@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+before:
+  hooks:
+    - go mod download
+builds:
+- env:
+  - CGO_ENABLED=0
+  binary: eqrcp
+  ldflags:
+  - -s -w -X eqrcp/version.version={{.Version}} -X eqrcp/version.date={{.Date}}
+  goos:
+  - linux
+  - darwin
+  - windows
+  goarch:
+  - 386
+  - amd64
+  - arm
+  - arm64
+  goarm:
+  - 7
+  ignore:
+  - goos: darwin
+    goarch: 386
+archives:
+  - format_overrides:
+    - goos: windows
+      formats: [ tar.gz, zip ]
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+    - '^chore:'
+nfpms:
+  - package_name: eqrcp
+    homepage: https://github.com/claudiodangelis/qrcp
+    maintainer: eqrcp maintainers
+    description: Transfer files over wifi from your computer to your mobile device by scanning a QR code without leaving the terminal.
+    license: MIT
+    formats:
+      - deb
+      - rpm
