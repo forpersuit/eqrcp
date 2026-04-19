@@ -127,6 +127,7 @@ GOCACHE=/tmp/eqrcp-go-build go run . desktop receive --help
 GOCACHE=/tmp/eqrcp-go-build go run . desktop share
 GOCACHE=/tmp/eqrcp-go-build go run . desktop receive
 GOCACHE=/tmp/eqrcp-go-build go run . desktop install
+GOCACHE=/tmp/eqrcp-go-build go run . desktop status
 GOCACHE=/tmp/eqrcp-go-build go run . desktop uninstall
 ```
 
@@ -136,7 +137,9 @@ Expected result:
 - `desktop share` without paths fails with an argument validation error.
 - `desktop receive` without a directory fails with an argument validation error.
 - On non-Windows systems, `desktop install` and `desktop uninstall` fail with a platform not implemented error.
+- On non-Windows systems, `desktop status` prints a platform not implemented status line.
 - On Windows, `desktop install` should create Explorer context menu entries under `HKCU\Software\Classes`.
+- On Windows, `desktop status` should report each expected registry entry and command.
 - On Windows, `desktop uninstall` should remove those entries.
 
 ## Windows Desktop Install Manual Test

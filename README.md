@@ -84,6 +84,8 @@ On Windows, install user-level Explorer context menu entries:
 
 ```powershell
 eqrcp.exe desktop install
+eqrcp.exe desktop status
+eqrcp.exe desktop uninstall
 ```
 
 ## Configuration

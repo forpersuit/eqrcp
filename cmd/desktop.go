@@ -56,6 +56,20 @@ var desktopInstallCmd = &cobra.Command{
 	},
 }
 
+var desktopStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show desktop context menu integration status",
+	Long:  "Show desktop context menu integration status for the current user.",
+	RunE: func(command *cobra.Command, args []string) error {
+		status, err := desktopIntegrationStatus()
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(command.OutOrStdout(), status)
+		return nil
+	},
+}
+
 var desktopUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall desktop context menu entries",

@@ -38,7 +38,7 @@ Use a staged approach.
 
 ### Phase 0: Document And Validate
 
-Status: in progress.
+Status: completed.
 
 Deliverables:
 
@@ -68,8 +68,9 @@ Status:
 
 - `eqrcp desktop share <paths...>` is implemented.
 - `eqrcp desktop receive <directory>` is implemented.
-- `eqrcp desktop install` installs Windows user-level Explorer context menu entries.
-- `eqrcp desktop uninstall` removes Windows user-level Explorer context menu entries.
+- `eqrcp desktop install` is implemented for Windows.
+- `eqrcp desktop uninstall` is implemented for Windows.
+- `eqrcp desktop status` is implemented for Windows and returns a platform note elsewhere.
 - Non-Windows install and uninstall paths currently return a not implemented error.
 
 Expected behavior:
@@ -106,6 +107,7 @@ eqrcp desktop uninstall
 Status:
 
 - Windows user-level registry integration is implemented.
+- Windows right-click launching uses hidden PowerShell to avoid the console-tool prompt.
 - Linux and macOS installers are documented but not implemented.
 
 The installer should:
@@ -122,6 +124,32 @@ Exit criteria:
 - macOS Finder has Quick Actions or Services. Not implemented.
 - Linux has at least Nautilus support, with KDE documented. Documented, not implemented.
 - Uninstall removes entries created by install. Implemented for Windows, pending manual Windows validation.
+
+### Phase 2.1: Windows Daily-Use Polish
+
+Status: in progress.
+
+Focus:
+
+- Validate Windows Explorer behavior after real right-click usage.
+- Add `eqrcp desktop status` so users can inspect installed registry commands.
+- Investigate practical multi-select support for Windows Explorer.
+- Decide whether a separate no-console launcher is needed.
+- Improve visible error reporting for no-terminal launches.
+
+Priority:
+
+1. `desktop status`.
+2. Windows multi-select behavior.
+3. No-console launcher design.
+4. User-visible error reporting.
+
+Exit criteria:
+
+- `eqrcp desktop status` reports all installed Windows entries and their command strings.
+- Single file share, folder share, folder receive, and folder-background receive are manually validated.
+- Multi-select support is either implemented with the simple registry approach or documented as requiring a future shell extension or launcher.
+- A decision is recorded for whether to keep the current hidden PowerShell launch or add `eqrcp-launcher.exe`.
 
 ### Phase 3: Better QR And Status UI
 

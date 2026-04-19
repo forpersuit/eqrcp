@@ -60,6 +60,12 @@ Install:
 eqrcp.exe desktop install
 ```
 
+Status:
+
+```powershell
+eqrcp.exe desktop status
+```
+
 Uninstall:
 
 ```powershell

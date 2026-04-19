@@ -18,6 +18,7 @@ func init() {
 	desktopCmd.AddCommand(desktopShareCmd)
 	desktopCmd.AddCommand(desktopReceiveCmd)
 	desktopCmd.AddCommand(desktopInstallCmd)
+	desktopCmd.AddCommand(desktopStatusCmd)
 	desktopCmd.AddCommand(desktopUninstallCmd)
 	configCmd.AddCommand(migrateCmd)
 	// Global command flags
