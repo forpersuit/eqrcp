@@ -14,6 +14,11 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(completionCmd)
+	rootCmd.AddCommand(desktopCmd)
+	desktopCmd.AddCommand(desktopShareCmd)
+	desktopCmd.AddCommand(desktopReceiveCmd)
+	desktopCmd.AddCommand(desktopInstallCmd)
+	desktopCmd.AddCommand(desktopUninstallCmd)
 	configCmd.AddCommand(migrateCmd)
 	// Global command flags
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Quiet, "quiet", "q", false, "only print errors")

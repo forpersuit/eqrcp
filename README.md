@@ -73,6 +73,13 @@ Run the configuration wizard:
 eqrcp config
 ```
 
+Desktop launcher helpers:
+
+```sh
+eqrcp desktop share /path/file.txt
+eqrcp desktop receive /path/directory
+```
+
 ## Configuration
 
 The default configuration file is:
@@ -123,6 +130,13 @@ In restricted environments, set a writable Go build cache:
 ```sh
 GOCACHE=/tmp/eqrcp-go-build go test ./...
 ```
+
+Planning documents:
+
+- [Test analysis](docs/test-analysis.md)
+- [Desktop integration plan](docs/desktop-integration-plan.md)
+- [Desktop platform notes](docs/desktop-platform-notes.md)
+- [Security notes](docs/security-notes.md)
 
 ## License
 

@@ -40,6 +40,13 @@ $XDG_CONFIG_HOME/eqrcp/config.yml
 
 Environment variables use the `EQRCP_` prefix.
 
+## Planning
+
+- [Test analysis](test-analysis.md)
+- [Desktop integration plan](desktop-integration-plan.md)
+- [Desktop platform notes](desktop-platform-notes.md)
+- [Security notes](security-notes.md)
+
 ## License
 
 MIT. See [LICENSE](../LICENSE).
