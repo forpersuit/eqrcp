@@ -4,6 +4,8 @@ This document records platform-specific integration approaches for right-click s
 
 ## Windows
 
+Status: implemented for user-level registry entries, pending manual validation in Windows Explorer.
+
 ### Minimal User-Level Registry Integration
 
 File share entry:
@@ -45,6 +47,27 @@ Command shape:
 "C:\Path\To\eqrcp.exe" desktop receive "%V"
 ```
 
+Implemented entries:
+
+- `HKCU\Software\Classes\*\shell\eqrcp-share`
+- `HKCU\Software\Classes\Directory\shell\eqrcp-share`
+- `HKCU\Software\Classes\Directory\shell\eqrcp-receive`
+- `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`
+
+Install:
+
+```powershell
+eqrcp.exe desktop install
+```
+
+Uninstall:
+
+```powershell
+eqrcp.exe desktop uninstall
+```
+
+The installer uses the current `eqrcp.exe` path returned by the operating system, so install from the final binary location rather than from a temporary download path.
+
 Pros:
 
 - Simple.
@@ -62,6 +85,8 @@ Recommendation:
 - Defer COM shell extension work until there is clear demand for polished multi-select behavior.
 
 ## macOS
+
+Status: documented, not implemented.
 
 Recommended first approach:
 
@@ -92,6 +117,8 @@ Recommendation:
 - Automate installation later if macOS testing is available.
 
 ## Linux
+
+Status: documented, not implemented.
 
 Linux needs multiple integrations because file managers differ.
 

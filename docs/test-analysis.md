@@ -135,7 +135,40 @@ Expected result:
 - `desktop`, `desktop share`, and `desktop receive` help text is available.
 - `desktop share` without paths fails with an argument validation error.
 - `desktop receive` without a directory fails with an argument validation error.
-- `desktop install` and `desktop uninstall` currently fail with a planned but not implemented error.
+- On non-Windows systems, `desktop install` and `desktop uninstall` fail with a platform not implemented error.
+- On Windows, `desktop install` should create Explorer context menu entries under `HKCU\Software\Classes`.
+- On Windows, `desktop uninstall` should remove those entries.
+
+## Windows Desktop Install Manual Test
+
+Build a Windows binary:
+
+```sh
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqrcp.exe .
+```
+
+From Windows, run:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop install
+```
+
+Expected result:
+
+- File right click includes `Share with eqrcp`.
+- Folder right click includes `Share with eqrcp`.
+- Folder right click includes `Receive here with eqrcp`.
+- Folder background right click includes `Receive here with eqrcp`.
+
+Then run:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop uninstall
+```
+
+Expected result:
+
+- The entries created by `desktop install` are removed.
 
 ## Desktop Share Flow
 

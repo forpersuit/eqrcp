@@ -48,7 +48,11 @@ var desktopInstallCmd = &cobra.Command{
 	Short: "Install desktop context menu entries",
 	Long:  "Install desktop context menu entries for the current user.",
 	RunE: func(command *cobra.Command, args []string) error {
-		return fmt.Errorf("desktop install is planned but not implemented yet")
+		if err := installDesktopIntegration(); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop context menu entries installed.")
+		return nil
 	},
 }
 
@@ -57,6 +61,10 @@ var desktopUninstallCmd = &cobra.Command{
 	Short: "Uninstall desktop context menu entries",
 	Long:  "Uninstall desktop context menu entries created by eqrcp.",
 	RunE: func(command *cobra.Command, args []string) error {
-		return fmt.Errorf("desktop uninstall is planned but not implemented yet")
+		if err := uninstallDesktopIntegration(); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop context menu entries uninstalled.")
+		return nil
 	},
 }

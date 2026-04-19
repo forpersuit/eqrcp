@@ -80,6 +80,12 @@ eqrcp desktop share /path/file.txt
 eqrcp desktop receive /path/directory
 ```
 
+On Windows, install user-level Explorer context menu entries:
+
+```powershell
+eqrcp.exe desktop install
+```
+
 ## Configuration
 
 The default configuration file is:

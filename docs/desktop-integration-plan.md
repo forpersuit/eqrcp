@@ -68,8 +68,9 @@ Status:
 
 - `eqrcp desktop share <paths...>` is implemented.
 - `eqrcp desktop receive <directory>` is implemented.
-- `eqrcp desktop install` is reserved and currently returns a not implemented error.
-- `eqrcp desktop uninstall` is reserved and currently returns a not implemented error.
+- `eqrcp desktop install` installs Windows user-level Explorer context menu entries.
+- `eqrcp desktop uninstall` removes Windows user-level Explorer context menu entries.
+- Non-Windows install and uninstall paths currently return a not implemented error.
 
 Expected behavior:
 
@@ -102,6 +103,11 @@ eqrcp desktop install
 eqrcp desktop uninstall
 ```
 
+Status:
+
+- Windows user-level registry integration is implemented.
+- Linux and macOS installers are documented but not implemented.
+
 The installer should:
 
 - Detect the current OS.
@@ -112,10 +118,10 @@ The installer should:
 
 Exit criteria:
 
-- Windows Explorer has share and receive entries.
-- macOS Finder has Quick Actions or Services.
-- Linux has at least Nautilus support, with KDE documented.
-- Uninstall removes entries created by install.
+- Windows Explorer has share and receive entries. Implemented, pending manual Windows validation.
+- macOS Finder has Quick Actions or Services. Not implemented.
+- Linux has at least Nautilus support, with KDE documented. Documented, not implemented.
+- Uninstall removes entries created by install. Implemented for Windows, pending manual Windows validation.
 
 ### Phase 3: Better QR And Status UI
 
