@@ -79,6 +79,8 @@ If `eqrcp-launcher.exe` is present next to `eqrcp.exe`, the installer registers 
 
 The launcher waits for the hidden `eqrcp.exe` process to finish. It writes output to a log under the user cache directory and shows a Windows message box only when `eqrcp.exe` exits with an error. Successful transfers should not show a completion dialog.
 
+The installer passes the current main executable path to `eqrcp-launcher.exe`. This means the launcher can still find the main executable when the main file is not literally named `eqrcp.exe`, as long as `desktop install` was run from that renamed executable.
+
 The Explorer command is launched through hidden PowerShell:
 
 ```text

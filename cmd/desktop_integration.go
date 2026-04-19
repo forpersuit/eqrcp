@@ -138,7 +138,7 @@ func windowsSendToSharePath() (string, error) {
 func windowsSendToShareScript(exe string, launcher string) string {
 	if launcher != "" {
 		return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
-cmd = Quote(%s) & " share"
+cmd = Quote(%s) & " --eqrcp-exe " & Quote(%s) & " share"
 For Each arg In WScript.Arguments
     cmd = cmd & " " & Quote(arg)
 Next
@@ -147,7 +147,7 @@ shell.Run cmd, 0, False
 Function Quote(value)
     Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
 End Function
-`, windowsVBString(launcher))
+`, windowsVBString(launcher), windowsVBString(exe))
 	}
 	return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
 cmd = Quote(%s) & " desktop share"
@@ -255,8 +255,9 @@ func windowsLauncherPath(exe string) string {
 
 func windowsShellCommand(exe string, launcher string, args ...string) string {
 	if launcher != "" {
-		quotedArgs := make([]string, 0, len(args))
-		for _, arg := range args {
+		launcherArgs := append([]string{"--eqrcp-exe", exe}, args...)
+		quotedArgs := make([]string, 0, len(launcherArgs))
+		for _, arg := range launcherArgs {
 			quotedArgs = append(quotedArgs, `"`+arg+`"`)
 		}
 		return fmt.Sprintf(`"%s" %s`, launcher, strings.Join(quotedArgs, " "))

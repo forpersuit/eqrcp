@@ -34,3 +34,11 @@ func TestCreateUniqueFile(t *testing.T) {
 		t.Fatalf("created file missing: %v", err)
 	}
 }
+
+func TestContentDispositionEscapesSpacesAsPercent20(t *testing.T) {
+	got := contentDisposition(`my file "final".txt`)
+	want := `attachment; filename="my file \"final\".txt"; filename*=UTF-8''my%20file%20%22final%22.txt`
+	if got != want {
+		t.Fatalf("contentDisposition() = %q, want %q", got, want)
+	}
+}

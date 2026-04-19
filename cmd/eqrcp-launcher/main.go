@@ -16,11 +16,14 @@ func main() {
 	if err != nil {
 		return
 	}
-	eqrcp := filepath.Join(filepath.Dir(exe), "eqrcp.exe")
-	if _, err := os.Stat(eqrcp); err != nil {
-		eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp")
+	eqrcp, args := parseArgs(os.Args[1:])
+	if eqrcp == "" {
+		eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp.exe")
+		if _, err := os.Stat(eqrcp); err != nil {
+			eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp")
+		}
 	}
-	args := append([]string{"desktop"}, os.Args[1:]...)
+	args = append([]string{"desktop"}, args...)
 	cmd := exec.Command(eqrcp, args...)
 	configureCommand(cmd)
 	logFile, logPath, err := createLog()
@@ -32,6 +35,13 @@ func main() {
 	if err := cmd.Run(); err != nil {
 		showError(formatError(err, logPath))
 	}
+}
+
+func parseArgs(args []string) (string, []string) {
+	if len(args) >= 2 && args[0] == "--eqrcp-exe" {
+		return args[1], args[2:]
+	}
+	return "", args
 }
 
 func createLog() (*os.File, string, error) {

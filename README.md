@@ -92,6 +92,8 @@ For multiple selected files on Windows, use `Send to > Share with eqrcp` after r
 
 For the smoothest Windows right-click experience, place `eqrcp-launcher.exe` next to `eqrcp.exe` before running `desktop install`.
 
+When sharing a directory, the downloaded archive is named `<directory>-directory.zip`. When sharing multiple selected files, the downloaded archive is named `eqrcp-multiple-files.zip`.
+
 ## Configuration
 
 The default configuration file is:

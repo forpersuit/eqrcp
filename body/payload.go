@@ -3,6 +3,7 @@ package body
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"eqrcp/util"
 )
@@ -23,6 +24,7 @@ func (p Body) Delete() error {
 func FromArgs(args []string, zipFlag bool) (Body, error) {
 	shouldzip := len(args) > 1 || zipFlag
 	var files []string
+	hasDir := false
 	// Check if content exists
 	for _, arg := range args {
 		file, err := os.Stat(arg)
@@ -32,6 +34,7 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 		// If at least one argument is dir, the content will be zipped
 		if file.IsDir() {
 			shouldzip = true
+			hasDir = true
 		}
 		files = append(files, arg)
 	}
@@ -47,9 +50,32 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 	} else {
 		content = args[0]
 	}
+	filename := filepath.Base(content)
+	if shouldzip {
+		filename = zipDownloadName(args, zipFlag, hasDir)
+	}
 	return Body{
 		Path:                content,
-		Filename:            filepath.Base(content),
+		Filename:            filename,
 		DeleteAfterTransfer: shouldzip,
 	}, nil
+}
+
+func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
+	if len(args) > 1 {
+		return "eqrcp-multiple-files.zip"
+	}
+	base := filepath.Base(args[0])
+	if hasDir {
+		return strings.TrimSuffix(base, string(filepath.Separator)) + "-directory.zip"
+	}
+	if zipFlag {
+		ext := filepath.Ext(base)
+		name := strings.TrimSuffix(base, ext)
+		if name == "" {
+			name = "eqrcp"
+		}
+		return name + "-zipped.zip"
+	}
+	return "eqrcp-files.zip"
 }

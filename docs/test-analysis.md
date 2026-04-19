@@ -104,6 +104,63 @@ Observation:
 
 - Send completion currently depends on a browser-style user agent path. Plain `curl` without a `Mozilla` user agent does not exercise the same shutdown path.
 
+## Download Filename Checks
+
+The send flow should preserve spaces in download filenames.
+
+Single file with spaces:
+
+```sh
+printf 'space filename test\n' > '/tmp/my file final.txt'
+XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+  -i any \
+  --bind 127.0.0.1 \
+  -p 19281 \
+  --path spacefile \
+  '/tmp/my file final.txt'
+```
+
+Expected response header:
+
+```text
+Content-Disposition: attachment; filename="my file final.txt"; filename*=UTF-8''my%20file%20final.txt
+```
+
+Directory transfer:
+
+```sh
+XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+  -i any \
+  --bind 127.0.0.1 \
+  -p 19282 \
+  --path dirzip \
+  '/tmp/eqrcp test dir'
+```
+
+Expected response header:
+
+```text
+Content-Disposition: attachment; filename="eqrcp test dir-directory.zip"; filename*=UTF-8''eqrcp%20test%20dir-directory.zip
+```
+
+Multiple file transfer:
+
+```sh
+XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+  -i any \
+  --bind 127.0.0.1 \
+  -p 19283 \
+  --path multizip \
+  '/tmp/eqrcp one.txt' \
+  '/tmp/eqrcp two.txt'
+```
+
+Expected response header:
+
+```text
+Content-Disposition: attachment; filename="eqrcp-multiple-files.zip"; filename*=UTF-8''eqrcp-multiple-files.zip
+```
+
 ## Desktop Integration Test Requirements
 
 Desktop integration should preserve the baseline above and add platform-specific checks:

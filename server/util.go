@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,4 +52,13 @@ func createUniqueFile(dir string, newFilename string, fileNamesInTargetDir []str
 		}
 		fileNamesInTargetDir = append(fileNamesInTargetDir, fileName)
 	}
+}
+
+func contentDisposition(filename string) string {
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filename)
+	return fmt.Sprintf(
+		`attachment; filename="%s"; filename*=UTF-8''%s`,
+		quoted,
+		url.PathEscape(filename),
+	)
 }
