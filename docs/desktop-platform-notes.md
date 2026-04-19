@@ -53,6 +53,7 @@ Implemented entries:
 - `HKCU\Software\Classes\Directory\shell\eqrcp-share`
 - `HKCU\Software\Classes\Directory\shell\eqrcp-receive`
 - `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`
+- `%APPDATA%\Microsoft\Windows\SendTo\Share with eqrcp.vbs`
 
 Install:
 
@@ -84,15 +85,22 @@ This avoids Explorer showing the console-program prompt when a context menu entr
 
 After replacing `eqrcp.exe` with a newer build, run `eqrcp.exe desktop install` again to refresh the registered command path and launch command.
 
+Multi-select support:
+
+- The top-level Explorer verbs are intended for single selected files and folders.
+- The installer also creates `Send to > Share with eqrcp`.
+- Use the Send To entry when sharing multiple selected files.
+- The Send To script receives all selected paths and starts `eqrcp desktop share` hidden through Windows Script Host.
+
 Pros:
 
 - Simple.
 - User-level install does not need administrator rights.
-- Good enough for single selected files and folders.
+- Good enough for single selected files, folders, and multi-select through Send To.
 
 Cons:
 
-- Full multi-select behavior is limited with simple registry commands.
+- Full top-level multi-select behavior is limited with simple registry commands.
 - Native shell extensions are more powerful but much more expensive to build and maintain.
 
 Recommendation:

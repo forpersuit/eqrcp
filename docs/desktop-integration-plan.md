@@ -134,13 +134,14 @@ Focus:
 - Validate Windows Explorer behavior after real right-click usage.
 - Add `eqrcp desktop status` so users can inspect installed registry commands.
 - Investigate practical multi-select support for Windows Explorer.
+- Add a Windows Send To entry for multi-select sharing.
 - Decide whether a separate no-console launcher is needed.
 - Improve visible error reporting for no-terminal launches.
 
 Priority:
 
 1. `desktop status`.
-2. Windows multi-select behavior.
+2. Windows multi-select behavior through Send To.
 3. No-console launcher design.
 4. User-visible error reporting.
 
@@ -148,7 +149,7 @@ Exit criteria:
 
 - `eqrcp desktop status` reports all installed Windows entries and their command strings.
 - Single file share, folder share, folder receive, and folder-background receive are manually validated.
-- Multi-select support is either implemented with the simple registry approach or documented as requiring a future shell extension or launcher.
+- Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
 - A decision is recorded for whether to keep the current hidden PowerShell launch or add `eqrcp-launcher.exe`.
 
 ### Phase 3: Better QR And Status UI

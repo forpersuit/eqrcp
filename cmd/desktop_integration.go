@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -46,14 +47,20 @@ func installWindowsDesktopIntegration() error {
 			return err
 		}
 	}
+	if err := installWindowsSendToShare(exe); err != nil {
+		return err
+	}
 	return nil
 }
 
 func uninstallWindowsDesktopIntegration() error {
 	for _, entry := range windowsContextEntries("") {
-		if err := runReg("delete", entry.key, "/f"); err != nil {
+		if err := runRegAllowMissing("delete", entry.key, "/f"); err != nil {
 			return err
 		}
+	}
+	if err := uninstallWindowsSendToShare(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -73,7 +80,63 @@ func windowsDesktopIntegrationStatus() (string, error) {
 		builder.WriteString(fmt.Sprintf("  key: %s\n", entry.key))
 		builder.WriteString(fmt.Sprintf("  command: %s\n", command))
 	}
+	sendTo, err := windowsSendToSharePath()
+	if err != nil {
+		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: unavailable (%v)\n", err))
+		return builder.String(), nil
+	}
+	if _, err := os.Stat(sendTo); err != nil {
+		builder.WriteString("- Send to > Share with eqrcp: not installed\n")
+		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
+	} else {
+		builder.WriteString("- Send to > Share with eqrcp: installed\n")
+		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
+	}
 	return builder.String(), nil
+}
+
+func installWindowsSendToShare(exe string) error {
+	path, err := windowsSendToSharePath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(windowsSendToShareScript(exe)), 0644)
+}
+
+func uninstallWindowsSendToShare() error {
+	path, err := windowsSendToSharePath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func windowsSendToSharePath() (string, error) {
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		return "", fmt.Errorf("APPDATA is not set")
+	}
+	return filepath.Join(appData, "Microsoft", "Windows", "SendTo", "Share with eqrcp.vbs"), nil
+}
+
+func windowsSendToShareScript(exe string) string {
+	return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
+cmd = Quote(%s) & " desktop share"
+For Each arg In WScript.Arguments
+    cmd = cmd & " " & Quote(arg)
+Next
+shell.Run cmd, 0, False
+
+Function Quote(value)
+    Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
+End Function
+`, windowsVBString(exe))
 }
 
 type windowsContextEntry struct {
@@ -133,6 +196,14 @@ func runReg(args ...string) error {
 	return nil
 }
 
+func runRegAllowMissing(args ...string) error {
+	cmd := exec.Command("reg", args...)
+	if output, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(output), "unable to find") && !strings.Contains(string(output), "not found") {
+		return fmt.Errorf("reg %v failed: %w: %s", args, err, output)
+	}
+	return nil
+}
+
 func queryRegDefault(key string) (string, error) {
 	output, err := exec.Command("reg", "query", key, "/ve").CombinedOutput()
 	if err != nil {
@@ -162,4 +233,8 @@ func windowsHiddenCommand(exe string, args ...string) string {
 		`powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "%s"`,
 		strings.ReplaceAll(command, `"`, `\"`),
 	)
+}
+
+func windowsVBString(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 }

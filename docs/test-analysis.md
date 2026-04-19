@@ -162,6 +162,7 @@ Expected result:
 - Folder right click includes `Share with eqrcp`.
 - Folder right click includes `Receive here with eqrcp`.
 - Folder background right click includes `Receive here with eqrcp`.
+- `Send to > Share with eqrcp` exists for multi-select sharing.
 - Clicking a context menu entry does not show the Windows console-program prompt.
 - Clicking a context menu entry opens the QR code page in the default browser.
 

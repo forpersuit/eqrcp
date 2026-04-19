@@ -88,6 +88,8 @@ eqrcp.exe desktop status
 eqrcp.exe desktop uninstall
 ```
 
+For multiple selected files on Windows, use `Send to > Share with eqrcp` after running `desktop install`.
+
 ## Configuration
 
 The default configuration file is:
