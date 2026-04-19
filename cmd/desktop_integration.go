@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 func installDesktopIntegration() error {
@@ -34,22 +35,22 @@ func installWindowsDesktopIntegration() error {
 		{
 			key:     `HKCU\Software\Classes\*\shell\eqrcp-share`,
 			label:   "Share with eqrcp",
-			command: fmt.Sprintf(`"%s" desktop share "%%1"`, exe),
+			command: windowsHiddenCommand(exe, "desktop", "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-share`,
 			label:   "Share with eqrcp",
-			command: fmt.Sprintf(`"%s" desktop share "%%1"`, exe),
+			command: windowsHiddenCommand(exe, "desktop", "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-receive`,
 			label:   "Receive here with eqrcp",
-			command: fmt.Sprintf(`"%s" desktop receive "%%1"`, exe),
+			command: windowsHiddenCommand(exe, "desktop", "receive", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`,
 			label:   "Receive here with eqrcp",
-			command: fmt.Sprintf(`"%s" desktop receive "%%V"`, exe),
+			command: windowsHiddenCommand(exe, "desktop", "receive", "%V"),
 		},
 	}
 	for _, entry := range entries {
@@ -101,4 +102,20 @@ func runReg(args ...string) error {
 		return fmt.Errorf("reg %v failed: %w: %s", args, err, output)
 	}
 	return nil
+}
+
+func windowsHiddenCommand(exe string, args ...string) string {
+	quotedArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		quotedArgs = append(quotedArgs, "'"+strings.ReplaceAll(arg, "'", "''")+"'")
+	}
+	command := fmt.Sprintf(
+		`Start-Process -WindowStyle Hidden -FilePath '%s' -ArgumentList @(%s)`,
+		strings.ReplaceAll(exe, "'", "''"),
+		strings.Join(quotedArgs, ","),
+	)
+	return fmt.Sprintf(
+		`powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "%s"`,
+		strings.ReplaceAll(command, `"`, `\"`),
+	)
 }

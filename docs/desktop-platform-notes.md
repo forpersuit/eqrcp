@@ -68,6 +68,16 @@ eqrcp.exe desktop uninstall
 
 The installer uses the current `eqrcp.exe` path returned by the operating system, so install from the final binary location rather than from a temporary download path.
 
+The Explorer command is launched through hidden PowerShell:
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process ..."
+```
+
+This avoids Explorer showing the console-program prompt when a context menu entry starts `eqrcp.exe`.
+
+After replacing `eqrcp.exe` with a newer build, run `eqrcp.exe desktop install` again to refresh the registered command path and launch command.
+
 Pros:
 
 - Simple.
