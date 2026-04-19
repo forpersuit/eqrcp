@@ -152,6 +152,7 @@ Exit criteria:
 - Single file share, folder share, folder receive, and folder-background receive are manually validated.
 - Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
 - `eqrcp-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqrcp.exe`.
+- `eqrcp-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqrcp` exits with an error.
 
 ### Phase 3: Better QR And Status UI
 

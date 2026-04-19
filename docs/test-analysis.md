@@ -166,6 +166,7 @@ Expected result:
 - Clicking a context menu entry does not show the Windows console-program prompt.
 - Clicking a context menu entry opens the QR code page in the default browser.
 - If `eqrcp-launcher.exe` is next to `eqrcp.exe`, `desktop status` reports it and installed commands use it.
+- If `eqrcp.exe` exits with an error when started by `eqrcp-launcher.exe`, a Windows message box shows the failure and log path.
 
 Then run:
 

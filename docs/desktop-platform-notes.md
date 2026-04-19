@@ -77,6 +77,8 @@ The installer uses the current `eqrcp.exe` path returned by the operating system
 
 If `eqrcp-launcher.exe` is present next to `eqrcp.exe`, the installer registers context menu entries through the launcher. The launcher is a Windows GUI-subsystem binary, so it avoids the console window and then starts `eqrcp.exe desktop ...` in the background.
 
+The launcher waits for the hidden `eqrcp.exe` process to finish. It writes output to a log under the user cache directory and shows a Windows message box only when `eqrcp.exe` exits with an error. Successful transfers should not show a completion dialog.
+
 The Explorer command is launched through hidden PowerShell:
 
 ```text
