@@ -22,6 +22,18 @@ builds:
   ignore:
   - goos: darwin
     goarch: 386
+- id: eqrcp-launcher
+  main: ./cmd/eqrcp-launcher
+  binary: eqrcp-launcher
+  env:
+  - CGO_ENABLED=0
+  ldflags:
+  - -s -w -H=windowsgui
+  goos:
+  - windows
+  goarch:
+  - amd64
+  - arm64
 archives:
   - format_overrides:
     - goos: windows

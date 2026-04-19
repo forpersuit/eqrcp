@@ -136,13 +136,14 @@ Focus:
 - Investigate practical multi-select support for Windows Explorer.
 - Add a Windows Send To entry for multi-select sharing.
 - Decide whether a separate no-console launcher is needed.
+- Add `eqrcp-launcher.exe` as an optional no-console launcher for context menu entries.
 - Improve visible error reporting for no-terminal launches.
 
 Priority:
 
 1. `desktop status`.
 2. Windows multi-select behavior through Send To.
-3. No-console launcher design.
+3. No-console launcher design and implementation.
 4. User-visible error reporting.
 
 Exit criteria:
@@ -150,7 +151,7 @@ Exit criteria:
 - `eqrcp desktop status` reports all installed Windows entries and their command strings.
 - Single file share, folder share, folder receive, and folder-background receive are manually validated.
 - Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
-- A decision is recorded for whether to keep the current hidden PowerShell launch or add `eqrcp-launcher.exe`.
+- `eqrcp-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqrcp.exe`.
 
 ### Phase 3: Better QR And Status UI
 

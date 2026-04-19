@@ -41,20 +41,21 @@ func installWindowsDesktopIntegration() error {
 	if err != nil {
 		return err
 	}
-	entries := windowsContextEntries(exe)
+	launcher := windowsLauncherPath(exe)
+	entries := windowsContextEntries(exe, launcher)
 	for _, entry := range entries {
 		if err := entry.install(exe); err != nil {
 			return err
 		}
 	}
-	if err := installWindowsSendToShare(exe); err != nil {
+	if err := installWindowsSendToShare(exe, launcher); err != nil {
 		return err
 	}
 	return nil
 }
 
 func uninstallWindowsDesktopIntegration() error {
-	for _, entry := range windowsContextEntries("") {
+	for _, entry := range windowsContextEntries("", "") {
 		if err := runRegAllowMissing("delete", entry.key, "/f"); err != nil {
 			return err
 		}
@@ -68,7 +69,7 @@ func uninstallWindowsDesktopIntegration() error {
 func windowsDesktopIntegrationStatus() (string, error) {
 	var builder strings.Builder
 	builder.WriteString("Windows desktop integration status\n")
-	for _, entry := range windowsContextEntries("") {
+	for _, entry := range windowsContextEntries("", "") {
 		commandKey := entry.key + `\command`
 		command, err := queryRegDefault(commandKey)
 		if err != nil {
@@ -92,10 +93,19 @@ func windowsDesktopIntegrationStatus() (string, error) {
 		builder.WriteString("- Send to > Share with eqrcp: installed\n")
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 	}
+	if exe, err := os.Executable(); err == nil {
+		launcher := windowsLauncherPath(exe)
+		if launcher == "" {
+			builder.WriteString("- eqrcp launcher: not installed\n")
+		} else {
+			builder.WriteString("- eqrcp launcher: installed\n")
+			builder.WriteString(fmt.Sprintf("  path: %s\n", launcher))
+		}
+	}
 	return builder.String(), nil
 }
 
-func installWindowsSendToShare(exe string) error {
+func installWindowsSendToShare(exe string, launcher string) error {
 	path, err := windowsSendToSharePath()
 	if err != nil {
 		return err
@@ -103,7 +113,7 @@ func installWindowsSendToShare(exe string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(windowsSendToShareScript(exe)), 0644)
+	return os.WriteFile(path, []byte(windowsSendToShareScript(exe, launcher)), 0644)
 }
 
 func uninstallWindowsSendToShare() error {
@@ -125,7 +135,20 @@ func windowsSendToSharePath() (string, error) {
 	return filepath.Join(appData, "Microsoft", "Windows", "SendTo", "Share with eqrcp.vbs"), nil
 }
 
-func windowsSendToShareScript(exe string) string {
+func windowsSendToShareScript(exe string, launcher string) string {
+	if launcher != "" {
+		return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
+cmd = Quote(%s) & " share"
+For Each arg In WScript.Arguments
+    cmd = cmd & " " & Quote(arg)
+Next
+shell.Run cmd, 0, False
+
+Function Quote(value)
+    Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
+End Function
+`, windowsVBString(launcher))
+	}
 	return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
 cmd = Quote(%s) & " desktop share"
 For Each arg In WScript.Arguments
@@ -145,27 +168,27 @@ type windowsContextEntry struct {
 	command string
 }
 
-func windowsContextEntries(exe string) []windowsContextEntry {
+func windowsContextEntries(exe string, launcher string) []windowsContextEntry {
 	return []windowsContextEntry{
 		{
 			key:     `HKCU\Software\Classes\*\shell\eqrcp-share`,
 			label:   "Share with eqrcp (file)",
-			command: windowsHiddenCommand(exe, "desktop", "share", "%1"),
+			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-share`,
 			label:   "Share with eqrcp (directory)",
-			command: windowsHiddenCommand(exe, "desktop", "share", "%1"),
+			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-receive`,
 			label:   "Receive here with eqrcp (directory)",
-			command: windowsHiddenCommand(exe, "desktop", "receive", "%1"),
+			command: windowsShellCommand(exe, launcher, "receive", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`,
 			label:   "Receive here with eqrcp (directory background)",
-			command: windowsHiddenCommand(exe, "desktop", "receive", "%V"),
+			command: windowsShellCommand(exe, launcher, "receive", "%V"),
 		},
 	}
 }
@@ -217,6 +240,29 @@ func queryRegDefault(key string) (string, error) {
 		}
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func windowsLauncherPath(exe string) string {
+	if exe == "" {
+		return ""
+	}
+	candidate := filepath.Join(filepath.Dir(exe), "eqrcp-launcher.exe")
+	if _, err := os.Stat(candidate); err != nil {
+		return ""
+	}
+	return candidate
+}
+
+func windowsShellCommand(exe string, launcher string, args ...string) string {
+	if launcher != "" {
+		quotedArgs := make([]string, 0, len(args))
+		for _, arg := range args {
+			quotedArgs = append(quotedArgs, `"`+arg+`"`)
+		}
+		return fmt.Sprintf(`"%s" %s`, launcher, strings.Join(quotedArgs, " "))
+	}
+	desktopArgs := append([]string{"desktop"}, args...)
+	return windowsHiddenCommand(exe, desktopArgs...)
 }
 
 func windowsHiddenCommand(exe string, args ...string) string {

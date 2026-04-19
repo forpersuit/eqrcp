@@ -90,6 +90,8 @@ eqrcp.exe desktop uninstall
 
 For multiple selected files on Windows, use `Send to > Share with eqrcp` after running `desktop install`.
 
+For the smoothest Windows right-click experience, place `eqrcp-launcher.exe` next to `eqrcp.exe` before running `desktop install`.
+
 ## Configuration
 
 The default configuration file is:

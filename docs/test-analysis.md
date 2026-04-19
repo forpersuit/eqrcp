@@ -165,6 +165,7 @@ Expected result:
 - `Send to > Share with eqrcp` exists for multi-select sharing.
 - Clicking a context menu entry does not show the Windows console-program prompt.
 - Clicking a context menu entry opens the QR code page in the default browser.
+- If `eqrcp-launcher.exe` is next to `eqrcp.exe`, `desktop status` reports it and installed commands use it.
 
 Then run:
 
