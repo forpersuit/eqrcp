@@ -69,6 +69,17 @@ var QR = `
             color: #59636e;
             font-size: 14px;
         }
+        .status {
+            background: #e8f3ef;
+            border: 1px solid #b7d6cc;
+            border-radius: 8px;
+            margin: 18px 0;
+            padding: 12px 14px;
+        }
+        .status strong {
+            display: block;
+            margin-bottom: 4px;
+        }
         @media (max-width: 560px) {
             .url-row {
                 flex-direction: column;
@@ -83,6 +94,10 @@ var QR = `
     <main>
         <h1>eqrcp transfer ready</h1>
         <p>Scan the QR code or open the address on another device.</p>
+        <div class="status" aria-live="polite">
+            <strong id="transfer-state">Waiting</strong>
+            <span id="transfer-message">Waiting for a device to connect.</span>
+        </div>
         <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
         <div class="url-row">
             <input id="transfer-url" type="text" value="{{.URL}}" readonly>
@@ -104,6 +119,29 @@ var QR = `
             }
             document.execCommand('copy');
         }
+        function updateStatus() {
+            fetch('{{.StatusRoute}}', { cache: 'no-store' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('status request failed');
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
+                    var state = data.state || 'waiting';
+                    var message = data.message || '';
+                    document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
+                    document.getElementById('transfer-message').textContent = message;
+                    if (state === 'completed' || state === 'stopped') {
+                        clearInterval(statusTimer);
+                    }
+                })
+                .catch(function() {
+                    document.getElementById('transfer-message').textContent = 'Status unavailable.';
+                });
+        }
+        var statusTimer = setInterval(updateStatus, 1500);
+        updateStatus();
     </script>
 </body>
 </html>

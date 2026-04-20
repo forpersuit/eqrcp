@@ -280,9 +280,11 @@ Expected result:
 
 - `/qr` serves an HTML control page.
 - `/qr/image` serves the QR code image.
+- `/qr/status` serves the current transfer state as JSON.
 - The page shows the transfer URL in a read-only input.
 - The page has a `Copy URL` button.
 - The page has a `Stop transfer` button.
+- The page updates the displayed transfer state without refreshing.
 - Posting to `/qr/stop` stops the current server.
 
 Automated checks:
@@ -294,6 +296,22 @@ GOCACHE=/tmp/eqrcp-go-build go test ./server
 Expected result:
 
 - The QR page template includes the image route, stop route, copy button, stop button, and escapes the transfer URL.
+- The transfer status helper stores and returns waiting, transferring, completed, and stopped states.
+
+Black-box checks:
+
+```sh
+curl -s http://127.0.0.1:<port>/qr/status
+curl -s -A Mozilla http://127.0.0.1:<port>/send/<path> -o downloaded.file
+curl -s http://127.0.0.1:<port>/qr/status
+curl -s -X POST http://127.0.0.1:<port>/qr/stop
+```
+
+Expected result:
+
+- The initial status response contains `waiting`.
+- After a successful download, the status response contains `completed`.
+- Posting to `/qr/stop` stops the server.
 
 ## Desktop Share Flow
 

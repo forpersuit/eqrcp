@@ -165,11 +165,11 @@ After the right-click workflow is functional, improve visibility:
 - Dedicated QR window.
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
-- Transfer status.
+- Transfer status. Implemented in the browser QR page through `/qr/status` polling.
 - Last used output directory.
 - System tray entry.
 
-The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, and `/qr/stop` stops the current transfer.
+The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
 
 ## Recommended First Implementation
 

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/jpeg"
@@ -42,9 +43,16 @@ type Server struct {
 	body        body.Body
 	outputDir   string
 	stopChannel chan bool
+	statusMu    sync.Mutex
+	status      transferStatus
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
+}
+
+type transferStatus struct {
+	State   string `json:"state"`
+	Message string `json:"message"`
 }
 
 // ReceiveTo sets the output directory
@@ -74,9 +82,10 @@ func (s *Server) Send(p body.Body) {
 // DisplayQR creates a handler for serving the QR code in the browser
 func (s *Server) DisplayQR(url string) error {
 	const (
-		pagePath  = "/qr"
-		imagePath = "/qr/image"
-		stopPath  = "/qr/stop"
+		pagePath   = "/qr"
+		imagePath  = "/qr/image"
+		statusPath = "/qr/status"
+		stopPath   = "/qr/stop"
 	)
 	qrImg, err := qr.RenderImage(url)
 	if err != nil {
@@ -88,11 +97,22 @@ func (s *Server) DisplayQR(url string) error {
 			log.Println(err)
 		}
 	})
+	s.mux.HandleFunc(statusPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(s.getStatus()); err != nil {
+			log.Println(err)
+		}
+	})
 	s.mux.HandleFunc(stopPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		s.setStatus("stopped", "Transfer stopped.")
 		fmt.Fprintln(w, "Transfer stopped. You can close this page.")
 		s.signalStop()
 	})
@@ -100,10 +120,12 @@ func (s *Server) DisplayQR(url string) error {
 		htmlVariables := struct {
 			URL          string
 			QRImageRoute string
+			StatusRoute  string
 			StopRoute    string
 		}{
 			URL:          url,
 			QRImageRoute: imagePath,
+			StatusRoute:  statusPath,
 			StopRoute:    stopPath,
 		}
 		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
@@ -114,6 +136,18 @@ func (s *Server) DisplayQR(url string) error {
 		}
 	})
 	return openBrowser(s.BaseURL + pagePath)
+}
+
+func (s *Server) setStatus(state string, message string) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	s.status = transferStatus{State: state, Message: message}
+}
+
+func (s *Server) getStatus() transferStatus {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	return s.status
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
@@ -226,6 +260,7 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	// Create channel to send message to stop server
 	app.stopChannel = make(chan bool, 1)
+	app.setStatus("waiting", "Waiting for a device to connect.")
 	// Create cookie used to verify request is coming from first client to connect
 	cookie := http.Cookie{Name: "eqrcp", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed
@@ -244,6 +279,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create handlers
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		app.setStatus("transferring", "Sending file to connected device.")
 		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") {
 			if cookie.Value == "" {
 				initCookie.Do(func() {
@@ -279,6 +315,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		w.Header().Set("Content-Disposition", contentDisposition(app.body.Filename))
 		http.ServeFile(w, r, app.body.Path)
+		app.setStatus("completed", "Transfer completed.")
 	})
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {
@@ -289,6 +326,7 @@ func New(cfg *config.Config) (*Server, error) {
 		htmlVariables.Route = "/receive/" + path
 		switch r.Method {
 		case "POST":
+			app.setStatus("transferring", "Receiving files from connected device.")
 			filenames, err := util.ReadFilenames(app.outputDir)
 			if err != nil {
 				fmt.Fprintf(w, "Unable to read output directory: %v\n", err)
@@ -385,6 +423,7 @@ func New(cfg *config.Config) (*Server, error) {
 				app.signalStop()
 				return
 			}
+			app.setStatus("completed", "Transfer completed.")
 			if !cfg.KeepAlive {
 				app.signalStop()
 			}

@@ -52,10 +52,12 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	data := struct {
 		URL          string
 		QRImageRoute string
+		StatusRoute  string
 		StopRoute    string
 	}{
 		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
 		QRImageRoute: "/qr/image",
+		StatusRoute:  "/qr/status",
 		StopRoute:    "/qr/stop",
 	}
 
@@ -66,12 +68,29 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	for _, want := range []string{
 		`src="/qr/image"`,
 		`action="/qr/stop"`,
+		`fetch('\/qr\/status'`,
 		"Copy URL",
 		"Stop transfer",
+		"Waiting for a device to connect.",
 		`name=&#34;quoted&#34;`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("QR page = %q, want to contain %q", html, want)
 		}
+	}
+}
+
+func TestTransferStatus(t *testing.T) {
+	server := &Server{}
+	server.setStatus("waiting", "Waiting for a device to connect.")
+	got := server.getStatus()
+	if got.State != "waiting" || got.Message != "Waiting for a device to connect." {
+		t.Fatalf("getStatus() = %#v", got)
+	}
+
+	server.setStatus("completed", "Transfer completed.")
+	got = server.getStatus()
+	if got.State != "completed" || got.Message != "Transfer completed." {
+		t.Fatalf("getStatus() = %#v", got)
 	}
 }
