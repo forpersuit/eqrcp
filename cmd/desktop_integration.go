@@ -69,7 +69,17 @@ func uninstallWindowsDesktopIntegration() error {
 func windowsDesktopIntegrationStatus() (string, error) {
 	var builder strings.Builder
 	builder.WriteString("Windows desktop integration status\n")
-	for _, entry := range windowsContextEntries("", "") {
+	exe, exeErr := os.Executable()
+	launcher := ""
+	if exeErr != nil {
+		builder.WriteString(fmt.Sprintf("- current executable: unavailable (%v)\n", exeErr))
+	} else {
+		launcher = windowsLauncherPath(exe)
+		builder.WriteString(fmt.Sprintf("- current executable: %s\n", exe))
+	}
+	expectedEntries := windowsContextEntries(exe, launcher)
+	statusEntries := windowsContextEntries("", "")
+	for index, entry := range statusEntries {
 		commandKey := entry.key + `\command`
 		command, err := queryRegDefault(commandKey)
 		if err != nil {
@@ -77,9 +87,17 @@ func windowsDesktopIntegrationStatus() (string, error) {
 			builder.WriteString(fmt.Sprintf("  key: %s\n", entry.key))
 			continue
 		}
-		builder.WriteString(fmt.Sprintf("- %s: installed\n", entry.label))
+		state := "installed"
+		if exeErr == nil && !windowsCommandMatches(command, expectedEntries[index].command) {
+			state = "needs repair"
+		}
+		builder.WriteString(fmt.Sprintf("- %s: %s\n", entry.label, state))
 		builder.WriteString(fmt.Sprintf("  key: %s\n", entry.key))
 		builder.WriteString(fmt.Sprintf("  command: %s\n", command))
+		if state == "needs repair" {
+			builder.WriteString(fmt.Sprintf("  expected: %s\n", expectedEntries[index].command))
+			builder.WriteString("  repair: run `eqrcp desktop install` from the executable you want Explorer to use.\n")
+		}
 	}
 	sendTo, err := windowsSendToSharePath()
 	if err != nil {
@@ -90,13 +108,28 @@ func windowsDesktopIntegrationStatus() (string, error) {
 		builder.WriteString("- Send to > Share with eqrcp: not installed\n")
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 	} else {
-		builder.WriteString("- Send to > Share with eqrcp: installed\n")
+		state := "installed"
+		if exeErr == nil {
+			content, err := os.ReadFile(sendTo)
+			if err != nil {
+				state = "needs repair"
+			} else if !windowsCommandMatches(string(content), windowsSendToShareScript(exe, launcher)) {
+				state = "needs repair"
+			}
+		}
+		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: %s\n", state))
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
+		if state == "needs repair" {
+			builder.WriteString("  repair: run `eqrcp desktop install` from the executable you want Explorer to use.\n")
+		}
 	}
-	if exe, err := os.Executable(); err == nil {
-		launcher := windowsLauncherPath(exe)
+	if exeErr == nil {
+		expectedLauncher := windowsExpectedLauncherPath(exe)
 		if launcher == "" {
 			builder.WriteString("- eqrcp launcher: not installed\n")
+			builder.WriteString(fmt.Sprintf("  expected path: %s\n", expectedLauncher))
+			builder.WriteString("  impact: Explorer can still use the hidden PowerShell fallback, but native launcher error dialogs are unavailable.\n")
+			builder.WriteString("  repair: place eqrcp-launcher.exe next to eqrcp.exe and run `eqrcp desktop install` again.\n")
 		} else {
 			builder.WriteString("- eqrcp launcher: installed\n")
 			builder.WriteString(fmt.Sprintf("  path: %s\n", launcher))
@@ -243,14 +276,25 @@ func queryRegDefault(key string) (string, error) {
 }
 
 func windowsLauncherPath(exe string) string {
-	if exe == "" {
+	candidate := windowsExpectedLauncherPath(exe)
+	if candidate == "" {
 		return ""
 	}
-	candidate := filepath.Join(filepath.Dir(exe), "eqrcp-launcher.exe")
 	if _, err := os.Stat(candidate); err != nil {
 		return ""
 	}
 	return candidate
+}
+
+func windowsExpectedLauncherPath(exe string) string {
+	if exe == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(exe), "eqrcp-launcher.exe")
+}
+
+func windowsCommandMatches(actual string, expected string) bool {
+	return strings.TrimSpace(actual) == strings.TrimSpace(expected)
 }
 
 func windowsShellCommand(exe string, launcher string, args ...string) string {

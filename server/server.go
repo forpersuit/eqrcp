@@ -399,6 +399,8 @@ func New(cfg *config.Config) (*Server, error) {
 		htmlVariables := struct {
 			Route string
 			File  string
+			Files []string
+			Count int
 		}{}
 		htmlVariables.Route = "/receive/" + path
 		switch r.Method {
@@ -513,6 +515,8 @@ func New(cfg *config.Config) (*Server, error) {
 			progressBar.FinishPrint("File transfer completed")
 			// Set the value of the variable to the actually transferred files
 			htmlVariables.File = strings.Join(transferredFiles, ", ")
+			htmlVariables.Files = transferredFiles
+			htmlVariables.Count = len(transferredFiles)
 			if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				log.Printf("Template error: %v\n", err)

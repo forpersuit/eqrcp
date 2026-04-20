@@ -155,6 +155,7 @@ Exit criteria:
 - `eqrcp-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqrcp` exits with an error.
 - Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display.
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
+- `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
 
 ### Phase 3: Better QR And Status UI
 
@@ -166,9 +167,10 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
-- QR page purpose labels. In progress: the page identifies share vs receive and shows the target file, archive, or output directory.
-- Basic transfer progress. In progress: `/qr/status` exposes byte counters and percent for browser display.
-- Receive completion details. In progress: `/qr/status` records the files saved during receive and the QR page displays them after upload.
+- QR page purpose labels. Implemented: the page identifies share vs receive and shows the target file, archive, or output directory.
+- Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
+- Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
+- Mobile upload completion page. Implemented: after phone upload, the success page lists each saved file and uses a small mobile-friendly layout.
 - Last used output directory.
 - System tray entry.
 
@@ -184,9 +186,9 @@ Current progress model:
 
 Next priorities:
 
-1. Validate progress in Windows right-click share and receive flows.
-2. Improve receive completion details by listing saved files in the QR control page.
-3. Add setup repair checks for stale Windows registry paths and missing launcher placement.
+1. Validate progress and mobile upload completion pages in Windows right-click share and receive flows.
+2. Validate setup repair checks for stale Windows registry paths and missing launcher placement on Windows.
+3. Start Phase 4 desktop agent design once single-transfer UI behavior is stable.
 
 ### Phase 4: Desktop Agent And Single Instance
 

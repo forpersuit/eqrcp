@@ -87,6 +87,36 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	}
 }
 
+func TestDonePageListsTransferredFiles(t *testing.T) {
+	var out bytes.Buffer
+	data := struct {
+		File  string
+		Files []string
+		Count int
+	}{
+		File:  `C:\Downloads\one.txt, C:\Downloads\two file.txt`,
+		Files: []string{`C:\Downloads\one.txt`, `C:\Downloads\two file.txt`},
+		Count: 2,
+	}
+
+	if err := serveTemplate("done", pages.Done, &out, data); err != nil {
+		t.Fatalf("serveTemplate() error = %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		"Upload complete",
+		"2 files were sent to this device.",
+		"Saved files",
+		`C:\Downloads\one.txt`,
+		`C:\Downloads\two file.txt`,
+		"You can close this page now.",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("Done page = %q, want to contain %q", html, want)
+		}
+	}
+}
+
 func TestTransferStatus(t *testing.T) {
 	server := &Server{}
 	server.setStatus("waiting", "Waiting for a device to connect.")

@@ -197,6 +197,8 @@ Expected result:
 - On non-Windows systems, `desktop status` prints a platform not implemented status line.
 - On Windows, `desktop install` should create Explorer context menu entries under `HKCU\Software\Classes`.
 - On Windows, `desktop status` should report each expected registry entry and command.
+- On Windows, `desktop status` should mark entries as `needs repair` when they point at an older executable path or when the Send To script differs from the current executable.
+- On Windows, `desktop status` should show the expected `eqrcp-launcher.exe` path and explain the impact when the launcher is missing.
 - On Windows, `desktop uninstall` should remove those entries.
 
 ## Windows Desktop Install Manual Test
@@ -321,6 +323,30 @@ Expected result:
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
 - Posting to `/qr/stop` stops the server.
 - With the browser QR page enabled, successful one-shot transfers keep `/qr/status` available briefly after completion so the page can display `completed` before the process exits.
+
+## Mobile Upload Completion Page
+
+After a phone uploads files to a receive session, the browser response should make the result clear without needing the desktop QR page.
+
+Expected result:
+
+- The page title area says `Upload complete`.
+- The page shows the number of files sent.
+- Every saved file path appears as its own row.
+- Long file names and paths wrap inside the viewport on mobile.
+- The page tells the user that it is safe to close the page.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./server
+```
+
+Expected result:
+
+- The done-page template renders the completion title.
+- The done-page template renders a multi-file count.
+- The done-page template lists each transferred file separately.
 
 ## Desktop Share Flow
 
