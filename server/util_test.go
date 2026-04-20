@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"eqrcp/pages"
 )
@@ -93,4 +95,54 @@ func TestTransferStatus(t *testing.T) {
 	if got.State != "completed" || got.Message != "Transfer completed." {
 		t.Fatalf("getStatus() = %#v", got)
 	}
+}
+
+func TestSignalStopAfterStatusGraceWaitsForCompletedState(t *testing.T) {
+	server := &Server{stopChannel: make(chan bool, 1)}
+	server.SetStatusGracePeriod(10 * time.Millisecond)
+	server.setStatus("completed", "Transfer completed.")
+
+	start := time.Now()
+	server.signalStopAfterStatusGrace()
+
+	if elapsed := time.Since(start); elapsed < 10*time.Millisecond {
+		t.Fatalf("signalStopAfterStatusGrace() returned after %v, want at least grace period", elapsed)
+	}
+	select {
+	case <-server.stopChannel:
+	default:
+		t.Fatal("signalStopAfterStatusGrace() did not signal stop")
+	}
+}
+
+func TestSignalStopAfterStatusGraceDoesNotWaitForWaitingState(t *testing.T) {
+	server := &Server{stopChannel: make(chan bool, 1)}
+	server.SetStatusGracePeriod(time.Second)
+	server.setStatus("waiting", "Waiting for a device to connect.")
+
+	start := time.Now()
+	server.signalStopAfterStatusGrace()
+
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("signalStopAfterStatusGrace() returned after %v, want immediate stop", elapsed)
+	}
+	select {
+	case <-server.stopChannel:
+	default:
+		t.Fatal("signalStopAfterStatusGrace() did not signal stop")
+	}
+}
+
+func TestTransferStatusConcurrentAccess(t *testing.T) {
+	server := &Server{}
+	var waitGroup sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			server.setStatus("transferring", "Transfer in progress.")
+			_ = server.getStatus()
+		}()
+	}
+	waitGroup.Wait()
 }

@@ -171,6 +171,8 @@ After the right-click workflow is functional, improve visibility:
 
 The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
 
+When the browser QR page is enabled, successful one-shot transfers keep the server alive briefly after completion so the control page can show `completed` before the process exits.
+
 ## Recommended First Implementation
 
 Start with Phase 1 and implement:

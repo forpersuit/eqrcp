@@ -30,6 +30,7 @@ import (
 )
 
 const maxUploadBytes int64 = 10 << 30
+const defaultStatusGracePeriod = 15 * time.Second
 
 // Server is the server
 type Server struct {
@@ -45,6 +46,7 @@ type Server struct {
 	stopChannel chan bool
 	statusMu    sync.Mutex
 	status      transferStatus
+	statusGrace time.Duration
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -81,6 +83,7 @@ func (s *Server) Send(p body.Body) {
 
 // DisplayQR creates a handler for serving the QR code in the browser
 func (s *Server) DisplayQR(url string) error {
+	s.SetStatusGracePeriod(defaultStatusGracePeriod)
 	const (
 		pagePath   = "/qr"
 		imagePath  = "/qr/image"
@@ -138,6 +141,12 @@ func (s *Server) DisplayQR(url string) error {
 	return openBrowser(s.BaseURL + pagePath)
 }
 
+func (s *Server) SetStatusGracePeriod(duration time.Duration) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	s.statusGrace = duration
+}
+
 func (s *Server) setStatus(state string, message string) {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
@@ -148,6 +157,17 @@ func (s *Server) getStatus() transferStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 	return s.status
+}
+
+func (s *Server) signalStopAfterStatusGrace() {
+	s.statusMu.Lock()
+	delay := s.statusGrace
+	state := s.status.State
+	s.statusMu.Unlock()
+	if delay > 0 && state == "completed" {
+		time.Sleep(delay)
+	}
+	s.signalStop()
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
@@ -425,7 +445,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.setStatus("completed", "Transfer completed.")
 			if !cfg.KeepAlive {
-				app.signalStop()
+				app.signalStopAfterStatusGrace()
 			}
 		case "GET":
 			if err := serveTemplate("upload", pages.Upload, w, htmlVariables); err != nil {
@@ -442,7 +462,7 @@ func New(cfg *config.Config) (*Server, error) {
 		if cfg.KeepAlive || !app.expectParallelRequests {
 			return
 		}
-		app.signalStop()
+		app.signalStopAfterStatusGrace()
 	}()
 	go func() {
 		netListener := tcpKeepAliveListener{listener.(*net.TCPListener)}

@@ -312,6 +312,7 @@ Expected result:
 - The initial status response contains `waiting`.
 - After a successful download, the status response contains `completed`.
 - Posting to `/qr/stop` stops the server.
+- With the browser QR page enabled, successful one-shot transfers keep `/qr/status` available briefly after completion so the page can display `completed` before the process exits.
 
 ## Desktop Share Flow
 
