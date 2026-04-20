@@ -53,15 +53,16 @@ type Server struct {
 }
 
 type transferStatus struct {
-	State      string `json:"state"`
-	Mode       string `json:"mode,omitempty"`
-	Title      string `json:"title,omitempty"`
-	Target     string `json:"target,omitempty"`
-	Current    string `json:"current,omitempty"`
-	Message    string `json:"message"`
-	BytesDone  int64  `json:"bytesDone"`
-	BytesTotal int64  `json:"bytesTotal"`
-	Percent    int    `json:"percent"`
+	State      string   `json:"state"`
+	Mode       string   `json:"mode,omitempty"`
+	Title      string   `json:"title,omitempty"`
+	Target     string   `json:"target,omitempty"`
+	Current    string   `json:"current,omitempty"`
+	Message    string   `json:"message"`
+	BytesDone  int64    `json:"bytesDone"`
+	BytesTotal int64    `json:"bytesTotal"`
+	Percent    int      `json:"percent"`
+	SavedFiles []string `json:"savedFiles,omitempty"`
 }
 
 // ReceiveTo sets the output directory
@@ -407,6 +408,7 @@ func New(cfg *config.Config) (*Server, error) {
 				status.BytesDone = 0
 				status.BytesTotal = r.ContentLength
 				status.Percent = 0
+				status.SavedFiles = nil
 			})
 			filenames, err := util.ReadFilenames(app.outputDir)
 			if err != nil {
@@ -504,6 +506,9 @@ func New(cfg *config.Config) (*Server, error) {
 					return
 				}
 				transferredFiles = append(transferredFiles, out.Name())
+				app.updateStatus(func(status *transferStatus) {
+					status.SavedFiles = append([]string(nil), transferredFiles...)
+				})
 			}
 			progressBar.FinishPrint("File transfer completed")
 			// Set the value of the variable to the actually transferred files
@@ -515,6 +520,14 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			app.setStatus("completed", "Transfer completed.")
+			app.updateStatus(func(status *transferStatus) {
+				status.SavedFiles = append([]string(nil), transferredFiles...)
+				if len(transferredFiles) == 1 {
+					status.Message = "Received 1 file."
+				} else {
+					status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
+				}
+			})
 			if !cfg.KeepAlive {
 				go app.signalStopAfterStatusGrace()
 			}

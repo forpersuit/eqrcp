@@ -287,6 +287,7 @@ Expected result:
 - The page has a `Stop transfer` button.
 - The page updates the displayed transfer state without refreshing.
 - The page displays byte progress when the server knows a total size.
+- The page displays saved file paths after receive completes.
 - Posting to `/qr/stop` stops the current server.
 
 Automated checks:
@@ -301,6 +302,7 @@ Expected result:
 - The transfer status helper stores and returns waiting, transferring, completed, and stopped states.
 - Send metadata includes mode, title, target, total bytes, and percent.
 - Receive metadata includes mode, title, target output directory, and percent.
+- Receive completion metadata includes the actual saved file paths, including renamed paths when conflicts are resolved.
 
 Black-box checks:
 
@@ -316,6 +318,7 @@ Expected result:
 - The initial status response contains `waiting`.
 - After a successful download, the status response contains `completed`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
+- After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
 - Posting to `/qr/stop` stops the server.
 - With the browser QR page enabled, successful one-shot transfers keep `/qr/status` available briefly after completion so the page can display `completed` before the process exits.
 

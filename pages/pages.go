@@ -99,6 +99,14 @@ var QR = `
             transition: width 180ms ease;
             width: 0;
         }
+        .saved-files {
+            margin: 14px 0 0;
+            padding-left: 20px;
+        }
+        .saved-files li {
+            margin: 5px 0;
+            overflow-wrap: anywhere;
+        }
         @media (max-width: 560px) {
             .url-row {
                 flex-direction: column;
@@ -121,6 +129,7 @@ var QR = `
             <div class="progress" aria-hidden="true">
                 <div class="progress-bar" id="transfer-progress"></div>
             </div>
+            <ul class="saved-files" id="saved-files"></ul>
         </div>
         <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
         <div class="url-row">
@@ -165,6 +174,7 @@ var QR = `
                     document.getElementById('transfer-current').textContent = current ? ('Current: ' + current) : '';
                     document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
                     document.getElementById('transfer-progress').style.width = percent + '%';
+                    renderSavedFiles(data.savedFiles || []);
                     if (state === 'completed' || state === 'stopped') {
                         clearInterval(statusTimer);
                     }
@@ -172,6 +182,18 @@ var QR = `
                 .catch(function() {
                     document.getElementById('transfer-message').textContent = 'Status unavailable.';
                 });
+        }
+        function renderSavedFiles(files) {
+            var list = document.getElementById('saved-files');
+            list.innerHTML = '';
+            if (!files.length) {
+                return;
+            }
+            files.forEach(function(file) {
+                var item = document.createElement('li');
+                item.textContent = file;
+                list.appendChild(item);
+            });
         }
         function progressText(done, total, percent) {
             if (!total) {

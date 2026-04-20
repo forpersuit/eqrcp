@@ -75,6 +75,8 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		"Copy URL",
 		"Stop transfer",
 		`id="transfer-progress"`,
+		`id="saved-files"`,
+		`renderSavedFiles(data.savedFiles || [])`,
 		`formatBytes(done)`,
 		"Waiting for a device to connect.",
 		`name=&#34;quoted&#34;`,
@@ -97,6 +99,24 @@ func TestTransferStatus(t *testing.T) {
 	got = server.getStatus()
 	if got.State != "completed" || got.Message != "Transfer completed." {
 		t.Fatalf("getStatus() = %#v", got)
+	}
+}
+
+func TestTransferStatusStoresSavedFiles(t *testing.T) {
+	server := &Server{}
+	files := []string{`C:\Downloads\a.txt`, `C:\Downloads\a(1).txt`}
+	server.updateStatus(func(status *transferStatus) {
+		status.SavedFiles = append([]string(nil), files...)
+	})
+
+	got := server.getStatus()
+	if len(got.SavedFiles) != len(files) {
+		t.Fatalf("SavedFiles = %#v, want %#v", got.SavedFiles, files)
+	}
+	for index := range files {
+		if got.SavedFiles[index] != files[index] {
+			t.Fatalf("SavedFiles = %#v, want %#v", got.SavedFiles, files)
+		}
 	}
 }
 

@@ -168,6 +168,7 @@ After the right-click workflow is functional, improve visibility:
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
 - QR page purpose labels. In progress: the page identifies share vs receive and shows the target file, archive, or output directory.
 - Basic transfer progress. In progress: `/qr/status` exposes byte counters and percent for browser display.
+- Receive completion details. In progress: `/qr/status` records the files saved during receive and the QR page displays them after upload.
 - Last used output directory.
 - System tray entry.
 
@@ -186,6 +187,22 @@ Next priorities:
 1. Validate progress in Windows right-click share and receive flows.
 2. Improve receive completion details by listing saved files in the QR control page.
 3. Add setup repair checks for stale Windows registry paths and missing launcher placement.
+
+### Phase 4: Desktop Agent And Single Instance
+
+Status: planned.
+
+The current Windows desktop flow starts one `eqrcp-launcher.exe` and one `eqrcp.exe` process per right-click action. This is acceptable while validating single-transfer behavior, but it can leave many waiting processes when users start several shares or receives.
+
+The planned fix is a desktop agent:
+
+- `eqrcp desktop agent` runs as the single long-lived process.
+- `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly.
+- The agent owns transfer lifecycle, status pages, stop actions, and cleanup.
+- The agent can later expose a tray icon and current-task list.
+- The agent should prevent stale orphaned transfers from accumulating.
+
+This phase should start after the single-transfer share and receive browser UI is stable.
 
 ## Recommended First Implementation
 
