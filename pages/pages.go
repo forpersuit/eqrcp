@@ -80,6 +80,25 @@ var QR = `
             display: block;
             margin-bottom: 4px;
         }
+        .meta {
+            color: #3c4752;
+            font-size: 14px;
+            margin: 6px 0;
+            overflow-wrap: anywhere;
+        }
+        .progress {
+            background: #d9e1e8;
+            border-radius: 6px;
+            height: 12px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            background: #13795b;
+            height: 100%;
+            transition: width 180ms ease;
+            width: 0;
+        }
         @media (max-width: 560px) {
             .url-row {
                 flex-direction: column;
@@ -92,11 +111,16 @@ var QR = `
 </head>
 <body>
     <main>
-        <h1>eqrcp transfer ready</h1>
-        <p>Scan the QR code or open the address on another device.</p>
+        <h1 id="transfer-title">eqrcp transfer ready</h1>
+        <p id="transfer-target">Scan the QR code or open the address on another device.</p>
         <div class="status" aria-live="polite">
             <strong id="transfer-state">Waiting</strong>
             <span id="transfer-message">Waiting for a device to connect.</span>
+            <div class="meta" id="transfer-current"></div>
+            <div class="meta" id="transfer-bytes"></div>
+            <div class="progress" aria-hidden="true">
+                <div class="progress-bar" id="transfer-progress"></div>
+            </div>
         </div>
         <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
         <div class="url-row">
@@ -130,8 +154,17 @@ var QR = `
                 .then(function(data) {
                     var state = data.state || 'waiting';
                     var message = data.message || '';
+                    var percent = data.percent || 0;
+                    var title = data.title || 'eqrcp transfer ready';
+                    var target = data.target || '';
+                    var current = data.current || '';
                     document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
                     document.getElementById('transfer-message').textContent = message;
+                    document.getElementById('transfer-title').textContent = title;
+                    document.getElementById('transfer-target').textContent = target ? target : 'Scan the QR code or open the address on another device.';
+                    document.getElementById('transfer-current').textContent = current ? ('Current: ' + current) : '';
+                    document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
+                    document.getElementById('transfer-progress').style.width = percent + '%';
                     if (state === 'completed' || state === 'stopped') {
                         clearInterval(statusTimer);
                     }
@@ -139,6 +172,22 @@ var QR = `
                 .catch(function() {
                     document.getElementById('transfer-message').textContent = 'Status unavailable.';
                 });
+        }
+        function progressText(done, total, percent) {
+            if (!total) {
+                return percent ? (percent + '%') : '';
+            }
+            return formatBytes(done) + ' / ' + formatBytes(total) + ' (' + percent + '%)';
+        }
+        function formatBytes(value) {
+            var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var size = value;
+            var index = 0;
+            while (size >= 1024 && index < units.length - 1) {
+                size = size / 1024;
+                index++;
+            }
+            return (index === 0 ? size : size.toFixed(1)) + ' ' + units[index];
         }
         var statusTimer = setInterval(updateStatus, 1500);
         updateStatus();

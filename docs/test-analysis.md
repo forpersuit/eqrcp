@@ -282,9 +282,11 @@ Expected result:
 - `/qr/image` serves the QR code image.
 - `/qr/status` serves the current transfer state as JSON.
 - The page shows the transfer URL in a read-only input.
+- The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - The page has a `Copy URL` button.
 - The page has a `Stop transfer` button.
 - The page updates the displayed transfer state without refreshing.
+- The page displays byte progress when the server knows a total size.
 - Posting to `/qr/stop` stops the current server.
 
 Automated checks:
@@ -297,6 +299,8 @@ Expected result:
 
 - The QR page template includes the image route, stop route, copy button, stop button, and escapes the transfer URL.
 - The transfer status helper stores and returns waiting, transferring, completed, and stopped states.
+- Send metadata includes mode, title, target, total bytes, and percent.
+- Receive metadata includes mode, title, target output directory, and percent.
 
 Black-box checks:
 
@@ -311,6 +315,7 @@ Expected result:
 
 - The initial status response contains `waiting`.
 - After a successful download, the status response contains `completed`.
+- During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - Posting to `/qr/stop` stops the server.
 - With the browser QR page enabled, successful one-shot transfers keep `/qr/status` available briefly after completion so the page can display `completed` before the process exits.
 

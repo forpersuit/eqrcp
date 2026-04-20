@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"eqrcp/body"
 	"eqrcp/pages"
 )
 
@@ -73,6 +74,8 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`fetch('\/qr\/status'`,
 		"Copy URL",
 		"Stop transfer",
+		`id="transfer-progress"`,
+		`formatBytes(done)`,
 		"Waiting for a device to connect.",
 		`name=&#34;quoted&#34;`,
 	} {
@@ -94,6 +97,67 @@ func TestTransferStatus(t *testing.T) {
 	got = server.getStatus()
 	if got.State != "completed" || got.Message != "Transfer completed." {
 		t.Fatalf("getStatus() = %#v", got)
+	}
+}
+
+func TestSendSetsStatusMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{}
+	server.Send(body.Body{Path: path, Filename: "report.txt"})
+
+	got := server.getStatus()
+	if got.Mode != "send" || got.Title != "Share file" || got.Target != "report.txt" {
+		t.Fatalf("getStatus() = %#v", got)
+	}
+	if got.BytesTotal != 5 {
+		t.Fatalf("BytesTotal = %d, want 5", got.BytesTotal)
+	}
+}
+
+func TestReceiveToSetsStatusMetadata(t *testing.T) {
+	dir := t.TempDir()
+	server := &Server{}
+	if err := server.ReceiveTo(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	got := server.getStatus()
+	if got.Mode != "receive" || got.Title != "Receive files" || got.Target != dir {
+		t.Fatalf("getStatus() = %#v", got)
+	}
+}
+
+func TestSendTitle(t *testing.T) {
+	tests := map[string]string{
+		"report.txt":               "Share file",
+		"photos-directory.zip":     "Share directory",
+		"eqrcp-multiple-files.zip": "Share multiple files",
+	}
+	for filename, want := range tests {
+		if got := sendTitle(filename); got != want {
+			t.Fatalf("sendTitle(%q) = %q, want %q", filename, got, want)
+		}
+	}
+}
+
+func TestTransferPercent(t *testing.T) {
+	tests := []struct {
+		done  int64
+		total int64
+		want  int
+	}{
+		{done: 0, total: 100, want: 0},
+		{done: 25, total: 100, want: 25},
+		{done: 150, total: 100, want: 100},
+		{done: 25, total: 0, want: 0},
+	}
+	for _, test := range tests {
+		if got := transferPercent(test.done, test.total); got != test.want {
+			t.Fatalf("transferPercent(%d, %d) = %d, want %d", test.done, test.total, got, test.want)
+		}
 	}
 }
 

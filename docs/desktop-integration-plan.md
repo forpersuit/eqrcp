@@ -166,12 +166,26 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
+- QR page purpose labels. In progress: the page identifies share vs receive and shows the target file, archive, or output directory.
+- Basic transfer progress. In progress: `/qr/status` exposes byte counters and percent for browser display.
 - Last used output directory.
 - System tray entry.
 
 The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
 
 When the browser QR page is enabled, successful one-shot transfers keep the server alive briefly after completion so the control page can show `completed` before the process exits.
+
+Current progress model:
+
+- Send progress counts bytes written by the server response and caps the UI at 100%.
+- Receive progress counts bytes read from uploaded file parts and uses the request content length as the best available total.
+- Browser range or parallel download requests may make send progress approximate, but the UI should remain monotonic and never exceed 100%.
+
+Next priorities:
+
+1. Validate progress in Windows right-click share and receive flows.
+2. Improve receive completion details by listing saved files in the QR control page.
+3. Add setup repair checks for stale Windows registry paths and missing launcher placement.
 
 ## Recommended First Implementation
 

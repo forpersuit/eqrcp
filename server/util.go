@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -61,4 +62,38 @@ func contentDisposition(filename string) string {
 		quoted,
 		url.PathEscape(filename),
 	)
+}
+
+func sendTitle(filename string) string {
+	switch {
+	case filename == "eqrcp-multiple-files.zip":
+		return "Share multiple files"
+	case strings.HasSuffix(filename, "-directory.zip"):
+		return "Share directory"
+	default:
+		return "Share file"
+	}
+}
+
+func transferPercent(done int64, total int64) int {
+	if total <= 0 || done <= 0 {
+		return 0
+	}
+	if done >= total {
+		return 100
+	}
+	return int(done * 100 / total)
+}
+
+type progressResponseWriter struct {
+	http.ResponseWriter
+	onWrite func(int64)
+}
+
+func (w *progressResponseWriter) Write(data []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(data)
+	if n > 0 && w.onWrite != nil {
+		w.onWrite(int64(n))
+	}
+	return n, err
 }

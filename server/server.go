@@ -53,8 +53,15 @@ type Server struct {
 }
 
 type transferStatus struct {
-	State   string `json:"state"`
-	Message string `json:"message"`
+	State      string `json:"state"`
+	Mode       string `json:"mode,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Target     string `json:"target,omitempty"`
+	Current    string `json:"current,omitempty"`
+	Message    string `json:"message"`
+	BytesDone  int64  `json:"bytesDone"`
+	BytesTotal int64  `json:"bytesTotal"`
+	Percent    int    `json:"percent"`
 }
 
 // ReceiveTo sets the output directory
@@ -72,6 +79,12 @@ func (s *Server) ReceiveTo(dir string) error {
 		return fmt.Errorf("%s is not a valid directory", output)
 	}
 	s.outputDir = output
+	s.updateStatus(func(status *transferStatus) {
+		status.Mode = "receive"
+		status.Title = "Receive files"
+		status.Target = output
+		status.Message = "Scan to upload files to this folder."
+	})
 	return nil
 }
 
@@ -79,6 +92,19 @@ func (s *Server) ReceiveTo(dir string) error {
 func (s *Server) Send(p body.Body) {
 	s.body = p
 	s.expectParallelRequests = true
+	total := int64(0)
+	if info, err := os.Stat(p.Path); err == nil {
+		total = info.Size()
+	}
+	s.updateStatus(func(status *transferStatus) {
+		status.Mode = "send"
+		status.Title = sendTitle(p.Filename)
+		status.Target = p.Filename
+		status.Message = "Scan to download this item."
+		status.BytesDone = 0
+		status.BytesTotal = total
+		status.Percent = 0
+	})
 }
 
 // DisplayQR creates a handler for serving the QR code in the browser
@@ -150,13 +176,25 @@ func (s *Server) SetStatusGracePeriod(duration time.Duration) {
 func (s *Server) setStatus(state string, message string) {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
-	s.status = transferStatus{State: state, Message: message}
+	s.status.State = state
+	s.status.Message = message
+	if state == "completed" {
+		s.status.BytesDone = s.status.BytesTotal
+		s.status.Percent = 100
+	}
 }
 
 func (s *Server) getStatus() transferStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 	return s.status
+}
+
+func (s *Server) updateStatus(update func(*transferStatus)) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	update(&s.status)
+	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
 }
 
 func (s *Server) signalStopAfterStatusGrace() {
@@ -300,6 +338,13 @@ func New(cfg *config.Config) (*Server, error) {
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		app.setStatus("transferring", "Sending file to connected device.")
+		app.updateStatus(func(status *transferStatus) {
+			status.Current = app.body.Filename
+			status.BytesDone = 0
+			if info, err := os.Stat(app.body.Path); err == nil {
+				status.BytesTotal = info.Size()
+			}
+		})
 		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") {
 			if cookie.Value == "" {
 				initCookie.Do(func() {
@@ -334,7 +379,18 @@ func New(cfg *config.Config) (*Server, error) {
 			defer waitgroup.Done()
 		}
 		w.Header().Set("Content-Disposition", contentDisposition(app.body.Filename))
-		http.ServeFile(w, r, app.body.Path)
+		progressWriter := &progressResponseWriter{
+			ResponseWriter: w,
+			onWrite: func(written int64) {
+				app.updateStatus(func(status *transferStatus) {
+					status.BytesDone += written
+					if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
+						status.BytesDone = status.BytesTotal
+					}
+				})
+			},
+		}
+		http.ServeFile(progressWriter, r, app.body.Path)
 		app.setStatus("completed", "Transfer completed.")
 	})
 	// Upload handler (serves the upload page)
@@ -347,6 +403,11 @@ func New(cfg *config.Config) (*Server, error) {
 		switch r.Method {
 		case "POST":
 			app.setStatus("transferring", "Receiving files from connected device.")
+			app.updateStatus(func(status *transferStatus) {
+				status.BytesDone = 0
+				status.BytesTotal = r.ContentLength
+				status.Percent = 0
+			})
 			filenames, err := util.ReadFilenames(app.outputDir)
 			if err != nil {
 				fmt.Fprintf(w, "Unable to read output directory: %v\n", err)
@@ -389,6 +450,10 @@ func New(cfg *config.Config) (*Server, error) {
 				filenames = append(filenames, fileName)
 				// Write the content from POSTed file to the out
 				fmt.Println("Transferring file: ", out.Name())
+				app.updateStatus(func(status *transferStatus) {
+					status.Current = fileName
+					status.Message = "Receiving " + fileName + "."
+				})
 				progressBar.Prefix(out.Name())
 				progressBar.Start()
 				buf := make([]byte, 32*1024)
@@ -424,6 +489,12 @@ func New(cfg *config.Config) (*Server, error) {
 						app.signalStop()
 						return
 					}
+					app.updateStatus(func(status *transferStatus) {
+						status.BytesDone += int64(n)
+						if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
+							status.BytesDone = status.BytesTotal
+						}
+					})
 					progressBar.Add(n)
 				}
 				if err := out.Close(); err != nil {
@@ -445,7 +516,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.setStatus("completed", "Transfer completed.")
 			if !cfg.KeepAlive {
-				app.signalStopAfterStatusGrace()
+				go app.signalStopAfterStatusGrace()
 			}
 		case "GET":
 			if err := serveTemplate("upload", pages.Upload, w, htmlVariables); err != nil {
