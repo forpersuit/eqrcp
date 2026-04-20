@@ -267,6 +267,11 @@ Expected result:
 - The message includes the underlying `eqrcp` error in `Details:`.
 - The message box stays visible until the user dismisses it.
 
+Implementation note:
+
+- The Windows launcher calls `user32.dll` `MessageBoxW` directly. It should not start PowerShell or show a transient console window for error display.
+- Context menu tests must use a launcher named `eqrcp-launcher.exe` next to the main executable before running `desktop install`; otherwise the installer cannot register the no-console launcher path.
+
 ## Desktop Share Flow
 
 The desktop share flow was validated by intercepting `xdg-open` with a temporary test script and downloading the shared file over loopback.
