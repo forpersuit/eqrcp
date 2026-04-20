@@ -348,6 +348,37 @@ Expected result:
 - The done-page template renders a multi-file count.
 - The done-page template lists each transferred file separately.
 
+## Desktop Agent
+
+The desktop agent is the first step toward a single-instance desktop flow.
+
+Command:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go run . desktop agent
+```
+
+Expected result:
+
+- The command starts a local HTTP control service at `127.0.0.1:48176`.
+- `GET /health` returns success when the agent is alive.
+- `GET /status` returns `idle` when no transfer is running.
+- `POST /tasks` accepts one `share` or `receive` task.
+- While a task is active, a second `POST /tasks` returns `409 Conflict`.
+- The agent keeps running after a task finishes and records the last task error if one occurred.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./cmd
+```
+
+Expected result:
+
+- Agent task validation rejects malformed actions.
+- The agent accepts a valid task and runs it through the configured runner.
+- The agent reports `busy` and rejects overlapping tasks while one task is active.
+
 ## Desktop Share Flow
 
 The desktop share flow was validated by intercepting `xdg-open` with a temporary test script and downloading the shared file over loopback.

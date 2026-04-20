@@ -192,19 +192,29 @@ Next priorities:
 
 ### Phase 4: Desktop Agent And Single Instance
 
-Status: planned.
+Status: in progress.
 
 The current Windows desktop flow starts one `eqrcp-launcher.exe` and one `eqrcp.exe` process per right-click action. This is acceptable while validating single-transfer behavior, but it can leave many waiting processes when users start several shares or receives.
 
 The planned fix is a desktop agent:
 
-- `eqrcp desktop agent` runs as the single long-lived process.
+- `eqrcp desktop agent` runs as the single long-lived process. Initial command and local API are implemented.
 - `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly.
-- The agent owns transfer lifecycle, status pages, stop actions, and cleanup.
+- The agent owns transfer lifecycle, status pages, stop actions, and cleanup. Initial implementation accepts one active task and rejects overlapping tasks with `409 Conflict`.
 - The agent can later expose a tray icon and current-task list.
 - The agent should prevent stale orphaned transfers from accumulating.
 
-This phase should start after the single-transfer share and receive browser UI is stable.
+Initial local API:
+
+- `GET /health` checks whether the agent is alive.
+- `GET /status` returns `idle` or `busy`, the active task, and the last task error.
+- `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
+
+Next priorities:
+
+1. Add launcher/client forwarding so `eqrcp-launcher.exe` tries the agent first.
+2. Add automatic agent startup when the launcher cannot reach an existing agent.
+3. Update Windows install commands to use forwarding mode after manual validation.
 
 ## Recommended First Implementation
 
