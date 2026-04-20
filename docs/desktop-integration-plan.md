@@ -153,6 +153,7 @@ Exit criteria:
 - Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
 - `eqrcp-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqrcp.exe`.
 - `eqrcp-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqrcp` exits with an error.
+- Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display. Manual Windows validation is still required for the native message box.
 
 ### Phase 3: Better QR And Status UI
 

@@ -1,22 +1,34 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		return
+	message := runLauncher(os.Args[1:])
+	if message != "" {
+		showError(message)
+	}
+}
+
+func runLauncher(rawArgs []string) string {
+	if len(rawArgs) == 0 {
+		return formatError(errors.New("missing launcher action"), "", "", nil)
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return
+		return formatError(err, "", "", nil)
 	}
-	eqrcp, args := parseArgs(os.Args[1:])
+	eqrcp, args, err := parseArgs(rawArgs)
+	if err != nil {
+		return formatError(err, "", "", nil)
+	}
 	if eqrcp == "" {
 		eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp.exe")
 		if _, err := os.Stat(eqrcp); err != nil {
@@ -33,15 +45,19 @@ func main() {
 		cmd.Stderr = logFile
 	}
 	if err := cmd.Run(); err != nil {
-		showError(formatError(err, logPath))
+		return formatError(err, logPath, eqrcp, args)
 	}
+	return ""
 }
 
-func parseArgs(args []string) (string, []string) {
-	if len(args) >= 2 && args[0] == "--eqrcp-exe" {
-		return args[1], args[2:]
+func parseArgs(args []string) (string, []string, error) {
+	if len(args) > 0 && args[0] == "--eqrcp-exe" {
+		if len(args) < 2 || args[1] == "" {
+			return "", nil, errors.New("missing value for --eqrcp-exe")
+		}
+		return args[1], args[2:], nil
 	}
-	return "", args
+	return "", args, nil
 }
 
 func createLog() (*os.File, string, error) {
@@ -60,8 +76,11 @@ func createLog() (*os.File, string, error) {
 	return file, file.Name(), nil
 }
 
-func formatError(err error, logPath string) string {
+func formatError(err error, logPath string, exe string, args []string) string {
 	message := fmt.Sprintf("eqrcp failed: %v", err)
+	if exe != "" {
+		message += fmt.Sprintf("\n\nCommand: %s", commandLine(exe, args))
+	}
 	if logPath == "" {
 		return message
 	}
@@ -70,6 +89,24 @@ func formatError(err error, logPath string) string {
 		message += "\n\nDetails:\n" + details
 	}
 	return message
+}
+
+func commandLine(exe string, args []string) string {
+	values := append([]string{exe}, args...)
+	for index, value := range values {
+		values[index] = quoteForDisplay(value)
+	}
+	return strings.Join(values, " ")
+}
+
+func quoteForDisplay(value string) string {
+	if value == "" {
+		return `""`
+	}
+	if !strings.ContainsAny(value, " \t\r\n\"") {
+		return value
+	}
+	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }
 
 func readTail(path string, limit int64) string {

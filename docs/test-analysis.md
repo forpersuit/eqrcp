@@ -235,6 +235,38 @@ Expected result:
 
 - The entries created by `desktop install` are removed.
 
+## Windows Launcher Error Display
+
+The no-console launcher should make failures visible even when Explorer starts it without a terminal.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./cmd/eqrcp-launcher
+```
+
+Expected result:
+
+- Missing `--eqrcp-exe` values return a clear launcher error.
+- Formatted errors include the failed command.
+- Formatted errors include the launcher log path.
+- Formatted errors include the tail of the launcher log.
+
+Manual Windows check:
+
+```powershell
+E:\developer\results\eqrcp-launcher.exe --eqrcp-exe E:\developer\results\eqrcp.exe share Z:\eqrcp-missing-file.txt
+```
+
+Expected result:
+
+- A native Windows message box opens with title `eqrcp`.
+- The message starts with `eqrcp failed:`.
+- The message includes the command that failed.
+- The message includes a `Log:` path under the user cache directory.
+- The message includes the underlying `eqrcp` error in `Details:`.
+- The message box stays visible until the user dismisses it.
+
 ## Desktop Share Flow
 
 The desktop share flow was validated by intercepting `xdg-open` with a temporary test script and downloading the shared file over loopback.
