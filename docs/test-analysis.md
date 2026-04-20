@@ -272,6 +272,29 @@ Implementation note:
 - The Windows launcher calls `user32.dll` `MessageBoxW` directly. It should not start PowerShell or show a transient console window for error display.
 - Context menu tests must use a launcher named `eqrcp-launcher.exe` next to the main executable before running `desktop install`; otherwise the installer cannot register the no-console launcher path.
 
+## Browser QR Control Page
+
+Desktop share and receive commands open a browser page at `/qr`.
+
+Expected result:
+
+- `/qr` serves an HTML control page.
+- `/qr/image` serves the QR code image.
+- The page shows the transfer URL in a read-only input.
+- The page has a `Copy URL` button.
+- The page has a `Stop transfer` button.
+- Posting to `/qr/stop` stops the current server.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./server
+```
+
+Expected result:
+
+- The QR page template includes the image route, stop route, copy button, stop button, and escapes the transfer URL.
+
 ## Desktop Share Flow
 
 The desktop share flow was validated by intercepting `xdg-open` with a temporary test script and downloading the shared file over loopback.

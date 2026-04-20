@@ -1,5 +1,114 @@
 package pages
 
+// QR page
+var QR = `
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>eqrcp</title>
+    <style>
+        body {
+            background: #f7f9fb;
+            color: #202428;
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+        }
+        main {
+            margin: 0 auto;
+            max-width: 760px;
+            padding: 28px 18px 40px;
+        }
+        h1 {
+            font-size: 28px;
+            line-height: 1.2;
+            margin: 0 0 8px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.5;
+            margin: 0 0 18px;
+        }
+        .qr {
+            background: #fff;
+            border: 1px solid #d7dee5;
+            border-radius: 8px;
+            display: block;
+            margin: 20px auto;
+            max-width: 360px;
+            padding: 18px;
+            width: calc(100% - 36px);
+        }
+        .url-row {
+            display: flex;
+            gap: 8px;
+            margin: 16px 0;
+        }
+        input {
+            border: 1px solid #b9c3cc;
+            border-radius: 6px;
+            flex: 1;
+            font-size: 15px;
+            min-width: 0;
+            padding: 10px;
+        }
+        button {
+            background: #13795b;
+            border: 0;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 15px;
+            padding: 10px 14px;
+        }
+        .stop {
+            background: #a52834;
+        }
+        .hint {
+            color: #59636e;
+            font-size: 14px;
+        }
+        @media (max-width: 560px) {
+            .url-row {
+                flex-direction: column;
+            }
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>eqrcp transfer ready</h1>
+        <p>Scan the QR code or open the address on another device.</p>
+        <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
+        <div class="url-row">
+            <input id="transfer-url" type="text" value="{{.URL}}" readonly>
+            <button type="button" onclick="copyURL()">Copy URL</button>
+        </div>
+        <form method="post" action="{{.StopRoute}}">
+            <button class="stop" type="submit">Stop transfer</button>
+        </form>
+        <p class="hint">This page can stay open while the transfer is waiting.</p>
+    </main>
+    <script>
+        function copyURL() {
+            var input = document.getElementById('transfer-url');
+            input.focus();
+            input.select();
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(input.value);
+                return;
+            }
+            document.execCommand('copy');
+        }
+    </script>
+</body>
+</html>
+`
+
 // Upload page
 var Upload = `
 <!doctype html>

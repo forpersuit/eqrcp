@@ -153,20 +153,23 @@ Exit criteria:
 - Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
 - `eqrcp-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqrcp.exe`.
 - `eqrcp-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqrcp` exits with an error.
-- Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display. Manual Windows validation is still required for the native message box.
+- Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display.
+- Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 
 ### Phase 3: Better QR And Status UI
+
+Status: in progress.
 
 After the right-click workflow is functional, improve visibility:
 
 - Dedicated QR window.
-- Copy URL button.
-- Stop server button.
+- Copy URL button. Implemented in the browser QR page.
+- Stop server button. Implemented in the browser QR page.
 - Transfer status.
 - Last used output directory.
 - System tray entry.
 
-This phase may require a GUI library or a browser-based local UI. Do not start here unless Phase 1 and Phase 2 expose a real need.
+The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, and `/qr/stop` stops the current transfer.
 
 ## Recommended First Implementation
 

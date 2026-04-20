@@ -73,18 +73,47 @@ func (s *Server) Send(p body.Body) {
 
 // DisplayQR creates a handler for serving the QR code in the browser
 func (s *Server) DisplayQR(url string) error {
-	const PATH = "/qr"
+	const (
+		pagePath  = "/qr"
+		imagePath = "/qr/image"
+		stopPath  = "/qr/stop"
+	)
 	qrImg, err := qr.RenderImage(url)
 	if err != nil {
 		return err
 	}
-	s.mux.HandleFunc(PATH, func(w http.ResponseWriter, r *http.Request) {
+	s.mux.HandleFunc(imagePath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/jpeg")
 		if err := jpeg.Encode(w, qrImg, nil); err != nil {
 			log.Println(err)
 		}
 	})
-	return openBrowser(s.BaseURL + PATH)
+	s.mux.HandleFunc(stopPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		fmt.Fprintln(w, "Transfer stopped. You can close this page.")
+		s.signalStop()
+	})
+	s.mux.HandleFunc(pagePath, func(w http.ResponseWriter, r *http.Request) {
+		htmlVariables := struct {
+			URL          string
+			QRImageRoute string
+			StopRoute    string
+		}{
+			URL:          url,
+			QRImageRoute: imagePath,
+			StopRoute:    stopPath,
+		}
+		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Template error: %v\n", err)
+			s.signalStop()
+			return
+		}
+	})
+	return openBrowser(s.BaseURL + pagePath)
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive

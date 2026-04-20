@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"eqrcp/pages"
 )
 
 func TestGetFileName(t *testing.T) {
@@ -40,5 +44,34 @@ func TestContentDispositionEscapesSpacesAsPercent20(t *testing.T) {
 	want := `attachment; filename="my file \"final\".txt"; filename*=UTF-8''my%20file%20%22final%22.txt`
 	if got != want {
 		t.Fatalf("contentDisposition() = %q, want %q", got, want)
+	}
+}
+
+func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
+	var out bytes.Buffer
+	data := struct {
+		URL          string
+		QRImageRoute string
+		StopRoute    string
+	}{
+		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
+		QRImageRoute: "/qr/image",
+		StopRoute:    "/qr/stop",
+	}
+
+	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
+		t.Fatalf("serveTemplate() error = %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		`src="/qr/image"`,
+		`action="/qr/stop"`,
+		"Copy URL",
+		"Stop transfer",
+		`name=&#34;quoted&#34;`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("QR page = %q, want to contain %q", html, want)
+		}
 	}
 }
