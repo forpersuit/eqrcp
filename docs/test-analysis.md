@@ -369,6 +369,7 @@ Expected result:
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
+- `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 
 Automated checks:
@@ -385,6 +386,7 @@ Expected result:
 - The agent runs the accepted later task after the current task exits.
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
+- The agent status formatter renders current task details and recent history.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.
 
 ## Launcher Agent Forwarding

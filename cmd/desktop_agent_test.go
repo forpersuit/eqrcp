@@ -210,6 +210,47 @@ func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
 	}
 }
 
+func TestFormatDesktopAgentStatus(t *testing.T) {
+	started := time.Date(2026, 4, 21, 10, 0, 0, 0, time.UTC)
+	finished := started.Add(time.Minute)
+	status := desktopAgentResponse{
+		State:  "busy",
+		Queued: 1,
+		Current: &desktopAgentTaskRecord{
+			ID:        2,
+			Action:    "share",
+			Paths:     []string{`C:\tmp\second.txt`},
+			State:     "running",
+			StartedAt: started,
+		},
+		History: []desktopAgentTaskRecord{
+			{
+				ID:         1,
+				Action:     "share",
+				Paths:      []string{`C:\tmp\first.txt`},
+				State:      "replaced",
+				StartedAt:  started,
+				FinishedAt: &finished,
+			},
+		},
+	}
+
+	got := formatDesktopAgentStatus(status)
+	for _, want := range []string{
+		"Desktop agent status",
+		"- state: busy",
+		"- queued: 1",
+		"#2 share running",
+		`paths: C:\tmp\second.txt`,
+		"#1 share replaced",
+		`paths: C:\tmp\first.txt`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("formatDesktopAgentStatus() = %q, want to contain %q", got, want)
+		}
+	}
+}
+
 func postAgentTask(t *testing.T, baseURL string, task desktopAgentTask) *http.Response {
 	t.Helper()
 	data, err := json.Marshal(task)

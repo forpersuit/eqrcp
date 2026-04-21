@@ -213,6 +213,7 @@ Initial local API:
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
+- `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
 - If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
 - If the agent is online and already waiting on a previous transfer, the new task is accepted and the agent stops the current server so the new QR page can open.
@@ -222,7 +223,7 @@ Next priorities:
 
 1. Add a browser-based agent status page showing current task, recent history, stop-agent, and stop-current actions.
 2. Add a dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
-3. Improve Windows status output to include whether the agent is currently running.
+3. Decide whether desktop share should support repeat downloads from the same QR or show a clear expired/replaced page after first use.
 
 ## Recommended First Implementation
 

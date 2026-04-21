@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -326,4 +328,78 @@ var desktopAgentStopCmd = &cobra.Command{
 		fmt.Fprintln(command.OutOrStdout(), "Desktop agent stopped.")
 		return nil
 	},
+}
+
+var desktopAgentStatusCmd = &cobra.Command{
+	Use:   "agent-status",
+	Short: "Show desktop integration agent status",
+	Long:  "Show the local desktop integration agent status and recent task history.",
+	RunE: func(command *cobra.Command, args []string) error {
+		status, err := fetchDesktopAgentStatus()
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(command.OutOrStdout(), formatDesktopAgentStatus(status))
+		return nil
+	},
+}
+
+func fetchDesktopAgentStatus() (desktopAgentResponse, error) {
+	response, err := http.Get("http://" + desktopAgentAddress + "/status")
+	if err != nil {
+		return desktopAgentResponse{}, fmt.Errorf("desktop agent is not running: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		details, _ := io.ReadAll(io.LimitReader(response.Body, 1000))
+		message := strings.TrimSpace(string(details))
+		if message == "" {
+			message = response.Status
+		}
+		return desktopAgentResponse{}, fmt.Errorf("desktop agent status failed: %s", message)
+	}
+	var status desktopAgentResponse
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		return desktopAgentResponse{}, err
+	}
+	return status, nil
+}
+
+func formatDesktopAgentStatus(status desktopAgentResponse) string {
+	var builder strings.Builder
+	builder.WriteString("Desktop agent status\n")
+	builder.WriteString(fmt.Sprintf("- state: %s\n", status.State))
+	builder.WriteString(fmt.Sprintf("- queued: %d\n", status.Queued))
+	if status.Current != nil {
+		builder.WriteString("- current:\n")
+		writeDesktopAgentRecord(&builder, *status.Current, "  ")
+	}
+	if status.LastError != "" {
+		builder.WriteString(fmt.Sprintf("- last error: %s\n", status.LastError))
+	}
+	if len(status.History) == 0 {
+		builder.WriteString("- history: empty\n")
+		return builder.String()
+	}
+	builder.WriteString("- history:\n")
+	for _, record := range status.History {
+		writeDesktopAgentRecord(&builder, record, "  ")
+	}
+	return builder.String()
+}
+
+func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRecord, indent string) {
+	builder.WriteString(fmt.Sprintf("%s- #%d %s %s\n", indent, record.ID, record.Action, record.State))
+	if len(record.Paths) > 0 {
+		builder.WriteString(fmt.Sprintf("%s  paths: %s\n", indent, strings.Join(record.Paths, ", ")))
+	}
+	if !record.StartedAt.IsZero() {
+		builder.WriteString(fmt.Sprintf("%s  started: %s\n", indent, record.StartedAt.Format(time.RFC3339)))
+	}
+	if record.FinishedAt != nil {
+		builder.WriteString(fmt.Sprintf("%s  finished: %s\n", indent, record.FinishedAt.Format(time.RFC3339)))
+	}
+	if record.Error != "" {
+		builder.WriteString(fmt.Sprintf("%s  error: %s\n", indent, record.Error))
+	}
 }
