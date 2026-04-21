@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"strings"
@@ -66,11 +67,27 @@ func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 
 func (agent *desktopAgent) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", agent.handlePage)
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
 	mux.HandleFunc("/tasks", agent.handleTasks)
+	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
 	return mux
+}
+
+func (agent *desktopAgent) handlePage(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	status := agent.snapshot()
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = desktopAgentPageTemplate.Execute(w, status)
 }
 
 func (agent *desktopAgent) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -112,13 +129,30 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	agent.queue = append(agent.queue, task)
 	agent.lastError = ""
 	if agent.busy {
-		agent.replaceActiveLocked()
+		agent.replaceActiveLocked("replaced")
 	}
 	agent.startNextLocked()
 	agent.mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
 	agent.writeStatus(w)
+}
+
+func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !agent.stopCurrent("stopped") {
+		http.Error(w, "desktop agent has no active task", http.StatusConflict)
+		return
+	}
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintln(w, "Current desktop agent task stopped.")
 }
 
 func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +163,7 @@ func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request
 	agent.mu.Lock()
 	agent.queue = nil
 	if agent.busy {
-		agent.replaceActiveLocked()
+		agent.replaceActiveLocked("replaced")
 	}
 	shutdown := agent.shutdown
 	agent.mu.Unlock()
@@ -165,9 +199,19 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 	agent.startNextLocked()
 }
 
-func (agent *desktopAgent) replaceActiveLocked() {
+func (agent *desktopAgent) stopCurrent(state string) bool {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if !agent.busy {
+		return false
+	}
+	agent.replaceActiveLocked(state)
+	return true
+}
+
+func (agent *desktopAgent) replaceActiveLocked(state string) {
 	if agent.current != nil && agent.current.State == "running" {
-		agent.current.State = "replaced"
+		agent.current.State = state
 		finishedAt := time.Now()
 		agent.current.FinishedAt = &finishedAt
 	}
@@ -204,6 +248,12 @@ func (agent *desktopAgent) setActiveStop(stop func()) {
 }
 
 func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
+	response := agent.snapshot()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (agent *desktopAgent) snapshot() desktopAgentResponse {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	response := desktopAgentResponse{
@@ -220,8 +270,7 @@ func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 			response.Current = &current
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	return response
 }
 
 func (agent *desktopAgent) addHistoryLocked(record desktopAgentTaskRecord) {
@@ -403,3 +452,226 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 		builder.WriteString(fmt.Sprintf("%s  error: %s\n", indent, record.Error))
 	}
 }
+
+var desktopAgentPageTemplate = template.Must(template.New("desktop-agent").Funcs(template.FuncMap{
+	"formatTime": func(value time.Time) string {
+		if value.IsZero() {
+			return ""
+		}
+		return value.Format("2006-01-02 15:04:05")
+	},
+	"formatFinished": func(value *time.Time) string {
+		if value == nil || value.IsZero() {
+			return ""
+		}
+		return value.Format("2006-01-02 15:04:05")
+	},
+	"joinPaths": func(paths []string) string {
+		return strings.Join(paths, ", ")
+	},
+}).Parse(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>eqrcp Agent</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --text: #1f2933;
+  --muted: #64748b;
+  --line: #d7dde5;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+  --ok: #047857;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+}
+main {
+  width: min(960px, calc(100% - 32px));
+  margin: 32px auto;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+button, a.button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  text-decoration: none;
+  font: inherit;
+}
+button.primary { border-color: var(--accent); color: var(--accent); }
+button.danger { border-color: var(--danger); color: var(--danger); }
+section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.metric {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+}
+.label {
+  color: var(--muted);
+  font-size: 13px;
+}
+.value {
+  margin-top: 4px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.state-busy { color: var(--accent); }
+.state-idle, .state-completed { color: var(--ok); }
+.state-failed, .state-replaced, .state-stopped { color: var(--danger); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  border-top: 1px solid var(--line);
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.paths {
+  max-width: 420px;
+  overflow-wrap: anywhere;
+}
+.empty {
+  color: var(--muted);
+  margin: 0;
+}
+@media (max-width: 720px) {
+  main { width: min(100% - 20px, 960px); margin: 20px auto; }
+  header { align-items: flex-start; flex-direction: column; }
+  .summary { grid-template-columns: 1fr; }
+  table, thead, tbody, th, td, tr { display: block; }
+  thead { display: none; }
+  tr { border-top: 1px solid var(--line); padding: 8px 0; }
+  td { border-top: 0; padding: 4px 0; }
+  td::before { color: var(--muted); content: attr(data-label) ": "; font-weight: 600; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>eqrcp Agent</h1>
+    <div class="actions">
+      <a class="button" href="/">Refresh</a>
+      <form method="post" action="/stop-current"><button class="primary" type="submit">Stop Current</button></form>
+      <form method="post" action="/shutdown"><button class="danger" type="submit">Stop Agent</button></form>
+    </div>
+  </header>
+
+  <section>
+    <h2>Status</h2>
+    <div class="summary">
+      <div class="metric">
+        <div class="label">State</div>
+        <div class="value state-{{.State}}">{{.State}}</div>
+      </div>
+      <div class="metric">
+        <div class="label">Queued</div>
+        <div class="value">{{.Queued}}</div>
+      </div>
+      <div class="metric">
+        <div class="label">Last Error</div>
+        <div class="value">{{if .LastError}}{{.LastError}}{{else}}None{{end}}</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Current</h2>
+    {{if .Current}}
+    <table>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th></tr></thead>
+      <tbody>
+        <tr>
+          <td data-label="ID">#{{.Current.ID}}</td>
+          <td data-label="Action">{{.Current.Action}}</td>
+          <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
+          <td data-label="Paths" class="paths">{{joinPaths .Current.Paths}}</td>
+          <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
+        </tr>
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No active task.</p>
+    {{end}}
+  </section>
+
+  <section>
+    <h2>History</h2>
+    {{if .History}}
+    <table>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
+      <tbody>
+        {{range .History}}
+        <tr>
+          <td data-label="ID">#{{.ID}}</td>
+          <td data-label="Action">{{.Action}}</td>
+          <td data-label="State" class="state-{{.State}}">{{.State}}</td>
+          <td data-label="Paths" class="paths">{{joinPaths .Paths}}</td>
+          <td data-label="Started">{{formatTime .StartedAt}}</td>
+          <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
+          <td data-label="Error">{{.Error}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">No history yet.</p>
+    {{end}}
+  </section>
+</main>
+</body>
+</html>`))

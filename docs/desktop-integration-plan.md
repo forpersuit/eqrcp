@@ -211,7 +211,9 @@ Initial local API:
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
+- `GET /` serves a browser-based agent status page with the current task, recent history, and local stop actions.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
+- `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
@@ -222,9 +224,11 @@ Initial local API:
 
 Next priorities:
 
-1. Add a browser-based agent status page showing current task, recent history, stop-agent, and stop-current actions.
-2. Add a dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
-3. Decide whether desktop share should support repeat downloads from the same QR or show a clear expired/replaced page after first use.
+1. Complete and validate the browser-based agent status page on Windows.
+2. Complete and validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
+3. Harden repeat QR scan and multi-browser behavior so completed, replaced, and stopped tasks are visible through `/qr/status`, `/status`, and the agent status page.
+4. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
+5. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
 
 ## Recommended First Implementation
 
@@ -245,8 +249,6 @@ Then implement Windows and Linux installers. macOS can be documented first if no
 - Should desktop mode suppress terminal QR output?
 - Should failures use native notifications or open a browser error page first?
 - Should `desktop receive` default to the clicked directory or the configured output directory when both are available?
-- Should right-click share use `--keep-alive` for multiple phone downloads?
-- Should the context menu expose both `Share once` and `Share and keep alive`?
 
 ## Risks
 

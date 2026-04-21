@@ -368,7 +368,10 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
+- `GET /` returns a browser status page with the current task, recent history, stop-current action, and stop-agent action.
 - `POST /tasks` accepts one `share` or `receive` task.
+- `POST /stop-current` stops the active task without stopping the agent.
+- `POST /stop-current` returns a conflict when no task is active.
 - While a task is active, later `POST /tasks` calls are accepted and cause the agent to stop the current task before running the next task.
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
@@ -391,6 +394,9 @@ Expected result:
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
 - The agent status formatter renders current task details and recent history.
+- The agent status page renders the current task, recent history, and local stop actions.
+- The stop-current endpoint records the active task as `stopped`.
+- The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.
 
 ## Launcher Agent Forwarding
@@ -432,6 +438,8 @@ Expected result:
 - `eqrcp.exe desktop status` reports installed entries without false `needs repair` results on localized Windows output.
 - First right-click share opens a QR page.
 - A second right-click share replaces the first waiting transfer and opens the new QR page.
+- `http://127.0.0.1:48176/` shows the long-lived agent state, current task, and recent history.
+- The agent status page can stop the active transfer without exiting the agent.
 - Process count should stay bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 
 ## Desktop Share Flow

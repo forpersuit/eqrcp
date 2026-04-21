@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,6 +208,166 @@ func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
 	status := getAgentStatus(t, server.URL)
 	if len(status.History) == 0 || status.History[0].State != "replaced" {
 		t.Fatalf("History = %#v, want replaced active task", status.History)
+	}
+}
+
+func TestDesktopAgentStopCurrentStopsActiveTask(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	agent := newDesktopAgent(application.Flags{})
+	var stopOnce sync.Once
+	agent.runner = func(task desktopAgentTask) error {
+		agent.setActiveStop(func() {
+			stopOnce.Do(func() {
+				close(block)
+			})
+		})
+		close(started)
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	response, err := http.Post(server.URL+"/stop-current", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("stop-current status = %d, want %d", response.StatusCode, http.StatusAccepted)
+	}
+	deadline := time.After(time.Second)
+	for {
+		status := getAgentStatus(t, server.URL)
+		if len(status.History) > 0 {
+			if status.History[0].State != "stopped" {
+				t.Fatalf("History = %#v, want stopped active task", status.History)
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("History = %#v, want stopped active task", status.History)
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func TestDesktopAgentStopCurrentWhenIdle(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Post(server.URL+"/stop-current", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("stop-current status = %d, want %d", response.StatusCode, http.StatusConflict)
+	}
+}
+
+func TestDesktopAgentStopCurrentRedirectsBrowserRequests(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	agent := newDesktopAgent(application.Flags{})
+	var stopOnce sync.Once
+	agent.runner = func(task desktopAgentTask) error {
+		agent.setActiveStop(func() {
+			stopOnce.Do(func() {
+				close(block)
+			})
+		})
+		close(started)
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/stop-current", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Accept", "text/html")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("stop-current status = %d, want %d", response.StatusCode, http.StatusSeeOther)
+	}
+	if response.Header.Get("Location") != "/" {
+		t.Fatalf("Location = %q, want /", response.Header.Get("Location"))
+	}
+}
+
+func TestDesktopAgentPageRendersStatus(t *testing.T) {
+	started := time.Date(2026, 4, 22, 9, 0, 0, 0, time.UTC)
+	finished := started.Add(time.Minute)
+	agent := newDesktopAgent(application.Flags{})
+	agent.history = []desktopAgentTaskRecord{
+		{
+			ID:         1,
+			Action:     "share",
+			Paths:      []string{"finished.txt"},
+			State:      "completed",
+			StartedAt:  started,
+			FinishedAt: &finished,
+		},
+	}
+	agent.current = &desktopAgentTaskRecord{
+		ID:        2,
+		Action:    "receive",
+		Paths:     []string{"/tmp/recv"},
+		State:     "running",
+		StartedAt: started,
+	}
+	agent.busy = true
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("page status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"eqrcp Agent",
+		"Stop Current",
+		"Stop Agent",
+		"receive",
+		"/tmp/recv",
+		"finished.txt",
+		"completed",
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("agent page = %q, want to contain %q", string(body), want)
+		}
 	}
 }
 
