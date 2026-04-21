@@ -7,6 +7,9 @@ import (
 	"sync"
 
 	"eqrcp/application"
+	"eqrcp/body"
+	"eqrcp/config"
+	"eqrcp/server"
 	"github.com/spf13/cobra"
 )
 
@@ -26,13 +29,14 @@ type desktopAgentResponse struct {
 }
 
 type desktopAgent struct {
-	mu        sync.Mutex
-	baseFlags application.Flags
-	busy      bool
-	current   *desktopAgentTask
-	queue     []desktopAgentTask
-	lastError string
-	runner    func(desktopAgentTask) error
+	mu         sync.Mutex
+	baseFlags  application.Flags
+	busy       bool
+	current    *desktopAgentTask
+	queue      []desktopAgentTask
+	activeStop func()
+	lastError  string
+	runner     func(desktopAgentTask) error
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
@@ -87,6 +91,9 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	agent.queue = append(agent.queue, task)
 	agent.lastError = ""
+	if agent.busy {
+		agent.stopActiveLocked()
+	}
 	agent.startNextLocked()
 	agent.mu.Unlock()
 
@@ -100,10 +107,19 @@ func (agent *desktopAgent) execute(task desktopAgentTask) {
 	defer agent.mu.Unlock()
 	agent.busy = false
 	agent.current = nil
+	agent.activeStop = nil
 	if err != nil {
 		agent.lastError = err.Error()
 	}
 	agent.startNextLocked()
+}
+
+func (agent *desktopAgent) stopActiveLocked() {
+	if agent.activeStop == nil {
+		return
+	}
+	stop := agent.activeStop
+	go stop()
 }
 
 func (agent *desktopAgent) startNextLocked() {
@@ -115,6 +131,12 @@ func (agent *desktopAgent) startNextLocked() {
 	agent.busy = true
 	agent.current = &task
 	go agent.execute(task)
+}
+
+func (agent *desktopAgent) setActiveStop(stop func()) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.activeStop = stop
 }
 
 func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
@@ -137,17 +159,47 @@ func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 }
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
-	app.Flags = agent.baseFlags
-	app.Flags.Browser = true
+	agentApp := application.New()
+	agentApp.Flags = agent.baseFlags
+	agentApp.Flags.Browser = true
+	if task.Action == "receive" {
+		agentApp.Flags.Output = task.Paths[0]
+	}
+	cfg, err := config.New(agentApp)
+	if err != nil {
+		return err
+	}
+	srv, err := server.New(&cfg)
+	if err != nil {
+		return err
+	}
+	agent.setActiveStop(srv.Shutdown)
 	switch task.Action {
 	case "share":
-		return sendCmdFunc(nil, task.Paths)
+		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
+		if err != nil {
+			srv.Shutdown()
+			return err
+		}
+		srv.Send(payload)
+		if err := srv.DisplayQR(srv.SendURL); err != nil {
+			srv.Shutdown()
+			return err
+		}
 	case "receive":
-		app.Flags.Output = task.Paths[0]
-		return receiveCmdFunc(nil, task.Paths)
+		if err := srv.ReceiveTo(cfg.Output); err != nil {
+			srv.Shutdown()
+			return err
+		}
+		if err := srv.DisplayQR(srv.ReceiveURL); err != nil {
+			srv.Shutdown()
+			return err
+		}
 	default:
+		srv.Shutdown()
 		return fmt.Errorf("unsupported desktop action %q", task.Action)
 	}
+	return srv.Wait()
 }
 
 func validateDesktopAgentTask(task desktopAgentTask) error {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,9 +78,15 @@ func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	started := make(chan struct{})
 	done := make(chan desktopAgentTask, 2)
 	agent := newDesktopAgent(application.Flags{})
+	var stopOnce sync.Once
 	agent.runner = func(task desktopAgentTask) error {
 		done <- task
 		if task.Action == "share" {
+			agent.setActiveStop(func() {
+				stopOnce.Do(func() {
+					close(block)
+				})
+			})
 			close(started)
 			<-block
 		}
@@ -97,11 +104,6 @@ func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	if second.StatusCode != http.StatusAccepted {
 		t.Fatalf("second status = %d, want %d", second.StatusCode, http.StatusAccepted)
 	}
-	status := getAgentStatus(t, server.URL)
-	if status.State != "busy" || status.Current == nil || status.Current.Action != "share" || status.Queued != 1 {
-		t.Fatalf("status = %#v", status)
-	}
-	close(block)
 
 	var tasks []desktopAgentTask
 	for len(tasks) < 2 {
