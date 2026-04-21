@@ -56,30 +56,36 @@ type Server struct {
 }
 
 type transferStatus struct {
-	State      string   `json:"state"`
-	Mode       string   `json:"mode,omitempty"`
-	Title      string   `json:"title,omitempty"`
-	Target     string   `json:"target,omitempty"`
-	Current    string   `json:"current,omitempty"`
-	Message    string   `json:"message"`
-	BytesDone  int64    `json:"bytesDone"`
-	BytesTotal int64    `json:"bytesTotal"`
-	Percent    int      `json:"percent"`
-	SavedFiles []string `json:"savedFiles,omitempty"`
+	State       string   `json:"state"`
+	Mode        string   `json:"mode,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	Target      string   `json:"target,omitempty"`
+	Archive     bool     `json:"archive,omitempty"`
+	ArchiveName string   `json:"archiveName,omitempty"`
+	Items       []string `json:"items,omitempty"`
+	Current     string   `json:"current,omitempty"`
+	Message     string   `json:"message"`
+	BytesDone   int64    `json:"bytesDone"`
+	BytesTotal  int64    `json:"bytesTotal"`
+	Percent     int      `json:"percent"`
+	SavedFiles  []string `json:"savedFiles,omitempty"`
 }
 
 type transferStatusRecord struct {
-	State      string    `json:"state"`
-	Mode       string    `json:"mode,omitempty"`
-	Title      string    `json:"title,omitempty"`
-	Target     string    `json:"target,omitempty"`
-	Current    string    `json:"current,omitempty"`
-	Message    string    `json:"message"`
-	BytesDone  int64     `json:"bytesDone"`
-	BytesTotal int64     `json:"bytesTotal"`
-	Percent    int       `json:"percent"`
-	SavedFiles []string  `json:"savedFiles,omitempty"`
-	FinishedAt time.Time `json:"finishedAt"`
+	State       string    `json:"state"`
+	Mode        string    `json:"mode,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Target      string    `json:"target,omitempty"`
+	Archive     bool      `json:"archive,omitempty"`
+	ArchiveName string    `json:"archiveName,omitempty"`
+	Items       []string  `json:"items,omitempty"`
+	Current     string    `json:"current,omitempty"`
+	Message     string    `json:"message"`
+	BytesDone   int64     `json:"bytesDone"`
+	BytesTotal  int64     `json:"bytesTotal"`
+	Percent     int       `json:"percent"`
+	SavedFiles  []string  `json:"savedFiles,omitempty"`
+	FinishedAt  time.Time `json:"finishedAt"`
 }
 
 type serviceStatus struct {
@@ -124,7 +130,15 @@ func (s *Server) Send(p body.Body) {
 		status.Mode = "send"
 		status.Title = sendTitle(p.Filename)
 		status.Target = p.Filename
-		status.Message = "Scan to download this item."
+		status.Archive = p.Archive
+		status.ArchiveName = ""
+		status.Items = append([]string(nil), p.Items...)
+		if p.Archive {
+			status.ArchiveName = p.Filename
+			status.Message = "Scan to download this zip archive."
+		} else {
+			status.Message = "Scan to download this item."
+		}
 		status.BytesDone = 0
 		status.BytesTotal = total
 		status.Percent = 0
@@ -270,17 +284,20 @@ func (s *Server) recordStatus() {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 	record := transferStatusRecord{
-		State:      s.status.State,
-		Mode:       s.status.Mode,
-		Title:      s.status.Title,
-		Target:     s.status.Target,
-		Current:    s.status.Current,
-		Message:    s.status.Message,
-		BytesDone:  s.status.BytesDone,
-		BytesTotal: s.status.BytesTotal,
-		Percent:    s.status.Percent,
-		SavedFiles: append([]string(nil), s.status.SavedFiles...),
-		FinishedAt: time.Now(),
+		State:       s.status.State,
+		Mode:        s.status.Mode,
+		Title:       s.status.Title,
+		Target:      s.status.Target,
+		Archive:     s.status.Archive,
+		ArchiveName: s.status.ArchiveName,
+		Items:       append([]string(nil), s.status.Items...),
+		Current:     s.status.Current,
+		Message:     s.status.Message,
+		BytesDone:   s.status.BytesDone,
+		BytesTotal:  s.status.BytesTotal,
+		Percent:     s.status.Percent,
+		SavedFiles:  append([]string(nil), s.status.SavedFiles...),
+		FinishedAt:  time.Now(),
 	}
 	s.history = append([]transferStatusRecord{record}, s.history...)
 	if len(s.history) > maxTransferHistory {
@@ -290,6 +307,7 @@ func (s *Server) recordStatus() {
 
 func cloneTransferStatus(status transferStatus) transferStatus {
 	status.SavedFiles = append([]string(nil), status.SavedFiles...)
+	status.Items = append([]string(nil), status.Items...)
 	return status
 }
 

@@ -107,6 +107,9 @@ var QR = `
             margin: 5px 0;
             overflow-wrap: anywhere;
         }
+        .hidden {
+            display: none;
+        }
         @media (max-width: 560px) {
             .url-row {
                 flex-direction: column;
@@ -125,21 +128,25 @@ var QR = `
             <strong id="transfer-state">Waiting</strong>
             <span id="transfer-message">Waiting for a device to connect.</span>
             <div class="meta" id="transfer-current"></div>
+            <div class="meta" id="archive-note"></div>
             <div class="meta" id="transfer-bytes"></div>
             <div class="progress" aria-hidden="true">
                 <div class="progress-bar" id="transfer-progress"></div>
             </div>
+            <ul class="saved-files" id="transfer-items"></ul>
             <ul class="saved-files" id="saved-files"></ul>
         </div>
-        <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
-        <div class="url-row">
-            <input id="transfer-url" type="text" value="{{.URL}}" readonly>
-            <button type="button" onclick="copyURL()">Copy URL</button>
+        <div id="qr-area">
+            <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
+            <div class="url-row">
+                <input id="transfer-url" type="text" value="{{.URL}}" readonly>
+                <button type="button" onclick="copyURL()">Copy URL</button>
+            </div>
+            <form method="post" action="{{.StopRoute}}">
+                <button class="stop" type="submit">Stop transfer</button>
+            </form>
+            <p class="hint">This page can stay open while the transfer is waiting.</p>
         </div>
-        <form method="post" action="{{.StopRoute}}">
-            <button class="stop" type="submit">Stop transfer</button>
-        </form>
-        <p class="hint">This page can stay open while the transfer is waiting.</p>
     </main>
     <script>
         function copyURL() {
@@ -167,15 +174,19 @@ var QR = `
                     var title = data.title || 'eqrcp transfer ready';
                     var target = data.target || '';
                     var current = data.current || '';
+                    var archiveName = data.archiveName || '';
                     document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
                     document.getElementById('transfer-message').textContent = message;
                     document.getElementById('transfer-title').textContent = title;
-                    document.getElementById('transfer-target').textContent = target ? target : 'Scan the QR code or open the address on another device.';
-                    document.getElementById('transfer-current').textContent = current ? ('Current: ' + current) : '';
+                    document.getElementById('transfer-target').textContent = targetText(data, target);
+                    document.getElementById('transfer-current').textContent = current && !archiveName ? ('Current: ' + current) : '';
+                    document.getElementById('archive-note').textContent = archiveName ? ('Download archive: ' + archiveName) : '';
                     document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
                     document.getElementById('transfer-progress').style.width = percent + '%';
+                    renderList('transfer-items', itemListTitle(data), data.items || []);
                     renderSavedFiles(data.savedFiles || []);
                     if (state === 'completed' || state === 'stopped') {
+                        document.getElementById('qr-area').classList.add('hidden');
                         clearInterval(statusTimer);
                     }
                 })
@@ -183,11 +194,37 @@ var QR = `
                     document.getElementById('transfer-message').textContent = 'Status unavailable.';
                 });
         }
+        function targetText(data, target) {
+            if (data.archiveName && data.items && data.items.length) {
+                return data.items.length + ' item' + (data.items.length === 1 ? '' : 's') + ' will be downloaded as a zip archive.';
+            }
+            return target ? target : 'Scan the QR code or open the address on another device.';
+        }
+        function itemListTitle(data) {
+            if (!data.items || !data.items.length) {
+                return '';
+            }
+            if (data.archiveName) {
+                return 'Included items';
+            }
+            return 'Transfer item';
+        }
         function renderSavedFiles(files) {
+            renderList('saved-files', files.length ? 'Saved files' : '', files);
+        }
+        function renderList(id, title, files) {
             var list = document.getElementById('saved-files');
+            if (id) {
+                list = document.getElementById(id);
+            }
             list.innerHTML = '';
             if (!files.length) {
                 return;
+            }
+            if (title) {
+                var titleItem = document.createElement('li');
+                titleItem.textContent = title + ':';
+                list.appendChild(titleItem);
             }
             files.forEach(function(file) {
                 var item = document.createElement('li');

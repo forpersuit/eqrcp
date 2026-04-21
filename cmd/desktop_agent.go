@@ -7,6 +7,8 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +23,9 @@ import (
 const desktopAgentAddress = "127.0.0.1:48176"
 const desktopAgentMaxQueue = 16
 const desktopAgentMaxHistory = 20
+
+var openDesktopAgentPage = openDesktopAgentPageURL
+var desktopAgentBaseURL = "http://" + desktopAgentAddress
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`
@@ -366,7 +371,7 @@ var desktopAgentStopCmd = &cobra.Command{
 	Short: "Stop the desktop integration agent",
 	Long:  "Stop the local desktop integration agent if it is running.",
 	RunE: func(command *cobra.Command, args []string) error {
-		response, err := http.Post("http://"+desktopAgentAddress+"/shutdown", "text/plain", nil)
+		response, err := http.Post(desktopAgentBaseURL+"/shutdown", "text/plain", nil)
 		if err != nil {
 			return fmt.Errorf("desktop agent is not running: %w", err)
 		}
@@ -393,8 +398,42 @@ var desktopAgentStatusCmd = &cobra.Command{
 	},
 }
 
+var desktopAgentOpenCmd = &cobra.Command{
+	Use:   "agent-open",
+	Short: "Open the desktop integration agent status page",
+	Long:  "Open the local desktop integration agent status page in the default browser.",
+	RunE: func(command *cobra.Command, args []string) error {
+		response, err := http.Get(desktopAgentBaseURL + "/health")
+		if err != nil {
+			return fmt.Errorf("desktop agent is not running: %w", err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			return fmt.Errorf("desktop agent health check failed: %s", response.Status)
+		}
+		if err := openDesktopAgentPage(desktopAgentBaseURL + "/"); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop agent status page opened.")
+		return nil
+	},
+}
+
+func openDesktopAgentPageURL(url string) error {
+	switch runtime.GOOS {
+	case "linux":
+		return exec.Command("xdg-open", url).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		return exec.Command("open", url).Start()
+	default:
+		return fmt.Errorf("failed to open browser on platform: %s", runtime.GOOS)
+	}
+}
+
 func fetchDesktopAgentStatus() (desktopAgentResponse, error) {
-	response, err := http.Get("http://" + desktopAgentAddress + "/status")
+	response, err := http.Get(desktopAgentBaseURL + "/status")
 	if err != nil {
 		return desktopAgentResponse{}, fmt.Errorf("desktop agent is not running: %w", err)
 	}

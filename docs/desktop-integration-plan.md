@@ -171,6 +171,8 @@ After the right-click workflow is functional, improve visibility:
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
 - Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.
+- Completion cleanup. Implemented: when `/qr/status` reaches `completed` or `stopped`, the QR code, copy URL field, stop button, and waiting hint are hidden from the browser QR page.
+- Archive clarity. Implemented: directory and multi-file downloads use timestamped zip names, and the browser QR page lists the original selected items while separately showing the zip archive name.
 - QR page purpose labels. Implemented: the page identifies share vs receive and shows the target file, archive, or output directory.
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
@@ -219,6 +221,7 @@ Initial local API:
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
+- `eqrcp desktop agent-open` opens the browser-based agent status page when the agent is running.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
 - If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
 - If the agent is online and already waiting on a previous transfer, the new task is accepted and the agent stops the current server so the new QR page can open.
@@ -226,11 +229,12 @@ Initial local API:
 
 Next priorities:
 
-1. Validate the browser-based agent status page on Windows, including automatic status refresh without pressing a manual refresh button.
-2. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
-3. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
-4. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
-5. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
+1. Validate QR completion cleanup, timestamped archive names, and original item lists in Windows right-click multi-file and directory share flows.
+2. Validate the browser-based agent status page on Windows, including automatic status refresh and `eqrcp desktop agent-open`.
+3. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
+4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
+5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
+6. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
 
 ## Recommended First Implementation
 

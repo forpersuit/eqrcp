@@ -288,9 +288,11 @@ Expected result:
 - Reopening a completed or stopped one-shot transfer URL returns `410 Gone` with a clear completion or stopped message.
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
+- For directory or multi-file shares, the page lists the original selected items and separately shows the timestamped zip archive name.
 - The page has a `Copy URL` button.
 - The page has a `Stop transfer` button.
 - The page updates the displayed transfer state without refreshing.
+- When the transfer reaches `completed` or `stopped`, the page hides the QR code, copy URL field, stop button, and waiting hint.
 - The page displays byte progress when the server knows a total size.
 - The page displays saved file paths after receive completes.
 - Posting to `/qr/stop` stops the current server.
@@ -304,8 +306,9 @@ GOCACHE=/tmp/eqrcp-go-build go test ./server
 Expected result:
 
 - The QR page template includes the image route, stop route, copy button, stop button, and escapes the transfer URL.
+- The QR page template includes the completion cleanup wrapper, transfer item list, and archive note.
 - The transfer status helper stores and returns waiting, transferring, completed, and stopped states.
-- Send metadata includes mode, title, target, total bytes, and percent.
+- Send metadata includes mode, title, target, archive metadata, original item names, total bytes, and percent.
 - Receive metadata includes mode, title, target output directory, and percent.
 - Receive completion metadata includes the actual saved file paths, including renamed paths when conflicts are resolved.
 
@@ -328,6 +331,7 @@ Expected result:
 - After a successful download, the status response contains `completed`.
 - After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
 - After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
+- Directory and multi-file downloads use timestamped zip file names, such as `eqrcp-multiple-files-YYYYMMDD-HHMMSS.zip`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
 - Posting to `/qr/stop` stops the server.
@@ -382,6 +386,7 @@ Expected result:
 - `POST /shutdown` stops the active task and exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
+- `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 
 Automated checks:
@@ -400,6 +405,7 @@ Expected result:
 - The agent records completed and replaced tasks in status history.
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
+- The agent-open command checks `/health` and opens the local status page.
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.

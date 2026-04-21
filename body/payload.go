@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"eqrcp/util"
 )
@@ -13,6 +14,12 @@ type Body struct {
 	Filename            string
 	Path                string
 	DeleteAfterTransfer bool
+	Archive             bool
+	Items               []string
+}
+
+var zipTimestamp = func() time.Time {
+	return time.Now()
 }
 
 // Delete the payload from disk
@@ -58,16 +65,19 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 		Path:                content,
 		Filename:            filename,
 		DeleteAfterTransfer: shouldzip,
+		Archive:             shouldzip,
+		Items:               displayItems(args),
 	}, nil
 }
 
 func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
+	timestamp := zipTimestamp().Format("20060102-150405")
 	if len(args) > 1 {
-		return "eqrcp-multiple-files.zip"
+		return "eqrcp-multiple-files-" + timestamp + ".zip"
 	}
 	base := filepath.Base(args[0])
 	if hasDir {
-		return strings.TrimSuffix(base, string(filepath.Separator)) + "-directory.zip"
+		return strings.TrimSuffix(base, string(filepath.Separator)) + "-directory-" + timestamp + ".zip"
 	}
 	if zipFlag {
 		ext := filepath.Ext(base)
@@ -75,7 +85,15 @@ func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
 		if name == "" {
 			name = "eqrcp"
 		}
-		return name + "-zipped.zip"
+		return name + "-zipped-" + timestamp + ".zip"
 	}
-	return "eqrcp-files.zip"
+	return "eqrcp-files-" + timestamp + ".zip"
+}
+
+func displayItems(args []string) []string {
+	items := make([]string, 0, len(args))
+	for _, arg := range args {
+		items = append(items, filepath.Base(arg))
+	}
+	return items
 }

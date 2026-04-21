@@ -3,7 +3,9 @@ package body
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestFromArgsSingleFile(t *testing.T) {
@@ -26,9 +28,16 @@ func TestFromArgsSingleFile(t *testing.T) {
 	if got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = true, want false")
 	}
+	if got.Archive {
+		t.Fatal("FromArgs() Archive = true, want false")
+	}
+	if len(got.Items) != 1 || got.Items[0] != "note.txt" {
+		t.Fatalf("FromArgs() Items = %#v, want note.txt", got.Items)
+	}
 }
 
 func TestFromArgsDirectoryZipName(t *testing.T) {
+	setZipTimestampForTest(t)
 	dir := t.TempDir()
 	nested := filepath.Join(dir, "photos")
 	if err := os.Mkdir(nested, 0755); err != nil {
@@ -44,15 +53,22 @@ func TestFromArgsDirectoryZipName(t *testing.T) {
 	}
 	defer got.Delete()
 
-	if got.Filename != "photos-directory.zip" {
-		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "photos-directory.zip")
+	if got.Filename != "photos-directory-20260422-010203.zip" {
+		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "photos-directory-20260422-010203.zip")
 	}
 	if !got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = false, want true")
 	}
+	if !got.Archive {
+		t.Fatal("FromArgs() Archive = false, want true")
+	}
+	if len(got.Items) != 1 || got.Items[0] != "photos" {
+		t.Fatalf("FromArgs() Items = %#v, want photos", got.Items)
+	}
 }
 
 func TestFromArgsMultipleFilesZipName(t *testing.T) {
+	setZipTimestampForTest(t)
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first file.txt")
 	second := filepath.Join(dir, "second file.txt")
@@ -69,10 +85,27 @@ func TestFromArgsMultipleFilesZipName(t *testing.T) {
 	}
 	defer got.Delete()
 
-	if got.Filename != "eqrcp-multiple-files.zip" {
-		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqrcp-multiple-files.zip")
+	if got.Filename != "eqrcp-multiple-files-20260422-010203.zip" {
+		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqrcp-multiple-files-20260422-010203.zip")
 	}
 	if !got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = false, want true")
 	}
+	if !got.Archive {
+		t.Fatal("FromArgs() Archive = false, want true")
+	}
+	if strings.Join(got.Items, ",") != "first file.txt,second file.txt" {
+		t.Fatalf("FromArgs() Items = %#v", got.Items)
+	}
+}
+
+func setZipTimestampForTest(t *testing.T) {
+	t.Helper()
+	previous := zipTimestamp
+	zipTimestamp = func() time.Time {
+		return time.Date(2026, 4, 22, 1, 2, 3, 0, time.UTC)
+	}
+	t.Cleanup(func() {
+		zipTimestamp = previous
+	})
 }

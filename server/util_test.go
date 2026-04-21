@@ -75,12 +75,16 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	html := out.String()
 	for _, want := range []string{
 		`src="/qr/image"`,
+		`id="qr-area"`,
 		`action="/qr/stop"`,
 		`fetch('\/qr\/status'`,
 		"Copy URL",
 		"Stop transfer",
 		`id="transfer-progress"`,
+		`id="transfer-items"`,
 		`id="saved-files"`,
+		`classList.add('hidden')`,
+		`Download archive: `,
 		`renderSavedFiles(data.savedFiles || [])`,
 		`formatBytes(done)`,
 		"Waiting for a device to connect.",
@@ -356,14 +360,48 @@ func TestSendSetsStatusMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := &Server{}
-	server.Send(body.Body{Path: path, Filename: "report.txt"})
+	server.Send(body.Body{Path: path, Filename: "report.txt", Items: []string{"report.txt"}})
 
 	got := server.getStatus()
 	if got.Mode != "send" || got.Title != "Share file" || got.Target != "report.txt" {
 		t.Fatalf("getStatus() = %#v", got)
 	}
+	if got.Archive || got.ArchiveName != "" {
+		t.Fatalf("archive metadata = %#v, want no archive", got)
+	}
+	if len(got.Items) != 1 || got.Items[0] != "report.txt" {
+		t.Fatalf("Items = %#v, want report.txt", got.Items)
+	}
 	if got.BytesTotal != 5 {
 		t.Fatalf("BytesTotal = %d, want 5", got.BytesTotal)
+	}
+}
+
+func TestSendSetsArchiveStatusMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "eqrcp-multiple-files-20260422-010203.zip")
+	if err := os.WriteFile(path, []byte("zip"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{}
+	server.Send(body.Body{
+		Path:     path,
+		Filename: "eqrcp-multiple-files-20260422-010203.zip",
+		Archive:  true,
+		Items:    []string{"one.txt", "two.txt"},
+	})
+
+	got := server.getStatus()
+	if got.Mode != "send" || got.Title != "Share multiple files" {
+		t.Fatalf("getStatus() = %#v", got)
+	}
+	if !got.Archive || got.ArchiveName != "eqrcp-multiple-files-20260422-010203.zip" {
+		t.Fatalf("archive metadata = %#v", got)
+	}
+	if strings.Join(got.Items, ",") != "one.txt,two.txt" {
+		t.Fatalf("Items = %#v", got.Items)
+	}
+	if !strings.Contains(got.Message, "zip archive") {
+		t.Fatalf("Message = %q, want zip archive explanation", got.Message)
 	}
 }
 
@@ -382,9 +420,10 @@ func TestReceiveToSetsStatusMetadata(t *testing.T) {
 
 func TestSendTitle(t *testing.T) {
 	tests := map[string]string{
-		"report.txt":               "Share file",
-		"photos-directory.zip":     "Share directory",
-		"eqrcp-multiple-files.zip": "Share multiple files",
+		"report.txt":                               "Share file",
+		"photos-directory-20260422-010203.zip":     "Share directory",
+		"eqrcp-multiple-files-20260422-010203.zip": "Share multiple files",
+		"eqrcp-multiple-files.zip":                 "Share file",
 	}
 	for filename, want := range tests {
 		if got := sendTitle(filename); got != want {

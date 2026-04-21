@@ -373,6 +373,42 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentOpenCommandOpensStatusPage(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	previousBaseURL := desktopAgentBaseURL
+	previousOpen := openDesktopAgentPage
+	desktopAgentBaseURL = server.URL
+	opened := make(chan string, 1)
+	openDesktopAgentPage = func(url string) error {
+		opened <- url
+		return nil
+	}
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+		openDesktopAgentPage = previousOpen
+	})
+
+	var out bytes.Buffer
+	desktopAgentOpenCmd.SetOut(&out)
+	if err := desktopAgentOpenCmd.RunE(desktopAgentOpenCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case url := <-opened:
+		if url != server.URL+"/" {
+			t.Fatalf("opened URL = %q, want %q", url, server.URL+"/")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("agent-open did not open status page")
+	}
+	if !strings.Contains(out.String(), "Desktop agent status page opened.") {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
 func TestFormatDesktopAgentStatus(t *testing.T) {
 	started := time.Date(2026, 4, 21, 10, 0, 0, 0, time.UTC)
 	finished := started.Add(time.Minute)
