@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestWindowsExpectedLauncherPath(t *testing.T) {
@@ -49,3 +53,126 @@ func TestParseRegDefaultValueLocalizedOutput(t *testing.T) {
 		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
 	}
 }
+
+func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	got, err := formatWindowsDesktopIntegrationStatus(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Windows desktop integration status",
+		`- current executable: C:\tools\eqrcp.exe`,
+		"- Share with eqrcp (file): installed",
+		"- Send to > Share with eqrcp: installed",
+		"- eqrcp launcher: installed",
+		`path: C:\tools\eqrcp-launcher.exe`,
+		"- summary: 6 installed, 0 needs repair, 0 not installed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status = %q, want to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, ": needs repair") {
+		t.Fatalf("status = %q, should not contain needs-repair entries", got)
+	}
+}
+
+func TestFormatWindowsDesktopIntegrationStatusMissingLauncher(t *testing.T) {
+	exe := filepath.Join("tools", "eqrcp.exe")
+	env := fakeWindowsDesktopStatusEnv(t, exe, "")
+	got, err := formatWindowsDesktopIntegrationStatus(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- eqrcp launcher: not installed",
+		"expected path: " + filepath.Join("tools", "eqrcp-launcher.exe"),
+		"place eqrcp-launcher.exe next to eqrcp.exe",
+		"- summary: 5 installed, 0 needs repair, 1 not installed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	staleCommand := windowsShellCommand(`C:\old\eqrcp.exe`, `C:\old\eqrcp-launcher.exe`, "share", "%1")
+	env.queryRegDefault = func(key string) (string, error) {
+		if strings.Contains(key, `*\shell\eqrcp-share\command`) {
+			return staleCommand, nil
+		}
+		return fakeWindowsRegCommands(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)[key], nil
+	}
+
+	got, err := formatWindowsDesktopIntegrationStatus(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- Share with eqrcp (file): needs repair",
+		`expected: "C:\tools\eqrcp-launcher.exe" "--eqrcp-exe" "C:\tools\eqrcp.exe" "share" "%1"`,
+		"repair: run `eqrcp desktop install`",
+		"- summary: 5 installed, 1 needs repair, 0 not installed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) windowsDesktopStatusEnv {
+	t.Helper()
+	registry := fakeWindowsRegCommands(exe, launcher)
+	sendTo := filepath.Join(t.TempDir(), "Share with eqrcp.vbs")
+	launcherPath := launcher
+	return windowsDesktopStatusEnv{
+		executable: func() (string, error) {
+			return exe, nil
+		},
+		launcherPath: func(string) string {
+			return launcherPath
+		},
+		queryRegDefault: func(key string) (string, error) {
+			value, ok := registry[key]
+			if !ok {
+				return "", errors.New("missing registry key")
+			}
+			return value, nil
+		},
+		sendToPath: func() (string, error) {
+			return sendTo, nil
+		},
+		stat: func(path string) (os.FileInfo, error) {
+			if path != sendTo {
+				return nil, os.ErrNotExist
+			}
+			return fakeFileInfo{}, nil
+		},
+		readFile: func(path string) ([]byte, error) {
+			if path != sendTo {
+				return nil, os.ErrNotExist
+			}
+			return []byte(windowsSendToShareScript(exe, launcher)), nil
+		},
+	}
+}
+
+func fakeWindowsRegCommands(exe string, launcher string) map[string]string {
+	values := map[string]string{}
+	for _, entry := range windowsContextEntries(exe, launcher) {
+		values[entry.key+`\command`] = entry.command
+	}
+	return values
+}
+
+type fakeFileInfo struct{}
+
+func (fakeFileInfo) Name() string       { return "Share with eqrcp.vbs" }
+func (fakeFileInfo) Size() int64        { return 1 }
+func (fakeFileInfo) Mode() os.FileMode  { return 0644 }
+func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
+func (fakeFileInfo) IsDir() bool        { return false }
+func (fakeFileInfo) Sys() any           { return nil }

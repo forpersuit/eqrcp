@@ -157,6 +157,7 @@ Exit criteria:
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
 - Windows manual validation: `desktop status` no longer misreports repaired entries as `needs repair` on localized Windows registry output.
+- `desktop status` now prints a summary count for installed, needs-repair, and not-installed desktop integration entries.
 
 ### Phase 3: Better QR And Status UI
 
@@ -194,7 +195,7 @@ Next priorities:
 
 1. Validate progress, QR completion cleanup, timestamped archive names, and mobile upload completion pages in Windows right-click share and receive flows.
 2. Validate `eqrcp desktop receive` without a directory, using the configured output directory or current working directory.
-3. Validate setup repair checks for stale Windows registry paths and missing launcher placement on Windows.
+3. Validate setup repair checks for stale Windows registry paths, missing launcher placement, and the `desktop status` summary on Windows.
 
 ### Phase 4: Desktop Agent And Single Instance
 

@@ -200,6 +200,7 @@ Expected result:
 - On Windows, `desktop status` should report each expected registry entry and command.
 - On Windows, `desktop status` should mark entries as `needs repair` when they point at an older executable path or when the Send To script differs from the current executable.
 - On Windows, `desktop status` should show the expected `eqrcp-launcher.exe` path and explain the impact when the launcher is missing.
+- On Windows, `desktop status` should include a summary count for installed, needs-repair, and not-installed entries.
 - On Windows, `desktop uninstall` should remove those entries.
 
 ## Windows Desktop Install Manual Test

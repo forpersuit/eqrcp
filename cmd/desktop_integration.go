@@ -67,22 +67,45 @@ func uninstallWindowsDesktopIntegration() error {
 }
 
 func windowsDesktopIntegrationStatus() (string, error) {
+	env := windowsDesktopStatusEnv{
+		executable:      os.Executable,
+		launcherPath:    windowsLauncherPath,
+		queryRegDefault: queryRegDefault,
+		sendToPath:      windowsSendToSharePath,
+		stat:            os.Stat,
+		readFile:        os.ReadFile,
+	}
+	return formatWindowsDesktopIntegrationStatus(env)
+}
+
+type windowsDesktopStatusEnv struct {
+	executable      func() (string, error)
+	launcherPath    func(string) string
+	queryRegDefault func(string) (string, error)
+	sendToPath      func() (string, error)
+	stat            func(string) (os.FileInfo, error)
+	readFile        func(string) ([]byte, error)
+}
+
+func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string, error) {
 	var builder strings.Builder
+	summary := windowsDesktopStatusSummary{}
 	builder.WriteString("Windows desktop integration status\n")
-	exe, exeErr := os.Executable()
+	exe, exeErr := env.executable()
 	launcher := ""
 	if exeErr != nil {
 		builder.WriteString(fmt.Sprintf("- current executable: unavailable (%v)\n", exeErr))
 	} else {
-		launcher = windowsLauncherPath(exe)
+		launcher = env.launcherPath(exe)
 		builder.WriteString(fmt.Sprintf("- current executable: %s\n", exe))
 	}
 	expectedEntries := windowsContextEntries(exe, launcher)
 	statusEntries := windowsContextEntries("", "")
 	for index, entry := range statusEntries {
 		commandKey := entry.key + `\command`
-		command, err := queryRegDefault(commandKey)
+		command, err := env.queryRegDefault(commandKey)
 		if err != nil {
+			summary.notInstalled++
 			builder.WriteString(fmt.Sprintf("- %s: not installed\n", entry.label))
 			builder.WriteString(fmt.Sprintf("  key: %s\n", entry.key))
 			continue
@@ -91,6 +114,7 @@ func windowsDesktopIntegrationStatus() (string, error) {
 		if exeErr == nil && !windowsCommandMatches(command, expectedEntries[index].command) {
 			state = "needs repair"
 		}
+		summary.add(state)
 		builder.WriteString(fmt.Sprintf("- %s: %s\n", entry.label, state))
 		builder.WriteString(fmt.Sprintf("  key: %s\n", entry.key))
 		builder.WriteString(fmt.Sprintf("  command: %s\n", command))
@@ -99,24 +123,26 @@ func windowsDesktopIntegrationStatus() (string, error) {
 			builder.WriteString("  repair: run `eqrcp desktop install` from the executable you want Explorer to use.\n")
 		}
 	}
-	sendTo, err := windowsSendToSharePath()
+	sendTo, err := env.sendToPath()
 	if err != nil {
 		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: unavailable (%v)\n", err))
 		return builder.String(), nil
 	}
-	if _, err := os.Stat(sendTo); err != nil {
+	if _, err := env.stat(sendTo); err != nil {
+		summary.notInstalled++
 		builder.WriteString("- Send to > Share with eqrcp: not installed\n")
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 	} else {
 		state := "installed"
 		if exeErr == nil {
-			content, err := os.ReadFile(sendTo)
+			content, err := env.readFile(sendTo)
 			if err != nil {
 				state = "needs repair"
 			} else if !windowsCommandMatches(string(content), windowsSendToShareScript(exe, launcher)) {
 				state = "needs repair"
 			}
 		}
+		summary.add(state)
 		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: %s\n", state))
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 		if state == "needs repair" {
@@ -126,16 +152,36 @@ func windowsDesktopIntegrationStatus() (string, error) {
 	if exeErr == nil {
 		expectedLauncher := windowsExpectedLauncherPath(exe)
 		if launcher == "" {
+			summary.notInstalled++
 			builder.WriteString("- eqrcp launcher: not installed\n")
 			builder.WriteString(fmt.Sprintf("  expected path: %s\n", expectedLauncher))
 			builder.WriteString("  impact: Explorer can still use the hidden PowerShell fallback, but native launcher error dialogs are unavailable.\n")
 			builder.WriteString("  repair: place eqrcp-launcher.exe next to eqrcp.exe and run `eqrcp desktop install` again.\n")
 		} else {
+			summary.installed++
 			builder.WriteString("- eqrcp launcher: installed\n")
 			builder.WriteString(fmt.Sprintf("  path: %s\n", launcher))
 		}
 	}
+	builder.WriteString(fmt.Sprintf("- summary: %d installed, %d needs repair, %d not installed\n", summary.installed, summary.needsRepair, summary.notInstalled))
 	return builder.String(), nil
+}
+
+type windowsDesktopStatusSummary struct {
+	installed    int
+	needsRepair  int
+	notInstalled int
+}
+
+func (summary *windowsDesktopStatusSummary) add(state string) {
+	switch state {
+	case "needs repair":
+		summary.needsRepair++
+	case "not installed":
+		summary.notInstalled++
+	default:
+		summary.installed++
+	}
 }
 
 func installWindowsSendToShare(exe string, launcher string) error {
