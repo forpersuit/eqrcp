@@ -283,6 +283,7 @@ Expected result:
 - `/qr` serves an HTML control page.
 - `/qr/image` serves the QR code image.
 - `/qr/status` serves the current transfer state as JSON.
+- `/status` serves the same transfer state JSON as `/qr/status`.
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - The page has a `Copy URL` button.
@@ -310,6 +311,7 @@ Black-box checks:
 
 ```sh
 curl -s http://127.0.0.1:<port>/qr/status
+curl -s http://127.0.0.1:<port>/status
 curl -s -A Mozilla http://127.0.0.1:<port>/send/<path> -o downloaded.file
 curl -s http://127.0.0.1:<port>/qr/status
 curl -s -X POST http://127.0.0.1:<port>/qr/stop

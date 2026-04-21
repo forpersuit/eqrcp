@@ -168,6 +168,7 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
+- Transfer status alias. Implemented: `/status` returns the same JSON as `/qr/status` on each transfer server, so changing `/qr` to `/status` works.
 - QR page purpose labels. Implemented: the page identifies share vs receive and shows the target file, archive, or output directory.
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.

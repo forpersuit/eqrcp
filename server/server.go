@@ -112,10 +112,11 @@ func (s *Server) Send(p body.Body) {
 func (s *Server) DisplayQR(url string) error {
 	s.SetStatusGracePeriod(defaultStatusGracePeriod)
 	const (
-		pagePath   = "/qr"
-		imagePath  = "/qr/image"
-		statusPath = "/qr/status"
-		stopPath   = "/qr/stop"
+		pagePath        = "/qr"
+		imagePath       = "/qr/image"
+		statusPath      = "/qr/status"
+		statusAliasPath = "/status"
+		stopPath        = "/qr/stop"
 	)
 	qrImg, err := qr.RenderImage(url)
 	if err != nil {
@@ -127,7 +128,7 @@ func (s *Server) DisplayQR(url string) error {
 			log.Println(err)
 		}
 	})
-	s.mux.HandleFunc(statusPath, func(w http.ResponseWriter, r *http.Request) {
+	statusHandler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -136,7 +137,9 @@ func (s *Server) DisplayQR(url string) error {
 		if err := json.NewEncoder(w).Encode(s.getStatus()); err != nil {
 			log.Println(err)
 		}
-	})
+	}
+	s.mux.HandleFunc(statusPath, statusHandler)
+	s.mux.HandleFunc(statusAliasPath, statusHandler)
 	s.mux.HandleFunc(stopPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
