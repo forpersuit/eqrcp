@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -89,7 +90,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	}
 }
 
-func TestDisplayQRStatusAlias(t *testing.T) {
+func TestDisplayQRServiceStatus(t *testing.T) {
 	binDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(binDir, "xdg-open"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
 		t.Fatal(err)
@@ -105,6 +106,7 @@ func TestDisplayQRStatusAlias(t *testing.T) {
 		t.Fatalf("DisplayQR() error = %v", err)
 	}
 
+	server.recordStatus()
 	request := httptest.NewRequest(http.MethodGet, "/status", nil)
 	response := httptest.NewRecorder()
 	server.mux.ServeHTTP(response, request)
@@ -112,8 +114,47 @@ func TestDisplayQRStatusAlias(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("/status code = %d, want %d; body = %q", response.Code, http.StatusOK, response.Body.String())
 	}
-	if !strings.Contains(response.Body.String(), `"state":"waiting"`) {
-		t.Fatalf("/status body = %q, want waiting state", response.Body.String())
+	var status serviceStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatalf("decode /status: %v", err)
+	}
+	if status.State != "waiting" || status.Current.State != "waiting" {
+		t.Fatalf("/status = %#v, want waiting service and current state", status)
+	}
+	if len(status.History) != 1 || status.History[0].State != "waiting" {
+		t.Fatalf("/status history = %#v, want waiting history record", status.History)
+	}
+}
+
+func TestDisplayQRCurrentStatus(t *testing.T) {
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "xdg-open"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	server := &Server{
+		BaseURL: "http://127.0.0.1:8080",
+		mux:     http.NewServeMux(),
+	}
+	server.setStatus("waiting", "Waiting for a device to connect.")
+
+	if err := server.DisplayQR("http://127.0.0.1:8080/send/test"); err != nil {
+		t.Fatalf("DisplayQR() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/qr/status", nil)
+	response := httptest.NewRecorder()
+	server.mux.ServeHTTP(response, request)
+
+	var status transferStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatalf("decode /qr/status: %v", err)
+	}
+	if status.State != "waiting" {
+		t.Fatalf("/qr/status = %#v, want waiting state", status)
+	}
+	if strings.Contains(response.Body.String(), `"history"`) {
+		t.Fatalf("/qr/status body = %q, should not include history", response.Body.String())
 	}
 }
 

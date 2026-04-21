@@ -31,6 +31,7 @@ import (
 
 const maxUploadBytes int64 = 10 << 30
 const defaultStatusGracePeriod = 15 * time.Second
+const maxTransferHistory = 20
 
 // Server is the server
 type Server struct {
@@ -46,6 +47,7 @@ type Server struct {
 	stopChannel chan bool
 	statusMu    sync.Mutex
 	status      transferStatus
+	history     []transferStatusRecord
 	statusGrace time.Duration
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
@@ -63,6 +65,26 @@ type transferStatus struct {
 	BytesTotal int64    `json:"bytesTotal"`
 	Percent    int      `json:"percent"`
 	SavedFiles []string `json:"savedFiles,omitempty"`
+}
+
+type transferStatusRecord struct {
+	State      string    `json:"state"`
+	Mode       string    `json:"mode,omitempty"`
+	Title      string    `json:"title,omitempty"`
+	Target     string    `json:"target,omitempty"`
+	Current    string    `json:"current,omitempty"`
+	Message    string    `json:"message"`
+	BytesDone  int64     `json:"bytesDone"`
+	BytesTotal int64     `json:"bytesTotal"`
+	Percent    int       `json:"percent"`
+	SavedFiles []string  `json:"savedFiles,omitempty"`
+	FinishedAt time.Time `json:"finishedAt"`
+}
+
+type serviceStatus struct {
+	State   string                 `json:"state"`
+	Current transferStatus         `json:"current"`
+	History []transferStatusRecord `json:"history,omitempty"`
 }
 
 // ReceiveTo sets the output directory
@@ -112,11 +134,10 @@ func (s *Server) Send(p body.Body) {
 func (s *Server) DisplayQR(url string) error {
 	s.SetStatusGracePeriod(defaultStatusGracePeriod)
 	const (
-		pagePath        = "/qr"
-		imagePath       = "/qr/image"
-		statusPath      = "/qr/status"
-		statusAliasPath = "/status"
-		stopPath        = "/qr/stop"
+		pagePath   = "/qr"
+		imagePath  = "/qr/image"
+		statusPath = "/qr/status"
+		stopPath   = "/qr/stop"
 	)
 	qrImg, err := qr.RenderImage(url)
 	if err != nil {
@@ -139,13 +160,23 @@ func (s *Server) DisplayQR(url string) error {
 		}
 	}
 	s.mux.HandleFunc(statusPath, statusHandler)
-	s.mux.HandleFunc(statusAliasPath, statusHandler)
+	s.mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(s.getServiceStatus()); err != nil {
+			log.Println(err)
+		}
+	})
 	s.mux.HandleFunc(stopPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		s.setStatus("stopped", "Transfer stopped.")
+		s.recordStatus()
 		fmt.Fprintln(w, "Transfer stopped. You can close this page.")
 		s.signalStop()
 	})
@@ -191,7 +222,17 @@ func (s *Server) setStatus(state string, message string) {
 func (s *Server) getStatus() transferStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
-	return s.status
+	return cloneTransferStatus(s.status)
+}
+
+func (s *Server) getServiceStatus() serviceStatus {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	return serviceStatus{
+		State:   s.status.State,
+		Current: cloneTransferStatus(s.status),
+		History: append([]transferStatusRecord(nil), s.history...),
+	}
 }
 
 func (s *Server) updateStatus(update func(*transferStatus)) {
@@ -199,6 +240,33 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	defer s.statusMu.Unlock()
 	update(&s.status)
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
+}
+
+func (s *Server) recordStatus() {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	record := transferStatusRecord{
+		State:      s.status.State,
+		Mode:       s.status.Mode,
+		Title:      s.status.Title,
+		Target:     s.status.Target,
+		Current:    s.status.Current,
+		Message:    s.status.Message,
+		BytesDone:  s.status.BytesDone,
+		BytesTotal: s.status.BytesTotal,
+		Percent:    s.status.Percent,
+		SavedFiles: append([]string(nil), s.status.SavedFiles...),
+		FinishedAt: time.Now(),
+	}
+	s.history = append([]transferStatusRecord{record}, s.history...)
+	if len(s.history) > maxTransferHistory {
+		s.history = s.history[:maxTransferHistory]
+	}
+}
+
+func cloneTransferStatus(status transferStatus) transferStatus {
+	status.SavedFiles = append([]string(nil), status.SavedFiles...)
+	return status
 }
 
 func (s *Server) signalStopAfterStatusGrace() {
@@ -396,6 +464,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		http.ServeFile(progressWriter, r, app.body.Path)
 		app.setStatus("completed", "Transfer completed.")
+		app.recordStatus()
 	})
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {
@@ -535,6 +604,7 @@ func New(cfg *config.Config) (*Server, error) {
 					status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
 				}
 			})
+			app.recordStatus()
 			if !cfg.KeepAlive {
 				go app.signalStopAfterStatusGrace()
 			}

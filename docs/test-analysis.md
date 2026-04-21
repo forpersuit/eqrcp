@@ -283,7 +283,7 @@ Expected result:
 - `/qr` serves an HTML control page.
 - `/qr/image` serves the QR code image.
 - `/qr/status` serves the current transfer state as JSON.
-- `/status` serves the same transfer state JSON as `/qr/status`.
+- `/status` serves service-level JSON with `current` transfer state and transfer `history`.
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - The page has a `Copy URL` button.
@@ -320,6 +320,8 @@ curl -s -X POST http://127.0.0.1:<port>/qr/stop
 Expected result:
 
 - The initial status response contains `waiting`.
+- The `/qr/status` response contains the current QR transfer state only.
+- The `/status` response contains `current` and `history`.
 - After a successful download, the status response contains `completed`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
