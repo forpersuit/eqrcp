@@ -1,14 +1,34 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+var desktopAgentURL = "http://127.0.0.1:48176"
+var agentHTTPClient = &http.Client{Timeout: time.Second}
+
+type desktopAgentTask struct {
+	Action string   `json:"action"`
+	Paths  []string `json:"paths"`
+}
+
+type agentRejectionError struct {
+	message string
+}
+
+func (err agentRejectionError) Error() string {
+	return err.message
+}
 
 func main() {
 	message := runLauncher(os.Args[1:])
@@ -35,19 +55,120 @@ func runLauncher(rawArgs []string) string {
 			eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp")
 		}
 	}
-	args = append([]string{"desktop"}, args...)
-	cmd := exec.Command(eqrcp, args...)
-	configureCommand(cmd)
 	logFile, logPath, err := createLog()
-	if err == nil {
+	if err == nil && logFile != nil {
 		defer logFile.Close()
+	}
+	if task, ok := agentTaskFromArgs(args); ok {
+		if err := submitTaskToAgent(eqrcp, task, logFile); err != nil {
+			var rejection agentRejectionError
+			if errors.As(err, &rejection) {
+				return formatError(err, logPath, eqrcp, append([]string{"desktop"}, args...))
+			}
+			if directErr := runDirect(eqrcp, args, logFile); directErr != nil {
+				return formatError(fmt.Errorf("agent unavailable: %v; direct launch failed: %w", err, directErr), logPath, eqrcp, append([]string{"desktop"}, args...))
+			}
+		}
+		return ""
+	}
+	if err := runDirect(eqrcp, args, logFile); err != nil {
+		return formatError(err, logPath, eqrcp, append([]string{"desktop"}, args...))
+	}
+	return ""
+}
+
+func agentTaskFromArgs(args []string) (desktopAgentTask, bool) {
+	if len(args) == 0 {
+		return desktopAgentTask{}, false
+	}
+	switch args[0] {
+	case "share", "receive":
+		return desktopAgentTask{Action: args[0], Paths: args[1:]}, true
+	default:
+		return desktopAgentTask{}, false
+	}
+}
+
+func submitTaskToAgent(eqrcp string, task desktopAgentTask, logFile *os.File) error {
+	if err := postAgentTask(task); err == nil {
+		return nil
+	} else {
+		var rejection agentRejectionError
+		if errors.As(err, &rejection) {
+			return err
+		}
+	}
+	if err := startAgent(eqrcp, logFile); err != nil {
+		return err
+	}
+	if err := waitForAgent(3 * time.Second); err != nil {
+		return err
+	}
+	return postAgentTask(task)
+}
+
+func postAgentTask(task desktopAgentTask) error {
+	body, err := json.Marshal(task)
+	if err != nil {
+		return err
+	}
+	response, err := agentHTTPClient.Post(desktopAgentURL+"/tasks", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		details, _ := io.ReadAll(io.LimitReader(response.Body, 1000))
+		message := strings.TrimSpace(string(details))
+		if message == "" {
+			message = response.Status
+		}
+		return agentRejectionError{message: fmt.Sprintf("agent rejected task: %s", message)}
+	}
+	return nil
+}
+
+func startAgent(eqrcp string, logFile *os.File) error {
+	cmd := exec.Command(eqrcp, "desktop", "agent")
+	configureCommand(cmd)
+	if logFile != nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
 	}
-	if err := cmd.Run(); err != nil {
-		return formatError(err, logPath, eqrcp, args)
+	return cmd.Start()
+}
+
+func waitForAgent(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		response, err := agentHTTPClient.Get(desktopAgentURL + "/health")
+		if err == nil {
+			response.Body.Close()
+			if response.StatusCode == http.StatusNoContent {
+				return nil
+			}
+			lastErr = fmt.Errorf("agent health returned %s", response.Status)
+		} else {
+			lastErr = err
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	return ""
+	if lastErr == nil {
+		lastErr = errors.New("agent did not become ready")
+	}
+	return lastErr
+}
+
+func runDirect(eqrcp string, args []string, logFile *os.File) error {
+	desktopArgs := append([]string{"desktop"}, args...)
+	cmd := exec.Command(eqrcp, desktopArgs...)
+	configureCommand(cmd)
+	if logFile != nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
+	return cmd.Run()
 }
 
 func parseArgs(args []string) (string, []string, error) {

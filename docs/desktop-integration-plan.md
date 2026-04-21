@@ -209,12 +209,16 @@ Initial local API:
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, and the last task error.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
+- `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
+- If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
+- If the agent is online but busy, the launcher reports the rejection instead of starting a second direct transfer.
+- If the agent cannot be started, the launcher falls back to the previous direct desktop command path.
 
 Next priorities:
 
-1. Add launcher/client forwarding so `eqrcp-launcher.exe` tries the agent first.
-2. Add automatic agent startup when the launcher cannot reach an existing agent.
-3. Update Windows install commands to use forwarding mode after manual validation.
+1. Validate launcher-to-agent forwarding on Windows right-click share and receive flows.
+2. Add agent-side task history and a way to stop the active task from the launcher or future tray UI.
+3. Update Windows install/status messaging after manual validation of forwarding mode.
 
 ## Recommended First Implementation
 

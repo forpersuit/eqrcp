@@ -379,6 +379,31 @@ Expected result:
 - The agent accepts a valid task and runs it through the configured runner.
 - The agent reports `busy` and rejects overlapping tasks while one task is active.
 
+## Launcher Agent Forwarding
+
+The Windows launcher should prefer the desktop agent for right-click transfer actions.
+
+Expected result:
+
+- `eqrcp-launcher.exe --eqrcp-exe <path> share <file>` posts a `share` task to the agent when it is already running.
+- `eqrcp-launcher.exe --eqrcp-exe <path> receive <directory>` posts a `receive` task to the agent when it is already running.
+- If the agent is not running, the launcher starts `<path> desktop agent`, waits for `/health`, then posts the task.
+- If the agent returns `409 Conflict` because it is busy, the launcher reports that rejection and does not start a second direct transfer.
+- If the agent cannot be reached or started, the launcher falls back to the previous direct `eqrcp desktop share/receive` command path.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./cmd/eqrcp-launcher
+```
+
+Expected result:
+
+- Launcher arguments are converted to agent tasks only for `share` and `receive`.
+- Agent task POST requests send the expected JSON payload.
+- Agent rejection responses preserve the server message and use a distinct rejection error type.
+- Agent health polling succeeds when `/health` returns `204`.
+
 ## Desktop Share Flow
 
 The desktop share flow was validated by intercepting `xdg-open` with a temporary test script and downloading the shared file over loopback.
