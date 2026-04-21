@@ -229,6 +229,26 @@ func (s *Server) getStatus() transferStatus {
 	return cloneTransferStatus(s.status)
 }
 
+func (s *Server) terminalStatus() (transferStatus, bool) {
+	status := s.getStatus()
+	return status, isTerminalTransferState(status.State)
+}
+
+func isTerminalTransferState(state string) bool {
+	return state == "completed" || state == "stopped"
+}
+
+func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusGone)
+	switch status.State {
+	case "stopped":
+		fmt.Fprintln(w, "This transfer was stopped. Start a new eqrcp transfer to continue.")
+	default:
+		fmt.Fprintln(w, "This one-time transfer has already completed. Start a new eqrcp transfer to continue.")
+	}
+}
+
 func (s *Server) getServiceStatus() serviceStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
@@ -413,6 +433,12 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create handlers
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		if !cfg.KeepAlive {
+			if status, done := app.terminalStatus(); done {
+				writeTerminalTransfer(w, status)
+				return
+			}
+		}
 		app.setStatus("transferring", "Sending file to connected device.")
 		app.updateStatus(func(status *transferStatus) {
 			status.Current = app.body.Filename
@@ -472,6 +498,12 @@ func New(cfg *config.Config) (*Server, error) {
 	})
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {
+		if !cfg.KeepAlive {
+			if status, done := app.terminalStatus(); done {
+				writeTerminalTransfer(w, status)
+				return
+			}
+		}
 		htmlVariables := struct {
 			Route string
 			File  string

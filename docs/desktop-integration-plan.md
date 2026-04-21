@@ -169,6 +169,8 @@ After the right-click workflow is functional, improve visibility:
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
+- Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
+- Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.
 - QR page purpose labels. Implemented: the page identifies share vs receive and shows the target file, archive, or output directory.
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
@@ -226,7 +228,7 @@ Next priorities:
 
 1. Validate the browser-based agent status page on Windows, including automatic status refresh without pressing a manual refresh button.
 2. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
-3. Harden repeat QR scan and multi-browser behavior so completed, replaced, and stopped tasks are visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
+3. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 4. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 5. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
 

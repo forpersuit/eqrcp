@@ -285,6 +285,7 @@ Expected result:
 - `/qr/status` serves the current transfer state as JSON.
 - `/status` serves service-level JSON with `current` transfer state and transfer `history`.
 - Appending `/status` to the active transfer URL, such as `/send/<path>/status` or `/receive/<path>/status`, serves the current transfer state as JSON.
+- Reopening a completed or stopped one-shot transfer URL returns `410 Gone` with a clear completion or stopped message.
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - The page has a `Copy URL` button.
@@ -325,6 +326,8 @@ Expected result:
 - The `/status` response contains `current` and `history`.
 - The transfer URL `/status` alias contains the current transfer state only and does not include service history.
 - After a successful download, the status response contains `completed`.
+- After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
+- After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
 - Posting to `/qr/stop` stops the server.

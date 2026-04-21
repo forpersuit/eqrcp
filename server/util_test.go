@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"eqrcp/body"
+	"eqrcp/config"
 	"eqrcp/pages"
 )
 
@@ -195,6 +197,93 @@ func TestDisplayQRTransferURLStatusAlias(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), `"history"`) {
 		t.Fatalf("transfer status alias body = %q, should not include history", response.Body.String())
+	}
+}
+
+func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "repeat-send",
+		KeepAlive: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+	server.SetStatusGracePeriod(time.Second)
+	server.Send(body.Body{Path: file, Filename: "report.txt"})
+
+	request, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("User-Agent", "Mozilla test")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("first send status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if _, err := io.ReadAll(response.Body); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+
+	request, err = http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("User-Agent", "Mozilla test")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusGone {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("second send status = %d, want %d; body = %q", response.StatusCode, http.StatusGone, string(body))
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "already completed") {
+		t.Fatalf("second send body = %q, want completion explanation", string(body))
+	}
+}
+
+func TestCompletedOneShotReceiveReturnsGoneForLaterBrowser(t *testing.T) {
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "repeat-receive",
+		KeepAlive: false,
+		Output:    t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+	server.setStatus("completed", "Transfer completed.")
+	server.ReceiveTo(server.outputDir)
+
+	response, err := http.Get(server.ReceiveURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusGone {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("completed receive status = %d, want %d; body = %q", response.StatusCode, http.StatusGone, string(body))
 	}
 }
 
