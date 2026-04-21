@@ -11,6 +11,7 @@ import (
 )
 
 const desktopAgentAddress = "127.0.0.1:48176"
+const desktopAgentMaxQueue = 16
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`
@@ -20,6 +21,7 @@ type desktopAgentTask struct {
 type desktopAgentResponse struct {
 	State     string            `json:"state"`
 	Current   *desktopAgentTask `json:"current,omitempty"`
+	Queued    int               `json:"queued"`
 	LastError string            `json:"lastError,omitempty"`
 }
 
@@ -28,6 +30,7 @@ type desktopAgent struct {
 	baseFlags application.Flags
 	busy      bool
 	current   *desktopAgentTask
+	queue     []desktopAgentTask
 	lastError string
 	runner    func(desktopAgentTask) error
 }
@@ -77,17 +80,16 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agent.mu.Lock()
-	if agent.busy {
+	if len(agent.queue) >= desktopAgentMaxQueue {
 		agent.mu.Unlock()
-		http.Error(w, "desktop agent is busy", http.StatusConflict)
+		http.Error(w, "desktop agent queue is full", http.StatusTooManyRequests)
 		return
 	}
-	agent.busy = true
-	agent.current = &task
+	agent.queue = append(agent.queue, task)
 	agent.lastError = ""
+	agent.startNextLocked()
 	agent.mu.Unlock()
 
-	go agent.execute(task)
 	w.WriteHeader(http.StatusAccepted)
 	agent.writeStatus(w)
 }
@@ -101,6 +103,18 @@ func (agent *desktopAgent) execute(task desktopAgentTask) {
 	if err != nil {
 		agent.lastError = err.Error()
 	}
+	agent.startNextLocked()
+}
+
+func (agent *desktopAgent) startNextLocked() {
+	if agent.busy || len(agent.queue) == 0 {
+		return
+	}
+	task := agent.queue[0]
+	agent.queue = agent.queue[1:]
+	agent.busy = true
+	agent.current = &task
+	go agent.execute(task)
 }
 
 func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
@@ -108,6 +122,7 @@ func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 	defer agent.mu.Unlock()
 	response := desktopAgentResponse{
 		State:     "idle",
+		Queued:    len(agent.queue),
 		LastError: agent.lastError,
 	}
 	if agent.busy {

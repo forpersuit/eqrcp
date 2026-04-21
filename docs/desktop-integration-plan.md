@@ -200,18 +200,18 @@ The planned fix is a desktop agent:
 
 - `eqrcp desktop agent` runs as the single long-lived process. Initial command and local API are implemented.
 - `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly.
-- The agent owns transfer lifecycle, status pages, stop actions, and cleanup. Initial implementation accepts one active task and rejects overlapping tasks with `409 Conflict`.
+- The agent owns transfer lifecycle, status pages, stop actions, and cleanup. It runs one active task at a time and queues later tasks instead of launching extra transfer processes.
 - The agent can later expose a tray icon and current-task list.
 - The agent should prevent stale orphaned transfers from accumulating.
 
 Initial local API:
 
 - `GET /health` checks whether the agent is alive.
-- `GET /status` returns `idle` or `busy`, the active task, and the last task error.
+- `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
 - If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
-- If the agent is online but busy, the launcher reports the rejection instead of starting a second direct transfer.
+- If the agent is online and already transferring, the launcher submits the new task to the agent queue instead of starting a second direct transfer.
 - If the agent cannot be started, the launcher falls back to the previous direct desktop command path.
 
 Next priorities:

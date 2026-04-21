@@ -364,7 +364,8 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `POST /tasks` accepts one `share` or `receive` task.
-- While a task is active, a second `POST /tasks` returns `409 Conflict`.
+- While a task is active, later `POST /tasks` calls are accepted into the agent queue.
+- If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 
 Automated checks:
@@ -377,7 +378,9 @@ Expected result:
 
 - Agent task validation rejects malformed actions.
 - The agent accepts a valid task and runs it through the configured runner.
-- The agent reports `busy` and rejects overlapping tasks while one task is active.
+- The agent reports `busy`, keeps the active task visible, and reports a queued task count while later tasks wait.
+- The agent runs queued tasks in order after the active task finishes.
+- The agent rejects new tasks only when the queue is full.
 
 ## Launcher Agent Forwarding
 
@@ -388,7 +391,8 @@ Expected result:
 - `eqrcp-launcher.exe --eqrcp-exe <path> share <file>` posts a `share` task to the agent when it is already running.
 - `eqrcp-launcher.exe --eqrcp-exe <path> receive <directory>` posts a `receive` task to the agent when it is already running.
 - If the agent is not running, the launcher starts `<path> desktop agent`, waits for `/health`, then posts the task.
-- If the agent returns `409 Conflict` because it is busy, the launcher reports that rejection and does not start a second direct transfer.
+- If the agent is busy, the launcher submits the task to the agent queue and does not start a second direct transfer.
+- If the agent rejects a task, the launcher reports that rejection and does not start a second direct transfer.
 - If the agent cannot be reached or started, the launcher falls back to the previous direct `eqrcp desktop share/receive` command path.
 
 Automated checks:
@@ -402,6 +406,7 @@ Expected result:
 - Launcher arguments are converted to agent tasks only for `share` and `receive`.
 - Agent task POST requests send the expected JSON payload.
 - Agent rejection responses preserve the server message and use a distinct rejection error type.
+- Agent busy responses are not expected in the normal queueing path, but rejection handling is kept for compatibility and queue-full errors.
 - Agent health polling succeeds when `/health` returns `204`.
 
 ## Desktop Share Flow

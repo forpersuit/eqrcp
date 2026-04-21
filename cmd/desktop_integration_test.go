@@ -29,3 +29,23 @@ func TestWindowsShellCommandUsesLauncherWhenAvailable(t *testing.T) {
 		t.Fatalf("windowsShellCommand() = %q, want %q", got, want)
 	}
 }
+
+func TestParseRegDefaultValueEnglishOutput(t *testing.T) {
+	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
+    (Default)    REG_SZ    "E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"
+`
+	want := `"E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"`
+	if got := parseRegDefaultValue(output); got != want {
+		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
+	}
+}
+
+func TestParseRegDefaultValueLocalizedOutput(t *testing.T) {
+	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
+    (默认)    REG_SZ    "E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"
+`
+	want := `"E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"`
+	if got := parseRegDefaultValue(output); got != want {
+		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
+	}
+}

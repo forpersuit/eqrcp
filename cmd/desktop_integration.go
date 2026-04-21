@@ -265,14 +265,20 @@ func queryRegDefault(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(string(output), "\n")
+	return parseRegDefaultValue(string(output)), nil
+}
+
+func parseRegDefaultValue(output string) string {
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		fields := strings.Fields(line)
-		if len(fields) >= 3 && fields[0] == "(Default)" {
-			return strings.Join(fields[2:], " "), nil
+		for index, field := range fields {
+			if strings.HasPrefix(field, "REG_") && index+1 < len(fields) {
+				return strings.Join(fields[index+1:], " ")
+			}
 		}
 	}
-	return strings.TrimSpace(string(output)), nil
+	return strings.TrimSpace(output)
 }
 
 func windowsLauncherPath(exe string) string {

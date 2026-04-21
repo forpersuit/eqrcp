@@ -72,18 +72,21 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	}
 }
 
-func TestDesktopAgentRejectsTaskWhileBusy(t *testing.T) {
+func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{})
+	done := make(chan desktopAgentTask, 2)
 	agent := newDesktopAgent(application.Flags{})
 	agent.runner = func(task desktopAgentTask) error {
-		close(started)
-		<-block
+		done <- task
+		if task.Action == "share" {
+			close(started)
+			<-block
+		}
 		return nil
 	}
 	server := httptest.NewServer(agent.routes())
 	defer server.Close()
-	defer close(block)
 
 	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"a.txt"}})
 	if first.StatusCode != http.StatusAccepted {
@@ -91,12 +94,58 @@ func TestDesktopAgentRejectsTaskWhileBusy(t *testing.T) {
 	}
 	<-started
 	second := postAgentTask(t, server.URL, desktopAgentTask{Action: "receive", Paths: []string{"/tmp"}})
-	if second.StatusCode != http.StatusConflict {
-		t.Fatalf("second status = %d, want %d", second.StatusCode, http.StatusConflict)
+	if second.StatusCode != http.StatusAccepted {
+		t.Fatalf("second status = %d, want %d", second.StatusCode, http.StatusAccepted)
 	}
 	status := getAgentStatus(t, server.URL)
-	if status.State != "busy" || status.Current == nil || status.Current.Action != "share" {
+	if status.State != "busy" || status.Current == nil || status.Current.Action != "share" || status.Queued != 1 {
 		t.Fatalf("status = %#v", status)
+	}
+	close(block)
+
+	var tasks []desktopAgentTask
+	for len(tasks) < 2 {
+		select {
+		case task := <-done:
+			tasks = append(tasks, task)
+		case <-time.After(time.Second):
+			t.Fatalf("queued task did not run, tasks = %#v", tasks)
+		}
+	}
+	if tasks[0].Action != "share" || tasks[1].Action != "receive" {
+		t.Fatalf("tasks = %#v, want share then receive", tasks)
+	}
+}
+
+func TestDesktopAgentRejectsWhenQueueIsFull(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	agent := newDesktopAgent(application.Flags{})
+	agent.runner = func(task desktopAgentTask) error {
+		if len(task.Paths) > 0 && task.Paths[0] == "active.txt" {
+			close(started)
+		}
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+	defer close(block)
+
+	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	for index := 0; index < desktopAgentMaxQueue; index++ {
+		response := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"queued.txt"}})
+		if response.StatusCode != http.StatusAccepted {
+			t.Fatalf("queued status = %d, want %d", response.StatusCode, http.StatusAccepted)
+		}
+	}
+	response := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"overflow.txt"}})
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("overflow status = %d, want %d", response.StatusCode, http.StatusTooManyRequests)
 	}
 }
 
