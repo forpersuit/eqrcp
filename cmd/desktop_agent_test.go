@@ -506,6 +506,77 @@ func TestDesktopAgentOpenCommandOpensStatusPage(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentOpenCurrentCommandOpensQRPage(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        1,
+		Action:    "share",
+		Paths:     []string{"active.txt"},
+		State:     "running",
+		PageURL:   "http://127.0.0.1:19000/qr",
+		StartedAt: time.Now(),
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	previousBaseURL := desktopAgentBaseURL
+	previousOpen := openDesktopAgentPage
+	desktopAgentBaseURL = server.URL
+	opened := make(chan string, 1)
+	openDesktopAgentPage = func(url string) error {
+		opened <- url
+		return nil
+	}
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+		openDesktopAgentPage = previousOpen
+	})
+
+	var out bytes.Buffer
+	desktopAgentOpenCurrentCmd.SetOut(&out)
+	if err := desktopAgentOpenCurrentCmd.RunE(desktopAgentOpenCurrentCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case url := <-opened:
+		if url != "http://127.0.0.1:19000/qr" {
+			t.Fatalf("opened URL = %q, want current QR page", url)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("agent-open-current did not open QR page")
+	}
+	if !strings.Contains(out.String(), "Current desktop agent QR page opened.") {
+		t.Fatalf("output = %q", out.String())
+	}
+}
+
+func TestDesktopAgentOpenCurrentCommandWhenIdle(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	previousBaseURL := desktopAgentBaseURL
+	previousOpen := openDesktopAgentPage
+	desktopAgentBaseURL = server.URL
+	openDesktopAgentPage = func(url string) error {
+		t.Fatalf("openDesktopAgentPage(%q) should not be called", url)
+		return nil
+	}
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+		openDesktopAgentPage = previousOpen
+	})
+
+	err := desktopAgentOpenCurrentCmd.RunE(desktopAgentOpenCurrentCmd, nil)
+	if err == nil {
+		t.Fatal("agent-open-current expected an error")
+	}
+	if !strings.Contains(err.Error(), "no active QR page") {
+		t.Fatalf("error = %q, want no active QR page", err.Error())
+	}
+}
+
 func TestFormatDesktopAgentStatus(t *testing.T) {
 	started := time.Date(2026, 4, 21, 10, 0, 0, 0, time.UTC)
 	finished := started.Add(time.Minute)
@@ -517,6 +588,7 @@ func TestFormatDesktopAgentStatus(t *testing.T) {
 			Action:    "share",
 			Paths:     []string{`C:\tmp\second.txt`},
 			State:     "running",
+			PageURL:   "http://127.0.0.1:19000/qr",
 			StartedAt: started,
 		},
 		History: []desktopAgentTaskRecord{
@@ -538,6 +610,7 @@ func TestFormatDesktopAgentStatus(t *testing.T) {
 		"- queued: 1",
 		"#2 share running",
 		`paths: C:\tmp\second.txt`,
+		`qr page: http://127.0.0.1:19000/qr`,
 		"#1 share replaced",
 		`paths: C:\tmp\first.txt`,
 	} {

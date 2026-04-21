@@ -452,6 +452,26 @@ var desktopAgentOpenCmd = &cobra.Command{
 	},
 }
 
+var desktopAgentOpenCurrentCmd = &cobra.Command{
+	Use:   "agent-open-current",
+	Short: "Open the current desktop integration QR page",
+	Long:  "Open the active desktop integration task QR page in the default browser.",
+	RunE: func(command *cobra.Command, args []string) error {
+		status, err := fetchDesktopAgentStatus()
+		if err != nil {
+			return err
+		}
+		if status.Current == nil || status.Current.PageURL == "" {
+			return fmt.Errorf("desktop agent has no active QR page")
+		}
+		if err := openDesktopAgentPage(status.Current.PageURL); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Current desktop agent QR page opened.")
+		return nil
+	},
+}
+
 func openDesktopAgentPageURL(url string) error {
 	switch runtime.GOOS {
 	case "linux":
@@ -513,6 +533,9 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 	builder.WriteString(fmt.Sprintf("%s- #%d %s %s\n", indent, record.ID, record.Action, record.State))
 	if len(record.Paths) > 0 {
 		builder.WriteString(fmt.Sprintf("%s  paths: %s\n", indent, strings.Join(record.Paths, ", ")))
+	}
+	if record.PageURL != "" {
+		builder.WriteString(fmt.Sprintf("%s  qr page: %s\n", indent, record.PageURL))
 	}
 	if !record.StartedAt.IsZero() {
 		builder.WriteString(fmt.Sprintf("%s  started: %s\n", indent, record.StartedAt.Format(time.RFC3339)))

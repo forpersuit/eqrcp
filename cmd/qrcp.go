@@ -25,6 +25,7 @@ func init() {
 	desktopCmd.AddCommand(desktopAgentStopCurrentCmd)
 	desktopCmd.AddCommand(desktopAgentStatusCmd)
 	desktopCmd.AddCommand(desktopAgentOpenCmd)
+	desktopCmd.AddCommand(desktopAgentOpenCurrentCmd)
 	configCmd.AddCommand(migrateCmd)
 	// Global command flags
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Quiet, "quiet", "q", false, "only print errors")

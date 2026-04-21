@@ -389,6 +389,7 @@ Expected result:
 - `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
+- `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 
 Automated checks:
@@ -409,6 +410,7 @@ Expected result:
 - The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
+- The agent-open-current command opens the active QR page and reports idle state as an error.
 - The agent-stop-current command records the active task as `stopped` and reports idle state as an error.
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
