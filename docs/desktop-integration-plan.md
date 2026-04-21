@@ -156,6 +156,7 @@ Exit criteria:
 - Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display.
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
+- Windows manual validation: `desktop status` no longer misreports repaired entries as `needs repair` on localized Windows registry output.
 
 ### Phase 3: Better QR And Status UI
 
@@ -198,9 +199,9 @@ The current Windows desktop flow starts one `eqrcp-launcher.exe` and one `eqrcp.
 
 The planned fix is a desktop agent:
 
-- `eqrcp desktop agent` runs as the single long-lived process. Initial command and local API are implemented.
-- `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly.
-- The agent owns transfer lifecycle, status pages, stop actions, and cleanup. It runs one active task at a time; when a new right-click task arrives, it stops the current task and starts the next one instead of launching extra transfer processes.
+- `eqrcp desktop agent` runs as the single long-lived process. Initial command and local API are implemented and manually validated on Windows.
+- `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly. Manually validated on Windows.
+- The agent owns transfer lifecycle, status pages, stop actions, and cleanup. It runs one active task at a time; when a new right-click task arrives, it stops the current task and starts the next one instead of launching extra transfer processes. Manually validated on Windows.
 - The agent can later expose a tray icon and current-task list.
 - The agent should prevent stale orphaned transfers from accumulating.
 
@@ -216,9 +217,9 @@ Initial local API:
 
 Next priorities:
 
-1. Validate launcher-to-agent forwarding on Windows right-click share and receive flows.
-2. Add agent-side task history and a way to stop the active task from the launcher or future tray UI.
-3. Update Windows install/status messaging after manual validation of forwarding mode.
+1. Add agent-side task history and expose it through `/status`, so users can see what was replaced, completed, or failed.
+2. Add a launcher-visible active-task status page or small browser page for “agent is already running this task” and stop/retry actions.
+3. Add a persistent agent stop command, for example `eqrcp desktop agent-stop`, to cleanly exit the long-lived agent when needed.
 
 ## Recommended First Implementation
 

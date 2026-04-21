@@ -394,6 +394,7 @@ Expected result:
 - If the agent is busy, the launcher submits the task to the agent and does not start a second direct transfer.
 - If the agent rejects a task, the launcher reports that rejection and does not start a second direct transfer.
 - If the agent cannot be reached or started, the launcher falls back to the previous direct `eqrcp desktop share/receive` command path.
+- Windows manual validation: a second right-click share replaces the first waiting share and opens the new QR flow instead of showing `desktop agent is busy` or doing nothing.
 
 Automated checks:
 
@@ -408,6 +409,19 @@ Expected result:
 - Agent rejection responses preserve the server message and use a distinct rejection error type.
 - Agent busy responses are not expected in the normal replacement path, but rejection handling is kept for compatibility and queue-full errors.
 - Agent health polling succeeds when `/health` returns `204`.
+
+Manual Windows check:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop install
+```
+
+Expected result:
+
+- `eqrcp.exe desktop status` reports installed entries without false `needs repair` results on localized Windows output.
+- First right-click share opens a QR page.
+- A second right-click share replaces the first waiting transfer and opens the new QR page.
+- Process count should stay bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 
 ## Desktop Share Flow
 
