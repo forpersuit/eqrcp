@@ -216,6 +216,7 @@ Initial local API:
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
 - `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling.
+- Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
@@ -230,7 +231,7 @@ Initial local API:
 Next priorities:
 
 1. Validate QR completion cleanup, timestamped archive names, and original item lists in Windows right-click multi-file and directory share flows.
-2. Validate the browser-based agent status page on Windows, including automatic status refresh and `eqrcp desktop agent-open`.
+2. Validate the browser-based agent status page on Windows, including automatic status refresh, `eqrcp desktop agent-open`, and the current task QR page link.
 3. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
 4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.

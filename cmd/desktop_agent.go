@@ -37,6 +37,7 @@ type desktopAgentTaskRecord struct {
 	Action     string     `json:"action"`
 	Paths      []string   `json:"paths"`
 	State      string     `json:"state"`
+	PageURL    string     `json:"pageUrl,omitempty"`
 	Error      string     `json:"error,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
@@ -252,6 +253,14 @@ func (agent *desktopAgent) setActiveStop(stop func()) {
 	agent.activeStop = stop
 }
 
+func (agent *desktopAgent) setCurrentPageURL(url string) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.current != nil && agent.current.State == "running" {
+		agent.current.PageURL = url
+	}
+}
+
 func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 	response := agent.snapshot()
 	w.Header().Set("Content-Type", "application/json")
@@ -302,6 +311,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		return err
 	}
 	agent.setActiveStop(srv.Shutdown)
+	agent.setCurrentPageURL(srv.BaseURL + "/qr")
 	switch task.Action {
 	case "share":
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
@@ -672,12 +682,13 @@ th {
     <div id="agent-current">
     {{if .Current}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
       <tbody>
         <tr>
           <td data-label="ID">#{{.Current.ID}}</td>
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
+          <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
           <td data-label="Paths" class="paths">{{joinPaths .Current.Paths}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
         </tr>
@@ -741,6 +752,17 @@ function appendCell(row, label, value, className) {
   cell.textContent = value || '';
   row.appendChild(cell);
 }
+function appendLinkCell(row, label, href, text) {
+  var cell = document.createElement('td');
+  cell.setAttribute('data-label', label);
+  if (href) {
+    var link = document.createElement('a');
+    link.href = href;
+    link.textContent = text;
+    cell.appendChild(link);
+  }
+  row.appendChild(cell);
+}
 function renderCurrent(record) {
   var container = document.getElementById('agent-current');
   container.innerHTML = '';
@@ -752,12 +774,13 @@ function renderCurrent(record) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
   var body = document.createElement('tbody');
   var row = document.createElement('tr');
   appendCell(row, 'ID', '#' + record.id);
   appendCell(row, 'Action', record.action);
   appendCell(row, 'State', record.state, 'state-' + record.state);
+  appendLinkCell(row, 'QR Page', record.pageUrl, 'Open QR Page');
   appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
   appendCell(row, 'Started', formatAgentTime(record.startedAt));
   body.appendChild(row);

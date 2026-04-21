@@ -338,6 +338,7 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		Action:    "receive",
 		Paths:     []string{"/tmp/recv"},
 		State:     "running",
+		PageURL:   "http://127.0.0.1:19000/qr",
 		StartedAt: started,
 	}
 	agent.busy = true
@@ -362,6 +363,8 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"Stop Agent",
 		"fetch('/status'",
 		"setInterval(updateAgentStatus",
+		"Open QR Page",
+		"http://127.0.0.1:19000/qr",
 		"receive",
 		"/tmp/recv",
 		"finished.txt",
@@ -370,6 +373,24 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("agent page = %q, want to contain %q", string(body), want)
 		}
+	}
+}
+
+func TestDesktopAgentSetCurrentPageURL(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        1,
+		Action:    "share",
+		Paths:     []string{"active.txt"},
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.setCurrentPageURL("http://127.0.0.1:19000/qr")
+	status := agent.snapshot()
+	if status.Current == nil || status.Current.PageURL != "http://127.0.0.1:19000/qr" {
+		t.Fatalf("Current = %#v, want page URL", status.Current)
 	}
 }
 

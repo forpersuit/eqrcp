@@ -378,6 +378,7 @@ Expected result:
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
 - `GET /` returns a browser status page with the current task, recent history, stop-current action, stop-agent action, and automatic `/status` polling.
+- Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `POST /stop-current` stops the active task without stopping the agent.
 - `POST /stop-current` returns a conflict when no task is active.
@@ -405,6 +406,7 @@ Expected result:
 - The agent records completed and replaced tasks in status history.
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
+- The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
