@@ -386,6 +386,7 @@ Expected result:
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
+- `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
@@ -408,6 +409,7 @@ Expected result:
 - The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
+- The agent-stop-current command records the active task as `stopped` and reports idle state as an error.
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.

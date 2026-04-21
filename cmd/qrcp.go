@@ -22,6 +22,7 @@ func init() {
 	desktopCmd.AddCommand(desktopUninstallCmd)
 	desktopCmd.AddCommand(desktopAgentCmd)
 	desktopCmd.AddCommand(desktopAgentStopCmd)
+	desktopCmd.AddCommand(desktopAgentStopCurrentCmd)
 	desktopCmd.AddCommand(desktopAgentStatusCmd)
 	desktopCmd.AddCommand(desktopAgentOpenCmd)
 	configCmd.AddCommand(migrateCmd)

@@ -394,6 +394,29 @@ var desktopAgentStopCmd = &cobra.Command{
 	},
 }
 
+var desktopAgentStopCurrentCmd = &cobra.Command{
+	Use:   "agent-stop-current",
+	Short: "Stop the current desktop integration agent task",
+	Long:  "Stop the active share or receive task without stopping the local desktop integration agent.",
+	RunE: func(command *cobra.Command, args []string) error {
+		response, err := http.Post(desktopAgentBaseURL+"/stop-current", "text/plain", nil)
+		if err != nil {
+			return fmt.Errorf("desktop agent is not running: %w", err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusAccepted {
+			details, _ := io.ReadAll(io.LimitReader(response.Body, 1000))
+			message := strings.TrimSpace(string(details))
+			if message == "" {
+				message = response.Status
+			}
+			return fmt.Errorf("desktop agent stop-current failed: %s", message)
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Current desktop agent task stopped.")
+		return nil
+	},
+}
+
 var desktopAgentStatusCmd = &cobra.Command{
 	Use:   "agent-status",
 	Short: "Show desktop integration agent status",

@@ -221,6 +221,7 @@ Initial local API:
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
+- `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
 - `eqrcp desktop agent-open` opens the browser-based agent status page when the agent is running.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
@@ -232,7 +233,7 @@ Next priorities:
 
 1. Validate QR completion cleanup, timestamped archive names, and original item lists in Windows right-click multi-file and directory share flows.
 2. Validate the browser-based agent status page on Windows, including automatic status refresh, `eqrcp desktop agent-open`, and the current task QR page link.
-3. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
+3. Validate the dedicated stop-current endpoint and `eqrcp desktop agent-stop-current` command so users can cancel the active transfer without exiting the agent.
 4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 6. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.

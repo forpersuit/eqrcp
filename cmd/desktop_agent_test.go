@@ -275,6 +275,82 @@ func TestDesktopAgentStopCurrentWhenIdle(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentStopCurrentCommand(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	agent := newDesktopAgent(application.Flags{})
+	var stopOnce sync.Once
+	agent.runner = func(task desktopAgentTask) error {
+		agent.setActiveStop(func() {
+			stopOnce.Do(func() {
+				close(block)
+			})
+		})
+		close(started)
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	previousBaseURL := desktopAgentBaseURL
+	desktopAgentBaseURL = server.URL
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+	})
+
+	var out bytes.Buffer
+	desktopAgentStopCurrentCmd.SetOut(&out)
+	if err := desktopAgentStopCurrentCmd.RunE(desktopAgentStopCurrentCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Current desktop agent task stopped.") {
+		t.Fatalf("output = %q", out.String())
+	}
+	deadline := time.After(time.Second)
+	for {
+		status := getAgentStatus(t, server.URL)
+		if len(status.History) > 0 {
+			if status.History[0].State != "stopped" {
+				t.Fatalf("History = %#v, want stopped active task", status.History)
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("History = %#v, want stopped active task", status.History)
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func TestDesktopAgentStopCurrentCommandWhenIdle(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+	previousBaseURL := desktopAgentBaseURL
+	desktopAgentBaseURL = server.URL
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+	})
+
+	var out bytes.Buffer
+	desktopAgentStopCurrentCmd.SetOut(&out)
+	err := desktopAgentStopCurrentCmd.RunE(desktopAgentStopCurrentCmd, nil)
+	if err == nil {
+		t.Fatal("agent-stop-current expected an error")
+	}
+	if !strings.Contains(err.Error(), "no active task") {
+		t.Fatalf("error = %q, want no active task", err.Error())
+	}
+}
+
 func TestDesktopAgentStopCurrentRedirectsBrowserRequests(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{})
