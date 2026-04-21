@@ -169,6 +169,7 @@ Desktop integration should preserve the baseline above and add platform-specific
 - Context menu can share a selected directory.
 - Context menu can share multiple selected paths where the platform supports it.
 - Context menu can receive into the selected directory.
+- Manual `desktop receive` without a directory can receive into the configured output directory or current working directory.
 - Launcher failures are visible to the user without requiring a terminal.
 - Generated QR code is visible through a browser or dedicated window.
 - Server exits after successful transfer by default.
@@ -192,7 +193,7 @@ Expected result:
 
 - `desktop`, `desktop share`, and `desktop receive` help text is available.
 - `desktop share` without paths fails with an argument validation error.
-- `desktop receive` without a directory fails with an argument validation error.
+- `desktop receive` accepts an optional directory; without one it uses the configured output directory or current working directory.
 - On non-Windows systems, `desktop install` and `desktop uninstall` fail with a platform not implemented error.
 - On non-Windows systems, `desktop status` prints a platform not implemented status line.
 - On Windows, `desktop install` should create Explorer context menu entries under `HKCU\Software\Classes`.

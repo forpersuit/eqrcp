@@ -30,17 +30,28 @@ eqrcp desktop share /path/directory`,
 }
 
 var desktopReceiveCmd = &cobra.Command{
-	Use:   "receive <directory>",
+	Use:   "receive [directory]",
 	Short: "Receive files into a directory from a desktop launcher",
-	Long:  "Receive files into a directory from a desktop launcher. This command opens the QR code in a browser by default.",
+	Long:  "Receive files into a directory from a desktop launcher. This command opens the QR code in a browser by default. When no directory is passed, the configured output directory or current working directory is used.",
 	Example: `# Receive files into a selected directory
-eqrcp desktop receive /path/directory`,
-	Args: cobra.ExactArgs(1),
+eqrcp desktop receive /path/directory
+# Receive files into the configured output directory or current directory
+eqrcp desktop receive`,
+	Args: cobra.RangeArgs(0, 1),
 	RunE: func(command *cobra.Command, args []string) error {
 		app.Flags.Browser = true
-		app.Flags.Output = args[0]
+		if output, ok := desktopReceiveOutput(args); ok {
+			app.Flags.Output = output
+		}
 		return receiveCmdFunc(command, args)
 	},
+}
+
+func desktopReceiveOutput(args []string) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+	return args[0], true
 }
 
 var desktopInstallCmd = &cobra.Command{

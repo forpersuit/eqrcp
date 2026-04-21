@@ -177,7 +177,7 @@ After the right-click workflow is functional, improve visibility:
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
 - Mobile upload completion page. Implemented: after phone upload, the success page lists each saved file and uses a small mobile-friendly layout.
-- Last used output directory.
+- Last used output directory. Partially implemented: `eqrcp desktop receive` can now run without a directory and uses the configured output directory or current working directory, while right-click receive still passes the clicked directory explicitly.
 - System tray entry.
 
 The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
@@ -192,9 +192,9 @@ Current progress model:
 
 Next priorities:
 
-1. Validate progress and mobile upload completion pages in Windows right-click share and receive flows.
-2. Validate setup repair checks for stale Windows registry paths and missing launcher placement on Windows.
-3. Start Phase 4 desktop agent design once single-transfer UI behavior is stable.
+1. Validate progress, QR completion cleanup, timestamped archive names, and mobile upload completion pages in Windows right-click share and receive flows.
+2. Validate `eqrcp desktop receive` without a directory, using the configured output directory or current working directory.
+3. Validate setup repair checks for stale Windows registry paths and missing launcher placement on Windows.
 
 ### Phase 4: Desktop Agent And Single Instance
 
@@ -241,14 +241,14 @@ Next priorities:
 
 ## Recommended First Implementation
 
-Start with Phase 1 and implement:
+The first desktop implementation is available:
 
 ```sh
 eqrcp desktop share <paths...>
-eqrcp desktop receive <directory>
+eqrcp desktop receive [directory]
 ```
 
-Use the browser QR page initially. It is already implemented and avoids introducing GUI dependencies.
+Use the browser QR page initially. It is already implemented and avoids introducing GUI dependencies. When `desktop receive` is launched from a right-click directory action, the clicked directory is passed explicitly. When it is launched manually without a directory, it falls back to the configured output directory or current working directory.
 
 Then implement Windows and Linux installers. macOS can be documented first if no macOS environment is available for testing.
 
