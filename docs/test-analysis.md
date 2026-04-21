@@ -363,9 +363,12 @@ Expected result:
 - The command starts a local HTTP control service at `127.0.0.1:48176`.
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
+- `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
 - `POST /tasks` accepts one `share` or `receive` task.
 - While a task is active, later `POST /tasks` calls are accepted and cause the agent to stop the current task before running the next task.
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
+- `POST /shutdown` stops the active task and exits the agent.
+- `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 
 Automated checks:
@@ -381,6 +384,8 @@ Expected result:
 - The agent can stop the active task when a later right-click task arrives.
 - The agent runs the accepted later task after the current task exits.
 - The agent rejects new tasks only when the queue is full.
+- The agent records completed and replaced tasks in status history.
+- The shutdown endpoint stops an active task and calls the configured server shutdown function.
 
 ## Launcher Agent Forwarding
 

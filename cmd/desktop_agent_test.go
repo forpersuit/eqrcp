@@ -71,6 +71,9 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	if status.State != "idle" {
 		t.Fatalf("State = %q, want idle", status.State)
 	}
+	if len(status.History) != 1 || status.History[0].State != "completed" || status.History[0].Action != "share" {
+		t.Fatalf("History = %#v, want completed share record", status.History)
+	}
 }
 
 func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
@@ -117,6 +120,16 @@ func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	if tasks[0].Action != "share" || tasks[1].Action != "receive" {
 		t.Fatalf("tasks = %#v, want share then receive", tasks)
 	}
+	status := getAgentStatus(t, server.URL)
+	if len(status.History) < 2 {
+		t.Fatalf("History = %#v, want at least two records", status.History)
+	}
+	if status.History[1].State != "replaced" || status.History[1].Action != "share" {
+		t.Fatalf("History = %#v, want replaced share record", status.History)
+	}
+	if status.History[0].State != "completed" || status.History[0].Action != "receive" {
+		t.Fatalf("History = %#v, want completed receive record", status.History)
+	}
 }
 
 func TestDesktopAgentRejectsWhenQueueIsFull(t *testing.T) {
@@ -148,6 +161,52 @@ func TestDesktopAgentRejectsWhenQueueIsFull(t *testing.T) {
 	response := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"overflow.txt"}})
 	if response.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("overflow status = %d, want %d", response.StatusCode, http.StatusTooManyRequests)
+	}
+}
+
+func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	shutdownCalled := make(chan struct{}, 1)
+	agent := newDesktopAgent(application.Flags{})
+	var stopOnce sync.Once
+	agent.shutdown = func() {
+		shutdownCalled <- struct{}{}
+	}
+	agent.runner = func(task desktopAgentTask) error {
+		agent.setActiveStop(func() {
+			stopOnce.Do(func() {
+				close(block)
+			})
+		})
+		close(started)
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	first := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d, want %d", first.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	response, err := http.Post(server.URL+"/shutdown", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("shutdown status = %d, want %d", response.StatusCode, http.StatusAccepted)
+	}
+	select {
+	case <-shutdownCalled:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown handler did not call shutdown function")
+	}
+	status := getAgentStatus(t, server.URL)
+	if len(status.History) == 0 || status.History[0].State != "replaced" {
+		t.Fatalf("History = %#v, want replaced active task", status.History)
 	}
 }
 

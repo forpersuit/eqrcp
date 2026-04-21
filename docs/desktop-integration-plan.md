@@ -209,7 +209,10 @@ Initial local API:
 
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
+- `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
+- `POST /shutdown` stops the active task and cleanly exits the agent.
+- `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
 - If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
 - If the agent is online and already waiting on a previous transfer, the new task is accepted and the agent stops the current server so the new QR page can open.
@@ -217,9 +220,9 @@ Initial local API:
 
 Next priorities:
 
-1. Add agent-side task history and expose it through `/status`, so users can see what was replaced, completed, or failed.
-2. Add a launcher-visible active-task status page or small browser page for “agent is already running this task” and stop/retry actions.
-3. Add a persistent agent stop command, for example `eqrcp desktop agent-stop`, to cleanly exit the long-lived agent when needed.
+1. Add a browser-based agent status page showing current task, recent history, stop-agent, and stop-current actions.
+2. Add a dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
+3. Improve Windows status output to include whether the agent is currently running.
 
 ## Recommended First Implementation
 

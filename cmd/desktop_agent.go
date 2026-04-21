@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"eqrcp/application"
 	"eqrcp/body"
@@ -15,26 +17,41 @@ import (
 
 const desktopAgentAddress = "127.0.0.1:48176"
 const desktopAgentMaxQueue = 16
+const desktopAgentMaxHistory = 20
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`
 	Paths  []string `json:"paths"`
 }
 
+type desktopAgentTaskRecord struct {
+	ID         int        `json:"id"`
+	Action     string     `json:"action"`
+	Paths      []string   `json:"paths"`
+	State      string     `json:"state"`
+	Error      string     `json:"error,omitempty"`
+	StartedAt  time.Time  `json:"startedAt"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+}
+
 type desktopAgentResponse struct {
-	State     string            `json:"state"`
-	Current   *desktopAgentTask `json:"current,omitempty"`
-	Queued    int               `json:"queued"`
-	LastError string            `json:"lastError,omitempty"`
+	State     string                   `json:"state"`
+	Current   *desktopAgentTaskRecord  `json:"current,omitempty"`
+	Queued    int                      `json:"queued"`
+	History   []desktopAgentTaskRecord `json:"history,omitempty"`
+	LastError string                   `json:"lastError,omitempty"`
 }
 
 type desktopAgent struct {
 	mu         sync.Mutex
 	baseFlags  application.Flags
 	busy       bool
-	current    *desktopAgentTask
+	current    *desktopAgentTaskRecord
 	queue      []desktopAgentTask
+	history    []desktopAgentTaskRecord
+	nextID     int
 	activeStop func()
+	shutdown   func()
 	lastError  string
 	runner     func(desktopAgentTask) error
 }
@@ -50,6 +67,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
 	mux.HandleFunc("/tasks", agent.handleTasks)
+	mux.HandleFunc("/shutdown", agent.handleShutdown)
 	return mux
 }
 
@@ -92,7 +110,7 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	agent.queue = append(agent.queue, task)
 	agent.lastError = ""
 	if agent.busy {
-		agent.stopActiveLocked()
+		agent.replaceActiveLocked()
 	}
 	agent.startNextLocked()
 	agent.mu.Unlock()
@@ -101,20 +119,56 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	agent.writeStatus(w)
 }
 
-func (agent *desktopAgent) execute(task desktopAgentTask) {
+func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	agent.mu.Lock()
+	agent.queue = nil
+	if agent.busy {
+		agent.replaceActiveLocked()
+	}
+	shutdown := agent.shutdown
+	agent.mu.Unlock()
+
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintln(w, "Desktop agent stopping.")
+	if shutdown != nil {
+		go shutdown()
+	}
+}
+
+func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 	err := agent.runner(task)
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if agent.current != nil && agent.current.ID == id {
+		finishedAt := time.Now()
+		agent.current.FinishedAt = &finishedAt
+		if agent.current.State == "running" {
+			if err != nil {
+				agent.current.State = "failed"
+				agent.current.Error = err.Error()
+				agent.lastError = err.Error()
+			} else {
+				agent.current.State = "completed"
+			}
+		}
+		agent.addHistoryLocked(*agent.current)
+	}
 	agent.busy = false
 	agent.current = nil
 	agent.activeStop = nil
-	if err != nil {
-		agent.lastError = err.Error()
-	}
 	agent.startNextLocked()
 }
 
-func (agent *desktopAgent) stopActiveLocked() {
+func (agent *desktopAgent) replaceActiveLocked() {
+	if agent.current != nil && agent.current.State == "running" {
+		agent.current.State = "replaced"
+		finishedAt := time.Now()
+		agent.current.FinishedAt = &finishedAt
+	}
 	if agent.activeStop == nil {
 		return
 	}
@@ -128,9 +182,17 @@ func (agent *desktopAgent) startNextLocked() {
 	}
 	task := agent.queue[0]
 	agent.queue = agent.queue[1:]
+	agent.nextID++
+	record := desktopAgentTaskRecord{
+		ID:        agent.nextID,
+		Action:    task.Action,
+		Paths:     append([]string(nil), task.Paths...),
+		State:     "running",
+		StartedAt: time.Now(),
+	}
 	agent.busy = true
-	agent.current = &task
-	go agent.execute(task)
+	agent.current = &record
+	go agent.execute(task, record.ID)
 }
 
 func (agent *desktopAgent) setActiveStop(stop func()) {
@@ -145,17 +207,27 @@ func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 	response := desktopAgentResponse{
 		State:     "idle",
 		Queued:    len(agent.queue),
+		History:   append([]desktopAgentTaskRecord(nil), agent.history...),
 		LastError: agent.lastError,
 	}
 	if agent.busy {
 		response.State = "busy"
 		if agent.current != nil {
 			current := *agent.current
+			current.Paths = append([]string(nil), agent.current.Paths...)
 			response.Current = &current
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (agent *desktopAgent) addHistoryLocked(record desktopAgentTaskRecord) {
+	record.Paths = append([]string(nil), record.Paths...)
+	agent.history = append([]desktopAgentTaskRecord{record}, agent.history...)
+	if len(agent.history) > desktopAgentMaxHistory {
+		agent.history = agent.history[:desktopAgentMaxHistory]
+	}
 }
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
@@ -224,7 +296,34 @@ var desktopAgentCmd = &cobra.Command{
 	Long:  "Run a local desktop integration agent that accepts right-click share and receive tasks.",
 	RunE: func(command *cobra.Command, args []string) error {
 		agent := newDesktopAgent(app.Flags)
+		server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
+		agent.shutdown = func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_ = server.Shutdown(ctx)
+		}
 		command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
-		return http.ListenAndServe(desktopAgentAddress, agent.routes())
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	},
+}
+
+var desktopAgentStopCmd = &cobra.Command{
+	Use:   "agent-stop",
+	Short: "Stop the desktop integration agent",
+	Long:  "Stop the local desktop integration agent if it is running.",
+	RunE: func(command *cobra.Command, args []string) error {
+		response, err := http.Post("http://"+desktopAgentAddress+"/shutdown", "text/plain", nil)
+		if err != nil {
+			return fmt.Errorf("desktop agent is not running: %w", err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusAccepted {
+			return fmt.Errorf("desktop agent stop failed: %s", response.Status)
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop agent stopped.")
+		return nil
 	},
 }
