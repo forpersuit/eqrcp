@@ -360,6 +360,8 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"eqrcp Agent",
 		"Stop Current",
 		"Stop Agent",
+		"fetch('/status'",
+		"setInterval(updateAgentStatus",
 		"receive",
 		"/tmp/recv",
 		"finished.txt",

@@ -211,7 +211,7 @@ Initial local API:
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
-- `GET /` serves a browser-based agent status page with the current task, recent history, and local stop actions.
+- `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
@@ -224,9 +224,9 @@ Initial local API:
 
 Next priorities:
 
-1. Complete and validate the browser-based agent status page on Windows.
-2. Complete and validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
-3. Harden repeat QR scan and multi-browser behavior so completed, replaced, and stopped tasks are visible through `/qr/status`, `/status`, and the agent status page.
+1. Validate the browser-based agent status page on Windows, including automatic status refresh without pressing a manual refresh button.
+2. Validate the dedicated stop-current endpoint so users can cancel the active transfer without exiting the agent.
+3. Harden repeat QR scan and multi-browser behavior so completed, replaced, and stopped tasks are visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 4. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 5. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
 

@@ -158,6 +158,46 @@ func TestDisplayQRCurrentStatus(t *testing.T) {
 	}
 }
 
+func TestDisplayQRTransferURLStatusAlias(t *testing.T) {
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "xdg-open"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	server := &Server{
+		BaseURL: "http://127.0.0.1:8080",
+		mux:     http.NewServeMux(),
+	}
+	server.setStatus("completed", "Transfer completed.")
+	server.updateStatus(func(status *transferStatus) {
+		status.Mode = "send"
+		status.Target = "eqrcp-multiple-files.zip"
+		status.SavedFiles = []string{"one.txt", "two.txt"}
+	})
+
+	if err := server.DisplayQR("http://127.0.0.1:8080/send/test/status-alias"); err != nil {
+		t.Fatalf("DisplayQR() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/send/test/status-alias/status", nil)
+	response := httptest.NewRecorder()
+	server.mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("transfer status alias code = %d, want %d; body = %q", response.Code, http.StatusOK, response.Body.String())
+	}
+	var status transferStatus
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatalf("decode transfer status alias: %v", err)
+	}
+	if status.State != "completed" || status.Target != "eqrcp-multiple-files.zip" {
+		t.Fatalf("transfer status alias = %#v, want completed status for current transfer", status)
+	}
+	if strings.Contains(response.Body.String(), `"history"`) {
+		t.Fatalf("transfer status alias body = %q, should not include history", response.Body.String())
+	}
+}
+
 func TestDonePageListsTransferredFiles(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {

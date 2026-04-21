@@ -605,7 +605,6 @@ th {
   <header>
     <h1>eqrcp Agent</h1>
     <div class="actions">
-      <a class="button" href="/">Refresh</a>
       <form method="post" action="/stop-current"><button class="primary" type="submit">Stop Current</button></form>
       <form method="post" action="/shutdown"><button class="danger" type="submit">Stop Agent</button></form>
     </div>
@@ -616,21 +615,22 @@ th {
     <div class="summary">
       <div class="metric">
         <div class="label">State</div>
-        <div class="value state-{{.State}}">{{.State}}</div>
+        <div id="agent-state" class="value state-{{.State}}">{{.State}}</div>
       </div>
       <div class="metric">
         <div class="label">Queued</div>
-        <div class="value">{{.Queued}}</div>
+        <div id="agent-queued" class="value">{{.Queued}}</div>
       </div>
       <div class="metric">
         <div class="label">Last Error</div>
-        <div class="value">{{if .LastError}}{{.LastError}}{{else}}None{{end}}</div>
+        <div id="agent-last-error" class="value">{{if .LastError}}{{.LastError}}{{else}}None{{end}}</div>
       </div>
     </div>
   </section>
 
   <section>
     <h2>Current</h2>
+    <div id="agent-current">
     {{if .Current}}
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th></tr></thead>
@@ -647,10 +647,12 @@ th {
     {{else}}
     <p class="empty">No active task.</p>
     {{end}}
+    </div>
   </section>
 
   <section>
     <h2>History</h2>
+    <div id="agent-history">
     {{if .History}}
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
@@ -671,7 +673,109 @@ th {
     {{else}}
     <p class="empty">No history yet.</p>
     {{end}}
+    </div>
   </section>
 </main>
+<script>
+function setText(id, value) {
+  document.getElementById(id).textContent = value;
+}
+function setStateClass(element, state) {
+  element.className = 'value state-' + state;
+}
+function formatAgentTime(value) {
+  if (!value) {
+    return '';
+  }
+  var date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+function appendCell(row, label, value, className) {
+  var cell = document.createElement('td');
+  cell.setAttribute('data-label', label);
+  if (className) {
+    cell.className = className;
+  }
+  cell.textContent = value || '';
+  row.appendChild(cell);
+}
+function renderCurrent(record) {
+  var container = document.getElementById('agent-current');
+  container.innerHTML = '';
+  if (!record) {
+    var empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'No active task.';
+    container.appendChild(empty);
+    return;
+  }
+  var table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th></tr></thead>';
+  var body = document.createElement('tbody');
+  var row = document.createElement('tr');
+  appendCell(row, 'ID', '#' + record.id);
+  appendCell(row, 'Action', record.action);
+  appendCell(row, 'State', record.state, 'state-' + record.state);
+  appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
+  appendCell(row, 'Started', formatAgentTime(record.startedAt));
+  body.appendChild(row);
+  table.appendChild(body);
+  container.appendChild(table);
+}
+function renderHistory(records) {
+  var container = document.getElementById('agent-history');
+  container.innerHTML = '';
+  if (!records || !records.length) {
+    var empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'No history yet.';
+    container.appendChild(empty);
+    return;
+  }
+  var table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>';
+  var body = document.createElement('tbody');
+  records.forEach(function(record) {
+    var row = document.createElement('tr');
+    appendCell(row, 'ID', '#' + record.id);
+    appendCell(row, 'Action', record.action);
+    appendCell(row, 'State', record.state, 'state-' + record.state);
+    appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
+    appendCell(row, 'Started', formatAgentTime(record.startedAt));
+    appendCell(row, 'Finished', formatAgentTime(record.finishedAt));
+    appendCell(row, 'Error', record.error || '');
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  container.appendChild(table);
+}
+function updateAgentStatus() {
+  fetch('/status', { cache: 'no-store' })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('status request failed');
+      }
+      return response.json();
+    })
+    .then(function(status) {
+      var state = status.state || 'idle';
+      var stateElement = document.getElementById('agent-state');
+      setText('agent-state', state);
+      setStateClass(stateElement, state);
+      setText('agent-queued', String(status.queued || 0));
+      setText('agent-last-error', status.lastError || 'None');
+      renderCurrent(status.current);
+      renderHistory(status.history || []);
+    })
+    .catch(function() {
+      setText('agent-last-error', 'Status unavailable.');
+    });
+}
+setInterval(updateAgentStatus, 1500);
+updateAgentStatus();
+</script>
 </body>
 </html>`))

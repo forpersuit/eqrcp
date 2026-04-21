@@ -284,6 +284,7 @@ Expected result:
 - `/qr/image` serves the QR code image.
 - `/qr/status` serves the current transfer state as JSON.
 - `/status` serves service-level JSON with `current` transfer state and transfer `history`.
+- Appending `/status` to the active transfer URL, such as `/send/<path>/status` or `/receive/<path>/status`, serves the current transfer state as JSON.
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - The page has a `Copy URL` button.
@@ -322,6 +323,7 @@ Expected result:
 - The initial status response contains `waiting`.
 - The `/qr/status` response contains the current QR transfer state only.
 - The `/status` response contains `current` and `history`.
+- The transfer URL `/status` alias contains the current transfer state only and does not include service history.
 - After a successful download, the status response contains `completed`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
@@ -368,7 +370,7 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
-- `GET /` returns a browser status page with the current task, recent history, stop-current action, and stop-agent action.
+- `GET /` returns a browser status page with the current task, recent history, stop-current action, stop-agent action, and automatic `/status` polling.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `POST /stop-current` stops the active task without stopping the agent.
 - `POST /stop-current` returns a conflict when no task is active.
@@ -394,7 +396,7 @@ Expected result:
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
 - The agent status formatter renders current task details and recent history.
-- The agent status page renders the current task, recent history, and local stop actions.
+- The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.

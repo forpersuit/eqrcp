@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	urlpkg "net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -158,6 +159,9 @@ func (s *Server) DisplayQR(url string) error {
 		if err := json.NewEncoder(w).Encode(s.getStatus()); err != nil {
 			log.Println(err)
 		}
+	}
+	if transferURL, err := urlpkg.Parse(url); err == nil && transferURL.Path != "" {
+		s.mux.HandleFunc(strings.TrimRight(transferURL.Path, "/")+"/status", statusHandler)
 	}
 	s.mux.HandleFunc(statusPath, statusHandler)
 	s.mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
