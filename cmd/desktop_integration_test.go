@@ -142,6 +142,9 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 			}
 			return value, nil
 		},
+		queryRegValue: func(key string, name string) (string, error) {
+			return "", errors.New("missing registry value")
+		},
 		sendToPath: func() (string, error) {
 			return sendTo, nil
 		},
@@ -157,6 +160,99 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 			}
 			return []byte(windowsSendToShareScript(exe, launcher)), nil
 		},
+	}
+}
+
+func TestWindowsAgentStartupCommand(t *testing.T) {
+	got := windowsAgentStartupCommand(`C:\tools\eqrcp.exe`)
+	for _, want := range []string{
+		"powershell.exe",
+		"Start-Process",
+		"-WindowStyle Hidden",
+		`C:\tools\eqrcp.exe`,
+		"'desktop'",
+		"'agent'",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("windowsAgentStartupCommand() = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestFormatWindowsDesktopStartupStatusDisabled(t *testing.T) {
+	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
+		executable: func() (string, error) {
+			return `C:\tools\eqrcp.exe`, nil
+		},
+		queryRegValue: func(key string, name string) (string, error) {
+			return "", errors.New("missing registry value")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Windows desktop agent startup status",
+		"- Agent startup: disabled",
+		windowsStartupRunKey,
+		windowsStartupValueName,
+		"eqrcp desktop startup-enable",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("startup status = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestFormatWindowsDesktopStartupStatusEnabled(t *testing.T) {
+	exe := `C:\tools\eqrcp.exe`
+	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
+		executable: func() (string, error) {
+			return exe, nil
+		},
+		queryRegValue: func(key string, name string) (string, error) {
+			if key != windowsStartupRunKey || name != windowsStartupValueName {
+				return "", errors.New("unexpected registry query")
+			}
+			return windowsAgentStartupCommand(exe), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- Agent startup: enabled",
+		"command: " + windowsAgentStartupCommand(exe),
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("startup status = %q, want to contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "needs repair") {
+		t.Fatalf("startup status = %q, should not need repair", got)
+	}
+}
+
+func TestFormatWindowsDesktopStartupStatusNeedsRepair(t *testing.T) {
+	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
+		executable: func() (string, error) {
+			return `C:\tools\eqrcp.exe`, nil
+		},
+		queryRegValue: func(key string, name string) (string, error) {
+			return windowsAgentStartupCommand(`C:\old\eqrcp.exe`), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- Agent startup: needs repair",
+		`expected: ` + windowsAgentStartupCommand(`C:\tools\eqrcp.exe`),
+		"repair: run `eqrcp desktop startup-enable`",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("startup status = %q, want to contain %q", got, want)
+		}
 	}
 }
 

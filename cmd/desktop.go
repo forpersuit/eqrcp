@@ -81,6 +81,46 @@ var desktopStatusCmd = &cobra.Command{
 	},
 }
 
+var desktopStartupEnableCmd = &cobra.Command{
+	Use:   "startup-enable",
+	Short: "Start the desktop agent at login",
+	Long:  "Register the desktop integration agent to start when the current user logs in.",
+	RunE: func(command *cobra.Command, args []string) error {
+		if err := installDesktopStartup(); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop agent startup enabled.")
+		return nil
+	},
+}
+
+var desktopStartupDisableCmd = &cobra.Command{
+	Use:   "startup-disable",
+	Short: "Stop starting the desktop agent at login",
+	Long:  "Remove the current-user login startup registration for the desktop integration agent.",
+	RunE: func(command *cobra.Command, args []string) error {
+		if err := uninstallDesktopStartup(); err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop agent startup disabled.")
+		return nil
+	},
+}
+
+var desktopStartupStatusCmd = &cobra.Command{
+	Use:   "startup-status",
+	Short: "Show desktop agent startup status",
+	Long:  "Show whether the desktop integration agent is registered to start when the current user logs in.",
+	RunE: func(command *cobra.Command, args []string) error {
+		status, err := desktopStartupStatus()
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(command.OutOrStdout(), status)
+		return nil
+	},
+}
+
 var desktopUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall desktop context menu entries",

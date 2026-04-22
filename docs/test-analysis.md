@@ -200,6 +200,10 @@ Expected result:
 - On Windows, `desktop status` should report each expected registry entry and command.
 - On Windows, `desktop status` should mark entries as `needs repair` when they point at an older executable path or when the Send To script differs from the current executable.
 - On Windows, `desktop status` should show the expected `eqrcp-launcher.exe` path and explain the impact when the launcher is missing.
+- On Windows, `desktop startup-enable` should register `eqrcp desktop agent` under the current-user Run key.
+- On Windows, `desktop startup-disable` should remove that startup registration.
+- On Windows, `desktop startup-status` should report disabled, enabled, or needs-repair startup state.
+- On Windows, `desktop status` should include desktop agent startup state without treating disabled startup as a broken context-menu installation.
 - On Windows, `desktop status` should include a summary count for installed, needs-repair, and not-installed entries.
 - On Windows, `desktop uninstall` should remove those entries.
 

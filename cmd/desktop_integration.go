@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+const windowsStartupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+const windowsStartupValueName = "eqrcp-agent"
+
 func installDesktopIntegration() error {
 	switch runtime.GOOS {
 	case "windows":
@@ -24,6 +27,33 @@ func uninstallDesktopIntegration() error {
 		return uninstallWindowsDesktopIntegration()
 	default:
 		return fmt.Errorf("desktop uninstall is not implemented for %s yet", runtime.GOOS)
+	}
+}
+
+func installDesktopStartup() error {
+	switch runtime.GOOS {
+	case "windows":
+		return installWindowsDesktopStartup()
+	default:
+		return fmt.Errorf("desktop startup is not implemented for %s yet", runtime.GOOS)
+	}
+}
+
+func uninstallDesktopStartup() error {
+	switch runtime.GOOS {
+	case "windows":
+		return uninstallWindowsDesktopStartup()
+	default:
+		return fmt.Errorf("desktop startup is not implemented for %s yet", runtime.GOOS)
+	}
+}
+
+func desktopStartupStatus() (string, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return windowsDesktopStartupStatus()
+	default:
+		return fmt.Sprintf("Desktop startup status is not implemented for %s yet.\n", runtime.GOOS), nil
 	}
 }
 
@@ -66,11 +96,32 @@ func uninstallWindowsDesktopIntegration() error {
 	return nil
 }
 
+func installWindowsDesktopStartup() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return runReg("add", windowsStartupRunKey, "/v", windowsStartupValueName, "/t", "REG_SZ", "/d", windowsAgentStartupCommand(exe), "/f")
+}
+
+func uninstallWindowsDesktopStartup() error {
+	return runRegAllowMissing("delete", windowsStartupRunKey, "/v", windowsStartupValueName, "/f")
+}
+
+func windowsDesktopStartupStatus() (string, error) {
+	env := windowsDesktopStartupStatusEnv{
+		executable:    os.Executable,
+		queryRegValue: queryRegValue,
+	}
+	return formatWindowsDesktopStartupStatus(env)
+}
+
 func windowsDesktopIntegrationStatus() (string, error) {
 	env := windowsDesktopStatusEnv{
 		executable:      os.Executable,
 		launcherPath:    windowsLauncherPath,
 		queryRegDefault: queryRegDefault,
+		queryRegValue:   queryRegValue,
 		sendToPath:      windowsSendToSharePath,
 		stat:            os.Stat,
 		readFile:        os.ReadFile,
@@ -82,6 +133,7 @@ type windowsDesktopStatusEnv struct {
 	executable      func() (string, error)
 	launcherPath    func(string) string
 	queryRegDefault func(string) (string, error)
+	queryRegValue   func(string, string) (string, error)
 	sendToPath      func() (string, error)
 	stat            func(string) (os.FileInfo, error)
 	readFile        func(string) ([]byte, error)
@@ -163,6 +215,12 @@ func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string,
 			builder.WriteString(fmt.Sprintf("  path: %s\n", launcher))
 		}
 	}
+	builder.WriteString(formatWindowsDesktopStartupStatusSection(windowsDesktopStartupStatusEnv{
+		executable: func() (string, error) {
+			return exe, exeErr
+		},
+		queryRegValue: env.queryRegValue,
+	}))
 	builder.WriteString(fmt.Sprintf("- summary: %d installed, %d needs repair, %d not installed\n", summary.installed, summary.needsRepair, summary.notInstalled))
 	return builder.String(), nil
 }
@@ -182,6 +240,52 @@ func (summary *windowsDesktopStatusSummary) add(state string) {
 	default:
 		summary.installed++
 	}
+}
+
+type windowsDesktopStartupStatusEnv struct {
+	executable    func() (string, error)
+	queryRegValue func(string, string) (string, error)
+}
+
+func formatWindowsDesktopStartupStatus(env windowsDesktopStartupStatusEnv) (string, error) {
+	var builder strings.Builder
+	builder.WriteString("Windows desktop agent startup status\n")
+	builder.WriteString(formatWindowsDesktopStartupStatusSection(env))
+	return builder.String(), nil
+}
+
+func formatWindowsDesktopStartupStatusSection(env windowsDesktopStartupStatusEnv) string {
+	var builder strings.Builder
+	builder.WriteString("- Agent startup: ")
+	exe, exeErr := env.executable()
+	command, err := env.queryRegValue(windowsStartupRunKey, windowsStartupValueName)
+	if err != nil {
+		builder.WriteString("disabled\n")
+		builder.WriteString(fmt.Sprintf("  key: %s\n", windowsStartupRunKey))
+		builder.WriteString(fmt.Sprintf("  value: %s\n", windowsStartupValueName))
+		builder.WriteString("  enable: run `eqrcp desktop startup-enable` from the executable you want Windows to start.\n")
+		return builder.String()
+	}
+	expected := ""
+	state := "enabled"
+	if exeErr == nil {
+		expected = windowsAgentStartupCommand(exe)
+		if !windowsCommandMatches(command, expected) {
+			state = "needs repair"
+		}
+	}
+	builder.WriteString(state + "\n")
+	builder.WriteString(fmt.Sprintf("  key: %s\n", windowsStartupRunKey))
+	builder.WriteString(fmt.Sprintf("  value: %s\n", windowsStartupValueName))
+	builder.WriteString(fmt.Sprintf("  command: %s\n", command))
+	if exeErr != nil {
+		builder.WriteString(fmt.Sprintf("  current executable: unavailable (%v)\n", exeErr))
+	}
+	if state == "needs repair" {
+		builder.WriteString(fmt.Sprintf("  expected: %s\n", expected))
+		builder.WriteString("  repair: run `eqrcp desktop startup-enable` from the executable you want Windows to start.\n")
+	}
+	return builder.String()
 }
 
 func installWindowsSendToShare(exe string, launcher string) error {
@@ -314,6 +418,14 @@ func queryRegDefault(key string) (string, error) {
 	return parseRegDefaultValue(string(output)), nil
 }
 
+func queryRegValue(key string, name string) (string, error) {
+	output, err := exec.Command("reg", "query", key, "/v", name).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return parseRegDefaultValue(string(output)), nil
+}
+
 func parseRegDefaultValue(output string) string {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -360,6 +472,10 @@ func windowsShellCommand(exe string, launcher string, args ...string) string {
 	}
 	desktopArgs := append([]string{"desktop"}, args...)
 	return windowsHiddenCommand(exe, desktopArgs...)
+}
+
+func windowsAgentStartupCommand(exe string) string {
+	return windowsHiddenCommand(exe, "desktop", "agent")
 }
 
 func windowsHiddenCommand(exe string, args ...string) string {

@@ -246,15 +246,22 @@ Next priorities:
 
 ### Phase 5: Desktop Enhancements
 
-Status: planned.
+Status: in progress.
 
 These features should start after Phase 3 and Phase 4 validation are stable:
 
 - Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
-- Startup registration: optionally start `eqrcp desktop agent` at login, with status and uninstall checks.
+- Startup registration: initial Windows current-user login startup is implemented with `eqrcp desktop startup-enable`, `eqrcp desktop startup-disable`, and `eqrcp desktop startup-status`. `eqrcp desktop status` also reports whether startup is disabled, enabled, or needs repair.
 - Notifications: show transfer started, completed, failed, and stopped messages without relying on browser focus.
 - Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
 - Settings surface: expose output directory, interface, port, and startup choice without requiring manual config editing.
+
+Next priorities:
+
+1. Validate Windows startup registration: run `eqrcp desktop startup-enable`, sign out or restart, confirm `eqrcp.exe desktop agent` starts and `http://127.0.0.1:48176/` is reachable.
+2. Validate startup repair detection by moving or renaming the executable and checking `eqrcp desktop startup-status`.
+3. Implement lightweight notifications for started, completed, failed, and stopped transfer events.
+4. After notifications, evaluate tray icon options. Tray work should be deferred until the agent lifecycle and startup behavior are stable.
 
 ## Recommended First Implementation
 
