@@ -159,7 +159,7 @@ var QR = `
             <form id="restart-form" method="post" action="{{.RestartRoute}}">
                 <button type="submit">Transfer again</button>
             </form>
-            <p class="hint">Use the same QR code again if the first download was canceled by mistake.</p>
+            <p class="hint">Use the same QR code again if the first download was canceled by mistake. This retry stays available for a few minutes.</p>
         </div>
     </main>
     <script>
@@ -276,7 +276,7 @@ var QR = `
                     return updateStatus();
                 })
                 .catch(function() {
-                    document.getElementById('transfer-message').textContent = 'Restart unavailable. Start a new transfer.';
+                    document.getElementById('transfer-message').textContent = 'Restart unavailable. Start a new transfer from the right-click menu.';
                 });
         });
         updateStatus();

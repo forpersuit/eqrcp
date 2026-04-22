@@ -169,7 +169,7 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
-- Repeat transfer action. Implemented: after a completed transfer, the QR page offers `Transfer again` so an accidental canceled or dismissed mobile download can be retried without starting a new right-click share.
+- Repeat transfer action. Implemented: after a completed transfer, the QR page offers `Transfer again` for the five-minute browser grace period so an accidental canceled or dismissed mobile download can be retried without starting a new right-click share.
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
 - Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.

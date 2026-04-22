@@ -31,7 +31,7 @@ import (
 )
 
 const maxUploadBytes int64 = 10 << 30
-const defaultStatusGracePeriod = 15 * time.Second
+const defaultStatusGracePeriod = 5 * time.Minute
 const maxTransferHistory = 20
 
 // Server is the server
