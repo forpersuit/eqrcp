@@ -169,7 +169,7 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
-- Repeat transfer action. Implemented: after a completed transfer, the QR page offers `Transfer again` for the five-minute browser grace period so an accidental canceled or dismissed mobile download can be retried without starting a new right-click share.
+- Repeat transfer action. Implemented: the agent status page history offers `Transfer again`; it creates a new transfer task from the original action and paths instead of reusing the completed QR server.
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
 - Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.
@@ -184,7 +184,7 @@ After the right-click workflow is functional, improve visibility:
 
 The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
 
-When the browser QR page is enabled, successful one-shot transfers keep the server alive briefly after completion so the control page can show `completed` before the process exits.
+When the browser QR page is enabled, successful one-shot transfers keep the server alive briefly after completion so the control page can show `completed` before the process exits. Completed one-shot transfer URLs remain terminal; repeat is handled by the long-running desktop agent.
 
 Current progress model:
 

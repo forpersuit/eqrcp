@@ -336,7 +336,7 @@ Expected result:
 - The `/status` response contains `current` and `history`.
 - The transfer URL `/status` alias contains the current transfer state only and does not include service history.
 - After a successful download, the status response contains `completed`.
-- After a successful download, the QR page exposes a `Transfer again` action that can reset the transfer to `waiting` during the completion grace period. The default browser grace period is five minutes so the retry action remains usable after the user notices a mistaken mobile cancellation.
+- After a successful download, repeat is available from the desktop agent browser page history. It posts to `/tasks/<id>/repeat` and starts a new transfer task instead of resetting the completed QR server.
 - After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
 - After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
 - Directory and multi-file downloads use timestamped zip file names, such as `eqrcp-multiple-files-YYYYMMDD-HHMMSS.zip`.

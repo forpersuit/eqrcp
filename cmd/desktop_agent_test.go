@@ -295,6 +295,63 @@ func TestDesktopAgentRejectsWhenQueueIsFull(t *testing.T) {
 	}
 }
 
+func TestParseDesktopAgentTaskActionPath(t *testing.T) {
+	id, action, ok := parseDesktopAgentTaskActionPath("/tasks/42/repeat")
+	if !ok || id != 42 || action != "repeat" {
+		t.Fatalf("parseDesktopAgentTaskActionPath() = %d, %q, %v", id, action, ok)
+	}
+	if _, _, ok := parseDesktopAgentTaskActionPath("/tasks/nope/repeat"); ok {
+		t.Fatal("parseDesktopAgentTaskActionPath() accepted invalid path")
+	}
+}
+
+func TestDesktopAgentRepeatsHistoryTask(t *testing.T) {
+	done := make(chan desktopAgentTask, 1)
+	agent := newDesktopAgent(application.Flags{})
+	agent.history = []desktopAgentTaskRecord{
+		{ID: 3, Action: "share", Paths: []string{"again.txt"}, State: "completed", StartedAt: time.Now()},
+	}
+	agent.runner = func(task desktopAgentTask) error {
+		done <- task
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Post(server.URL+"/tasks/3/repeat", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("repeat status = %d, want %d; body = %q", response.StatusCode, http.StatusAccepted, string(body))
+	}
+	select {
+	case task := <-done:
+		if task.Action != "share" || len(task.Paths) != 1 || task.Paths[0] != "again.txt" {
+			t.Fatalf("task = %#v, want repeated history task", task)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("repeated task did not run")
+	}
+}
+
+func TestDesktopAgentRepeatMissingTask(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Post(server.URL+"/tasks/99/repeat", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("repeat status = %d, want %d", response.StatusCode, http.StatusConflict)
+	}
+}
+
 func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{})
@@ -567,8 +624,11 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"eqrcp Agent",
 		"Stop Current",
 		"Clear History",
+		"Transfer again",
 		"Stop Agent",
 		"fetch('/status'",
+		"data-repeat-id",
+		"/tasks/' + id + '/repeat",
 		"fetch('/history'",
 		"setInterval(updateAgentStatus, 500)",
 		"Open QR Page",

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +107,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
 	mux.HandleFunc("/tasks", agent.handleTasks)
+	mux.HandleFunc("/tasks/", agent.handleTaskAction)
 	mux.HandleFunc("/history", agent.handleHistory)
 	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
@@ -172,6 +174,36 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusAccepted)
 	agent.writeStatus(w)
+}
+
+func (agent *desktopAgent) handleTaskAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	taskID, action, ok := parseDesktopAgentTaskActionPath(r.URL.Path)
+	if !ok || action != "repeat" {
+		http.NotFound(w, r)
+		return
+	}
+	if err := agent.repeatTask(taskID); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	agent.writeStatus(w)
+}
+
+func parseDesktopAgentTaskActionPath(path string) (int, string, bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 3 || parts[0] != "tasks" {
+		return 0, "", false
+	}
+	id, err := strconv.Atoi(parts[1])
+	if err != nil || id <= 0 {
+		return 0, "", false
+	}
+	return id, parts[2], true
 }
 
 func (agent *desktopAgent) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -257,6 +289,41 @@ func (agent *desktopAgent) stopCurrent(state string) bool {
 	}
 	agent.replaceActiveLocked(state)
 	return true
+}
+
+func (agent *desktopAgent) repeatTask(id int) error {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if len(agent.queue) >= desktopAgentMaxQueue {
+		return fmt.Errorf("desktop agent queue is full")
+	}
+	var repeated *desktopAgentTask
+	if agent.current != nil && agent.current.ID == id {
+		task := desktopAgentTask{Action: agent.current.Action, Paths: append([]string(nil), agent.current.Paths...)}
+		repeated = &task
+	}
+	if repeated == nil {
+		for _, record := range agent.history {
+			if record.ID == id {
+				task := desktopAgentTask{Action: record.Action, Paths: append([]string(nil), record.Paths...)}
+				repeated = &task
+				break
+			}
+		}
+	}
+	if repeated == nil {
+		return fmt.Errorf("desktop agent task #%d was not found", id)
+	}
+	if err := validateDesktopAgentTask(*repeated); err != nil {
+		return err
+	}
+	agent.queue = append(agent.queue, *repeated)
+	agent.lastError = ""
+	if agent.busy {
+		agent.replaceActiveLocked("replaced")
+	}
+	agent.startNextLocked()
+	return nil
 }
 
 func (agent *desktopAgent) replaceActiveLocked(state string) {
@@ -855,6 +922,7 @@ func formatDesktopAgentStatus(status desktopAgentResponse) string {
 	for _, record := range status.History {
 		writeDesktopAgentRecord(&builder, record, "  ")
 	}
+	builder.WriteString("- repeat: use the browser agent page Transfer again button for a history item\n")
 	return builder.String()
 }
 
@@ -1095,7 +1163,7 @@ th {
     <div id="agent-history">
     {{if .History}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>
       <tbody>
         {{range .History}}
         <tr>
@@ -1107,6 +1175,7 @@ th {
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
           <td data-label="Error">{{.Error}}</td>
+          <td data-label="Actions"><button type="button" data-repeat-id="{{.ID}}">Transfer again</button></td>
         </tr>
         {{end}}
       </tbody>
@@ -1190,7 +1259,7 @@ function renderHistory(records) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>';
   var body = document.createElement('tbody');
   records.forEach(function(record) {
     var row = document.createElement('tr');
@@ -1202,10 +1271,21 @@ function renderHistory(records) {
     appendCell(row, 'Started', formatAgentTime(record.startedAt));
     appendCell(row, 'Finished', formatAgentTime(record.finishedAt));
     appendCell(row, 'Error', record.error || '');
+    appendRepeatCell(row, record.id);
     body.appendChild(row);
   });
   table.appendChild(body);
   container.appendChild(table);
+}
+function appendRepeatCell(row, id) {
+  var cell = document.createElement('td');
+  cell.setAttribute('data-label', 'Actions');
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.setAttribute('data-repeat-id', String(id));
+  button.textContent = 'Transfer again';
+  cell.appendChild(button);
+  row.appendChild(cell);
 }
 function transferText(record) {
   if (!record.transferState) {
@@ -1253,6 +1333,23 @@ document.getElementById('clear-history').addEventListener('click', function() {
     })
     .catch(function() {
       setText('agent-last-error', 'Clear history failed.');
+    });
+});
+document.addEventListener('click', function(event) {
+  var button = event.target.closest('[data-repeat-id]');
+  if (!button) {
+    return;
+  }
+  var id = button.getAttribute('data-repeat-id');
+  fetch('/tasks/' + id + '/repeat', { method: 'POST' })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('repeat failed');
+      }
+      return updateAgentStatus();
+    })
+    .catch(function() {
+      setText('agent-last-error', 'Transfer again failed.');
     });
 });
 updateAgentStatus();

@@ -155,12 +155,6 @@ var QR = `
             </form>
             <p class="hint">This page can stay open while the transfer is waiting.</p>
         </div>
-        <div id="restart-area" class="hidden">
-            <form id="restart-form" method="post" action="{{.RestartRoute}}">
-                <button type="submit">Transfer again</button>
-            </form>
-            <p class="hint">Use the same QR code again if the first download was canceled by mistake. This retry stays available for a few minutes.</p>
-        </div>
     </main>
     <script>
         function copyURL() {
@@ -201,9 +195,6 @@ var QR = `
                     renderSavedFiles(data.savedFiles || []);
                     if (state === 'completed' || state === 'stopped') {
                         document.getElementById('qr-area').classList.add('hidden');
-                        if (state === 'completed') {
-                            document.getElementById('restart-area').classList.remove('hidden');
-                        }
                         clearInterval(statusTimer);
                     }
                 })
@@ -263,22 +254,6 @@ var QR = `
             return (index === 0 ? size : size.toFixed(1)) + ' ' + units[index];
         }
         var statusTimer = setInterval(updateStatus, 1500);
-        document.getElementById('restart-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            fetch('{{.RestartRoute}}', { method: 'POST' })
-                .then(function(response) {
-                    if (!response.ok) {
-                        throw new Error('restart failed');
-                    }
-                    document.getElementById('restart-area').classList.add('hidden');
-                    document.getElementById('qr-area').classList.remove('hidden');
-                    statusTimer = setInterval(updateStatus, 1500);
-                    return updateStatus();
-                })
-                .catch(function() {
-                    document.getElementById('transfer-message').textContent = 'Restart unavailable. Start a new transfer from the right-click menu.';
-                });
-        });
         updateStatus();
     </script>
 </body>
