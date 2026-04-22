@@ -21,6 +21,7 @@ func init() {
 	desktopCmd.AddCommand(desktopStatusCmd)
 	desktopCmd.AddCommand(desktopUninstallCmd)
 	desktopCmd.AddCommand(desktopAgentCmd)
+	desktopCmd.AddCommand(desktopAgentHistoryClearCmd)
 	desktopCmd.AddCommand(desktopAgentStopCmd)
 	desktopCmd.AddCommand(desktopAgentStopCurrentCmd)
 	desktopCmd.AddCommand(desktopAgentStatusCmd)

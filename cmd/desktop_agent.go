@@ -7,7 +7,9 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -17,12 +19,14 @@ import (
 	"eqrcp/body"
 	"eqrcp/config"
 	"eqrcp/server"
+	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 )
 
 const desktopAgentAddress = "127.0.0.1:48176"
 const desktopAgentMaxQueue = 16
 const desktopAgentMaxHistory = 20
+const desktopAgentHistoryFilename = "desktop-agent-history.json"
 
 var openDesktopAgentPage = openDesktopAgentPageURL
 var desktopAgentBaseURL = "http://" + desktopAgentAddress
@@ -51,24 +55,36 @@ type desktopAgentResponse struct {
 	LastError string                   `json:"lastError,omitempty"`
 }
 
+type desktopAgentHistoryStore struct {
+	History []desktopAgentTaskRecord `json:"history"`
+}
+
 type desktopAgent struct {
-	mu         sync.Mutex
-	baseFlags  application.Flags
-	busy       bool
-	current    *desktopAgentTaskRecord
-	queue      []desktopAgentTask
-	history    []desktopAgentTaskRecord
-	nextID     int
-	activeStop func()
-	shutdown   func()
-	lastError  string
-	runner     func(desktopAgentTask) error
+	mu          sync.Mutex
+	baseFlags   application.Flags
+	busy        bool
+	current     *desktopAgentTaskRecord
+	queue       []desktopAgentTask
+	history     []desktopAgentTaskRecord
+	nextID      int
+	activeStop  func()
+	shutdown    func()
+	lastError   string
+	runner      func(desktopAgentTask) error
+	historyPath string
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
-	agent := &desktopAgent{baseFlags: baseFlags}
+	agent := &desktopAgent{
+		baseFlags:   baseFlags,
+		historyPath: defaultDesktopAgentHistoryPath(),
+	}
 	agent.runner = agent.runTask
 	return agent
+}
+
+func defaultDesktopAgentHistoryPath() string {
+	return filepath.Join(xdg.ConfigHome, application.New().Name, desktopAgentHistoryFilename)
 }
 
 func (agent *desktopAgent) routes() http.Handler {
@@ -77,6 +93,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
 	mux.HandleFunc("/tasks", agent.handleTasks)
+	mux.HandleFunc("/history", agent.handleHistory)
 	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
 	return mux
@@ -142,6 +159,18 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusAccepted)
 	agent.writeStatus(w)
+}
+
+func (agent *desktopAgent) handleHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := agent.clearHistory(); err != nil {
+		http.Error(w, fmt.Sprintf("clear desktop agent history failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Request) {
@@ -273,7 +302,7 @@ func (agent *desktopAgent) snapshot() desktopAgentResponse {
 	response := desktopAgentResponse{
 		State:     "idle",
 		Queued:    len(agent.queue),
-		History:   append([]desktopAgentTaskRecord(nil), agent.history...),
+		History:   cloneDesktopAgentRecords(agent.history),
 		LastError: agent.lastError,
 	}
 	if agent.busy {
@@ -288,11 +317,92 @@ func (agent *desktopAgent) snapshot() desktopAgentResponse {
 }
 
 func (agent *desktopAgent) addHistoryLocked(record desktopAgentTaskRecord) {
-	record.Paths = append([]string(nil), record.Paths...)
+	record = cloneDesktopAgentRecord(record)
 	agent.history = append([]desktopAgentTaskRecord{record}, agent.history...)
 	if len(agent.history) > desktopAgentMaxHistory {
 		agent.history = agent.history[:desktopAgentMaxHistory]
 	}
+	if err := saveDesktopAgentHistory(agent.historyPath, agent.history); err != nil {
+		agent.lastError = fmt.Sprintf("unable to save desktop agent history: %v", err)
+	}
+}
+
+func (agent *desktopAgent) loadHistory() error {
+	history, err := loadDesktopAgentHistory(agent.historyPath)
+	if err != nil {
+		return err
+	}
+	nextID := agent.nextID
+	for _, record := range history {
+		if record.ID > nextID {
+			nextID = record.ID
+		}
+	}
+	if len(history) > desktopAgentMaxHistory {
+		history = history[:desktopAgentMaxHistory]
+	}
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.history = cloneDesktopAgentRecords(history)
+	agent.nextID = nextID
+	return nil
+}
+
+func (agent *desktopAgent) clearHistory() error {
+	agent.mu.Lock()
+	agent.history = nil
+	agent.lastError = ""
+	historyPath := agent.historyPath
+	agent.mu.Unlock()
+	return saveDesktopAgentHistory(historyPath, nil)
+}
+
+func loadDesktopAgentHistory(path string) ([]desktopAgentTaskRecord, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var store desktopAgentHistoryStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, err
+	}
+	return cloneDesktopAgentRecords(store.History), nil
+}
+
+func saveDesktopAgentHistory(path string, history []desktopAgentTaskRecord) error {
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(desktopAgentHistoryStore{History: cloneDesktopAgentRecords(history)}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+func cloneDesktopAgentRecords(records []desktopAgentTaskRecord) []desktopAgentTaskRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	cloned := make([]desktopAgentTaskRecord, len(records))
+	for index, record := range records {
+		cloned[index] = cloneDesktopAgentRecord(record)
+	}
+	return cloned
+}
+
+func cloneDesktopAgentRecord(record desktopAgentTaskRecord) desktopAgentTaskRecord {
+	record.Paths = append([]string(nil), record.Paths...)
+	return record
 }
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
@@ -362,6 +472,9 @@ var desktopAgentCmd = &cobra.Command{
 	Long:  "Run a local desktop integration agent that accepts right-click share and receive tasks.",
 	RunE: func(command *cobra.Command, args []string) error {
 		agent := newDesktopAgent(app.Flags)
+		if err := agent.loadHistory(); err != nil {
+			agent.lastError = fmt.Sprintf("unable to load desktop agent history: %v", err)
+		}
 		server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
 		agent.shutdown = func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -372,6 +485,33 @@ var desktopAgentCmd = &cobra.Command{
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return err
 		}
+		return nil
+	},
+}
+
+var desktopAgentHistoryClearCmd = &cobra.Command{
+	Use:   "agent-history-clear",
+	Short: "Clear desktop integration agent history",
+	Long:  "Clear recent task history stored by the local desktop integration agent.",
+	RunE: func(command *cobra.Command, args []string) error {
+		request, err := http.NewRequest(http.MethodDelete, desktopAgentBaseURL+"/history", nil)
+		if err != nil {
+			return err
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			return fmt.Errorf("desktop agent is not running: %w", err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			details, _ := io.ReadAll(io.LimitReader(response.Body, 1000))
+			message := strings.TrimSpace(string(details))
+			if message == "" {
+				message = response.Status
+			}
+			return fmt.Errorf("desktop agent history clear failed: %s", message)
+		}
+		fmt.Fprintln(command.OutOrStdout(), "Desktop agent history cleared.")
 		return nil
 	},
 }
@@ -701,6 +841,7 @@ th {
     <h1>eqrcp Agent</h1>
     <div class="actions">
       <form method="post" action="/stop-current"><button class="primary" type="submit">Stop Current</button></form>
+      <button id="clear-history" type="button">Clear History</button>
       <form method="post" action="/shutdown"><button class="danger" type="submit">Stop Agent</button></form>
     </div>
   </header>
@@ -883,6 +1024,18 @@ function updateAgentStatus() {
     });
 }
 setInterval(updateAgentStatus, 500);
+document.getElementById('clear-history').addEventListener('click', function() {
+  fetch('/history', { method: 'DELETE' })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('clear history failed');
+      }
+      return updateAgentStatus();
+    })
+    .catch(function() {
+      setText('agent-last-error', 'Clear history failed.');
+    });
+});
 updateAgentStatus();
 </script>
 </body>

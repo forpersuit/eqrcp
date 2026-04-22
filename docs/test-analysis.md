@@ -380,9 +380,11 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
-- `GET /` returns a browser status page with the current task, recent history, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
+- `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
+- Recent task history is persisted across agent restarts and capped at 20 records.
 - `POST /tasks` accepts one `share` or `receive` task.
+- `DELETE /history` clears the in-memory and persisted recent task history.
 - `POST /stop-current` stops the active task without stopping the agent.
 - `POST /stop-current` returns a conflict when no task is active.
 - While a task is active, later `POST /tasks` calls are accepted and cause the agent to stop the current task before running the next task.
@@ -391,6 +393,7 @@ Expected result:
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
+- `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
@@ -409,8 +412,11 @@ Expected result:
 - The agent runs the accepted later task after the current task exits.
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
+- The agent persists recent task history to the local config directory and reloads it after restart.
+- The agent trims persisted recent task history to the configured limit and keeps new task IDs monotonic.
+- The history-clear endpoint and command clear both in-memory and persisted history.
 - The agent status formatter renders current task details and recent history.
-- The agent status page renders the current task, recent history, local stop actions, and automatic status polling.
+- The agent status page renders the current task, recent history, local clear/stop actions, and automatic status polling.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.

@@ -218,12 +218,15 @@ Initial local API:
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
 - `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling. The page polls every 500ms so right-click task replacement and completion states appear quickly.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
+- Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqrcp desktop agent-history-clear`.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
+- `DELETE /history` clears the in-memory and persisted recent task history.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
+- `eqrcp desktop agent-history-clear` clears recent desktop agent task history.
 - `eqrcp desktop agent-open` opens the browser-based agent status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the current task QR page when one is active.
 - `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
@@ -238,7 +241,8 @@ Next priorities:
 3. Validate the dedicated stop-current endpoint and `eqrcp desktop agent-stop-current` command so users can cancel the active transfer without exiting the agent.
 4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
-6. Before tray icon, startup registration, notifications, and persistent transfer history, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, and desktop status repair diagnostics.
+6. Validate persisted recent task history on Windows: finish a task, restart `eqrcp desktop agent`, confirm `agent-status` and `http://127.0.0.1:48176/` still show the completed task, then clear it with `agent-history-clear` or the status page button.
+7. Before tray icon, startup registration, and notifications, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, history clearing, and desktop status repair diagnostics.
 
 ### Phase 5: Desktop Enhancements
 
@@ -249,7 +253,7 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 - Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
 - Startup registration: optionally start `eqrcp desktop agent` at login, with status and uninstall checks.
 - Notifications: show transfer started, completed, failed, and stopped messages without relying on browser focus.
-- Persistent transfer history: store recent task records across agent restarts, with privacy-aware retention limits.
+- Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
 - Settings surface: expose output directory, interface, port, and startup choice without requiring manual config editing.
 
 ## Recommended First Implementation

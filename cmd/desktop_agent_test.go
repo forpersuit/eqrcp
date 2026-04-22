@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -436,8 +437,10 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 	for _, want := range []string{
 		"eqrcp Agent",
 		"Stop Current",
+		"Clear History",
 		"Stop Agent",
 		"fetch('/status'",
+		"fetch('/history'",
 		"setInterval(updateAgentStatus, 500)",
 		"Open QR Page",
 		"http://127.0.0.1:19000/qr",
@@ -449,6 +452,141 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("agent page = %q, want to contain %q", string(body), want)
 		}
+	}
+}
+
+func TestDesktopAgentPersistsHistory(t *testing.T) {
+	started := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	finished := started.Add(time.Minute)
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	agent.mu.Lock()
+	agent.addHistoryLocked(desktopAgentTaskRecord{
+		ID:         7,
+		Action:     "share",
+		Paths:      []string{"a file.txt"},
+		State:      "completed",
+		StartedAt:  started,
+		FinishedAt: &finished,
+	})
+	agent.mu.Unlock()
+
+	restarted := newDesktopAgent(application.Flags{})
+	restarted.historyPath = historyPath
+	if err := restarted.loadHistory(); err != nil {
+		t.Fatal(err)
+	}
+	status := restarted.snapshot()
+	if len(status.History) != 1 {
+		t.Fatalf("History = %#v, want one persisted record", status.History)
+	}
+	record := status.History[0]
+	if record.ID != 7 || record.Action != "share" || record.State != "completed" || len(record.Paths) != 1 || record.Paths[0] != "a file.txt" {
+		t.Fatalf("History[0] = %#v, want persisted share record", record)
+	}
+	if restarted.nextID != 7 {
+		t.Fatalf("nextID = %d, want 7", restarted.nextID)
+	}
+}
+
+func TestDesktopAgentLoadHistoryTrimsToLimit(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	var records []desktopAgentTaskRecord
+	for index := 0; index < desktopAgentMaxHistory+3; index++ {
+		records = append(records, desktopAgentTaskRecord{
+			ID:        index + 1,
+			Action:    "share",
+			Paths:     []string{"file.txt"},
+			State:     "completed",
+			StartedAt: time.Now(),
+		})
+	}
+	if err := saveDesktopAgentHistory(historyPath, records); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	if err := agent.loadHistory(); err != nil {
+		t.Fatal(err)
+	}
+	status := agent.snapshot()
+	if len(status.History) != desktopAgentMaxHistory {
+		t.Fatalf("History length = %d, want %d", len(status.History), desktopAgentMaxHistory)
+	}
+	if agent.nextID != desktopAgentMaxHistory+3 {
+		t.Fatalf("nextID = %d, want %d", agent.nextID, desktopAgentMaxHistory+3)
+	}
+}
+
+func TestDesktopAgentClearHistory(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	agent.mu.Lock()
+	agent.addHistoryLocked(desktopAgentTaskRecord{
+		ID:        1,
+		Action:    "share",
+		Paths:     []string{"a.txt"},
+		State:     "completed",
+		StartedAt: time.Now(),
+	})
+	agent.mu.Unlock()
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	request, err := http.NewRequest(http.MethodDelete, server.URL+"/history", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("clear history status = %d, want %d", response.StatusCode, http.StatusNoContent)
+	}
+	status := getAgentStatus(t, server.URL)
+	if len(status.History) != 0 {
+		t.Fatalf("History = %#v, want empty", status.History)
+	}
+	restarted := newDesktopAgent(application.Flags{})
+	restarted.historyPath = historyPath
+	if err := restarted.loadHistory(); err != nil {
+		t.Fatal(err)
+	}
+	if len(restarted.snapshot().History) != 0 {
+		t.Fatalf("persisted History = %#v, want empty", restarted.snapshot().History)
+	}
+}
+
+func TestDesktopAgentHistoryClearCommand(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = filepath.Join(t.TempDir(), "history.json")
+	agent.history = []desktopAgentTaskRecord{
+		{ID: 1, Action: "share", Paths: []string{"a.txt"}, State: "completed", StartedAt: time.Now()},
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	previousBaseURL := desktopAgentBaseURL
+	desktopAgentBaseURL = server.URL
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+	})
+
+	var out bytes.Buffer
+	desktopAgentHistoryClearCmd.SetOut(&out)
+	if err := desktopAgentHistoryClearCmd.RunE(desktopAgentHistoryClearCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Desktop agent history cleared.") {
+		t.Fatalf("output = %q", out.String())
+	}
+	if len(agent.snapshot().History) != 0 {
+		t.Fatalf("History = %#v, want empty", agent.snapshot().History)
 	}
 }
 
