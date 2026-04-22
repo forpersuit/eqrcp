@@ -480,6 +480,54 @@ func TestTransferPercent(t *testing.T) {
 	}
 }
 
+func TestTransferIncomplete(t *testing.T) {
+	tests := []struct {
+		done  int64
+		total int64
+		want  bool
+	}{
+		{done: 0, total: 0, want: false},
+		{done: 0, total: 10, want: true},
+		{done: 9, total: 10, want: true},
+		{done: 10, total: 10, want: false},
+		{done: 11, total: 10, want: false},
+	}
+
+	for _, test := range tests {
+		if got := transferIncomplete(test.done, test.total); got != test.want {
+			t.Fatalf("transferIncomplete(%d, %d) = %v, want %v", test.done, test.total, got, test.want)
+		}
+	}
+}
+
+func TestProgressResponseWriterStoresWriteError(t *testing.T) {
+	wantErr := io.ErrClosedPipe
+	writer := &progressResponseWriter{
+		ResponseWriter: failingResponseWriter{err: wantErr},
+	}
+
+	if _, err := writer.Write([]byte("hello")); err != wantErr {
+		t.Fatalf("Write() error = %v, want %v", err, wantErr)
+	}
+	if writer.err != wantErr {
+		t.Fatalf("progress writer error = %v, want %v", writer.err, wantErr)
+	}
+}
+
+type failingResponseWriter struct {
+	err error
+}
+
+func (failingResponseWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (failingResponseWriter) WriteHeader(statusCode int) {}
+
+func (w failingResponseWriter) Write(data []byte) (int, error) {
+	return 0, w.err
+}
+
 func TestSignalStopAfterStatusGraceWaitsForCompletedState(t *testing.T) {
 	server := &Server{stopChannel: make(chan bool, 1)}
 	server.SetStatusGracePeriod(10 * time.Millisecond)

@@ -387,6 +387,7 @@ Expected result:
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
+- Send transfers are marked completed only after the expected bytes are written without a response write error. Interrupted downloads are marked stopped.
 - Recent task history is persisted across agent restarts and capped at 20 records.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `DELETE /history` clears the in-memory and persisted recent task history.
@@ -419,6 +420,7 @@ Expected result:
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
 - The transfer service emits status snapshots when state or progress changes.
+- The transfer service tracks response write errors and incomplete send progress so canceled downloads do not appear as completed.
 - The agent stores observed transfer state on the current task.
 - The agent emits notification events for QR-ready, real transfer started, completed, failed, stopped, and replaced states.
 - Real transfer notifications are deduplicated per task and transfer state.

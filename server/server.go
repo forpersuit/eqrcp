@@ -557,6 +557,7 @@ func New(cfg *config.Config) (*Server, error) {
 			defer waitgroup.Done()
 		}
 		w.Header().Set("Content-Disposition", contentDisposition(app.body.Filename))
+		expectedBytes := app.getStatus().BytesTotal
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
 			onWrite: func(written int64) {
@@ -569,6 +570,18 @@ func New(cfg *config.Config) (*Server, error) {
 			},
 		}
 		http.ServeFile(progressWriter, r, app.body.Path)
+		if r.Method == http.MethodHead {
+			return
+		}
+		status := app.getStatus()
+		if progressWriter.err != nil || (r.Header.Get("Range") == "" && transferIncomplete(status.BytesDone, expectedBytes)) {
+			app.setStatus("stopped", "Transfer interrupted before completion.")
+			app.recordStatus()
+			if !cfg.KeepAlive {
+				go app.signalStopAfterStatusGrace()
+			}
+			return
+		}
 		app.setStatus("completed", "Transfer completed.")
 		app.recordStatus()
 	})

@@ -85,13 +85,21 @@ func transferPercent(done int64, total int64) int {
 	return int(done * 100 / total)
 }
 
+func transferIncomplete(done int64, total int64) bool {
+	return total > 0 && done < total
+}
+
 type progressResponseWriter struct {
 	http.ResponseWriter
+	err     error
 	onWrite func(int64)
 }
 
 func (w *progressResponseWriter) Write(data []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(data)
+	if err != nil {
+		w.err = err
+	}
 	if n > 0 && w.onWrite != nil {
 		w.onWrite(int64(n))
 	}
