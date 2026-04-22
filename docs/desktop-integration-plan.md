@@ -169,7 +169,7 @@ After the right-click workflow is functional, improve visibility:
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
 - Transfer status. Implemented in the browser QR page through `/qr/status` polling.
-- Send confirmation page. Implemented: send QR codes now open a confirmation page first. The actual file response is only requested after the receiving device taps Download, so scanning the QR code no longer starts the download automatically.
+- Repeat transfer action. Implemented: after a completed transfer, the QR page offers `Transfer again` so an accidental canceled or dismissed mobile download can be retried without starting a new right-click share.
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
 - Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.
@@ -220,7 +220,7 @@ Initial local API:
 - `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling. The page polls every 500ms so right-click task replacement and completion states appear quickly.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
 - Active agent tasks now also receive real server transfer state from the transfer service: `waiting`, `transferring`, `completed`, or `stopped`, including progress percentage, current file, and saved files.
-- Send-side completion is based on the explicit download response, not QR scanning. A send transfer is completed only when the user clicks Download on the receiving device and the expected bytes are written without a write error. If the downloading client cancels before completion, the transfer is recorded as stopped instead of completed.
+- Send-side completion is based on response write progress: a transfer is completed only when the expected bytes are written without a write error. If the downloading client cancels before completion, the transfer is recorded as stopped instead of completed.
 - Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqrcp desktop agent-history-clear`.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `DELETE /history` clears the in-memory and persisted recent task history.

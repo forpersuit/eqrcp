@@ -40,17 +40,19 @@ type Server struct {
 	// SendURL is the URL used to send the file
 	SendURL string
 	// ReceiveURL is the URL used to Receive the file
-	ReceiveURL  string
-	instance    *http.Server
-	mux         *http.ServeMux
-	body        body.Body
-	outputDir   string
-	stopChannel chan bool
-	statusMu    sync.Mutex
-	status      transferStatus
-	history     []transferStatusRecord
-	statusGrace time.Duration
-	statusHook  func(TransferStatusSnapshot)
+	ReceiveURL   string
+	instance     *http.Server
+	mux          *http.ServeMux
+	body         body.Body
+	outputDir    string
+	stopChannel  chan bool
+	statusMu     sync.Mutex
+	status       transferStatus
+	history      []transferStatusRecord
+	statusGrace  time.Duration
+	statusHook   func(TransferStatusSnapshot)
+	statusEpoch  int64
+	restartCount int64
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -166,10 +168,11 @@ func (s *Server) Send(p body.Body) {
 func (s *Server) DisplayQR(url string) error {
 	s.SetStatusGracePeriod(defaultStatusGracePeriod)
 	const (
-		pagePath   = "/qr"
-		imagePath  = "/qr/image"
-		statusPath = "/qr/status"
-		stopPath   = "/qr/stop"
+		pagePath    = "/qr"
+		imagePath   = "/qr/image"
+		statusPath  = "/qr/status"
+		stopPath    = "/qr/stop"
+		restartPath = "/qr/restart"
 	)
 	qrImg, err := qr.RenderImage(url)
 	if err != nil {
@@ -215,17 +218,30 @@ func (s *Server) DisplayQR(url string) error {
 		fmt.Fprintln(w, "Transfer stopped. You can close this page.")
 		s.signalStop()
 	})
+	s.mux.HandleFunc(restartPath, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !s.restartTransfer() {
+			http.Error(w, "transfer cannot be restarted in its current state", http.StatusConflict)
+			return
+		}
+		fmt.Fprintln(w, "Transfer restarted. Scan the QR code again or reuse the same URL.")
+	})
 	s.mux.HandleFunc(pagePath, func(w http.ResponseWriter, r *http.Request) {
 		htmlVariables := struct {
 			URL          string
 			QRImageRoute string
 			StatusRoute  string
 			StopRoute    string
+			RestartRoute string
 		}{
 			URL:          url,
 			QRImageRoute: imagePath,
 			StatusRoute:  statusPath,
 			StopRoute:    stopPath,
+			RestartRoute: restartPath,
 		}
 		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -257,6 +273,7 @@ func (s *Server) setStatus(state string, message string) {
 	s.statusMu.Lock()
 	s.status.State = state
 	s.status.Message = message
+	s.statusEpoch++
 	if state == "completed" {
 		s.status.BytesDone = s.status.BytesTotal
 		s.status.Percent = 100
@@ -265,6 +282,44 @@ func (s *Server) setStatus(state string, message string) {
 	hook := s.statusHook
 	s.statusMu.Unlock()
 	notifyTransferStatusHook(hook, status)
+}
+
+func (s *Server) restartTransfer() bool {
+	s.statusMu.Lock()
+	if s.status.State != "completed" {
+		s.statusMu.Unlock()
+		return false
+	}
+	s.status.State = "waiting"
+	switch s.status.Mode {
+	case "receive":
+		s.status.Message = "Scan to upload files to this folder."
+	case "send":
+		if s.status.Archive {
+			s.status.Message = "Scan to download this zip archive."
+		} else {
+			s.status.Message = "Scan to download this item."
+		}
+	default:
+		s.status.Message = "Waiting for a device to connect."
+	}
+	s.status.Current = ""
+	s.status.BytesDone = 0
+	s.status.Percent = 0
+	s.status.SavedFiles = nil
+	s.statusEpoch++
+	s.restartCount++
+	status := cloneTransferStatus(s.status)
+	hook := s.statusHook
+	s.statusMu.Unlock()
+	notifyTransferStatusHook(hook, status)
+	return true
+}
+
+func (s *Server) hasRestarted() bool {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	return s.restartCount > 0
 }
 
 func (s *Server) getStatus() transferStatus {
@@ -373,10 +428,17 @@ func (s *Server) signalStopAfterStatusGrace() {
 	s.statusMu.Lock()
 	delay := s.statusGrace
 	state := s.status.State
+	epoch := s.statusEpoch
 	s.statusMu.Unlock()
 	if delay > 0 && state == "completed" {
 		time.Sleep(delay)
 	}
+	s.statusMu.Lock()
+	if epoch != s.statusEpoch {
+		s.statusMu.Unlock()
+		return
+	}
+	s.statusMu.Unlock()
 	s.signalStop()
 }
 
@@ -465,7 +527,6 @@ func New(cfg *config.Config) (*Server, error) {
 	app.BaseURL = fmt.Sprintf("%s://%s", protocol, hostname)
 	app.SendURL = fmt.Sprintf("%s/send/%s",
 		app.BaseURL, path)
-	sendDownloadPath := "/send/" + path + "/download"
 	app.ReceiveURL = fmt.Sprintf("%s/receive/%s",
 		app.BaseURL, path)
 	// Create a server
@@ -508,41 +569,8 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
+	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
-		if !cfg.KeepAlive {
-			if status, done := app.terminalStatus(); done {
-				writeTerminalTransfer(w, status)
-				return
-			}
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		htmlVariables := struct {
-			DownloadURL string
-			Filename    string
-			Archive     bool
-			ArchiveName string
-			Items       []string
-			BytesTotal  int64
-		}{
-			DownloadURL: sendDownloadPath,
-			Filename:    app.body.Filename,
-			Archive:     app.body.Archive,
-			ArchiveName: app.body.Filename,
-			Items:       append([]string(nil), app.body.Items...),
-			BytesTotal:  app.getStatus().BytesTotal,
-		}
-		if err := serveTemplate("send-confirm", pages.SendConfirm, w, htmlVariables); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Template error: %v\n", err)
-			app.signalStop()
-			return
-		}
-	})
-	// Send download handler (sends file to caller)
-	mux.HandleFunc(sendDownloadPath, func(w http.ResponseWriter, r *http.Request) {
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
@@ -618,6 +646,9 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.setStatus("completed", "Transfer completed.")
 		app.recordStatus()
+		if !cfg.KeepAlive && app.hasRestarted() {
+			go app.signalStopAfterStatusGrace()
+		}
 	})
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {

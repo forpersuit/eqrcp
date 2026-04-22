@@ -62,11 +62,13 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		QRImageRoute string
 		StatusRoute  string
 		StopRoute    string
+		RestartRoute string
 	}{
 		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
 		StopRoute:    "/qr/stop",
+		RestartRoute: "/qr/restart",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -77,7 +79,9 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`src="/qr/image"`,
 		`id="qr-area"`,
 		`action="/qr/stop"`,
+		`action="/qr/restart"`,
 		`fetch('\/qr\/status'`,
+		`Transfer again`,
 		"Copy URL",
 		"Stop transfer",
 		`id="transfer-progress"`,
@@ -231,28 +235,8 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("send page status = %d, want %d", response.StatusCode, http.StatusOK)
-	}
-	page, err := io.ReadAll(response.Body)
-	response.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(page), "Ready to download") || !strings.Contains(string(page), "/send/repeat-send/download") {
-		t.Fatalf("send page = %q, want confirmation page with download link", string(page))
-	}
-
-	request, err = http.NewRequest(http.MethodGet, server.SendURL+"/download", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 	request.Header.Set("User-Agent", "Mozilla test")
-	response, err = http.DefaultClient.Do(request)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +248,7 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 	response.Body.Close()
 
-	request, err = http.NewRequest(http.MethodGet, server.SendURL+"/download", nil)
+	request, err = http.NewRequest(http.MethodGet, server.SendURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +271,7 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 }
 
-func TestSendConfirmationPageDoesNotStartTransfer(t *testing.T) {
+func TestRestartCompletedOneShotSendAllowsSameURLAgain(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "report.txt")
 	if err := os.WriteFile(file, []byte("hello"), 0644); err != nil {
@@ -297,7 +281,7 @@ func TestSendConfirmationPageDoesNotStartTransfer(t *testing.T) {
 		Interface: "any",
 		Bind:      "127.0.0.1",
 		Port:      0,
-		Path:      "confirm-send",
+		Path:      "restart-send",
 		KeepAlive: false,
 	})
 	if err != nil {
@@ -305,18 +289,58 @@ func TestSendConfirmationPageDoesNotStartTransfer(t *testing.T) {
 	}
 	defer server.Shutdown()
 	server.Send(body.Body{Path: file, Filename: "report.txt", Items: []string{"report.txt"}})
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "xdg-open"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	if err := server.DisplayQR(server.SendURL); err != nil {
+		t.Fatal(err)
+	}
+	server.SetStatusGracePeriod(10 * time.Millisecond)
 
 	response, err := http.Get(server.SendURL)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := io.ReadAll(response.Body); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	status := server.getStatus()
+	if status.State != "completed" {
+		t.Fatalf("status = %#v, want completed before restart", status)
+	}
+
+	response, err = http.Post(server.BaseURL+"/qr/restart", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		t.Fatalf("send page status = %d, want %d", response.StatusCode, http.StatusOK)
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("restart status = %d, want %d; body = %q", response.StatusCode, http.StatusOK, string(body))
 	}
-	status := server.getStatus()
-	if status.State != "waiting" {
-		t.Fatalf("status = %#v, want waiting before download click", status)
+	status = server.getStatus()
+	if status.State != "waiting" || status.BytesDone != 0 || status.Percent != 0 {
+		t.Fatalf("status = %#v, want waiting reset after restart", status)
+	}
+
+	response, err = http.Get(server.SendURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("second send status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if _, err := io.ReadAll(response.Body); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-server.stopChannel:
+	case <-time.After(time.Second):
+		t.Fatal("server did not stop after restarted transfer completed")
 	}
 }
 
