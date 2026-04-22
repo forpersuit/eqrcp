@@ -59,6 +59,8 @@ type desktopAgentHistoryStore struct {
 	History []desktopAgentTaskRecord `json:"history"`
 }
 
+type desktopAgentNotifier func(title string, message string) error
+
 type desktopAgent struct {
 	mu          sync.Mutex
 	baseFlags   application.Flags
@@ -71,12 +73,14 @@ type desktopAgent struct {
 	shutdown    func()
 	lastError   string
 	runner      func(desktopAgentTask) error
+	notifier    desktopAgentNotifier
 	historyPath string
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 	agent := &desktopAgent{
 		baseFlags:   baseFlags,
+		notifier:    notifyDesktop,
 		historyPath: defaultDesktopAgentHistoryPath(),
 	}
 	agent.runner = agent.runTask
@@ -227,6 +231,7 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 			}
 		}
 		agent.addHistoryLocked(*agent.current)
+		agent.notifyRecordLocked(*agent.current)
 	}
 	agent.busy = false
 	agent.current = nil
@@ -273,7 +278,63 @@ func (agent *desktopAgent) startNextLocked() {
 	}
 	agent.busy = true
 	agent.current = &record
+	agent.notifyRecordLocked(record)
 	go agent.execute(task, record.ID)
+}
+
+func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
+	if agent.notifier == nil {
+		return
+	}
+	title, message := desktopAgentNotification(record)
+	if title == "" || message == "" {
+		return
+	}
+	_ = agent.notifier(title, message)
+}
+
+func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
+	action := desktopAgentActionLabel(record.Action)
+	target := desktopAgentPathsSummary(record.Paths)
+	switch record.State {
+	case "running":
+		return "eqrcp transfer started", fmt.Sprintf("%s started: %s", action, target)
+	case "completed":
+		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
+	case "failed":
+		if record.Error != "" {
+			return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, record.Error)
+		}
+		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
+	case "stopped":
+		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
+	case "replaced":
+		return "eqrcp transfer replaced", fmt.Sprintf("%s replaced by a newer task: %s", action, target)
+	default:
+		return "", ""
+	}
+}
+
+func desktopAgentActionLabel(action string) string {
+	switch action {
+	case "share":
+		return "Share"
+	case "receive":
+		return "Receive"
+	default:
+		return action
+	}
+}
+
+func desktopAgentPathsSummary(paths []string) string {
+	switch len(paths) {
+	case 0:
+		return "no paths"
+	case 1:
+		return paths[0]
+	default:
+		return fmt.Sprintf("%d items", len(paths))
+	}
 }
 
 func (agent *desktopAgent) setActiveStop(stop func()) {
@@ -623,6 +684,40 @@ func openDesktopAgentPageURL(url string) error {
 	default:
 		return fmt.Errorf("failed to open browser on platform: %s", runtime.GOOS)
 	}
+}
+
+func notifyDesktop(title string, message string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return notifyDesktopWindows(title, message)
+	case "linux":
+		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+			return nil
+		}
+		return exec.Command("notify-send", title, message).Start()
+	case "darwin":
+		script := fmt.Sprintf("display notification %s with title %s", appleScriptString(message), appleScriptString(title))
+		return exec.Command("osascript", "-e", script).Start()
+	default:
+		return nil
+	}
+}
+
+func notifyDesktopWindows(title string, message string) error {
+	script := fmt.Sprintf(
+		`Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.BalloonTipTitle = %s; $n.BalloonTipText = %s; $n.Visible = $true; $n.ShowBalloonTip(5000); Start-Sleep -Seconds 6; $n.Dispose()`,
+		powershellString(title),
+		powershellString(message),
+	)
+	return exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", script).Start()
+}
+
+func powershellString(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func appleScriptString(value string) string {
+	return `"` + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `"`, `\"`) + `"`
 }
 
 func fetchDesktopAgentStatus() (desktopAgentResponse, error) {

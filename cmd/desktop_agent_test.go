@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +49,12 @@ func TestValidateDesktopAgentTask(t *testing.T) {
 
 func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	done := make(chan desktopAgentTask, 1)
+	notifications := make(chan string, 4)
 	agent := newDesktopAgent(application.Flags{})
+	agent.notifier = func(title string, message string) error {
+		notifications <- title + ": " + message
+		return nil
+	}
 	agent.runner = func(task desktopAgentTask) error {
 		done <- task
 		return nil
@@ -75,6 +81,64 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	}
 	if len(status.History) != 1 || status.History[0].State != "completed" || status.History[0].Action != "share" {
 		t.Fatalf("History = %#v, want completed share record", status.History)
+	}
+	assertNotificationContains(t, notifications, "eqrcp transfer started")
+	assertNotificationContains(t, notifications, "eqrcp transfer completed")
+}
+
+func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
+	tests := []struct {
+		name  string
+		state string
+		err   string
+		want  []string
+	}{
+		{name: "running", state: "running", want: []string{"eqrcp transfer started", "Share started: a.txt"}},
+		{name: "completed", state: "completed", want: []string{"eqrcp transfer completed", "Share completed: a.txt"}},
+		{name: "failed", state: "failed", err: "network failed", want: []string{"eqrcp transfer failed", "Share failed: network failed"}},
+		{name: "stopped", state: "stopped", want: []string{"eqrcp transfer stopped", "Share stopped: a.txt"}},
+		{name: "replaced", state: "replaced", want: []string{"eqrcp transfer replaced", "Share replaced by a newer task: a.txt"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			title, message := desktopAgentNotification(desktopAgentTaskRecord{
+				Action: "share",
+				Paths:  []string{"a.txt"},
+				State:  test.state,
+				Error:  test.err,
+			})
+			got := title + ": " + message
+			for _, want := range test.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("notification = %q, want to contain %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestDesktopAgentNotificationSummarizesMultiplePaths(t *testing.T) {
+	_, message := desktopAgentNotification(desktopAgentTaskRecord{
+		Action: "share",
+		Paths:  []string{"a.txt", "b.txt", "c.txt"},
+		State:  "running",
+	})
+	if !strings.Contains(message, "3 items") {
+		t.Fatalf("message = %q, want multi-item summary", message)
+	}
+}
+
+func TestDesktopAgentIgnoresNotificationErrors(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.notifier = func(title string, message string) error {
+		return errors.New("notification backend unavailable")
+	}
+	agent.mu.Lock()
+	agent.notifyRecordLocked(desktopAgentTaskRecord{Action: "share", Paths: []string{"a.txt"}, State: "running"})
+	agent.mu.Unlock()
+	if agent.lastError != "" {
+		t.Fatalf("lastError = %q, want notification errors to stay non-fatal", agent.lastError)
 	}
 }
 
@@ -786,4 +850,19 @@ func getAgentStatus(t *testing.T, baseURL string) desktopAgentResponse {
 		t.Fatal(err)
 	}
 	return status
+}
+
+func assertNotificationContains(t *testing.T, notifications <-chan string, want string) {
+	t.Helper()
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case got := <-notifications:
+			if strings.Contains(got, want) {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("notification %q was not sent", want)
+		}
+	}
 }

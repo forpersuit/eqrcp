@@ -401,6 +401,7 @@ Expected result:
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
+- The agent sends lightweight desktop notifications for transfer started, completed, failed, stopped, and replaced states. Notification backend failures are ignored so transfers remain authoritative.
 
 Automated checks:
 
@@ -416,6 +417,9 @@ Expected result:
 - The agent runs the accepted later task after the current task exits.
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
+- The agent emits notification events for transfer started, completed, failed, stopped, and replaced states.
+- Notification messages summarize multiple selected paths as an item count.
+- Notification backend errors do not update the transfer `last error`.
 - The agent persists recent task history to the local config directory and reloads it after restart.
 - The agent trims persisted recent task history to the configured limit and keeps new task IDs monotonic.
 - The history-clear endpoint and command clear both in-memory and persisted history.
