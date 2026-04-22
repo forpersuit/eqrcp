@@ -260,6 +260,99 @@ var QR = `
 </html>
 `
 
+// SendConfirm page
+var SendConfirm = `
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>eqrcp download</title>
+    <style>
+        body {
+            background: #f7f9fb;
+            color: #202428;
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+        }
+        main {
+            margin: 0 auto;
+            max-width: 720px;
+            padding: 30px 18px 42px;
+        }
+        h1 {
+            font-size: 28px;
+            line-height: 1.2;
+            margin: 0 0 10px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.5;
+            margin: 0 0 16px;
+        }
+        .panel {
+            background: #fff;
+            border: 1px solid #d7dee5;
+            border-radius: 8px;
+            padding: 18px;
+        }
+        .meta {
+            color: #3c4752;
+            font-size: 14px;
+            margin: 8px 0;
+            overflow-wrap: anywhere;
+        }
+        .button {
+            background: #13795b;
+            border-radius: 6px;
+            color: #fff;
+            display: inline-flex;
+            font-size: 16px;
+            margin-top: 14px;
+            min-height: 42px;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+            text-decoration: none;
+        }
+        ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+        li {
+            margin: 5px 0;
+            overflow-wrap: anywhere;
+        }
+        @media (max-width: 560px) {
+            .button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Ready to download</h1>
+        <p>Tap Download when you want this device to start receiving the file.</p>
+        <div class="panel">
+            <div class="meta">File: {{.Filename}}</div>
+            {{if .BytesTotal}}<div class="meta">Size: {{.BytesTotal}} bytes</div>{{end}}
+            {{if .Archive}}
+            <div class="meta">This download is a zip archive: {{.ArchiveName}}</div>
+            {{if .Items}}
+            <div class="meta">Included items:</div>
+            <ul>
+                {{range .Items}}<li>{{.}}</li>{{end}}
+            </ul>
+            {{end}}
+            {{end}}
+            <a class="button" href="{{.DownloadURL}}">Download</a>
+        </div>
+    </main>
+</body>
+</html>
+`
+
 // Upload page
 var Upload = `
 <!doctype html>

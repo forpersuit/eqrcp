@@ -231,8 +231,28 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("User-Agent", "Mozilla test")
 	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("send page status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	page, err := io.ReadAll(response.Body)
+	response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "Ready to download") || !strings.Contains(string(page), "/send/repeat-send/download") {
+		t.Fatalf("send page = %q, want confirmation page with download link", string(page))
+	}
+
+	request, err = http.NewRequest(http.MethodGet, server.SendURL+"/download", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("User-Agent", "Mozilla test")
+	response, err = http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +264,7 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 	response.Body.Close()
 
-	request, err = http.NewRequest(http.MethodGet, server.SendURL, nil)
+	request, err = http.NewRequest(http.MethodGet, server.SendURL+"/download", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,6 +284,39 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "already completed") {
 		t.Fatalf("second send body = %q, want completion explanation", string(body))
+	}
+}
+
+func TestSendConfirmationPageDoesNotStartTransfer(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "confirm-send",
+		KeepAlive: false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+	server.Send(body.Body{Path: file, Filename: "report.txt", Items: []string{"report.txt"}})
+
+	response, err := http.Get(server.SendURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("send page status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	status := server.getStatus()
+	if status.State != "waiting" {
+		t.Fatalf("status = %#v, want waiting before download click", status)
 	}
 }
 

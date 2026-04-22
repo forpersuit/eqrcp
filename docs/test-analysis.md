@@ -324,7 +324,8 @@ Black-box checks:
 ```sh
 curl -s http://127.0.0.1:<port>/qr/status
 curl -s http://127.0.0.1:<port>/status
-curl -s -A Mozilla http://127.0.0.1:<port>/send/<path> -o downloaded.file
+curl -s -A Mozilla http://127.0.0.1:<port>/send/<path>
+curl -s -A Mozilla http://127.0.0.1:<port>/send/<path>/download -o downloaded.file
 curl -s http://127.0.0.1:<port>/qr/status
 curl -s -X POST http://127.0.0.1:<port>/qr/stop
 ```
@@ -335,7 +336,8 @@ Expected result:
 - The `/qr/status` response contains the current QR transfer state only.
 - The `/status` response contains `current` and `history`.
 - The transfer URL `/status` alias contains the current transfer state only and does not include service history.
-- After a successful download, the status response contains `completed`.
+- Opening the send URL returns a confirmation page and leaves status as `waiting`.
+- After tapping Download or requesting `/send/<path>/download`, a successful download makes the status response contain `completed`.
 - After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
 - After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
 - Directory and multi-file downloads use timestamped zip file names, such as `eqrcp-multiple-files-YYYYMMDD-HHMMSS.zip`.
@@ -387,7 +389,7 @@ Expected result:
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
-- Send transfers are marked completed only after the expected bytes are written without a response write error. Interrupted downloads are marked stopped.
+- Send transfers are marked completed only after the receiving device explicitly requests the download and the expected bytes are written without a response write error. Interrupted downloads are marked stopped.
 - Recent task history is persisted across agent restarts and capped at 20 records.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `DELETE /history` clears the in-memory and persisted recent task history.

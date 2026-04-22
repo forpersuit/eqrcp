@@ -29,7 +29,7 @@ func sendCmdFunc(command *cobra.Command, args []string) error {
 	}
 	// Sets the body
 	srv.Send(body)
-	log.Print(`Scan the following URL with a QR reader to start the file transfer, press CTRL+C or "q" to exit:`)
+	log.Print(`Scan the following URL with a QR reader to open the download page, press CTRL+C or "q" to exit:`)
 	log.Print(srv.SendURL)
 	if err := qr.RenderString(srv.SendURL, cfg.Reversed); err != nil {
 		return err

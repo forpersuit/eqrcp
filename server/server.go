@@ -465,6 +465,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.BaseURL = fmt.Sprintf("%s://%s", protocol, hostname)
 	app.SendURL = fmt.Sprintf("%s/send/%s",
 		app.BaseURL, path)
+	sendDownloadPath := "/send/" + path + "/download"
 	app.ReceiveURL = fmt.Sprintf("%s/receive/%s",
 		app.BaseURL, path)
 	// Create a server
@@ -507,8 +508,41 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
-	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		if !cfg.KeepAlive {
+			if status, done := app.terminalStatus(); done {
+				writeTerminalTransfer(w, status)
+				return
+			}
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		htmlVariables := struct {
+			DownloadURL string
+			Filename    string
+			Archive     bool
+			ArchiveName string
+			Items       []string
+			BytesTotal  int64
+		}{
+			DownloadURL: sendDownloadPath,
+			Filename:    app.body.Filename,
+			Archive:     app.body.Archive,
+			ArchiveName: app.body.Filename,
+			Items:       append([]string(nil), app.body.Items...),
+			BytesTotal:  app.getStatus().BytesTotal,
+		}
+		if err := serveTemplate("send-confirm", pages.SendConfirm, w, htmlVariables); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Template error: %v\n", err)
+			app.signalStop()
+			return
+		}
+	})
+	// Send download handler (sends file to caller)
+	mux.HandleFunc(sendDownloadPath, func(w http.ResponseWriter, r *http.Request) {
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
