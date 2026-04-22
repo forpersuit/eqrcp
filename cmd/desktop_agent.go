@@ -37,14 +37,21 @@ type desktopAgentTask struct {
 }
 
 type desktopAgentTaskRecord struct {
-	ID         int        `json:"id"`
-	Action     string     `json:"action"`
-	Paths      []string   `json:"paths"`
-	State      string     `json:"state"`
-	PageURL    string     `json:"pageUrl,omitempty"`
-	Error      string     `json:"error,omitempty"`
-	StartedAt  time.Time  `json:"startedAt"`
-	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	ID              int        `json:"id"`
+	Action          string     `json:"action"`
+	Paths           []string   `json:"paths"`
+	State           string     `json:"state"`
+	TransferState   string     `json:"transferState,omitempty"`
+	TransferMessage string     `json:"transferMessage,omitempty"`
+	TransferCurrent string     `json:"transferCurrent,omitempty"`
+	TransferPercent int        `json:"transferPercent,omitempty"`
+	BytesDone       int64      `json:"bytesDone,omitempty"`
+	BytesTotal      int64      `json:"bytesTotal,omitempty"`
+	SavedFiles      []string   `json:"savedFiles,omitempty"`
+	PageURL         string     `json:"pageUrl,omitempty"`
+	Error           string     `json:"error,omitempty"`
+	StartedAt       time.Time  `json:"startedAt"`
+	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
 }
 
 type desktopAgentResponse struct {
@@ -75,6 +82,7 @@ type desktopAgent struct {
 	runner      func(desktopAgentTask) error
 	notifier    desktopAgentNotifier
 	historyPath string
+	notified    map[int]map[string]bool
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
@@ -82,6 +90,7 @@ func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 		baseFlags:   baseFlags,
 		notifier:    notifyDesktop,
 		historyPath: defaultDesktopAgentHistoryPath(),
+		notified:    map[int]map[string]bool{},
 	}
 	agent.runner = agent.runTask
 	return agent
@@ -232,6 +241,7 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 		}
 		agent.addHistoryLocked(*agent.current)
 		agent.notifyRecordLocked(*agent.current)
+		delete(agent.notified, agent.current.ID)
 	}
 	agent.busy = false
 	agent.current = nil
@@ -282,6 +292,31 @@ func (agent *desktopAgent) startNextLocked() {
 	go agent.execute(task, record.ID)
 }
 
+func (agent *desktopAgent) currentTaskID() int {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.current == nil {
+		return 0
+	}
+	return agent.current.ID
+}
+
+func (agent *desktopAgent) observeTransferStatus(taskID int, status server.TransferStatusSnapshot) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.current == nil || agent.current.ID != taskID {
+		return
+	}
+	agent.current.TransferState = status.State
+	agent.current.TransferMessage = status.Message
+	agent.current.TransferCurrent = status.Current
+	agent.current.TransferPercent = status.Percent
+	agent.current.BytesDone = status.BytesDone
+	agent.current.BytesTotal = status.BytesTotal
+	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
+	agent.notifyTransferStatusLocked(*agent.current)
+}
+
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
 	if agent.notifier == nil {
 		return
@@ -293,13 +328,40 @@ func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
 	_ = agent.notifier(title, message)
 }
 
+func (agent *desktopAgent) notifyTransferStatusLocked(record desktopAgentTaskRecord) {
+	if agent.notifier == nil {
+		return
+	}
+	key := record.TransferState
+	switch key {
+	case "transferring", "completed", "stopped":
+	default:
+		return
+	}
+	if agent.notified[record.ID] == nil {
+		agent.notified[record.ID] = map[string]bool{}
+	}
+	if agent.notified[record.ID][key] {
+		return
+	}
+	title, message := desktopAgentTransferNotification(record)
+	if title == "" || message == "" {
+		return
+	}
+	agent.notified[record.ID][key] = true
+	_ = agent.notifier(title, message)
+}
+
 func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
 	action := desktopAgentActionLabel(record.Action)
 	target := desktopAgentPathsSummary(record.Paths)
 	switch record.State {
 	case "running":
-		return "eqrcp transfer started", fmt.Sprintf("%s started: %s", action, target)
+		return "eqrcp transfer ready", fmt.Sprintf("%s ready: %s", action, target)
 	case "completed":
+		if record.TransferState == "completed" {
+			return "", ""
+		}
 		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
 	case "failed":
 		if record.Error != "" {
@@ -307,9 +369,36 @@ func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
 		}
 		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
 	case "stopped":
+		if record.TransferState == "stopped" {
+			return "", ""
+		}
 		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
 	case "replaced":
 		return "eqrcp transfer replaced", fmt.Sprintf("%s replaced by a newer task: %s", action, target)
+	default:
+		return "", ""
+	}
+}
+
+func desktopAgentTransferNotification(record desktopAgentTaskRecord) (string, string) {
+	action := desktopAgentActionLabel(record.Action)
+	target := desktopAgentPathsSummary(record.Paths)
+	if record.TransferCurrent != "" {
+		target = record.TransferCurrent
+	}
+	switch record.TransferState {
+	case "transferring":
+		return "eqrcp transfer started", fmt.Sprintf("%s started: %s", action, target)
+	case "completed":
+		if len(record.SavedFiles) == 1 {
+			return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, record.SavedFiles[0])
+		}
+		if len(record.SavedFiles) > 1 {
+			return "eqrcp transfer completed", fmt.Sprintf("%s completed: %d files", action, len(record.SavedFiles))
+		}
+		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
+	case "stopped":
+		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
 	default:
 		return "", ""
 	}
@@ -463,10 +552,12 @@ func cloneDesktopAgentRecords(records []desktopAgentTaskRecord) []desktopAgentTa
 
 func cloneDesktopAgentRecord(record desktopAgentTaskRecord) desktopAgentTaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
+	record.SavedFiles = append([]string(nil), record.SavedFiles...)
 	return record
 }
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
+	taskID := agent.currentTaskID()
 	agentApp := application.New()
 	agentApp.Flags = agent.baseFlags
 	agentApp.Flags.Browser = true
@@ -481,6 +572,9 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	if err != nil {
 		return err
 	}
+	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
+		agent.observeTransferStatus(taskID, status)
+	})
 	agent.setActiveStop(srv.Shutdown)
 	agent.setCurrentPageURL(srv.BaseURL + "/qr")
 	switch task.Action {
@@ -772,6 +866,19 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 	if record.PageURL != "" {
 		builder.WriteString(fmt.Sprintf("%s  qr page: %s\n", indent, record.PageURL))
 	}
+	if record.TransferState != "" {
+		builder.WriteString(fmt.Sprintf("%s  transfer: %s", indent, record.TransferState))
+		if record.TransferPercent > 0 {
+			builder.WriteString(fmt.Sprintf(" %d%%", record.TransferPercent))
+		}
+		builder.WriteString("\n")
+	}
+	if record.TransferMessage != "" {
+		builder.WriteString(fmt.Sprintf("%s  transfer message: %s\n", indent, record.TransferMessage))
+	}
+	if len(record.SavedFiles) > 0 {
+		builder.WriteString(fmt.Sprintf("%s  saved files: %s\n", indent, strings.Join(record.SavedFiles, ", ")))
+	}
 	if !record.StartedAt.IsZero() {
 		builder.WriteString(fmt.Sprintf("%s  started: %s\n", indent, record.StartedAt.Format(time.RFC3339)))
 	}
@@ -892,7 +999,7 @@ section {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
-.state-busy { color: var(--accent); }
+.state-busy, .state-transferring, .state-waiting { color: var(--accent); }
 .state-idle, .state-completed { color: var(--ok); }
 .state-failed, .state-replaced, .state-stopped { color: var(--danger); }
 table {
@@ -964,12 +1071,13 @@ th {
     <div id="agent-current">
     {{if .Current}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
       <tbody>
         <tr>
           <td data-label="ID">#{{.Current.ID}}</td>
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
+          <td data-label="Transfer">{{if .Current.TransferState}}{{.Current.TransferState}} {{if .Current.TransferPercent}}{{.Current.TransferPercent}}%{{end}}{{end}}</td>
           <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
           <td data-label="Paths" class="paths">{{joinPaths .Current.Paths}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
@@ -987,13 +1095,14 @@ th {
     <div id="agent-history">
     {{if .History}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>
       <tbody>
         {{range .History}}
         <tr>
           <td data-label="ID">#{{.ID}}</td>
           <td data-label="Action">{{.Action}}</td>
           <td data-label="State" class="state-{{.State}}">{{.State}}</td>
+          <td data-label="Transfer">{{if .TransferState}}{{.TransferState}} {{if .TransferPercent}}{{.TransferPercent}}%{{end}}{{end}}</td>
           <td data-label="Paths" class="paths">{{joinPaths .Paths}}</td>
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
@@ -1056,12 +1165,13 @@ function renderCurrent(record) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
   var body = document.createElement('tbody');
   var row = document.createElement('tr');
   appendCell(row, 'ID', '#' + record.id);
   appendCell(row, 'Action', record.action);
   appendCell(row, 'State', record.state, 'state-' + record.state);
+  appendCell(row, 'Transfer', transferText(record));
   appendLinkCell(row, 'QR Page', record.pageUrl, 'Open QR Page');
   appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
   appendCell(row, 'Started', formatAgentTime(record.startedAt));
@@ -1080,13 +1190,14 @@ function renderHistory(records) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th></tr></thead>';
   var body = document.createElement('tbody');
   records.forEach(function(record) {
     var row = document.createElement('tr');
     appendCell(row, 'ID', '#' + record.id);
     appendCell(row, 'Action', record.action);
     appendCell(row, 'State', record.state, 'state-' + record.state);
+    appendCell(row, 'Transfer', transferText(record));
     appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
     appendCell(row, 'Started', formatAgentTime(record.startedAt));
     appendCell(row, 'Finished', formatAgentTime(record.finishedAt));
@@ -1095,6 +1206,19 @@ function renderHistory(records) {
   });
   table.appendChild(body);
   container.appendChild(table);
+}
+function transferText(record) {
+  if (!record.transferState) {
+    return '';
+  }
+  var text = record.transferState;
+  if (record.transferPercent) {
+    text += ' ' + record.transferPercent + '%';
+  }
+  if (record.transferMessage) {
+    text += ' - ' + record.transferMessage;
+  }
+  return text;
 }
 function updateAgentStatus() {
   fetch('/status', { cache: 'no-store' })

@@ -218,6 +218,7 @@ Initial local API:
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
 - `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling. The page polls every 500ms so right-click task replacement and completion states appear quickly.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
+- Active agent tasks now also receive real server transfer state from the transfer service: `waiting`, `transferring`, `completed`, or `stopped`, including progress percentage, current file, and saved files.
 - Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqrcp desktop agent-history-clear`.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `DELETE /history` clears the in-memory and persisted recent task history.
@@ -252,7 +253,7 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 
 - Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
 - Startup registration: initial Windows current-user login startup is implemented with `eqrcp desktop startup-enable`, `eqrcp desktop startup-disable`, and `eqrcp desktop startup-status`. `eqrcp desktop status` also reports whether startup is disabled, enabled, or needs repair.
-- Notifications: initial lightweight notifications are implemented for transfer started, completed, failed, stopped, and replaced states. Windows uses built-in PowerShell/.NET balloon notifications without adding a GUI dependency.
+- Notifications: initial lightweight notifications are implemented for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Real started/completed/stopped notifications are driven by server transfer state rather than only by agent task lifecycle. Windows uses built-in PowerShell/.NET balloon notifications without adding a GUI dependency.
 - Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
 - Settings surface: expose output directory, interface, port, and startup choice without requiring manual config editing.
 
@@ -261,7 +262,8 @@ Next priorities:
 1. Validate Windows startup registration: run `eqrcp desktop startup-enable`, sign out or restart, confirm `eqrcp.exe desktop agent` starts and `http://127.0.0.1:48176/` is reachable.
 2. Validate startup repair detection by moving or renaming the executable and checking `eqrcp desktop startup-status`.
 3. Validate lightweight notifications on Windows for share, receive, stop-current, replacement, and failure cases.
-4. Evaluate tray icon options. Tray work should be deferred until the agent lifecycle, startup behavior, history persistence, and notifications are stable.
+4. Validate agent status page transfer fields during a large send and a multi-file receive: state, percent, current file, and saved files should update without manual refresh.
+5. Evaluate tray icon options. Tray work should be deferred until the agent lifecycle, startup behavior, history persistence, real transfer status, and notifications are stable.
 
 ## Recommended First Implementation
 

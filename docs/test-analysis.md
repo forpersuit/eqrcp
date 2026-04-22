@@ -386,6 +386,7 @@ Expected result:
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
+- Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
 - Recent task history is persisted across agent restarts and capped at 20 records.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `DELETE /history` clears the in-memory and persisted recent task history.
@@ -401,7 +402,7 @@ Expected result:
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
-- The agent sends lightweight desktop notifications for transfer started, completed, failed, stopped, and replaced states. Notification backend failures are ignored so transfers remain authoritative.
+- The agent sends lightweight desktop notifications for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Notification backend failures are ignored so transfers remain authoritative.
 
 Automated checks:
 
@@ -417,7 +418,10 @@ Expected result:
 - The agent runs the accepted later task after the current task exits.
 - The agent rejects new tasks only when the queue is full.
 - The agent records completed and replaced tasks in status history.
-- The agent emits notification events for transfer started, completed, failed, stopped, and replaced states.
+- The transfer service emits status snapshots when state or progress changes.
+- The agent stores observed transfer state on the current task.
+- The agent emits notification events for QR-ready, real transfer started, completed, failed, stopped, and replaced states.
+- Real transfer notifications are deduplicated per task and transfer state.
 - Notification messages summarize multiple selected paths as an item count.
 - Notification backend errors do not update the transfer `last error`.
 - The agent persists recent task history to the local config directory and reloads it after restart.

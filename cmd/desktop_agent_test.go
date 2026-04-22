@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"eqrcp/application"
+	"eqrcp/server"
 )
 
 func TestValidateDesktopAgentTask(t *testing.T) {
@@ -82,7 +83,7 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	if len(status.History) != 1 || status.History[0].State != "completed" || status.History[0].Action != "share" {
 		t.Fatalf("History = %#v, want completed share record", status.History)
 	}
-	assertNotificationContains(t, notifications, "eqrcp transfer started")
+	assertNotificationContains(t, notifications, "eqrcp transfer ready")
 	assertNotificationContains(t, notifications, "eqrcp transfer completed")
 }
 
@@ -93,7 +94,7 @@ func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
 		err   string
 		want  []string
 	}{
-		{name: "running", state: "running", want: []string{"eqrcp transfer started", "Share started: a.txt"}},
+		{name: "running", state: "running", want: []string{"eqrcp transfer ready", "Share ready: a.txt"}},
 		{name: "completed", state: "completed", want: []string{"eqrcp transfer completed", "Share completed: a.txt"}},
 		{name: "failed", state: "failed", err: "network failed", want: []string{"eqrcp transfer failed", "Share failed: network failed"}},
 		{name: "stopped", state: "stopped", want: []string{"eqrcp transfer stopped", "Share stopped: a.txt"}},
@@ -115,6 +116,70 @@ func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDesktopAgentObservesTransferStatus(t *testing.T) {
+	notifications := make(chan string, 4)
+	agent := newDesktopAgent(application.Flags{})
+	agent.notifier = func(title string, message string) error {
+		notifications <- title + ": " + message
+		return nil
+	}
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        3,
+		Action:    "receive",
+		Paths:     []string{"/tmp/inbox"},
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeTransferStatus(3, server.TransferStatusSnapshot{
+		State:      "transferring",
+		Message:    "Receiving report.txt.",
+		Current:    "report.txt",
+		BytesDone:  50,
+		BytesTotal: 100,
+		Percent:    50,
+	})
+	status := agent.snapshot()
+	if status.Current == nil || status.Current.TransferState != "transferring" || status.Current.TransferPercent != 50 || status.Current.TransferCurrent != "report.txt" {
+		t.Fatalf("Current = %#v, want observed transfer status", status.Current)
+	}
+	assertNotificationContains(t, notifications, "eqrcp transfer started")
+
+	agent.observeTransferStatus(3, server.TransferStatusSnapshot{
+		State:      "completed",
+		Message:    "Received 2 files.",
+		Percent:    100,
+		SavedFiles: []string{"a.txt", "b.txt"},
+	})
+	status = agent.snapshot()
+	if len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" {
+		t.Fatalf("Current = %#v, want saved files and completed transfer", status.Current)
+	}
+	assertNotificationContains(t, notifications, "eqrcp transfer completed")
+}
+
+func TestDesktopAgentTransferNotificationsAreDeduped(t *testing.T) {
+	notifications := make(chan string, 4)
+	agent := newDesktopAgent(application.Flags{})
+	agent.notifier = func(title string, message string) error {
+		notifications <- title + ": " + message
+		return nil
+	}
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{ID: 4, Action: "share", Paths: []string{"a.txt"}, State: "running"}
+
+	for index := 0; index < 3; index++ {
+		agent.observeTransferStatus(4, server.TransferStatusSnapshot{State: "transferring", Current: "a.txt"})
+	}
+	assertNotificationContains(t, notifications, "eqrcp transfer started")
+	select {
+	case got := <-notifications:
+		t.Fatalf("unexpected duplicate notification %q", got)
+	default:
 	}
 }
 

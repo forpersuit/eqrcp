@@ -339,6 +339,33 @@ func TestTransferStatus(t *testing.T) {
 	}
 }
 
+func TestTransferStatusHookReceivesCurrentStatus(t *testing.T) {
+	server := &Server{}
+	server.setStatus("waiting", "Waiting for a device to connect.")
+	var snapshots []TransferStatusSnapshot
+	server.SetStatusHook(func(status TransferStatusSnapshot) {
+		snapshots = append(snapshots, status)
+	})
+	server.updateStatus(func(status *transferStatus) {
+		status.BytesDone = 5
+		status.BytesTotal = 10
+	})
+	server.setStatus("completed", "Transfer completed.")
+
+	if len(snapshots) != 3 {
+		t.Fatalf("snapshots = %#v, want initial, progress, completed", snapshots)
+	}
+	if snapshots[0].State != "waiting" || snapshots[0].Message != "Waiting for a device to connect." {
+		t.Fatalf("initial snapshot = %#v, want waiting", snapshots[0])
+	}
+	if snapshots[1].Percent != 50 {
+		t.Fatalf("progress snapshot = %#v, want 50 percent", snapshots[1])
+	}
+	if snapshots[2].State != "completed" || snapshots[2].Percent != 100 {
+		t.Fatalf("completed snapshot = %#v, want completed 100 percent", snapshots[2])
+	}
+}
+
 func TestTransferStatusStoresSavedFiles(t *testing.T) {
 	server := &Server{}
 	files := []string{`C:\Downloads\a.txt`, `C:\Downloads\a(1).txt`}

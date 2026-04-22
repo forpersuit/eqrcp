@@ -50,6 +50,7 @@ type Server struct {
 	status      transferStatus
 	history     []transferStatusRecord
 	statusGrace time.Duration
+	statusHook  func(TransferStatusSnapshot)
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -92,6 +93,22 @@ type serviceStatus struct {
 	State   string                 `json:"state"`
 	Current transferStatus         `json:"current"`
 	History []transferStatusRecord `json:"history,omitempty"`
+}
+
+type TransferStatusSnapshot struct {
+	State       string
+	Mode        string
+	Title       string
+	Target      string
+	Archive     bool
+	ArchiveName string
+	Items       []string
+	Current     string
+	Message     string
+	BytesDone   int64
+	BytesTotal  int64
+	Percent     int
+	SavedFiles  []string
 }
 
 // ReceiveTo sets the output directory
@@ -226,15 +243,28 @@ func (s *Server) SetStatusGracePeriod(duration time.Duration) {
 	s.statusGrace = duration
 }
 
+func (s *Server) SetStatusHook(hook func(TransferStatusSnapshot)) {
+	s.statusMu.Lock()
+	s.statusHook = hook
+	status := cloneTransferStatus(s.status)
+	s.statusMu.Unlock()
+	if hook != nil {
+		hook(snapshotTransferStatus(status))
+	}
+}
+
 func (s *Server) setStatus(state string, message string) {
 	s.statusMu.Lock()
-	defer s.statusMu.Unlock()
 	s.status.State = state
 	s.status.Message = message
 	if state == "completed" {
 		s.status.BytesDone = s.status.BytesTotal
 		s.status.Percent = 100
 	}
+	status := cloneTransferStatus(s.status)
+	hook := s.statusHook
+	s.statusMu.Unlock()
+	notifyTransferStatusHook(hook, status)
 }
 
 func (s *Server) getStatus() transferStatus {
@@ -275,9 +305,12 @@ func (s *Server) getServiceStatus() serviceStatus {
 
 func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.statusMu.Lock()
-	defer s.statusMu.Unlock()
 	update(&s.status)
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
+	status := cloneTransferStatus(s.status)
+	hook := s.statusHook
+	s.statusMu.Unlock()
+	notifyTransferStatusHook(hook, status)
 }
 
 func (s *Server) recordStatus() {
@@ -309,6 +342,31 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 	status.SavedFiles = append([]string(nil), status.SavedFiles...)
 	status.Items = append([]string(nil), status.Items...)
 	return status
+}
+
+func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
+	return TransferStatusSnapshot{
+		State:       status.State,
+		Mode:        status.Mode,
+		Title:       status.Title,
+		Target:      status.Target,
+		Archive:     status.Archive,
+		ArchiveName: status.ArchiveName,
+		Items:       append([]string(nil), status.Items...),
+		Current:     status.Current,
+		Message:     status.Message,
+		BytesDone:   status.BytesDone,
+		BytesTotal:  status.BytesTotal,
+		Percent:     status.Percent,
+		SavedFiles:  append([]string(nil), status.SavedFiles...),
+	}
+}
+
+func notifyTransferStatusHook(hook func(TransferStatusSnapshot), status transferStatus) {
+	if hook == nil {
+		return
+	}
+	hook(snapshotTransferStatus(status))
 }
 
 func (s *Server) signalStopAfterStatusGrace() {
