@@ -882,7 +882,7 @@ function updateAgentStatus() {
       setText('agent-last-error', 'Status unavailable.');
     });
 }
-setInterval(updateAgentStatus, 1500);
+setInterval(updateAgentStatus, 500);
 updateAgentStatus();
 </script>
 </body>

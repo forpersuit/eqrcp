@@ -173,7 +173,7 @@ After the right-click workflow is functional, improve visibility:
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
 - Repeat scan handling. Implemented: completed or stopped one-shot transfer URLs now return `410 Gone` with a clear message instead of starting a confusing second transfer attempt.
 - Completion cleanup. Implemented: when `/qr/status` reaches `completed` or `stopped`, the QR code, copy URL field, stop button, and waiting hint are hidden from the browser QR page.
-- Archive clarity. Implemented: directory and multi-file downloads use timestamped zip names, and the browser QR page lists the original selected items while separately showing the zip archive name.
+- Archive clarity. Implemented: directory and multi-file downloads use timestamped zip names, and the browser QR page lists the original selected items while separately showing the zip archive name. The list title is rendered as a label, not as a transferred item.
 - QR page purpose labels. Implemented: the page identifies share vs receive and shows the target file, archive, or output directory.
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
@@ -216,7 +216,7 @@ Initial local API:
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
-- `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling.
+- `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling. The page polls every 500ms so right-click task replacement and completion states appear quickly.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
@@ -238,7 +238,19 @@ Next priorities:
 3. Validate the dedicated stop-current endpoint and `eqrcp desktop agent-stop-current` command so users can cancel the active transfer without exiting the agent.
 4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
 5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
-6. Defer tray icon, startup registration, notifications, and persistent transfer history until the local agent lifecycle is stable.
+6. Before tray icon, startup registration, notifications, and persistent transfer history, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, and desktop status repair diagnostics.
+
+### Phase 5: Desktop Enhancements
+
+Status: planned.
+
+These features should start after Phase 3 and Phase 4 validation are stable:
+
+- Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
+- Startup registration: optionally start `eqrcp desktop agent` at login, with status and uninstall checks.
+- Notifications: show transfer started, completed, failed, and stopped messages without relying on browser focus.
+- Persistent transfer history: store recent task records across agent restarts, with privacy-aware retention limits.
+- Settings surface: expose output directory, interface, port, and startup choice without requiring manual config editing.
 
 ## Recommended First Implementation
 

@@ -291,6 +291,7 @@ Expected result:
 - The page shows the transfer URL in a read-only input.
 - The page identifies the QR purpose: share file, share directory, share multiple files, or receive files.
 - For directory or multi-file shares, the page lists the original selected items and separately shows the timestamped zip archive name.
+- The included-items label is rendered outside the file list, so it is not counted as a transferred item.
 - The page has a `Copy URL` button.
 - The page has a `Stop transfer` button.
 - The page updates the displayed transfer state without refreshing.
@@ -308,7 +309,7 @@ GOCACHE=/tmp/eqrcp-go-build go test ./server
 Expected result:
 
 - The QR page template includes the image route, stop route, copy button, stop button, and escapes the transfer URL.
-- The QR page template includes the completion cleanup wrapper, transfer item list, and archive note.
+- The QR page template includes the completion cleanup wrapper, transfer item list title, saved-files title, and archive note.
 - The transfer status helper stores and returns waiting, transferring, completed, and stopped states.
 - Send metadata includes mode, title, target, archive metadata, original item names, total bytes, and percent.
 - Receive metadata includes mode, title, target output directory, and percent.
@@ -379,7 +380,7 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
-- `GET /` returns a browser status page with the current task, recent history, stop-current action, stop-agent action, and automatic `/status` polling.
+- `GET /` returns a browser status page with the current task, recent history, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - `POST /tasks` accepts one `share` or `receive` task.
 - `POST /stop-current` stops the active task without stopping the agent.

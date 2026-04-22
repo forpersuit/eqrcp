@@ -100,12 +100,18 @@ var QR = `
             width: 0;
         }
         .saved-files {
-            margin: 14px 0 0;
+            margin: 6px 0 0;
             padding-left: 20px;
         }
         .saved-files li {
             margin: 5px 0;
             overflow-wrap: anywhere;
+        }
+        .list-title {
+            color: #3c4752;
+            font-size: 14px;
+            font-weight: 700;
+            margin-top: 14px;
         }
         .hidden {
             display: none;
@@ -133,7 +139,9 @@ var QR = `
             <div class="progress" aria-hidden="true">
                 <div class="progress-bar" id="transfer-progress"></div>
             </div>
+            <div class="list-title" id="transfer-items-title"></div>
             <ul class="saved-files" id="transfer-items"></ul>
+            <div class="list-title" id="saved-files-title"></div>
             <ul class="saved-files" id="saved-files"></ul>
         </div>
         <div id="qr-area">
@@ -183,7 +191,7 @@ var QR = `
                     document.getElementById('archive-note').textContent = archiveName ? ('Download archive: ' + archiveName) : '';
                     document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
                     document.getElementById('transfer-progress').style.width = percent + '%';
-                    renderList('transfer-items', itemListTitle(data), data.items || []);
+                    renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
                     renderSavedFiles(data.savedFiles || []);
                     if (state === 'completed' || state === 'stopped') {
                         document.getElementById('qr-area').classList.add('hidden');
@@ -210,21 +218,18 @@ var QR = `
             return 'Transfer item';
         }
         function renderSavedFiles(files) {
-            renderList('saved-files', files.length ? 'Saved files' : '', files);
+            renderList('saved-files', 'saved-files-title', files.length ? 'Saved files' : '', files);
         }
-        function renderList(id, title, files) {
-            var list = document.getElementById('saved-files');
-            if (id) {
-                list = document.getElementById(id);
-            }
+        function renderList(id, titleId, title, files) {
+            var list = document.getElementById(id);
+            var titleElement = document.getElementById(titleId);
             list.innerHTML = '';
+            titleElement.textContent = '';
             if (!files.length) {
                 return;
             }
             if (title) {
-                var titleItem = document.createElement('li');
-                titleItem.textContent = title + ':';
-                list.appendChild(titleItem);
+                titleElement.textContent = title + ':';
             }
             files.forEach(function(file) {
                 var item = document.createElement('li');

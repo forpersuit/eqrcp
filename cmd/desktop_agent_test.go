@@ -438,7 +438,7 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"Stop Current",
 		"Stop Agent",
 		"fetch('/status'",
-		"setInterval(updateAgentStatus",
+		"setInterval(updateAgentStatus, 500)",
 		"Open QR Page",
 		"http://127.0.0.1:19000/qr",
 		"receive",
