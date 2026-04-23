@@ -156,6 +156,7 @@ Exit criteria:
 - Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display.
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
+- `desktop status` now also reports desktop agent runtime diagnostics: whether the agent is running, its live version, current task, and whether the running agent should be restarted because it does not match the current executable.
 - Windows manual validation: `desktop status` no longer misreports repaired entries as `needs repair` on localized Windows registry output.
 - `desktop status` now prints a summary count for installed, needs-repair, and not-installed desktop integration entries.
 
@@ -249,6 +250,12 @@ Next priorities:
 6. Validate persisted recent task history on Windows: finish a task, restart `eqrcp desktop agent`, confirm `agent-status` and `http://127.0.0.1:48176/` still show the completed task, then clear it with `agent-history-clear` or the status page button.
 7. Before tray icon, startup registration, and notifications, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, history clearing, and desktop status repair diagnostics.
 8. After the remaining Windows validation closes, move into tray icon evaluation, startup polish, and longer-lived desktop settings work.
+
+Current Windows validation gap after this change:
+
+1. Confirm `desktop status` on Windows shows `Desktop agent runtime: running` after startup and `not running` after `agent-stop`.
+2. Replace `eqrcp.exe` with a newer build while leaving the old agent process alive, then confirm `desktop status` reports `status: needs restart`.
+3. Re-run the large-send and multi-file receive browser checks to verify transfer fields still refresh promptly without manual reload.
 
 ### Phase 5: Desktop Enhancements
 

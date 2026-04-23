@@ -407,6 +407,7 @@ Expected result:
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
 - `eqrcp desktop status` and `eqrcp desktop startup-status` print the running eqrcp version before the status body.
+- `eqrcp desktop status` also reports desktop agent runtime diagnostics, including whether the local agent is running, the live agent version, the active task, and whether the agent should be restarted because it does not match the current executable.
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
@@ -445,6 +446,8 @@ Expected result:
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.
+- The Windows desktop status formatter reports `Desktop agent runtime: not running` when the local agent is offline and recommends `eqrcp desktop agent-start`.
+- The Windows desktop status formatter reports `status: needs restart` when the running agent version differs from the current executable version.
 
 ## Launcher Agent Forwarding
 

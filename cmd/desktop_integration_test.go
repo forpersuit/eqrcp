@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"eqrcp/version"
 )
 
 func TestWindowsExpectedLauncherPath(t *testing.T) {
@@ -67,6 +69,8 @@ func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
 		"- Share with eqrcp (file): installed",
 		"- Send to > Share with eqrcp: installed",
 		"- eqrcp launcher: installed",
+		"- Desktop agent runtime: not running",
+		"eqrcp desktop agent-start",
 		`path: C:\tools\eqrcp-launcher.exe`,
 		"- summary: 6 installed, 0 needs repair, 0 not installed",
 	} {
@@ -172,6 +176,9 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 		queryRegValue: func(key string, name string) (string, error) {
 			return "", errors.New("missing registry value")
 		},
+		agentStatus: func() (desktopAgentResponse, error) {
+			return desktopAgentResponse{}, errors.New("desktop agent is not running: dial tcp 127.0.0.1:48176: connect: connection refused")
+		},
 		sendToPath: func() (string, error) {
 			return sendTo, nil
 		},
@@ -187,6 +194,67 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 			}
 			return []byte(windowsSendToShareScript(exe, launcher)), nil
 		},
+	}
+}
+
+func TestFormatWindowsDesktopIntegrationStatusRunningAgent(t *testing.T) {
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	started := time.Date(2026, 4, 24, 9, 30, 0, 0, time.UTC)
+	env.agentStatus = func() (desktopAgentResponse, error) {
+		return desktopAgentResponse{
+			State:          "busy",
+			Queued:         1,
+			Version:        version.String(),
+			AgentStartedAt: started,
+			Current: &desktopAgentTaskRecord{
+				ID:     7,
+				Action: "share",
+				State:  "running",
+			},
+		}, nil
+	}
+
+	got, err := formatWindowsDesktopIntegrationStatus(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- Desktop agent runtime: running",
+		"  state: busy",
+		"  queued: 1",
+		"  version: " + version.String(),
+		"  started: 2026-04-24T09:30:00Z",
+		"  current task: #7 share running",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status = %q, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	env.agentStatus = func() (desktopAgentResponse, error) {
+		return desktopAgentResponse{
+			State:   "idle",
+			Version: "eqrcp old-build [date: 2026-04-20T00:00:00Z]",
+		}, nil
+	}
+
+	got, err := formatWindowsDesktopIntegrationStatus(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- Desktop agent runtime: running",
+		"  status: needs restart",
+		"  current executable version: " + version.String(),
+		"eqrcp desktop agent-stop",
+		"eqrcp desktop agent-start",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status = %q, want to contain %q", got, want)
+		}
 	}
 }
 

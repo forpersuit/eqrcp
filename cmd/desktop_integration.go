@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"eqrcp/version"
 )
 
 const windowsStartupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
@@ -122,6 +126,7 @@ func windowsDesktopIntegrationStatus() (string, error) {
 		launcherPath:    windowsLauncherPath,
 		queryRegDefault: queryRegDefault,
 		queryRegValue:   queryRegValue,
+		agentStatus:     fetchDesktopAgentStatus,
 		sendToPath:      windowsSendToSharePath,
 		stat:            os.Stat,
 		readFile:        os.ReadFile,
@@ -134,6 +139,7 @@ type windowsDesktopStatusEnv struct {
 	launcherPath    func(string) string
 	queryRegDefault func(string) (string, error)
 	queryRegValue   func(string, string) (string, error)
+	agentStatus     func() (desktopAgentResponse, error)
 	sendToPath      func() (string, error)
 	stat            func(string) (os.FileInfo, error)
 	readFile        func(string) ([]byte, error)
@@ -221,8 +227,48 @@ func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string,
 		},
 		queryRegValue: env.queryRegValue,
 	}))
+	builder.WriteString(formatWindowsDesktopAgentRuntimeStatus(env))
 	builder.WriteString(fmt.Sprintf("- summary: %d installed, %d needs repair, %d not installed\n", summary.installed, summary.needsRepair, summary.notInstalled))
 	return builder.String(), nil
+}
+
+func formatWindowsDesktopAgentRuntimeStatus(env windowsDesktopStatusEnv) string {
+	var builder strings.Builder
+	builder.WriteString("- Desktop agent runtime: ")
+	if env.agentStatus == nil {
+		builder.WriteString("unavailable\n")
+		return builder.String()
+	}
+	status, err := env.agentStatus()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "desktop agent is not running") {
+			builder.WriteString("not running\n")
+			builder.WriteString("  start: run `eqrcp desktop agent-start` or trigger a right-click share/receive action.\n")
+			return builder.String()
+		}
+		builder.WriteString(fmt.Sprintf("unavailable (%v)\n", err))
+		return builder.String()
+	}
+	builder.WriteString("running\n")
+	builder.WriteString(fmt.Sprintf("  state: %s\n", status.State))
+	builder.WriteString(fmt.Sprintf("  queued: %d\n", status.Queued))
+	builder.WriteString(fmt.Sprintf("  version: %s\n", status.Version))
+	if !status.AgentStartedAt.IsZero() {
+		builder.WriteString(fmt.Sprintf("  started: %s\n", status.AgentStartedAt.Format(time.RFC3339)))
+	}
+	currentVersion := version.String()
+	if status.Version != "" && currentVersion != "" && status.Version != currentVersion {
+		builder.WriteString("  status: needs restart\n")
+		builder.WriteString(fmt.Sprintf("  current executable version: %s\n", currentVersion))
+		builder.WriteString("  repair: run `eqrcp desktop agent-stop`, then `eqrcp desktop agent-start`, or trigger a fresh right-click action.\n")
+	}
+	if status.Current != nil {
+		builder.WriteString(fmt.Sprintf("  current task: #%d %s %s\n", status.Current.ID, status.Current.Action, status.Current.State))
+	}
+	if status.LastError != "" {
+		builder.WriteString(fmt.Sprintf("  last error: %s\n", status.LastError))
+	}
+	return builder.String()
 }
 
 type windowsDesktopStatusSummary struct {
