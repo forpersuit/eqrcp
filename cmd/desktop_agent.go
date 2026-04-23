@@ -20,6 +20,7 @@ import (
 	"eqrcp/body"
 	"eqrcp/config"
 	"eqrcp/server"
+	"eqrcp/version"
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 )
@@ -56,11 +57,13 @@ type desktopAgentTaskRecord struct {
 }
 
 type desktopAgentResponse struct {
-	State     string                   `json:"state"`
-	Current   *desktopAgentTaskRecord  `json:"current,omitempty"`
-	Queued    int                      `json:"queued"`
-	History   []desktopAgentTaskRecord `json:"history,omitempty"`
-	LastError string                   `json:"lastError,omitempty"`
+	State          string                   `json:"state"`
+	Current        *desktopAgentTaskRecord  `json:"current,omitempty"`
+	Queued         int                      `json:"queued"`
+	History        []desktopAgentTaskRecord `json:"history,omitempty"`
+	LastError      string                   `json:"lastError,omitempty"`
+	Version        string                   `json:"version"`
+	AgentStartedAt time.Time                `json:"agentStartedAt"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -72,6 +75,7 @@ type desktopAgentNotifier func(title string, message string) error
 type desktopAgent struct {
 	mu          sync.Mutex
 	baseFlags   application.Flags
+	startedAt   time.Time
 	busy        bool
 	current     *desktopAgentTaskRecord
 	queue       []desktopAgentTask
@@ -91,6 +95,7 @@ type desktopAgent struct {
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 	agent := &desktopAgent{
 		baseFlags:   baseFlags,
+		startedAt:   time.Now(),
 		notifier:    notifyDesktop,
 		historyPath: defaultDesktopAgentHistoryPath(),
 		notified:    map[int]map[string]bool{},
@@ -632,10 +637,12 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	response := desktopAgentResponse{
-		State:     "idle",
-		Queued:    len(agent.queue),
-		History:   cloneDesktopAgentRecords(agent.history),
-		LastError: agent.lastError,
+		State:          "idle",
+		Queued:         len(agent.queue),
+		History:        cloneDesktopAgentRecords(agent.history),
+		LastError:      agent.lastError,
+		Version:        version.String(),
+		AgentStartedAt: agent.startedAt,
 	}
 	if agent.busy {
 		response.State = "busy"
@@ -1025,6 +1032,8 @@ func formatDesktopAgentStatus(status desktopAgentResponse) string {
 	builder.WriteString("Desktop agent status\n")
 	builder.WriteString(fmt.Sprintf("- state: %s\n", status.State))
 	builder.WriteString(fmt.Sprintf("- queued: %d\n", status.Queued))
+	builder.WriteString(fmt.Sprintf("- version: %s\n", status.Version))
+	builder.WriteString(fmt.Sprintf("- agent started: %s\n", status.AgentStartedAt.Format(time.RFC3339)))
 	if status.Current != nil {
 		builder.WriteString("- current:\n")
 		writeDesktopAgentRecord(&builder, *status.Current, "  ")
@@ -1168,7 +1177,7 @@ section {
 }
 .summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 .metric {
@@ -1244,6 +1253,14 @@ th {
       <div class="metric">
         <div class="label">Queued</div>
         <div id="agent-queued" class="value">{{.Queued}}</div>
+      </div>
+      <div class="metric">
+        <div class="label">Version</div>
+        <div id="agent-version" class="value">{{.Version}}</div>
+      </div>
+      <div class="metric">
+        <div class="label">Started</div>
+        <div id="agent-started" class="value">{{formatTime .AgentStartedAt}}</div>
       </div>
       <div class="metric">
         <div class="label">Last Error</div>
@@ -1424,6 +1441,8 @@ function renderAgentStatus(status) {
   setText('agent-state', state);
   setStateClass(stateElement, state);
   setText('agent-queued', String(status.queued || 0));
+  setText('agent-version', status.version || '');
+  setText('agent-started', formatAgentTime(status.agentStartedAt));
   setText('agent-last-error', status.lastError || 'None');
   renderCurrent(status.current);
   renderHistory(status.history || []);
