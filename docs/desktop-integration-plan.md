@@ -168,7 +168,7 @@ After the right-click workflow is functional, improve visibility:
 - Dedicated QR window.
 - Copy URL button. Implemented in the browser QR page.
 - Stop server button. Implemented in the browser QR page.
-- Transfer status. Implemented in the browser QR page through `/qr/status` polling.
+- Transfer status. Implemented in the browser QR page through `/qr/events` server-sent events, with `/qr/status` polling as a fallback.
 - Repeat transfer action. Implemented: the agent status page history and the original QR result page offer `Transfer again`; both create a new transfer task from the original action and paths instead of reusing the completed QR server.
 - Transfer service status. Implemented: `/qr/status` returns the current QR transfer state, while `/status` returns service-level state with the current transfer and history.
 - Transfer URL status alias. Implemented: appending `/status` to the active send or receive URL returns the current transfer state.
@@ -182,7 +182,7 @@ After the right-click workflow is functional, improve visibility:
 - Last used output directory. Partially implemented: `eqrcp desktop receive` can now run without a directory and uses the configured output directory or current working directory, while right-click receive still passes the clicked directory explicitly.
 - System tray entry.
 
-The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/status` returns the current transfer state, and `/qr/stop` stops the current transfer.
+The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/events` pushes current transfer state changes, `/qr/status` returns the current transfer state for fallback polling, and `/qr/stop` stops the current transfer.
 
 When the browser QR page is enabled, terminal one-shot transfers keep the server alive briefly after completion so the control page can show `completed`, `stopped`, or `failed` before the process exits. Completed, stopped, and failed one-shot transfer URLs remain terminal; repeat is handled by the long-running desktop agent.
 
@@ -217,7 +217,7 @@ Initial local API:
 - `GET /health` checks whether the agent is alive.
 - `GET /status` returns `idle` or `busy`, the active task, queued task count, and the last task error.
 - `GET /status` returns recent task history with `running`, `completed`, `failed`, or `replaced` states.
-- `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and automatic `/status` polling. The page polls every 500ms so right-click task replacement and completion states appear quickly.
+- `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and `/events` server-sent events for near-real-time updates. `/status` polling remains as a fallback.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
 - Active agent tasks now also receive real server transfer state from the transfer service: `waiting`, `transferring`, `completed`, or `stopped`, including progress percentage, current file, and saved files.
 - Send-side completion is based on response write progress: a transfer is completed only when the expected bytes are written without a write error. If the downloading client cancels before completion, the transfer is recorded as stopped instead of completed.

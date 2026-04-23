@@ -195,6 +195,36 @@ var QR = `
                 });
         }
         {{end}}
+        function renderStatus(data) {
+            var state = data.state || 'waiting';
+            var message = data.message || '';
+            var percent = data.percent || 0;
+            var title = data.title || 'eqrcp transfer ready';
+            var target = data.target || '';
+            var current = data.current || '';
+            var archiveName = data.archiveName || '';
+            document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
+            document.getElementById('transfer-message').textContent = message;
+            document.getElementById('transfer-title').textContent = title;
+            document.getElementById('transfer-target').textContent = targetText(data, target);
+            document.getElementById('transfer-current').textContent = current && !archiveName ? ('Current: ' + current) : '';
+            document.getElementById('archive-note').textContent = archiveName ? ('Download archive: ' + archiveName) : '';
+            document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
+            document.getElementById('transfer-progress').style.width = percent + '%';
+            renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
+            renderSavedFiles(data.savedFiles || []);
+            if (state === 'completed' || state === 'stopped' || state === 'failed') {
+                document.getElementById('qr-area').classList.add('hidden');
+                var repeatArea = document.getElementById('repeat-area');
+                if (repeatArea) {
+                    repeatArea.classList.remove('hidden');
+                }
+                clearInterval(statusTimer);
+                if (statusEvents) {
+                    statusEvents.close();
+                }
+            }
+        }
         function updateStatus() {
             fetch('{{.StatusRoute}}', { cache: 'no-store' })
                 .then(function(response) {
@@ -203,33 +233,7 @@ var QR = `
                     }
                     return response.json();
                 })
-                .then(function(data) {
-                    var state = data.state || 'waiting';
-                    var message = data.message || '';
-                    var percent = data.percent || 0;
-                    var title = data.title || 'eqrcp transfer ready';
-                    var target = data.target || '';
-                    var current = data.current || '';
-                    var archiveName = data.archiveName || '';
-                    document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
-                    document.getElementById('transfer-message').textContent = message;
-                    document.getElementById('transfer-title').textContent = title;
-                    document.getElementById('transfer-target').textContent = targetText(data, target);
-                    document.getElementById('transfer-current').textContent = current && !archiveName ? ('Current: ' + current) : '';
-                    document.getElementById('archive-note').textContent = archiveName ? ('Download archive: ' + archiveName) : '';
-                    document.getElementById('transfer-bytes').textContent = progressText(data.bytesDone || 0, data.bytesTotal || 0, percent);
-                    document.getElementById('transfer-progress').style.width = percent + '%';
-                    renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
-                    renderSavedFiles(data.savedFiles || []);
-                    if (state === 'completed' || state === 'stopped' || state === 'failed') {
-                        document.getElementById('qr-area').classList.add('hidden');
-                        var repeatArea = document.getElementById('repeat-area');
-                        if (repeatArea) {
-                            repeatArea.classList.remove('hidden');
-                        }
-                        clearInterval(statusTimer);
-                    }
-                })
+                .then(renderStatus)
                 .catch(function() {
                     document.getElementById('transfer-message').textContent = 'Status unavailable.';
                 });
@@ -286,6 +290,13 @@ var QR = `
             return (index === 0 ? size : size.toFixed(1)) + ' ' + units[index];
         }
         var statusTimer = setInterval(updateStatus, 1500);
+        var statusEvents = null;
+        if (window.EventSource) {
+            statusEvents = new EventSource('{{.EventsRoute}}');
+            statusEvents.onmessage = function(event) {
+                renderStatus(JSON.parse(event.data));
+            };
+        }
         updateStatus();
     </script>
 </body>

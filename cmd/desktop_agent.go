@@ -84,6 +84,7 @@ type desktopAgent struct {
 	notifier    desktopAgentNotifier
 	historyPath string
 	notified    map[int]map[string]bool
+	revision    int64
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
@@ -106,6 +107,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/", agent.handlePage)
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
+	mux.HandleFunc("/events", agent.handleEvents)
 	mux.HandleFunc("/tasks", agent.handleTasks)
 	mux.HandleFunc("/tasks/", agent.handleTaskAction)
 	mux.HandleFunc("/history", agent.handleHistory)
@@ -144,6 +146,62 @@ func (agent *desktopAgent) handleStatus(w http.ResponseWriter, r *http.Request) 
 	agent.writeStatus(w)
 }
 
+func (agent *desktopAgent) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	lastRevision := int64(-1)
+	send := func() bool {
+		status, revision := agent.snapshotWithRevision()
+		if revision == lastRevision {
+			return true
+		}
+		lastRevision = revision
+		if _, err := fmt.Fprint(w, "data: "); err != nil {
+			return false
+		}
+		if err := json.NewEncoder(w).Encode(status); err != nil {
+			return false
+		}
+		if _, err := fmt.Fprint(w, "\n"); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !send() {
+		return
+	}
+	events := time.NewTicker(250 * time.Millisecond)
+	defer events.Stop()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-events.C:
+			if !send() {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
 func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -170,6 +228,7 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 		agent.replaceActiveLocked("replaced")
 	}
 	agent.startNextLocked()
+	agent.revision++
 	agent.mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
@@ -252,6 +311,7 @@ func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request
 		agent.replaceActiveLocked("replaced")
 	}
 	shutdown := agent.shutdown
+	agent.revision++
 	agent.mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
@@ -287,6 +347,7 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 	agent.current = nil
 	agent.activeStop = nil
 	agent.startNextLocked()
+	agent.revision++
 }
 
 func (agent *desktopAgent) stopCurrent(state string) bool {
@@ -296,6 +357,7 @@ func (agent *desktopAgent) stopCurrent(state string) bool {
 		return false
 	}
 	agent.replaceActiveLocked(state)
+	agent.revision++
 	return true
 }
 
@@ -331,6 +393,7 @@ func (agent *desktopAgent) repeatTask(id int) error {
 		agent.replaceActiveLocked("replaced")
 	}
 	agent.startNextLocked()
+	agent.revision++
 	return nil
 }
 
@@ -394,6 +457,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.BytesTotal = status.BytesTotal
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
 	agent.notifyTransferStatusLocked(*agent.current)
+	agent.revision++
 }
 
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
@@ -521,6 +585,7 @@ func (agent *desktopAgent) setCurrentPageURL(url string) {
 	defer agent.mu.Unlock()
 	if agent.current != nil && agent.current.State == "running" {
 		agent.current.PageURL = url
+		agent.revision++
 	}
 }
 
@@ -531,6 +596,11 @@ func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
 }
 
 func (agent *desktopAgent) snapshot() desktopAgentResponse {
+	response, _ := agent.snapshotWithRevision()
+	return response
+}
+
+func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	response := desktopAgentResponse{
@@ -547,7 +617,7 @@ func (agent *desktopAgent) snapshot() desktopAgentResponse {
 			response.Current = &current
 		}
 	}
-	return response
+	return response, agent.revision
 }
 
 func (agent *desktopAgent) addHistoryLocked(record desktopAgentTaskRecord) {
@@ -579,6 +649,7 @@ func (agent *desktopAgent) loadHistory() error {
 	defer agent.mu.Unlock()
 	agent.history = cloneDesktopAgentRecords(history)
 	agent.nextID = nextID
+	agent.revision++
 	return nil
 }
 
@@ -587,6 +658,7 @@ func (agent *desktopAgent) clearHistory() error {
 	agent.history = nil
 	agent.lastError = ""
 	historyPath := agent.historyPath
+	agent.revision++
 	agent.mu.Unlock()
 	return saveDesktopAgentHistory(historyPath, nil)
 }
@@ -1318,6 +1390,16 @@ function transferText(record) {
   }
   return text;
 }
+function renderAgentStatus(status) {
+  var state = status.state || 'idle';
+  var stateElement = document.getElementById('agent-state');
+  setText('agent-state', state);
+  setStateClass(stateElement, state);
+  setText('agent-queued', String(status.queued || 0));
+  setText('agent-last-error', status.lastError || 'None');
+  renderCurrent(status.current);
+  renderHistory(status.history || []);
+}
 function updateAgentStatus() {
   fetch('/status', { cache: 'no-store' })
     .then(function(response) {
@@ -1326,21 +1408,23 @@ function updateAgentStatus() {
       }
       return response.json();
     })
-    .then(function(status) {
-      var state = status.state || 'idle';
-      var stateElement = document.getElementById('agent-state');
-      setText('agent-state', state);
-      setStateClass(stateElement, state);
-      setText('agent-queued', String(status.queued || 0));
-      setText('agent-last-error', status.lastError || 'None');
-      renderCurrent(status.current);
-      renderHistory(status.history || []);
-    })
+    .then(renderAgentStatus)
     .catch(function() {
       setText('agent-last-error', 'Status unavailable.');
     });
 }
-setInterval(updateAgentStatus, 500);
+if (window.EventSource) {
+  var agentEvents = new EventSource('/events');
+  agentEvents.onmessage = function(event) {
+    renderAgentStatus(JSON.parse(event.data));
+  };
+  agentEvents.onerror = function() {
+    setText('agent-last-error', 'Status stream unavailable; using refresh fallback.');
+  };
+  setInterval(updateAgentStatus, 5000);
+} else {
+  setInterval(updateAgentStatus, 500);
+}
 document.getElementById('clear-history').addEventListener('click', function() {
   fetch('/history', { method: 'DELETE' })
     .then(function(response) {

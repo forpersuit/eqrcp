@@ -52,6 +52,7 @@ type Server struct {
 	statusGrace time.Duration
 	statusHook  func(TransferStatusSnapshot)
 	repeatRoute string
+	statusSeq   int64
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -170,6 +171,7 @@ func (s *Server) DisplayQR(url string) error {
 		pagePath   = "/qr"
 		imagePath  = "/qr/image"
 		statusPath = "/qr/status"
+		eventsPath = "/qr/events"
 		stopPath   = "/qr/stop"
 	)
 	qrImg, err := qr.RenderImage(url)
@@ -196,6 +198,9 @@ func (s *Server) DisplayQR(url string) error {
 		s.mux.HandleFunc(strings.TrimRight(transferURL.Path, "/")+"/status", statusHandler)
 	}
 	s.mux.HandleFunc(statusPath, statusHandler)
+	s.mux.HandleFunc(eventsPath, func(w http.ResponseWriter, r *http.Request) {
+		s.handleStatusEvents(w, r)
+	})
 	s.mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -224,12 +229,14 @@ func (s *Server) DisplayQR(url string) error {
 			URL          string
 			QRImageRoute string
 			StatusRoute  string
+			EventsRoute  string
 			StopRoute    string
 			RepeatRoute  string
 		}{
 			URL:          url,
 			QRImageRoute: imagePath,
 			StatusRoute:  statusPath,
+			EventsRoute:  eventsPath,
 			StopRoute:    stopPath,
 			RepeatRoute:  repeatRoute,
 		}
@@ -273,6 +280,7 @@ func (s *Server) setStatus(state string, message string) {
 		s.status.BytesDone = s.status.BytesTotal
 		s.status.Percent = 100
 	}
+	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
 	s.statusMu.Unlock()
@@ -283,6 +291,12 @@ func (s *Server) getStatus() transferStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
 	return cloneTransferStatus(s.status)
+}
+
+func (s *Server) getStatusWithSeq() (transferStatus, int64) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	return cloneTransferStatus(s.status), s.statusSeq
 }
 
 func (s *Server) terminalStatus() (transferStatus, bool) {
@@ -311,6 +325,62 @@ func interruptedTransferError(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
+func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	lastSeq := int64(-1)
+	send := func() bool {
+		status, seq := s.getStatusWithSeq()
+		if seq == lastSeq {
+			return true
+		}
+		lastSeq = seq
+		if _, err := fmt.Fprint(w, "data: "); err != nil {
+			return false
+		}
+		if err := json.NewEncoder(w).Encode(status); err != nil {
+			return false
+		}
+		if _, err := fmt.Fprint(w, "\n"); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	if !send() {
+		return
+	}
+	events := time.NewTicker(250 * time.Millisecond)
+	defer events.Stop()
+	heartbeat := time.NewTicker(15 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-events.C:
+			if !send() {
+				return
+			}
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
 func (s *Server) getServiceStatus() serviceStatus {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
@@ -325,6 +395,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.statusMu.Lock()
 	update(&s.status)
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
+	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
 	s.statusMu.Unlock()

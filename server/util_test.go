@@ -61,12 +61,14 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		URL          string
 		QRImageRoute string
 		StatusRoute  string
+		EventsRoute  string
 		StopRoute    string
 		RepeatRoute  string
 	}{
 		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
+		EventsRoute:  "/qr/events",
 		StopRoute:    "/qr/stop",
 		RepeatRoute:  "http://127.0.0.1:48176/tasks/7/repeat",
 	}
@@ -82,6 +84,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`Transfer again`,
 		`http:\/\/127.0.0.1:48176\/tasks\/7\/repeat`,
 		`fetch('\/qr\/status'`,
+		`new EventSource('\/qr\/events')`,
 		"Copy URL",
 		"Stop transfer",
 		`id="transfer-progress"`,
@@ -109,12 +112,14 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 		URL          string
 		QRImageRoute string
 		StatusRoute  string
+		EventsRoute  string
 		StopRoute    string
 		RepeatRoute  string
 	}{
 		URL:          "http://127.0.0.1:8080/send/a",
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
+		EventsRoute:  "/qr/events",
 		StopRoute:    "/qr/stop",
 	}
 

@@ -289,6 +289,7 @@ Expected result:
 - `/qr` serves an HTML control page.
 - `/qr/image` serves the QR code image.
 - `/qr/status` serves the current transfer state as JSON.
+- `/qr/events` streams the current transfer state with server-sent events so the QR page can update without waiting for a polling interval.
 - `/status` serves service-level JSON with `current` transfer state and transfer `history`.
 - Appending `/status` to the active transfer URL, such as `/send/<path>/status` or `/receive/<path>/status`, serves the current transfer state as JSON.
 - Reopening a completed or stopped one-shot transfer URL returns `410 Gone` with a clear completion or stopped message.
@@ -386,7 +387,8 @@ Expected result:
 - `GET /health` returns success when the agent is alive.
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
-- `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and automatic `/status` polling at a short interval.
+- `GET /events` streams agent status with server-sent events.
+- `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and EventSource-based status updates with `/status` polling fallback.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
 - Send transfers are marked completed only after the expected bytes are written without a response write error. Interrupted downloads are marked stopped.
@@ -432,7 +434,7 @@ Expected result:
 - The agent trims persisted recent task history to the configured limit and keeps new task IDs monotonic.
 - The history-clear endpoint and command clear both in-memory and persisted history.
 - The agent status formatter renders current task details and recent history.
-- The agent status page renders the current task, recent history, local clear/stop actions, and automatic status polling.
+- The agent status page renders the current task, recent history, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.
