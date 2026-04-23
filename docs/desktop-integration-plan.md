@@ -226,9 +226,11 @@ Initial local API:
 - `DELETE /history` clears the in-memory and persisted recent task history.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
+- `eqrcp desktop agent-start` now exists as an explicit alias for `eqrcp desktop agent`, so users can start the long-lived agent with a clearer command name.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
+- The browser agent page now explains the task lifecycle directly: `Current` keeps the active task visible while its QR service still exists, and the task moves to `History` only after that service exits and the task is fully finalized.
 - `eqrcp desktop agent-history-clear` clears recent desktop agent task history.
 - `eqrcp desktop agent-open` opens the browser-based agent status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the current task QR page when one is active.
@@ -246,6 +248,7 @@ Next priorities:
 5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
 6. Validate persisted recent task history on Windows: finish a task, restart `eqrcp desktop agent`, confirm `agent-status` and `http://127.0.0.1:48176/` still show the completed task, then clear it with `agent-history-clear` or the status page button.
 7. Before tray icon, startup registration, and notifications, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, history clearing, and desktop status repair diagnostics.
+8. After the remaining Windows validation closes, move into tray icon evaluation, startup polish, and longer-lived desktop settings work.
 
 ### Phase 5: Desktop Enhancements
 

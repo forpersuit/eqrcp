@@ -822,23 +822,32 @@ var desktopAgentCmd = &cobra.Command{
 	Use:   "agent",
 	Short: "Run the desktop integration agent",
 	Long:  "Run a local desktop integration agent that accepts right-click share and receive tasks.",
-	RunE: func(command *cobra.Command, args []string) error {
-		agent := newDesktopAgent(app.Flags)
-		if err := agent.loadHistory(); err != nil {
-			agent.lastError = fmt.Sprintf("unable to load desktop agent history: %v", err)
-		}
-		server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
-		agent.shutdown = func() {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			_ = server.Shutdown(ctx)
-		}
-		command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return err
-		}
-		return nil
-	},
+	RunE:  runDesktopAgent,
+}
+
+var desktopAgentStartCmd = &cobra.Command{
+	Use:   "agent-start",
+	Short: "Start the desktop integration agent",
+	Long:  "Start the local desktop integration agent that accepts right-click share and receive tasks.",
+	RunE:  runDesktopAgent,
+}
+
+func runDesktopAgent(command *cobra.Command, args []string) error {
+	agent := newDesktopAgent(app.Flags)
+	if err := agent.loadHistory(); err != nil {
+		agent.lastError = fmt.Sprintf("unable to load desktop agent history: %v", err)
+	}
+	server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
+	agent.shutdown = func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	}
+	command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 var desktopAgentHistoryClearCmd = &cobra.Command{
@@ -1274,10 +1283,11 @@ th {
     </div>
   </section>
 
-  <section>
-    <h2>Current</h2>
-    <div id="agent-current">
-    {{if .Current}}
+	  <section>
+	    <h2>Current</h2>
+	    <p class="empty">Current keeps the active task visible while its QR service is still running, even after the transfer already reached a final state.</p>
+	    <div id="agent-current">
+	    {{if .Current}}
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
       <tbody>
@@ -1298,9 +1308,10 @@ th {
     </div>
   </section>
 
-  <section>
-    <h2>History</h2>
-    <div id="agent-history">
+	  <section>
+	    <h2>History</h2>
+	    <p class="empty">History contains finalized tasks after the QR service has exited and the task is fully closed out.</p>
+	    <div id="agent-history">
     {{if .History}}
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>

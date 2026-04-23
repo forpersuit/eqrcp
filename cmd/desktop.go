@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"eqrcp/version"
 	"github.com/spf13/cobra"
 )
 
@@ -76,7 +77,7 @@ var desktopStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(command.OutOrStdout(), status)
+		fmt.Fprintf(command.OutOrStdout(), "%s\n%s", version.String(), status)
 		return nil
 	},
 }
@@ -116,7 +117,7 @@ var desktopStartupStatusCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(command.OutOrStdout(), status)
+		fmt.Fprintf(command.OutOrStdout(), "%s\n%s", version.String(), status)
 		return nil
 	},
 }

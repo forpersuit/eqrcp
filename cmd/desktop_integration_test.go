@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -75,6 +76,32 @@ func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
 	}
 	if strings.Contains(got, ": needs repair") {
 		t.Fatalf("status = %q, should not contain needs-repair entries", got)
+	}
+}
+
+func TestDesktopStatusCommandIncludesVersion(t *testing.T) {
+	var out bytes.Buffer
+	desktopStatusCmd.SetOut(&out)
+	desktopStatusCmd.SetErr(&out)
+
+	if err := desktopStatusCmd.RunE(desktopStatusCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "eqrcp ") {
+		t.Fatalf("desktop status output = %q, want version header", out.String())
+	}
+}
+
+func TestDesktopStartupStatusCommandIncludesVersion(t *testing.T) {
+	var out bytes.Buffer
+	desktopStartupStatusCmd.SetOut(&out)
+	desktopStartupStatusCmd.SetErr(&out)
+
+	if err := desktopStartupStatusCmd.RunE(desktopStartupStatusCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "eqrcp ") {
+		t.Fatalf("desktop startup-status output = %q, want version header", out.String())
 	}
 }
 

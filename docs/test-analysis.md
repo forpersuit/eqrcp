@@ -402,9 +402,11 @@ Expected result:
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
+- `eqrcp desktop agent-start` is available as an explicit alias for `eqrcp desktop agent`.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
+- `eqrcp desktop status` and `eqrcp desktop startup-status` print the running eqrcp version before the status body.
 - `eqrcp desktop agent-open` opens the browser status page when the agent is running.
 - `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
@@ -435,7 +437,7 @@ Expected result:
 - The agent trims persisted recent task history to the configured limit and keeps new task IDs monotonic.
 - The history-clear endpoint and command clear both in-memory and persisted history.
 - The agent status formatter renders current task details and recent history.
-- The agent status page renders the current task, recent history, local clear/stop actions, EventSource updates, and fallback status polling.
+- The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.
