@@ -137,6 +137,7 @@ var QR = `
         <div class="status" aria-live="polite">
             <strong id="transfer-state">Waiting</strong>
             <span id="transfer-message">Waiting for a device to connect.</span>
+            <div class="meta" id="transfer-version">Version: {{.Version}}</div>
             <div class="meta" id="transfer-current"></div>
             <div class="meta" id="archive-note"></div>
             <div class="meta" id="transfer-bytes"></div>
@@ -205,6 +206,7 @@ var QR = `
             var archiveName = data.archiveName || '';
             document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
             document.getElementById('transfer-message').textContent = message;
+            document.getElementById('transfer-version').textContent = data.version ? ('Version: ' + data.version) : 'Version: {{.Version}}';
             document.getElementById('transfer-title').textContent = title;
             document.getElementById('transfer-target').textContent = targetText(data, target);
             document.getElementById('transfer-current').textContent = current && !archiveName ? ('Current: ' + current) : '';

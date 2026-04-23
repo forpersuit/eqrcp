@@ -489,6 +489,11 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.BytesDone = status.BytesDone
 	agent.current.BytesTotal = status.BytesTotal
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
+	if isTerminalDesktopTransferState(status.State) && agent.current.State == "running" {
+		agent.current.State = status.State
+		finishedAt := time.Now()
+		agent.current.FinishedAt = &finishedAt
+	}
 	agent.notifyTransferStatusLocked(*agent.current)
 	agent.touchLocked()
 }

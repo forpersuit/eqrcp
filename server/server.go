@@ -27,6 +27,7 @@ import (
 	"eqrcp/config"
 	"eqrcp/pages"
 	"eqrcp/util"
+	"eqrcp/version"
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
@@ -73,6 +74,7 @@ type transferStatus struct {
 	BytesTotal  int64    `json:"bytesTotal"`
 	Percent     int      `json:"percent"`
 	SavedFiles  []string `json:"savedFiles,omitempty"`
+	Version     string   `json:"version,omitempty"`
 }
 
 type transferStatusRecord struct {
@@ -96,6 +98,7 @@ type serviceStatus struct {
 	State   string                 `json:"state"`
 	Current transferStatus         `json:"current"`
 	History []transferStatusRecord `json:"history,omitempty"`
+	Version string                 `json:"version"`
 }
 
 type TransferStatusSnapshot struct {
@@ -112,6 +115,7 @@ type TransferStatusSnapshot struct {
 	BytesTotal  int64
 	Percent     int
 	SavedFiles  []string
+	Version     string
 }
 
 // ReceiveTo sets the output directory
@@ -233,6 +237,7 @@ func (s *Server) DisplayQR(url string) error {
 			EventsRoute  string
 			StopRoute    string
 			RepeatRoute  string
+			Version      string
 		}{
 			URL:          url,
 			QRImageRoute: imagePath,
@@ -240,6 +245,7 @@ func (s *Server) DisplayQR(url string) error {
 			EventsRoute:  eventsPath,
 			StopRoute:    stopPath,
 			RepeatRoute:  repeatRoute,
+			Version:      version.String(),
 		}
 		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -415,6 +421,7 @@ func (s *Server) getServiceStatus() serviceStatus {
 		State:   s.status.State,
 		Current: cloneTransferStatus(s.status),
 		History: append([]transferStatusRecord(nil), s.history...),
+		Version: version.String(),
 	}
 }
 
@@ -458,6 +465,7 @@ func (s *Server) recordStatus() {
 func cloneTransferStatus(status transferStatus) transferStatus {
 	status.SavedFiles = append([]string(nil), status.SavedFiles...)
 	status.Items = append([]string(nil), status.Items...)
+	status.Version = version.String()
 	return status
 }
 
@@ -476,6 +484,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		BytesTotal:  status.BytesTotal,
 		Percent:     status.Percent,
 		SavedFiles:  append([]string(nil), status.SavedFiles...),
+		Version:     status.Version,
 	}
 }
 

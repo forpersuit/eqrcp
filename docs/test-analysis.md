@@ -291,6 +291,7 @@ Expected result:
 - `/qr/status` serves the current transfer state as JSON.
 - `/qr/events` streams the current transfer state with server-sent events so the QR page can update without waiting for a polling interval.
 - `/status` serves service-level JSON with `current` transfer state and transfer `history`.
+- Browser status pages and status JSON include the running eqrcp version so stale desktop agents can be identified during manual testing.
 - Appending `/status` to the active transfer URL, such as `/send/<path>/status` or `/receive/<path>/status`, serves the current transfer state as JSON.
 - Reopening a completed or stopped one-shot transfer URL returns `410 Gone` with a clear completion or stopped message.
 - The page shows the transfer URL in a read-only input.

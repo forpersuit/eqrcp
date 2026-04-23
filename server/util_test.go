@@ -64,6 +64,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		EventsRoute  string
 		StopRoute    string
 		RepeatRoute  string
+		Version      string
 	}{
 		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
 		QRImageRoute: "/qr/image",
@@ -71,6 +72,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		EventsRoute:  "/qr/events",
 		StopRoute:    "/qr/stop",
 		RepeatRoute:  "http://127.0.0.1:48176/tasks/7/repeat",
+		Version:      "eqrcp test [date: now]",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -92,6 +94,8 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`id="transfer-items"`,
 		`id="saved-files-title"`,
 		`id="saved-files"`,
+		`id="transfer-version"`,
+		`Version: eqrcp test [date: now]`,
 		`classList.add('hidden')`,
 		`Download archive: `,
 		`renderList('transfer-items', 'transfer-items-title'`,
@@ -115,12 +119,14 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 		EventsRoute  string
 		StopRoute    string
 		RepeatRoute  string
+		Version      string
 	}{
 		URL:          "http://127.0.0.1:8080/send/a",
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
 		EventsRoute:  "/qr/events",
 		StopRoute:    "/qr/stop",
+		Version:      "eqrcp test [date: now]",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -162,6 +168,9 @@ func TestDisplayQRServiceStatus(t *testing.T) {
 	if status.State != "waiting" || status.Current.State != "waiting" {
 		t.Fatalf("/status = %#v, want waiting service and current state", status)
 	}
+	if status.Version == "" || status.Current.Version == "" {
+		t.Fatalf("/status = %#v, want service and current version", status)
+	}
 	if len(status.History) != 1 || status.History[0].State != "waiting" {
 		t.Fatalf("/status history = %#v, want waiting history record", status.History)
 	}
@@ -193,6 +202,9 @@ func TestDisplayQRCurrentStatus(t *testing.T) {
 	}
 	if status.State != "waiting" {
 		t.Fatalf("/qr/status = %#v, want waiting state", status)
+	}
+	if status.Version == "" {
+		t.Fatalf("/qr/status = %#v, want version", status)
 	}
 	if strings.Contains(response.Body.String(), `"history"`) {
 		t.Fatalf("/qr/status body = %q, should not include history", response.Body.String())

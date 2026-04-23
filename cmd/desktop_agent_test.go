@@ -156,7 +156,7 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 		SavedFiles: []string{"a.txt", "b.txt"},
 	})
 	status = agent.snapshot()
-	if len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" {
+	if status.Current.State != "completed" || len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" {
 		t.Fatalf("Current = %#v, want saved files and completed transfer", status.Current)
 	}
 	assertNotificationContains(t, notifications, "eqrcp transfer completed")
@@ -180,6 +180,10 @@ func TestDesktopAgentRecordsStoppedTransferState(t *testing.T) {
 		State:   "stopped",
 		Message: "Transfer interrupted before completion.",
 	})
+	current := agent.snapshot().Current
+	if current == nil || current.State != "stopped" || current.FinishedAt == nil {
+		t.Fatalf("Current = %#v, want stopped current task before server exits", current)
+	}
 	agent.execute(desktopAgentTask{Action: "share", Paths: []string{"a.txt"}}, 8)
 	status := agent.snapshot()
 	if len(status.History) != 1 || status.History[0].State != "stopped" || status.History[0].TransferState != "stopped" {
@@ -205,6 +209,10 @@ func TestDesktopAgentRecordsFailedTransferState(t *testing.T) {
 		State:   "failed",
 		Message: "Upload failed.",
 	})
+	current := agent.snapshot().Current
+	if current == nil || current.State != "failed" || current.FinishedAt == nil {
+		t.Fatalf("Current = %#v, want failed current task before server exits", current)
+	}
 	agent.execute(desktopAgentTask{Action: "receive", Paths: []string{"/tmp/inbox"}}, 9)
 	status := agent.snapshot()
 	if len(status.History) != 1 || status.History[0].State != "failed" || status.History[0].TransferState != "failed" {
