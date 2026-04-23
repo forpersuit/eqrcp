@@ -162,6 +162,56 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 	assertNotificationContains(t, notifications, "eqrcp transfer completed")
 }
 
+func TestDesktopAgentRecordsStoppedTransferState(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.runner = func(task desktopAgentTask) error {
+		return nil
+	}
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        8,
+		Action:    "share",
+		Paths:     []string{"a.txt"},
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeTransferStatus(8, server.TransferStatusSnapshot{
+		State:   "stopped",
+		Message: "Transfer interrupted before completion.",
+	})
+	agent.execute(desktopAgentTask{Action: "share", Paths: []string{"a.txt"}}, 8)
+	status := agent.snapshot()
+	if len(status.History) != 1 || status.History[0].State != "stopped" || status.History[0].TransferState != "stopped" {
+		t.Fatalf("History = %#v, want stopped transfer record", status.History)
+	}
+}
+
+func TestDesktopAgentRecordsFailedTransferState(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.runner = func(task desktopAgentTask) error {
+		return nil
+	}
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        9,
+		Action:    "receive",
+		Paths:     []string{"/tmp/inbox"},
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeTransferStatus(9, server.TransferStatusSnapshot{
+		State:   "failed",
+		Message: "Upload failed.",
+	})
+	agent.execute(desktopAgentTask{Action: "receive", Paths: []string{"/tmp/inbox"}}, 9)
+	status := agent.snapshot()
+	if len(status.History) != 1 || status.History[0].State != "failed" || status.History[0].TransferState != "failed" {
+		t.Fatalf("History = %#v, want failed transfer record", status.History)
+	}
+}
+
 func TestDesktopAgentTransferNotificationsAreDeduped(t *testing.T) {
 	notifications := make(chan string, 4)
 	agent := newDesktopAgent(application.Flags{})

@@ -336,7 +336,8 @@ Expected result:
 - The `/status` response contains `current` and `history`.
 - The transfer URL `/status` alias contains the current transfer state only and does not include service history.
 - After a successful download, the status response contains `completed`.
-- After a successful download, repeat is available from the desktop agent browser page history. It posts to `/tasks/<id>/repeat` and starts a new transfer task instead of resetting the completed QR server.
+- After a terminal transfer, repeat is available from both the desktop agent browser page history and the original QR result page. It posts to `/tasks/<id>/repeat` and starts a new transfer task instead of resetting the completed QR server.
+- Interrupted transfers are recorded as `stopped`; server-side upload, disk, or rendering errors are recorded as `failed`; both states hide the original QR code.
 - After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
 - After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
 - Directory and multi-file downloads use timestamped zip file names, such as `eqrcp-multiple-files-YYYYMMDD-HHMMSS.zip`.

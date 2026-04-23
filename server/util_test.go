@@ -62,11 +62,13 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		QRImageRoute string
 		StatusRoute  string
 		StopRoute    string
+		RepeatRoute  string
 	}{
 		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
 		StopRoute:    "/qr/stop",
+		RepeatRoute:  "http://127.0.0.1:48176/tasks/7/repeat",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -77,6 +79,8 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`src="/qr/image"`,
 		`id="qr-area"`,
 		`action="/qr/stop"`,
+		`Transfer again`,
+		`http:\/\/127.0.0.1:48176\/tasks\/7\/repeat`,
 		`fetch('\/qr\/status'`,
 		"Copy URL",
 		"Stop transfer",
@@ -96,6 +100,29 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Fatalf("QR page = %q, want to contain %q", html, want)
 		}
+	}
+}
+
+func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
+	var out bytes.Buffer
+	data := struct {
+		URL          string
+		QRImageRoute string
+		StatusRoute  string
+		StopRoute    string
+		RepeatRoute  string
+	}{
+		URL:          "http://127.0.0.1:8080/send/a",
+		QRImageRoute: "/qr/image",
+		StatusRoute:  "/qr/status",
+		StopRoute:    "/qr/stop",
+	}
+
+	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
+		t.Fatalf("serveTemplate() error = %v", err)
+	}
+	if strings.Contains(out.String(), "Transfer again") {
+		t.Fatalf("QR page = %q, want no repeat action without route", out.String())
 	}
 }
 

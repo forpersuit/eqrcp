@@ -177,6 +177,12 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (agent *desktopAgent) handleTaskAction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -267,6 +273,8 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 				agent.current.State = "failed"
 				agent.current.Error = err.Error()
 				agent.lastError = err.Error()
+			} else if isTerminalDesktopTransferState(agent.current.TransferState) {
+				agent.current.State = agent.current.TransferState
 			} else {
 				agent.current.State = "completed"
 			}
@@ -324,6 +332,10 @@ func (agent *desktopAgent) repeatTask(id int) error {
 	}
 	agent.startNextLocked()
 	return nil
+}
+
+func isTerminalDesktopTransferState(state string) bool {
+	return state == "completed" || state == "stopped" || state == "failed"
 }
 
 func (agent *desktopAgent) replaceActiveLocked(state string) {
@@ -401,7 +413,7 @@ func (agent *desktopAgent) notifyTransferStatusLocked(record desktopAgentTaskRec
 	}
 	key := record.TransferState
 	switch key {
-	case "transferring", "completed", "stopped":
+	case "transferring", "completed", "stopped", "failed":
 	default:
 		return
 	}
@@ -431,6 +443,9 @@ func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
 		}
 		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
 	case "failed":
+		if record.TransferState == "failed" {
+			return "", ""
+		}
 		if record.Error != "" {
 			return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, record.Error)
 		}
@@ -466,6 +481,8 @@ func desktopAgentTransferNotification(record desktopAgentTaskRecord) (string, st
 		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
 	case "stopped":
 		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
+	case "failed":
+		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
 	default:
 		return "", ""
 	}
@@ -642,6 +659,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)
 	})
+	srv.SetRepeatRoute(desktopAgentBaseURL + "/tasks/" + strconv.Itoa(taskID) + "/repeat")
 	agent.setActiveStop(srv.Shutdown)
 	agent.setCurrentPageURL(srv.BaseURL + "/qr")
 	switch task.Action {

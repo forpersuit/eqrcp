@@ -65,6 +65,10 @@ var QR = `
         .stop {
             background: #a52834;
         }
+        .repeat {
+            background: #155f9f;
+            margin-top: 12px;
+        }
         .hint {
             color: #59636e;
             font-size: 14px;
@@ -155,6 +159,12 @@ var QR = `
             </form>
             <p class="hint">This page can stay open while the transfer is waiting.</p>
         </div>
+        {{if .RepeatRoute}}
+        <div id="repeat-area" class="hidden">
+            <button class="repeat" type="button" onclick="repeatTransfer()">Transfer again</button>
+            <p class="hint">Start a new transfer with the same source from the desktop agent.</p>
+        </div>
+        {{end}}
     </main>
     <script>
         function copyURL() {
@@ -167,6 +177,24 @@ var QR = `
             }
             document.execCommand('copy');
         }
+        {{if .RepeatRoute}}
+        function repeatTransfer() {
+            fetch('{{.RepeatRoute}}', { method: 'POST', mode: 'cors' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('repeat failed');
+                    }
+                    document.getElementById('transfer-message').textContent = 'Started a new transfer. The desktop agent will open a fresh QR page.';
+                    var repeatArea = document.getElementById('repeat-area');
+                    if (repeatArea) {
+                        repeatArea.classList.add('hidden');
+                    }
+                })
+                .catch(function() {
+                    document.getElementById('transfer-message').textContent = 'Transfer again failed. Open the desktop agent status page and retry from history.';
+                });
+        }
+        {{end}}
         function updateStatus() {
             fetch('{{.StatusRoute}}', { cache: 'no-store' })
                 .then(function(response) {
@@ -193,8 +221,12 @@ var QR = `
                     document.getElementById('transfer-progress').style.width = percent + '%';
                     renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
                     renderSavedFiles(data.savedFiles || []);
-                    if (state === 'completed' || state === 'stopped') {
+                    if (state === 'completed' || state === 'stopped' || state === 'failed') {
                         document.getElementById('qr-area').classList.add('hidden');
+                        var repeatArea = document.getElementById('repeat-area');
+                        if (repeatArea) {
+                            repeatArea.classList.remove('hidden');
+                        }
                         clearInterval(statusTimer);
                     }
                 })

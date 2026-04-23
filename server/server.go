@@ -51,6 +51,7 @@ type Server struct {
 	history     []transferStatusRecord
 	statusGrace time.Duration
 	statusHook  func(TransferStatusSnapshot)
+	repeatRoute string
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -216,16 +217,21 @@ func (s *Server) DisplayQR(url string) error {
 		s.signalStop()
 	})
 	s.mux.HandleFunc(pagePath, func(w http.ResponseWriter, r *http.Request) {
+		s.statusMu.Lock()
+		repeatRoute := s.repeatRoute
+		s.statusMu.Unlock()
 		htmlVariables := struct {
 			URL          string
 			QRImageRoute string
 			StatusRoute  string
 			StopRoute    string
+			RepeatRoute  string
 		}{
 			URL:          url,
 			QRImageRoute: imagePath,
 			StatusRoute:  statusPath,
 			StopRoute:    stopPath,
+			RepeatRoute:  repeatRoute,
 		}
 		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -251,6 +257,12 @@ func (s *Server) SetStatusHook(hook func(TransferStatusSnapshot)) {
 	if hook != nil {
 		hook(snapshotTransferStatus(status))
 	}
+}
+
+func (s *Server) SetRepeatRoute(route string) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	s.repeatRoute = route
 }
 
 func (s *Server) setStatus(state string, message string) {
@@ -279,7 +291,7 @@ func (s *Server) terminalStatus() (transferStatus, bool) {
 }
 
 func isTerminalTransferState(state string) bool {
-	return state == "completed" || state == "stopped"
+	return state == "completed" || state == "stopped" || state == "failed"
 }
 
 func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
@@ -288,9 +300,15 @@ func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
 	switch status.State {
 	case "stopped":
 		fmt.Fprintln(w, "This transfer was stopped. Start a new eqrcp transfer to continue.")
+	case "failed":
+		fmt.Fprintln(w, "This transfer failed. Start a new eqrcp transfer to continue.")
 	default:
 		fmt.Fprintln(w, "This one-time transfer has already completed. Start a new eqrcp transfer to continue.")
 	}
+}
+
+func interruptedTransferError(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func (s *Server) getServiceStatus() serviceStatus {
@@ -613,6 +631,8 @@ func New(cfg *config.Config) (*Server, error) {
 			if err != nil {
 				fmt.Fprintf(w, "Unable to read output directory: %v\n", err)
 				log.Printf("Unable to read output directory: %v\n", err)
+				app.setStatus("failed", "Unable to read output directory.")
+				app.recordStatus()
 				app.signalStop()
 				return
 			}
@@ -621,6 +641,14 @@ func New(cfg *config.Config) (*Server, error) {
 			if err != nil {
 				fmt.Fprintf(w, "Upload error: %v\n", err)
 				log.Printf("Upload error: %v\n", err)
+				state := "failed"
+				message := "Upload failed."
+				if interruptedTransferError(err) || r.Context().Err() != nil {
+					state = "stopped"
+					message = "Upload interrupted before completion."
+				}
+				app.setStatus(state, message)
+				app.recordStatus()
 				app.signalStop()
 				return
 			}
@@ -644,6 +672,8 @@ func New(cfg *config.Config) (*Server, error) {
 					// Output to console
 					log.Printf("Unable to create the file for writing: %s\n", err)
 					// Send signal to server to shutdown
+					app.setStatus("failed", "Unable to create the file for writing.")
+					app.recordStatus()
 					app.signalStop()
 					return
 				}
@@ -673,6 +703,14 @@ func New(cfg *config.Config) (*Server, error) {
 						fmt.Printf("Unable to write file to disk: %v", err)
 						out.Close()
 						// Send signal to server to shutdown
+						state := "failed"
+						message := "Upload failed."
+						if interruptedTransferError(err) || r.Context().Err() != nil {
+							state = "stopped"
+							message = "Upload interrupted before completion."
+						}
+						app.setStatus(state, message)
+						app.recordStatus()
 						app.signalStop()
 						return
 					}
@@ -687,6 +725,8 @@ func New(cfg *config.Config) (*Server, error) {
 						log.Printf("Unable to write file to disk: %v", err)
 						out.Close()
 						// Send signal to server to shutdown
+						app.setStatus("failed", "Unable to write file to disk.")
+						app.recordStatus()
 						app.signalStop()
 						return
 					}
@@ -701,6 +741,8 @@ func New(cfg *config.Config) (*Server, error) {
 				if err := out.Close(); err != nil {
 					fmt.Fprintf(w, "Unable to close file: %v", err)
 					log.Printf("Unable to close file: %v", err)
+					app.setStatus("failed", "Unable to close file.")
+					app.recordStatus()
 					app.signalStop()
 					return
 				}
@@ -717,6 +759,8 @@ func New(cfg *config.Config) (*Server, error) {
 			if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				log.Printf("Template error: %v\n", err)
+				app.setStatus("failed", "Unable to render completion page.")
+				app.recordStatus()
 				app.signalStop()
 				return
 			}
@@ -737,6 +781,8 @@ func New(cfg *config.Config) (*Server, error) {
 			if err := serveTemplate("upload", pages.Upload, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				log.Printf("Template error: %v\n", err)
+				app.setStatus("failed", "Unable to render upload page.")
+				app.recordStatus()
 				app.signalStop()
 				return
 			}
