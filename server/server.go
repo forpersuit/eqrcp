@@ -53,6 +53,7 @@ type Server struct {
 	statusHook  func(TransferStatusSnapshot)
 	repeatRoute string
 	statusSeq   int64
+	statusSubs  map[chan struct{}]struct{}
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -283,6 +284,7 @@ func (s *Server) setStatus(state string, message string) {
 	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
+	s.notifyStatusSubscribersLocked()
 	s.statusMu.Unlock()
 	notifyTransferStatusHook(hook, status)
 }
@@ -360,15 +362,15 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	if !send() {
 		return
 	}
-	events := time.NewTicker(250 * time.Millisecond)
-	defer events.Stop()
+	events, unsubscribe := s.subscribeStatusEvents()
+	defer unsubscribe()
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-events.C:
+		case <-events:
 			if !send() {
 				return
 			}
@@ -377,6 +379,31 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
+		}
+	}
+}
+
+func (s *Server) subscribeStatusEvents() (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+	s.statusMu.Lock()
+	if s.statusSubs == nil {
+		s.statusSubs = map[chan struct{}]struct{}{}
+	}
+	s.statusSubs[ch] = struct{}{}
+	s.statusMu.Unlock()
+	return ch, func() {
+		s.statusMu.Lock()
+		delete(s.statusSubs, ch)
+		close(ch)
+		s.statusMu.Unlock()
+	}
+}
+
+func (s *Server) notifyStatusSubscribersLocked() {
+	for ch := range s.statusSubs {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
 	}
 }
@@ -398,6 +425,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
+	s.notifyStatusSubscribersLocked()
 	s.statusMu.Unlock()
 	notifyTransferStatusHook(hook, status)
 }
@@ -470,7 +498,7 @@ func (s *Server) signalStopAfterStatusGrace() {
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
-func (s Server) Wait() error {
+func (s *Server) Wait() error {
 	<-s.stopChannel
 	if err := s.instance.Shutdown(context.Background()); err != nil {
 		log.Println(err)
@@ -484,11 +512,11 @@ func (s Server) Wait() error {
 }
 
 // Shutdown the server
-func (s Server) Shutdown() {
+func (s *Server) Shutdown() {
 	s.signalStop()
 }
 
-func (s Server) signalStop() {
+func (s *Server) signalStop() {
 	select {
 	case s.stopChannel <- true:
 	default:

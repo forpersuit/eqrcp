@@ -85,6 +85,7 @@ type desktopAgent struct {
 	historyPath string
 	notified    map[int]map[string]bool
 	revision    int64
+	subscribers map[chan struct{}]struct{}
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
@@ -93,6 +94,7 @@ func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 		notifier:    notifyDesktop,
 		historyPath: defaultDesktopAgentHistoryPath(),
 		notified:    map[int]map[string]bool{},
+		subscribers: map[chan struct{}]struct{}{},
 	}
 	agent.runner = agent.runTask
 	return agent
@@ -181,15 +183,15 @@ func (agent *desktopAgent) handleEvents(w http.ResponseWriter, r *http.Request) 
 	if !send() {
 		return
 	}
-	events := time.NewTicker(250 * time.Millisecond)
-	defer events.Stop()
+	events, unsubscribe := agent.subscribeEvents()
+	defer unsubscribe()
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-events.C:
+		case <-events:
 			if !send() {
 				return
 			}
@@ -198,6 +200,32 @@ func (agent *desktopAgent) handleEvents(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			flusher.Flush()
+		}
+	}
+}
+
+func (agent *desktopAgent) subscribeEvents() (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+	agent.mu.Lock()
+	if agent.subscribers == nil {
+		agent.subscribers = map[chan struct{}]struct{}{}
+	}
+	agent.subscribers[ch] = struct{}{}
+	agent.mu.Unlock()
+	return ch, func() {
+		agent.mu.Lock()
+		delete(agent.subscribers, ch)
+		close(ch)
+		agent.mu.Unlock()
+	}
+}
+
+func (agent *desktopAgent) touchLocked() {
+	agent.revision++
+	for ch := range agent.subscribers {
+		select {
+		case ch <- struct{}{}:
+		default:
 		}
 	}
 }
@@ -228,7 +256,7 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 		agent.replaceActiveLocked("replaced")
 	}
 	agent.startNextLocked()
-	agent.revision++
+	agent.touchLocked()
 	agent.mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
@@ -311,7 +339,7 @@ func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request
 		agent.replaceActiveLocked("replaced")
 	}
 	shutdown := agent.shutdown
-	agent.revision++
+	agent.touchLocked()
 	agent.mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
@@ -347,7 +375,7 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 	agent.current = nil
 	agent.activeStop = nil
 	agent.startNextLocked()
-	agent.revision++
+	agent.touchLocked()
 }
 
 func (agent *desktopAgent) stopCurrent(state string) bool {
@@ -357,7 +385,7 @@ func (agent *desktopAgent) stopCurrent(state string) bool {
 		return false
 	}
 	agent.replaceActiveLocked(state)
-	agent.revision++
+	agent.touchLocked()
 	return true
 }
 
@@ -393,7 +421,7 @@ func (agent *desktopAgent) repeatTask(id int) error {
 		agent.replaceActiveLocked("replaced")
 	}
 	agent.startNextLocked()
-	agent.revision++
+	agent.touchLocked()
 	return nil
 }
 
@@ -457,7 +485,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.BytesTotal = status.BytesTotal
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
 	agent.notifyTransferStatusLocked(*agent.current)
-	agent.revision++
+	agent.touchLocked()
 }
 
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
@@ -585,7 +613,7 @@ func (agent *desktopAgent) setCurrentPageURL(url string) {
 	defer agent.mu.Unlock()
 	if agent.current != nil && agent.current.State == "running" {
 		agent.current.PageURL = url
-		agent.revision++
+		agent.touchLocked()
 	}
 }
 
@@ -649,7 +677,7 @@ func (agent *desktopAgent) loadHistory() error {
 	defer agent.mu.Unlock()
 	agent.history = cloneDesktopAgentRecords(history)
 	agent.nextID = nextID
-	agent.revision++
+	agent.touchLocked()
 	return nil
 }
 
@@ -658,7 +686,7 @@ func (agent *desktopAgent) clearHistory() error {
 	agent.history = nil
 	agent.lastError = ""
 	historyPath := agent.historyPath
-	agent.revision++
+	agent.touchLocked()
 	agent.mu.Unlock()
 	return saveDesktopAgentHistory(historyPath, nil)
 }
