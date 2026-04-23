@@ -221,6 +221,7 @@ Initial local API:
 - `GET /` serves a browser-based agent status page with the current task, recent history, local stop actions, and `/events` server-sent events for near-real-time updates. `/status` polling remains as a fallback.
 - Active agent tasks now include the browser QR page URL, and the agent status page links back to the current QR control page.
 - Active agent tasks now also receive real server transfer state from the transfer service: `waiting`, `transferring`, `completed`, or `stopped`, including progress percentage, current file, and saved files.
+- The agent browser page and `desktop agent-status` output now render `current file` and `saved files` explicitly for both the active task and history records, so Windows validation can confirm multi-file receive and large-transfer field updates without opening raw JSON.
 - Send-side completion is based on response write progress: a transfer is completed only when the expected bytes are written without a write error. If the downloading client cancels before completion, the transfer is recorded as stopped instead of completed.
 - Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqrcp desktop agent-history-clear`.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.

@@ -392,6 +392,7 @@ Expected result:
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and EventSource-based status updates with `/status` polling fallback.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
+- The browser agent page and `desktop agent-status` output explicitly show `current file` and `saved files` for the current task and history entries.
 - Send transfers are marked completed only after the expected bytes are written without a response write error. Interrupted downloads are marked stopped.
 - Recent task history is persisted across agent restarts and capped at 20 records.
 - `POST /tasks` accepts one `share` or `receive` task.
@@ -439,6 +440,7 @@ Expected result:
 - The history-clear endpoint and command clear both in-memory and persisted history.
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
+- The agent status formatter and page both render `current file` and `saved files` when those fields are available from transfer snapshots.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.

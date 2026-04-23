@@ -1085,6 +1085,9 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 	if record.TransferMessage != "" {
 		builder.WriteString(fmt.Sprintf("%s  transfer message: %s\n", indent, record.TransferMessage))
 	}
+	if record.TransferCurrent != "" {
+		builder.WriteString(fmt.Sprintf("%s  current file: %s\n", indent, record.TransferCurrent))
+	}
 	if len(record.SavedFiles) > 0 {
 		builder.WriteString(fmt.Sprintf("%s  saved files: %s\n", indent, strings.Join(record.SavedFiles, ", ")))
 	}
@@ -1289,13 +1292,15 @@ th {
 	    <div id="agent-current">
 	    {{if .Current}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
       <tbody>
         <tr>
           <td data-label="ID">#{{.Current.ID}}</td>
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
           <td data-label="Transfer">{{if .Current.TransferState}}{{.Current.TransferState}} {{if .Current.TransferPercent}}{{.Current.TransferPercent}}%{{end}}{{end}}</td>
+          <td data-label="Current File" class="paths">{{.Current.TransferCurrent}}</td>
+          <td data-label="Saved Files" class="paths">{{joinPaths .Current.SavedFiles}}</td>
           <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
           <td data-label="Paths" class="paths">{{joinPaths .Current.Paths}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
@@ -1314,7 +1319,7 @@ th {
 	    <div id="agent-history">
     {{if .History}}
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>
       <tbody>
         {{range .History}}
         <tr>
@@ -1322,6 +1327,8 @@ th {
           <td data-label="Action">{{.Action}}</td>
           <td data-label="State" class="state-{{.State}}">{{.State}}</td>
           <td data-label="Transfer">{{if .TransferState}}{{.TransferState}} {{if .TransferPercent}}{{.TransferPercent}}%{{end}}{{end}}</td>
+          <td data-label="Current File" class="paths">{{.TransferCurrent}}</td>
+          <td data-label="Saved Files" class="paths">{{joinPaths .SavedFiles}}</td>
           <td data-label="Paths" class="paths">{{joinPaths .Paths}}</td>
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
@@ -1385,13 +1392,15 @@ function renderCurrent(record) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
   var body = document.createElement('tbody');
   var row = document.createElement('tr');
   appendCell(row, 'ID', '#' + record.id);
   appendCell(row, 'Action', record.action);
   appendCell(row, 'State', record.state, 'state-' + record.state);
   appendCell(row, 'Transfer', transferText(record));
+  appendCell(row, 'Current File', record.transferCurrent || '', 'paths');
+  appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'paths');
   appendLinkCell(row, 'QR Page', record.pageUrl, 'Open QR Page');
   appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
   appendCell(row, 'Started', formatAgentTime(record.startedAt));
@@ -1410,7 +1419,7 @@ function renderHistory(records) {
     return;
   }
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>';
   var body = document.createElement('tbody');
   records.forEach(function(record) {
     var row = document.createElement('tr');
@@ -1418,6 +1427,8 @@ function renderHistory(records) {
     appendCell(row, 'Action', record.action);
     appendCell(row, 'State', record.state, 'state-' + record.state);
     appendCell(row, 'Transfer', transferText(record));
+    appendCell(row, 'Current File', record.transferCurrent || '', 'paths');
+    appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'paths');
     appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
     appendCell(row, 'Started', formatAgentTime(record.startedAt));
     appendCell(row, 'Finished', formatAgentTime(record.finishedAt));

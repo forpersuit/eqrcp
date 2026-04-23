@@ -152,11 +152,12 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 	agent.observeTransferStatus(3, server.TransferStatusSnapshot{
 		State:      "completed",
 		Message:    "Received 2 files.",
+		Current:    "b.txt",
 		Percent:    100,
 		SavedFiles: []string{"a.txt", "b.txt"},
 	})
 	status = agent.snapshot()
-	if status.Current.State != "completed" || len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" {
+	if status.Current.State != "completed" || len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" || status.Current.TransferCurrent != "b.txt" {
 		t.Fatalf("Current = %#v, want saved files and completed transfer", status.Current)
 	}
 	assertNotificationContains(t, notifications, "eqrcp transfer completed")
@@ -646,21 +647,25 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
 	agent.history = []desktopAgentTaskRecord{
 		{
-			ID:         1,
-			Action:     "share",
-			Paths:      []string{"finished.txt"},
-			State:      "completed",
-			StartedAt:  started,
-			FinishedAt: &finished,
+			ID:              1,
+			Action:          "share",
+			Paths:           []string{"finished.txt"},
+			State:           "completed",
+			TransferCurrent: "finished.txt",
+			SavedFiles:      []string{"finished.txt"},
+			StartedAt:       started,
+			FinishedAt:      &finished,
 		},
 	}
 	agent.current = &desktopAgentTaskRecord{
-		ID:        2,
-		Action:    "receive",
-		Paths:     []string{"/tmp/recv"},
-		State:     "running",
-		PageURL:   "http://127.0.0.1:19000/qr",
-		StartedAt: started,
+		ID:              2,
+		Action:          "receive",
+		Paths:           []string{"/tmp/recv"},
+		State:           "running",
+		TransferCurrent: "incoming.txt",
+		SavedFiles:      []string{"a.txt", "b.txt"},
+		PageURL:         "http://127.0.0.1:19000/qr",
+		StartedAt:       started,
 	}
 	agent.busy = true
 	server := httptest.NewServer(agent.routes())
@@ -698,6 +703,10 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"setInterval(updateAgentStatus, 5000)",
 		"Open QR Page",
 		"http://127.0.0.1:19000/qr",
+		"Current File",
+		"Saved Files",
+		"incoming.txt",
+		"a.txt, b.txt",
 		"receive",
 		"/tmp/recv",
 		"finished.txt",
@@ -976,21 +985,25 @@ func TestFormatDesktopAgentStatus(t *testing.T) {
 		State:  "busy",
 		Queued: 1,
 		Current: &desktopAgentTaskRecord{
-			ID:        2,
-			Action:    "share",
-			Paths:     []string{`C:\tmp\second.txt`},
-			State:     "running",
-			PageURL:   "http://127.0.0.1:19000/qr",
-			StartedAt: started,
+			ID:              2,
+			Action:          "share",
+			Paths:           []string{`C:\tmp\second.txt`},
+			State:           "running",
+			TransferCurrent: `C:\tmp\second.txt`,
+			SavedFiles:      []string{`C:\tmp\second.txt`},
+			PageURL:         "http://127.0.0.1:19000/qr",
+			StartedAt:       started,
 		},
 		History: []desktopAgentTaskRecord{
 			{
-				ID:         1,
-				Action:     "share",
-				Paths:      []string{`C:\tmp\first.txt`},
-				State:      "replaced",
-				StartedAt:  started,
-				FinishedAt: &finished,
+				ID:              1,
+				Action:          "share",
+				Paths:           []string{`C:\tmp\first.txt`},
+				State:           "replaced",
+				TransferCurrent: `C:\tmp\first.txt`,
+				SavedFiles:      []string{`C:\tmp\first.txt`},
+				StartedAt:       started,
+				FinishedAt:      &finished,
 			},
 		},
 	}
@@ -1003,9 +1016,13 @@ func TestFormatDesktopAgentStatus(t *testing.T) {
 		"- version: ",
 		"#2 share running",
 		`paths: C:\tmp\second.txt`,
+		`current file: C:\tmp\second.txt`,
+		`saved files: C:\tmp\second.txt`,
 		`qr page: http://127.0.0.1:19000/qr`,
 		"#1 share replaced",
 		`paths: C:\tmp\first.txt`,
+		`current file: C:\tmp\first.txt`,
+		`saved files: C:\tmp\first.txt`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("formatDesktopAgentStatus() = %q, want to contain %q", got, want)
