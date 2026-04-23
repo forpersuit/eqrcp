@@ -404,6 +404,7 @@ Expected result:
 - `POST /shutdown` stops the active task and exits the agent.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
 - `eqrcp desktop agent-start` is available as an explicit alias for `eqrcp desktop agent`.
+- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground long-running commands; a normal shell should stay attached until the agent is stopped.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
@@ -441,6 +442,7 @@ Expected result:
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent status formatter and page both render `current file` and `saved files` when those fields are available from transfer snapshots.
+- The browser agent page truncates long `Paths` cells with ellipsis and preserves the full value in the tooltip.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.
@@ -450,6 +452,7 @@ Expected result:
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.
 - The Windows desktop status formatter reports `Desktop agent runtime: not running` when the local agent is offline and recommends `eqrcp desktop agent-start`.
 - The Windows desktop status formatter reports `status: needs restart` when the running agent version differs from the current executable version.
+- Running `eqrcp desktop agent runtime` should return guidance to use `desktop status` or `desktop agent-status` instead of trying to start a second foreground agent.
 
 ## Launcher Agent Forwarding
 

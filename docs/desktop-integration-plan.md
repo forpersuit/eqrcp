@@ -157,6 +157,7 @@ Exit criteria:
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
 - `desktop status` now also reports desktop agent runtime diagnostics: whether the agent is running, its live version, current task, and whether the running agent should be restarted because it does not match the current executable.
+- The agent status page now truncates long `Paths` values with ellipsis by default and keeps the full value in the cell tooltip so wide selections do not stretch the table.
 - Windows manual validation: `desktop status` no longer misreports repaired entries as `needs repair` on localized Windows registry output.
 - `desktop status` now prints a summary count for installed, needs-repair, and not-installed desktop integration entries.
 
@@ -229,6 +230,7 @@ Initial local API:
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-start` now exists as an explicit alias for `eqrcp desktop agent`, so users can start the long-lived agent with a clearer command name.
+- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground commands by design: they keep the shell occupied while the agent is running. Explorer startup and right-click launches should continue to use the launcher or startup path, which starts the agent hidden in the background.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.

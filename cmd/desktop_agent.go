@@ -822,6 +822,7 @@ var desktopAgentCmd = &cobra.Command{
 	Use:   "agent",
 	Short: "Run the desktop integration agent",
 	Long:  "Run a local desktop integration agent that accepts right-click share and receive tasks.",
+	Args:  desktopAgentCommandArgs,
 	RunE:  runDesktopAgent,
 }
 
@@ -829,7 +830,18 @@ var desktopAgentStartCmd = &cobra.Command{
 	Use:   "agent-start",
 	Short: "Start the desktop integration agent",
 	Long:  "Start the local desktop integration agent that accepts right-click share and receive tasks.",
+	Args:  desktopAgentCommandArgs,
 	RunE:  runDesktopAgent,
+}
+
+func desktopAgentCommandArgs(command *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	if len(args) == 1 && args[0] == "runtime" {
+		return fmt.Errorf("use `eqrcp desktop status` or `eqrcp desktop agent-status` for runtime details; `%s` starts the foreground agent process", command.CommandPath())
+	}
+	return fmt.Errorf("%s does not take arguments", command.CommandPath())
 }
 
 func runDesktopAgent(command *cobra.Command, args []string) error {
@@ -845,9 +857,23 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 	}
 	command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if desktopAgentAddressInUse(err) {
+			response, healthErr := http.Get(desktopAgentBaseURL + "/health")
+			if healthErr == nil {
+				defer response.Body.Close()
+				if response.StatusCode == http.StatusNoContent {
+					return fmt.Errorf("desktop agent is already running at %s; use `eqrcp desktop agent-open`, `eqrcp desktop agent-status`, or `eqrcp desktop status`", desktopAgentBaseURL)
+				}
+			}
+		}
 		return err
 	}
 	return nil
+}
+
+func desktopAgentAddressInUse(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "address already in use") || strings.Contains(message, "Only one usage of each socket address")
 }
 
 var desktopAgentHistoryClearCmd = &cobra.Command{
@@ -1230,8 +1256,10 @@ th {
   font-weight: 600;
 }
 .paths {
-  max-width: 420px;
-  overflow-wrap: anywhere;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .empty {
   color: var(--muted);
@@ -1299,10 +1327,10 @@ th {
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
           <td data-label="Transfer">{{if .Current.TransferState}}{{.Current.TransferState}} {{if .Current.TransferPercent}}{{.Current.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths">{{.Current.TransferCurrent}}</td>
-          <td data-label="Saved Files" class="paths">{{joinPaths .Current.SavedFiles}}</td>
+          <td data-label="Current File" class="paths" title="{{.Current.TransferCurrent}}">{{.Current.TransferCurrent}}</td>
+          <td data-label="Saved Files" class="paths" title="{{joinPaths .Current.SavedFiles}}">{{joinPaths .Current.SavedFiles}}</td>
           <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
-          <td data-label="Paths" class="paths">{{joinPaths .Current.Paths}}</td>
+          <td data-label="Paths" class="paths" title="{{joinPaths .Current.Paths}}">{{joinPaths .Current.Paths}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
         </tr>
       </tbody>
@@ -1327,9 +1355,9 @@ th {
           <td data-label="Action">{{.Action}}</td>
           <td data-label="State" class="state-{{.State}}">{{.State}}</td>
           <td data-label="Transfer">{{if .TransferState}}{{.TransferState}} {{if .TransferPercent}}{{.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths">{{.TransferCurrent}}</td>
-          <td data-label="Saved Files" class="paths">{{joinPaths .SavedFiles}}</td>
-          <td data-label="Paths" class="paths">{{joinPaths .Paths}}</td>
+          <td data-label="Current File" class="paths" title="{{.TransferCurrent}}">{{.TransferCurrent}}</td>
+          <td data-label="Saved Files" class="paths" title="{{joinPaths .SavedFiles}}">{{joinPaths .SavedFiles}}</td>
+          <td data-label="Paths" class="paths" title="{{joinPaths .Paths}}">{{joinPaths .Paths}}</td>
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
           <td data-label="Error">{{.Error}}</td>
@@ -1368,6 +1396,9 @@ function appendCell(row, label, value, className) {
     cell.className = className;
   }
   cell.textContent = value || '';
+  if (className && className.indexOf('paths') !== -1 && value) {
+    cell.title = value;
+  }
   row.appendChild(cell);
 }
 function appendLinkCell(row, label, href, text) {

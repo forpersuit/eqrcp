@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -710,6 +711,8 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"receive",
 		"/tmp/recv",
 		"finished.txt",
+		"text-overflow: ellipsis",
+		`title="/tmp/recv"`,
 		"completed",
 	} {
 		if !strings.Contains(string(body), want) {
@@ -750,6 +753,32 @@ func TestDesktopAgentPersistsHistory(t *testing.T) {
 	}
 	if restarted.nextID != 7 {
 		t.Fatalf("nextID = %d, want 7", restarted.nextID)
+	}
+}
+
+func TestDesktopAgentCommandArgs(t *testing.T) {
+	if err := desktopAgentCommandArgs(desktopAgentCmd, nil); err != nil {
+		t.Fatalf("desktopAgentCommandArgs(nil) error = %v", err)
+	}
+	err := desktopAgentCommandArgs(desktopAgentCmd, []string{"runtime"})
+	if err == nil || !strings.Contains(err.Error(), "desktop status") {
+		t.Fatalf("desktopAgentCommandArgs(runtime) = %v, want runtime guidance", err)
+	}
+	err = desktopAgentCommandArgs(desktopAgentStartCmd, []string{"extra"})
+	if err == nil || !strings.Contains(err.Error(), "does not take arguments") {
+		t.Fatalf("desktopAgentCommandArgs(extra) = %v, want no-args error", err)
+	}
+}
+
+func TestDesktopAgentAddressInUse(t *testing.T) {
+	if !desktopAgentAddressInUse(fmt.Errorf("listen tcp 127.0.0.1:48176: bind: address already in use")) {
+		t.Fatal("desktopAgentAddressInUse() should detect unix-style bind errors")
+	}
+	if !desktopAgentAddressInUse(fmt.Errorf("listen tcp 127.0.0.1:48176: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.")) {
+		t.Fatal("desktopAgentAddressInUse() should detect windows-style bind errors")
+	}
+	if desktopAgentAddressInUse(fmt.Errorf("some other error")) {
+		t.Fatal("desktopAgentAddressInUse() should ignore unrelated errors")
 	}
 }
 
