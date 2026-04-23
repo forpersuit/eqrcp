@@ -442,7 +442,7 @@ Expected result:
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent status formatter and page both render `current file` and `saved files` when those fields are available from transfer snapshots.
-- The browser agent page truncates long `Paths` cells with ellipsis and preserves the full value in the tooltip.
+- The browser agent page keeps the table responsive to viewport width and renders long `Paths` cells as collapsed blocks with explicit `Expand`/`Collapse` controls.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
 - The agent-open-current command opens the active QR page and reports idle state as an error.

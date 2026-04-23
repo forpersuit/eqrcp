@@ -157,7 +157,7 @@ Exit criteria:
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
 - `desktop status` now also reports desktop agent runtime diagnostics: whether the agent is running, its live version, current task, and whether the running agent should be restarted because it does not match the current executable.
-- The agent status page now truncates long `Paths` values with ellipsis by default and keeps the full value in the cell tooltip so wide selections do not stretch the table.
+- The agent status page now keeps the table responsive to the browser width and uses explicit expand/collapse controls for long `Paths` values instead of forcing permanently expanded rows.
 - Windows manual validation: `desktop status` no longer misreports repaired entries as `needs repair` on localized Windows registry output.
 - `desktop status` now prints a summary count for installed, needs-repair, and not-installed desktop integration entries.
 

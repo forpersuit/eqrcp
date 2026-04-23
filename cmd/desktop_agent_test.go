@@ -711,8 +711,11 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"receive",
 		"/tmp/recv",
 		"finished.txt",
-		"text-overflow: ellipsis",
-		`title="/tmp/recv"`,
+		"table-layout: fixed",
+		"table-wrap",
+		"toggle-inline",
+		"data-collapse-target",
+		"Expand",
 		"completed",
 	} {
 		if !strings.Contains(string(body), want) {

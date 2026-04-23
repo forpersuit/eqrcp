@@ -1141,10 +1141,20 @@ var desktopAgentPageTemplate = template.Must(template.New("desktop-agent").Funcs
 		}
 		return value.Format("2006-01-02 15:04:05")
 	},
+	"collapseID": func(prefix string, recordID int, field string) string {
+		return fmt.Sprintf("%s-%d-%s", prefix, recordID, field)
+	},
+	"dict": func(values ...string) map[string]string {
+		result := make(map[string]string, len(values)/2)
+		for index := 0; index+1 < len(values); index += 2 {
+			result[values[index]] = values[index+1]
+		}
+		return result
+	},
 	"joinPaths": func(paths []string) string {
 		return strings.Join(paths, ", ")
 	},
-}).Parse(`<!doctype html>
+}).Parse(`{{define "collapseCell"}}{{if .Value}}<div class="paths"><div id="{{.ID}}" class="cell-text collapsed">{{.Value}}</div>{{if gt (len .Value) 60}}<button class="toggle-inline" type="button" data-collapse-target="{{.ID}}" aria-expanded="false">Expand</button>{{end}}</div>{{end}}{{end}}<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1243,23 +1253,46 @@ section {
 table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 th, td {
   border-top: 1px solid var(--line);
   padding: 10px 8px;
   text-align: left;
   vertical-align: top;
+  min-width: 0;
 }
 th {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
 }
+.table-wrap {
+  overflow-x: auto;
+}
 .paths {
-  max-width: 260px;
+  width: 100%;
+}
+.cell-text {
+  overflow-wrap: anywhere;
+}
+.cell-text.collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.toggle-inline {
+  min-height: 0;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  justify-content: flex-start;
+}
+.toggle-inline:hover {
+  text-decoration: underline;
 }
 .empty {
   color: var(--muted);
@@ -1319,6 +1352,7 @@ th {
 	    <p class="empty">Current keeps the active task visible while its QR service is still running, even after the transfer already reached a final state.</p>
 	    <div id="agent-current">
 	    {{if .Current}}
+    <div class="table-wrap">
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
       <tbody>
@@ -1327,14 +1361,15 @@ th {
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
           <td data-label="Transfer">{{if .Current.TransferState}}{{.Current.TransferState}} {{if .Current.TransferPercent}}{{.Current.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths" title="{{.Current.TransferCurrent}}">{{.Current.TransferCurrent}}</td>
-          <td data-label="Saved Files" class="paths" title="{{joinPaths .Current.SavedFiles}}">{{joinPaths .Current.SavedFiles}}</td>
+          <td data-label="Current File" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "current") "Value" .Current.TransferCurrent)}}</td>
+          <td data-label="Saved Files" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "saved") "Value" (joinPaths .Current.SavedFiles))}}</td>
           <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
-          <td data-label="Paths" class="paths" title="{{joinPaths .Current.Paths}}">{{joinPaths .Current.Paths}}</td>
+          <td data-label="Paths" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "paths") "Value" (joinPaths .Current.Paths))}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
         </tr>
       </tbody>
     </table>
+    </div>
     {{else}}
     <p class="empty">No active task.</p>
     {{end}}
@@ -1346,6 +1381,7 @@ th {
 	    <p class="empty">History contains finalized tasks after the QR service has exited and the task is fully closed out.</p>
 	    <div id="agent-history">
     {{if .History}}
+    <div class="table-wrap">
     <table>
       <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>
       <tbody>
@@ -1355,9 +1391,9 @@ th {
           <td data-label="Action">{{.Action}}</td>
           <td data-label="State" class="state-{{.State}}">{{.State}}</td>
           <td data-label="Transfer">{{if .TransferState}}{{.TransferState}} {{if .TransferPercent}}{{.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths" title="{{.TransferCurrent}}">{{.TransferCurrent}}</td>
-          <td data-label="Saved Files" class="paths" title="{{joinPaths .SavedFiles}}">{{joinPaths .SavedFiles}}</td>
-          <td data-label="Paths" class="paths" title="{{joinPaths .Paths}}">{{joinPaths .Paths}}</td>
+          <td data-label="Current File" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "current") "Value" .TransferCurrent)}}</td>
+          <td data-label="Saved Files" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "saved") "Value" (joinPaths .SavedFiles))}}</td>
+          <td data-label="Paths" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "paths") "Value" (joinPaths .Paths))}}</td>
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
           <td data-label="Error">{{.Error}}</td>
@@ -1366,6 +1402,7 @@ th {
         {{end}}
       </tbody>
     </table>
+    </div>
     {{else}}
     <p class="empty">No history yet.</p>
     {{end}}
@@ -1392,14 +1429,38 @@ function formatAgentTime(value) {
 function appendCell(row, label, value, className) {
   var cell = document.createElement('td');
   cell.setAttribute('data-label', label);
-  if (className) {
+  if (className && className !== 'collapse') {
     cell.className = className;
   }
-  cell.textContent = value || '';
-  if (className && className.indexOf('paths') !== -1 && value) {
-    cell.title = value;
+  if (className === 'collapse') {
+    renderCollapseCell(cell, label.toLowerCase().replace(/\s+/g, '-') + '-' + row.children.length, value || '');
+  } else {
+    cell.textContent = value || '';
   }
   row.appendChild(cell);
+}
+function renderCollapseCell(cell, id, value) {
+  if (!value) {
+    cell.textContent = '';
+    return;
+  }
+  var wrapper = document.createElement('div');
+  wrapper.className = 'paths';
+  var content = document.createElement('div');
+  content.className = 'cell-text collapsed';
+  content.id = id;
+  content.textContent = value;
+  wrapper.appendChild(content);
+  if (value.length > 60) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toggle-inline';
+    button.setAttribute('data-collapse-target', id);
+    button.setAttribute('aria-expanded', 'false');
+    button.textContent = 'Expand';
+    wrapper.appendChild(button);
+  }
+  cell.appendChild(wrapper);
 }
 function appendLinkCell(row, label, href, text) {
   var cell = document.createElement('td');
@@ -1422,6 +1483,8 @@ function renderCurrent(record) {
     container.appendChild(empty);
     return;
   }
+  var wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
   var table = document.createElement('table');
   table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
   var body = document.createElement('tbody');
@@ -1430,14 +1493,15 @@ function renderCurrent(record) {
   appendCell(row, 'Action', record.action);
   appendCell(row, 'State', record.state, 'state-' + record.state);
   appendCell(row, 'Transfer', transferText(record));
-  appendCell(row, 'Current File', record.transferCurrent || '', 'paths');
-  appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'paths');
+  appendCell(row, 'Current File', record.transferCurrent || '', 'collapse');
+  appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'collapse');
   appendLinkCell(row, 'QR Page', record.pageUrl, 'Open QR Page');
-  appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
+  appendCell(row, 'Paths', (record.paths || []).join(', '), 'collapse');
   appendCell(row, 'Started', formatAgentTime(record.startedAt));
   body.appendChild(row);
   table.appendChild(body);
-  container.appendChild(table);
+  wrap.appendChild(table);
+  container.appendChild(wrap);
 }
 function renderHistory(records) {
   var container = document.getElementById('agent-history');
@@ -1449,6 +1513,8 @@ function renderHistory(records) {
     container.appendChild(empty);
     return;
   }
+  var wrap = document.createElement('div');
+  wrap.className = 'table-wrap';
   var table = document.createElement('table');
   table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>Paths</th><th>Started</th><th>Finished</th><th>Error</th><th>Actions</th></tr></thead>';
   var body = document.createElement('tbody');
@@ -1458,9 +1524,9 @@ function renderHistory(records) {
     appendCell(row, 'Action', record.action);
     appendCell(row, 'State', record.state, 'state-' + record.state);
     appendCell(row, 'Transfer', transferText(record));
-    appendCell(row, 'Current File', record.transferCurrent || '', 'paths');
-    appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'paths');
-    appendCell(row, 'Paths', (record.paths || []).join(', '), 'paths');
+    appendCell(row, 'Current File', record.transferCurrent || '', 'collapse');
+    appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'collapse');
+    appendCell(row, 'Paths', (record.paths || []).join(', '), 'collapse');
     appendCell(row, 'Started', formatAgentTime(record.startedAt));
     appendCell(row, 'Finished', formatAgentTime(record.finishedAt));
     appendCell(row, 'Error', record.error || '');
@@ -1468,7 +1534,8 @@ function renderHistory(records) {
     body.appendChild(row);
   });
   table.appendChild(body);
-  container.appendChild(table);
+  wrap.appendChild(table);
+  container.appendChild(wrap);
 }
 function appendRepeatCell(row, id) {
   var cell = document.createElement('td');
@@ -1543,6 +1610,18 @@ document.getElementById('clear-history').addEventListener('click', function() {
     });
 });
 document.addEventListener('click', function(event) {
+  var toggle = event.target.closest('[data-collapse-target]');
+  if (toggle) {
+    var target = document.getElementById(toggle.getAttribute('data-collapse-target'));
+    if (!target) {
+      return;
+    }
+    var expanded = toggle.getAttribute('aria-expanded') === 'true';
+    target.classList.toggle('collapsed', expanded);
+    toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    toggle.textContent = expanded ? 'Expand' : 'Collapse';
+    return;
+  }
   var button = event.target.closest('[data-repeat-id]');
   if (!button) {
     return;
