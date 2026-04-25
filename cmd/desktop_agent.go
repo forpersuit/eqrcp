@@ -32,6 +32,9 @@ const desktopAgentHistoryFilename = "desktop-agent-history.json"
 
 var openDesktopAgentPage = openDesktopAgentPageURL
 var desktopAgentBaseURL = "http://" + desktopAgentAddress
+var desktopAgentExecutable = os.Executable
+var desktopAgentBackgroundStarter = startDesktopAgentBackgroundProcess
+var desktopAgentReadyWaiter = waitForDesktopAgentReady
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`
@@ -39,21 +42,26 @@ type desktopAgentTask struct {
 }
 
 type desktopAgentTaskRecord struct {
-	ID              int        `json:"id"`
-	Action          string     `json:"action"`
-	Paths           []string   `json:"paths"`
-	State           string     `json:"state"`
-	TransferState   string     `json:"transferState,omitempty"`
-	TransferMessage string     `json:"transferMessage,omitempty"`
-	TransferCurrent string     `json:"transferCurrent,omitempty"`
-	TransferPercent int        `json:"transferPercent,omitempty"`
-	BytesDone       int64      `json:"bytesDone,omitempty"`
-	BytesTotal      int64      `json:"bytesTotal,omitempty"`
-	SavedFiles      []string   `json:"savedFiles,omitempty"`
-	PageURL         string     `json:"pageUrl,omitempty"`
-	Error           string     `json:"error,omitempty"`
-	StartedAt       time.Time  `json:"startedAt"`
-	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
+	ID                  int        `json:"id"`
+	Action              string     `json:"action"`
+	Paths               []string   `json:"paths"`
+	State               string     `json:"state"`
+	TransferState       string     `json:"transferState,omitempty"`
+	TransferMessage     string     `json:"transferMessage,omitempty"`
+	TransferMode        string     `json:"transferMode,omitempty"`
+	TransferTarget      string     `json:"transferTarget,omitempty"`
+	TransferArchive     bool       `json:"transferArchive,omitempty"`
+	TransferArchiveName string     `json:"transferArchiveName,omitempty"`
+	TransferItems       []string   `json:"transferItems,omitempty"`
+	TransferCurrent     string     `json:"transferCurrent,omitempty"`
+	TransferPercent     int        `json:"transferPercent,omitempty"`
+	BytesDone           int64      `json:"bytesDone,omitempty"`
+	BytesTotal          int64      `json:"bytesTotal,omitempty"`
+	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	PageURL             string     `json:"pageUrl,omitempty"`
+	Error               string     `json:"error,omitempty"`
+	StartedAt           time.Time  `json:"startedAt"`
+	FinishedAt          *time.Time `json:"finishedAt,omitempty"`
 }
 
 type desktopAgentResponse struct {
@@ -115,6 +123,8 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/health", agent.handleHealth)
 	mux.HandleFunc("/status", agent.handleStatus)
 	mux.HandleFunc("/events", agent.handleEvents)
+	mux.HandleFunc("/settings", agent.handleSettings)
+	mux.HandleFunc("/restart", agent.handleRestart)
 	mux.HandleFunc("/tasks", agent.handleTasks)
 	mux.HandleFunc("/tasks/", agent.handleTaskAction)
 	mux.HandleFunc("/history", agent.handleHistory)
@@ -138,6 +148,12 @@ func (agent *desktopAgent) handlePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (agent *desktopAgent) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -146,6 +162,12 @@ func (agent *desktopAgent) handleHealth(w http.ResponseWriter, r *http.Request) 
 }
 
 func (agent *desktopAgent) handleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -233,6 +255,97 @@ func (agent *desktopAgent) touchLocked() {
 		default:
 		}
 	}
+}
+
+func (agent *desktopAgent) handleRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	logFile, logPath, err := createDesktopAgentBackgroundLog()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("desktop agent restart failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	exe, err := desktopAgentExecutable()
+	if err != nil {
+		_ = logFile.Close()
+		http.Error(w, fmt.Sprintf("desktop agent restart failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	cmd := exec.Command(exe, "desktop", "agent-restart-helper")
+	configureDesktopAgentBackgroundCommand(cmd)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		http.Error(w, fmt.Sprintf("desktop agent restart failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if err := cmd.Process.Release(); err != nil {
+		_ = logFile.Close()
+		http.Error(w, fmt.Sprintf("desktop agent restart failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	agent.mu.Lock()
+	agent.queue = nil
+	if agent.busy {
+		agent.finalizeActiveLocked("replaced")
+	}
+	shutdown := agent.shutdown
+	agent.touchLocked()
+	agent.mu.Unlock()
+
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintf(w, "Desktop agent restarting.\nLog: %s\n", logPath)
+	go func() {
+		defer logFile.Close()
+		if shutdown != nil {
+			shutdown()
+		}
+	}()
+}
+
+func (agent *desktopAgent) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		settings, err := agent.readSettings()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("desktop agent settings unavailable: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(settings)
+	case http.MethodPost:
+		var settings config.DesktopSettings
+		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+			http.Error(w, fmt.Sprintf("invalid settings: %v", err), http.StatusBadRequest)
+			return
+		}
+		saved, err := agent.writeSettings(settings)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("save desktop agent settings failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(saved)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (agent *desktopAgent) settingsApp() application.App {
+	settingsApp := application.New()
+	settingsApp.Flags = agent.baseFlags
+	return settingsApp
+}
+
+func (agent *desktopAgent) readSettings() (config.DesktopSettings, error) {
+	return config.ReadDesktopSettings(agent.settingsApp())
+}
+
+func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (config.DesktopSettings, error) {
+	return config.WriteDesktopSettings(agent.settingsApp(), settings)
 }
 
 func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +454,7 @@ func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request
 	agent.mu.Lock()
 	agent.queue = nil
 	if agent.busy {
-		agent.replaceActiveLocked("replaced")
+		agent.finalizeActiveLocked("replaced")
 	}
 	shutdown := agent.shutdown
 	agent.touchLocked()
@@ -447,6 +560,20 @@ func (agent *desktopAgent) replaceActiveLocked(state string) {
 	go stop()
 }
 
+func (agent *desktopAgent) finalizeActiveLocked(state string) {
+	agent.replaceActiveLocked(state)
+	if agent.current == nil {
+		return
+	}
+	record := *agent.current
+	agent.addHistoryLocked(record)
+	agent.notifyRecordLocked(record)
+	delete(agent.notified, record.ID)
+	agent.busy = false
+	agent.current = nil
+	agent.activeStop = nil
+}
+
 func (agent *desktopAgent) startNextLocked() {
 	if agent.busy || len(agent.queue) == 0 {
 		return
@@ -484,6 +611,11 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	}
 	agent.current.TransferState = status.State
 	agent.current.TransferMessage = status.Message
+	agent.current.TransferMode = status.Mode
+	agent.current.TransferTarget = status.Target
+	agent.current.TransferArchive = status.Archive
+	agent.current.TransferArchiveName = status.ArchiveName
+	agent.current.TransferItems = append([]string(nil), status.Items...)
 	agent.current.TransferCurrent = status.Current
 	agent.current.TransferPercent = status.Percent
 	agent.current.BytesDone = status.BytesDone
@@ -584,6 +716,9 @@ func desktopAgentTransferNotification(record desktopAgentTaskRecord) (string, st
 	case "stopped":
 		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
 	case "failed":
+		if record.TransferMessage != "" {
+			return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, record.TransferMessage)
+		}
 		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
 	default:
 		return "", ""
@@ -610,6 +745,85 @@ func desktopAgentPathsSummary(paths []string) string {
 	default:
 		return fmt.Sprintf("%d items", len(paths))
 	}
+}
+
+func displayBaseName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.TrimRight(value, `/\`)
+	if value == "" {
+		return ""
+	}
+	index := strings.LastIndexAny(value, `/\`)
+	if index >= 0 && index+1 < len(value) {
+		return value[index+1:]
+	}
+	return value
+}
+
+func listSummary(values []string, singular string) string {
+	switch len(values) {
+	case 0:
+		return ""
+	case 1:
+		return displayBaseName(values[0])
+	default:
+		return fmt.Sprintf("%d %ss", len(values), singular)
+	}
+}
+
+func desktopAgentPathDisplaySummary(action string, archive bool, archiveName string, paths []string, items []string) string {
+	if archive && archiveName != "" {
+		return archiveName
+	}
+	if len(items) > 1 {
+		return fmt.Sprintf("%d items", len(items))
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	if action == "receive" {
+		return listSummary(paths, "folder")
+	}
+	return listSummary(paths, "item")
+}
+
+func desktopAgentPathDetail(action string, archive bool, archiveName string, paths []string, items []string) string {
+	var lines []string
+	if archive && archiveName != "" {
+		lines = append(lines, "Archive: "+archiveName)
+	}
+	if len(items) > 0 {
+		lines = append(lines, "Items:")
+		for _, item := range items {
+			lines = append(lines, "  "+item)
+		}
+	}
+	if len(paths) > 0 {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, "Paths:")
+		for _, path := range paths {
+			lines = append(lines, "  "+path)
+		}
+	}
+	if len(lines) == 0 && action == "receive" {
+		return "Current receive folder"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func desktopAgentPathKind(action string, archive bool, paths []string) string {
+	if archive || len(paths) > 1 {
+		return "archive"
+	}
+	if action == "receive" {
+		return "directory"
+	}
+	return "file"
 }
 
 func (agent *desktopAgent) setActiveStop(stop func()) {
@@ -749,6 +963,7 @@ func cloneDesktopAgentRecords(records []desktopAgentTaskRecord) []desktopAgentTa
 func cloneDesktopAgentRecord(record desktopAgentTaskRecord) desktopAgentTaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
 	record.SavedFiles = append([]string(nil), record.SavedFiles...)
+	record.TransferItems = append([]string(nil), record.TransferItems...)
 	return record
 }
 
@@ -756,7 +971,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	taskID := agent.currentTaskID()
 	agentApp := application.New()
 	agentApp.Flags = agent.baseFlags
-	agentApp.Flags.Browser = true
+	agentApp.Flags.Browser = desktopBrowserPreference(agent.baseFlags, true)
 	if task.Action == "receive" {
 		agentApp.Flags.Output = task.Paths[0]
 	}
@@ -845,6 +1060,17 @@ func desktopAgentCommandArgs(command *cobra.Command, args []string) error {
 }
 
 func runDesktopAgent(command *cobra.Command, args []string) error {
+	background := false
+	if command.Flags().Lookup("background") != nil {
+		value, err := command.Flags().GetBool("background")
+		if err != nil {
+			return err
+		}
+		background = value
+	}
+	if background {
+		return runDesktopAgentBackground(command)
+	}
 	agent := newDesktopAgent(app.Flags)
 	if err := agent.loadHistory(); err != nil {
 		agent.lastError = fmt.Sprintf("unable to load desktop agent history: %v", err)
@@ -869,6 +1095,91 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 		return err
 	}
 	return nil
+}
+
+var desktopAgentRestartHelperCmd = &cobra.Command{
+	Use:    "agent-restart-helper",
+	Hidden: true,
+	Args:   cobra.NoArgs,
+	RunE: func(command *cobra.Command, args []string) error {
+		time.Sleep(800 * time.Millisecond)
+		return runDesktopAgent(command, args)
+	},
+}
+
+func runDesktopAgentBackground(command *cobra.Command) error {
+	if _, err := fetchDesktopAgentStatus(); err == nil {
+		fmt.Fprintf(command.OutOrStdout(), "Desktop agent is already running at %s.\n", desktopAgentBaseURL)
+		return nil
+	}
+	exe, err := desktopAgentExecutable()
+	if err != nil {
+		return err
+	}
+	logFile, logPath, err := createDesktopAgentBackgroundLog()
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+	if err := desktopAgentBackgroundStarter(exe, logFile); err != nil {
+		return err
+	}
+	if err := desktopAgentReadyWaiter(3 * time.Second); err != nil {
+		return fmt.Errorf("desktop agent background start failed: %w; log: %s", err, logPath)
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Desktop agent started in background.\nStatus: %s/\nLog: %s\n", desktopAgentBaseURL, logPath)
+	return nil
+}
+
+func createDesktopAgentBackgroundLog() (*os.File, string, error) {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	dir = filepath.Join(dir, application.New().Name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, "", err
+	}
+	file, err := os.CreateTemp(dir, "agent-*.log")
+	if err != nil {
+		return nil, "", err
+	}
+	return file, file.Name(), nil
+}
+
+func startDesktopAgentBackgroundProcess(exe string, logFile *os.File) error {
+	cmd := exec.Command(exe, "desktop", "agent")
+	configureDesktopAgentBackgroundCommand(cmd)
+	if logFile != nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+func waitForDesktopAgentReady(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		response, err := http.Get(desktopAgentBaseURL + "/health")
+		if err == nil {
+			response.Body.Close()
+			if response.StatusCode == http.StatusNoContent {
+				return nil
+			}
+			lastErr = fmt.Errorf("desktop agent health returned %s", response.Status)
+		} else {
+			lastErr = err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("desktop agent did not become ready")
+	}
+	return lastErr
 }
 
 func desktopAgentAddressInUse(err error) bool {
@@ -1154,7 +1465,17 @@ var desktopAgentPageTemplate = template.Must(template.New("desktop-agent").Funcs
 	"joinPaths": func(paths []string) string {
 		return strings.Join(paths, ", ")
 	},
-}).Parse(`{{define "collapseCell"}}{{if .Value}}<div class="paths"><div id="{{.ID}}" class="cell-text collapsed">{{.Value}}</div>{{if gt (len .Value) 60}}<button class="toggle-inline" type="button" data-collapse-target="{{.ID}}" aria-expanded="false">Expand</button>{{end}}</div>{{end}}{{end}}<!doctype html>
+	"joinLines": func(paths []string) string {
+		return strings.Join(paths, "\n")
+	},
+	"baseName": displayBaseName,
+	"savedSummary": func(paths []string) string {
+		return listSummary(paths, "file")
+	},
+	"pathsSummary": desktopAgentPathDisplaySummary,
+	"pathsDetail":  desktopAgentPathDetail,
+	"pathsKind":    desktopAgentPathKind,
+}).Parse(`{{define "detailCell"}}{{if .Value}}<button class="detail-cell kind-{{.Kind}}" type="button" data-detail-label="{{.Label}}" data-detail-value="{{.Value}}"><span class="kind-dot"></span><span class="detail-cell-text" title="{{.Value}}">{{if .Display}}{{.Display}}{{else}}{{.Value}}{{end}}</span></button>{{end}}{{end}}<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -1270,29 +1591,130 @@ th {
 .table-wrap {
   overflow-x: auto;
 }
-.paths {
+.detail-cell {
   width: 100%;
-}
-.cell-text {
-  overflow-wrap: anywhere;
-}
-.cell-text.collapsed {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.toggle-inline {
-  min-height: 0;
-  margin-top: 6px;
-  padding: 0;
+  min-height: 28px;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
   border: 0;
-  background: transparent;
-  color: var(--accent);
-  justify-content: flex-start;
+  border-radius: 5px;
+  padding: 3px 6px;
+  background: #f8fafc;
+  color: var(--text);
+  text-align: left;
 }
-.toggle-inline:hover {
-  text-decoration: underline;
+.detail-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kind-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.kind-file .kind-dot { background: var(--accent); }
+.kind-directory .kind-dot { background: var(--ok); }
+.kind-archive .kind-dot { background: #c2410c; }
+.kind-file { background: #eff6ff; }
+.kind-directory { background: #ecfdf5; }
+.kind-archive { background: #fff7ed; }
+.detail-cell:hover {
+  outline: 1px solid var(--accent);
+}
+.current-actions {
+  display: flex;
+  gap: 6px;
+}
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.42);
+}
+.detail-backdrop.open {
+  display: flex;
+}
+.detail-dialog {
+  width: min(760px, 100%);
+  max-height: min(70vh, 680px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.22);
+}
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.detail-title {
+  margin: 0;
+  font-size: 16px;
+}
+.detail-body {
+  max-height: calc(min(70vh, 680px) - 58px);
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding: 10px 14px;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.field label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.field input, .field select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  font: inherit;
+  background: #fff;
+}
+.field.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field.checkbox input {
+  width: auto;
+  min-height: 0;
+}
+.field.checkbox label {
+  margin: 0;
+  color: var(--text);
+}
+.settings-status {
+  margin: 10px 0 0;
+  color: var(--muted);
 }
 .empty {
   color: var(--muted);
@@ -1302,6 +1724,7 @@ th {
   main { width: min(100% - 20px, 960px); margin: 20px auto; }
   header { align-items: flex-start; flex-direction: column; }
   .summary { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
   table, thead, tbody, th, td, tr { display: block; }
   thead { display: none; }
   tr { border-top: 1px solid var(--line); padding: 8px 0; }
@@ -1315,7 +1738,7 @@ th {
   <header>
     <h1>eqrcp Agent</h1>
     <div class="actions">
-      <form method="post" action="/stop-current"><button class="primary" type="submit">Stop Current</button></form>
+      <button id="restart-agent" type="button">Restart Agent</button>
       <button id="clear-history" type="button">Clear History</button>
       <form method="post" action="/shutdown"><button class="danger" type="submit">Stop Agent</button></form>
     </div>
@@ -1347,6 +1770,40 @@ th {
     </div>
   </section>
 
+  <section>
+    <h2>Settings</h2>
+    <form id="settings-form">
+      <div class="settings-grid">
+        <div class="field">
+          <label for="settings-output">Output directory</label>
+          <input id="settings-output" name="output" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="settings-interface">Interface</label>
+          <select id="settings-interface" name="interface"></select>
+        </div>
+        <div class="field">
+          <label for="settings-port">Port</label>
+          <input id="settings-port" name="port" type="number" min="0" max="65535" step="1">
+          <p class="settings-status">Use 0 to automatically choose an available port. Fixed ports can fail when another process already uses them.</p>
+        </div>
+        <div class="field">
+          <label for="settings-config">Config file</label>
+          <input id="settings-config" name="configPath" readonly>
+        </div>
+        <div class="field checkbox">
+          <input id="settings-browser" name="browser" type="checkbox">
+          <label for="settings-browser">Open browser pages automatically</label>
+        </div>
+      </div>
+      <div class="actions" style="margin-top: 12px;">
+        <button class="primary" type="submit">Save Settings</button>
+      </div>
+      <p id="settings-status" class="settings-status">Loading settings.</p>
+      <p class="settings-status">Config is stored in the current user's config directory so installed application files can stay read-only.</p>
+    </form>
+  </section>
+
 	  <section>
 	    <h2>Current</h2>
 	    <p class="empty">Current keeps the active task visible while its QR service is still running, even after the transfer already reached a final state.</p>
@@ -1354,18 +1811,19 @@ th {
 	    {{if .Current}}
     <div class="table-wrap">
     <table>
-      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>
+      <thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th><th>Actions</th></tr></thead>
       <tbody>
         <tr>
           <td data-label="ID">#{{.Current.ID}}</td>
           <td data-label="Action">{{.Current.Action}}</td>
           <td data-label="State" class="state-{{.Current.State}}">{{.Current.State}}</td>
           <td data-label="Transfer">{{if .Current.TransferState}}{{.Current.TransferState}} {{if .Current.TransferPercent}}{{.Current.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "current") "Value" .Current.TransferCurrent)}}</td>
-          <td data-label="Saved Files" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "saved") "Value" (joinPaths .Current.SavedFiles))}}</td>
+          <td data-label="Current File">{{template "detailCell" (dict "Label" "Current File" "Kind" "file" "Display" (baseName .Current.TransferCurrent) "Value" .Current.TransferCurrent)}}</td>
+          <td data-label="Saved Files">{{template "detailCell" (dict "Label" "Saved Files" "Kind" "file" "Display" (savedSummary .Current.SavedFiles) "Value" (joinLines .Current.SavedFiles))}}</td>
           <td data-label="QR Page">{{if .Current.PageURL}}<a href="{{.Current.PageURL}}">Open QR Page</a>{{end}}</td>
-          <td data-label="Paths" class="paths">{{template "collapseCell" (dict "ID" (collapseID "current" .Current.ID "paths") "Value" (joinPaths .Current.Paths))}}</td>
+          <td data-label="Paths">{{template "detailCell" (dict "Label" "Paths" "Kind" (pathsKind .Current.Action .Current.TransferArchive .Current.Paths) "Display" (pathsSummary .Current.Action .Current.TransferArchive .Current.TransferArchiveName .Current.Paths .Current.TransferItems) "Value" (pathsDetail .Current.Action .Current.TransferArchive .Current.TransferArchiveName .Current.Paths .Current.TransferItems))}}</td>
           <td data-label="Started">{{formatTime .Current.StartedAt}}</td>
+          <td data-label="Actions"><button class="primary" type="button" data-stop-current="true">Stop Current</button></td>
         </tr>
       </tbody>
     </table>
@@ -1391,9 +1849,9 @@ th {
           <td data-label="Action">{{.Action}}</td>
           <td data-label="State" class="state-{{.State}}">{{.State}}</td>
           <td data-label="Transfer">{{if .TransferState}}{{.TransferState}} {{if .TransferPercent}}{{.TransferPercent}}%{{end}}{{end}}</td>
-          <td data-label="Current File" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "current") "Value" .TransferCurrent)}}</td>
-          <td data-label="Saved Files" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "saved") "Value" (joinPaths .SavedFiles))}}</td>
-          <td data-label="Paths" class="paths">{{template "collapseCell" (dict "ID" (collapseID "history" .ID "paths") "Value" (joinPaths .Paths))}}</td>
+          <td data-label="Current File">{{template "detailCell" (dict "Label" "Current File" "Kind" "file" "Display" (baseName .TransferCurrent) "Value" .TransferCurrent)}}</td>
+          <td data-label="Saved Files">{{template "detailCell" (dict "Label" "Saved Files" "Kind" "file" "Display" (savedSummary .SavedFiles) "Value" (joinLines .SavedFiles))}}</td>
+          <td data-label="Paths">{{template "detailCell" (dict "Label" "Paths" "Kind" (pathsKind .Action .TransferArchive .Paths) "Display" (pathsSummary .Action .TransferArchive .TransferArchiveName .Paths .TransferItems) "Value" (pathsDetail .Action .TransferArchive .TransferArchiveName .Paths .TransferItems))}}</td>
           <td data-label="Started">{{formatTime .StartedAt}}</td>
           <td data-label="Finished">{{formatFinished .FinishedAt}}</td>
           <td data-label="Error">{{.Error}}</td>
@@ -1409,10 +1867,21 @@ th {
     </div>
   </section>
 </main>
+<div id="detail-backdrop" class="detail-backdrop" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+  <div class="detail-dialog">
+    <div class="detail-header">
+      <h2 id="detail-title" class="detail-title">Details</h2>
+      <button id="detail-close" type="button">Close</button>
+    </div>
+    <div id="detail-body" class="detail-body"></div>
+    <div class="detail-footer"><button id="detail-copy" type="button">Copy</button></div>
+  </div>
+</div>
 <script>
 function setText(id, value) {
   document.getElementById(id).textContent = value;
 }
+var currentDetailValue = '';
 function setStateClass(element, state) {
   element.className = 'value state-' + state;
 }
@@ -1429,38 +1898,36 @@ function formatAgentTime(value) {
 function appendCell(row, label, value, className) {
   var cell = document.createElement('td');
   cell.setAttribute('data-label', label);
-  if (className && className !== 'collapse') {
+  if (className && className.indexOf('detail') !== 0) {
     cell.className = className;
   }
-  if (className === 'collapse') {
-    renderCollapseCell(cell, label.toLowerCase().replace(/\s+/g, '-') + '-' + row.children.length, value || '');
+  if (className && className.indexOf('detail') === 0) {
+    var parts = className.split(':');
+    renderDetailCell(cell, label, value || '', parts[1] || 'file', decodeClassPart(parts[2] || ''));
   } else {
     cell.textContent = value || '';
   }
   row.appendChild(cell);
 }
-function renderCollapseCell(cell, id, value) {
+function renderDetailCell(cell, label, value, kind, display) {
   if (!value) {
     cell.textContent = '';
     return;
   }
-  var wrapper = document.createElement('div');
-  wrapper.className = 'paths';
-  var content = document.createElement('div');
-  content.className = 'cell-text collapsed';
-  content.id = id;
-  content.textContent = value;
-  wrapper.appendChild(content);
-  if (value.length > 60) {
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'toggle-inline';
-    button.setAttribute('data-collapse-target', id);
-    button.setAttribute('aria-expanded', 'false');
-    button.textContent = 'Expand';
-    wrapper.appendChild(button);
-  }
-  cell.appendChild(wrapper);
+  var content = document.createElement('button');
+  content.type = 'button';
+  content.className = 'detail-cell kind-' + (kind || 'file');
+  content.setAttribute('data-detail-label', label || 'Details');
+  content.setAttribute('data-detail-value', value);
+  content.title = value;
+  var dot = document.createElement('span');
+  dot.className = 'kind-dot';
+  content.appendChild(dot);
+  var text = document.createElement('span');
+  text.className = 'detail-cell-text';
+  text.textContent = display || displayValue(value);
+  content.appendChild(text);
+  cell.appendChild(content);
 }
 function appendLinkCell(row, label, href, text) {
   var cell = document.createElement('td');
@@ -1486,18 +1953,19 @@ function renderCurrent(record) {
   var wrap = document.createElement('div');
   wrap.className = 'table-wrap';
   var table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>ID</th><th>Action</th><th>State</th><th>Transfer</th><th>Current File</th><th>Saved Files</th><th>QR Page</th><th>Paths</th><th>Started</th><th>Actions</th></tr></thead>';
   var body = document.createElement('tbody');
   var row = document.createElement('tr');
   appendCell(row, 'ID', '#' + record.id);
   appendCell(row, 'Action', record.action);
   appendCell(row, 'State', record.state, 'state-' + record.state);
   appendCell(row, 'Transfer', transferText(record));
-  appendCell(row, 'Current File', record.transferCurrent || '', 'collapse');
-  appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'collapse');
+  appendCell(row, 'Current File', record.transferCurrent || '', 'detail:file:' + encodeClassPart(baseName(record.transferCurrent || '')));
+  appendCell(row, 'Saved Files', (record.savedFiles || []).join('\n'), 'detail:file:' + encodeClassPart(listSummary(record.savedFiles || [], 'file')));
   appendLinkCell(row, 'QR Page', record.pageUrl, 'Open QR Page');
-  appendCell(row, 'Paths', (record.paths || []).join(', '), 'collapse');
+  appendCell(row, 'Paths', pathDetail(record), 'detail:' + pathKind(record) + ':' + encodeClassPart(pathSummary(record)));
   appendCell(row, 'Started', formatAgentTime(record.startedAt));
+  appendStopCurrentCell(row);
   body.appendChild(row);
   table.appendChild(body);
   wrap.appendChild(table);
@@ -1524,9 +1992,9 @@ function renderHistory(records) {
     appendCell(row, 'Action', record.action);
     appendCell(row, 'State', record.state, 'state-' + record.state);
     appendCell(row, 'Transfer', transferText(record));
-    appendCell(row, 'Current File', record.transferCurrent || '', 'collapse');
-    appendCell(row, 'Saved Files', (record.savedFiles || []).join(', '), 'collapse');
-    appendCell(row, 'Paths', (record.paths || []).join(', '), 'collapse');
+    appendCell(row, 'Current File', record.transferCurrent || '', 'detail:file:' + encodeClassPart(baseName(record.transferCurrent || '')));
+    appendCell(row, 'Saved Files', (record.savedFiles || []).join('\n'), 'detail:file:' + encodeClassPart(listSummary(record.savedFiles || [], 'file')));
+    appendCell(row, 'Paths', pathDetail(record), 'detail:' + pathKind(record) + ':' + encodeClassPart(pathSummary(record)));
     appendCell(row, 'Started', formatAgentTime(record.startedAt));
     appendCell(row, 'Finished', formatAgentTime(record.finishedAt));
     appendCell(row, 'Error', record.error || '');
@@ -1547,6 +2015,17 @@ function appendRepeatCell(row, id) {
   cell.appendChild(button);
   row.appendChild(cell);
 }
+function appendStopCurrentCell(row) {
+  var cell = document.createElement('td');
+  cell.setAttribute('data-label', 'Actions');
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'primary';
+  button.setAttribute('data-stop-current', 'true');
+  button.textContent = 'Stop Current';
+  cell.appendChild(button);
+  row.appendChild(cell);
+}
 function transferText(record) {
   if (!record.transferState) {
     return '';
@@ -1555,10 +2034,75 @@ function transferText(record) {
   if (record.transferPercent) {
     text += ' ' + record.transferPercent + '%';
   }
-  if (record.transferMessage) {
-    text += ' - ' + record.transferMessage;
-  }
   return text;
+}
+function baseName(value) {
+  value = String(value || '').replace(/[\/\\]+$/, '');
+  var index = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+  return index >= 0 ? value.slice(index + 1) : value;
+}
+function listSummary(values, singular) {
+  values = values || [];
+  if (values.length === 0) {
+    return '';
+  }
+  if (values.length === 1) {
+    return baseName(values[0]);
+  }
+  return values.length + ' ' + singular + 's';
+}
+function pathSummary(record) {
+  if (record.transferArchive && record.transferArchiveName) {
+    return record.transferArchiveName;
+  }
+  if (record.transferItems && record.transferItems.length > 1) {
+    return record.transferItems.length + ' items';
+  }
+  if (record.transferItems && record.transferItems.length === 1) {
+    return record.transferItems[0];
+  }
+  return listSummary(record.paths || [], record.action === 'receive' ? 'folder' : 'item');
+}
+function pathDetail(record) {
+  var lines = [];
+  if (record.transferArchive && record.transferArchiveName) {
+    lines.push('Archive: ' + record.transferArchiveName);
+  }
+  if (record.transferItems && record.transferItems.length) {
+    lines.push('Items:');
+    record.transferItems.forEach(function(item) { lines.push('  ' + item); });
+  }
+  if (record.paths && record.paths.length) {
+    if (lines.length) {
+      lines.push('');
+    }
+    lines.push('Paths:');
+    record.paths.forEach(function(path) { lines.push('  ' + path); });
+  }
+  return lines.join('\n');
+}
+function pathKind(record) {
+  if (record.transferArchive || (record.paths || []).length > 1) {
+    return 'archive';
+  }
+  if (record.action === 'receive') {
+    return 'directory';
+  }
+  return 'file';
+}
+function displayValue(value) {
+  var first = String(value || '').split('\n').filter(Boolean)[0] || '';
+  return baseName(first);
+}
+function encodeClassPart(value) {
+  return encodeURIComponent(value || '');
+}
+function decodeClassPart(value) {
+  try {
+    return decodeURIComponent(value || '');
+  } catch (error) {
+    return value || '';
+  }
 }
 function renderAgentStatus(status) {
   var state = status.state || 'idle';
@@ -1572,6 +2116,30 @@ function renderAgentStatus(status) {
   renderCurrent(status.current);
   renderHistory(status.history || []);
 }
+function openDetailDialog(title, value) {
+  currentDetailValue = value || '';
+  setText('detail-title', title || 'Details');
+  setText('detail-body', currentDetailValue);
+  document.getElementById('detail-backdrop').classList.add('open');
+}
+function closeDetailDialog() {
+  document.getElementById('detail-backdrop').classList.remove('open');
+}
+function copyText(value) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
+  var area = document.createElement('textarea');
+  area.value = value;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.left = '-9999px';
+  document.body.appendChild(area);
+  area.select();
+  var ok = document.execCommand('copy');
+  document.body.removeChild(area);
+  return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+}
 function updateAgentStatus() {
   fetch('/status', { cache: 'no-store' })
     .then(function(response) {
@@ -1583,6 +2151,41 @@ function updateAgentStatus() {
     .then(renderAgentStatus)
     .catch(function() {
       setText('agent-last-error', 'Status unavailable.');
+    });
+}
+function renderSettings(settings) {
+  document.getElementById('settings-output').value = settings.output || '';
+  var interfaceSelect = document.getElementById('settings-interface');
+  interfaceSelect.innerHTML = '';
+  (settings.interfaceOptions || []).forEach(function(option) {
+    var item = document.createElement('option');
+    item.value = option.name;
+    item.textContent = option.label || option.name;
+    interfaceSelect.appendChild(item);
+  });
+  if (settings.interface && !Array.prototype.some.call(interfaceSelect.options, function(option) { return option.value === settings.interface; })) {
+    var current = document.createElement('option');
+    current.value = settings.interface;
+    current.textContent = settings.interface + ' (not currently available)';
+    interfaceSelect.appendChild(current);
+  }
+  interfaceSelect.value = settings.interface || 'any';
+  document.getElementById('settings-port').value = String(settings.port || 0);
+  document.getElementById('settings-config').value = settings.configPath || '';
+  document.getElementById('settings-browser').checked = Boolean(settings.browser);
+  setText('settings-status', 'Settings loaded.');
+}
+function loadSettings() {
+  fetch('/settings', { cache: 'no-store' })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('settings request failed');
+      }
+      return response.json();
+    })
+    .then(renderSettings)
+    .catch(function() {
+      setText('settings-status', 'Settings unavailable.');
     });
 }
 if (window.EventSource) {
@@ -1609,17 +2212,84 @@ document.getElementById('clear-history').addEventListener('click', function() {
       setText('agent-last-error', 'Clear history failed.');
     });
 });
+document.getElementById('restart-agent').addEventListener('click', function() {
+  fetch('/restart', { method: 'POST' })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('restart failed');
+      }
+      setText('agent-last-error', 'Restarting.');
+      setTimeout(updateAgentStatus, 1200);
+    })
+    .catch(function() {
+      setText('agent-last-error', 'Restart failed.');
+    });
+});
+document.getElementById('settings-form').addEventListener('submit', function(event) {
+  event.preventDefault();
+  var port = Number.parseInt(document.getElementById('settings-port').value || '0', 10);
+  fetch('/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      output: document.getElementById('settings-output').value,
+      interface: document.getElementById('settings-interface').value,
+      port: Number.isNaN(port) ? 0 : port,
+      browser: document.getElementById('settings-browser').checked
+    })
+  })
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('settings save failed');
+      }
+      return response.json();
+    })
+    .then(function(settings) {
+      renderSettings(settings);
+      setText('settings-status', 'Settings saved.');
+    })
+    .catch(function() {
+      setText('settings-status', 'Settings save failed.');
+    });
+});
+document.getElementById('detail-close').addEventListener('click', closeDetailDialog);
+document.getElementById('detail-copy').addEventListener('click', function() {
+  copyText(currentDetailValue)
+    .then(function() {
+      setText('settings-status', 'Copied detail.');
+    })
+    .catch(function() {
+      setText('settings-status', 'Copy failed.');
+    });
+});
+document.getElementById('detail-backdrop').addEventListener('click', function(event) {
+  if (event.target.id === 'detail-backdrop') {
+    closeDetailDialog();
+  }
+});
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') {
+    closeDetailDialog();
+  }
+});
 document.addEventListener('click', function(event) {
-  var toggle = event.target.closest('[data-collapse-target]');
-  if (toggle) {
-    var target = document.getElementById(toggle.getAttribute('data-collapse-target'));
-    if (!target) {
-      return;
-    }
-    var expanded = toggle.getAttribute('aria-expanded') === 'true';
-    target.classList.toggle('collapsed', expanded);
-    toggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-    toggle.textContent = expanded ? 'Expand' : 'Collapse';
+  var stopCurrent = event.target.closest('[data-stop-current]');
+  if (stopCurrent) {
+    fetch('/stop-current', { method: 'POST' })
+      .then(function(response) {
+        if (!response.ok) {
+          throw new Error('stop-current failed');
+        }
+        return updateAgentStatus();
+      })
+      .catch(function() {
+        setText('agent-last-error', 'Stop current failed.');
+      });
+    return;
+  }
+  var detail = event.target.closest('[data-detail-value]');
+  if (detail) {
+    openDetailDialog(detail.getAttribute('data-detail-label') || 'Details', detail.getAttribute('data-detail-value') || '');
     return;
   }
   var button = event.target.closest('[data-repeat-id]');
@@ -1639,6 +2309,7 @@ document.addEventListener('click', function(event) {
     });
 });
 updateAgentStatus();
+loadSettings();
 </script>
 </body>
 </html>`))

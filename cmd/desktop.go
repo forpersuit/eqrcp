@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"eqrcp/application"
+	"eqrcp/config"
 	"eqrcp/version"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +27,7 @@ eqrcp desktop share /path/file.txt /path/photo.jpg
 eqrcp desktop share /path/directory`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(command *cobra.Command, args []string) error {
-		app.Flags.Browser = true
+		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
 		return sendCmdFunc(command, args)
 	},
 }
@@ -40,9 +42,11 @@ eqrcp desktop receive /path/directory
 eqrcp desktop receive`,
 	Args: cobra.RangeArgs(0, 1),
 	RunE: func(command *cobra.Command, args []string) error {
-		app.Flags.Browser = true
+		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
 		if output, ok := desktopReceiveOutput(args); ok {
 			app.Flags.Output = output
+		} else if app.Flags.Output == "" {
+			app.Flags.Output = desktopOutputPreference(app.Flags)
 		}
 		return receiveCmdFunc(command, args)
 	},
@@ -53,6 +57,26 @@ func desktopReceiveOutput(args []string) (string, bool) {
 		return "", false
 	}
 	return args[0], true
+}
+
+func desktopBrowserPreference(flags application.Flags, fallback bool) bool {
+	settingsApp := application.New()
+	settingsApp.Flags = flags
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	if err != nil {
+		return fallback
+	}
+	return settings.Browser
+}
+
+func desktopOutputPreference(flags application.Flags) string {
+	settingsApp := application.New()
+	settingsApp.Flags = flags
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	if err != nil || settings.Output == "" {
+		return config.DefaultDesktopOutputDirectory()
+	}
+	return settings.Output
 }
 
 var desktopInstallCmd = &cobra.Command{

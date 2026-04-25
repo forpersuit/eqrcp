@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,7 +16,9 @@ import (
 	"time"
 
 	"eqrcp/application"
+	"eqrcp/config"
 	"eqrcp/server"
+	"github.com/spf13/cobra"
 )
 
 func TestValidateDesktopAgentTask(t *testing.T) {
@@ -240,6 +243,22 @@ func TestDesktopAgentTransferNotificationsAreDeduped(t *testing.T) {
 	case got := <-notifications:
 		t.Fatalf("unexpected duplicate notification %q", got)
 	default:
+	}
+}
+
+func TestDesktopAgentFailedTransferNotificationUsesTransferMessage(t *testing.T) {
+	title, message := desktopAgentTransferNotification(desktopAgentTaskRecord{
+		Action:          "receive",
+		Paths:           []string{"/tmp/inbox"},
+		TransferState:   "failed",
+		TransferMessage: "Unable to write file to disk.",
+		TransferCurrent: "report.txt",
+	})
+	got := title + ": " + message
+	for _, want := range []string{"eqrcp transfer failed", "Receive failed: Unable to write file to disk."} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("notification = %q, want to contain %q", got, want)
+		}
 	}
 }
 
@@ -690,6 +709,15 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"Clear History",
 		"Transfer again",
 		"Stop Agent",
+		"Restart Agent",
+		"Settings",
+		"Save Settings",
+		"Output directory",
+		"<select id=\"settings-interface\"",
+		"Open browser pages automatically",
+		"current user's config directory",
+		"detail-backdrop",
+		"detail-body",
 		"Current keeps the active task visible while its QR service is still running",
 		"History contains finalized tasks after the QR service has exited",
 		"Version",
@@ -700,6 +728,8 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"data-repeat-id",
 		"/tasks/' + id + '/repeat",
 		"fetch('/history'",
+		"fetch('/restart'",
+		"fetch('/settings'",
 		"new EventSource('/events')",
 		"setInterval(updateAgentStatus, 5000)",
 		"Open QR Page",
@@ -707,15 +737,19 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		"Current File",
 		"Saved Files",
 		"incoming.txt",
-		"a.txt, b.txt",
+		"2 files",
+		"a.txt\nb.txt",
 		"receive",
 		"/tmp/recv",
 		"finished.txt",
 		"table-layout: fixed",
 		"table-wrap",
-		"toggle-inline",
-		"data-collapse-target",
-		"Expand",
+		"detail-cell",
+		"data-detail-value",
+		"detail-copy",
+		"Copy",
+		"kind-directory",
+		"kind-archive",
 		"completed",
 	} {
 		if !strings.Contains(string(body), want) {
@@ -770,6 +804,53 @@ func TestDesktopAgentCommandArgs(t *testing.T) {
 	err = desktopAgentCommandArgs(desktopAgentStartCmd, []string{"extra"})
 	if err == nil || !strings.Contains(err.Error(), "does not take arguments") {
 		t.Fatalf("desktopAgentCommandArgs(extra) = %v, want no-args error", err)
+	}
+}
+
+func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
+	previousBaseURL := desktopAgentBaseURL
+	previousExecutable := desktopAgentExecutable
+	previousStarter := desktopAgentBackgroundStarter
+	previousWaiter := desktopAgentReadyWaiter
+	desktopAgentBaseURL = "http://127.0.0.1:1"
+	desktopAgentExecutable = func() (string, error) {
+		return "/tmp/eqrcp", nil
+	}
+	started := false
+	desktopAgentBackgroundStarter = func(exe string, logFile *os.File) error {
+		started = true
+		if exe != "/tmp/eqrcp" {
+			t.Fatalf("exe = %q, want /tmp/eqrcp", exe)
+		}
+		if logFile == nil {
+			t.Fatal("logFile is nil")
+		}
+		return nil
+	}
+	desktopAgentReadyWaiter = func(timeout time.Duration) error {
+		if timeout != 3*time.Second {
+			t.Fatalf("timeout = %s, want 3s", timeout)
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		desktopAgentBaseURL = previousBaseURL
+		desktopAgentExecutable = previousExecutable
+		desktopAgentBackgroundStarter = previousStarter
+		desktopAgentReadyWaiter = previousWaiter
+	})
+
+	command := &cobra.Command{}
+	var out bytes.Buffer
+	command.SetOut(&out)
+	if err := runDesktopAgentBackground(command); err != nil {
+		t.Fatal(err)
+	}
+	if !started {
+		t.Fatal("background starter was not called")
+	}
+	if !strings.Contains(out.String(), "Desktop agent started in background.") || !strings.Contains(out.String(), "Log: ") {
+		t.Fatalf("output = %q, want background start details", out.String())
 	}
 }
 
@@ -854,6 +935,181 @@ func TestDesktopAgentClearHistory(t *testing.T) {
 	}
 	if len(restarted.snapshot().History) != 0 {
 		t.Fatalf("persisted History = %#v, want empty", restarted.snapshot().History)
+	}
+}
+
+func TestDesktopAgentRestartEndpointStopsAndStartsAgent(t *testing.T) {
+	previousExecutable := desktopAgentExecutable
+	desktopAgentExecutable = func() (string, error) {
+		return "/bin/true", nil
+	}
+	t.Cleanup(func() {
+		desktopAgentExecutable = previousExecutable
+	})
+
+	shutdownCalled := make(chan struct{}, 1)
+	agent := newDesktopAgent(application.Flags{})
+	agent.shutdown = func() {
+		shutdownCalled <- struct{}{}
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Post(server.URL+"/restart", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("restart status = %d, want %d", response.StatusCode, http.StatusAccepted)
+	}
+	select {
+	case <-shutdownCalled:
+	case <-time.After(time.Second):
+		t.Fatal("restart did not call shutdown")
+	}
+}
+
+func TestDesktopAgentRestartPersistsActiveTaskForRepeat(t *testing.T) {
+	previousExecutable := desktopAgentExecutable
+	desktopAgentExecutable = func() (string, error) {
+		return "/bin/true", nil
+	}
+	t.Cleanup(func() {
+		desktopAgentExecutable = previousExecutable
+	})
+
+	block := make(chan struct{})
+	started := make(chan struct{})
+	shutdownCalled := make(chan struct{}, 1)
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	var stopOnce sync.Once
+	agent.shutdown = func() {
+		shutdownCalled <- struct{}{}
+	}
+	agent.runner = func(task desktopAgentTask) error {
+		agent.setActiveStop(func() {
+			stopOnce.Do(func() {
+				close(block)
+			})
+		})
+		close(started)
+		<-block
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"active.txt"}})
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("task status = %d, want %d", response.StatusCode, http.StatusAccepted)
+	}
+	<-started
+	restartResponse, err := http.Post(server.URL+"/restart", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restartResponse.Body.Close()
+	if restartResponse.StatusCode != http.StatusAccepted {
+		t.Fatalf("restart status = %d, want %d", restartResponse.StatusCode, http.StatusAccepted)
+	}
+	select {
+	case <-shutdownCalled:
+	case <-time.After(time.Second):
+		t.Fatal("restart did not call shutdown")
+	}
+	status := getAgentStatus(t, server.URL)
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want nil after restart finalizes active task", status.Current)
+	}
+	if len(status.History) == 0 || status.History[0].ID != 1 || status.History[0].State != "replaced" {
+		t.Fatalf("History = %#v, want replaced active task #1", status.History)
+	}
+
+	repeated := make(chan desktopAgentTask, 1)
+	restarted := newDesktopAgent(application.Flags{})
+	restarted.historyPath = historyPath
+	if err := restarted.loadHistory(); err != nil {
+		t.Fatal(err)
+	}
+	restarted.runner = func(task desktopAgentTask) error {
+		repeated <- task
+		return nil
+	}
+	restartedServer := httptest.NewServer(restarted.routes())
+	defer restartedServer.Close()
+
+	repeatResponse, err := http.Post(restartedServer.URL+"/tasks/1/repeat", "text/plain", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer repeatResponse.Body.Close()
+	if repeatResponse.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(repeatResponse.Body)
+		t.Fatalf("repeat status = %d, want %d; body = %q", repeatResponse.StatusCode, http.StatusAccepted, string(body))
+	}
+	select {
+	case task := <-repeated:
+		if task.Action != "share" || len(task.Paths) != 1 || task.Paths[0] != "active.txt" {
+			t.Fatalf("repeated task = %#v, want original active task", task)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("repeated task did not run after restart")
+	}
+}
+
+func TestDesktopAgentSettingsEndpointReadsAndWritesConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(configPath, []byte("output: /tmp/old\nport: 19000\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	agent := newDesktopAgent(application.Flags{Config: configPath})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	response, err := http.Get(server.URL + "/settings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("settings status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	var settings config.DesktopSettings
+	if err := json.NewDecoder(response.Body).Decode(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.Output != "/tmp/old" || settings.Port != 19000 || !settings.Browser || settings.ConfigPath != configPath || len(settings.InterfaceOptions) == 0 {
+		t.Fatalf("settings = %#v, want config values", settings)
+	}
+
+	newOutput := t.TempDir()
+	payload := bytes.NewBufferString(fmt.Sprintf(`{"output":%q,"interface":"any","port":19001,"browser":true}`, newOutput))
+	response, err = http.Post(server.URL+"/settings", "application/json", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("save settings status = %d, want %d; body = %q", response.StatusCode, http.StatusOK, string(body))
+	}
+	if err := json.NewDecoder(response.Body).Decode(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.Output != newOutput || settings.Interface != "any" || settings.Port != 19001 || !settings.Browser {
+		t.Fatalf("saved settings = %#v, want updated values", settings)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"output: " + newOutput, "interface: any", "port: 19001", "browser: true"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("config = %q, want to contain %q", string(data), want)
+		}
 	}
 }
 

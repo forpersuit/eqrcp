@@ -9,120 +9,290 @@ var QR = `
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>eqrcp</title>
     <style>
+        :root {
+            --bg: #f4f7fb;
+            --surface: #fff;
+            --surface-soft: #f8fafc;
+            --line: #d9e2ec;
+            --text: #17202a;
+            --muted: #5d6978;
+            --accent: #2563eb;
+            --ok: #15803d;
+            --warn: #b45309;
+            --danger: #b42318;
+            --idle: #64748b;
+        }
+        * {
+            box-sizing: border-box;
+        }
         body {
-            background: #f7f9fb;
-            color: #202428;
-            font-family: Arial, Helvetica, sans-serif;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
             margin: 0;
         }
         main {
             margin: 0 auto;
+            max-width: 1040px;
+            padding: 36px 20px 44px;
+        }
+        .page-header {
             max-width: 760px;
-            padding: 28px 18px 40px;
+            margin-bottom: 22px;
         }
         h1 {
-            font-size: 28px;
-            line-height: 1.2;
-            margin: 0 0 8px;
+            font-size: clamp(28px, 4vw, 42px);
+            font-weight: 720;
+            line-height: 1.08;
+            margin: 0 0 10px;
         }
         p {
+            color: var(--muted);
             font-size: 16px;
-            line-height: 1.5;
-            margin: 0 0 18px;
+            line-height: 1.55;
+            margin: 0;
         }
-        .qr {
-            background: #fff;
-            border: 1px solid #d7dee5;
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
+            gap: 18px;
+            align-items: start;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
             border-radius: 8px;
-            display: block;
-            margin: 20px auto;
-            max-width: 360px;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+        }
+        .status-card {
             padding: 18px;
-            width: calc(100% - 36px);
         }
-        .url-row {
+        .status-head {
             display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .state-badge {
+            display: inline-flex;
+            align-items: center;
             gap: 8px;
-            margin: 16px 0;
+            border-radius: 999px;
+            background: #eef2f7;
+            color: var(--idle);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 6px 10px;
+            white-space: nowrap;
         }
-        input {
-            border: 1px solid #b9c3cc;
-            border-radius: 6px;
-            flex: 1;
-            font-size: 15px;
-            min-width: 0;
-            padding: 10px;
+        .state-badge::before,
+        .agent-pill-dot {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: currentColor;
         }
-        button {
-            background: #13795b;
-            border: 0;
-            border-radius: 6px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 15px;
-            padding: 10px 14px;
+        .state-badge.state-transferring,
+        .state-badge.state-completed {
+            background: #eaf7ee;
+            color: var(--ok);
         }
-        .stop {
-            background: #a52834;
+        .state-badge.state-failed,
+        .state-badge.state-disconnected {
+            background: #fff0f0;
+            color: var(--danger);
         }
-        .repeat {
-            background: #155f9f;
+        .state-badge.state-stopped,
+        .state-badge.state-replaced {
+            background: #f4f6f8;
+            color: var(--idle);
+        }
+        .state-badge.state-waiting {
+            background: #eff6ff;
+            color: var(--accent);
+        }
+        .version {
+            color: var(--muted);
+            font-size: 12px;
+            text-align: right;
+        }
+        .status-message {
+            color: var(--text);
+            font-size: 16px;
+            margin-bottom: 14px;
+        }
+        .detail-grid {
+            display: grid;
+            gap: 8px;
             margin-top: 12px;
         }
-        .hint {
-            color: #59636e;
-            font-size: 14px;
-        }
-        .status {
-            background: #e8f3ef;
-            border: 1px solid #b7d6cc;
-            border-radius: 8px;
-            margin: 18px 0;
-            padding: 12px 14px;
-        }
-        .status strong {
-            display: block;
-            margin-bottom: 4px;
-        }
         .meta {
-            color: #3c4752;
+            color: var(--muted);
             font-size: 14px;
-            margin: 6px 0;
             overflow-wrap: anywhere;
         }
         .progress {
-            background: #d9e1e8;
-            border-radius: 6px;
-            height: 12px;
-            margin-top: 12px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            height: 10px;
+            margin-top: 14px;
             overflow: hidden;
         }
         .progress-bar {
-            background: #13795b;
+            background: var(--accent);
             height: 100%;
             transition: width 180ms ease;
             width: 0;
+        }
+        .list-title {
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 700;
+            margin-top: 16px;
         }
         .saved-files {
             margin: 6px 0 0;
             padding-left: 20px;
         }
         .saved-files li {
+            color: var(--muted);
             margin: 5px 0;
             overflow-wrap: anywhere;
         }
-        .list-title {
-            color: #3c4752;
+        .qr-card {
+            padding: 18px;
+            text-align: center;
+        }
+        .qr-frame {
+            display: grid;
+            place-items: center;
+            background: var(--surface-soft);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 18px;
+        }
+        .qr {
+            display: block;
+            max-width: 315px;
+            width: 100%;
+        }
+        .url-row {
+            display: flex;
+            gap: 8px;
+            margin: 16px 0 12px;
+        }
+        input {
+            width: 100%;
+            min-width: 0;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            color: var(--text);
+            flex: 1;
+            font-size: 14px;
+            padding: 10px 11px;
+        }
+        .actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        button {
+            min-height: 38px;
+            border: 0;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
             font-size: 14px;
             font-weight: 700;
+            padding: 9px 13px;
+        }
+        button:disabled {
+            cursor: default;
+            opacity: 0.68;
+        }
+        .secondary {
+            background: #334155;
+        }
+        .stop {
+            background: var(--danger);
+        }
+        .repeat {
+            background: var(--accent);
+        }
+        .hint {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 12px;
+        }
+        .repeat-card {
             margin-top: 14px;
+            padding: 16px;
+            text-align: center;
+        }
+        .agent-pill {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 10;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            max-width: min(440px, calc(100vw - 32px));
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+            color: var(--idle);
+            font-size: 13px;
+            font-weight: 700;
+            padding: 8px 11px;
+        }
+        .agent-pill-text {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .agent-pill.agent-online,
+        .agent-pill.agent-busy {
+            color: var(--ok);
+        }
+        .agent-pill.agent-offline {
+            color: var(--danger);
+        }
+        .agent-pill.agent-checking,
+        .agent-pill.agent-idle,
+        .agent-pill.agent-running {
+            color: var(--idle);
         }
         .hidden {
             display: none;
         }
+        @media (max-width: 800px) {
+            main {
+                padding-top: 64px;
+            }
+            .layout {
+                grid-template-columns: 1fr;
+            }
+            .qr-card {
+                order: -1;
+            }
+        }
         @media (max-width: 560px) {
-            .url-row {
+            .url-row,
+            .actions,
+            .status-head {
                 flex-direction: column;
+                align-items: stretch;
+            }
+            .version {
+                text-align: left;
             }
             button {
                 width: 100%;
@@ -131,41 +301,59 @@ var QR = `
     </style>
 </head>
 <body>
+    {{if .HasAgentStatus}}
+    <div id="agent-pill" class="agent-pill agent-checking" title="Checking desktop agent status.">
+        <span class="agent-pill-dot"></span>
+        <span id="agent-state" class="agent-pill-text">Agent: checking</span>
+    </div>
+    {{end}}
     <main>
-        <h1 id="transfer-title">eqrcp transfer ready</h1>
-        <p id="transfer-target">Scan the QR code or open the address on another device.</p>
-        <div class="status" aria-live="polite">
-            <strong id="transfer-state">Waiting</strong>
-            <span id="transfer-message">Waiting for a device to connect.</span>
-            <div class="meta" id="transfer-version">Version: {{.Version}}</div>
-            <div class="meta" id="transfer-current"></div>
-            <div class="meta" id="archive-note"></div>
-            <div class="meta" id="transfer-bytes"></div>
-            <div class="progress" aria-hidden="true">
-                <div class="progress-bar" id="transfer-progress"></div>
-            </div>
-            <div class="list-title" id="transfer-items-title"></div>
-            <ul class="saved-files" id="transfer-items"></ul>
-            <div class="list-title" id="saved-files-title"></div>
-            <ul class="saved-files" id="saved-files"></ul>
+        <header class="page-header">
+            <h1 id="transfer-title">eqrcp transfer ready</h1>
+            <p id="transfer-target">Scan the QR code or open the address on another device.</p>
+        </header>
+        <div class="layout">
+            <section class="card status-card" aria-live="polite">
+                <div class="status-head">
+                    <strong id="transfer-state" class="state-badge state-waiting">Waiting</strong>
+                    <div class="version" id="transfer-version">Version: {{.Version}}</div>
+                </div>
+                <div class="status-message" id="transfer-message">Waiting for a device to connect.</div>
+                <div class="progress" aria-hidden="true">
+                    <div class="progress-bar" id="transfer-progress"></div>
+                </div>
+                <div class="detail-grid">
+                    <div class="meta" id="transfer-current"></div>
+                    <div class="meta" id="archive-note"></div>
+                    <div class="meta" id="transfer-bytes"></div>
+                </div>
+                <div class="list-title" id="transfer-items-title"></div>
+                <ul class="saved-files" id="transfer-items"></ul>
+                <div class="list-title" id="saved-files-title"></div>
+                <ul class="saved-files" id="saved-files"></ul>
+            </section>
+            <section id="qr-area" class="card qr-card">
+                <div class="qr-frame">
+                    <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
+                </div>
+                <div class="url-row">
+                    <input id="transfer-url" type="text" value="{{.URL}}" readonly>
+                    <button class="secondary" type="button" onclick="copyURL()">Copy URL</button>
+                </div>
+                <div class="actions">
+                    <form method="post" action="{{.StopRoute}}">
+                        <button class="stop" type="submit">Stop transfer</button>
+                    </form>
+                </div>
+                <p class="hint">This page can stay open while the transfer is waiting.</p>
+            </section>
+            {{if .RepeatRoute}}
+            <section id="repeat-area" class="card repeat-card hidden">
+                <button id="repeat-button" class="repeat" type="button" onclick="repeatTransfer()">Transfer again</button>
+                <p class="hint" id="repeat-hint">Start a new transfer with the same source from the desktop agent.</p>
+            </section>
+            {{end}}
         </div>
-        <div id="qr-area">
-            <img class="qr" src="{{.QRImageRoute}}" alt="QR code">
-            <div class="url-row">
-                <input id="transfer-url" type="text" value="{{.URL}}" readonly>
-                <button type="button" onclick="copyURL()">Copy URL</button>
-            </div>
-            <form method="post" action="{{.StopRoute}}">
-                <button class="stop" type="submit">Stop transfer</button>
-            </form>
-            <p class="hint">This page can stay open while the transfer is waiting.</p>
-        </div>
-        {{if .RepeatRoute}}
-        <div id="repeat-area" class="hidden">
-            <button class="repeat" type="button" onclick="repeatTransfer()">Transfer again</button>
-            <p class="hint">Start a new transfer with the same source from the desktop agent.</p>
-        </div>
-        {{end}}
     </main>
     <script>
         function copyURL() {
@@ -180,6 +368,15 @@ var QR = `
         }
         {{if .RepeatRoute}}
         function repeatTransfer() {
+            var repeatButton = document.getElementById('repeat-button');
+            var repeatHint = document.getElementById('repeat-hint');
+            if (repeatButton) {
+                repeatButton.disabled = true;
+                repeatButton.textContent = 'Starting...';
+            }
+            if (repeatHint) {
+                repeatHint.textContent = 'Asking the desktop agent to start a fresh transfer.';
+            }
             fetch('{{.RepeatRoute}}', { method: 'POST', mode: 'cors' })
                 .then(function(response) {
                     if (!response.ok) {
@@ -190,21 +387,41 @@ var QR = `
                     if (repeatArea) {
                         repeatArea.classList.add('hidden');
                     }
+                    if (repeatHint) {
+                        repeatHint.textContent = 'Started. The desktop agent will open a fresh QR page.';
+                    }
                 })
                 .catch(function() {
                     document.getElementById('transfer-message').textContent = 'Transfer again failed. Open the desktop agent status page and retry from history.';
+                    if (repeatHint) {
+                        repeatHint.textContent = 'Could not start from this page. Open the agent page and retry from history.';
+                    }
+                    if (repeatButton) {
+                        repeatButton.disabled = false;
+                        repeatButton.textContent = 'Transfer again';
+                    }
                 });
         }
         {{end}}
+        var renderingAgentRecord = false;
+        function normalizeState(state) {
+            return String(state || 'waiting').toLowerCase();
+        }
+        function setTransferState(state) {
+            var normalized = normalizeState(state);
+            var element = document.getElementById('transfer-state');
+            element.textContent = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+            element.className = 'state-badge state-' + normalized;
+        }
         function renderStatus(data) {
-            var state = data.state || 'waiting';
+            var state = normalizeState(data.state || 'waiting');
             var message = data.message || '';
             var percent = data.percent || 0;
             var title = data.title || 'eqrcp transfer ready';
             var target = data.target || '';
             var current = data.current || '';
             var archiveName = data.archiveName || '';
-            document.getElementById('transfer-state').textContent = state.charAt(0).toUpperCase() + state.slice(1);
+            setTransferState(state);
             document.getElementById('transfer-message').textContent = message;
             document.getElementById('transfer-version').textContent = data.version ? ('Version: ' + data.version) : 'Version: {{.Version}}';
             document.getElementById('transfer-title').textContent = title;
@@ -215,12 +432,11 @@ var QR = `
             document.getElementById('transfer-progress').style.width = percent + '%';
             renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
             renderSavedFiles(data.savedFiles || []);
-            if (state === 'completed' || state === 'stopped' || state === 'failed') {
-                document.getElementById('qr-area').classList.add('hidden');
-                var repeatArea = document.getElementById('repeat-area');
-                if (repeatArea) {
-                    repeatArea.classList.remove('hidden');
-                }
+            if (!renderingAgentRecord) {
+                probeAgentStatus(false);
+            }
+            if (state === 'completed' || state === 'stopped' || state === 'failed' || state === 'replaced') {
+                hideTransferControls();
                 clearInterval(statusTimer);
                 if (statusEvents) {
                     statusEvents.close();
@@ -237,9 +453,117 @@ var QR = `
                 })
                 .then(renderStatus)
                 .catch(function() {
-                    document.getElementById('transfer-message').textContent = 'Status unavailable.';
+                    handleTransferUnavailable();
                 });
         }
+        function hideTransferControls() {
+            document.getElementById('qr-area').classList.add('hidden');
+            var repeatArea = document.getElementById('repeat-area');
+            if (repeatArea) {
+                repeatArea.classList.remove('hidden');
+            }
+        }
+        function handleTransferUnavailable() {
+            setTransferState('disconnected');
+            document.getElementById('transfer-message').textContent = 'Transfer service disconnected. Checking desktop agent.';
+            hideTransferControls();
+            if (statusEvents) {
+                statusEvents.close();
+            }
+            probeAgentStatus(true);
+        }
+        {{if .HasAgentStatus}}
+        function setAgentStatus(state, message) {
+            var normalized = normalizeState(state);
+            var pill = document.getElementById('agent-pill');
+            var label = document.getElementById('agent-state');
+            var text = message ? ('Agent: ' + normalized + ' - ' + message) : ('Agent: ' + normalized);
+            label.textContent = text;
+            pill.className = 'agent-pill agent-' + normalized;
+            pill.title = text;
+        }
+        function probeAgentStatus(force) {
+            fetch('{{.AgentStatusRoute}}', { cache: 'no-store', mode: 'cors' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('agent status failed');
+                    }
+                    return response.json();
+                })
+                .then(function(status) {
+                    renderAgentStatus(status, force);
+                })
+                .catch(function() {
+                    setAgentStatus('offline', 'Desktop agent is restarting or offline.');
+                });
+        }
+        function renderAgentStatus(status, force) {
+            var taskID = Number('{{.AgentTaskID}}');
+            var current = status.current && status.current.id === taskID ? status.current : null;
+            var history = status.history || [];
+            var record = current;
+            var source = current ? 'current' : '';
+            if (!record) {
+                for (var index = 0; index < history.length; index++) {
+                    if (history[index].id === taskID) {
+                        record = history[index];
+                        source = 'history';
+                        break;
+                    }
+                }
+            }
+            if (!record) {
+                setAgentStatus(status.state || 'running', 'Desktop agent is reachable, but this transfer is no longer tracked.');
+                if (force) {
+                    document.getElementById('transfer-message').textContent = 'Transfer expired. Open the desktop agent page or start this transfer again.';
+                }
+                return;
+            }
+            var transferState = record.transferState || record.state || '';
+            setAgentStatus(status.state || 'running', 'Task #' + taskID + ' is in agent ' + source + ': ' + transferState + '.');
+            if (force || transferState === 'stopped' || transferState === 'failed' || transferState === 'replaced' || transferState === 'completed') {
+                renderAgentRecord(record);
+            }
+        }
+        function renderAgentRecord(record) {
+            var state = record.transferState || record.state || 'stopped';
+            var message = record.transferMessage || record.error || agentRecordMessage(record);
+            renderingAgentRecord = true;
+            try {
+                renderStatus({
+                    state: state,
+                    message: message,
+                    title: record.action === 'receive' ? 'Receive files' : 'Share files',
+                    target: (record.paths || []).join(', '),
+                    current: record.transferCurrent || '',
+                    bytesDone: record.bytesDone || 0,
+                    bytesTotal: record.bytesTotal || 0,
+                    percent: record.transferPercent || 0,
+                    savedFiles: record.savedFiles || [],
+                    version: ''
+                });
+            } finally {
+                renderingAgentRecord = false;
+            }
+            hideTransferControls();
+        }
+        function agentRecordMessage(record) {
+            switch (record.state) {
+            case 'replaced':
+                return 'Transfer was interrupted by a newer task or agent restart.';
+            case 'stopped':
+                return 'Transfer stopped.';
+            case 'failed':
+                return 'Transfer failed.';
+            case 'completed':
+                return 'Transfer completed.';
+            default:
+                return 'Transfer is no longer connected to this page.';
+            }
+        }
+        {{else}}
+        function probeAgentStatus(force) {}
+        {{end}}
         function targetText(data, target) {
             if (data.archiveName && data.items && data.items.length) {
                 return data.items.length + ' item' + (data.items.length === 1 ? '' : 's') + ' will be downloaded as a zip archive.';
@@ -292,12 +616,16 @@ var QR = `
             return (index === 0 ? size : size.toFixed(1)) + ' ' + units[index];
         }
         var statusTimer = setInterval(updateStatus, 1500);
+        {{if .HasAgentStatus}}
+        var agentTimer = setInterval(function() { probeAgentStatus(false); }, 3000);
+        {{end}}
         var statusEvents = null;
         if (window.EventSource) {
             statusEvents = new EventSource('{{.EventsRoute}}');
             statusEvents.onmessage = function(event) {
                 renderStatus(JSON.parse(event.data));
             };
+            statusEvents.onerror = handleTransferUnavailable;
         }
         updateStatus();
     </script>

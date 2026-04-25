@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -87,6 +88,21 @@ func transferPercent(done int64, total int64) int {
 
 func transferIncomplete(done int64, total int64) bool {
 	return total > 0 && done < total
+}
+
+func agentStatusFromRepeatRoute(route string) (string, string, bool) {
+	parsed, err := url.Parse(route)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", "", false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) != 3 || parts[0] != "tasks" || parts[2] != "repeat" {
+		return "", "", false
+	}
+	if _, err := strconv.Atoi(parts[1]); err != nil {
+		return "", "", false
+	}
+	return parsed.Scheme + "://" + parsed.Host + "/status", parts[1], true
 }
 
 type progressResponseWriter struct {

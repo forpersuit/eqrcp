@@ -230,22 +230,29 @@ func (s *Server) DisplayQR(url string) error {
 		s.statusMu.Lock()
 		repeatRoute := s.repeatRoute
 		s.statusMu.Unlock()
+		agentStatusRoute, agentTaskID, hasAgentStatus := agentStatusFromRepeatRoute(repeatRoute)
 		htmlVariables := struct {
-			URL          string
-			QRImageRoute string
-			StatusRoute  string
-			EventsRoute  string
-			StopRoute    string
-			RepeatRoute  string
-			Version      string
+			URL              string
+			QRImageRoute     string
+			StatusRoute      string
+			EventsRoute      string
+			StopRoute        string
+			RepeatRoute      string
+			AgentStatusRoute string
+			AgentTaskID      string
+			HasAgentStatus   bool
+			Version          string
 		}{
-			URL:          url,
-			QRImageRoute: imagePath,
-			StatusRoute:  statusPath,
-			EventsRoute:  eventsPath,
-			StopRoute:    stopPath,
-			RepeatRoute:  repeatRoute,
-			Version:      version.String(),
+			URL:              url,
+			QRImageRoute:     imagePath,
+			StatusRoute:      statusPath,
+			EventsRoute:      eventsPath,
+			StopRoute:        stopPath,
+			RepeatRoute:      repeatRoute,
+			AgentStatusRoute: agentStatusRoute,
+			AgentTaskID:      agentTaskID,
+			HasAgentStatus:   hasAgentStatus,
+			Version:          version.String(),
 		}
 		if err := serveTemplate("qr", pages.QR, w, htmlVariables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

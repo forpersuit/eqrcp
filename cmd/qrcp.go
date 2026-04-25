@@ -25,6 +25,7 @@ func init() {
 	desktopCmd.AddCommand(desktopUninstallCmd)
 	desktopCmd.AddCommand(desktopAgentCmd)
 	desktopCmd.AddCommand(desktopAgentStartCmd)
+	desktopCmd.AddCommand(desktopAgentRestartHelperCmd)
 	desktopCmd.AddCommand(desktopAgentHistoryClearCmd)
 	desktopCmd.AddCommand(desktopAgentStopCmd)
 	desktopCmd.AddCommand(desktopAgentStopCurrentCmd)
@@ -32,6 +33,8 @@ func init() {
 	desktopCmd.AddCommand(desktopAgentOpenCmd)
 	desktopCmd.AddCommand(desktopAgentOpenCurrentCmd)
 	configCmd.AddCommand(migrateCmd)
+	desktopAgentCmd.Flags().BoolP("background", "B", false, "start the desktop agent in the background")
+	desktopAgentStartCmd.Flags().BoolP("background", "B", false, "start the desktop agent in the background")
 	// Global command flags
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Quiet, "quiet", "q", false, "only print errors")
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.KeepAlive, "keep-alive", "k", false, "keep server alive after transferring")

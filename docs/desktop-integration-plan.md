@@ -230,7 +230,8 @@ Initial local API:
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
 - `eqrcp desktop agent-start` now exists as an explicit alias for `eqrcp desktop agent`, so users can start the long-lived agent with a clearer command name.
-- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground commands by design: they keep the shell occupied while the agent is running. Explorer startup and right-click launches should continue to use the launcher or startup path, which starts the agent hidden in the background.
+- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground commands by default: they keep the shell occupied while the agent is running.
+- `eqrcp desktop agent -B` and `eqrcp desktop agent-start -B` start the same agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell. The uppercase shorthand avoids conflicting with the existing global `-b` / `--browser` flag.
 - `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
@@ -243,22 +244,13 @@ Initial local API:
 - If the agent is online and already waiting on a previous transfer, the new task is accepted and the agent stops the current server so the new QR page can open.
 - If the agent cannot be started, the launcher falls back to the previous direct desktop command path.
 
-Next priorities:
+Deferred Windows validation batch:
 
-1. Validate QR completion cleanup, timestamped archive names, and original item lists in Windows right-click multi-file and directory share flows.
+1. Validate QR completion cleanup, timestamped archive names, original item lists, large-send fields, and multi-file receive fields in Windows right-click flows.
 2. Validate the browser-based agent status page on Windows, including automatic status refresh, `eqrcp desktop agent-open`, `eqrcp desktop agent-open-current`, and the current task QR page link.
-3. Validate the dedicated stop-current endpoint and `eqrcp desktop agent-stop-current` command so users can cancel the active transfer without exiting the agent.
-4. Validate repeat QR scan and multi-browser behavior on Windows: completed or stopped one-shot links should return a clear expired response, while current state remains visible through `/qr/status`, `/status`, transfer-link `/status` aliases, and the agent status page.
-5. Keep Windows process count bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
-6. Validate persisted recent task history on Windows: finish a task, restart `eqrcp desktop agent`, confirm `agent-status` and `http://127.0.0.1:48176/` still show the completed task, then clear it with `agent-history-clear` or the status page button.
-7. Before tray icon, startup registration, and notifications, finish Windows validation for current agent lifecycle, stop-current behavior, status freshness, history clearing, and desktop status repair diagnostics.
-8. After the remaining Windows validation closes, move into tray icon evaluation, startup polish, and longer-lived desktop settings work.
-
-Current Windows validation gap after this change:
-
-1. Confirm `desktop status` on Windows shows `Desktop agent runtime: running` after startup and `not running` after `agent-stop`.
-2. Replace `eqrcp.exe` with a newer build while leaving the old agent process alive, then confirm `desktop status` reports `status: needs restart`.
-3. Re-run the large-send and multi-file receive browser checks to verify transfer fields still refresh promptly without manual reload.
+3. Validate `eqrcp desktop agent-start -B`, `eqrcp desktop agent-stop`, and `eqrcp desktop status` runtime diagnostics on Windows, including the version mismatch `needs restart` case.
+4. Validate `eqrcp desktop agent-stop-current`, repeat QR scan, multi-browser behavior, persisted history, and process count bounded around one long-lived agent plus short-lived launcher invocations.
+5. Validate Windows startup registration, login autostart, startup repair detection, and lightweight notifications after the next Windows-focused development pass.
 
 ### Phase 5: Desktop Enhancements
 
@@ -270,15 +262,22 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 - Startup registration: initial Windows current-user login startup is implemented with `eqrcp desktop startup-enable`, `eqrcp desktop startup-disable`, and `eqrcp desktop startup-status`. `eqrcp desktop status` also reports whether startup is disabled, enabled, or needs repair.
 - Notifications: initial lightweight notifications are implemented for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Real started/completed/stopped notifications are driven by server transfer state rather than only by agent task lifecycle. Windows uses built-in PowerShell/.NET balloon notifications without adding a GUI dependency.
 - Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
-- Settings surface: expose output directory, interface, port, and startup choice without requiring manual config editing.
+- Settings surface: initial browser-based settings surface is implemented on the local agent page. It can read and update output directory, interface, port, and browser-open preference through `/settings`, backed by the existing per-user config file. The browser-open preference is now used by desktop share/receive flows and desktop agent tasks.
+- Interface selection is a dropdown populated from detected usable interfaces plus `any (0.0.0.0)`, so users do not need to know OS-specific adapter names.
+- When no interface is configured, the settings page selects the first detected usable interface rather than `any`, because `any` can bind successfully while producing QR URLs that other devices cannot reach.
+- Port `0` remains the recommended default because it lets the OS choose an available port. Fixed ports are supported for predictable URLs, but transfers fail visibly if the chosen port is already occupied.
+- When no output directory is configured, desktop settings resolve to the current user's `Downloads` directory if it exists, otherwise the user's home directory. Saving an empty output value writes that resolved user-directory default instead of leaving receive behavior dependent on the process working directory.
+- The config file stays in the current user's config directory. This remains the right default for installer builds because installation directories are often read-only, shared by multiple users, and unsuitable for mutable per-user preferences.
+- Agent restart: the browser status page includes `Restart Agent`, which asks the current process to stop and launch a fresh background agent from the same executable.
+- Transfer pages opened by the desktop agent now show a compact agent status pill in the top-right corner. It uses green, red, or gray state coloring for reachable, offline, and idle/restarting states. If the per-task QR service disappears after agent restart or replacement, the page falls back to the agent `/status` endpoint, shows whether the agent is reachable, and renders the task's final agent state when it can still find the task in current or history.
+- Agent restart now synchronously finalizes the active task into persisted history before the old agent exits, so an already-open task page can still use `Transfer again` after the new agent starts.
 
 Next priorities:
 
-1. Validate Windows startup registration: run `eqrcp desktop startup-enable`, sign out or restart, confirm `eqrcp.exe desktop agent` starts and `http://127.0.0.1:48176/` is reachable.
-2. Validate startup repair detection by moving or renaming the executable and checking `eqrcp desktop startup-status`.
-3. Validate lightweight notifications on Windows for share, receive, stop-current, replacement, and failure cases.
-4. Validate agent status page transfer fields during a large send and a multi-file receive: state, percent, current file, and saved files should update without manual refresh.
-5. Evaluate tray icon options. Tray work should be deferred until the agent lifecycle, startup behavior, history persistence, real transfer status, and notifications are stable.
+1. Extend the settings surface with startup choice/status and stronger output directory validation guidance.
+2. Add history refinements: configurable retention and open/export actions for saved history.
+3. Evaluate tray icon options after the settings surface is usable; the tray should wrap the same local agent actions rather than introduce a second control path.
+4. Build Windows binaries and run the deferred Windows validation batch when the next Windows development slice is ready.
 
 ## Recommended First Implementation
 

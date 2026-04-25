@@ -58,21 +58,27 @@ func TestContentDispositionEscapesSpacesAsPercent20(t *testing.T) {
 func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
-		URL          string
-		QRImageRoute string
-		StatusRoute  string
-		EventsRoute  string
-		StopRoute    string
-		RepeatRoute  string
-		Version      string
+		URL              string
+		QRImageRoute     string
+		StatusRoute      string
+		EventsRoute      string
+		StopRoute        string
+		RepeatRoute      string
+		AgentStatusRoute string
+		AgentTaskID      string
+		HasAgentStatus   bool
+		Version          string
 	}{
-		URL:          `http://127.0.0.1:8080/send/a?name="quoted"`,
-		QRImageRoute: "/qr/image",
-		StatusRoute:  "/qr/status",
-		EventsRoute:  "/qr/events",
-		StopRoute:    "/qr/stop",
-		RepeatRoute:  "http://127.0.0.1:48176/tasks/7/repeat",
-		Version:      "eqrcp test [date: now]",
+		URL:              `http://127.0.0.1:8080/send/a?name="quoted"`,
+		QRImageRoute:     "/qr/image",
+		StatusRoute:      "/qr/status",
+		EventsRoute:      "/qr/events",
+		StopRoute:        "/qr/stop",
+		RepeatRoute:      "http://127.0.0.1:48176/tasks/7/repeat",
+		AgentStatusRoute: "http://127.0.0.1:48176/status",
+		AgentTaskID:      "7",
+		HasAgentStatus:   true,
+		Version:          "eqrcp test [date: now]",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -101,6 +107,13 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`renderList('transfer-items', 'transfer-items-title'`,
 		`renderSavedFiles(data.savedFiles || [])`,
 		`formatBytes(done)`,
+		`Agent: checking`,
+		`http:\/\/127.0.0.1:48176\/status`,
+		`Task #`,
+		`renderAgentRecord(record)`,
+		`handleTransferUnavailable`,
+		`Transfer service disconnected. Checking desktop agent.`,
+		`agentTimer`,
 		"Waiting for a device to connect.",
 		`name=&#34;quoted&#34;`,
 	} {
@@ -113,13 +126,16 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
-		URL          string
-		QRImageRoute string
-		StatusRoute  string
-		EventsRoute  string
-		StopRoute    string
-		RepeatRoute  string
-		Version      string
+		URL              string
+		QRImageRoute     string
+		StatusRoute      string
+		EventsRoute      string
+		StopRoute        string
+		RepeatRoute      string
+		AgentStatusRoute string
+		AgentTaskID      string
+		HasAgentStatus   bool
+		Version          string
 	}{
 		URL:          "http://127.0.0.1:8080/send/a",
 		QRImageRoute: "/qr/image",
@@ -134,6 +150,27 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "Transfer again") {
 		t.Fatalf("QR page = %q, want no repeat action without route", out.String())
+	}
+}
+
+func TestAgentStatusFromRepeatRoute(t *testing.T) {
+	status, taskID, ok := agentStatusFromRepeatRoute("http://127.0.0.1:48176/tasks/42/repeat")
+	if !ok {
+		t.Fatal("agentStatusFromRepeatRoute() ok = false, want true")
+	}
+	if status != "http://127.0.0.1:48176/status" || taskID != "42" {
+		t.Fatalf("agentStatusFromRepeatRoute() = %q, %q, want status route and task id", status, taskID)
+	}
+
+	for _, route := range []string{
+		"",
+		"/tasks/42/repeat",
+		"http://127.0.0.1:48176/tasks/not-number/repeat",
+		"http://127.0.0.1:48176/tasks/42/stop",
+	} {
+		if status, taskID, ok := agentStatusFromRepeatRoute(route); ok || status != "" || taskID != "" {
+			t.Fatalf("agentStatusFromRepeatRoute(%q) = %q, %q, %v; want empty false", route, status, taskID, ok)
+		}
 	}
 }
 

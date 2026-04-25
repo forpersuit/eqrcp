@@ -390,6 +390,8 @@ Expected result:
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
 - `GET /events` streams agent status with server-sent events.
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and EventSource-based status updates with `/status` polling fallback.
+- `GET /settings` returns editable desktop settings from the existing per-user config file, including detected interface options.
+- `POST /settings` updates output directory, interface, port, and browser-open preference in the existing config file.
 - Active tasks include the QR control page URL, and the browser status page links back to that QR page.
 - Active tasks include real transfer state from the transfer service, including state, progress percentage, current file, and saved files.
 - The browser agent page and `desktop agent-status` output explicitly show `current file` and `saved files` for the current task and history entries.
@@ -402,9 +404,11 @@ Expected result:
 - While a task is active, later `POST /tasks` calls are accepted and cause the agent to stop the current task before running the next task.
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
+- `POST /restart` stops the active task, shuts down the current agent, and starts a fresh background agent from the same executable.
 - `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
 - `eqrcp desktop agent-start` is available as an explicit alias for `eqrcp desktop agent`.
-- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground long-running commands; a normal shell should stay attached until the agent is stopped.
+- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground long-running commands by default; a normal shell should stay attached until the agent is stopped.
+- `eqrcp desktop agent -B` and `eqrcp desktop agent-start -B` start the agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell.
 - `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
 - `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
 - `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
@@ -442,6 +446,16 @@ Expected result:
 - The agent status formatter renders current task details and recent history.
 - The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent status formatter and page both render `current file` and `saved files` when those fields are available from transfer snapshots.
+- The browser agent page renders Stop Current on the active Current row instead of as a global header action.
+- The browser agent page renders Restart Agent as an agent-level action.
+- Long current file, saved files, and paths values stay one-line in tables with file/directory/archive visual treatment. The visible text uses the actual item name rather than the full path when possible. Clicking a value opens a stable detail dialog with a copy action.
+- Desktop-agent QR pages include a top-right agent status pill, poll the agent `/status` endpoint, and keep showing agent reachability even after the task reaches `completed`, `stopped`, `failed`, or `replaced`.
+- If the task QR service is unavailable after agent restart or task replacement, the QR page hides stale transfer controls, marks the transfer as disconnected, and uses agent current/history data to render the final task state when available.
+- Restarting the agent while a task is active persists that task as `replaced` before shutdown; a newly started agent can reload it from history and accept `POST /tasks/<id>/repeat`.
+- The settings endpoint reads and writes the existing per-user config file, validates interface choices against detected adapters or `any`, and the browser agent page renders the settings form with an interface dropdown.
+- Empty output settings resolve to the current user's Downloads directory when it exists, otherwise the user's home directory.
+- Desktop share, desktop receive, and desktop agent tasks use the saved browser-open preference, defaulting to browser pages for new configs.
+- The failed transfer notification uses the transfer failure message when the server provides one.
 - The browser agent page keeps the table responsive to viewport width and renders long `Paths` cells as collapsed blocks with explicit `Expand`/`Collapse` controls.
 - The agent stores the current QR page URL and renders an `Open QR Page` link for the active task.
 - The agent-open command checks `/health` and opens the local status page.
@@ -453,6 +467,7 @@ Expected result:
 - The Windows desktop status formatter reports `Desktop agent runtime: not running` when the local agent is offline and recommends `eqrcp desktop agent-start`.
 - The Windows desktop status formatter reports `status: needs restart` when the running agent version differs from the current executable version.
 - Running `eqrcp desktop agent runtime` should return guidance to use `desktop status` or `desktop agent-status` instead of trying to start a second foreground agent.
+- The agent and agent-start commands expose `-B` / `--background`, and background startup uses the current executable, creates an agent log, waits for readiness, and reports the status URL.
 
 ## Launcher Agent Forwarding
 
