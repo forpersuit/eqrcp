@@ -4,6 +4,7 @@ import './app.css';
 import {EventsOn} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
+    OpenURL,
     ReadSettings,
     Receive,
     SaveSettings,
@@ -110,10 +111,17 @@ function renderCurrent(task) {
         return `<div class="empty-state">Agent is idle.</div>`;
     }
     const percent = task.transferPercent || 0;
+    const qrImage = qrImageURL(task.pageUrl);
     return `
         <div class="task-card">
             <div class="task-title">${escapeHTML(task.action)} #${task.id}</div>
             <div class="task-state">${escapeHTML(task.transferState || task.state)}</div>
+            ${qrImage ? `
+                <div class="qr-preview">
+                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">Open in browser</button>
+                </div>
+            ` : ''}
             <div class="progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl>
                 <dt>Target</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || shortName(task.paths?.[0] || ''))}</dd>
@@ -155,6 +163,7 @@ function bindEvents() {
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-settings')?.addEventListener('click', saveSettings);
     document.querySelector('#stop-current')?.addEventListener('click', stopCurrent);
+    document.querySelector('.open-qr')?.addEventListener('click', openQRPage);
 }
 
 async function chooseFiles() {
@@ -219,6 +228,15 @@ async function stopCurrent() {
     });
 }
 
+async function openQRPage(event) {
+    await run(async () => {
+        const url = event.currentTarget.dataset.openUrl;
+        if (url) {
+            await OpenURL(url);
+        }
+    });
+}
+
 async function refreshStatus() {
     await run(async () => {
         state.status = await AgentStatus();
@@ -254,6 +272,22 @@ function addSharePaths(paths) {
 
 function shortName(path) {
     return String(path || '').split(/[\\/]/).filter(Boolean).pop() || path || '';
+}
+
+function qrImageURL(pageUrl) {
+    if (!pageUrl) {
+        return '';
+    }
+    try {
+        const url = new URL(pageUrl);
+        const cleanPath = url.pathname.replace(/\/$/, '');
+        url.pathname = cleanPath.endsWith('/qr') ? `${cleanPath}/image` : '/qr/image';
+        url.search = '';
+        url.hash = '';
+        return url.toString();
+    } catch {
+        return '';
+    }
 }
 
 function escapeHTML(value) {

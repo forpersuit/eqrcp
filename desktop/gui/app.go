@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,6 +125,18 @@ func (a *App) RestartAgent() error {
 		return err
 	}
 	return a.postNoBody("/restart")
+}
+
+func (a *App) OpenURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
+	}
+	wailsruntime.BrowserOpenURL(a.ctx, rawURL)
+	return nil
 }
 
 func (a *App) ReadSettings() (DesktopSettings, error) {

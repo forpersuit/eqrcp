@@ -251,6 +251,33 @@ dd {
     margin-top: 4px;
 }
 
+.qr-preview {
+    align-items: center;
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: grid;
+    gap: 12px;
+    justify-items: center;
+    margin: 14px 0;
+    padding: 14px;
+}
+
+.qr-preview img {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    height: 180px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    padding: 8px;
+    width: 180px;
+}
+
+.open-qr {
+    border: 1px solid var(--line);
+}
+
 .progress {
     background: var(--wash);
     border-radius: 999px;

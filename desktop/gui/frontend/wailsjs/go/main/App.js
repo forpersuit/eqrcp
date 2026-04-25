@@ -6,6 +6,10 @@ export function AgentStatus() {
   return window['go']['main']['App']['AgentStatus']();
 }
 
+export function OpenURL(arg1) {
+  return window['go']['main']['App']['OpenURL'](arg1);
+}
+
 export function ReadSettings() {
   return window['go']['main']['App']['ReadSettings']();
 }

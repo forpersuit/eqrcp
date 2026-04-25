@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function AgentStatus():Promise<main.AgentStatus>;
 
+export function OpenURL(arg1:string):Promise<void>;
+
 export function ReadSettings():Promise<main.DesktopSettings>;
 
 export function Receive(arg1:string):Promise<main.AgentStatus>;
