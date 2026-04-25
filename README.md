@@ -80,6 +80,13 @@ eqrcp desktop share /path/file.txt
 eqrcp desktop receive /path/directory
 ```
 
+Experimental Wails desktop GUI:
+
+```sh
+cd desktop/gui
+EQRCP_CLI=/path/to/eqrcp wails dev
+```
+
 On Windows, install user-level Explorer context menu entries:
 
 ```powershell

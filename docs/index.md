@@ -45,6 +45,7 @@ Environment variables use the `EQRCP_` prefix.
 - [Test analysis](test-analysis.md)
 - [Desktop integration plan](desktop-integration-plan.md)
 - [Desktop platform notes](desktop-platform-notes.md)
+- [Windows validation checklist](windows-validation-checklist.md)
 - [Security notes](security-notes.md)
 
 ## License

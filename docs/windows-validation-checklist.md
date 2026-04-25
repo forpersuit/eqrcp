@@ -1,0 +1,198 @@
+# Windows Validation Checklist
+
+This checklist is for the deferred Windows validation batch in `desktop-integration-plan.md`.
+
+## Scope
+
+- Validate Windows desktop integration behavior end-to-end.
+- Produce pass/fail evidence for each item.
+- Record findings before continuing new feature work.
+
+## Environment And Build
+
+- [ ] Use a clean test machine or VM with Windows Explorer enabled.
+- [ ] Build binaries from current `master`:
+
+```sh
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqrcp.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o /mnt/e/developer/results/eqrcp-launcher.exe ./cmd/eqrcp-launcher
+```
+
+- [ ] Place `eqrcp.exe` and `eqrcp-launcher.exe` side by side.
+- [ ] Confirm CLI baseline:
+
+```powershell
+E:\developer\results\eqrcp.exe version
+E:\developer\results\eqrcp.exe desktop --help
+E:\developer\results\eqrcp.exe desktop status
+```
+
+Evidence to capture:
+
+- Version output text.
+- First `desktop status` output before install.
+
+## Install And Baseline Regression
+
+- [ ] Install desktop integration:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop install
+```
+
+- [ ] Validate Explorer entries:
+- [ ] `Share with eqrcp` on file right-click.
+- [ ] `Share with eqrcp` on folder right-click.
+- [ ] `Receive here with eqrcp` on folder right-click.
+- [ ] `Receive here with eqrcp` on folder background right-click.
+- [ ] `Send to > Share with eqrcp` exists.
+- [ ] Validate no console prompt appears on right-click action.
+- [ ] Validate right-click action opens browser QR page.
+- [ ] Validate `desktop status` reports launcher path and no false localized parsing issues.
+
+Evidence to capture:
+
+- Screenshot for each context menu entry.
+- One screenshot of QR page opened from Explorer.
+- `desktop status` full output.
+
+## Deferred Batch 1: QR/Transfer UI Details
+
+- [ ] Right-click share file: validate progress, completion cleanup, final state.
+- [ ] Right-click share directory: validate timestamped archive naming and original item list.
+- [ ] Right-click share multi-select via Send To: validate item list and archive naming.
+- [ ] Right-click receive: upload multiple files from phone and validate saved files rendering.
+- [ ] Large send file: validate `bytesDone/bytesTotal/percent` behavior and monotonic UI.
+
+Evidence to capture:
+
+- QR page screenshots at waiting, transferring, completed/stopped.
+- `/qr/status` sample JSON for one send and one receive.
+
+## Deferred Batch 2: Agent Browser Status And Open Commands
+
+- [ ] Start agent in background:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop agent-start -B
+```
+
+- [ ] Open agent page and validate auto refresh and current/history sections:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop agent-open
+```
+
+- [ ] Start a right-click task and validate `Open QR Page` link in agent page.
+- [ ] Validate `agent-open-current` when active and when idle:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop agent-open-current
+```
+
+Evidence to capture:
+
+- Agent page screenshot with one active task.
+- Agent page screenshot with history rows.
+- Output of `desktop agent-status`.
+
+## Deferred Batch 3: Background Lifecycle And Runtime Diagnostics
+
+- [ ] Validate background start/stop path:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop agent-start -B
+E:\developer\results\eqrcp.exe desktop agent-status
+E:\developer\results\eqrcp.exe desktop agent-stop
+```
+
+- [ ] Validate runtime diagnostics in `desktop status`:
+- [ ] Agent not running case.
+- [ ] Agent running with matching version case.
+- [ ] Agent running with version mismatch case shows `needs restart`.
+
+- [ ] Validate startup commands:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop startup-status
+E:\developer\results\eqrcp.exe desktop startup-enable
+E:\developer\results\eqrcp.exe desktop startup-status
+E:\developer\results\eqrcp.exe desktop startup-disable
+E:\developer\results\eqrcp.exe desktop startup-status
+```
+
+Evidence to capture:
+
+- Outputs for all commands above.
+- `desktop status` output for each diagnostics case.
+
+## Deferred Batch 4: Stop Current, Repeat Scan, Multi-Browser, History, Process Bound
+
+- [ ] Start share task and stop it via CLI:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop agent-stop-current
+```
+
+- [ ] Validate stopped task lands in history with expected state.
+- [ ] Validate repeat behavior from:
+- [ ] Original QR result page `Transfer again`.
+- [ ] Agent history `Transfer again`.
+- [ ] Validate multi-browser behavior on same task URL (no invalid state reset).
+- [ ] Validate persisted history survives agent restart.
+- [ ] Validate process count stays bounded around one long-lived agent plus short-lived launcher processes.
+
+Evidence to capture:
+
+- `desktop agent-status` before/after stop and repeat.
+- Task Manager or `Get-Process` snapshots during repeated right-click actions.
+
+## Deferred Batch 5: Startup Autostart Repair And Notifications
+
+- [ ] Enable startup and confirm current-user Run key registration.
+- [ ] Sign out/sign in, confirm agent autostarts.
+- [ ] Validate startup repair detection when executable path changes.
+- [ ] Validate notifications for:
+- [ ] QR ready.
+- [ ] Transfer started.
+- [ ] Completed.
+- [ ] Failed.
+- [ ] Stopped.
+- [ ] Replaced.
+
+Evidence to capture:
+
+- `desktop status` and `startup-status` output after each startup state change.
+- Screenshots or logs for notification events.
+
+## Cleanup
+
+- [ ] Uninstall desktop integration:
+
+```powershell
+E:\developer\results\eqrcp.exe desktop uninstall
+```
+
+- [ ] Confirm installed Explorer entries are removed.
+
+## Result Template
+
+Fill this table after execution:
+
+| Area | Result | Notes | Evidence Path |
+| --- | --- | --- | --- |
+| Install and Explorer verbs | PASS/FAIL |  |  |
+| Deferred batch 1 | PASS/FAIL |  |  |
+| Deferred batch 2 | PASS/FAIL |  |  |
+| Deferred batch 3 | PASS/FAIL |  |  |
+| Deferred batch 4 | PASS/FAIL |  |  |
+| Deferred batch 5 | PASS/FAIL |  |  |
+| Cleanup uninstall | PASS/FAIL |  |  |
+
+If any item fails, create a follow-up issue with:
+
+- Exact command or click path.
+- Actual behavior.
+- Expected behavior.
+- Reproduction rate.
+- Evidence link.

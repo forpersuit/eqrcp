@@ -1,0 +1,297 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"time"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+const agentBaseURL = "http://127.0.0.1:48176"
+
+type App struct {
+	ctx    context.Context
+	client *http.Client
+}
+
+type AgentTask struct {
+	Action string   `json:"action"`
+	Paths  []string `json:"paths"`
+}
+
+type TaskRecord struct {
+	ID                  int        `json:"id"`
+	Action              string     `json:"action"`
+	Paths               []string   `json:"paths"`
+	State               string     `json:"state"`
+	TransferState       string     `json:"transferState,omitempty"`
+	TransferMessage     string     `json:"transferMessage,omitempty"`
+	TransferMode        string     `json:"transferMode,omitempty"`
+	TransferTarget      string     `json:"transferTarget,omitempty"`
+	TransferArchiveName string     `json:"transferArchiveName,omitempty"`
+	TransferCurrent     string     `json:"transferCurrent,omitempty"`
+	TransferPercent     int        `json:"transferPercent,omitempty"`
+	BytesDone           int64      `json:"bytesDone,omitempty"`
+	BytesTotal          int64      `json:"bytesTotal,omitempty"`
+	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	PageURL             string     `json:"pageUrl,omitempty"`
+	Error               string     `json:"error,omitempty"`
+	StartedAt           time.Time  `json:"startedAt"`
+	FinishedAt          *time.Time `json:"finishedAt,omitempty"`
+}
+
+type AgentStatus struct {
+	State          string       `json:"state"`
+	Current        *TaskRecord  `json:"current,omitempty"`
+	Queued         int          `json:"queued"`
+	History        []TaskRecord `json:"history,omitempty"`
+	LastError      string       `json:"lastError,omitempty"`
+	Version        string       `json:"version"`
+	AgentStartedAt time.Time    `json:"agentStartedAt"`
+}
+
+type DesktopSettings struct {
+	ConfigPath       string            `json:"configPath"`
+	Interface        string            `json:"interface"`
+	InterfaceOptions []InterfaceOption `json:"interfaceOptions"`
+	Port             int               `json:"port"`
+	Output           string            `json:"output"`
+	Browser          bool              `json:"browser"`
+}
+
+type InterfaceOption struct {
+	Name  string `json:"name"`
+	IP    string `json:"ip"`
+	Label string `json:"label"`
+}
+
+func NewApp() *App {
+	return &App{
+		client: &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	wailsruntime.OnFileDrop(ctx, func(_ int, _ int, paths []string) {
+		wailsruntime.EventsEmit(ctx, "eqrcp:file-drop", paths)
+	})
+}
+
+func (a *App) AgentStatus() (AgentStatus, error) {
+	if err := a.ensureAgent(); err != nil {
+		return AgentStatus{}, err
+	}
+	var status AgentStatus
+	if err := a.getJSON("/status", &status); err != nil {
+		return AgentStatus{}, err
+	}
+	return status, nil
+}
+
+func (a *App) Share(paths []string) (AgentStatus, error) {
+	if len(paths) == 0 {
+		return AgentStatus{}, fmt.Errorf("choose at least one file or folder")
+	}
+	return a.postTask(AgentTask{Action: "share", Paths: paths})
+}
+
+func (a *App) Receive(output string) (AgentStatus, error) {
+	paths := []string{}
+	if output != "" {
+		paths = []string{output}
+	}
+	return a.postTask(AgentTask{Action: "receive", Paths: paths})
+}
+
+func (a *App) StopCurrent() error {
+	if err := a.ensureAgent(); err != nil {
+		return err
+	}
+	return a.postNoBody("/stop-current")
+}
+
+func (a *App) RestartAgent() error {
+	if err := a.ensureAgent(); err != nil {
+		return err
+	}
+	return a.postNoBody("/restart")
+}
+
+func (a *App) ReadSettings() (DesktopSettings, error) {
+	if err := a.ensureAgent(); err != nil {
+		return DesktopSettings{}, err
+	}
+	var settings DesktopSettings
+	if err := a.getJSON("/settings", &settings); err != nil {
+		return DesktopSettings{}, err
+	}
+	return settings, nil
+}
+
+func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
+	if err := a.ensureAgent(); err != nil {
+		return DesktopSettings{}, err
+	}
+	var saved DesktopSettings
+	if err := a.postJSON("/settings", settings, &saved); err != nil {
+		return DesktopSettings{}, err
+	}
+	return saved, nil
+}
+
+func (a *App) SelectFiles() ([]string, error) {
+	return wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Choose files to share",
+	})
+}
+
+func (a *App) SelectShareDirectory() (string, error) {
+	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Choose folder to share",
+	})
+}
+
+func (a *App) SelectReceiveDirectory() (string, error) {
+	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Choose receive folder",
+	})
+}
+
+func (a *App) postTask(task AgentTask) (AgentStatus, error) {
+	if err := a.ensureAgent(); err != nil {
+		return AgentStatus{}, err
+	}
+	var status AgentStatus
+	if err := a.postJSON("/tasks", task, &status); err != nil {
+		return AgentStatus{}, err
+	}
+	return status, nil
+}
+
+func (a *App) ensureAgent() error {
+	if a.health() == nil {
+		return nil
+	}
+	cli, err := findEqrcpCLI()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(cli, "desktop", "agent-start", "-B")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start desktop agent: %w", err)
+	}
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("start desktop agent: %w", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if a.health() == nil {
+			return nil
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+	return fmt.Errorf("desktop agent did not become ready")
+}
+
+func (a *App) health() error {
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+"/health", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("desktop agent health returned %s", resp.Status)
+	}
+	return nil
+}
+
+func (a *App) getJSON(path string, out interface{}) error {
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("desktop agent returned %s", resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func (a *App) postJSON(path string, in interface{}, out interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("desktop agent returned %s", resp.Status)
+	}
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func (a *App) postNoBody(path string) error {
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("desktop agent returned %s", resp.Status)
+	}
+	return nil
+}
+
+func findEqrcpCLI() (string, error) {
+	if configured := os.Getenv("EQRCP_CLI"); configured != "" {
+		return configured, nil
+	}
+	if exe, err := os.Executable(); err == nil {
+		name := "eqrcp"
+		if runtime.GOOS == "windows" {
+			name = "eqrcp.exe"
+		}
+		candidate := filepath.Join(filepath.Dir(exe), name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	if path, err := exec.LookPath("eqrcp"); err == nil {
+		return path, nil
+	}
+	return "", fmt.Errorf("eqrcp CLI was not found; set EQRCP_CLI or place eqrcp next to the desktop app")
+}

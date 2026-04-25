@@ -279,6 +279,45 @@ Next priorities:
 3. Evaluate tray icon options after the settings surface is usable; the tray should wrap the same local agent actions rather than introduce a second control path.
 4. Build Windows binaries and run the deferred Windows validation batch when the next Windows development slice is ready.
 
+### Phase 6: Cross-Platform Desktop GUI
+
+Status: started.
+
+Use Wails v2 to provide a native desktop application on Windows, Linux, and macOS while keeping the existing Go transfer engine and desktop agent as the source of truth.
+
+Architecture:
+
+- `desktop/gui` contains the Wails v2 app as a separate module.
+- The GUI talks to the long-running desktop agent at `127.0.0.1:48176`.
+- The GUI starts `eqrcp desktop agent-start -B` when the agent is offline, using `EQRCP_CLI`, a sibling `eqrcp` binary, or `eqrcp` on `PATH`.
+- Transfer task creation stays behind the existing `/tasks` agent API.
+- Settings stay behind the existing `/settings` agent API.
+- The Wails app should not duplicate send, receive, status, history, or cleanup logic.
+
+Initial GUI scope:
+
+- Share mode with drag-and-drop, file selection, folder selection, and a `Start transfer` action.
+- Receive mode with output directory selection and a `Start receive` action.
+- Current task display with state, target, QR page URL, and progress.
+- Recent task history display.
+- Stop-current action.
+- Settings save for output directory and browser fallback.
+
+Commercial boundary:
+
+- Keep the MIT-licensed transfer core compliant and attributed.
+- Put paid value in desktop convenience features rather than in easily bypassed CLI primitives.
+- Candidate paid features include tray automation, persistent advanced history, batch/task queues, auto-receive profiles, multi-device presets, organization deployment controls, and packaged support.
+- Do not merge future upstream code whose license terms conflict with commercial distribution; keep the current MIT provenance and license notices.
+
+Next priorities:
+
+1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
+2. Add tray menu actions that call the same agent endpoints: open app, share, receive, stop current, quit agent.
+3. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
+4. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
+5. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
+
 ## Recommended First Implementation
 
 The first desktop implementation is available:
