@@ -6,6 +6,10 @@ export function AgentStatus() {
   return window['go']['main']['App']['AgentStatus']();
 }
 
+export function ClearHistory() {
+  return window['go']['main']['App']['ClearHistory']();
+}
+
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
@@ -16,6 +20,10 @@ export function ReadSettings() {
 
 export function Receive(arg1) {
   return window['go']['main']['App']['Receive'](arg1);
+}
+
+export function RepeatTask(arg1) {
+  return window['go']['main']['App']['RepeatTask'](arg1);
 }
 
 export function RestartAgent() {

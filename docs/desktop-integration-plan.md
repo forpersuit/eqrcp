@@ -318,6 +318,13 @@ Next priorities:
 4. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
 5. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
 
+System tray note:
+
+- Wails v2.12.0 does not expose a stable public `SystemTray` API in the same style as Wails v3 alpha.
+- The local Wails v2 module contains internal and on-hold tray menu code, but no direct `options.App` or runtime entry point suitable for product use.
+- Wails v3 alpha documents `app.SystemTray.New()` and tray menus; do not migrate only for tray support until v3 is stable enough for this product.
+- For the Wails v2 track, evaluate a focused third-party Go tray library after the in-window Share/Receive workflow is stable.
+
 ## Recommended First Implementation
 
 The first desktop implementation is available:

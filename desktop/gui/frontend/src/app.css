@@ -176,8 +176,9 @@ h2 {
 .path-list li,
 .history li {
     border-bottom: 1px solid var(--line);
-    display: grid;
+    display: flex;
     gap: 4px;
+    justify-content: space-between;
     padding: 11px 0;
     text-align: left;
 }
@@ -231,9 +232,18 @@ dd {
     padding: 12px;
 }
 
+.success {
+    background: #edf8f0;
+    color: var(--accent-strong);
+}
+
 .error {
     background: #fff1ed;
     color: var(--danger);
+}
+
+.compact {
+    margin-top: 12px;
 }
 
 .task-card {
@@ -249,6 +259,10 @@ dd {
     color: var(--warning);
     font-weight: 800;
     margin-top: 4px;
+}
+
+.task-state.done {
+    color: var(--accent);
 }
 
 .qr-preview {
@@ -306,6 +320,60 @@ dt {
 
 dd {
     margin: 0;
+}
+
+.icon-button {
+    align-self: center;
+    background: #eef2ec;
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-weight: 900;
+    height: 28px;
+    line-height: 1;
+    width: 28px;
+}
+
+.saved-files {
+    background: #f8faf6;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-top: 14px;
+    padding: 12px;
+}
+
+.saved-files ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
+
+.saved-files li {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.settings-panel {
+    display: grid;
+    gap: 10px;
+}
+
+.settings-panel label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.settings-panel input,
+.settings-panel select {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    min-width: 0;
+    padding: 10px 12px;
+}
+
+.full {
+    width: 100%;
 }
 
 @media (max-width: 900px) {

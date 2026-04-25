@@ -120,6 +120,39 @@ func (a *App) StopCurrent() error {
 	return a.postNoBody("/stop-current")
 }
 
+func (a *App) ClearHistory() error {
+	if err := a.ensureAgent(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodDelete, agentBaseURL+"/history", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("desktop agent returned %s", resp.Status)
+	}
+	return nil
+}
+
+func (a *App) RepeatTask(id int) (AgentStatus, error) {
+	if id <= 0 {
+		return AgentStatus{}, fmt.Errorf("invalid task id")
+	}
+	if err := a.ensureAgent(); err != nil {
+		return AgentStatus{}, err
+	}
+	var status AgentStatus
+	if err := a.postJSON(fmt.Sprintf("/tasks/%d/repeat", id), nil, &status); err != nil {
+		return AgentStatus{}, err
+	}
+	return status, nil
+}
+
 func (a *App) RestartAgent() error {
 	if err := a.ensureAgent(); err != nil {
 		return err
@@ -250,11 +283,17 @@ func (a *App) getJSON(path string, out interface{}) error {
 }
 
 func (a *App) postJSON(path string, in interface{}, out interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
+	var body *bytes.Reader
+	if in == nil {
+		body = bytes.NewReader(nil)
+	} else {
+		data, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, body)
 	if err != nil {
 		return err
 	}
