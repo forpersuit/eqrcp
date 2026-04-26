@@ -449,11 +449,42 @@ func runReg(args ...string) error {
 }
 
 func runRegAllowMissing(args ...string) error {
+	if !regDeleteTargetExists(args...) {
+		return nil
+	}
 	cmd := exec.Command("reg", args...)
-	if output, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(output), "unable to find") && !strings.Contains(string(output), "not found") {
+	if output, err := cmd.CombinedOutput(); err != nil {
+		if !regDeleteTargetExists(args...) {
+			return nil
+		}
 		return fmt.Errorf("reg %v failed: %w: %s", args, err, output)
 	}
 	return nil
+}
+
+func regDeleteTargetExists(args ...string) bool {
+	queryArgs, ok := regDeleteQueryArgs(args...)
+	if !ok {
+		return true
+	}
+	return exec.Command("reg", queryArgs...).Run() == nil
+}
+
+func regDeleteQueryArgs(args ...string) ([]string, bool) {
+	if len(args) < 2 || strings.ToLower(args[0]) != "delete" {
+		return nil, false
+	}
+	queryArgs := []string{"query", args[1]}
+	for index := 2; index < len(args)-1; index++ {
+		if strings.EqualFold(args[index], "/v") || strings.EqualFold(args[index], "/ve") {
+			queryArgs = append(queryArgs, args[index])
+			if strings.EqualFold(args[index], "/v") {
+				queryArgs = append(queryArgs, args[index+1])
+			}
+			break
+		}
+	}
+	return queryArgs, true
 }
 
 func queryRegDefault(key string) (string, error) {

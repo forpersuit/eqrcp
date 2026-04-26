@@ -29,6 +29,44 @@ func TestWindowsCommandMatchesIgnoresOuterWhitespace(t *testing.T) {
 	}
 }
 
+func TestRegDeleteQueryArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+		ok   bool
+	}{
+		{
+			name: "key",
+			args: []string{"delete", `HKCU\Software\Classes\*\shell\eqrcp-share`, "/f"},
+			want: []string{"query", `HKCU\Software\Classes\*\shell\eqrcp-share`},
+			ok:   true,
+		},
+		{
+			name: "value",
+			args: []string{"delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqrcp-agent", "/f"},
+			want: []string{"query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqrcp-agent"},
+			ok:   true,
+		},
+		{
+			name: "not delete",
+			args: []string{"add", `HKCU\Software\Classes\*\shell\eqrcp-share`, "/f"},
+			ok:   false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := regDeleteQueryArgs(test.args...)
+			if ok != test.ok {
+				t.Fatalf("regDeleteQueryArgs() ok = %v, want %v", ok, test.ok)
+			}
+			if strings.Join(got, "\x00") != strings.Join(test.want, "\x00") {
+				t.Fatalf("regDeleteQueryArgs() = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestWindowsShellCommandUsesLauncherWhenAvailable(t *testing.T) {
 	got := windowsShellCommand(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`, "share", "%1")
 	want := `"C:\tools\eqrcp-launcher.exe" "--eqrcp-exe" "C:\tools\eqrcp.exe" "share" "%1"`

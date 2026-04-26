@@ -80,15 +80,18 @@ build_windows_cli() {
 
 build_gui_windows() {
   local target_dir="$build_root/windows-amd64"
-  if [[ "$(uname -s)" != "MINGW"* && "$(uname -s)" != "MSYS"* && "$(uname -s)" != "CYGWIN"* && "$(uname -s)" != "Windows_NT" ]]; then
-    echo "Skipping GUI build: Wails desktop build is expected to run on Windows." >&2
-    return 0
+  local wails_cmd
+  if wails_cmd="$(command -v wails 2>/dev/null)"; then
+    :
+  else
+    wails_cmd="$(go env GOPATH)/bin/wails"
   fi
-  if ! command -v wails >/dev/null 2>&1; then
+  if [[ ! -x "$wails_cmd" ]]; then
     echo "Skipping GUI build: wails CLI not found in PATH." >&2
     return 0
   fi
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" wails build -o "$target_dir/eqrcp-desktop.exe" -platform windows/amd64 -windowsconsole)
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64 -windowsconsole)
+  cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$target_dir/eqrcp-desktop.exe"
 }
 
 run_checks() {
