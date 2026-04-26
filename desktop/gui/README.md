@@ -44,7 +44,11 @@ cd desktop/gui
 EQRCP_CLI=/path/to/eqrcp wails dev
 ```
 
-Linux development requires the Wails system dependencies reported by `wails doctor`, especially `pkg-config`, `libgtk-3-dev`, and `libwebkit2gtk-4.0-dev`.
+Linux development requires the Wails system dependencies reported by `wails doctor`, especially `pkg-config`, `libgtk-3-dev`, and WebKitGTK. On Ubuntu 24.04, install `libwebkit2gtk-4.1-dev` and build with:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
+```
 
 ## Current Scope
 

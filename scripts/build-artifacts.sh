@@ -15,7 +15,7 @@ Default behavior:
 Options:
 - --out DIR    Output directory. Default: dist/test-artifacts
 - --windows    Build Windows CLI artifacts
-- --gui        Also build the Wails desktop app as eqrcp-desktop.exe
+- --gui        Also build Wails desktop app artifacts
 - --no-tests   Skip go test and frontend build checks
 EOF
 }
@@ -78,8 +78,7 @@ build_windows_cli() {
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$target_dir/eqrcp-launcher.exe" ./cmd/eqrcp-launcher)
 }
 
-build_gui_windows() {
-  local target_dir="$build_root/windows-amd64"
+find_wails() {
   local wails_cmd
   if wails_cmd="$(command -v wails 2>/dev/null)"; then
     :
@@ -87,7 +86,44 @@ build_gui_windows() {
     wails_cmd="$(go env GOPATH)/bin/wails"
   fi
   if [[ ! -x "$wails_cmd" ]]; then
-    echo "Skipping GUI build: wails CLI not found in PATH." >&2
+    return 1
+  fi
+  printf '%s\n' "$wails_cmd"
+}
+
+linux_wails_tags() {
+  if pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
+    printf 'webkit2_41'
+  fi
+}
+
+build_gui_current() {
+  local wails_cmd
+  if ! wails_cmd="$(find_wails)"; then
+    echo "Skipping current GUI build: wails CLI not found in PATH." >&2
+    return 0
+  fi
+  case "$(uname -s)" in
+    Linux*)
+      local target_dir="$build_root/current"
+      local tags
+      mkdir -p "$target_dir"
+      tags="$(linux_wails_tags)"
+      if [[ -n "$tags" ]]; then
+        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -tags "$tags" -o eqrcp-desktop)
+      else
+        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop)
+      fi
+      cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop" "$target_dir/eqrcp-desktop"
+      ;;
+  esac
+}
+
+build_gui_windows() {
+  local target_dir="$build_root/windows-amd64"
+  local wails_cmd
+  if ! wails_cmd="$(find_wails)"; then
+    echo "Skipping Windows GUI build: wails CLI not found in PATH." >&2
     return 0
   fi
   (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64 -windowsconsole)
@@ -111,6 +147,7 @@ if [[ "$build_windows" -eq 1 ]]; then
 fi
 
 if [[ "$build_gui" -eq 1 ]]; then
+  build_gui_current
   build_gui_windows
 fi
 
