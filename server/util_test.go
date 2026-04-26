@@ -213,6 +213,26 @@ func TestDisplayQRServiceStatus(t *testing.T) {
 	}
 }
 
+func TestServeQRDoesNotOpenBrowser(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	server := &Server{
+		BaseURL: "http://127.0.0.1:8080",
+		mux:     http.NewServeMux(),
+	}
+	server.setStatus("waiting", "Waiting for a device to connect.")
+
+	if err := server.ServeQR("http://127.0.0.1:8080/send/test"); err != nil {
+		t.Fatalf("ServeQR() error = %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/qr/status", nil)
+	response := httptest.NewRecorder()
+	server.mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("/qr/status code = %d, want %d; body = %q", response.Code, http.StatusOK, response.Body.String())
+	}
+}
+
 func TestDisplayQRCurrentStatus(t *testing.T) {
 	binDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(binDir, "xdg-open"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {

@@ -26,6 +26,7 @@ const state = {
     error: '',
     notice: '',
     busy: false,
+    browserFallback: false,
 };
 
 const app = document.querySelector('#app');
@@ -112,7 +113,7 @@ function renderReceive() {
                 <button id="choose-receive">Choose</button>
             </div>
             <label class="check">
-                <input id="browser-open" type="checkbox" ${state.settings?.browser ? 'checked' : ''} />
+                <input id="browser-open" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Open browser QR page as a fallback
             </label>
         </div>
@@ -138,7 +139,7 @@ function renderSettings() {
             <label>Port</label>
             <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" />
             <label class="check">
-                <input id="settings-browser" type="checkbox" ${state.settings.browser ? 'checked' : ''} />
+                <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
             </label>
             <button class="primary full" id="save-side-settings">Save settings</button>
@@ -263,6 +264,7 @@ async function chooseReceiveDirectory() {
 
 async function startShare() {
     await run(async () => {
+        await saveSettingsData();
         state.status = await Share(state.sharePaths);
         state.notice = 'Share task started.';
         render();
@@ -295,12 +297,13 @@ async function saveSettingsData() {
     const settings = {
         ...(state.settings || {}),
         output: receiveInput?.value || state.receiveDir || state.settings?.output || '',
-        browser: Boolean(receiveBrowser?.checked ?? sideBrowser?.checked ?? state.settings?.browser),
+        browser: Boolean(receiveBrowser?.checked ?? sideBrowser?.checked ?? state.browserFallback),
         interface: iface?.value || state.settings?.interface || '',
         port: Number(port?.value ?? state.settings?.port ?? 0),
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;
+    state.browserFallback = state.settings.browser;
 }
 
 async function stopCurrent() {
@@ -350,6 +353,7 @@ async function loadSettings() {
     await run(async () => {
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
+        state.browserFallback = false;
         await loadStatusData();
         render();
     });

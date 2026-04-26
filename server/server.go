@@ -169,8 +169,8 @@ func (s *Server) Send(p body.Body) {
 	})
 }
 
-// DisplayQR creates a handler for serving the QR code in the browser
-func (s *Server) DisplayQR(url string) error {
+// ServeQR creates handlers for serving the QR code control page.
+func (s *Server) ServeQR(url string) error {
 	s.SetStatusGracePeriod(defaultStatusGracePeriod)
 	const (
 		pagePath   = "/qr"
@@ -261,7 +261,15 @@ func (s *Server) DisplayQR(url string) error {
 			return
 		}
 	})
-	return openBrowser(s.BaseURL + pagePath)
+	return nil
+}
+
+// DisplayQR serves the QR control page and opens it in the browser.
+func (s *Server) DisplayQR(url string) error {
+	if err := s.ServeQR(url); err != nil {
+		return err
+	}
+	return openBrowser(s.BaseURL + "/qr")
 }
 
 func (s *Server) SetStatusGracePeriod(duration time.Duration) {

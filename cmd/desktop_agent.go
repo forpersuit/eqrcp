@@ -997,7 +997,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			return err
 		}
 		srv.Send(payload)
-		if err := srv.DisplayQR(srv.SendURL); err != nil {
+		if err := serveDesktopTaskQR(srv, srv.SendURL, agentApp.Flags.Browser); err != nil {
 			srv.Shutdown()
 			return err
 		}
@@ -1006,7 +1006,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			srv.Shutdown()
 			return err
 		}
-		if err := srv.DisplayQR(srv.ReceiveURL); err != nil {
+		if err := serveDesktopTaskQR(srv, srv.ReceiveURL, agentApp.Flags.Browser); err != nil {
 			srv.Shutdown()
 			return err
 		}
@@ -1015,6 +1015,13 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		return fmt.Errorf("unsupported desktop action %q", task.Action)
 	}
 	return srv.Wait()
+}
+
+func serveDesktopTaskQR(srv *server.Server, url string, openBrowser bool) error {
+	if openBrowser {
+		return srv.DisplayQR(url)
+	}
+	return srv.ServeQR(url)
 }
 
 func validateDesktopAgentTask(task desktopAgentTask) error {

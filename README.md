@@ -152,6 +152,12 @@ In restricted environments, set a writable Go build cache:
 GOCACHE=/tmp/eqrcp-go-build go test ./...
 ```
 
+For a one-step build of the current test artifacts, use:
+
+```sh
+scripts/build-artifacts.sh
+```
+
 Planning documents:
 
 - [Test analysis](docs/test-analysis.md)
