@@ -304,6 +304,10 @@ Initial GUI scope:
 - Settings save for output directory and browser fallback.
 - Title-bar actions for settings, About, and feedback. The main workspace keeps
   settings out of the repeated transfer flow except for the receive directory.
+- Native tray menu through `fyne.io/systray`. The first implementation keeps the
+  tray as a control surface over the same Wails GUI and desktop agent actions:
+  open app, share, receive, open current QR, stop current, settings, About,
+  feedback, and quit.
 
 Commercial boundary:
 
@@ -316,7 +320,7 @@ Next priorities:
 
 1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
 2. Convert share mode into the compact tray-launched flow: open on a drop area, reveal the pending list only after files are selected, lock the list after transfer starts, and make QR/status the primary surface.
-3. Evaluate a third-party tray library for the Wails v2 product line, then implement tray actions for open app, share, receive, open current QR, stop current, settings, about, feedback, and quit.
+3. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current QR action, stop-current action, and real quit.
 4. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
 5. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
 6. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
@@ -326,7 +330,11 @@ System tray note:
 - Wails v2.12.0 does not expose a stable public `SystemTray` API in the same style as Wails v3 alpha.
 - The local Wails v2 module contains internal and on-hold tray menu code, but no direct `options.App` or runtime entry point suitable for product use.
 - Wails v3 alpha documents `app.SystemTray.New()` and tray menus; do not migrate only for tray support until v3 is stable enough for this product.
-- For the Wails v2 track, evaluate a focused third-party Go tray library after the in-window Share/Receive workflow is stable.
+- The Wails v2 track now uses `fyne.io/systray` instead of Wails internal tray code.
+  It requires cgo and needs explicit Windows, Linux, and macOS packaging checks.
+- Linux tray visibility depends on a desktop StatusNotifier/AppIndicator watcher.
+  Minimal sessions without that watcher may log a tray registration error while
+  the GUI itself still runs.
 - The tray plan, logo prompt, About surface, feedback surface, and paid-product gap list live in [EQT product roadmap](product-roadmap.md).
 
 ## Recommended First Implementation

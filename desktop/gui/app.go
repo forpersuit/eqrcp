@@ -94,6 +94,20 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+func (a *App) showWindow() {
+	if a.ctx == nil {
+		return
+	}
+	wailsruntime.WindowShow(a.ctx)
+}
+
+func (a *App) emitTrayCommand(command string) {
+	if a.ctx == nil {
+		return
+	}
+	wailsruntime.EventsEmit(a.ctx, "eqt:tray-command", command)
+}
+
 func (a *App) AgentStatus() (AgentStatus, error) {
 	if err := a.ensureAgent(); err != nil {
 		return AgentStatus{}, err

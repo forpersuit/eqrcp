@@ -1,7 +1,7 @@
 import './style.css';
 import './app.css';
 
-import {OnFileDrop} from '../wailsjs/runtime/runtime';
+import {EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
@@ -579,6 +579,32 @@ function handleFileDrop(paths) {
     addSharePaths(paths || []);
 }
 
+function handleTrayCommand(command) {
+    clearMessages();
+    if (command === 'share') {
+        state.mode = 'share';
+        state.activePanel = '';
+        state.notice = 'Ready to share.';
+        render();
+        return;
+    }
+    if (command === 'receive') {
+        state.mode = 'receive';
+        state.activePanel = '';
+        state.notice = 'Ready to receive.';
+        render();
+        return;
+    }
+    if (command === 'settings' || command === 'about' || command === 'feedback') {
+        state.activePanel = command;
+        render();
+        return;
+    }
+    if (command === 'refresh') {
+        refreshStatus();
+    }
+}
+
 function clearMessages() {
     state.error = '';
     state.notice = '';
@@ -667,6 +693,8 @@ function escapeAttr(value) {
 OnFileDrop((_x, _y, paths) => {
     handleFileDrop(paths);
 }, true);
+
+EventsOn('eqt:tray-command', handleTrayCommand);
 
 render();
 loadSettings().then(connectAgentEvents);

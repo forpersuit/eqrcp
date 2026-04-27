@@ -71,10 +71,12 @@ Implementation decision for the current Wails v2 track:
   it would couple the product to unsupported implementation details.
 - Do not migrate to Wails v3 only for tray support until v3 is stable enough for
   this product.
-- Current implementation should keep preparing the GUI and agent actions so a
-  tray frontend can be attached later without changing transfer semantics.
-- Next implementation options are a focused third-party Go tray library for the
-  Wails v2 product line, or a Wails v3 migration once stable.
+- Current implementation uses `fyne.io/systray` as the focused third-party Go
+  tray library for the Wails v2 product line.
+- The tray is a control surface over the Wails GUI and desktop agent. It does
+  not duplicate transfer state or introduce a second task controller.
+- Remaining tray work: dynamic menu state, progress tooltip updates,
+  platform-specific icon variants, and Windows manual validation.
 
 ## About Surface
 

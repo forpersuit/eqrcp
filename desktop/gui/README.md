@@ -59,14 +59,17 @@ GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
 - Stop-current action.
 - Settings save for receive output and browser fallback from a title-bar gear action.
 - About and feedback surfaces with local diagnostics preview.
+- Native tray menu using `fyne.io/systray`: open EQT, share, receive, open current
+  QR, stop current transfer, settings, About, feedback, and quit.
+- Closing the main window hides it to the tray; use the tray `Quit` action to
+  exit the GUI process.
 - Product naming is moving toward `EQT`; the binary and CLI remain `eqrcp` during
   the packaging transition.
 
 ## Deferred
 
-- Native tray menu. Wails v2.12.0 has no stable public tray API, so the current
-  path is to keep GUI and agent actions tray-ready while evaluating a focused
-  third-party tray library or a later Wails v3 migration.
+- Tray state refinements such as disabled menu items, progress text, and
+  per-platform icon variants.
 - Native QR rendering inside the GUI instead of linking through the existing task state.
 - Paid feature gating and license activation.
 - Native package metadata, signing, and installer polish.
