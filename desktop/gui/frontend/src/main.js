@@ -4,7 +4,9 @@ import './app.css';
 import {OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
+    AppInfo,
     ClearHistory,
+    OpenExternal,
     OpenPath,
     OpenURL,
     ReadSettings,
@@ -24,6 +26,8 @@ const state = {
     receiveDir: '',
     status: null,
     settings: null,
+    appInfo: null,
+    activePanel: '',
     error: '',
     notice: '',
     busy: false,
@@ -42,13 +46,18 @@ function render() {
         <main class="shell">
             <header class="topbar">
                 <div>
-                    <div class="eyebrow">eqrcp desktop</div>
+                    <div class="eyebrow">Easy QR Transfer</div>
                     <h1>${state.mode === 'share' ? 'Share files' : 'Receive files'}</h1>
                 </div>
-                <nav class="mode-switch" aria-label="Mode">
-                    <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
-                    <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
-                </nav>
+                <div class="top-actions">
+                    <nav class="mode-switch" aria-label="Mode">
+                        <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
+                        <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
+                    </nav>
+                    <button class="tool-button" id="open-settings" title="Settings" aria-label="Settings">&#9881;</button>
+                    <button class="tool-button" id="open-about" title="About EQT" aria-label="About EQT">i</button>
+                    <button class="tool-button" id="open-feedback" title="Send feedback" aria-label="Send feedback">?</button>
+                </div>
             </header>
 
             <section class="layout">
@@ -72,9 +81,9 @@ function render() {
                         </div>
                         ${renderHistory(history)}
                     </div>
-                    ${renderSettings()}
                 </aside>
             </section>
+            ${renderPanel()}
         </main>
     `;
     bindEvents();
@@ -116,19 +125,39 @@ function renderReceive() {
                 <input id="receive-dir" value="${escapeAttr(output)}" placeholder="Choose a folder" />
                 <button id="choose-receive">Choose</button>
             </div>
-            <label class="check">
-                <input id="browser-open" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
-                Open browser QR page as a fallback
-            </label>
         </div>
         <div class="primary-row">
             <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start receive'}</button>
-            <button class="ghost" id="save-settings">Save settings</button>
+            <button class="ghost" id="save-receive-dir">Save directory</button>
         </div>
     `;
 }
 
-function renderSettings() {
+function renderPanel() {
+    if (!state.activePanel) {
+        return '';
+    }
+    const title = {
+        settings: 'Settings',
+        about: 'About EQT',
+        feedback: 'Send feedback',
+    }[state.activePanel] || '';
+    return `
+        <div class="overlay" role="presentation">
+            <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+                <div class="modal-head">
+                    <h2>${escapeHTML(title)}</h2>
+                    <button class="tool-button" id="close-panel" title="Close" aria-label="Close">x</button>
+                </div>
+                ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
+                ${state.activePanel === 'about' ? renderAboutPanel() : ''}
+                ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
+            </section>
+        </div>
+    `;
+}
+
+function renderSettingsPanel() {
     if (!state.settings) {
         return '';
     }
@@ -136,8 +165,7 @@ function renderSettings() {
         <option value="${escapeAttr(option.name)}" ${option.name === state.settings.interface ? 'selected' : ''}>${escapeHTML(option.label || option.name)}</option>
     `).join('');
     return `
-        <div class="panel settings-panel">
-            <h2>Settings</h2>
+        <div class="settings-panel">
             <label>Network interface</label>
             <select id="settings-interface">${options}</select>
             <label>Port</label>
@@ -147,6 +175,50 @@ function renderSettings() {
                 Browser fallback
             </label>
             <button class="primary full" id="save-side-settings">Save settings</button>
+        </div>
+    `;
+}
+
+function renderAboutPanel() {
+    const info = state.appInfo || {};
+    return `
+        <div class="about-panel">
+            <div class="brand-mark">EQT</div>
+            <p>${escapeHTML(info.description || 'Local QR-code file transfer for desktop and mobile devices.')}</p>
+            <dl>
+                <dt>Product</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
+                <dt>Agent</dt><dd>${escapeHTML(info.agentUrl || agentEventsURL.replace('/events', ''))}</dd>
+                <dt>Platform</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
+                <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
+                <dt>License</dt><dd>MIT, forked from qrcp</dd>
+            </dl>
+            <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqrcp">Project page</button>
+        </div>
+    `;
+}
+
+function renderFeedbackPanel() {
+    const diagnostics = buildDiagnostics();
+    const mailto = feedbackMailto(diagnostics);
+    return `
+        <div class="feedback-panel">
+            <label>Category</label>
+            <select id="feedback-category">
+                <option>Bug report</option>
+                <option>Transfer failure</option>
+                <option>GUI issue</option>
+                <option>Feature request</option>
+                <option>Purchase or license issue</option>
+                <option>Other</option>
+            </select>
+            <label>Message</label>
+            <textarea id="feedback-message" rows="5" placeholder="What happened?"></textarea>
+            <label class="check">
+                <input id="feedback-diagnostics" type="checkbox" checked />
+                Include diagnostics preview
+            </label>
+            <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
+            <button class="primary full" id="send-feedback" data-mailto="${escapeAttr(mailto)}">Open email draft</button>
         </div>
     `;
 }
@@ -228,6 +300,15 @@ function bindEvents() {
         });
     });
     document.querySelector('#refresh')?.addEventListener('click', refreshStatus);
+    document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
+    document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
+    document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
+    document.querySelector('#close-panel')?.addEventListener('click', closePanel);
+    document.querySelector('.overlay')?.addEventListener('click', (event) => {
+        if (event.target.classList.contains('overlay')) {
+            closePanel();
+        }
+    });
     document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);
     document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
     document.querySelector('#clear-share')?.addEventListener('click', () => {
@@ -241,7 +322,7 @@ function bindEvents() {
     document.querySelector('#start-share')?.addEventListener('click', startShare);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
-    document.querySelector('#save-settings')?.addEventListener('click', saveSettings);
+    document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
     document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
     document.querySelector('#stop-current')?.addEventListener('click', stopCurrent);
     document.querySelector('.open-qr')?.addEventListener('click', openQRPage);
@@ -252,6 +333,19 @@ function bindEvents() {
     document.querySelectorAll('.path-link').forEach((button) => {
         button.addEventListener('click', openPath);
     });
+    document.querySelector('.open-docs')?.addEventListener('click', openExternal);
+    document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
+}
+
+function openPanel(panel) {
+    state.activePanel = panel;
+    clearMessages();
+    render();
+}
+
+function closePanel() {
+    state.activePanel = '';
+    render();
 }
 
 async function chooseFiles() {
@@ -366,6 +460,29 @@ async function openPath(event) {
     }, {busy: false});
 }
 
+async function openExternal(event) {
+    await run(async () => {
+        const target = event.currentTarget.dataset.openExternal;
+        if (target) {
+            await OpenExternal(target);
+        }
+    }, {busy: false});
+}
+
+async function sendFeedback(event) {
+    await run(async () => {
+        const category = document.querySelector('#feedback-category')?.value || 'Feedback';
+        const message = document.querySelector('#feedback-message')?.value || '';
+        const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
+        const body = [
+            message,
+            includeDiagnostics ? '\n\nDiagnostics:\n' + buildDiagnostics() : '',
+        ].join('');
+        const mailto = feedbackMailto(body, category);
+        await OpenExternal(mailto || event.currentTarget.dataset.mailto);
+    }, {busy: false});
+}
+
 async function refreshStatus(shouldRender = true) {
     await run(async () => {
         await loadStatusData();
@@ -377,9 +494,10 @@ async function refreshStatus(shouldRender = true) {
 
 async function loadSettings() {
     await run(async () => {
+        state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
-        state.browserFallback = false;
+        state.browserFallback = Boolean(state.settings.browser);
         await loadStatusData();
         render();
     });
@@ -508,6 +626,28 @@ function qrImageURL(pageUrl) {
     } catch {
         return '';
     }
+}
+
+function buildDiagnostics() {
+    const info = state.appInfo || {};
+    const status = state.status || {};
+    return [
+        `product: ${info.product || 'EQT'} (${info.name || 'Easy QR Transfer'})`,
+        `platform: ${[info.os, info.arch].filter(Boolean).join('/') || 'unknown'}`,
+        `agent: ${info.agentUrl || agentEventsURL.replace('/events', '')}`,
+        `cli: ${info.cliPath || 'not found'}`,
+        `agent state: ${status.state || 'unknown'}`,
+        `agent version: ${status.version || 'unknown'}`,
+        `current task: ${status.current ? `${status.current.action} #${status.current.id} ${status.current.state}` : 'none'}`,
+        `history count: ${(status.history || []).length}`,
+        `config: ${state.settings?.configPath || 'unknown'}`,
+    ].join('\n');
+}
+
+function feedbackMailto(body, category = 'Feedback') {
+    const subject = encodeURIComponent(`EQT ${category}`);
+    const encodedBody = encodeURIComponent(body || buildDiagnostics());
+    return `mailto:forpersuit@gmail.com?subject=${subject}&body=${encodedBody}`;
 }
 
 function escapeHTML(value) {

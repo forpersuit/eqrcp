@@ -57,7 +57,8 @@ GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
 - Receive workspace with output directory selection.
 - Agent status, current task, progress, and recent history display.
 - Stop-current action.
-- Settings save for receive output and browser fallback.
+- Settings save for receive output and browser fallback from a title-bar gear action.
+- About and feedback surfaces with local diagnostics preview.
 - Product naming is moving toward `EQT`; the binary and CLI remain `eqrcp` during
   the packaging transition.
 
@@ -67,6 +68,5 @@ GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
   path is to keep GUI and agent actions tray-ready while evaluating a focused
   third-party tray library or a later Wails v3 migration.
 - Native QR rendering inside the GUI instead of linking through the existing task state.
-- About and feedback surfaces.
 - Paid feature gating and license activation.
 - Native package metadata, signing, and installer polish.

@@ -6,8 +6,16 @@ export function AgentStatus() {
   return window['go']['main']['App']['AgentStatus']();
 }
 
+export function AppInfo() {
+  return window['go']['main']['App']['AppInfo']();
+}
+
 export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
+}
+
+export function OpenExternal(arg1) {
+  return window['go']['main']['App']['OpenExternal'](arg1);
 }
 
 export function OpenPath(arg1) {

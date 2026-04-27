@@ -109,6 +109,30 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class AppInfo {
+	    product: string;
+	    name: string;
+	    description: string;
+	    agentUrl: string;
+	    os: string;
+	    arch: string;
+	    cliPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.product = source["product"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.agentUrl = source["agentUrl"];
+	        this.os = source["os"];
+	        this.arch = source["arch"];
+	        this.cliPath = source["cliPath"];
+	    }
+	}
 	export class InterfaceOption {
 	    name: string;
 	    ip: string;

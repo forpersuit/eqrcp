@@ -78,6 +78,8 @@ Implementation decision for the current Wails v2 track:
 
 ## About Surface
 
+Initial Wails GUI support exists as a title-bar `About EQT` action.
+
 The About surface should include:
 
 - Product name: `EQT`.
@@ -88,6 +90,9 @@ The About surface should include:
 - Update channel and current update status once signed updates exist.
 
 ## Feedback Surface
+
+Initial Wails GUI support exists as a title-bar feedback action with a local
+diagnostics preview and an email draft handoff.
 
 Feedback should be explicit and privacy-preserving:
 

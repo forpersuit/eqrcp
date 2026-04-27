@@ -4,7 +4,11 @@ import {main} from '../models';
 
 export function AgentStatus():Promise<main.AgentStatus>;
 
+export function AppInfo():Promise<main.AppInfo>;
+
 export function ClearHistory():Promise<void>;
+
+export function OpenExternal(arg1:string):Promise<void>;
 
 export function OpenPath(arg1:string):Promise<void>;
 

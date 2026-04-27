@@ -74,6 +74,16 @@ type InterfaceOption struct {
 	Label string `json:"label"`
 }
 
+type AppInfo struct {
+	Product     string `json:"product"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	AgentURL    string `json:"agentUrl"`
+	OS          string `json:"os"`
+	Arch        string `json:"arch"`
+	CLIPath     string `json:"cliPath,omitempty"`
+}
+
 func NewApp() *App {
 	return &App{
 		client: &http.Client{Timeout: 5 * time.Second},
@@ -158,11 +168,19 @@ func (a *App) RestartAgent() error {
 }
 
 func (a *App) OpenURL(rawURL string) error {
+	return a.openExternal(rawURL, map[string]bool{"http": true, "https": true})
+}
+
+func (a *App) OpenExternal(rawURL string) error {
+	return a.openExternal(rawURL, map[string]bool{"http": true, "https": true, "mailto": true})
+}
+
+func (a *App) openExternal(rawURL string, allowed map[string]bool) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+	if !allowed[parsed.Scheme] {
 		return fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
 	}
 	wailsruntime.BrowserOpenURL(a.ctx, rawURL)
@@ -226,6 +244,21 @@ func (a *App) SelectReceiveDirectory() (string, error) {
 	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Choose receive folder",
 	})
+}
+
+func (a *App) AppInfo() AppInfo {
+	info := AppInfo{
+		Product:     "EQT",
+		Name:        "Easy QR Transfer",
+		Description: "Local QR-code file transfer for desktop and mobile devices.",
+		AgentURL:    agentBaseURL,
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+	}
+	if cli, err := findEqrcpCLI(); err == nil {
+		info.CLIPath = cli
+	}
+	return info
 }
 
 func (a *App) postTask(task AgentTask) (AgentStatus, error) {

@@ -302,6 +302,8 @@ Initial GUI scope:
 - Recent task history display.
 - Stop-current action.
 - Settings save for output directory and browser fallback.
+- Title-bar actions for settings, About, and feedback. The main workspace keeps
+  settings out of the repeated transfer flow except for the receive directory.
 
 Commercial boundary:
 
@@ -313,7 +315,7 @@ Commercial boundary:
 Next priorities:
 
 1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
-2. Keep the Wails GUI workflow compatible with a future tray surface: share opens a compact drop area, receive opens the receive directory workflow, terminal tasks immediately move to history, and all actions continue to use desktop agent endpoints.
+2. Convert share mode into the compact tray-launched flow: open on a drop area, reveal the pending list only after files are selected, lock the list after transfer starts, and make QR/status the primary surface.
 3. Evaluate a third-party tray library for the Wails v2 product line, then implement tray actions for open app, share, receive, open current QR, stop current, settings, about, feedback, and quit.
 4. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
 5. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.

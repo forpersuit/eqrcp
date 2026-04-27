@@ -23,6 +23,12 @@
     margin-bottom: 24px;
 }
 
+.top-actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
 .eyebrow {
     color: var(--accent);
     font-size: 12px;
@@ -68,6 +74,21 @@ h2 {
 .mode-switch .active {
     background: var(--panel);
     box-shadow: 0 1px 4px rgba(24, 33, 31, 0.12);
+}
+
+.tool-button {
+    align-items: center;
+    background: #e9eee7;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    cursor: pointer;
+    display: inline-flex;
+    font-weight: 900;
+    height: 38px;
+    justify-content: center;
+    line-height: 1;
+    width: 38px;
 }
 
 .layout {
@@ -374,18 +395,90 @@ dd {
     gap: 10px;
 }
 
-.settings-panel label {
+.settings-panel label,
+.feedback-panel label {
     color: var(--muted);
     font-size: 13px;
     font-weight: 800;
 }
 
 .settings-panel input,
-.settings-panel select {
+.settings-panel select,
+.feedback-panel select,
+.feedback-panel textarea {
     border: 1px solid var(--line);
     border-radius: 6px;
     min-width: 0;
     padding: 10px 12px;
+}
+
+.overlay {
+    align-items: center;
+    background: rgba(24, 33, 31, 0.32);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 5;
+}
+
+.modal {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 18px 48px rgba(24, 33, 31, 0.22);
+    box-sizing: border-box;
+    max-height: calc(100vh - 48px);
+    max-width: 560px;
+    overflow: auto;
+    padding: 20px;
+    width: min(560px, 100%);
+}
+
+.modal-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.about-panel,
+.feedback-panel {
+    display: grid;
+    gap: 12px;
+}
+
+.brand-mark {
+    align-items: center;
+    background: #e8f3ee;
+    border: 1px solid #bed8ce;
+    border-radius: 8px;
+    color: var(--accent-strong);
+    display: inline-flex;
+    font-size: 24px;
+    font-weight: 900;
+    height: 72px;
+    justify-content: center;
+    width: 72px;
+}
+
+.about-panel p {
+    color: var(--muted);
+    margin: 0;
+}
+
+.diagnostics {
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    margin: 0;
+    max-height: 180px;
+    overflow: auto;
+    padding: 12px;
+    white-space: pre-wrap;
 }
 
 .full {
@@ -402,6 +495,12 @@ dd {
         display: grid;
         gap: 16px;
         grid-template-columns: 1fr;
+    }
+
+    .top-actions {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr 38px 38px 38px;
     }
 
     .side {
