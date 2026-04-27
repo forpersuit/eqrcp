@@ -17,7 +17,7 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "eqrcp Desktop",
+		Title:     "EQT",
 		Width:     1120,
 		Height:    760,
 		MinWidth:  900,

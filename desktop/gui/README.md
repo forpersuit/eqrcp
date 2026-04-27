@@ -1,6 +1,7 @@
-# eqrcp Desktop GUI
+# EQT Desktop GUI
 
-This is the Wails v2 desktop application for `eqrcp`.
+This is the Wails v2 desktop application for `EQT` (Easy QR Transfer). It uses
+the existing `eqrcp` CLI and desktop agent as the transfer core.
 
 The GUI is intentionally thin. It talks to the existing desktop agent at `127.0.0.1:48176` and does not reimplement transfer logic. If the agent is not running, the GUI tries to start `eqrcp desktop agent-start -B` by finding the CLI in this order:
 
@@ -57,10 +58,15 @@ GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
 - Agent status, current task, progress, and recent history display.
 - Stop-current action.
 - Settings save for receive output and browser fallback.
+- Product naming is moving toward `EQT`; the binary and CLI remain `eqrcp` during
+  the packaging transition.
 
 ## Deferred
 
-- Native tray menu.
+- Native tray menu. Wails v2.12.0 has no stable public tray API, so the current
+  path is to keep GUI and agent actions tray-ready while evaluating a focused
+  third-party tray library or a later Wails v3 migration.
 - Native QR rendering inside the GUI instead of linking through the existing task state.
+- About and feedback surfaces.
 - Paid feature gating and license activation.
 - Native package metadata, signing, and installer polish.

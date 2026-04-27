@@ -283,7 +283,7 @@ Next priorities:
 
 Status: started.
 
-Use Wails v2 to provide a native desktop application on Windows, Linux, and macOS while keeping the existing Go transfer engine and desktop agent as the source of truth.
+Use Wails v2 to provide a native desktop application on Windows, Linux, and macOS while keeping the existing Go transfer engine and desktop agent as the source of truth. The user-facing product name is `EQT`, short for Easy QR Transfer; keep `eqrcp` as the CLI and core-transfer identity until a packaging and migration plan is ready.
 
 Architecture:
 
@@ -313,10 +313,11 @@ Commercial boundary:
 Next priorities:
 
 1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
-2. Add tray menu actions that call the same agent endpoints: open app, share, receive, stop current, quit agent.
-3. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
-4. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
-5. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
+2. Keep the Wails GUI workflow compatible with a future tray surface: share opens a compact drop area, receive opens the receive directory workflow, terminal tasks immediately move to history, and all actions continue to use desktop agent endpoints.
+3. Evaluate a third-party tray library for the Wails v2 product line, then implement tray actions for open app, share, receive, open current QR, stop current, settings, about, feedback, and quit.
+4. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
+5. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
+6. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
 
 System tray note:
 
@@ -324,6 +325,7 @@ System tray note:
 - The local Wails v2 module contains internal and on-hold tray menu code, but no direct `options.App` or runtime entry point suitable for product use.
 - Wails v3 alpha documents `app.SystemTray.New()` and tray menus; do not migrate only for tray support until v3 is stable enough for this product.
 - For the Wails v2 track, evaluate a focused third-party Go tray library after the in-window Share/Receive workflow is stable.
+- The tray plan, logo prompt, About surface, feedback surface, and paid-product gap list live in [EQT product roadmap](product-roadmap.md).
 
 ## Recommended First Implementation
 
