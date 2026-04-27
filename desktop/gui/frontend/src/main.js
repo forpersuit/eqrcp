@@ -647,7 +647,7 @@ function buildDiagnostics() {
 function feedbackMailto(body, category = 'Feedback') {
     const subject = encodeURIComponent(`EQT ${category}`);
     const encodedBody = encodeURIComponent(body || buildDiagnostics());
-    return `mailto:forpersuit@gmail.com?subject=${subject}&body=${encodedBody}`;
+    return `mailto:jinxpeeter@outlook.com?subject=${subject}&body=${encodedBody}`;
 }
 
 function escapeHTML(value) {
