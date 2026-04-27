@@ -176,6 +176,12 @@ func (agent *desktopAgent) handleStatus(w http.ResponseWriter, r *http.Request) 
 }
 
 func (agent *desktopAgent) handleEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -488,12 +494,12 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 		agent.addHistoryLocked(*agent.current)
 		agent.notifyRecordLocked(*agent.current)
 		delete(agent.notified, agent.current.ID)
+		agent.busy = false
+		agent.current = nil
+		agent.activeStop = nil
+		agent.startNextLocked()
+		agent.touchLocked()
 	}
-	agent.busy = false
-	agent.current = nil
-	agent.activeStop = nil
-	agent.startNextLocked()
-	agent.touchLocked()
 }
 
 func (agent *desktopAgent) stopCurrent(state string) bool {
@@ -627,6 +633,18 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		agent.current.FinishedAt = &finishedAt
 	}
 	agent.notifyTransferStatusLocked(*agent.current)
+	if isTerminalDesktopTransferState(agent.current.State) {
+		record := *agent.current
+		agent.addHistoryLocked(record)
+		agent.notifyRecordLocked(record)
+		delete(agent.notified, record.ID)
+		agent.busy = false
+		agent.current = nil
+		agent.activeStop = nil
+		agent.startNextLocked()
+		agent.touchLocked()
+		return
+	}
 	agent.touchLocked()
 }
 

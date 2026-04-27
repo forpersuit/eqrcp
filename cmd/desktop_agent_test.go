@@ -161,8 +161,11 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 		SavedFiles: []string{"a.txt", "b.txt"},
 	})
 	status = agent.snapshot()
-	if status.Current.State != "completed" || len(status.Current.SavedFiles) != 2 || status.Current.TransferState != "completed" || status.Current.TransferCurrent != "b.txt" {
-		t.Fatalf("Current = %#v, want saved files and completed transfer", status.Current)
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want completed transfer moved to history", status.Current)
+	}
+	if len(status.History) != 1 || status.History[0].State != "completed" || len(status.History[0].SavedFiles) != 2 || status.History[0].TransferCurrent != "b.txt" {
+		t.Fatalf("History = %#v, want saved files and completed transfer", status.History)
 	}
 	assertNotificationContains(t, notifications, "eqrcp transfer completed")
 }
@@ -185,12 +188,15 @@ func TestDesktopAgentRecordsStoppedTransferState(t *testing.T) {
 		State:   "stopped",
 		Message: "Transfer interrupted before completion.",
 	})
-	current := agent.snapshot().Current
-	if current == nil || current.State != "stopped" || current.FinishedAt == nil {
-		t.Fatalf("Current = %#v, want stopped current task before server exits", current)
+	status := agent.snapshot()
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want stopped task moved to history", status.Current)
+	}
+	if len(status.History) != 1 || status.History[0].State != "stopped" || status.History[0].FinishedAt == nil {
+		t.Fatalf("History = %#v, want stopped history task before server exits", status.History)
 	}
 	agent.execute(desktopAgentTask{Action: "share", Paths: []string{"a.txt"}}, 8)
-	status := agent.snapshot()
+	status = agent.snapshot()
 	if len(status.History) != 1 || status.History[0].State != "stopped" || status.History[0].TransferState != "stopped" {
 		t.Fatalf("History = %#v, want stopped transfer record", status.History)
 	}
@@ -214,12 +220,15 @@ func TestDesktopAgentRecordsFailedTransferState(t *testing.T) {
 		State:   "failed",
 		Message: "Upload failed.",
 	})
-	current := agent.snapshot().Current
-	if current == nil || current.State != "failed" || current.FinishedAt == nil {
-		t.Fatalf("Current = %#v, want failed current task before server exits", current)
+	status := agent.snapshot()
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want failed task moved to history", status.Current)
+	}
+	if len(status.History) != 1 || status.History[0].State != "failed" || status.History[0].FinishedAt == nil {
+		t.Fatalf("History = %#v, want failed history task before server exits", status.History)
 	}
 	agent.execute(desktopAgentTask{Action: "receive", Paths: []string{"/tmp/inbox"}}, 9)
-	status := agent.snapshot()
+	status = agent.snapshot()
 	if len(status.History) != 1 || status.History[0].State != "failed" || status.History[0].TransferState != "failed" {
 		t.Fatalf("History = %#v, want failed transfer record", status.History)
 	}

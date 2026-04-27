@@ -29,6 +29,9 @@ const state = {
     browserFallback: false,
 };
 
+const agentEventsURL = 'http://127.0.0.1:48176/events';
+let agentEvents = null;
+let agentEventsRetry = null;
 const app = document.querySelector('#app');
 
 function render() {
@@ -400,6 +403,38 @@ function addSharePaths(paths) {
     render();
 }
 
+function preventFileNavigation(event) {
+    if (event.dataTransfer?.types?.includes('Files')) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+    }
+}
+
+function connectAgentEvents() {
+    if (!window.EventSource || agentEvents) {
+        return;
+    }
+    agentEvents = new EventSource(agentEventsURL);
+    agentEvents.onmessage = (event) => {
+        try {
+            state.status = JSON.parse(event.data);
+            render();
+        } catch {
+            refreshStatus(false);
+        }
+    };
+    agentEvents.onerror = () => {
+        agentEvents.close();
+        agentEvents = null;
+        if (!agentEventsRetry) {
+            agentEventsRetry = window.setTimeout(() => {
+                agentEventsRetry = null;
+                connectAgentEvents();
+            }, 1500);
+        }
+    };
+}
+
 function clearMessages() {
     state.error = '';
     state.notice = '';
@@ -468,6 +503,10 @@ EventsOn('eqrcp:file-drop', (paths) => {
     addSharePaths(paths || []);
 });
 
+document.addEventListener('dragenter', preventFileNavigation, true);
+document.addEventListener('dragover', preventFileNavigation, true);
+document.addEventListener('drop', preventFileNavigation, true);
+
 render();
-loadSettings();
-setInterval(refreshStatus, 4000);
+loadSettings().then(connectAgentEvents);
+setInterval(refreshStatus, 1500);
