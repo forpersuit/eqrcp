@@ -82,9 +82,6 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	wailsruntime.OnFileDrop(ctx, func(_ int, _ int, paths []string) {
-		wailsruntime.EventsEmit(ctx, "eqrcp:file-drop", paths)
-	})
 }
 
 func (a *App) AgentStatus() (AgentStatus, error) {
@@ -172,6 +169,25 @@ func (a *App) OpenURL(rawURL string) error {
 	return nil
 }
 
+func (a *App) OpenPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	target := path
+	if !info.IsDir() {
+		target = filepath.Dir(path)
+	}
+	cmd, err := openPathCommand(target)
+	if err != nil {
+		return err
+	}
+	return cmd.Start()
+}
+
 func (a *App) ReadSettings() (DesktopSettings, error) {
 	if err := a.ensureAgent(); err != nil {
 		return DesktopSettings{}, err
@@ -232,6 +248,9 @@ func (a *App) ensureAgent() error {
 		return err
 	}
 	cmd := exec.Command(cli, "desktop", "agent-start", "-B")
+	if launcher, ok := findEqrcpLauncher(cli); ok {
+		cmd = exec.Command(launcher, "--eqrcp-exe", cli, "agent-start", "-B")
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -346,4 +365,28 @@ func findEqrcpCLI() (string, error) {
 		return path, nil
 	}
 	return "", fmt.Errorf("eqrcp CLI was not found; set EQRCP_CLI or place eqrcp next to the desktop app")
+}
+
+func findEqrcpLauncher(cli string) (string, bool) {
+	if runtime.GOOS != "windows" || cli == "" {
+		return "", false
+	}
+	candidate := filepath.Join(filepath.Dir(cli), "eqrcp-launcher.exe")
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate, true
+	}
+	return "", false
+}
+
+func openPathCommand(path string) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("explorer.exe", path), nil
+	case "darwin":
+		return exec.Command("open", path), nil
+	case "linux":
+		return exec.Command("xdg-open", path), nil
+	default:
+		return nil, fmt.Errorf("opening paths is not supported on %s", runtime.GOOS)
+	}
 }

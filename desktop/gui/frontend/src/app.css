@@ -190,6 +190,22 @@ dd {
     overflow-wrap: anywhere;
 }
 
+.path-link {
+    background: transparent;
+    border: 0;
+    color: var(--accent);
+    cursor: pointer;
+    display: block;
+    font: inherit;
+    overflow-wrap: anywhere;
+    padding: 0;
+    text-align: left;
+}
+
+.path-link:hover {
+    text-decoration: underline;
+}
+
 .empty,
 .empty-state {
     color: var(--muted);

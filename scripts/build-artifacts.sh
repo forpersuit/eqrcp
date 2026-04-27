@@ -126,7 +126,7 @@ build_gui_windows() {
     echo "Skipping Windows GUI build: wails CLI not found in PATH." >&2
     return 0
   fi
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64 -windowsconsole)
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64)
   cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$target_dir/eqrcp-desktop.exe"
 }
 

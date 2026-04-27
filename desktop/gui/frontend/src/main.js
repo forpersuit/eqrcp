@@ -1,10 +1,11 @@
 import './style.css';
 import './app.css';
 
-import {EventsOn} from '../wailsjs/runtime/runtime';
+import {OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     ClearHistory,
+    OpenPath,
     OpenURL,
     ReadSettings,
     Receive,
@@ -202,11 +203,20 @@ function renderHistory(history) {
             <div>
                 <strong>${escapeHTML(titleCase(task.action))} #${task.id}</strong>
                 <span>${escapeHTML(task.state)}${task.transferState ? ` / ${escapeHTML(task.transferState)}` : ''}</span>
-                <span>${escapeHTML(task.transferTarget || task.paths?.map(shortName).join(', ') || '')}</span>
+                ${renderHistoryTarget(task)}
             </div>
             <button class="ghost repeat-task" data-task-id="${task.id}">Repeat</button>
         </li>
     `).join('')}</ol>`;
+}
+
+function renderHistoryTarget(task) {
+    const path = task.action === 'receive' ? task.paths?.[0] : '';
+    const label = task.transferTarget || task.paths?.map(shortName).join(', ') || '';
+    if (path) {
+        return `<button class="path-link" data-open-path="${escapeAttr(path)}">${escapeHTML(label || path)}</button>`;
+    }
+    return `<span>${escapeHTML(label)}</span>`;
 }
 
 function bindEvents() {
@@ -239,6 +249,9 @@ function bindEvents() {
     document.querySelectorAll('.repeat-task').forEach((button) => {
         button.addEventListener('click', repeatTask);
     });
+    document.querySelectorAll('.path-link').forEach((button) => {
+        button.addEventListener('click', openPath);
+    });
 }
 
 async function chooseFiles() {
@@ -269,6 +282,7 @@ async function startShare() {
     await run(async () => {
         await saveSettingsData();
         state.status = await Share(state.sharePaths);
+        state.sharePaths = [];
         state.notice = 'Share task started.';
         render();
     });
@@ -343,13 +357,22 @@ async function openQRPage(event) {
     });
 }
 
+async function openPath(event) {
+    await run(async () => {
+        const path = event.currentTarget.dataset.openPath;
+        if (path) {
+            await OpenPath(path);
+        }
+    }, {busy: false});
+}
+
 async function refreshStatus(shouldRender = true) {
     await run(async () => {
         await loadStatusData();
         if (shouldRender) {
             render();
         }
-    });
+    }, {busy: false});
 }
 
 async function loadSettings() {
@@ -366,18 +389,23 @@ async function loadStatusData() {
     state.status = await AgentStatus();
 }
 
-async function run(fn) {
+async function run(fn, options = {}) {
+    const showBusy = options.busy !== false;
     state.error = '';
-    state.busy = true;
-    renderBusy();
+    if (showBusy) {
+        state.busy = true;
+        renderBusy();
+    }
     try {
         await fn();
     } catch (error) {
         state.error = error?.message || String(error);
         render();
     } finally {
-        state.busy = false;
-        render();
+        if (showBusy) {
+            state.busy = false;
+            render();
+        }
     }
 }
 
@@ -403,13 +431,6 @@ function addSharePaths(paths) {
     render();
 }
 
-function preventFileNavigation(event) {
-    if (event.dataTransfer?.types?.includes('Files')) {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
-    }
-}
-
 function connectAgentEvents() {
     if (!window.EventSource || agentEvents) {
         return;
@@ -433,6 +454,11 @@ function connectAgentEvents() {
             }, 1500);
         }
     };
+}
+
+function handleFileDrop(paths) {
+    state.mode = 'share';
+    addSharePaths(paths || []);
 }
 
 function clearMessages() {
@@ -498,14 +524,9 @@ function escapeAttr(value) {
     return escapeHTML(value).replace(/`/g, '&#096;');
 }
 
-EventsOn('eqrcp:file-drop', (paths) => {
-    state.mode = 'share';
-    addSharePaths(paths || []);
-});
-
-document.addEventListener('dragenter', preventFileNavigation, true);
-document.addEventListener('dragover', preventFileNavigation, true);
-document.addEventListener('drop', preventFileNavigation, true);
+OnFileDrop((_x, _y, paths) => {
+    handleFileDrop(paths);
+}, true);
 
 render();
 loadSettings().then(connectAgentEvents);

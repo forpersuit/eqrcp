@@ -6,6 +6,8 @@ export function AgentStatus():Promise<main.AgentStatus>;
 
 export function ClearHistory():Promise<void>;
 
+export function OpenPath(arg1:string):Promise<void>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function ReadSettings():Promise<main.DesktopSettings>;
