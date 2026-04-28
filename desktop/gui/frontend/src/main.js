@@ -90,6 +90,10 @@ function render() {
 }
 
 function renderShare() {
+    const activeTask = activeShareTask();
+    if (activeTask) {
+        return renderShareTransfer(activeTask);
+    }
     const items = state.sharePaths.map((path, index) => `
         <li>
             <div>
@@ -99,19 +103,64 @@ function renderShare() {
             <button class="icon-button remove-path" data-path-index="${index}" title="Remove">x</button>
         </li>
     `).join('');
+    const hasItems = state.sharePaths.length > 0;
     return `
         <div class="dropzone" style="--wails-drop-target: drop">
             <div class="drop-title">Drop files or folders here</div>
-            <div class="drop-subtitle">${state.sharePaths.length ? `${state.sharePaths.length} item(s) ready` : 'Use drag and drop, or choose files manually.'}</div>
+            <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} item(s) ready` : 'Use drag and drop, or choose files manually.'}</div>
             <div class="actions">
                 <button id="choose-files">Choose files</button>
                 <button id="choose-folder" class="secondary">Choose folder</button>
             </div>
         </div>
-        <ul class="path-list">${items || '<li class="empty">No selected items</li>'}</ul>
-        <div class="primary-row">
-            <button class="primary" id="start-share" ${state.sharePaths.length && !state.busy ? '' : 'disabled'}>${state.busy ? 'Working...' : 'Start transfer'}</button>
-            <button class="ghost" id="clear-share" ${state.sharePaths.length ? '' : 'disabled'}>Clear</button>
+        ${hasItems ? `
+            <ul class="path-list">${items}</ul>
+            <div class="primary-row">
+                <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start transfer'}</button>
+                <button class="ghost" id="clear-share">Clear</button>
+            </div>
+        ` : ''}
+    `;
+}
+
+function renderShareTransfer(task) {
+    const percent = task.transferPercent || 0;
+    const qrImage = qrImageURL(task.pageUrl);
+    const paths = task.paths || [];
+    return `
+        <div class="transfer-stage">
+            <div class="transfer-head">
+                <div>
+                    <div class="eyebrow">Share active</div>
+                    <h2>${escapeHTML(task.transferState || task.state || 'Waiting')}</h2>
+                </div>
+                <button class="danger inline stop-current-action">Stop</button>
+            </div>
+            ${qrImage ? `
+                <div class="qr-hero">
+                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">Open in browser</button>
+                </div>
+            ` : '<div class="empty-state transfer-empty">Waiting for QR page.</div>'}
+            <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
+            <dl class="transfer-details">
+                <dt>Target</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || 'Waiting')}</dd>
+                <dt>Bytes</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                <dt>QR page</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : 'Waiting'}</dd>
+            </dl>
+            <div class="locked-list">
+                <strong>Locked transfer list</strong>
+                <ul class="path-list locked">${paths.map((path) => `
+                    <li>
+                        <div>
+                            <strong>${escapeHTML(shortName(path))}</strong>
+                            <span>${escapeHTML(path)}</span>
+                        </div>
+                        <span class="item-status">${escapeHTML(shareItemStatus(task, path))}</span>
+                    </li>
+                `).join('')}</ul>
+            </div>
+            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>
     `;
 }
@@ -249,7 +298,7 @@ function renderCurrent(task) {
             </dl>
             ${renderSavedFiles(task.savedFiles)}
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
-            ${finished ? '' : '<button class="danger" id="stop-current">Stop current</button>'}
+            ${finished ? '' : '<button class="danger stop-current-action">Stop current</button>'}
         </div>
     `;
 }
@@ -324,8 +373,12 @@ function bindEvents() {
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
     document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
-    document.querySelector('#stop-current')?.addEventListener('click', stopCurrent);
-    document.querySelector('.open-qr')?.addEventListener('click', openQRPage);
+    document.querySelectorAll('.stop-current-action').forEach((button) => {
+        button.addEventListener('click', stopCurrent);
+    });
+    document.querySelectorAll('.open-qr').forEach((button) => {
+        button.addEventListener('click', openQRPage);
+    });
     document.querySelector('#clear-history')?.addEventListener('click', clearHistory);
     document.querySelectorAll('.repeat-task').forEach((button) => {
         button.addEventListener('click', repeatTask);
@@ -612,6 +665,26 @@ function clearMessages() {
 
 function isTerminal(task) {
     return ['completed', 'stopped', 'failed', 'replaced'].includes(task.transferState || task.state);
+}
+
+function activeShareTask() {
+    const task = state.status?.current;
+    if (!task || task.action !== 'share' || isTerminal(task)) {
+        return null;
+    }
+    return task;
+}
+
+function shareItemStatus(task, path) {
+    const current = shortName(task.transferCurrent || '');
+    if (current && current === shortName(path)) {
+        const percent = task.transferPercent || 0;
+        return percent ? `${percent}%` : 'Active';
+    }
+    if (task.transferState === 'waiting') {
+        return 'Waiting';
+    }
+    return 'Locked';
 }
 
 function titleCase(value) {

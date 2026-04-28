@@ -187,6 +187,11 @@ h2 {
     width: 100%;
 }
 
+.danger.inline {
+    margin-top: 0;
+    width: auto;
+}
+
 .path-list,
 .history {
     list-style: none;
@@ -202,6 +207,14 @@ h2 {
     justify-content: space-between;
     padding: 11px 0;
     text-align: left;
+}
+
+.path-list.locked {
+    margin-top: 10px;
+}
+
+.path-list.locked li {
+    align-items: center;
 }
 
 .path-list span,
@@ -388,6 +401,77 @@ dd {
 .saved-files li {
     color: var(--muted);
     overflow-wrap: anywhere;
+}
+
+.transfer-stage {
+    display: grid;
+    gap: 16px;
+}
+
+.transfer-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+}
+
+.transfer-head h2 {
+    font-size: 24px;
+}
+
+.qr-hero {
+    align-items: center;
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: grid;
+    gap: 14px;
+    justify-items: center;
+    min-height: 300px;
+    padding: 18px;
+}
+
+.qr-hero img {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    height: min(320px, 46vw);
+    image-rendering: pixelated;
+    object-fit: contain;
+    padding: 10px;
+    width: min(320px, 46vw);
+}
+
+.transfer-progress {
+    margin: 0;
+}
+
+.transfer-details {
+    background: #fbfcf8;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.transfer-empty {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+}
+
+.locked-list {
+    display: grid;
+    gap: 4px;
+}
+
+.item-status {
+    background: var(--wash);
+    border-radius: 999px;
+    color: var(--accent-strong);
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 6px 10px;
 }
 
 .settings-panel {

@@ -53,7 +53,8 @@ GOCACHE=/tmp/eqrcp-go-build wails build -tags webkit2_41
 
 ## Current Scope
 
-- Share workspace with file/folder selection and Wails file-drop support.
+- Share workspace with a drop-first flow, file/folder selection, Wails file-drop
+  support, delayed pending-list display, and locked QR/status state after start.
 - Receive workspace with output directory selection.
 - Agent status, current task, progress, and recent history display.
 - Stop-current action.

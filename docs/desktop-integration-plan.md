@@ -296,7 +296,9 @@ Architecture:
 
 Initial GUI scope:
 
-- Share mode with drag-and-drop, file selection, folder selection, and a `Start transfer` action.
+- Share mode opens as a drop-first workflow. The pending list and `Start transfer`
+  / `Clear` actions appear only after files or folders are selected. Once the
+  transfer starts, the workspace switches to QR/status and shows a locked list.
 - Receive mode with output directory selection and a `Start receive` action.
 - Current task display with state, target, QR page URL, and progress.
 - Recent task history display.
@@ -319,9 +321,9 @@ Commercial boundary:
 Next priorities:
 
 1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
-2. Convert share mode into the compact tray-launched flow: open on a drop area, reveal the pending list only after files are selected, lock the list after transfer starts, and make QR/status the primary surface.
-3. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current QR action, stop-current action, and real quit.
-4. Render the active QR code inside the Wails window instead of relying on the existing browser QR page URL.
+2. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current QR action, stop-current action, and real quit.
+3. Refine tray state: disable unavailable actions, update tooltip text, and provide icon variants for idle, active, completed, and failed states.
+4. Render the active QR code independently inside the Wails window instead of relying on the existing browser QR image endpoint.
 5. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
 6. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
 
