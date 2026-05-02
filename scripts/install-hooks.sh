@@ -96,18 +96,27 @@ echo "Building Windows CLI artifacts..."
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$OUTPUT_DIR/eqrcp.exe" . || { echo "Failed to build Windows CLI"; exit 1; }
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$OUTPUT_DIR/eqrcp-launcher.exe" ./cmd/eqrcp-launcher || { echo "Failed to build Windows launcher"; exit 1; }
 
-# Build Wails GUI if wails is available
-if command -v wails &> /dev/null || [ -f "$(go env GOPATH)/bin/wails" ]; then
-    WAILS_CMD="wails"
-    if [ ! -x "$(command -v wails)" ]; then
-        WAILS_CMD="$(go env GOPATH)/bin/wails"
+# Build Wails GUI if wails is available (optional, can be slow)
+# Set SKIP_WAILS_BUILD=1 to skip Wails GUI build
+if [ -z "$SKIP_WAILS_BUILD" ]; then
+    if command -v wails &> /dev/null || [ -f "$(go env GOPATH)/bin/wails" ]; then
+        WAILS_CMD="wails"
+        if [ ! -x "$(command -v wails)" ]; then
+            WAILS_CMD="$(go env GOPATH)/bin/wails"
+        fi
+        
+        if [ -x "$WAILS_CMD" ]; then
+            echo "Building Wails GUI..."
+            cd "$SCRIPT_DIR/desktop/gui"
+            $WAILS_CMD build -clean -o "$OUTPUT_DIR/eqrcp-desktop.exe" -platform windows/amd64 || { echo "Failed to build Wails GUI"; exit 1; }
+        else
+            echo "Skipping Wails GUI build: wails command not found"
+        fi
+    else
+        echo "Skipping Wails GUI build: wails not installed"
     fi
-    
-    if [ -x "$WAILS_CMD" ]; then
-        echo "Building Wails GUI..."
-        cd "$SCRIPT_DIR/desktop/gui"
-        $WAILS_CMD build -clean -o "$OUTPUT_DIR/eqrcp-desktop.exe" -platform windows/amd64 || { echo "Failed to build Wails GUI"; exit 1; }
-    fi
+else
+    echo "Skipping Wails GUI build: SKIP_WAILS_BUILD is set"
 fi
 
 echo "Step 3: Done - Project rebuilt successfully."
