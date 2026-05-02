@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -150,6 +151,121 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "Transfer again") {
 		t.Fatalf("QR page = %q, want no repeat action without route", out.String())
+	}
+}
+
+func TestChatPageIncludesMessagingRoutes(t *testing.T) {
+	var out bytes.Buffer
+	data := struct {
+		URL              string
+		QRImageRoute     string
+		EventsRoute      string
+		MessagesRoute    string
+		AttachmentsRoute string
+		StopRoute        string
+		Version          string
+	}{
+		URL:              "http://127.0.0.1:8080/chat/test",
+		QRImageRoute:     "/chat/test/qr/image",
+		EventsRoute:      "/chat/test/events",
+		MessagesRoute:    "/chat/test/messages",
+		AttachmentsRoute: "/chat/test/attachments",
+		StopRoute:        "/chat/test/stop",
+		Version:          "eqrcp test [date: now]",
+	}
+
+	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
+		t.Fatalf("serveTemplate() error = %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		"eqrcp chat",
+		`src="/chat/test/qr/image"`,
+		`new EventSource('\/chat\/test\/events')`,
+		`fetch('\/chat\/test\/messages'`,
+		`fetch('\/chat\/test\/attachments'`,
+		`action="/chat/test/stop"`,
+		"Attach",
+		"Stop chat",
+		"Version: eqrcp test [date: now]",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("Chat page = %q, want to contain %q", html, want)
+		}
+	}
+}
+
+func TestChatMessagesAndAttachments(t *testing.T) {
+	server := &Server{
+		BaseURL:     "http://127.0.0.1:8080",
+		ChatURL:     "http://127.0.0.1:8080/chat/test",
+		mux:         http.NewServeMux(),
+		stopChannel: make(chan bool, 1),
+	}
+	server.setStatus("waiting", "Waiting.")
+	if err := server.Chat(); err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	defer os.RemoveAll(server.chatDir)
+
+	messageBody := strings.NewReader(`{"sender":"desktop","text":"hello mobile"}`)
+	messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", messageBody)
+	messageRequest.Header.Set("Content-Type", "application/json")
+	messageResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(messageResponse, messageRequest)
+	if messageResponse.Code != http.StatusOK {
+		t.Fatalf("message status = %d, want %d; body = %q", messageResponse.Code, http.StatusOK, messageResponse.Body.String())
+	}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/chat/test/messages", nil)
+	listResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(listResponse, listRequest)
+	var messages []chatMessage
+	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
+		t.Fatalf("decode messages: %v", err)
+	}
+	if len(messages) != 1 || messages[0].Sender != "desktop" || messages[0].Text != "hello mobile" {
+		t.Fatalf("messages = %#v, want desktop text message", messages)
+	}
+
+	var uploadBody bytes.Buffer
+	writer := multipart.NewWriter(&uploadBody)
+	if err := writer.WriteField("sender", "mobile"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("files", "photo.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("attachment body")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	uploadRequest := httptest.NewRequest(http.MethodPost, "/chat/test/attachments", &uploadBody)
+	uploadRequest.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(uploadResponse, uploadRequest)
+	if uploadResponse.Code != http.StatusOK {
+		t.Fatalf("upload status = %d, want %d; body = %q", uploadResponse.Code, http.StatusOK, uploadResponse.Body.String())
+	}
+	var uploaded []chatMessage
+	if err := json.NewDecoder(uploadResponse.Body).Decode(&uploaded); err != nil {
+		t.Fatalf("decode upload: %v", err)
+	}
+	if len(uploaded) != 1 || uploaded[0].Sender != "mobile" || uploaded[0].FileName != "photo.txt" || uploaded[0].URL == "" {
+		t.Fatalf("uploaded = %#v, want mobile attachment message", uploaded)
+	}
+
+	downloadRequest := httptest.NewRequest(http.MethodGet, "/chat/test/"+uploaded[0].URL, nil)
+	downloadResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(downloadResponse, downloadRequest)
+	if downloadResponse.Code != http.StatusOK {
+		t.Fatalf("download status = %d, want %d; body = %q", downloadResponse.Code, http.StatusOK, downloadResponse.Body.String())
+	}
+	if downloadResponse.Body.String() != "attachment body" {
+		t.Fatalf("download body = %q, want attachment body", downloadResponse.Body.String())
 	}
 }
 

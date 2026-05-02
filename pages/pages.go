@@ -633,6 +633,433 @@ var QR = `
 </html>
 `
 
+// Chat page
+var Chat = `
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>eqrcp chat</title>
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --line: #d8e0ea;
+            --text: #17202a;
+            --muted: #617083;
+            --accent: #0f766e;
+            --accent-strong: #115e59;
+            --danger: #b42318;
+            --bubble: #e8f3f1;
+            --other: #eef2f7;
+        }
+        * { box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        }
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 310px;
+            gap: 16px;
+            max-width: 1120px;
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 18px;
+        }
+        .chat-shell,
+        .side {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+        }
+        .chat-shell {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            overflow: hidden;
+        }
+        .chat-head,
+        .composer {
+            border-bottom: 1px solid var(--line);
+            padding: 14px;
+        }
+        .composer {
+            border-top: 1px solid var(--line);
+            border-bottom: 0;
+        }
+        h1 {
+            font-size: 20px;
+            line-height: 1.2;
+            margin: 0;
+        }
+        .subtle,
+        .meta {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .messages {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow: auto;
+            padding: 14px;
+        }
+        .message {
+            max-width: min(680px, 86%);
+            border-radius: 8px;
+            background: var(--other);
+            padding: 10px 12px;
+            overflow-wrap: anywhere;
+        }
+        .message.mine {
+            align-self: flex-end;
+            background: var(--bubble);
+        }
+        .message.system {
+            align-self: center;
+            max-width: 92%;
+            background: transparent;
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+        .sender {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-transform: capitalize;
+        }
+        .text {
+            white-space: pre-wrap;
+        }
+        .attachment {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent-strong);
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .preview {
+            display: block;
+            max-width: min(340px, 100%);
+            max-height: 260px;
+            border-radius: 6px;
+            margin-top: 8px;
+            object-fit: contain;
+        }
+        .compose-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 8px;
+            align-items: end;
+        }
+        textarea,
+        input {
+            width: 100%;
+            min-width: 0;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            color: var(--text);
+            font: inherit;
+            padding: 10px 11px;
+        }
+        textarea {
+            min-height: 42px;
+            max-height: 150px;
+            resize: vertical;
+        }
+        button,
+        .file-label {
+            min-height: 42px;
+            border: 0;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 10px 13px;
+            white-space: nowrap;
+        }
+        button:disabled {
+            cursor: default;
+            opacity: 0.65;
+        }
+        .secondary {
+            background: #334155;
+        }
+        .danger {
+            background: var(--danger);
+        }
+        .side {
+            align-self: start;
+            padding: 14px;
+        }
+        .qr-frame {
+            display: grid;
+            place-items: center;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f8fafc;
+            margin: 12px 0;
+            padding: 14px;
+        }
+        .qr {
+            display: block;
+            max-width: 240px;
+            width: 100%;
+        }
+        .url-row {
+            display: grid;
+            gap: 8px;
+        }
+        .peer-row {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0;
+        }
+        .peer-row button {
+            background: #e2e8f0;
+            color: var(--text);
+            flex: 1;
+        }
+        .peer-row button.active {
+            background: var(--accent);
+            color: #fff;
+        }
+        .hidden {
+            display: none;
+        }
+        @media (max-width: 820px) {
+            main {
+                grid-template-columns: 1fr;
+                padding: 10px;
+            }
+            .side {
+                order: -1;
+            }
+            .compose-row {
+                grid-template-columns: 1fr;
+            }
+            .message {
+                max-width: 94%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="chat-shell">
+            <header class="chat-head">
+                <h1>eqrcp chat</h1>
+                <div class="subtle" id="connection-state">Connecting...</div>
+            </header>
+            <div class="messages" id="messages" aria-live="polite"></div>
+            <form class="composer" id="composer">
+                <div class="compose-row">
+                    <textarea id="message-text" placeholder="Type a message" autocomplete="off"></textarea>
+                    <label class="file-label" for="file-input">Attach</label>
+                    <button type="submit">Send</button>
+                </div>
+                <input id="file-input" class="hidden" type="file" multiple>
+            </form>
+        </section>
+        <aside class="side">
+            <h1>Session</h1>
+            <div class="subtle">Scan this code to join from another device.</div>
+            <div class="qr-frame">
+                <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
+            </div>
+            <div class="peer-row" aria-label="Sender">
+                <button type="button" data-peer="desktop">Desktop</button>
+                <button type="button" data-peer="mobile">Mobile</button>
+            </div>
+            <div class="url-row">
+                <input id="chat-url" value="{{.URL}}" readonly>
+                <button class="secondary" type="button" id="copy-url">Copy URL</button>
+                <form method="post" action="{{.StopRoute}}">
+                    <button class="danger" type="submit">Stop chat</button>
+                </form>
+            </div>
+            <p class="meta">Version: {{.Version}}</p>
+        </aside>
+    </main>
+    <script>
+        var state = {
+            messages: [],
+            peer: currentPeer()
+        };
+        var messagesEl = document.getElementById('messages');
+        var textEl = document.getElementById('message-text');
+        var fileEl = document.getElementById('file-input');
+        var connectionEl = document.getElementById('connection-state');
+
+        function currentPeer() {
+            var params = new URLSearchParams(window.location.search);
+            var fromURL = params.get('peer');
+            var saved = window.localStorage.getItem('eqrcp-chat-peer');
+            var peer = fromURL || saved || 'mobile';
+            return peer === 'desktop' ? 'desktop' : 'mobile';
+        }
+        function setPeer(peer) {
+            state.peer = peer === 'desktop' ? 'desktop' : 'mobile';
+            window.localStorage.setItem('eqrcp-chat-peer', state.peer);
+            document.querySelectorAll('[data-peer]').forEach(function(button) {
+                button.classList.toggle('active', button.dataset.peer === state.peer);
+            });
+        }
+        function renderMessages() {
+            messagesEl.innerHTML = '';
+            state.messages.forEach(function(message) {
+                var item = document.createElement('div');
+                item.className = 'message ' + (message.sender === state.peer ? 'mine ' : '') + (message.type === 'system' ? 'system' : '');
+                if (message.type !== 'system') {
+                    var sender = document.createElement('div');
+                    sender.className = 'sender';
+                    sender.textContent = message.sender || 'guest';
+                    item.appendChild(sender);
+                }
+                if (message.type === 'text' || message.type === 'system') {
+                    var text = document.createElement('div');
+                    text.className = 'text';
+                    text.textContent = message.text || '';
+                    item.appendChild(text);
+                } else {
+                    var link = document.createElement('a');
+                    link.className = 'attachment';
+                    link.href = message.url;
+                    link.textContent = (message.type === 'image' ? 'Image: ' : 'File: ') + (message.fileName || 'attachment') + ' (' + formatBytes(message.size || 0) + ')';
+                    link.setAttribute('download', message.fileName || '');
+                    item.appendChild(link);
+                    if (message.type === 'image') {
+                        var image = document.createElement('img');
+                        image.className = 'preview';
+                        image.src = message.url;
+                        image.alt = message.fileName || 'image attachment';
+                        item.appendChild(image);
+                    }
+                }
+                messagesEl.appendChild(item);
+            });
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function loadMessages() {
+            fetch('{{.MessagesRoute}}', { cache: 'no-store' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('message load failed');
+                    }
+                    return response.json();
+                })
+                .then(function(messages) {
+                    state.messages = messages || [];
+                    renderMessages();
+                    connectionEl.textContent = 'Connected as ' + state.peer + '.';
+                })
+                .catch(function() {
+                    connectionEl.textContent = 'Disconnected. Retrying...';
+                });
+        }
+        function sendText(event) {
+            event.preventDefault();
+            var text = textEl.value.trim();
+            if (!text) {
+                return;
+            }
+            textEl.value = '';
+            fetch('{{.MessagesRoute}}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sender: state.peer, text: text})
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('send failed');
+                }
+                return response.json();
+            }).catch(function() {
+                connectionEl.textContent = 'Message send failed.';
+                textEl.value = text;
+            });
+        }
+        function uploadFiles() {
+            if (!fileEl.files || !fileEl.files.length) {
+                return;
+            }
+            var data = new FormData();
+            data.append('sender', state.peer);
+            Array.prototype.forEach.call(fileEl.files, function(file) {
+                data.append('files', file);
+            });
+            fileEl.value = '';
+            fetch('{{.AttachmentsRoute}}', {
+                method: 'POST',
+                body: data
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('upload failed');
+                }
+                return response.json();
+            }).catch(function() {
+                connectionEl.textContent = 'Attachment upload failed.';
+            });
+        }
+        function formatBytes(value) {
+            var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var size = Number(value || 0);
+            var index = 0;
+            while (size >= 1024 && index < units.length - 1) {
+                size = size / 1024;
+                index++;
+            }
+            return (index === 0 ? size : size.toFixed(1)) + ' ' + units[index];
+        }
+        function copyURL() {
+            var input = document.getElementById('chat-url');
+            input.focus();
+            input.select();
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(input.value);
+                return;
+            }
+            document.execCommand('copy');
+        }
+        document.getElementById('composer').addEventListener('submit', sendText);
+        fileEl.addEventListener('change', uploadFiles);
+        document.getElementById('copy-url').addEventListener('click', copyURL);
+        document.querySelectorAll('[data-peer]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                setPeer(button.dataset.peer);
+                renderMessages();
+                connectionEl.textContent = 'Connected as ' + state.peer + '.';
+            });
+        });
+        setPeer(state.peer);
+        if (window.EventSource) {
+            var events = new EventSource('{{.EventsRoute}}');
+            events.onmessage = function(event) {
+                state.messages = JSON.parse(event.data) || [];
+                renderMessages();
+                connectionEl.textContent = 'Connected as ' + state.peer + '.';
+            };
+            events.onerror = function() {
+                connectionEl.textContent = 'Disconnected. Retrying...';
+            };
+        }
+        loadMessages();
+    </script>
+</body>
+</html>
+`
+
 // Upload page
 var Upload = `
 <!doctype html>

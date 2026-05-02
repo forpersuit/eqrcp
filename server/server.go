@@ -41,11 +41,14 @@ type Server struct {
 	// SendURL is the URL used to send the file
 	SendURL string
 	// ReceiveURL is the URL used to Receive the file
-	ReceiveURL  string
+	ReceiveURL string
+	// ChatURL is the URL used for a browser chat session
+	ChatURL     string
 	instance    *http.Server
 	mux         *http.ServeMux
 	body        body.Body
 	outputDir   string
+	chatDir     string
 	stopChannel chan bool
 	statusMu    sync.Mutex
 	status      transferStatus
@@ -532,6 +535,11 @@ func (s *Server) Wait() error {
 			return err
 		}
 	}
+	if s.chatDir != "" {
+		if err := os.RemoveAll(s.chatDir); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -607,6 +615,8 @@ func New(cfg *config.Config) (*Server, error) {
 	app.SendURL = fmt.Sprintf("%s/send/%s",
 		app.BaseURL, path)
 	app.ReceiveURL = fmt.Sprintf("%s/receive/%s",
+		app.BaseURL, path)
+	app.ChatURL = fmt.Sprintf("%s/chat/%s",
 		app.BaseURL, path)
 	// Create a server
 	mux := http.NewServeMux()
