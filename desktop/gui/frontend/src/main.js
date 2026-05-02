@@ -5,13 +5,18 @@ import {EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
+    Chat,
+    ChatSaveDirectory,
     ClearHistory,
+    DownloadChatAttachment,
     OpenExternal,
+    OpenFile,
     OpenPath,
     OpenURL,
     ReadSettings,
     Receive,
     RepeatTask,
+    SaveChatAttachmentAs,
     SaveSettings,
     SelectFiles,
     SelectReceiveDirectory,
@@ -24,6 +29,10 @@ const state = {
     mode: 'share',
     sharePaths: [],
     receiveDir: '',
+    chatText: '',
+    chatMessages: [],
+    chatSaved: {},
+    chatSaveDir: '',
     status: null,
     settings: null,
     appInfo: null,
@@ -37,22 +46,23 @@ const state = {
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 let agentEvents = null;
 let agentEventsRetry = null;
+let chatEvents = null;
+let chatEventsURL = '';
 const app = document.querySelector('#app');
 
 function render() {
-    const current = state.status?.current;
-    const history = state.status?.history || [];
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
                 <div>
                     <div class="eyebrow">Easy QR Transfer</div>
-                    <h1>${state.mode === 'share' ? 'Share files' : 'Receive files'}</h1>
+                    <h1>${state.mode === 'share' ? 'Share files' : state.mode === 'receive' ? 'Receive files' : 'Chat'}</h1>
                 </div>
                 <div class="top-actions">
                     <nav class="mode-switch" aria-label="Mode">
                         <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
                         <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
+                        <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
                     </nav>
                     <button class="tool-button" id="open-settings" title="Settings" aria-label="Settings">&#9881;</button>
                     <button class="tool-button" id="open-about" title="About EQT" aria-label="About EQT">i</button>
@@ -62,31 +72,26 @@ function render() {
 
             <section class="layout">
                 <div class="workspace">
-                    ${state.mode === 'share' ? renderShare() : renderReceive()}
+                    ${renderWorkspace()}
                     ${state.notice ? `<div class="notice success">${escapeHTML(state.notice)}</div>` : ''}
                     ${state.error ? `<div class="notice error">${escapeHTML(state.error)}</div>` : ''}
                 </div>
-                <aside class="side">
-                    <div class="panel">
-                        <div class="panel-head">
-                            <h2>Current task</h2>
-                            <button class="ghost" id="refresh">Refresh</button>
-                        </div>
-                        ${renderCurrent(current)}
-                    </div>
-                    <div class="panel">
-                        <div class="panel-head">
-                            <h2>Recent history</h2>
-                            <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'}>Clear</button>
-                        </div>
-                        ${renderHistory(history)}
-                    </div>
-                </aside>
+                ${renderSide()}
             </section>
             ${renderPanel()}
         </main>
     `;
     bindEvents();
+}
+
+function renderWorkspace() {
+    if (state.mode === 'share') {
+        return renderShare();
+    }
+    if (state.mode === 'receive') {
+        return renderReceive();
+    }
+    return renderChat();
 }
 
 function renderShare() {
@@ -120,6 +125,32 @@ function renderShare() {
                 <button class="ghost" id="clear-share">Clear</button>
             </div>
         ` : ''}
+    `;
+}
+
+function renderSide() {
+    if (state.mode === 'chat') {
+        return renderChatSide();
+    }
+    const current = state.status?.current;
+    const history = state.status?.history || [];
+    return `
+        <aside class="side">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Current task</h2>
+                    <button class="ghost" id="refresh">Refresh</button>
+                </div>
+                ${renderCurrent(current)}
+            </div>
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Recent history</h2>
+                    <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'}>Clear</button>
+                </div>
+                ${renderHistory(history)}
+            </div>
+        </aside>
     `;
 }
 
@@ -178,6 +209,142 @@ function renderReceive() {
         <div class="primary-row">
             <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start receive'}</button>
             <button class="ghost" id="save-receive-dir">Save directory</button>
+        </div>
+    `;
+}
+
+function renderChat() {
+    const task = activeChatTask();
+    if (!task) {
+        return `
+            <div class="chat-start">
+                <div>
+                    <div class="eyebrow">Session mode</div>
+                    <h2>Local chat with phones and nearby devices</h2>
+                    <p>Messages stay in this local session. Attachments received by the desktop app are saved automatically.</p>
+                </div>
+                <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start chat'}</button>
+            </div>
+        `;
+    }
+    const chatUrl = task.pageUrl || '';
+    return `
+        <div class="chat-panel">
+            <div class="chat-thread" id="chat-thread">
+                ${renderChatMessages()}
+            </div>
+            <form class="chat-compose" id="chat-compose">
+                <input id="chat-file-input" type="file" multiple hidden />
+                <button type="button" class="secondary" id="attach-chat-file">Attach</button>
+                <textarea id="chat-text" rows="1" placeholder="Type a message or paste an image">${escapeHTML(state.chatText)}</textarea>
+                <button class="primary" type="submit">Send</button>
+            </form>
+        </div>
+    `;
+}
+
+function renderChatSide() {
+    const task = activeChatTask();
+    if (!task) {
+        return `
+            <aside class="side">
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2>Chat session</h2>
+                        <button class="ghost" id="refresh">Refresh</button>
+                    </div>
+                    <div class="empty-state">No active chat.</div>
+                </div>
+            </aside>
+        `;
+    }
+    const chatUrl = task.pageUrl || '';
+    const qrImage = qrImageURL(chatUrl);
+    const senders = chatSenders();
+    return `
+        <aside class="side">
+            <div class="panel chat-session-panel">
+                <div class="panel-head">
+                    <div>
+                        <div class="eyebrow">Chat active</div>
+                        <h2>${escapeHTML(task.transferState || task.state || 'Running')}</h2>
+                    </div>
+                    <button class="ghost" id="refresh">Refresh</button>
+                </div>
+                ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code" />` : ''}
+                <input value="${escapeAttr(chatUrl)}" readonly />
+                <div class="chat-side-actions">
+                    <button class="ghost" id="copy-chat-url" ${chatUrl ? '' : 'disabled'}>Copy URL</button>
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(chatUrl)}" ${chatUrl ? '' : 'disabled'}>Open browser</button>
+                    <button class="danger inline stop-current-action">Stop</button>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Auto-save</h2>
+                    <button class="ghost" id="open-chat-save" ${state.chatSaveDir ? '' : 'disabled'}>Open</button>
+                </div>
+                <p class="side-note">${escapeHTML(state.chatSaveDir || 'Attachments save automatically by day.')}</p>
+                <p class="side-note">Daily folders older than 7 days are cleaned automatically.</p>
+            </div>
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>Devices</h2>
+                    <span class="side-count">${senders.length}</span>
+                </div>
+                ${senders.length ? `<ul class="device-list">${senders.map((sender) => `<li>${escapeHTML(sender)}</li>`).join('')}</ul>` : '<div class="empty-state">Waiting for devices.</div>'}
+            </div>
+        </aside>
+    `;
+}
+
+function renderChatMessages() {
+    if (!state.chatMessages.length) {
+        return `<div class="empty-state">No messages yet.</div>`;
+    }
+    return state.chatMessages.map((message) => {
+        const mine = message.sender === 'Desktop';
+        const saved = state.chatSaved[message.id];
+        return `
+            <div class="chat-message ${mine ? 'mine' : ''}" data-message-id="${escapeAttr(message.id)}">
+                <div class="chat-sender"><span>${escapeHTML(message.sender || 'Guest')}</span><time>${escapeHTML(messageTime(message.createdAt))}</time></div>
+                ${message.recalled ? `
+                    <div class="chat-text recalled">Message recalled.</div>
+                ` : message.type === 'text' || message.type === 'system' ? `
+                    <div class="chat-text">${escapeHTML(message.text || '')}</div>
+                ` : renderChatAttachment(message, saved)}
+                ${renderChatBubbleActions(message)}
+            </div>
+        `;
+    }).join('');
+}
+
+function renderChatBubbleActions(message) {
+    const actions = [];
+    if (message.url) {
+        actions.push(`<button type="button" class="bubble-action" data-save-url="${escapeAttr(absoluteChatURL(message.url))}" data-save-name="${escapeAttr(message.fileName || 'attachment')}" title="Download" aria-label="Download">${downloadIcon()}</button>`);
+    }
+    if (message.sender === 'Desktop' && message.type !== 'system' && !message.recalled) {
+        actions.push(`<button type="button" class="bubble-action" data-recall-message="${escapeAttr(message.id)}" title="Recall" aria-label="Recall">${recallIcon()}</button>`);
+    }
+    if (!actions.length) {
+        return '';
+    }
+    return `<div class="bubble-actions">${actions.join('')}</div>`;
+}
+
+function renderChatAttachment(message, saved) {
+    const fullUrl = absoluteChatURL(message.url);
+    const name = escapeHTML(message.fileName || 'attachment');
+    const meta = escapeHTML(attachmentDescription(message));
+    const preview = message.type === 'image'
+        ? `<button class="preview-button media-frame" ${saved ? `data-open-file="${escapeAttr(saved)}"` : `data-open-url="${escapeAttr(fullUrl)}"`} title="Open image"><img class="chat-preview" src="${escapeAttr(fullUrl)}" alt="${escapeAttr(message.fileName || 'image')}" /><span class="media-meta">${name} · ${meta}</span></button>`
+        : message.type === 'video'
+            ? `<div class="media-frame"><video class="chat-preview" src="${escapeAttr(fullUrl)}" controls preload="metadata"></video><span class="media-meta">${name} · ${meta}</span></div>`
+            : `<button class="chat-file file-open" ${saved ? `data-open-file="${escapeAttr(saved)}"` : ''}><strong>${name}</strong><span>${meta}</span></button>`;
+    return `
+        <div class="chat-attachment">
+            ${preview}
         </div>
     `;
 }
@@ -345,6 +512,11 @@ function bindEvents() {
         button.addEventListener('click', () => {
             state.mode = button.dataset.mode;
             clearMessages();
+            if (state.mode !== 'chat') {
+                disconnectChatEvents();
+            } else {
+                connectActiveChat();
+            }
             render();
         });
     });
@@ -369,6 +541,7 @@ function bindEvents() {
         button.addEventListener('click', removePath);
     });
     document.querySelector('#start-share')?.addEventListener('click', startShare);
+    document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
@@ -376,7 +549,7 @@ function bindEvents() {
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
     });
-    document.querySelectorAll('.open-qr').forEach((button) => {
+    document.querySelectorAll('.open-qr, .preview-button[data-open-url]').forEach((button) => {
         button.addEventListener('click', openQRPage);
     });
     document.querySelector('#clear-history')?.addEventListener('click', clearHistory);
@@ -386,6 +559,30 @@ function bindEvents() {
     document.querySelectorAll('.path-link').forEach((button) => {
         button.addEventListener('click', openPath);
     });
+    document.querySelectorAll('[data-open-file]').forEach((button) => {
+        button.addEventListener('click', openSavedFile);
+    });
+    document.querySelectorAll('[data-save-url]').forEach((element) => {
+        element.addEventListener('contextmenu', openChatContextMenu);
+        element.addEventListener('click', saveAttachmentAsFromButton);
+    });
+    document.querySelectorAll('#chat-thread .chat-message').forEach((element) => {
+        element.addEventListener('contextmenu', openChatContextMenu);
+    });
+    document.querySelectorAll('[data-recall-message]').forEach((button) => {
+        button.addEventListener('click', (event) => recallChatMessageByID(event.currentTarget.dataset.recallMessage));
+    });
+    document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
+    document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
+    document.querySelector('#chat-compose')?.addEventListener('submit', sendChatText);
+    document.querySelector('#attach-chat-file')?.addEventListener('click', () => document.querySelector('#chat-file-input')?.click());
+    document.querySelector('#chat-file-input')?.addEventListener('change', uploadChatInputFiles);
+    document.querySelector('#chat-text')?.addEventListener('input', (event) => {
+        state.chatText = event.currentTarget.value;
+        adjustChatTextarea(event.currentTarget);
+    });
+    document.querySelector('#chat-text')?.addEventListener('paste', pasteChatImage);
+    adjustChatTextarea();
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
 }
@@ -442,6 +639,137 @@ async function startReceive() {
         state.notice = 'Receive task started.';
         render();
     });
+}
+
+async function startChat() {
+    await run(async () => {
+        await saveSettingsData();
+        state.status = await Chat();
+        state.mode = 'chat';
+        state.notice = 'Chat session started.';
+        state.chatSaveDir = await ChatSaveDirectory();
+        connectActiveChat();
+        render();
+    });
+}
+
+async function openChatSaveDirectory() {
+    await run(async () => {
+        const dir = state.chatSaveDir || await ChatSaveDirectory();
+        state.chatSaveDir = dir;
+        await OpenPath(dir);
+    }, {busy: false});
+}
+
+function copyChatURL() {
+    const task = activeChatTask();
+    if (!task?.pageUrl) {
+        return;
+    }
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(task.pageUrl);
+    }
+}
+
+async function sendChatText(event) {
+    event.preventDefault();
+    const task = activeChatTask();
+    const text = state.chatText.trim();
+    if (!task?.pageUrl || !text) {
+        return;
+    }
+    state.chatText = '';
+    const input = document.querySelector('#chat-text');
+    if (input) {
+        input.value = '';
+        adjustChatTextarea(input);
+    }
+    await run(async () => {
+        const response = await fetch(chatMessagesURL(task.pageUrl), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({sender: 'Desktop', text}),
+        });
+        if (!response.ok) {
+            throw new Error('chat send failed');
+        }
+    }, {busy: false});
+}
+
+async function recallChatMessageByID(id) {
+    const task = activeChatTask();
+    if (!task?.pageUrl || !id) {
+        return;
+    }
+    await run(async () => {
+        const response = await fetch(`${chatMessagesURL(task.pageUrl)}/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({sender: 'Desktop'}),
+        });
+        if (!response.ok) {
+            throw new Error('message recall failed');
+        }
+    }, {busy: false});
+}
+
+function continueChatEditMessage(message) {
+    if (!message) {
+        return;
+    }
+    state.chatText = message.text || '';
+    render();
+    window.setTimeout(() => {
+        const input = document.querySelector('#chat-text');
+        if (input) {
+            adjustChatTextarea(input);
+            input.focus();
+            input.selectionStart = input.value.length;
+            input.selectionEnd = input.value.length;
+        }
+    }, 0);
+}
+
+async function uploadChatInputFiles(event) {
+    const files = Array.from(event.currentTarget.files || []);
+    event.currentTarget.value = '';
+    await uploadChatFiles(files);
+}
+
+async function pasteChatImage(event) {
+    const files = [];
+    Array.from(event.clipboardData?.items || []).forEach((item) => {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+                files.push(file);
+            }
+        }
+    });
+    if (!files.length) {
+        return;
+    }
+    event.preventDefault();
+    await uploadChatFiles(files);
+}
+
+async function uploadChatFiles(files) {
+    const task = activeChatTask();
+    if (!task?.pageUrl || !files.length) {
+        return;
+    }
+    await run(async () => {
+        const data = new FormData();
+        data.append('sender', 'Desktop');
+        files.forEach((file) => data.append('files', file, file.name || `pasted-image-${Date.now()}.png`));
+        const response = await fetch(chatAttachmentsURL(task.pageUrl), {
+            method: 'POST',
+            body: data,
+        });
+        if (!response.ok) {
+            throw new Error('chat upload failed');
+        }
+    }, {busy: false});
 }
 
 async function saveSettings() {
@@ -513,6 +841,129 @@ async function openPath(event) {
     }, {busy: false});
 }
 
+async function openSavedFile(event) {
+    await run(async () => {
+        const path = event.currentTarget.dataset.openFile;
+        if (path) {
+            await OpenFile(path);
+        }
+    }, {busy: false});
+}
+
+function openChatContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.currentTarget;
+    const message = messageFromElement(target);
+    const items = [];
+    if (target.dataset.saveUrl) {
+        items.push({label: 'Save as', action: () => saveAttachmentAs(target.dataset.saveUrl, target.dataset.saveName || 'attachment')});
+    }
+    if (message?.sender === 'Desktop' && message.type === 'text') {
+        if (message.recalled) {
+            items.push({label: 'Continue editing', action: () => continueChatEditMessage(message)});
+        } else {
+            items.push({label: 'Recall', action: () => recallChatMessageByID(message.id)});
+        }
+    }
+    if (items.length) {
+        showContextMenu(items, event.clientX, event.clientY);
+    }
+}
+
+async function saveAttachmentAs(url, name) {
+    await run(async () => {
+        await SaveChatAttachmentAs(url, name || 'attachment');
+    }, {busy: false});
+}
+
+async function saveAttachmentAsFromButton(event) {
+    event.stopPropagation();
+    const target = event.currentTarget;
+    await saveAttachmentAs(target.dataset.saveUrl, target.dataset.saveName || 'attachment');
+}
+
+function messageFromElement(element) {
+    const id = element.dataset.messageId || element.closest('.chat-message')?.dataset.messageId;
+    if (!id) {
+        return null;
+    }
+    return state.chatMessages.find((message) => message.id === id) || null;
+}
+
+function showContextMenu(items, x, y) {
+    closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    items.forEach((item) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = item.label;
+        button.addEventListener('click', () => {
+            closeContextMenu();
+            item.action();
+        });
+        menu.appendChild(button);
+    });
+    document.body.appendChild(menu);
+    const rect = menu.getBoundingClientRect();
+    const left = Math.min(x, window.innerWidth - rect.width - 8);
+    const top = Math.min(y, window.innerHeight - rect.height - 8);
+    menu.style.left = `${Math.max(8, left)}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
+    window.setTimeout(() => {
+        document.addEventListener('pointerdown', closeContextMenuOnOutside);
+        document.addEventListener('keydown', closeContextMenuOnEscape);
+    }, 0);
+}
+
+function closeContextMenuOnOutside(event) {
+    if (!event.target.closest('.context-menu')) {
+        closeContextMenu();
+    }
+}
+
+function closeContextMenuOnEscape(event) {
+    if (event.key === 'Escape') {
+        closeContextMenu();
+    }
+}
+
+function closeContextMenu() {
+    document.querySelector('.context-menu')?.remove();
+    document.removeEventListener('pointerdown', closeContextMenuOnOutside);
+    document.removeEventListener('keydown', closeContextMenuOnEscape);
+}
+
+function bindLongPress(element) {
+    let timer = null;
+    let point = {x: 0, y: 0};
+    element.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+            return;
+        }
+        point = {x: event.clientX, y: event.clientY};
+        timer = window.setTimeout(() => {
+            openChatContextMenu({
+                preventDefault() {},
+                stopPropagation() {},
+                currentTarget: element,
+                clientX: point.x,
+                clientY: point.y,
+            });
+            timer = null;
+        }, 560);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel', 'pointermove'].forEach((name) => {
+        element.addEventListener(name, () => {
+            if (timer) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
+        });
+    });
+}
+
 async function openExternal(event) {
     await run(async () => {
         const target = event.currentTarget.dataset.openExternal;
@@ -558,6 +1009,9 @@ async function loadSettings() {
 
 async function loadStatusData() {
     state.status = await AgentStatus();
+    if (state.mode === 'chat') {
+        connectActiveChat();
+    }
 }
 
 async function run(fn, options = {}) {
@@ -610,7 +1064,12 @@ function connectAgentEvents() {
     agentEvents.onmessage = (event) => {
         try {
             state.status = JSON.parse(event.data);
-            render();
+            if (state.mode === 'chat' && activeChatTask()) {
+                connectActiveChat();
+                updateChatSide();
+            } else {
+                render();
+            }
         } catch {
             refreshStatus(false);
         }
@@ -625,6 +1084,97 @@ function connectAgentEvents() {
             }, 1500);
         }
     };
+}
+
+function connectActiveChat() {
+    const task = activeChatTask();
+    if (!task?.pageUrl) {
+        disconnectChatEvents();
+        return;
+    }
+    const nextURL = chatEventsRoute(task.pageUrl);
+    if (chatEvents && chatEventsURL === nextURL) {
+        return;
+    }
+    disconnectChatEvents();
+    chatEventsURL = nextURL;
+    if (!window.EventSource) {
+        loadChatMessages(task.pageUrl);
+        return;
+    }
+    chatEvents = new EventSource(nextURL);
+    chatEvents.onmessage = (event) => {
+        try {
+            const wasNearBottom = isChatNearBottom();
+            const previousLastID = state.chatMessages.at(-1)?.id;
+            state.chatMessages = JSON.parse(event.data) || [];
+            const nextLast = state.chatMessages.at(-1);
+            saveChatAttachments();
+            if (state.mode === 'chat') {
+                updateChatThread({forceBottom: wasNearBottom || (nextLast?.sender === 'Desktop' && nextLast.id !== previousLastID)});
+                updateChatSide();
+            }
+        } catch {
+            loadChatMessages(task.pageUrl);
+        }
+    };
+    chatEvents.onerror = () => {
+        loadChatMessages(task.pageUrl);
+    };
+}
+
+function disconnectChatEvents() {
+    if (chatEvents) {
+        chatEvents.close();
+        chatEvents = null;
+    }
+    chatEventsURL = '';
+}
+
+async function loadChatMessages(pageUrl) {
+    if (!pageUrl) {
+        return;
+    }
+    try {
+        const response = await fetch(chatMessagesURL(pageUrl), {cache: 'no-store'});
+        if (!response.ok) {
+            throw new Error('chat messages failed');
+        }
+        state.chatMessages = await response.json() || [];
+        await saveChatAttachments();
+        if (state.mode === 'chat') {
+            updateChatThread({forceBottom: true});
+            updateChatSide();
+        }
+    } catch (error) {
+        state.error = error?.message || String(error);
+    }
+}
+
+async function saveChatAttachments() {
+    const task = activeChatTask();
+    if (!task?.pageUrl) {
+        return;
+    }
+    if (!state.chatSaveDir) {
+        try {
+            state.chatSaveDir = await ChatSaveDirectory();
+        } catch {
+            return;
+        }
+    }
+    for (const message of state.chatMessages) {
+        if (!message?.id || !message.url || message.type === 'text' || message.type === 'system' || state.chatSaved[message.id]) {
+            continue;
+        }
+        try {
+            const saved = await DownloadChatAttachment(absoluteChatURL(message.url), message.fileName || 'attachment');
+            state.chatSaved = {...state.chatSaved, [message.id]: saved};
+            updateChatThread();
+        } catch (error) {
+            state.error = error?.message || String(error);
+        }
+    }
 }
 
 function handleFileDrop(paths) {
@@ -645,6 +1195,14 @@ function handleTrayCommand(command) {
         state.mode = 'receive';
         state.activePanel = '';
         state.notice = 'Ready to receive.';
+        render();
+        return;
+    }
+    if (command === 'chat') {
+        state.mode = 'chat';
+        state.activePanel = '';
+        state.notice = 'Ready to chat.';
+        connectActiveChat();
         render();
         return;
     }
@@ -673,6 +1231,105 @@ function activeShareTask() {
         return null;
     }
     return task;
+}
+
+function activeChatTask() {
+    const task = state.status?.current;
+    if (!task || task.action !== 'chat' || isTerminal(task)) {
+        return null;
+    }
+    return task;
+}
+
+function updateChatThread(options = {}) {
+    const thread = document.querySelector('#chat-thread');
+    if (!thread) {
+        render();
+        return;
+    }
+    const activeElement = document.activeElement;
+    const composerFocused = activeElement?.id === 'chat-text';
+    const selectionStart = composerFocused ? activeElement.selectionStart : 0;
+    const selectionEnd = composerFocused ? activeElement.selectionEnd : 0;
+    const shouldStick = options.forceBottom || isChatNearBottom(thread);
+    thread.innerHTML = renderChatMessages();
+    bindChatThreadEvents();
+    if (shouldStick) {
+        thread.scrollTop = thread.scrollHeight;
+    }
+    if (composerFocused) {
+        const input = document.querySelector('#chat-text');
+        input?.focus();
+        if (input) {
+            input.selectionStart = selectionStart;
+            input.selectionEnd = selectionEnd;
+        }
+    }
+}
+
+function updateChatSide() {
+    if (state.mode !== 'chat') {
+        return;
+    }
+    const side = document.querySelector('.layout > .side');
+    if (!side) {
+        return;
+    }
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = renderChatSide().trim();
+    const next = wrapper.firstElementChild;
+    if (next) {
+        side.replaceWith(next);
+        bindSideEvents();
+    }
+}
+
+function bindSideEvents() {
+    document.querySelector('#refresh')?.addEventListener('click', refreshStatus);
+    document.querySelectorAll('.side .stop-current-action').forEach((button) => {
+        button.addEventListener('click', stopCurrent);
+    });
+    document.querySelectorAll('.side .open-qr').forEach((button) => {
+        button.addEventListener('click', openQRPage);
+    });
+    document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
+    document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
+}
+
+function bindChatThreadEvents() {
+    document.querySelectorAll('#chat-thread .preview-button[data-open-url]').forEach((button) => {
+        button.addEventListener('click', openQRPage);
+    });
+    document.querySelectorAll('#chat-thread [data-open-file]').forEach((button) => {
+        button.addEventListener('click', openSavedFile);
+    });
+    document.querySelectorAll('#chat-thread [data-save-url]').forEach((element) => {
+        element.addEventListener('contextmenu', openChatContextMenu);
+        element.addEventListener('click', saveAttachmentAsFromButton);
+    });
+    document.querySelectorAll('#chat-thread .chat-message').forEach((element) => {
+        element.addEventListener('contextmenu', openChatContextMenu);
+    });
+    document.querySelectorAll('#chat-thread [data-recall-message]').forEach((button) => {
+        button.addEventListener('click', (event) => recallChatMessageByID(event.currentTarget.dataset.recallMessage));
+    });
+}
+
+function isChatNearBottom(thread = document.querySelector('#chat-thread')) {
+    if (!thread) {
+        return true;
+    }
+    return thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+}
+
+function chatSenders() {
+    const senders = new Set(['Desktop']);
+    state.chatMessages.forEach((message) => {
+        if (message.sender && message.type !== 'system') {
+            senders.add(message.sender);
+        }
+    });
+    return [...senders].slice(0, 8);
 }
 
 function shareItemStatus(task, path) {
@@ -707,6 +1364,51 @@ function formatBytes(value) {
     return `${next >= 10 || unit === 0 ? next.toFixed(0) : next.toFixed(1)} ${units[unit]}`;
 }
 
+function attachmentDescription(message) {
+    const parts = [];
+    const extension = fileExtension(message.fileName);
+    if (extension !== 'FILE') {
+        parts.push(extension);
+    }
+    parts.push(formatBytes(message.size || 0));
+    return parts.join(' - ');
+}
+
+function messageTime(value) {
+    if (!value) {
+        return '';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+    return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+function fileExtension(name) {
+    const parts = String(name || '').split('.');
+    if (parts.length < 2) {
+        return 'FILE';
+    }
+    return parts.pop().slice(0, 4).toUpperCase();
+}
+
+function adjustChatTextarea(input = document.querySelector('#chat-text')) {
+    if (!input) {
+        return;
+    }
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 150)}px`;
+}
+
+function downloadIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
+}
+
+function recallIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5"></path><path d="M4 12a8 8 0 1 0 2.3-5.7"></path></svg>';
+}
+
 function shortName(path) {
     return String(path || '').split(/[\\/]/).filter(Boolean).pop() || path || '';
 }
@@ -718,10 +1420,52 @@ function qrImageURL(pageUrl) {
     try {
         const url = new URL(pageUrl);
         const cleanPath = url.pathname.replace(/\/$/, '');
-        url.pathname = cleanPath.endsWith('/qr') ? `${cleanPath}/image` : '/qr/image';
+        if (cleanPath.endsWith('/qr')) {
+            url.pathname = `${cleanPath}/image`;
+        } else if (cleanPath.includes('/chat/')) {
+            url.pathname = `${cleanPath}/qr/image`;
+        } else {
+            url.pathname = '/qr/image';
+        }
         url.search = '';
         url.hash = '';
         return url.toString();
+    } catch {
+        return '';
+    }
+}
+
+function chatMessagesURL(pageUrl) {
+    const url = new URL(pageUrl);
+    url.pathname = url.pathname.replace(/\/$/, '') + '/messages';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+}
+
+function chatAttachmentsURL(pageUrl) {
+    const url = new URL(pageUrl);
+    url.pathname = url.pathname.replace(/\/$/, '') + '/attachments';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+}
+
+function chatEventsRoute(pageUrl) {
+    const url = new URL(pageUrl);
+    url.pathname = url.pathname.replace(/\/$/, '') + '/events';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+}
+
+function absoluteChatURL(path) {
+    const task = activeChatTask();
+    if (!task?.pageUrl || !path) {
+        return '';
+    }
+    try {
+        return new URL(path, task.pageUrl.replace(/\/?$/, '/')).toString();
     } catch {
         return '';
     }
@@ -771,4 +1515,4 @@ EventsOn('eqt:tray-command', handleTrayCommand);
 
 render();
 loadSettings().then(connectAgentEvents);
-setInterval(refreshStatus, 1500);
+setInterval(() => refreshStatus(false), 1500);

@@ -655,19 +655,23 @@ var Chat = `
             --other: #eef2f7;
         }
         * { box-sizing: border-box; }
+        html,
         body {
-            min-height: 100vh;
+            height: 100%;
+        }
+        body {
             margin: 0;
             background: var(--bg);
             color: var(--text);
             font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            overflow: hidden;
         }
         main {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 310px;
             gap: 16px;
             max-width: 1120px;
-            min-height: 100vh;
+            height: 100%;
             margin: 0 auto;
             padding: 18px;
         }
@@ -682,14 +686,35 @@ var Chat = `
             grid-template-rows: auto minmax(0, 1fr) auto;
             overflow: hidden;
         }
-        .chat-head,
-        .composer {
+        .chat-head {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
             border-bottom: 1px solid var(--line);
-            padding: 14px;
+            padding: 12px 14px;
         }
         .composer {
             border-top: 1px solid var(--line);
             border-bottom: 0;
+            padding: 10px 12px 12px;
+        }
+        .head-actions {
+            display: inline-flex;
+            gap: 8px;
+        }
+        .icon-button {
+            width: 40px;
+            min-width: 40px;
+            min-height: 40px;
+            padding: 0;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: var(--text);
+        }
+        .icon-button svg {
+            width: 19px;
+            height: 19px;
         }
         h1 {
             font-size: 20px;
@@ -702,17 +727,19 @@ var Chat = `
             font-size: 13px;
         }
         .messages {
+            -webkit-overflow-scrolling: touch;
             display: flex;
             flex-direction: column;
             gap: 10px;
             overflow: auto;
             padding: 14px;
+            touch-action: pan-y;
         }
         .message {
-            max-width: min(680px, 86%);
+            max-width: min(520px, 82%);
             border-radius: 8px;
             background: var(--other);
-            padding: 10px 12px;
+            padding: 9px 11px 8px;
             overflow-wrap: anywhere;
         }
         .message.mine {
@@ -728,36 +755,121 @@ var Chat = `
             text-align: center;
         }
         .sender {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
             color: var(--muted);
             font-size: 12px;
             font-weight: 700;
             margin-bottom: 4px;
-            text-transform: capitalize;
+        }
+        .sender time {
+            font-weight: 500;
+            white-space: nowrap;
         }
         .text {
             white-space: pre-wrap;
         }
-        .attachment {
-            display: inline-flex;
+        .text.recalled {
+            color: var(--muted);
+            font-style: italic;
+        }
+        .attachment-card {
+            display: grid;
+            gap: 6px;
+            max-width: min(360px, 100%);
+        }
+        .media-frame {
+            display: block;
+            position: relative;
+        }
+        .media-preview {
+            display: block;
+            max-width: 100%;
+            max-height: min(300px, 58vh);
+            background: #0f172a;
+            border-radius: 6px;
+            object-fit: contain;
+            width: auto;
+        }
+        video.media-preview {
+            aspect-ratio: 16 / 9;
+        }
+        .media-meta {
+            position: absolute;
+            right: 7px;
+            bottom: 7px;
+            max-width: calc(100% - 14px);
+            border-radius: 5px;
+            background: rgba(15, 23, 42, 0.72);
+            color: #fff;
+            font-size: 11px;
+            overflow-wrap: anywhere;
+            padding: 4px 6px;
+            text-align: right;
+        }
+        .file-card {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
             align-items: center;
-            gap: 8px;
-            color: var(--accent-strong);
-            font-weight: 700;
+            min-width: min(340px, 100%);
+            border: 1px solid rgba(15, 118, 110, 0.18);
+            border-radius: 7px;
+            background: rgba(255, 255, 255, 0.62);
+            padding: 10px;
             text-decoration: none;
         }
-        .preview {
-            display: block;
-            max-width: min(340px, 100%);
-            max-height: 260px;
-            border-radius: 6px;
-            margin-top: 8px;
-            object-fit: contain;
+        .file-name {
+            color: var(--text);
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+        .file-meta {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 2px;
+            text-align: right;
+        }
+        .bubble-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .bubble-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            min-width: 26px;
+            height: 26px;
+            min-height: 26px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.74);
+            color: var(--accent-strong);
+            padding: 0;
+            text-decoration: none;
+        }
+        .bubble-action svg,
+        .file-label svg,
+        .send-button svg {
+            width: 15px;
+            height: 15px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
         .compose-row {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto auto;
-            gap: 8px;
-            align-items: end;
+            grid-template-columns: 38px minmax(0, 1fr) 38px;
+            gap: 10px;
+            align-items: center;
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            background: #f8fafc;
+            padding: 6px;
         }
         textarea,
         input {
@@ -770,15 +882,22 @@ var Chat = `
             padding: 10px 11px;
         }
         textarea {
-            min-height: 42px;
-            max-height: 150px;
-            resize: vertical;
+            min-height: 24px;
+            max-height: 128px;
+            border: 0;
+            background: transparent;
+            overflow-y: auto;
+            padding: 7px 2px;
+            resize: none;
+        }
+        textarea:focus {
+            outline: none;
         }
         button,
         .file-label {
             min-height: 42px;
             border: 0;
-            border-radius: 6px;
+            border-radius: 999px;
             background: var(--accent);
             color: #fff;
             cursor: pointer;
@@ -789,6 +908,14 @@ var Chat = `
             font-weight: 700;
             padding: 10px 13px;
             white-space: nowrap;
+        }
+        .file-label,
+        .send-button {
+            width: 38px;
+            min-width: 38px;
+            height: 38px;
+            min-height: 38px;
+            padding: 0;
         }
         button:disabled {
             cursor: default;
@@ -804,6 +931,12 @@ var Chat = `
             align-self: start;
             padding: 14px;
         }
+        .session-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
         .qr-frame {
             display: grid;
             place-items: center;
@@ -812,6 +945,9 @@ var Chat = `
             background: #f8fafc;
             margin: 12px 0;
             padding: 14px;
+        }
+        .session-backdrop {
+            display: none;
         }
         .qr {
             display: block;
@@ -822,36 +958,60 @@ var Chat = `
             display: grid;
             gap: 8px;
         }
-        .peer-row {
-            display: flex;
-            gap: 8px;
-            margin: 12px 0;
-        }
-        .peer-row button {
-            background: #e2e8f0;
-            color: var(--text);
-            flex: 1;
-        }
-        .peer-row button.active {
-            background: var(--accent);
-            color: #fff;
-        }
         .hidden {
             display: none;
         }
         @media (max-width: 820px) {
             main {
+                display: block;
+                height: 100%;
                 grid-template-columns: 1fr;
+                padding: 0;
+            }
+            .chat-shell {
+                height: 100%;
+                border: 0;
+                border-radius: 0;
+            }
+            .chat-head {
+                position: sticky;
+                top: 0;
+                z-index: 2;
+                background: rgba(255, 255, 255, 0.96);
+            }
+            .messages {
                 padding: 10px;
             }
+            .composer {
+                padding: 8px;
+            }
+            textarea {
+                min-height: 40px;
+            }
             .side {
-                order: -1;
+                display: none;
             }
             .compose-row {
-                grid-template-columns: 1fr;
+                grid-template-columns: auto minmax(0, 1fr) auto;
             }
             .message {
                 max-width: 94%;
+            }
+            .session-backdrop.open {
+                display: grid;
+                place-items: center;
+                position: fixed;
+                inset: 0;
+                z-index: 20;
+                background: rgba(15, 23, 42, 0.42);
+                padding: 18px;
+            }
+            .session-backdrop.open .side {
+                display: block;
+                width: min(360px, 100%);
+                max-height: calc(100vh - 36px);
+                overflow: auto;
+                box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
             }
         }
     </style>
@@ -860,100 +1020,284 @@ var Chat = `
     <main>
         <section class="chat-shell">
             <header class="chat-head">
-                <h1>eqrcp chat</h1>
-                <div class="subtle" id="connection-state">Connecting...</div>
+                <div>
+                    <h1>eqrcp chat</h1>
+                    <div class="subtle" id="connection-state">Connecting...</div>
+                </div>
+                <div class="head-actions">
+                    <button class="icon-button" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <path d="M8.6 10.5 15.4 6.5"></path>
+                            <path d="M8.6 13.5 15.4 17.5"></path>
+                        </svg>
+                    </button>
+                    <button class="icon-button" type="button" id="close-page" title="Close" aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M18 6 6 18"></path>
+                            <path d="m6 6 12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
             <form class="composer" id="composer">
                 <div class="compose-row">
+                    <label class="file-label" for="file-input" title="Attach file" aria-label="Attach file">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                    </label>
                     <textarea id="message-text" placeholder="Type a message" autocomplete="off"></textarea>
-                    <label class="file-label" for="file-input">Attach</label>
-                    <button type="submit">Send</button>
+                    <button class="send-button" type="submit" aria-label="Send">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>
+                    </button>
                 </div>
                 <input id="file-input" class="hidden" type="file" multiple>
             </form>
         </section>
-        <aside class="side">
-            <h1>Session</h1>
-            <div class="subtle">Scan this code to join from another device.</div>
-            <div class="qr-frame">
-                <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
-            </div>
-            <div class="peer-row" aria-label="Sender">
-                <button type="button" data-peer="desktop">Desktop</button>
-                <button type="button" data-peer="mobile">Mobile</button>
-            </div>
-            <div class="url-row">
-                <input id="chat-url" value="{{.URL}}" readonly>
-                <button class="secondary" type="button" id="copy-url">Copy URL</button>
-                <form method="post" action="{{.StopRoute}}">
-                    <button class="danger" type="submit">Stop chat</button>
-                </form>
-            </div>
-            <p class="meta">Version: {{.Version}}</p>
-        </aside>
+        <div class="session-backdrop" id="session-backdrop">
+            <aside class="side" id="session-panel">
+                <div class="session-head">
+                    <h1>Session</h1>
+                    <button class="icon-button" type="button" id="close-session" title="Close session panel" aria-label="Close session panel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M18 6 6 18"></path>
+                            <path d="m6 6 12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="subtle">Scan this code to join from another device.</div>
+                <div class="qr-frame">
+                    <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
+                </div>
+                <div class="url-row">
+                    <input id="chat-url" value="{{.URL}}" readonly>
+                    <button class="secondary" type="button" id="copy-url">Copy URL</button>
+                    <form method="post" action="{{.StopRoute}}">
+                        <button class="danger" type="submit">Stop chat</button>
+                    </form>
+                </div>
+                <p class="meta">Version: {{.Version}}</p>
+            </aside>
+        </div>
     </main>
     <script>
         var state = {
             messages: [],
-            peer: currentPeer()
+            sender: currentSender()
         };
         var messagesEl = document.getElementById('messages');
         var textEl = document.getElementById('message-text');
         var fileEl = document.getElementById('file-input');
         var connectionEl = document.getElementById('connection-state');
+        var sessionBackdrop = document.getElementById('session-backdrop');
 
-        function currentPeer() {
+        function currentSender() {
             var params = new URLSearchParams(window.location.search);
-            var fromURL = params.get('peer');
-            var saved = window.localStorage.getItem('eqrcp-chat-peer');
-            var peer = fromURL || saved || 'mobile';
-            return peer === 'desktop' ? 'desktop' : 'mobile';
+            var fromURL = params.get('sender') || params.get('peer');
+            if (fromURL === 'desktop') {
+                return 'Desktop';
+            }
+            if (fromURL) {
+                return cleanSenderName(fromURL);
+            }
+            var key = 'eqrcp-chat-sender:' + window.location.pathname;
+            var saved = window.localStorage.getItem(key);
+            if (saved) {
+                return cleanSenderName(saved);
+            }
+            var generated = 'Device ' + Math.floor(1000 + Math.random() * 9000);
+            window.localStorage.setItem(key, generated);
+            return generated;
         }
-        function setPeer(peer) {
-            state.peer = peer === 'desktop' ? 'desktop' : 'mobile';
-            window.localStorage.setItem('eqrcp-chat-peer', state.peer);
-            document.querySelectorAll('[data-peer]').forEach(function(button) {
-                button.classList.toggle('active', button.dataset.peer === state.peer);
-            });
+        function cleanSenderName(value) {
+            var text = String(value || '').replace(/\s+/g, ' ').trim();
+            return text ? text.slice(0, 40) : 'Guest';
         }
         function renderMessages() {
             messagesEl.innerHTML = '';
             state.messages.forEach(function(message) {
                 var item = document.createElement('div');
-                item.className = 'message ' + (message.sender === state.peer ? 'mine ' : '') + (message.type === 'system' ? 'system' : '');
+                item.className = 'message ' + (message.sender === state.sender ? 'mine ' : '') + (message.type === 'system' ? 'system' : '');
+                item.dataset.messageId = message.id || '';
                 if (message.type !== 'system') {
                     var sender = document.createElement('div');
                     sender.className = 'sender';
-                    sender.textContent = message.sender || 'guest';
+                    var senderName = document.createElement('span');
+                    senderName.textContent = message.sender || 'guest';
+                    var time = document.createElement('time');
+                    time.textContent = messageTime(message.createdAt);
+                    sender.appendChild(senderName);
+                    sender.appendChild(time);
                     item.appendChild(sender);
                 }
-                if (message.type === 'text' || message.type === 'system') {
+                if (message.recalled) {
+                    var recalled = document.createElement('div');
+                    recalled.className = 'text recalled';
+                    recalled.textContent = 'Message recalled.';
+                    item.appendChild(recalled);
+                } else if (message.type === 'text' || message.type === 'system') {
                     var text = document.createElement('div');
                     text.className = 'text';
                     text.textContent = message.text || '';
                     item.appendChild(text);
                 } else {
-                    var link = document.createElement('a');
-                    link.className = 'attachment';
-                    link.href = message.url;
-                    link.textContent = (message.type === 'image' ? 'Image: ' : 'File: ') + (message.fileName || 'attachment') + ' (' + formatBytes(message.size || 0) + ')';
-                    link.setAttribute('download', message.fileName || '');
-                    item.appendChild(link);
-                    if (message.type === 'image') {
-                        var image = document.createElement('img');
-                        image.className = 'preview';
-                        image.src = message.url;
-                        image.alt = message.fileName || 'image attachment';
-                        item.appendChild(image);
-                    }
+                    item.appendChild(renderAttachment(message));
                 }
+                item.appendChild(renderBubbleActions(message));
                 messagesEl.appendChild(item);
             });
-            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function renderBubbleActions(message) {
+            var actions = document.createElement('div');
+            actions.className = 'bubble-actions';
+            var hasActions = false;
+            if (message.url) {
+                var download = document.createElement('a');
+                download.className = 'bubble-action';
+                download.href = downloadURL(message.url);
+                download.setAttribute('download', message.fileName || 'attachment');
+                download.setAttribute('aria-label', 'Download');
+                download.title = 'Download';
+                download.innerHTML = downloadIcon();
+                actions.appendChild(download);
+                hasActions = true;
+            }
+            if (message.sender === state.sender && message.type !== 'system' && !message.recalled) {
+                var recall = document.createElement('button');
+                recall.type = 'button';
+                recall.className = 'bubble-action';
+                recall.setAttribute('aria-label', 'Recall');
+                recall.title = 'Recall';
+                recall.innerHTML = recallIcon();
+                recall.addEventListener('click', function() {
+                    recallMessage(message);
+                });
+                actions.appendChild(recall);
+                hasActions = true;
+            }
+            return hasActions ? actions : document.createDocumentFragment();
+        }
+        function renderAttachment(message) {
+            var wrap = document.createElement('div');
+            wrap.className = 'attachment-card';
+            var sourceURL = attachmentURL(message.url);
+            if (message.type === 'image') {
+                var open = document.createElement('a');
+                open.className = 'media-frame';
+                open.href = sourceURL;
+                open.target = '_blank';
+                open.rel = 'noopener';
+                var image = document.createElement('img');
+                image.className = 'media-preview';
+                image.src = sourceURL;
+                image.alt = message.fileName || 'image attachment';
+                open.appendChild(image);
+                open.appendChild(renderAttachmentMeta(message));
+                wrap.appendChild(open);
+            } else if (message.type === 'video') {
+                var frame = document.createElement('div');
+                frame.className = 'media-frame';
+                var video = document.createElement('video');
+                video.className = 'media-preview';
+                video.src = sourceURL;
+                video.controls = true;
+                video.preload = 'metadata';
+                frame.appendChild(video);
+                frame.appendChild(renderAttachmentMeta(message));
+                wrap.appendChild(frame);
+            } else {
+                wrap.appendChild(renderFileCard(message));
+            }
+            return wrap;
+        }
+        function renderAttachmentMeta(message) {
+            var meta = document.createElement('span');
+            meta.className = 'media-meta';
+            meta.textContent = (message.fileName || 'attachment') + ' · ' + fileDescription(message);
+            return meta;
+        }
+        function renderFileCard(message) {
+            var card = document.createElement('a');
+            card.className = 'file-card';
+            card.href = downloadURL(message.url);
+            card.setAttribute('download', message.fileName || '');
+            var body = document.createElement('div');
+            var name = document.createElement('div');
+            name.className = 'file-name';
+            name.textContent = message.fileName || 'attachment';
+            var meta = document.createElement('div');
+            meta.className = 'file-meta';
+            meta.textContent = fileDescription(message);
+            body.appendChild(name);
+            body.appendChild(meta);
+            card.appendChild(body);
+            return card;
+        }
+        function fileExtension(name) {
+            var parts = String(name || '').split('.');
+            if (parts.length < 2) {
+                return 'FILE';
+            }
+            return parts.pop().slice(0, 4).toUpperCase();
+        }
+        function fileDescription(message) {
+            var parts = [];
+            var ext = fileExtension(message.fileName);
+            if (ext !== 'FILE') {
+                parts.push(ext);
+            }
+            parts.push(formatBytes(message.size || 0));
+            return parts.join(' - ');
+        }
+        function attachmentURL(url) {
+            try {
+                return new URL(String(url || ''), window.location.href.replace(/\/?$/, '/')).toString();
+            } catch (error) {
+                return String(url || '');
+            }
+        }
+        function downloadURL(url) {
+            var resolved = attachmentURL(url);
+            return resolved + (resolved.indexOf('?') === -1 ? '?download=1' : '&download=1');
+        }
+        function messageTime(value) {
+            var date = new Date(value || '');
+            if (isNaN(date.getTime())) {
+                return '';
+            }
+            return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+        }
+        function setConnectionText() {
+            connectionEl.textContent = 'Connected as ' + state.sender + '.';
+        }
+        function openSessionPanel() {
+            sessionBackdrop.classList.add('open');
+        }
+        function closeSessionPanel() {
+            sessionBackdrop.classList.remove('open');
+        }
+        function closePage() {
+            window.close();
+            if (history.length > 1) {
+                history.back();
+            }
+        }
+        function setMessages(messages) {
+            var shouldStick = isNearBottom();
+            state.messages = messages || [];
+            renderMessages();
+            if (shouldStick) {
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+            setConnectionText();
+        }
+        function isNearBottom() {
+            return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         }
         function loadMessages() {
-            fetch('{{.MessagesRoute}}', { cache: 'no-store' })
+            return fetch('{{.MessagesRoute}}', { cache: 'no-store' })
                 .then(function(response) {
                     if (!response.ok) {
                         throw new Error('message load failed');
@@ -961,9 +1305,7 @@ var Chat = `
                     return response.json();
                 })
                 .then(function(messages) {
-                    state.messages = messages || [];
-                    renderMessages();
-                    connectionEl.textContent = 'Connected as ' + state.peer + '.';
+                    setMessages(messages);
                 })
                 .catch(function() {
                     connectionEl.textContent = 'Disconnected. Retrying...';
@@ -976,10 +1318,11 @@ var Chat = `
                 return;
             }
             textEl.value = '';
+            resizeComposer();
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.peer, text: text})
+                body: JSON.stringify({sender: state.sender, text: text})
             }).then(function(response) {
                 if (!response.ok) {
                     throw new Error('send failed');
@@ -988,16 +1331,37 @@ var Chat = `
             }).catch(function() {
                 connectionEl.textContent = 'Message send failed.';
                 textEl.value = text;
+                resizeComposer();
             });
+        }
+        function recallMessage(message) {
+            fetch('{{.MessagesRoute}}/' + encodeURIComponent(message.id), {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sender: state.sender})
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('recall failed');
+                }
+                return response.json();
+            }).catch(function() {
+                connectionEl.textContent = 'Message recall failed.';
+            });
+        }
+        function downloadIcon() {
+            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
+        }
+        function recallIcon() {
+            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5"></path><path d="M4 12a8 8 0 1 0 2.3-5.7"></path></svg>';
         }
         function uploadFiles() {
             if (!fileEl.files || !fileEl.files.length) {
                 return;
             }
             var data = new FormData();
-            data.append('sender', state.peer);
+            data.append('sender', state.sender);
             Array.prototype.forEach.call(fileEl.files, function(file) {
-                data.append('files', file);
+                data.append('files', file, file.name || 'attachment');
             });
             fileEl.value = '';
             fetch('{{.AttachmentsRoute}}', {
@@ -1032,29 +1396,35 @@ var Chat = `
             }
             document.execCommand('copy');
         }
+        function resizeComposer() {
+            textEl.style.height = 'auto';
+            textEl.style.height = Math.min(textEl.scrollHeight, 120) + 'px';
+        }
         document.getElementById('composer').addEventListener('submit', sendText);
         fileEl.addEventListener('change', uploadFiles);
+        textEl.addEventListener('input', resizeComposer);
         document.getElementById('copy-url').addEventListener('click', copyURL);
-        document.querySelectorAll('[data-peer]').forEach(function(button) {
-            button.addEventListener('click', function() {
-                setPeer(button.dataset.peer);
-                renderMessages();
-                connectionEl.textContent = 'Connected as ' + state.peer + '.';
-            });
+        document.getElementById('share-session').addEventListener('click', openSessionPanel);
+        document.getElementById('close-session').addEventListener('click', closeSessionPanel);
+        document.getElementById('close-page').addEventListener('click', closePage);
+        sessionBackdrop.addEventListener('click', function(event) {
+            if (event.target === sessionBackdrop) {
+                closeSessionPanel();
+            }
         });
-        setPeer(state.peer);
+        setConnectionText();
+        resizeComposer();
         if (window.EventSource) {
             var events = new EventSource('{{.EventsRoute}}');
             events.onmessage = function(event) {
-                state.messages = JSON.parse(event.data) || [];
-                renderMessages();
-                connectionEl.textContent = 'Connected as ' + state.peer + '.';
+                setMessages(JSON.parse(event.data) || []);
             };
             events.onerror = function() {
                 connectionEl.textContent = 'Disconnected. Retrying...';
             };
+        } else {
+            loadMessages();
         }
-        loadMessages();
     </script>
 </body>
 </html>

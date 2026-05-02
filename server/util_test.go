@@ -185,7 +185,11 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`fetch('\/chat\/test\/messages'`,
 		`fetch('\/chat\/test\/attachments'`,
 		`action="/chat/test/stop"`,
-		"Attach",
+		`id="share-session"`,
+		`id="close-page"`,
+		`attachment-card`,
+		`downloadURL(message.url)`,
+		`Device `,
 		"Stop chat",
 		"Version: eqrcp test [date: now]",
 	} {
@@ -208,7 +212,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	}
 	defer os.RemoveAll(server.chatDir)
 
-	messageBody := strings.NewReader(`{"sender":"desktop","text":"hello mobile"}`)
+	messageBody := strings.NewReader(`{"sender":"Desk One","text":"hello mobile"}`)
 	messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", messageBody)
 	messageRequest.Header.Set("Content-Type", "application/json")
 	messageResponse := httptest.NewRecorder()
@@ -224,13 +228,29 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
 		t.Fatalf("decode messages: %v", err)
 	}
-	if len(messages) != 1 || messages[0].Sender != "desktop" || messages[0].Text != "hello mobile" {
-		t.Fatalf("messages = %#v, want desktop text message", messages)
+	if len(messages) != 1 || messages[0].Sender != "Desk One" || messages[0].Text != "hello mobile" {
+		t.Fatalf("messages = %#v, want named desktop text message", messages)
+	}
+	recallBody := strings.NewReader(`{"sender":"Desk One"}`)
+	recallRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+messages[0].ID, recallBody)
+	recallRequest.Header.Set("Content-Type", "application/json")
+	recallResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(recallResponse, recallRequest)
+	if recallResponse.Code != http.StatusOK {
+		t.Fatalf("recall status = %d, want %d; body = %q", recallResponse.Code, http.StatusOK, recallResponse.Body.String())
+	}
+	listResponse = httptest.NewRecorder()
+	server.mux.ServeHTTP(listResponse, listRequest)
+	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
+		t.Fatalf("decode recalled messages: %v", err)
+	}
+	if len(messages) != 1 || !messages[0].Recalled || messages[0].Text != "hello mobile" {
+		t.Fatalf("messages = %#v, want recalled message retaining original text", messages)
 	}
 
 	var uploadBody bytes.Buffer
 	writer := multipart.NewWriter(&uploadBody)
-	if err := writer.WriteField("sender", "mobile"); err != nil {
+	if err := writer.WriteField("sender", "Phone 2471"); err != nil {
 		t.Fatal(err)
 	}
 	part, err := writer.CreateFormFile("files", "photo.txt")
@@ -254,11 +274,15 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if err := json.NewDecoder(uploadResponse.Body).Decode(&uploaded); err != nil {
 		t.Fatalf("decode upload: %v", err)
 	}
-	if len(uploaded) != 1 || uploaded[0].Sender != "mobile" || uploaded[0].FileName != "photo.txt" || uploaded[0].URL == "" {
-		t.Fatalf("uploaded = %#v, want mobile attachment message", uploaded)
+	if len(uploaded) != 1 || uploaded[0].Sender != "Phone 2471" || uploaded[0].FileName != "photo.txt" || uploaded[0].URL == "" {
+		t.Fatalf("uploaded = %#v, want named mobile attachment message", uploaded)
 	}
 
-	downloadRequest := httptest.NewRequest(http.MethodGet, "/chat/test/"+uploaded[0].URL, nil)
+	if uploaded[0].URL != "/chat/test/attachments/"+uploaded[0].ID {
+		t.Fatalf("uploaded URL = %q, want absolute chat attachment path", uploaded[0].URL)
+	}
+
+	downloadRequest := httptest.NewRequest(http.MethodGet, uploaded[0].URL, nil)
 	downloadResponse := httptest.NewRecorder()
 	server.mux.ServeHTTP(downloadResponse, downloadRequest)
 	if downloadResponse.Code != http.StatusOK {
@@ -266,6 +290,49 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	}
 	if downloadResponse.Body.String() != "attachment body" {
 		t.Fatalf("download body = %q, want attachment body", downloadResponse.Body.String())
+	}
+
+	forcedDownloadRequest := httptest.NewRequest(http.MethodGet, uploaded[0].URL+"?download=1", nil)
+	forcedDownloadResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(forcedDownloadResponse, forcedDownloadRequest)
+	if got := forcedDownloadResponse.Header().Get("Content-Disposition"); !strings.Contains(got, "attachment") || !strings.Contains(got, "photo.txt") {
+		t.Fatalf("download content disposition = %q, want attachment filename", got)
+	}
+
+	recallAttachmentBody := strings.NewReader(`{"sender":"Phone 2471"}`)
+	recallAttachmentRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+uploaded[0].ID, recallAttachmentBody)
+	recallAttachmentRequest.Header.Set("Content-Type", "application/json")
+	recallAttachmentResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(recallAttachmentResponse, recallAttachmentRequest)
+	if recallAttachmentResponse.Code != http.StatusOK {
+		t.Fatalf("attachment recall status = %d, want %d; body = %q", recallAttachmentResponse.Code, http.StatusOK, recallAttachmentResponse.Body.String())
+	}
+	listResponse = httptest.NewRecorder()
+	server.mux.ServeHTTP(listResponse, listRequest)
+	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
+		t.Fatalf("decode attachment recall messages: %v", err)
+	}
+	if len(messages) != 2 || !messages[1].Recalled || messages[1].URL != "" || messages[1].FileName != "" {
+		t.Fatalf("messages = %#v, want recalled attachment without retrievable content", messages)
+	}
+	recalledDownloadResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(recalledDownloadResponse, downloadRequest)
+	if recalledDownloadResponse.Code != http.StatusNotFound {
+		t.Fatalf("recalled download status = %d, want %d", recalledDownloadResponse.Code, http.StatusNotFound)
+	}
+}
+
+func TestSafeChatFilename(t *testing.T) {
+	tests := map[string]string{
+		`C:\fakepath\report final.pdf`: "report final.pdf",
+		"../photo.jpeg":                "photo.jpeg",
+		`bad:name?.txt`:                "bad_name_.txt",
+		"":                             "attachment",
+	}
+	for input, want := range tests {
+		if got := safeChatFilename(input); got != want {
+			t.Fatalf("safeChatFilename(%q) = %q, want %q", input, got, want)
+		}
 	}
 }
 

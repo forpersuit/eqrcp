@@ -23,12 +23,13 @@ import (
 const maxChatHistory = 200
 
 type chatSession struct {
-	mu          sync.Mutex
-	messages    []chatMessage
-	attachments map[string]chatAttachment
-	subscribers map[chan struct{}]struct{}
-	nextID      int64
-	dir         string
+	mu              sync.Mutex
+	messages        []chatMessage
+	attachments     map[string]chatAttachment
+	subscribers     map[chan struct{}]struct{}
+	nextID          int64
+	dir             string
+	attachmentRoute string
 }
 
 type chatMessage struct {
@@ -36,6 +37,7 @@ type chatMessage struct {
 	Sender    string    `json:"sender"`
 	Type      string    `json:"type"`
 	Text      string    `json:"text,omitempty"`
+	Recalled  bool      `json:"recalled,omitempty"`
 	FileName  string    `json:"fileName,omitempty"`
 	Size      int64     `json:"size,omitempty"`
 	MimeType  string    `json:"mimeType,omitempty"`
@@ -57,11 +59,6 @@ func (s *Server) Chat() error {
 	if err != nil {
 		return err
 	}
-	session := &chatSession{
-		attachments: map[string]chatAttachment{},
-		subscribers: map[chan struct{}]struct{}{},
-		dir:         dir,
-	}
 	route := strings.TrimPrefix(strings.TrimRight(s.ChatURL, "/"), s.BaseURL)
 	if route == "" || route == s.ChatURL {
 		os.RemoveAll(dir)
@@ -72,6 +69,12 @@ func (s *Server) Chat() error {
 	messagesRoute := route + "/messages"
 	attachmentsRoute := route + "/attachments"
 	stopRoute := route + "/stop"
+	session := &chatSession{
+		attachments:     map[string]chatAttachment{},
+		subscribers:     map[chan struct{}]struct{}{},
+		dir:             dir,
+		attachmentRoute: attachmentsRoute,
+	}
 	qrImg, err := qr.RenderImage(s.ChatURL)
 	if err != nil {
 		os.RemoveAll(dir)
@@ -86,12 +89,18 @@ func (s *Server) Chat() error {
 		status.Message = "Scan to join this chat session."
 	})
 	s.mux.HandleFunc(imageRoute, func(w http.ResponseWriter, r *http.Request) {
+		if handleChatCORS(w, r, http.MethodGet) {
+			return
+		}
 		w.Header().Set("Content-Type", "image/jpeg")
 		if err := jpeg.Encode(w, qrImg, nil); err != nil {
 			log.Println(err)
 		}
 	})
 	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
+		if handleChatCORS(w, r, http.MethodGet) {
+			return
+		}
 		if r.URL.Path != route {
 			http.NotFound(w, r)
 			return
@@ -125,6 +134,7 @@ func (s *Server) Chat() error {
 	})
 	s.mux.HandleFunc(eventsRoute, session.handleEvents)
 	s.mux.HandleFunc(messagesRoute, session.handleMessages)
+	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
 	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
 	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
 	s.mux.HandleFunc(stopRoute, func(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +150,32 @@ func (s *Server) Chat() error {
 	return nil
 }
 
+func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodDelete) {
+		return
+	}
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:], "/")
+	var request struct {
+		Sender string `json:"sender"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&request)
+	}
+	message, ok := session.recallMessage(id, sanitizeChatSender(request.Sender))
+	if !ok {
+		http.Error(w, "message not found or cannot be recalled", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(message); err != nil {
+		log.Println(err)
+	}
+}
+
 func (s *Server) DisplayChat() error {
 	if err := s.Chat(); err != nil {
 		return err
@@ -148,6 +184,9 @@ func (s *Server) DisplayChat() error {
 }
 
 func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodGet, http.MethodPost) {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/json")
@@ -163,7 +202,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "invalid message", http.StatusBadRequest)
 			return
 		}
-		message := session.addTextMessage(normalizeChatSender(request.Sender), request.Text)
+		message := session.addTextMessage(sanitizeChatSender(request.Sender), request.Text)
 		if message.ID == "" {
 			http.Error(w, "message text is empty", http.StatusBadRequest)
 			return
@@ -178,6 +217,9 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 }
 
 func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodPost) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -190,7 +232,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	if r.MultipartForm != nil {
 		defer r.MultipartForm.RemoveAll()
 	}
-	sender := normalizeChatSender(r.FormValue("sender"))
+	sender := sanitizeChatSender(r.FormValue("sender"))
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
 		files = r.MultipartForm.File["file"]
@@ -206,7 +248,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "upload failed", http.StatusBadRequest)
 			return
 		}
-		message, err := session.saveAttachment(sender, filepath.Base(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
+		message, err := session.saveAttachment(sender, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
 		file.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -221,6 +263,9 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 }
 
 func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodGet) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -238,7 +283,11 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Disposition", contentDisposition(attachment.FileName))
+	if r.URL.Query().Get("download") == "1" {
+		w.Header().Set("Content-Disposition", contentDispositionFor("attachment", attachment.FileName))
+	} else {
+		w.Header().Set("Content-Disposition", contentDispositionFor("inline", attachment.FileName))
+	}
 	if attachment.MimeType != "" {
 		w.Header().Set("Content-Type", attachment.MimeType)
 	}
@@ -246,6 +295,9 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 }
 
 func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodGet) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -259,13 +311,17 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	write := func() bool {
-		if _, err := fmt.Fprint(w, "data: "); err != nil {
+		messages := session.snapshot()
+		data, err := json.Marshal(messages)
+		if err != nil {
 			return false
 		}
-		if err := json.NewEncoder(w).Encode(session.snapshot()); err != nil {
-			return false
+		if lastID := latestChatMessageID(messages); lastID != "" {
+			if _, err := fmt.Fprintf(w, "id: %s\n", lastID); err != nil {
+				return false
+			}
 		}
-		if _, err := fmt.Fprint(w, "\n"); err != nil {
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
 			return false
 		}
 		flusher.Flush()
@@ -293,6 +349,21 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 			flusher.Flush()
 		}
 	}
+}
+
+func handleChatCORS(w http.ResponseWriter, r *http.Request, methods ...string) bool {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if len(methods) > 0 {
+		allowed := append([]string(nil), methods...)
+		allowed = append(allowed, http.MethodOptions)
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowed, ", "))
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return true
+	}
+	return false
 }
 
 func (session *chatSession) addTextMessage(sender string, text string) chatMessage {
@@ -337,12 +408,14 @@ func (session *chatSession) saveAttachment(sender string, name string, mimeType 
 	if size <= 0 {
 		size = written
 	}
-	if mimeType == "" {
+	if mimeType == "" || mimeType == "application/octet-stream" {
 		mimeType = mime.TypeByExtension(filepath.Ext(name))
 	}
 	messageType := "file"
 	if strings.HasPrefix(mimeType, "image/") {
 		messageType = "image"
+	} else if strings.HasPrefix(mimeType, "video/") {
+		messageType = "video"
 	}
 	message := chatMessage{
 		ID:        id,
@@ -351,7 +424,7 @@ func (session *chatSession) saveAttachment(sender string, name string, mimeType 
 		FileName:  name,
 		Size:      size,
 		MimeType:  mimeType,
-		URL:       "attachments/" + id,
+		URL:       strings.TrimRight(session.attachmentRoute, "/") + "/" + id,
 		CreatedAt: time.Now(),
 	}
 	session.mu.Lock()
@@ -390,6 +463,37 @@ func (session *chatSession) snapshot() []chatMessage {
 	return append([]chatMessage(nil), session.messages...)
 }
 
+func latestChatMessageID(messages []chatMessage) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	return messages[len(messages)-1].ID
+}
+
+func (session *chatSession) recallMessage(id string, sender string) (chatMessage, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for index := range session.messages {
+		if session.messages[index].ID != id {
+			continue
+		}
+		if sender != "" && session.messages[index].Sender != sender {
+			return chatMessage{}, false
+		}
+		session.messages[index].Recalled = true
+		if session.messages[index].URL != "" {
+			delete(session.attachments, id)
+			session.messages[index].URL = ""
+			session.messages[index].FileName = ""
+			session.messages[index].Size = 0
+			session.messages[index].MimeType = ""
+		}
+		session.notifyLocked()
+		return session.messages[index], true
+	}
+	return chatMessage{}, false
+}
+
 func (session *chatSession) subscribe() (<-chan struct{}, func()) {
 	ch := make(chan struct{}, 1)
 	session.mu.Lock()
@@ -423,13 +527,46 @@ func (session *chatSession) nextMessageIDLocked() string {
 	return strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(session.nextID, 36)
 }
 
-func normalizeChatSender(sender string) string {
-	switch strings.ToLower(strings.TrimSpace(sender)) {
-	case "desktop":
-		return "desktop"
-	case "mobile":
-		return "mobile"
-	default:
-		return "guest"
+func sanitizeChatSender(sender string) string {
+	sender = strings.TrimSpace(sender)
+	if sender == "" {
+		return "Guest"
 	}
+	sender = strings.Join(strings.Fields(sender), " ")
+	if len([]rune(sender)) > 40 {
+		sender = string([]rune(sender)[:40])
+	}
+	return sender
+}
+
+func safeChatFilename(name string) string {
+	name = strings.TrimSpace(strings.ReplaceAll(name, `\`, "/"))
+	name = filepath.Base(name)
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "attachment"
+	}
+	name = strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
+			return '_'
+		}
+		if r < 32 {
+			return '_'
+		}
+		return r
+	}, name)
+	if len([]rune(name)) > 180 {
+		ext := filepath.Ext(name)
+		base := strings.TrimSuffix(name, ext)
+		runes := []rune(base)
+		limit := 180 - len([]rune(ext))
+		if limit < 1 {
+			limit = 1
+		}
+		if len(runes) > limit {
+			base = string(runes[:limit])
+		}
+		name = base + ext
+	}
+	return name
 }

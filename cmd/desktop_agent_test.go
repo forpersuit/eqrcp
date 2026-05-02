@@ -816,6 +816,16 @@ func TestDesktopAgentCommandArgs(t *testing.T) {
 	}
 }
 
+func TestValidateDesktopAgentChatTask(t *testing.T) {
+	if err := validateDesktopAgentTask(desktopAgentTask{Action: "chat"}); err != nil {
+		t.Fatalf("validateDesktopAgentTask(chat) error = %v", err)
+	}
+	err := validateDesktopAgentTask(desktopAgentTask{Action: "chat", Paths: []string{"unexpected"}})
+	if err == nil || !strings.Contains(err.Error(), "does not accept paths") {
+		t.Fatalf("validateDesktopAgentTask(chat paths) = %v, want path rejection", err)
+	}
+}
+
 func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 	previousBaseURL := desktopAgentBaseURL
 	previousExecutable := desktopAgentExecutable

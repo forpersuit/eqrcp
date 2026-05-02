@@ -10,12 +10,28 @@ export function AppInfo() {
   return window['go']['main']['App']['AppInfo']();
 }
 
+export function Chat() {
+  return window['go']['main']['App']['Chat']();
+}
+
+export function ChatSaveDirectory() {
+  return window['go']['main']['App']['ChatSaveDirectory']();
+}
+
 export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function DownloadChatAttachment(arg1, arg2) {
+  return window['go']['main']['App']['DownloadChatAttachment'](arg1, arg2);
+}
+
 export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
+}
+
+export function OpenFile(arg1) {
+  return window['go']['main']['App']['OpenFile'](arg1);
 }
 
 export function OpenPath(arg1) {
@@ -40,6 +56,10 @@ export function RepeatTask(arg1) {
 
 export function RestartAgent() {
   return window['go']['main']['App']['RestartAgent']();
+}
+
+export function SaveChatAttachmentAs(arg1, arg2) {
+  return window['go']['main']['App']['SaveChatAttachmentAs'](arg1, arg2);
 }
 
 export function SaveSettings(arg1) {

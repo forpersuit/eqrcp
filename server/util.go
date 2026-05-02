@@ -57,9 +57,17 @@ func createUniqueFile(dir string, newFilename string, fileNamesInTargetDir []str
 }
 
 func contentDisposition(filename string) string {
+	return contentDispositionFor("attachment", filename)
+}
+
+func contentDispositionFor(disposition string, filename string) string {
+	if disposition == "" {
+		disposition = "attachment"
+	}
 	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filename)
 	return fmt.Sprintf(
-		`attachment; filename="%s"; filename*=UTF-8''%s`,
+		`%s; filename="%s"; filename*=UTF-8''%s`,
+		disposition,
 		quoted,
 		url.PathEscape(filename),
 	)

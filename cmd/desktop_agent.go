@@ -749,6 +749,8 @@ func desktopAgentActionLabel(action string) string {
 		return "Share"
 	case "receive":
 		return "Receive"
+	case "chat":
+		return "Chat"
 	default:
 		return action
 	}
@@ -1006,9 +1008,9 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	})
 	srv.SetRepeatRoute(desktopAgentBaseURL + "/tasks/" + strconv.Itoa(taskID) + "/repeat")
 	agent.setActiveStop(srv.Shutdown)
-	agent.setCurrentPageURL(srv.BaseURL + "/qr")
 	switch task.Action {
 	case "share":
+		agent.setCurrentPageURL(srv.BaseURL + "/qr")
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
 		if err != nil {
 			srv.Shutdown()
@@ -1020,11 +1022,18 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			return err
 		}
 	case "receive":
+		agent.setCurrentPageURL(srv.BaseURL + "/qr")
 		if err := srv.ReceiveTo(cfg.Output); err != nil {
 			srv.Shutdown()
 			return err
 		}
 		if err := serveDesktopTaskQR(srv, srv.ReceiveURL, agentApp.Flags.Browser); err != nil {
+			srv.Shutdown()
+			return err
+		}
+	case "chat":
+		agent.setCurrentPageURL(srv.ChatURL)
+		if err := srv.Chat(); err != nil {
 			srv.Shutdown()
 			return err
 		}
@@ -1051,6 +1060,10 @@ func validateDesktopAgentTask(task desktopAgentTask) error {
 	case "receive":
 		if len(task.Paths) != 1 {
 			return fmt.Errorf("receive task requires exactly one directory")
+		}
+	case "chat":
+		if len(task.Paths) != 0 {
+			return fmt.Errorf("chat task does not accept paths")
 		}
 	default:
 		return fmt.Errorf("unsupported desktop action %q", task.Action)

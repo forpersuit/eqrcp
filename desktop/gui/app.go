@@ -5,18 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const agentBaseURL = "http://127.0.0.1:48176"
+const chatSaveRetentionDays = 7
 
 type App struct {
 	ctx    context.Context
@@ -134,6 +137,110 @@ func (a *App) Receive(output string) (AgentStatus, error) {
 	return a.postTask(AgentTask{Action: "receive", Paths: paths})
 }
 
+func (a *App) Chat() (AgentStatus, error) {
+	return a.postTask(AgentTask{Action: "chat"})
+}
+
+func (a *App) ChatSaveDirectory() (string, error) {
+	dir, err := currentChatSaveDirectory()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	_ = cleanupOldChatSaveDirectories(chatSaveRetentionDays)
+	return dir, nil
+}
+
+func (a *App) DownloadChatAttachment(rawURL string, filename string) (string, error) {
+	parsed, err := chatAttachmentDownloadURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+	dir, err := a.ChatSaveDirectory()
+	if err != nil {
+		return "", err
+	}
+	if filename == "" {
+		filename = filepath.Base(parsed.Path)
+	}
+	target, err := uniquePath(dir, safeFilename(filename))
+	if err != nil {
+		return "", err
+	}
+	if err := a.downloadChatAttachmentTo(parsed.String(), target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+func (a *App) SaveChatAttachmentAs(rawURL string, filename string) (string, error) {
+	parsed, err := chatAttachmentDownloadURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if filename == "" {
+		filename = filepath.Base(parsed.Path)
+	}
+	target, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save attachment as",
+		DefaultFilename: safeFilename(filename),
+	})
+	if err != nil {
+		return "", err
+	}
+	if target == "" {
+		return "", nil
+	}
+	if err := a.downloadChatAttachmentTo(parsed.String(), target); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+func chatAttachmentDownloadURL(rawURL string) (*url.URL, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("unsupported attachment URL scheme %q", parsed.Scheme)
+	}
+	query := parsed.Query()
+	query.Set("download", "1")
+	parsed.RawQuery = query.Encode()
+	return parsed, nil
+}
+
+func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("attachment download returned %s", resp.Status)
+	}
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, resp.Body)
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return nil
+}
+
 func (a *App) StopCurrent() error {
 	if err := a.ensureAgent(); err != nil {
 		return err
@@ -214,6 +321,24 @@ func (a *App) OpenPath(path string) error {
 		target = filepath.Dir(path)
 	}
 	cmd, err := openPathCommand(target)
+	if err != nil {
+		return err
+	}
+	return cmd.Start()
+}
+
+func (a *App) OpenFile(path string) error {
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return a.OpenPath(path)
+	}
+	cmd, err := openFileCommand(path)
 	if err != nil {
 		return err
 	}
@@ -435,5 +560,97 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 		return exec.Command("xdg-open", path), nil
 	default:
 		return nil, fmt.Errorf("opening paths is not supported on %s", runtime.GOOS)
+	}
+}
+
+func openFileCommand(path string) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path), nil
+	case "darwin":
+		return exec.Command("open", path), nil
+	case "linux":
+		return exec.Command("xdg-open", path), nil
+	default:
+		return nil, fmt.Errorf("opening files is not supported on %s", runtime.GOOS)
+	}
+}
+
+func currentChatSaveDirectory() (string, error) {
+	root, err := chatSaveRoot()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, time.Now().Format("2006-01-02")), nil
+}
+
+func chatSaveRoot() (string, error) {
+	return filepath.Join(os.TempDir(), "EQT Chat"), nil
+}
+
+func cleanupOldChatSaveDirectories(retentionDays int) error {
+	root, err := chatSaveRoot()
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		day, err := time.Parse("2006-01-02", entry.Name())
+		if err != nil || !day.Before(cutoff) {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(root, entry.Name()))
+	}
+	return nil
+}
+
+func safeFilename(name string) string {
+	name = strings.TrimSpace(filepath.Base(name))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "attachment"
+	}
+	replacer := strings.NewReplacer("/", "_", `\`, "_", ":", "_", "*", "_", "?", "_", `"`, "_", "<", "_", ">", "_", "|", "_")
+	name = replacer.Replace(name)
+	if len([]rune(name)) > 160 {
+		ext := filepath.Ext(name)
+		base := strings.TrimSuffix(name, ext)
+		runes := []rune(base)
+		limit := 160 - len([]rune(ext))
+		if limit < 1 {
+			limit = 1
+		}
+		if len(runes) > limit {
+			base = string(runes[:limit])
+		}
+		name = base + ext
+	}
+	return name
+}
+
+func uniquePath(dir string, name string) (string, error) {
+	for index := 0; ; index++ {
+		candidate := name
+		if index > 0 {
+			ext := filepath.Ext(name)
+			base := strings.TrimSuffix(name, ext)
+			candidate = fmt.Sprintf("%s(%d)%s", base, index, ext)
+		}
+		path := filepath.Join(dir, candidate)
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return path, nil
+			}
+			return "", err
+		}
 	}
 }

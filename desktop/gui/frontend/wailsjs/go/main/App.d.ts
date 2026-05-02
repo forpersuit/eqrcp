@@ -6,9 +6,17 @@ export function AgentStatus():Promise<main.AgentStatus>;
 
 export function AppInfo():Promise<main.AppInfo>;
 
+export function Chat():Promise<main.AgentStatus>;
+
+export function ChatSaveDirectory():Promise<string>;
+
 export function ClearHistory():Promise<void>;
 
+export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
+
 export function OpenExternal(arg1:string):Promise<void>;
+
+export function OpenFile(arg1:string):Promise<void>;
 
 export function OpenPath(arg1:string):Promise<void>;
 
@@ -21,6 +29,8 @@ export function Receive(arg1:string):Promise<main.AgentStatus>;
 export function RepeatTask(arg1:number):Promise<main.AgentStatus>;
 
 export function RestartAgent():Promise<void>;
+
+export function SaveChatAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
 export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSettings>;
 
