@@ -14,9 +14,9 @@ echo "Installing git hooks..."
 cat > "$HOOKS_DIR/pre-commit" << 'EOF'
 #!/bin/bash
 
-# Pre-commit hook: Close eqrcp processes and rebuild before commit
+# Pre-commit hook: Close eqrcp processes, run tests, and rebuild before commit
 
-echo "=== Pre-commit hook: Closing eqrcp processes and rebuilding ==="
+echo "=== Pre-commit hook: Closing eqrcp processes, running tests, and rebuilding ==="
 
 # Step 1: Close eqrcp processes
 echo "Step 1: Closing eqrcp processes..."
@@ -38,16 +38,12 @@ fi
 
 echo "Step 1: Done - eqrcp processes closed."
 
-# Step 2: Rebuild the project
-echo "Step 2: Rebuilding project..."
+# Step 2: Run tests
+echo "Step 2: Running tests..."
 
 # Get the root directory (parent of .git)
 # BASH_SOURCE[0] is .git/hooks/pre-commit, so we need to go up two levels
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
-# Output directory for built executables
-OUTPUT_DIR="E:/developer/results"
-mkdir -p "$OUTPUT_DIR"
 
 # Verify we're in the right directory
 if [ ! -f "$SCRIPT_DIR/main.go" ]; then
@@ -55,12 +51,44 @@ if [ ! -f "$SCRIPT_DIR/main.go" ]; then
     exit 1
 fi
 
+cd "$SCRIPT_DIR"
+
+# Run Go tests
+echo "Running Go tests..."
+go test ./... || { echo "Go tests failed"; exit 1; }
+
+# Run GUI frontend tests if npm is available
+if command -v npm &> /dev/null; then
+    if [ -f "$SCRIPT_DIR/desktop/gui/frontend/package.json" ]; then
+        echo "Building GUI frontend..."
+        cd "$SCRIPT_DIR/desktop/gui/frontend"
+        npm run build || { echo "GUI frontend build failed"; exit 1; }
+    fi
+    
+    # Run GUI Go tests
+    if [ -d "$SCRIPT_DIR/desktop/gui" ]; then
+        echo "Running GUI Go tests..."
+        cd "$SCRIPT_DIR/desktop/gui"
+        go test ./... || { echo "GUI Go tests failed"; exit 1; }
+    fi
+fi
+
+echo "Step 2: Done - All tests passed."
+
+# Step 3: Rebuild the project
+echo "Step 3: Rebuilding project..."
+
+cd "$SCRIPT_DIR"
+
+# Output directory for built executables
+OUTPUT_DIR="E:/developer/results"
+mkdir -p "$OUTPUT_DIR"
+
 echo "Building in directory: $SCRIPT_DIR"
 echo "Output directory: $OUTPUT_DIR"
 
 # Build current platform CLI
 echo "Building current platform CLI..."
-cd "$SCRIPT_DIR"
 go build -o "$OUTPUT_DIR/eqrcp" . || { echo "Failed to build current platform CLI"; exit 1; }
 
 # Build Windows CLI artifacts
@@ -82,7 +110,7 @@ if command -v wails &> /dev/null || [ -f "$(go env GOPATH)/bin/wails" ]; then
     fi
 fi
 
-echo "Step 2: Done - Project rebuilt successfully."
+echo "Step 3: Done - Project rebuilt successfully."
 echo "Built executables:"
 ls -la "$OUTPUT_DIR"/eqrcp* 2>/dev/null || dir "$OUTPUT_DIR"\eqrcp* 2>/dev/null
 
@@ -99,7 +127,10 @@ echo "✓ Pre-commit hook installed successfully!"
 echo ""
 echo "The hook will:"
 echo "  1. Close all running eqrcp processes"
-echo "  2. Rebuild executables to E:/developer/results"
-echo "  3. Continue with the commit"
+echo "  2. Run Go tests (go test ./...)"
+echo "  3. Build GUI frontend (npm run build)"
+echo "  4. Run GUI Go tests"
+echo "  5. Rebuild executables to E:/developer/results"
+echo "  6. Continue with the commit"
 echo ""
 echo "To uninstall, run: rm .git/hooks/pre-commit"

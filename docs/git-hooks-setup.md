@@ -41,12 +41,17 @@ Pre-commit hook会在每次提交前自动：
    - eqrcp-launcher.exe
    - eqrcp-desktop.exe
 
-2. **重新构建项目**
+2. **运行测试**
+   - Go tests: `go test ./...`
+   - GUI frontend build: `npm run build`
+   - GUI Go tests: `go test ./...` (in desktop/gui)
+
+3. **重新构建项目**
    - 构建当前平台CLI
    - 构建Windows CLI (eqrcp.exe, eqrcp-launcher.exe)
    - 构建Wails GUI (如果wails可用)
 
-3. **保存到指定目录**
+4. **保存到指定目录**
    - 所有exe保存到 `E:\developer\results`
 
 ## 卸载Hook
