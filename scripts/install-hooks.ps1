@@ -106,7 +106,10 @@ if [ -z "$SKIP_WAILS_BUILD" ]; then
         if [ -x "$WAILS_CMD" ]; then
             echo "Building Wails GUI..."
             cd "$SCRIPT_DIR/desktop/gui"
-            $WAILS_CMD build -clean -o "$OUTPUT_DIR/eqrcp-desktop.exe" -platform windows/amd64 || { echo "Failed to build Wails GUI"; exit 1; }
+            # Build to default location first (Wails doesn't support absolute paths)
+            $WAILS_CMD build -clean -platform windows/amd64 || { echo "Failed to build Wails GUI"; exit 1; }
+            # Copy to output directory
+            cp "$SCRIPT_DIR/desktop/gui/build/bin/eqrcp-desktop.exe" "$OUTPUT_DIR/eqrcp-desktop.exe" || { echo "Failed to copy Wails GUI"; exit 1; }
         else
             echo "Skipping Wails GUI build: wails command not found"
         fi
