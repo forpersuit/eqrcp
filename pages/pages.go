@@ -1414,16 +1414,147 @@ var Chat = `
         });
         setConnectionText();
         resizeComposer();
-        if (window.EventSource) {
-            var events = new EventSource('{{.EventsRoute}}');
+        
+        // Smart reconnection with Page Visibility API
+        var reconnectDelay = 1000;
+        var maxReconnectDelay = 30000;
+        var events = null;
+        var isPageVisible = !document.hidden;
+        var lastMessageId = null;
+        var reconnectTimer = null;
+        var lastMessageTimestamp = Date.now();
+        
+        function connectSSE() {
+            if (events) {
+                events.close();
+                events = null;
+            }
+            
+            // Build URL with Last-Event-ID for message recovery
+            var url = '{{.EventsRoute}}';
+            if (lastMessageId) {
+                url += '?lastEventId=' + encodeURIComponent(lastMessageId);
+            }
+            
+            events = new EventSource(url);
+            
+            events.onopen = function() {
+                reconnectDelay = 1000;
+                connectionEl.textContent = 'Connected as ' + state.sender + '.';
+                lastMessageTimestamp = Date.now();
+            };
+            
             events.onmessage = function(event) {
+                // Save the last message ID for recovery
+                if (event.lastEventId) {
+                    lastMessageId = event.lastEventId;
+                }
                 setMessages(JSON.parse(event.data) || []);
+                lastMessageTimestamp = Date.now();
             };
+            
             events.onerror = function() {
-                connectionEl.textContent = 'Disconnected. Retrying...';
+                connectionEl.textContent = 'Disconnected. Reconnecting...';
+                if (events) {
+                    events.close();
+                    events = null;
+                }
+                
+                // Only reconnect if page is visible
+                if (isPageVisible) {
+                    scheduleReconnect();
+                }
             };
+        }
+        
+        function scheduleReconnect() {
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+            
+            reconnectTimer = setTimeout(function() {
+                if (isPageVisible) {
+                    connectSSE();
+                    reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
+                }
+            }, reconnectDelay);
+        }
+        
+        function verifyConnection() {
+            // Verify connection health by fetching messages
+            fetch('{{.HealthRoute}}', { cache: 'no-store' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('health check failed');
+                    }
+                    return response.json();
+                })
+                .then(function(health) {
+                    // Connection is healthy, fetch latest messages
+                    return fetch('{{.MessagesRoute}}', { cache: 'no-store' });
+                })
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('fetch messages failed');
+                    }
+                    return response.json();
+                })
+                .then(function(messages) {
+                    setMessages(messages);
+                    connectionEl.textContent = 'Connected as ' + state.sender + '.';
+                })
+                .catch(function() {
+                    // Connection is broken, reconnect
+                    connectionEl.textContent = 'Connection lost. Reconnecting...';
+                    if (events) {
+                        events.close();
+                        events = null;
+                    }
+                    reconnectDelay = 1000;
+                    connectSSE();
+                });
+        }
+        
+        // Monitor page visibility changes
+        document.addEventListener('visibilitychange', function() {
+            isPageVisible = !document.hidden;
+            
+            if (isPageVisible) {
+                // Page became visible
+                var timeSinceLastMessage = Date.now() - lastMessageTimestamp;
+                
+                if (!events || events.readyState === EventSource.CLOSED) {
+                    // Connection is closed, reconnect immediately
+                    connectionEl.textContent = 'Reconnecting...';
+                    reconnectDelay = 1000;
+                    connectSSE();
+                } else if (events.readyState === EventSource.CONNECTING) {
+                    // Already connecting, wait
+                    connectionEl.textContent = 'Connecting...';
+                } else if (timeSinceLastMessage > 30000) {
+                    // Connection looks open but no messages for 30s, verify health
+                    verifyConnection();
+                }
+            } else {
+                // Page became hidden, cancel reconnection attempts
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+            }
+        });
+        
+        // Initialize connection
+        if (window.EventSource) {
+            connectSSE();
         } else {
-            loadMessages();
+            // Fallback for browsers without EventSource
+            connectionEl.textContent = 'EventSource not supported. Using polling...';
+            setInterval(function() {
+                if (isPageVisible) {
+                    loadMessages();
+                }
+            }, 3000);
         }
     </script>
 </body>

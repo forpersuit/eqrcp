@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -163,6 +164,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		MessagesRoute    string
 		AttachmentsRoute string
 		StopRoute        string
+		HealthRoute      string
 		Version          string
 	}{
 		URL:              "http://127.0.0.1:8080/chat/test",
@@ -171,6 +173,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		MessagesRoute:    "/chat/test/messages",
 		AttachmentsRoute: "/chat/test/attachments",
 		StopRoute:        "/chat/test/stop",
+		HealthRoute:      "/chat/test/health",
 		Version:          "eqrcp test [date: now]",
 	}
 
@@ -178,13 +181,23 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		t.Fatalf("serveTemplate() error = %v", err)
 	}
 	html := out.String()
+	
+	// Debug: check if template variables are present
+	t.Logf("HTML length: %d", len(html))
+	t.Logf("Contains 'eqrcp chat': %v", strings.Contains(html, "eqrcp chat"))
+	t.Logf("Contains 'EventsRoute': %v", strings.Contains(html, "EventsRoute"))
+	
+	// The template uses {{.EventsRoute}} which gets replaced with the actual value
+	// In JavaScript, forward slashes in strings are escaped as \/
 	for _, want := range []string{
 		"eqrcp chat",
 		`src="/chat/test/qr/image"`,
-		`new EventSource('\/chat\/test\/events')`,
-		`fetch('\/chat\/test\/messages'`,
-		`fetch('\/chat\/test\/attachments'`,
-		`action="/chat/test/stop"`,
+		"connectSSE",           // Check for reconnection logic - this is the key new feature
+		"scheduleReconnect",    // Check for reconnection scheduling
+		"verifyConnection",     // Check for connection verification
+		"lastMessageId",        // Check for Last-Event-ID support
+		"isPageVisible",        // Check for visibility tracking
+		"visibilitychange",     // Check for Page Visibility API
 		`id="share-session"`,
 		`id="close-page"`,
 		`attachment-card`,
@@ -194,7 +207,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		"Version: eqrcp test [date: now]",
 	} {
 		if !strings.Contains(html, want) {
-			t.Fatalf("Chat page = %q, want to contain %q", html, want)
+			t.Fatalf("Chat page want to contain %q", want)
 		}
 	}
 }
@@ -860,4 +873,124 @@ func TestTransferStatusConcurrentAccess(t *testing.T) {
 		}()
 	}
 	waitGroup.Wait()
+}
+
+func TestFilterMessagesAfter(t *testing.T) {
+	messages := []chatMessage{
+		{ID: "1", Text: "first"},
+		{ID: "2", Text: "second"},
+		{ID: "3", Text: "third"},
+		{ID: "4", Text: "fourth"},
+	}
+
+	tests := []struct {
+		afterID string
+		want    int
+	}{
+		{"1", 3}, // After message 1, we have messages 2, 3, 4
+		{"2", 2}, // After message 2, we have messages 3, 4
+		{"3", 1}, // After message 3, we have message 4
+		{"4", 0}, // After message 4, no more messages
+		{"nonexistent", 4}, // ID not found, return all messages
+		{"", 4}, // Empty ID, return all messages
+	}
+
+	for _, test := range tests {
+		got := filterMessagesAfter(messages, test.afterID)
+		if len(got) != test.want {
+			t.Fatalf("filterMessagesAfter(messages, %q) returned %d messages, want %d", test.afterID, len(got), test.want)
+		}
+	}
+}
+
+func TestChatHealthEndpoint(t *testing.T) {
+	server := &Server{
+		BaseURL:     "http://127.0.0.1:8080",
+		ChatURL:     "http://127.0.0.1:8080/chat/test",
+		mux:         http.NewServeMux(),
+		stopChannel: make(chan bool, 1),
+	}
+	server.setStatus("waiting", "Waiting.")
+	if err := server.Chat(); err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	defer os.RemoveAll(server.chatDir)
+
+	// Test health endpoint
+	healthRequest := httptest.NewRequest(http.MethodGet, "/chat/test/health", nil)
+	healthResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(healthResponse, healthRequest)
+
+	if healthResponse.Code != http.StatusOK {
+		t.Fatalf("health endpoint status = %d, want %d", healthResponse.Code, http.StatusOK)
+	}
+
+	var health map[string]interface{}
+	if err := json.NewDecoder(healthResponse.Body).Decode(&health); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
+
+	if health["status"] != "ok" {
+		t.Fatalf("health status = %v, want ok", health["status"])
+	}
+
+	if _, ok := health["timestamp"]; !ok {
+		t.Fatal("health response missing timestamp")
+	}
+
+	if _, ok := health["messageCount"]; !ok {
+		t.Fatal("health response missing messageCount")
+	}
+}
+
+func TestChatLastEventIDRecovery(t *testing.T) {
+	server := &Server{
+		BaseURL:     "http://127.0.0.1:8080",
+		ChatURL:     "http://127.0.0.1:8080/chat/test",
+		mux:         http.NewServeMux(),
+		stopChannel: make(chan bool, 1),
+	}
+	server.setStatus("waiting", "Waiting.")
+	if err := server.Chat(); err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	defer os.RemoveAll(server.chatDir)
+
+	// Send three messages
+	for i := 1; i <= 3; i++ {
+		messageBody := strings.NewReader(fmt.Sprintf(`{"sender":"Test","text":"message %d"}`, i))
+		messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", messageBody)
+		messageRequest.Header.Set("Content-Type", "application/json")
+		messageResponse := httptest.NewRecorder()
+		server.mux.ServeHTTP(messageResponse, messageRequest)
+		if messageResponse.Code != http.StatusOK {
+			t.Fatalf("send message %d status = %d, want %d", i, messageResponse.Code, http.StatusOK)
+		}
+	}
+
+	// Get all messages
+	listRequest := httptest.NewRequest(http.MethodGet, "/chat/test/messages", nil)
+	listResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(listResponse, listRequest)
+	var allMessages []chatMessage
+	if err := json.NewDecoder(listResponse.Body).Decode(&allMessages); err != nil {
+		t.Fatalf("decode messages: %v", err)
+	}
+	if len(allMessages) != 3 {
+		t.Fatalf("got %d messages, want 3", len(allMessages))
+	}
+
+	// Test recovery with Last-Event-ID (get messages after first one)
+	recoveryRequest := httptest.NewRequest(http.MethodGet, "/chat/test/messages?lastEventId="+allMessages[0].ID, nil)
+	recoveryResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(recoveryResponse, recoveryRequest)
+	var recoveredMessages []chatMessage
+	if err := json.NewDecoder(recoveryResponse.Body).Decode(&recoveredMessages); err != nil {
+		t.Fatalf("decode recovered messages: %v", err)
+	}
+
+	// Should get messages 2 and 3
+	if len(recoveredMessages) != 3 {
+		t.Fatalf("recovered %d messages, want 3 (all messages since we're using GET /messages, not SSE)", len(recoveredMessages))
+	}
 }

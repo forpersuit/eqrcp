@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Rebuild EXE Before Commit",
+  "description": "Kills running eqrcp.exe processes and rebuilds the binary before git commits",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "taskkill /F /IM eqrcp.exe /T 2>$null; taskkill /F /IM EQT.exe /T 2>$null; go build -o eqrcp.exe .; if ($LASTEXITCODE -eq 0) { Write-Host \"✓ Build successful: eqrcp.exe created\" } else { Write-Host \"✗ Build failed\" }",
+    "timeout": 120
+  }
+}

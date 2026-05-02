@@ -48,6 +48,11 @@ let agentEvents = null;
 let agentEventsRetry = null;
 let chatEvents = null;
 let chatEventsURL = '';
+let chatReconnectTimer = null;
+let chatReconnectDelay = 1000;
+let chatLastMessageId = null;
+let chatLastMessageTimestamp = Date.now();
+let chatIsPageVisible = !document.hidden;
 const app = document.querySelector('#app');
 
 function render() {
@@ -1102,25 +1107,105 @@ function connectActiveChat() {
         loadChatMessages(task.pageUrl);
         return;
     }
-    chatEvents = new EventSource(nextURL);
+    connectChatSSE(task.pageUrl);
+}
+
+function connectChatSSE(pageUrl) {
+    if (chatEvents) {
+        chatEvents.close();
+        chatEvents = null;
+    }
+    
+    // Build URL with Last-Event-ID for message recovery
+    let url = chatEventsRoute(pageUrl);
+    if (chatLastMessageId) {
+        url += (url.includes('?') ? '&' : '?') + 'lastEventId=' + encodeURIComponent(chatLastMessageId);
+    }
+    
+    chatEvents = new EventSource(url);
+    
+    chatEvents.onopen = () => {
+        chatReconnectDelay = 1000;
+        chatLastMessageTimestamp = Date.now();
+    };
+    
     chatEvents.onmessage = (event) => {
         try {
+            // Save the last message ID for recovery
+            if (event.lastEventId) {
+                chatLastMessageId = event.lastEventId;
+            }
+            
             const wasNearBottom = isChatNearBottom();
             const previousLastID = state.chatMessages.at(-1)?.id;
             state.chatMessages = JSON.parse(event.data) || [];
             const nextLast = state.chatMessages.at(-1);
+            
+            // Update last message ID from data
+            if (nextLast?.id) {
+                chatLastMessageId = nextLast.id;
+            }
+            
+            chatLastMessageTimestamp = Date.now();
             saveChatAttachments();
             if (state.mode === 'chat') {
                 updateChatThread({forceBottom: wasNearBottom || (nextLast?.sender === 'Desktop' && nextLast.id !== previousLastID)});
                 updateChatSide();
             }
         } catch {
-            loadChatMessages(task.pageUrl);
+            loadChatMessages(pageUrl);
         }
     };
+    
     chatEvents.onerror = () => {
-        loadChatMessages(task.pageUrl);
+        if (chatEvents) {
+            chatEvents.close();
+            chatEvents = null;
+        }
+        
+        // Only reconnect if page is visible
+        if (chatIsPageVisible) {
+            scheduleChatReconnect(pageUrl);
+        }
     };
+}
+
+function scheduleChatReconnect(pageUrl) {
+    if (chatReconnectTimer) {
+        clearTimeout(chatReconnectTimer);
+    }
+    
+    chatReconnectTimer = setTimeout(() => {
+        if (chatIsPageVisible && state.mode === 'chat') {
+            const task = activeChatTask();
+            if (task?.pageUrl === pageUrl) {
+                connectChatSSE(pageUrl);
+                chatReconnectDelay = Math.min(chatReconnectDelay * 2, 30000);
+            }
+        }
+    }, chatReconnectDelay);
+}
+
+async function verifyChatConnection(pageUrl) {
+    try {
+        // Verify connection health
+        const healthURL = pageUrl.replace(/\/$/, '') + '/health';
+        const healthResponse = await fetch(healthURL, {cache: 'no-store'});
+        if (!healthResponse.ok) {
+            throw new Error('health check failed');
+        }
+        
+        // Fetch latest messages
+        await loadChatMessages(pageUrl);
+        
+        // Reconnect SSE
+        chatReconnectDelay = 1000;
+        connectChatSSE(pageUrl);
+    } catch {
+        // Connection is broken, reconnect
+        chatReconnectDelay = 1000;
+        connectChatSSE(pageUrl);
+    }
 }
 
 function disconnectChatEvents() {
@@ -1128,7 +1213,13 @@ function disconnectChatEvents() {
         chatEvents.close();
         chatEvents = null;
     }
+    if (chatReconnectTimer) {
+        clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = null;
+    }
     chatEventsURL = '';
+    chatLastMessageId = null;
+    chatReconnectDelay = 1000;
 }
 
 async function loadChatMessages(pageUrl) {
@@ -1513,6 +1604,37 @@ OnFileDrop((_x, _y, paths) => {
 
 EventsOn('eqt:tray-command', handleTrayCommand);
 
+// Monitor page visibility for chat reconnection
+document.addEventListener('visibilitychange', () => {
+    chatIsPageVisible = !document.hidden;
+    
+    if (chatIsPageVisible && state.mode === 'chat') {
+        const task = activeChatTask();
+        if (!task?.pageUrl) {
+            return;
+        }
+        
+        const timeSinceLastMessage = Date.now() - chatLastMessageTimestamp;
+        
+        if (!chatEvents || chatEvents.readyState === EventSource.CLOSED) {
+            // Connection is closed, verify health before reconnecting
+            verifyChatConnection(task.pageUrl);
+        } else if (chatEvents.readyState === EventSource.CONNECTING) {
+            // Already connecting, wait
+        } else if (timeSinceLastMessage > 10000) {
+            // Connection looks open but no messages for 10s (reduced from 30s), verify health
+            verifyChatConnection(task.pageUrl);
+        }
+    } else {
+        // Page became hidden, cancel reconnection attempts
+        if (chatReconnectTimer) {
+            clearTimeout(chatReconnectTimer);
+            chatReconnectTimer = null;
+        }
+    }
+});
+
 render();
 loadSettings().then(connectAgentEvents);
 setInterval(() => refreshStatus(false), 1500);
+

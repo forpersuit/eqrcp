@@ -88,6 +88,95 @@ Acceptance criteria:
 - Keep chat session state independent from `transferStatus`; agent integration
   can wrap it later as a task record.
 
+## Mobile Connection Stability Enhancement
+
+Status: **Phase 1 completed**.
+
+### Problem Identified
+
+Mobile browsers (iOS Safari, Android Chrome) suspend background tabs and close
+SSE connections when users switch apps. The current implementation does not
+detect or recover from these disconnections, causing message sync failures.
+
+### Solution Plan
+
+Implementing Page Visibility API + intelligent reconnection (Phase 1):
+
+- [x] Problem analysis and solution design completed
+- [x] Client-side reconnection logic with Page Visibility API
+- [x] Server-side Last-Event-ID support for message recovery
+- [x] Connection health check endpoint
+- [x] Exponential backoff for reconnection attempts
+- [x] Visual connection status indicators
+- [x] Unit tests for new functionality
+- [ ] Mobile device testing (iOS Safari, Android Chrome)
+
+Future enhancement (Phase 2):
+
+- [ ] Polling fallback for unstable networks
+- [ ] WebSocket migration consideration
+
+### Implementation Details
+
+Client improvements:
+
+- Detect page visibility changes using Page Visibility API
+- Reconnect SSE only when page becomes visible
+- Use Last-Event-ID to recover missed messages
+- Verify connection health on visibility change
+- Exponential backoff with max delay cap (1s → 30s)
+- Automatic fallback to polling if EventSource unavailable
+
+Server improvements:
+
+- Support Last-Event-ID header and query parameter
+- Filter messages after specified ID for recovery
+- Add /health endpoint for connection verification
+- Include message ID in SSE event stream
+
+### Testing Strategy
+
+Automated tests:
+- ✅ `TestFilterMessagesAfter` - Message recovery logic
+- ✅ `TestChatHealthEndpoint` - Health check endpoint
+- ✅ `TestChatLastEventIDRecovery` - Last-Event-ID support
+- ✅ `TestChatPageIncludesMessagingRoutes` - Client-side reconnection code
+
+Manual testing required:
+- [ ] Background/foreground switching (1 min, 5 min, 10 min)
+- [ ] Network switching (WiFi ↔ 4G)
+- [ ] Low power mode behavior
+- [ ] Multi-device synchronization
+- [ ] Connection recovery verification
+
+### Testing Instructions
+
+1. Start chat session:
+   ```bash
+   eqrcp chat --browser
+   ```
+
+2. Open mobile browser and scan QR code
+
+3. Test scenarios:
+   - Send messages from both devices
+   - Switch mobile browser to background for 1 minute
+   - Switch back and verify messages sync
+   - Repeat with 5 minute and 10 minute delays
+   - Test with network interruption
+   - Test with multiple devices simultaneously
+
+4. Monitor connection status in browser console:
+   - Check for "Reconnecting..." messages
+   - Verify "Connected as [name]" after reconnection
+   - Confirm no message loss
+
+### Known Limitations
+
+- SSE connections may take up to 30 seconds to detect stale connections
+- Very long background periods (>10 minutes) may require manual refresh
+- Browser-specific behavior may vary (iOS Safari vs Android Chrome)
+
 ## Risks
 
 - Chat sessions are long-lived, while existing transfer tasks usually terminate

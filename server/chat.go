@@ -69,6 +69,7 @@ func (s *Server) Chat() error {
 	messagesRoute := route + "/messages"
 	attachmentsRoute := route + "/attachments"
 	stopRoute := route + "/stop"
+	healthRoute := route + "/health"
 	session := &chatSession{
 		attachments:     map[string]chatAttachment{},
 		subscribers:     map[chan struct{}]struct{}{},
@@ -116,6 +117,7 @@ func (s *Server) Chat() error {
 			MessagesRoute    string
 			AttachmentsRoute string
 			StopRoute        string
+			HealthRoute      string
 			Version          string
 		}{
 			URL:              s.ChatURL,
@@ -124,6 +126,7 @@ func (s *Server) Chat() error {
 			MessagesRoute:    messagesRoute,
 			AttachmentsRoute: attachmentsRoute,
 			StopRoute:        stopRoute,
+			HealthRoute:      healthRoute,
 			Version:          version.String(),
 		}
 		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
@@ -146,6 +149,24 @@ func (s *Server) Chat() error {
 		s.setStatus("stopped", "Chat session stopped.")
 		fmt.Fprintln(w, "Chat session stopped. You can close this page.")
 		s.signalStop()
+	})
+	s.mux.HandleFunc(healthRoute, func(w http.ResponseWriter, r *http.Request) {
+		if handleChatCORS(w, r, http.MethodGet) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		session.mu.Lock()
+		messageCount := len(session.messages)
+		session.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "ok",
+			"timestamp":    time.Now().Unix(),
+			"messageCount": messageCount,
+		})
 	})
 	return nil
 }
@@ -310,8 +331,21 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	
+	// Support Last-Event-ID for message recovery after reconnection
+	lastEventID := r.Header.Get("Last-Event-ID")
+	if lastEventID == "" {
+		lastEventID = r.URL.Query().Get("lastEventId")
+	}
+	
 	write := func() bool {
 		messages := session.snapshot()
+		
+		// If client provides lastEventID, only send messages after that ID
+		if lastEventID != "" {
+			messages = filterMessagesAfter(messages, lastEventID)
+		}
+		
 		data, err := json.Marshal(messages)
 		if err != nil {
 			return false
@@ -569,4 +603,18 @@ func safeChatFilename(name string) string {
 		name = base + ext
 	}
 	return name
+}
+
+// filterMessagesAfter returns messages that come after the specified message ID.
+// If the ID is not found, returns all messages.
+func filterMessagesAfter(messages []chatMessage, afterID string) []chatMessage {
+	for i, msg := range messages {
+		if msg.ID == afterID {
+			if i+1 < len(messages) {
+				return messages[i+1:]
+			}
+			return []chatMessage{}
+		}
+	}
+	return messages
 }
