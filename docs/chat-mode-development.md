@@ -49,18 +49,23 @@ Acceptance criteria:
 
 ### Phase 2: Desktop Agent Integration
 
-Status: planned.
+Status: **completed**.
 
-- Add `chat` as a desktop agent task action.
-- Track chat task lifecycle separately from send/receive transfer completion.
-- Add stop/current/open-current support for active chat sessions.
-- Add agent history entry for ended chat sessions.
+- [x] Add `chat` as a desktop agent task action.
+- [x] Track chat task lifecycle separately from send/receive transfer completion.
+- [x] Add stop/current/open-current support for active chat sessions.
+- [x] Add agent history entry for ended chat sessions.
+- [x] Add chat status tracking with message count and session state.
+- [x] Display chat session details in agent status page.
+- [x] Support repeat for chat history items.
 
 Acceptance criteria:
 
-- `eqrcp desktop chat` starts through the agent.
-- Agent status shows active chat session URL.
-- Existing share/receive tasks remain unchanged.
+- [x] `eqrcp desktop chat` starts through the agent.
+- [x] Agent status shows active chat session URL and message count.
+- [x] Existing share/receive tasks remain unchanged.
+- [x] Chat sessions properly finalize when stopped.
+- [x] History shows meaningful chat session details.
 
 ### Phase 3: Wails GUI Chat Surface
 
@@ -87,6 +92,64 @@ Acceptance criteria:
 - Default to temporary attachment storage for privacy and cleanup.
 - Keep chat session state independent from `transferStatus`; agent integration
   can wrap it later as a task record.
+
+## Desktop Agent Integration
+
+Status: **Phase 2 completed**.
+
+### Implementation Summary
+
+Chat sessions are now fully integrated with the desktop agent:
+
+1. **Chat Status Tracking**
+   - Added `ChatStatusSnapshot` with state, message count, and activity tracking
+   - Chat sessions report "waiting", "active", and "ended" states
+   - Status updates trigger on first message and every 10 messages
+
+2. **Desktop Agent Support**
+   - `desktopAgentTaskRecord` includes chat-specific fields:
+     - `ChatState`: current session state
+     - `ChatMessageCount`: number of messages exchanged
+     - `ChatLastActivity`: timestamp of last activity
+   - `observeChatStatus` method tracks chat session lifecycle
+   - Chat tasks move to history when session ends
+
+3. **Status Display**
+   - Agent status page shows chat session details
+   - Command-line `agent-status` displays message count and state
+   - History records preserve chat session information
+
+4. **Task Lifecycle**
+   - `eqrcp desktop chat` starts chat via agent
+   - Stop current works for active chat sessions
+   - Repeat works for chat history items
+   - Chat sessions properly finalize on stop
+
+### Usage
+
+```bash
+# Start desktop agent
+eqrcp desktop agent-start -B
+
+# Start chat session (via agent)
+eqrcp desktop chat
+
+# Check agent status
+eqrcp desktop agent-status
+
+# Open agent status page
+eqrcp desktop agent-open
+
+# Stop current chat
+eqrcp desktop agent-stop-current
+```
+
+### Testing
+
+All tests pass:
+- `TestDesktopAgentObservesChatStatus`: Verifies chat status tracking
+- `TestDesktopAgentChatEndedMovesToHistory`: Verifies lifecycle management
+- `TestValidateDesktopAgentChatTask`: Verifies task validation
 
 ## Mobile Connection Stability Enhancement
 

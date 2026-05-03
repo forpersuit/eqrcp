@@ -18,6 +18,7 @@ func init() {
 	rootCmd.AddCommand(desktopCmd)
 	desktopCmd.AddCommand(desktopShareCmd)
 	desktopCmd.AddCommand(desktopReceiveCmd)
+	desktopCmd.AddCommand(desktopChatCmd)
 	desktopCmd.AddCommand(desktopInstallCmd)
 	desktopCmd.AddCommand(desktopStatusCmd)
 	desktopCmd.AddCommand(desktopStartupEnableCmd)

@@ -43,21 +43,22 @@ type Server struct {
 	// ReceiveURL is the URL used to Receive the file
 	ReceiveURL string
 	// ChatURL is the URL used for a browser chat session
-	ChatURL     string
-	instance    *http.Server
-	mux         *http.ServeMux
-	body        body.Body
-	outputDir   string
-	chatDir     string
-	stopChannel chan bool
-	statusMu    sync.Mutex
-	status      transferStatus
-	history     []transferStatusRecord
-	statusGrace time.Duration
-	statusHook  func(TransferStatusSnapshot)
-	repeatRoute string
-	statusSeq   int64
-	statusSubs  map[chan struct{}]struct{}
+	ChatURL         string
+	instance        *http.Server
+	mux             *http.ServeMux
+	body            body.Body
+	outputDir       string
+	chatDir         string
+	stopChannel     chan bool
+	statusMu        sync.Mutex
+	status          transferStatus
+	history         []transferStatusRecord
+	statusGrace     time.Duration
+	statusHook      func(TransferStatusSnapshot)
+	chatStatusHook  func(ChatStatusSnapshot)
+	repeatRoute     string
+	statusSeq       int64
+	statusSubs      map[chan struct{}]struct{}
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -289,6 +290,13 @@ func (s *Server) SetStatusHook(hook func(TransferStatusSnapshot)) {
 	if hook != nil {
 		hook(snapshotTransferStatus(status))
 	}
+}
+
+// SetChatStatusHook sets a callback for chat session status updates.
+func (s *Server) SetChatStatusHook(hook func(ChatStatusSnapshot)) {
+	s.statusMu.Lock()
+	s.chatStatusHook = hook
+	s.statusMu.Unlock()
 }
 
 func (s *Server) SetRepeatRoute(route string) {

@@ -58,6 +58,9 @@ type desktopAgentTaskRecord struct {
 	BytesDone           int64      `json:"bytesDone,omitempty"`
 	BytesTotal          int64      `json:"bytesTotal,omitempty"`
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	ChatState           string     `json:"chatState,omitempty"`
+	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
+	ChatLastActivity    string     `json:"chatLastActivity,omitempty"`
 	PageURL             string     `json:"pageUrl,omitempty"`
 	Error               string     `json:"error,omitempty"`
 	StartedAt           time.Time  `json:"startedAt"`
@@ -648,6 +651,35 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.touchLocked()
 }
 
+func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatusSnapshot) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.current == nil || agent.current.ID != taskID {
+		return
+	}
+	agent.current.ChatState = status.State
+	agent.current.ChatMessageCount = status.MessageCount
+	if !status.LastActivity.IsZero() {
+		agent.current.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
+	}
+	if status.State == "ended" && agent.current.State == "running" {
+		agent.current.State = "completed"
+		finishedAt := time.Now()
+		agent.current.FinishedAt = &finishedAt
+		record := *agent.current
+		agent.addHistoryLocked(record)
+		agent.notifyRecordLocked(record)
+		delete(agent.notified, record.ID)
+		agent.busy = false
+		agent.current = nil
+		agent.activeStop = nil
+		agent.startNextLocked()
+		agent.touchLocked()
+		return
+	}
+	agent.touchLocked()
+}
+
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
 	if agent.notifier == nil {
 		return
@@ -1033,9 +1065,19 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		}
 	case "chat":
 		agent.setCurrentPageURL(srv.ChatURL)
-		if err := srv.Chat(); err != nil {
-			srv.Shutdown()
-			return err
+		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
+			agent.observeChatStatus(taskID, status)
+		})
+		if agentApp.Flags.Browser {
+			if err := srv.DisplayChat(); err != nil {
+				srv.Shutdown()
+				return err
+			}
+		} else {
+			if err := srv.Chat(); err != nil {
+				srv.Shutdown()
+				return err
+			}
 		}
 	default:
 		srv.Shutdown()
@@ -1450,21 +1492,34 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 	if record.PageURL != "" {
 		builder.WriteString(fmt.Sprintf("%s  qr page: %s\n", indent, record.PageURL))
 	}
-	if record.TransferState != "" {
-		builder.WriteString(fmt.Sprintf("%s  transfer: %s", indent, record.TransferState))
-		if record.TransferPercent > 0 {
-			builder.WriteString(fmt.Sprintf(" %d%%", record.TransferPercent))
+	if record.Action == "chat" {
+		if record.ChatState != "" {
+			builder.WriteString(fmt.Sprintf("%s  chat: %s", indent, record.ChatState))
+			if record.ChatMessageCount > 0 {
+				builder.WriteString(fmt.Sprintf(" (%d messages)", record.ChatMessageCount))
+			}
+			builder.WriteString("\n")
 		}
-		builder.WriteString("\n")
-	}
-	if record.TransferMessage != "" {
-		builder.WriteString(fmt.Sprintf("%s  transfer message: %s\n", indent, record.TransferMessage))
-	}
-	if record.TransferCurrent != "" {
-		builder.WriteString(fmt.Sprintf("%s  current file: %s\n", indent, record.TransferCurrent))
-	}
-	if len(record.SavedFiles) > 0 {
-		builder.WriteString(fmt.Sprintf("%s  saved files: %s\n", indent, strings.Join(record.SavedFiles, ", ")))
+		if record.ChatLastActivity != "" {
+			builder.WriteString(fmt.Sprintf("%s  last activity: %s\n", indent, record.ChatLastActivity))
+		}
+	} else {
+		if record.TransferState != "" {
+			builder.WriteString(fmt.Sprintf("%s  transfer: %s", indent, record.TransferState))
+			if record.TransferPercent > 0 {
+				builder.WriteString(fmt.Sprintf(" %d%%", record.TransferPercent))
+			}
+			builder.WriteString("\n")
+		}
+		if record.TransferMessage != "" {
+			builder.WriteString(fmt.Sprintf("%s  transfer message: %s\n", indent, record.TransferMessage))
+		}
+		if record.TransferCurrent != "" {
+			builder.WriteString(fmt.Sprintf("%s  current file: %s\n", indent, record.TransferCurrent))
+		}
+		if len(record.SavedFiles) > 0 {
+			builder.WriteString(fmt.Sprintf("%s  saved files: %s\n", indent, strings.Join(record.SavedFiles, ", ")))
+		}
 	}
 	if !record.StartedAt.IsZero() {
 		builder.WriteString(fmt.Sprintf("%s  started: %s\n", indent, record.StartedAt.Format(time.RFC3339)))

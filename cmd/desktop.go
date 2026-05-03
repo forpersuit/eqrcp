@@ -52,6 +52,19 @@ eqrcp desktop receive`,
 	},
 }
 
+var desktopChatCmd = &cobra.Command{
+	Use:   "chat",
+	Short: "Start a chat session from a desktop launcher",
+	Long:  "Start a browser-based chat session from a desktop launcher. This command opens the chat interface in a browser by default.",
+	Example: `# Start a chat session
+eqrcp desktop chat`,
+	Args: cobra.NoArgs,
+	RunE: func(command *cobra.Command, args []string) error {
+		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
+		return chatCmdFunc(command, args)
+	},
+}
+
 func desktopReceiveOutput(args []string) (string, bool) {
 	if len(args) == 0 {
 		return "", false

@@ -30,6 +30,17 @@ type chatSession struct {
 	nextID          int64
 	dir             string
 	attachmentRoute string
+	startedAt       time.Time
+	lastActivity    time.Time
+	statusHook      func(ChatStatusSnapshot)
+}
+
+// ChatStatusSnapshot represents the current state of a chat session.
+type ChatStatusSnapshot struct {
+	State        string    `json:"state"`        // "waiting", "active", "ended"
+	MessageCount int       `json:"messageCount"`
+	StartedAt    time.Time `json:"startedAt"`
+	LastActivity time.Time `json:"lastActivity"`
 }
 
 type chatMessage struct {
@@ -75,7 +86,11 @@ func (s *Server) Chat() error {
 		subscribers:     map[chan struct{}]struct{}{},
 		dir:             dir,
 		attachmentRoute: attachmentsRoute,
+		startedAt:       time.Now(),
+		lastActivity:    time.Now(),
+		statusHook:      s.chatStatusHook,
 	}
+	session.notifyStatusLocked("waiting")
 	qrImg, err := qr.RenderImage(s.ChatURL)
 	if err != nil {
 		os.RemoveAll(dir)
@@ -146,6 +161,9 @@ func (s *Server) Chat() error {
 			return
 		}
 		session.addSystemMessage("Chat session stopped.")
+		session.mu.Lock()
+		session.notifyStatusLocked("ended")
+		session.mu.Unlock()
 		s.setStatus("stopped", "Chat session stopped.")
 		fmt.Fprintln(w, "Chat session stopped. You can close this page.")
 		s.signalStop()
@@ -405,11 +423,19 @@ func (session *chatSession) addTextMessage(sender string, text string) chatMessa
 	if text == "" {
 		return chatMessage{}
 	}
-	return session.addMessage(chatMessage{
+	message := session.addMessage(chatMessage{
 		Sender: sender,
 		Type:   "text",
 		Text:   text,
 	})
+	session.mu.Lock()
+	if len(session.messages) == 1 {
+		session.notifyStatusLocked("active")
+	} else if len(session.messages)%10 == 0 {
+		session.notifyStatusLocked("active")
+	}
+	session.mu.Unlock()
+	return message
 }
 
 func (session *chatSession) addSystemMessage(text string) chatMessage {
@@ -486,6 +512,7 @@ func (session *chatSession) addMessage(message chatMessage) chatMessage {
 	if len(session.messages) > maxChatHistory {
 		session.messages = session.messages[len(session.messages)-maxChatHistory:]
 	}
+	session.lastActivity = time.Now()
 	session.notifyLocked()
 	session.mu.Unlock()
 	return message
@@ -548,6 +575,19 @@ func (session *chatSession) notifyLocked() {
 		default:
 		}
 	}
+}
+
+func (session *chatSession) notifyStatusLocked(state string) {
+	if session.statusHook == nil {
+		return
+	}
+	snapshot := ChatStatusSnapshot{
+		State:        state,
+		MessageCount: len(session.messages),
+		StartedAt:    session.startedAt,
+		LastActivity: session.lastActivity,
+	}
+	go session.statusHook(snapshot)
 }
 
 func (session *chatSession) nextMessageID() string {

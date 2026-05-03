@@ -826,6 +826,77 @@ func TestValidateDesktopAgentChatTask(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentObservesChatStatus(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        5,
+		Action:    "chat",
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeChatStatus(5, server.ChatStatusSnapshot{
+		State:        "active",
+		MessageCount: 12,
+		StartedAt:    time.Now(),
+		LastActivity: time.Now(),
+	})
+
+	status := agent.snapshot()
+	if status.Current == nil {
+		t.Fatal("Current is nil, want active chat task")
+	}
+	if status.Current.ChatState != "active" {
+		t.Fatalf("ChatState = %q, want active", status.Current.ChatState)
+	}
+	if status.Current.ChatMessageCount != 12 {
+		t.Fatalf("ChatMessageCount = %d, want 12", status.Current.ChatMessageCount)
+	}
+	if status.Current.ChatLastActivity == "" {
+		t.Fatal("ChatLastActivity is empty, want timestamp")
+	}
+}
+
+func TestDesktopAgentChatEndedMovesToHistory(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        6,
+		Action:    "chat",
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeChatStatus(6, server.ChatStatusSnapshot{
+		State:        "ended",
+		MessageCount: 25,
+		StartedAt:    time.Now().Add(-10 * time.Minute),
+		LastActivity: time.Now(),
+	})
+
+	status := agent.snapshot()
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want ended chat moved to history", status.Current)
+	}
+	if len(status.History) != 1 {
+		t.Fatalf("History length = %d, want 1", len(status.History))
+	}
+	record := status.History[0]
+	if record.State != "completed" {
+		t.Fatalf("History[0].State = %q, want completed", record.State)
+	}
+	if record.ChatState != "ended" {
+		t.Fatalf("History[0].ChatState = %q, want ended", record.ChatState)
+	}
+	if record.ChatMessageCount != 25 {
+		t.Fatalf("History[0].ChatMessageCount = %d, want 25", record.ChatMessageCount)
+	}
+	if record.FinishedAt == nil {
+		t.Fatal("History[0].FinishedAt is nil, want timestamp")
+	}
+}
+
 func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 	previousBaseURL := desktopAgentBaseURL
 	previousExecutable := desktopAgentExecutable
