@@ -14,12 +14,12 @@
 **服务端（方案2实现）**：
 ```
 server/chat.go
-├── SSE + Last-Event-ID支持
+├── SSE snapshot支持
 ├── /chat/{path}/events - SSE事件流
 ├── /chat/{path}/messages - 消息列表
 ├── /chat/{path}/health - 健康检查
 ├── /chat/{path}/attachments - 附件管理
-└── filterMessagesAfter() - 消息恢复逻辑
+└── client-side merge - 消息恢复逻辑
 ```
 
 **客户端（都使用同一套服务端API）**：
@@ -33,7 +33,7 @@ server/chat.go
 
 ### Chat模式和方案2的关系
 
-- **方案2** 是底层的reconnection机制（SSE + Last-Event-ID + Page Visibility API）
+- **方案2** 是底层的reconnection机制（SSE snapshot + Page Visibility API）
 - **Chat模式** 是应用层功能，使用方案2提供的reconnection能力
 - 两个客户端（浏览器和Wails GUI）都通过HTTP请求访问同一套服务端API
 

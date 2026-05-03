@@ -304,7 +304,7 @@ func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	agent.runner = func(task desktopAgentTask) error {
 		done <- task
 		if task.Action == "share" {
-			agent.setActiveStop(func() {
+			agent.setActiveStop(func(state string) {
 				stopOnce.Do(func() {
 					close(block)
 				})
@@ -450,7 +450,7 @@ func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
 		shutdownCalled <- struct{}{}
 	}
 	agent.runner = func(task desktopAgentTask) error {
-		agent.setActiveStop(func() {
+		agent.setActiveStop(func(state string) {
 			stopOnce.Do(func() {
 				close(block)
 			})
@@ -492,7 +492,7 @@ func TestDesktopAgentStopCurrentStopsActiveTask(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
 	var stopOnce sync.Once
 	agent.runner = func(task desktopAgentTask) error {
-		agent.setActiveStop(func() {
+		agent.setActiveStop(func(state string) {
 			stopOnce.Do(func() {
 				close(block)
 			})
@@ -556,7 +556,7 @@ func TestDesktopAgentStopCurrentCommand(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
 	var stopOnce sync.Once
 	agent.runner = func(task desktopAgentTask) error {
-		agent.setActiveStop(func() {
+		agent.setActiveStop(func(state string) {
 			stopOnce.Do(func() {
 				close(block)
 			})
@@ -632,7 +632,7 @@ func TestDesktopAgentStopCurrentRedirectsBrowserRequests(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
 	var stopOnce sync.Once
 	agent.runner = func(task desktopAgentTask) error {
-		agent.setActiveStop(func() {
+		agent.setActiveStop(func(state string) {
 			stopOnce.Do(func() {
 				close(block)
 			})
@@ -897,6 +897,38 @@ func TestDesktopAgentChatEndedMovesToHistory(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentChatStoppedMovesToStoppedHistory(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	agent.busy = true
+	agent.current = &desktopAgentTaskRecord{
+		ID:        7,
+		Action:    "chat",
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+
+	agent.observeChatStatus(7, server.ChatStatusSnapshot{
+		State:        "stopped",
+		MessageCount: 3,
+		LastActivity: time.Now(),
+	})
+
+	status := agent.snapshot()
+	if status.Current != nil {
+		t.Fatalf("Current = %#v, want stopped chat moved to history", status.Current)
+	}
+	if len(status.History) != 1 {
+		t.Fatalf("History length = %d, want 1", len(status.History))
+	}
+	record := status.History[0]
+	if record.State != "stopped" {
+		t.Fatalf("History[0].State = %q, want stopped", record.State)
+	}
+	if record.ChatState != "stopped" || record.ChatMessageCount != 3 {
+		t.Fatalf("History[0] = %#v, want stopped chat details", record)
+	}
+}
+
 func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 	previousBaseURL := desktopAgentBaseURL
 	previousExecutable := desktopAgentExecutable
@@ -1080,7 +1112,7 @@ func TestDesktopAgentRestartPersistsActiveTaskForRepeat(t *testing.T) {
 		shutdownCalled <- struct{}{}
 	}
 	agent.runner = func(task desktopAgentTask) error {
-		agent.setActiveStop(func() {
+		agent.setActiveStop(func(state string) {
 			stopOnce.Do(func() {
 				close(block)
 			})

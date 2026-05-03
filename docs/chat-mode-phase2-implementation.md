@@ -14,7 +14,7 @@
 
 1. **Chat Session Lifecycle**
    - Chat sessions are long-lived, unlike one-shot transfers
-   - Need explicit "active" vs "ended" states
+   - Need explicit active vs stopped/replaced terminal states
    - Need user-initiated stop action
 
 2. **Status Tracking**
@@ -34,7 +34,7 @@
 Add a status hook mechanism similar to transfer status:
 ```go
 type ChatStatusSnapshot struct {
-    State        string    // "waiting", "active", "ended"
+    State        string    // "waiting", "active", "stopped", "replaced", "failed"
     MessageCount int
     StartedAt    time.Time
     LastActivity time.Time
@@ -58,7 +58,7 @@ Add chat-specific fields to `desktopAgentTaskRecord`:
 ```go
 type desktopAgentTaskRecord struct {
     // ... existing fields ...
-    ChatState        string `json:"chatState,omitempty"`        // "waiting", "active", "ended"
+    ChatState        string `json:"chatState,omitempty"`        // "waiting", "active", "stopped", "replaced", "failed"
     ChatMessageCount int    `json:"chatMessageCount,omitempty"`
     ChatLastActivity string `json:"chatLastActivity,omitempty"`
 }
@@ -100,7 +100,7 @@ case "chat":
 Add chat-specific display in the Current and History tables:
 - Show "Chat Session" instead of "Transfer" for chat tasks
 - Display message count
-- Display session state (waiting/active/ended)
+- Display session state (waiting/active/stopped/replaced/failed)
 - Show last activity time
 
 ### Task 5: Add Tests

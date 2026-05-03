@@ -10,7 +10,7 @@ Chat Mode Phase 2 已成功实现，将聊天功能完全集成到 desktop agent
 
 **新增类型：**
 - `ChatStatusSnapshot`: 表示聊天会话的当前状态
-  - `State`: "waiting", "active", "ended"
+  - `State`: "waiting", "active", "stopped", "replaced", "failed"
   - `MessageCount`: 消息数量
   - `StartedAt`: 会话开始时间
   - `LastActivity`: 最后活动时间
@@ -18,8 +18,8 @@ Chat Mode Phase 2 已成功实现，将聊天功能完全集成到 desktop agent
 **状态更新触发：**
 - 会话启动时：`waiting`
 - 第一条消息时：`active`
-- 每 10 条消息：更新 `active` 状态
-- 会话停止时：`ended`
+- 每条文本消息和附件都会更新 `active` 状态
+- 会话停止时：`stopped`；被新任务替换时：`replaced`
 
 ### 2. Desktop Agent 集成
 
@@ -58,7 +58,7 @@ Desktop agent status
 ```
 
 **浏览器状态页面：**
-- 显示聊天会话状态（waiting/active/ended）
+- 显示聊天会话状态（waiting/active/stopped/replaced/failed）
 - 实时更新消息计数
 - 显示最后活动时间
 - 历史记录保留会话详情
@@ -136,7 +136,7 @@ eqrcp desktop agent-stop-current
 
 1. **统一管理**：Chat 会话与 share/receive 任务使用相同的 agent 架构
 2. **状态可见**：实时显示会话状态和消息计数
-3. **生命周期清晰**：明确的 waiting → active → ended 状态转换
+3. **生命周期清晰**：明确的 waiting → active → stopped 状态转换
 4. **历史记录**：保留会话详情供后续查看和重复
 5. **可扩展性**：为未来的 GUI 集成（Phase 3）奠定基础
 

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image/jpeg"
@@ -8,6 +10,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,28 +35,33 @@ type chatSession struct {
 	attachmentRoute string
 	startedAt       time.Time
 	lastActivity    time.Time
+	state           string
+	statusSeq       int64
+	hostToken       string
 	statusHook      func(ChatStatusSnapshot)
 }
 
 // ChatStatusSnapshot represents the current state of a chat session.
 type ChatStatusSnapshot struct {
-	State        string    `json:"state"`        // "waiting", "active", "ended"
+	State        string    `json:"state"` // "waiting", "active", "ended", "stopped", "failed", "replaced"
 	MessageCount int       `json:"messageCount"`
 	StartedAt    time.Time `json:"startedAt"`
 	LastActivity time.Time `json:"lastActivity"`
+	Seq          int64     `json:"seq"`
 }
 
 type chatMessage struct {
-	ID        string    `json:"id"`
-	Sender    string    `json:"sender"`
-	Type      string    `json:"type"`
-	Text      string    `json:"text,omitempty"`
-	Recalled  bool      `json:"recalled,omitempty"`
-	FileName  string    `json:"fileName,omitempty"`
-	Size      int64     `json:"size,omitempty"`
-	MimeType  string    `json:"mimeType,omitempty"`
-	URL       string    `json:"url,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	Sender     string    `json:"sender"`
+	Type       string    `json:"type"`
+	Text       string    `json:"text,omitempty"`
+	Recalled   bool      `json:"recalled,omitempty"`
+	FileName   string    `json:"fileName,omitempty"`
+	Size       int64     `json:"size,omitempty"`
+	MimeType   string    `json:"mimeType,omitempty"`
+	URL        string    `json:"url,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	ownerToken string
 }
 
 type chatAttachment struct {
@@ -88,15 +96,20 @@ func (s *Server) Chat() error {
 		attachmentRoute: attachmentsRoute,
 		startedAt:       time.Now(),
 		lastActivity:    time.Now(),
+		state:           "waiting",
+		hostToken:       randomChatToken(),
 		statusHook:      s.chatStatusHook,
 	}
-	session.notifyStatusLocked("waiting")
+	session.notifyStatus("waiting")
 	qrImg, err := qr.RenderImage(s.ChatURL)
 	if err != nil {
 		os.RemoveAll(dir)
 		return err
 	}
+	s.statusMu.Lock()
 	s.chatDir = dir
+	s.chatSession = session
+	s.statusMu.Unlock()
 	s.setStatus("waiting", "Chat session waiting for a device to connect.")
 	s.updateStatus(func(status *transferStatus) {
 		status.Mode = "chat"
@@ -133,6 +146,8 @@ func (s *Server) Chat() error {
 			AttachmentsRoute string
 			StopRoute        string
 			HealthRoute      string
+			HostToken        string
+			CanStop          bool
 			Version          string
 		}{
 			URL:              s.ChatURL,
@@ -142,6 +157,8 @@ func (s *Server) Chat() error {
 			AttachmentsRoute: attachmentsRoute,
 			StopRoute:        stopRoute,
 			HealthRoute:      healthRoute,
+			HostToken:        session.hostToken,
+			CanStop:          session.validHostToken(r.URL.Query().Get("hostToken")),
 			Version:          version.String(),
 		}
 		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
@@ -160,10 +177,15 @@ func (s *Server) Chat() error {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if rejectCrossOriginChat(w, r) {
+			return
+		}
+		if !session.validHostToken(chatHostTokenFromRequest(r)) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		session.addSystemMessage("Chat session stopped.")
-		session.mu.Lock()
-		session.notifyStatusLocked("ended")
-		session.mu.Unlock()
+		session.end("stopped")
 		s.setStatus("stopped", "Chat session stopped.")
 		fmt.Fprintln(w, "Chat session stopped. You can close this page.")
 		s.signalStop()
@@ -197,14 +219,22 @@ func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.R
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if rejectCrossOriginChat(w, r) {
+		return
+	}
 	id := strings.TrimPrefix(r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:], "/")
 	var request struct {
 		Sender string `json:"sender"`
+		Token  string `json:"token"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&request)
 	}
-	message, ok := session.recallMessage(id, sanitizeChatSender(request.Sender))
+	if session.isTerminal() {
+		writeChatTerminal(w)
+		return
+	}
+	message, ok := session.recallMessage(id, sanitizeChatSender(request.Sender), request.Token)
 	if !ok {
 		http.Error(w, "message not found or cannot be recalled", http.StatusNotFound)
 		return
@@ -219,7 +249,13 @@ func (s *Server) DisplayChat() error {
 	if err := s.Chat(); err != nil {
 		return err
 	}
-	return openBrowser(s.ChatURL + "?peer=desktop")
+	s.statusMu.Lock()
+	hostToken := ""
+	if s.chatSession != nil {
+		hostToken = s.chatSession.hostToken
+	}
+	s.statusMu.Unlock()
+	return openBrowser(s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(hostToken))
 }
 
 func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -233,15 +269,27 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			log.Println(err)
 		}
 	case http.MethodPost:
+		if rejectCrossOriginChat(w, r) {
+			return
+		}
 		var request struct {
 			Sender string `json:"sender"`
 			Text   string `json:"text"`
+			Token  string `json:"token"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
 			http.Error(w, "invalid message", http.StatusBadRequest)
 			return
 		}
-		message := session.addTextMessage(sanitizeChatSender(request.Sender), request.Text)
+		if session.isTerminal() {
+			writeChatTerminal(w)
+			return
+		}
+		if strings.TrimSpace(request.Token) == "" {
+			http.Error(w, "missing token", http.StatusBadRequest)
+			return
+		}
+		message := session.addTextMessage(sanitizeChatSender(request.Sender), request.Token, request.Text)
 		if message.ID == "" {
 			http.Error(w, "message text is empty", http.StatusBadRequest)
 			return
@@ -263,6 +311,13 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if rejectCrossOriginChat(w, r) {
+		return
+	}
+	if session.isTerminal() {
+		writeChatTerminal(w)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "upload failed", http.StatusBadRequest)
@@ -272,6 +327,11 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		defer r.MultipartForm.RemoveAll()
 	}
 	sender := sanitizeChatSender(r.FormValue("sender"))
+	token := strings.TrimSpace(r.FormValue("token"))
+	if token == "" {
+		http.Error(w, "missing token", http.StatusBadRequest)
+		return
+	}
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
 		files = r.MultipartForm.File["file"]
@@ -287,7 +347,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "upload failed", http.StatusBadRequest)
 			return
 		}
-		message, err := session.saveAttachment(sender, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
+		message, err := session.saveAttachment(sender, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
 		file.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -322,7 +382,8 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		http.NotFound(w, r)
 		return
 	}
-	if r.URL.Query().Get("download") == "1" {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if r.URL.Query().Get("download") == "1" || !safeInlineChatMime(attachment.MimeType) {
 		w.Header().Set("Content-Disposition", contentDispositionFor("attachment", attachment.FileName))
 	} else {
 		w.Header().Set("Content-Disposition", contentDispositionFor("inline", attachment.FileName))
@@ -349,21 +410,9 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	
-	// Support Last-Event-ID for message recovery after reconnection
-	lastEventID := r.Header.Get("Last-Event-ID")
-	if lastEventID == "" {
-		lastEventID = r.URL.Query().Get("lastEventId")
-	}
-	
+
 	write := func() bool {
 		messages := session.snapshot()
-		
-		// If client provides lastEventID, only send messages after that ID
-		if lastEventID != "" {
-			messages = filterMessagesAfter(messages, lastEventID)
-		}
-		
 		data, err := json.Marshal(messages)
 		if err != nil {
 			return false
@@ -418,35 +467,41 @@ func handleChatCORS(w http.ResponseWriter, r *http.Request, methods ...string) b
 	return false
 }
 
-func (session *chatSession) addTextMessage(sender string, text string) chatMessage {
+func rejectCrossOriginChat(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return false
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || !strings.EqualFold(parsed.Host, r.Host) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return true
+	}
+	return false
+}
+
+func (session *chatSession) addTextMessage(sender string, token string, text string) chatMessage {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return chatMessage{}
 	}
-	message := session.addMessage(chatMessage{
-		Sender: sender,
-		Type:   "text",
-		Text:   text,
-	})
-	session.mu.Lock()
-	if len(session.messages) == 1 {
-		session.notifyStatusLocked("active")
-	} else if len(session.messages)%10 == 0 {
-		session.notifyStatusLocked("active")
-	}
-	session.mu.Unlock()
-	return message
+	return session.addMessageWithStatus(chatMessage{
+		Sender:     sender,
+		Type:       "text",
+		Text:       text,
+		ownerToken: strings.TrimSpace(token),
+	}, "active")
 }
 
 func (session *chatSession) addSystemMessage(text string) chatMessage {
-	return session.addMessage(chatMessage{
+	return session.addMessageWithStatus(chatMessage{
 		Sender: "system",
 		Type:   "system",
 		Text:   text,
-	})
+	}, "")
 }
 
-func (session *chatSession) saveAttachment(sender string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
+func (session *chatSession) saveAttachment(sender string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
 	if name == "" {
 		name = "attachment"
 	}
@@ -478,14 +533,15 @@ func (session *chatSession) saveAttachment(sender string, name string, mimeType 
 		messageType = "video"
 	}
 	message := chatMessage{
-		ID:        id,
-		Sender:    sender,
-		Type:      messageType,
-		FileName:  name,
-		Size:      size,
-		MimeType:  mimeType,
-		URL:       strings.TrimRight(session.attachmentRoute, "/") + "/" + id,
-		CreatedAt: time.Now(),
+		ID:         id,
+		Sender:     sender,
+		Type:       messageType,
+		FileName:   name,
+		Size:       size,
+		MimeType:   mimeType,
+		URL:        strings.TrimRight(session.attachmentRoute, "/") + "/" + id,
+		CreatedAt:  time.Now(),
+		ownerToken: strings.TrimSpace(token),
 	}
 	session.mu.Lock()
 	session.attachments[id] = chatAttachment{
@@ -496,25 +552,34 @@ func (session *chatSession) saveAttachment(sender string, name string, mimeType 
 		MimeType: mimeType,
 	}
 	session.messages = append(session.messages, message)
-	if len(session.messages) > maxChatHistory {
-		session.messages = session.messages[len(session.messages)-maxChatHistory:]
-	}
+	session.trimHistoryLocked()
+	session.lastActivity = time.Now()
 	session.notifyLocked()
+	hook, snapshot := session.statusSnapshotLocked("active")
 	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
 	return message, nil
 }
 
 func (session *chatSession) addMessage(message chatMessage) chatMessage {
+	return session.addMessageWithStatus(message, "active")
+}
+
+func (session *chatSession) addMessageWithStatus(message chatMessage, statusState string) chatMessage {
 	session.mu.Lock()
 	message.ID = session.nextMessageIDLocked()
 	message.CreatedAt = time.Now()
 	session.messages = append(session.messages, message)
-	if len(session.messages) > maxChatHistory {
-		session.messages = session.messages[len(session.messages)-maxChatHistory:]
-	}
+	session.trimHistoryLocked()
 	session.lastActivity = time.Now()
 	session.notifyLocked()
+	var hook func(ChatStatusSnapshot)
+	var snapshot ChatStatusSnapshot
+	if statusState != "" {
+		hook, snapshot = session.statusSnapshotLocked(statusState)
+	}
 	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
 	return message
 }
 
@@ -524,6 +589,27 @@ func (session *chatSession) snapshot() []chatMessage {
 	return append([]chatMessage(nil), session.messages...)
 }
 
+func (session *chatSession) trimHistoryLocked() {
+	if len(session.messages) <= maxChatHistory {
+		return
+	}
+	pruned := append([]chatMessage(nil), session.messages[:len(session.messages)-maxChatHistory]...)
+	session.messages = session.messages[len(session.messages)-maxChatHistory:]
+	for _, message := range pruned {
+		if message.URL == "" {
+			continue
+		}
+		attachment, ok := session.attachments[message.ID]
+		if !ok {
+			continue
+		}
+		delete(session.attachments, message.ID)
+		if attachment.Path != "" {
+			_ = os.Remove(attachment.Path)
+		}
+	}
+}
+
 func latestChatMessageID(messages []chatMessage) string {
 	if len(messages) == 0 {
 		return ""
@@ -531,14 +617,18 @@ func latestChatMessageID(messages []chatMessage) string {
 	return messages[len(messages)-1].ID
 }
 
-func (session *chatSession) recallMessage(id string, sender string) (chatMessage, bool) {
+func (session *chatSession) recallMessage(id string, sender string, token string) (chatMessage, bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for index := range session.messages {
 		if session.messages[index].ID != id {
 			continue
 		}
-		if sender != "" && session.messages[index].Sender != sender {
+		if session.messages[index].ownerToken != "" {
+			if strings.TrimSpace(token) != session.messages[index].ownerToken {
+				return chatMessage{}, false
+			}
+		} else if sender != "" && session.messages[index].Sender != sender {
 			return chatMessage{}, false
 		}
 		session.messages[index].Recalled = true
@@ -553,6 +643,22 @@ func (session *chatSession) recallMessage(id string, sender string) (chatMessage
 		return session.messages[index], true
 	}
 	return chatMessage{}, false
+}
+
+func (session *chatSession) isTerminal() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return isTerminalChatState(session.state)
+}
+
+func writeChatTerminal(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusGone)
+	fmt.Fprintln(w, "This chat session has ended. Start a new eqrcp chat session to continue.")
+}
+
+func (session *chatSession) validHostToken(token string) bool {
+	return session.hostToken != "" && token == session.hostToken
 }
 
 func (session *chatSession) subscribe() (<-chan struct{}, func()) {
@@ -577,17 +683,52 @@ func (session *chatSession) notifyLocked() {
 	}
 }
 
-func (session *chatSession) notifyStatusLocked(state string) {
-	if session.statusHook == nil {
-		return
+func (session *chatSession) notifyStatus(state string) {
+	session.mu.Lock()
+	hook, snapshot := session.statusSnapshotLocked(state)
+	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
+}
+
+func (session *chatSession) statusSnapshotLocked(state string) (func(ChatStatusSnapshot), ChatStatusSnapshot) {
+	if state != "" && !isTerminalChatState(session.state) {
+		session.state = state
+	}
+	if state != "" {
+		session.statusSeq++
 	}
 	snapshot := ChatStatusSnapshot{
-		State:        state,
+		State:        session.state,
 		MessageCount: len(session.messages),
 		StartedAt:    session.startedAt,
 		LastActivity: session.lastActivity,
+		Seq:          session.statusSeq,
 	}
-	go session.statusHook(snapshot)
+	return session.statusHook, snapshot
+}
+
+func notifyChatStatusHook(hook func(ChatStatusSnapshot), snapshot ChatStatusSnapshot) {
+	if hook != nil {
+		hook(snapshot)
+	}
+}
+
+func (session *chatSession) end(state string) {
+	if state == "" {
+		state = "stopped"
+	}
+	session.mu.Lock()
+	if isTerminalChatState(session.state) {
+		session.mu.Unlock()
+		return
+	}
+	hook, snapshot := session.statusSnapshotLocked(state)
+	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
+}
+
+func isTerminalChatState(state string) bool {
+	return state == "ended" || state == "stopped" || state == "failed" || state == "replaced"
 }
 
 func (session *chatSession) nextMessageID() string {
@@ -645,16 +786,39 @@ func safeChatFilename(name string) string {
 	return name
 }
 
-// filterMessagesAfter returns messages that come after the specified message ID.
-// If the ID is not found, returns all messages.
-func filterMessagesAfter(messages []chatMessage, afterID string) []chatMessage {
-	for i, msg := range messages {
-		if msg.ID == afterID {
-			if i+1 < len(messages) {
-				return messages[i+1:]
-			}
-			return []chatMessage{}
+func chatHostTokenFromRequest(r *http.Request) string {
+	if token := r.Header.Get("X-Eqrcp-Chat-Host-Token"); token != "" {
+		return token
+	}
+	if token := r.URL.Query().Get("token"); token != "" {
+		return token
+	}
+	if token := r.URL.Query().Get("hostToken"); token != "" {
+		return token
+	}
+	if err := r.ParseForm(); err == nil {
+		if token := r.FormValue("hostToken"); token != "" {
+			return token
 		}
 	}
-	return messages
+	return ""
+}
+
+func randomChatToken() string {
+	var data [16]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(data[:])
+}
+
+func safeInlineChatMime(mimeType string) bool {
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	if strings.HasPrefix(mimeType, "video/") {
+		return true
+	}
+	if !strings.HasPrefix(mimeType, "image/") {
+		return false
+	}
+	return mimeType != "image/svg+xml"
 }

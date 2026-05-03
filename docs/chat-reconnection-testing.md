@@ -10,7 +10,7 @@ This document provides detailed testing procedures for the chat mode reconnectio
 
 **Solution:** Implemented Page Visibility API + intelligent reconnection with:
 - Automatic reconnection when page becomes visible
-- Last-Event-ID support for message recovery
+- SSE snapshot support for message recovery
 - Connection health verification
 - Exponential backoff (1s → 30s)
 - Visual connection status indicators
@@ -250,7 +250,7 @@ For debugging, use remote debugging:
 Look for:
 - EventSource connection status
 - Reconnection attempts
-- Last-Event-ID values
+- SSE event IDs and message IDs
 - Health check requests
 
 ---
@@ -300,7 +300,7 @@ In browser DevTools → Network tab, observe:
 
 **Debug Steps:**
 1. Check browser console for multiple EventSource connections
-2. Verify Last-Event-ID is being sent correctly
+2. Verify SSE reconnects and snapshots merge correctly
 3. Check server logs for duplicate connections
 
 ### Issue: Reconnection takes too long
@@ -380,12 +380,12 @@ For CI/CD integration, consider:
 go test ./server -v -run "Chat"
 
 # Run specific reconnection tests
-go test ./server -v -run "TestChatHealth|TestFilterMessages|TestChatLastEventID"
+go test ./server -v -run "TestChatHealth|TestChatMessagesSnapshot|TestChatPageMergesRecoveredSSEMessages"
 ```
 
 Current test coverage:
 - ✅ Message filtering logic
 - ✅ Health endpoint
-- ✅ Last-Event-ID recovery
+- ✅ SSE snapshot recovery
 - ✅ Client-side reconnection code presence
 - ⚠️ End-to-end reconnection (requires manual testing)

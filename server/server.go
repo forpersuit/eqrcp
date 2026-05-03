@@ -43,22 +43,23 @@ type Server struct {
 	// ReceiveURL is the URL used to Receive the file
 	ReceiveURL string
 	// ChatURL is the URL used for a browser chat session
-	ChatURL         string
-	instance        *http.Server
-	mux             *http.ServeMux
-	body            body.Body
-	outputDir       string
-	chatDir         string
-	stopChannel     chan bool
-	statusMu        sync.Mutex
-	status          transferStatus
-	history         []transferStatusRecord
-	statusGrace     time.Duration
-	statusHook      func(TransferStatusSnapshot)
-	chatStatusHook  func(ChatStatusSnapshot)
-	repeatRoute     string
-	statusSeq       int64
-	statusSubs      map[chan struct{}]struct{}
+	ChatURL        string
+	instance       *http.Server
+	mux            *http.ServeMux
+	body           body.Body
+	outputDir      string
+	chatDir        string
+	chatSession    *chatSession
+	stopChannel    chan bool
+	statusMu       sync.Mutex
+	status         transferStatus
+	history        []transferStatusRecord
+	statusGrace    time.Duration
+	statusHook     func(TransferStatusSnapshot)
+	chatStatusHook func(ChatStatusSnapshot)
+	repeatRoute    string
+	statusSeq      int64
+	statusSubs     map[chan struct{}]struct{}
 	// expectParallelRequests is set to true when eqrcp sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -553,7 +554,23 @@ func (s *Server) Wait() error {
 
 // Shutdown the server
 func (s *Server) Shutdown() {
+	s.stopChatSession("stopped")
 	s.signalStop()
+}
+
+// ShutdownChat stops the server and records a chat-specific terminal state.
+func (s *Server) ShutdownChat(state string) {
+	s.stopChatSession(state)
+	s.signalStop()
+}
+
+func (s *Server) stopChatSession(state string) {
+	s.statusMu.Lock()
+	session := s.chatSession
+	s.statusMu.Unlock()
+	if session != nil {
+		session.end(state)
+	}
 }
 
 func (s *Server) signalStop() {

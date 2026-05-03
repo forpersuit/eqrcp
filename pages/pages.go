@@ -1074,9 +1074,10 @@ var Chat = `
                 <div class="url-row">
                     <input id="chat-url" value="{{.URL}}" readonly>
                     <button class="secondary" type="button" id="copy-url">Copy URL</button>
-                    <form method="post" action="{{.StopRoute}}">
+                    {{if .CanStop}}<form method="post" action="{{.StopRoute}}">
+                        <input type="hidden" name="hostToken" value="{{.HostToken}}">
                         <button class="danger" type="submit">Stop chat</button>
-                    </form>
+                    </form>{{end}}
                 </div>
                 <p class="meta">Version: {{.Version}}</p>
             </aside>
@@ -1085,7 +1086,8 @@ var Chat = `
     <script>
         var state = {
             messages: [],
-            sender: currentSender()
+            sender: currentSender(),
+            token: currentClientToken()
         };
         var messagesEl = document.getElementById('messages');
         var textEl = document.getElementById('message-text');
@@ -1114,6 +1116,25 @@ var Chat = `
         function cleanSenderName(value) {
             var text = String(value || '').replace(/\s+/g, ' ').trim();
             return text ? text.slice(0, 40) : 'Guest';
+        }
+        function currentClientToken() {
+            var key = 'eqrcp-chat-token:' + window.location.pathname;
+            var saved = window.localStorage.getItem(key);
+            if (saved) {
+                return saved;
+            }
+            var token = '';
+            if (window.crypto && window.crypto.getRandomValues) {
+                var data = new Uint8Array(16);
+                window.crypto.getRandomValues(data);
+                Array.prototype.forEach.call(data, function(value) {
+                    token += ('0' + value.toString(16)).slice(-2);
+                });
+            } else {
+                token = String(Date.now()) + '-' + String(Math.random()).slice(2);
+            }
+            window.localStorage.setItem(key, token);
+            return token;
         }
         function renderMessages() {
             messagesEl.innerHTML = '';
@@ -1293,6 +1314,30 @@ var Chat = `
             }
             setConnectionText();
         }
+        function mergeMessages(messages) {
+            if (!messages || !messages.length) {
+                return;
+            }
+            var byId = {};
+            state.messages.forEach(function(message, index) {
+                if (message && message.id) {
+                    byId[message.id] = index;
+                }
+            });
+            var merged = state.messages.slice();
+            messages.forEach(function(message) {
+                if (!message || !message.id) {
+                    return;
+                }
+                if (Object.prototype.hasOwnProperty.call(byId, message.id)) {
+                    merged[byId[message.id]] = message;
+                    return;
+                }
+                byId[message.id] = merged.length;
+                merged.push(message);
+            });
+            setMessages(merged);
+        }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         }
@@ -1322,7 +1367,7 @@ var Chat = `
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.sender, text: text})
+                body: JSON.stringify({sender: state.sender, token: state.token, text: text})
             }).then(function(response) {
                 if (!response.ok) {
                     throw new Error('send failed');
@@ -1338,7 +1383,7 @@ var Chat = `
             fetch('{{.MessagesRoute}}/' + encodeURIComponent(message.id), {
                 method: 'DELETE',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.sender})
+                body: JSON.stringify({sender: state.sender, token: state.token})
             }).then(function(response) {
                 if (!response.ok) {
                     throw new Error('recall failed');
@@ -1360,6 +1405,7 @@ var Chat = `
             }
             var data = new FormData();
             data.append('sender', state.sender);
+            data.append('token', state.token);
             Array.prototype.forEach.call(fileEl.files, function(file) {
                 data.append('files', file, file.name || 'attachment');
             });
@@ -1420,7 +1466,6 @@ var Chat = `
         var maxReconnectDelay = 30000;
         var events = null;
         var isPageVisible = !document.hidden;
-        var lastMessageId = null;
         var reconnectTimer = null;
         var lastMessageTimestamp = Date.now();
         
@@ -1430,11 +1475,7 @@ var Chat = `
                 events = null;
             }
             
-            // Build URL with Last-Event-ID for message recovery
             var url = '{{.EventsRoute}}';
-            if (lastMessageId) {
-                url += '?lastEventId=' + encodeURIComponent(lastMessageId);
-            }
             
             events = new EventSource(url);
             
@@ -1445,11 +1486,7 @@ var Chat = `
             };
             
             events.onmessage = function(event) {
-                // Save the last message ID for recovery
-                if (event.lastEventId) {
-                    lastMessageId = event.lastEventId;
-                }
-                setMessages(JSON.parse(event.data) || []);
+                mergeMessages(JSON.parse(event.data) || []);
                 lastMessageTimestamp = Date.now();
             };
             

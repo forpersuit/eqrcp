@@ -13,9 +13,9 @@
 ### 1. 服务器端改进
 
 #### 新增功能
-- **Last-Event-ID 支持** (`server/chat.go`)
-  - 支持 HTTP 头 `Last-Event-ID` 和查询参数 `lastEventId`
-  - 实现 `filterMessagesAfter()` 函数过滤已接收的消息
+- **SSE 快照恢复支持** (`server/chat.go`)
+  - SSE 事件持续发送完整消息快照
+  - 客户端按消息 ID 合并快照，避免重连后丢失历史
   - SSE 事件流中包含消息 ID
 
 - **健康检查端点** (`/chat/{path}/health`)
@@ -25,8 +25,7 @@
 #### 代码变更
 ```go
 // server/chat.go
-- 修改 handleEvents() 支持 Last-Event-ID
-- 新增 filterMessagesAfter() 函数
+- 修改 handleEvents() 持续发送完整消息快照
 - 新增 /health 路由处理器
 - 更新模板变量包含 HealthRoute
 ```
@@ -46,12 +45,12 @@
 
 - **连接状态管理**
   - 追踪页面可见性 (`isPageVisible`)
-  - 记录最后消息 ID (`lastMessageId`)
+  - 按消息 ID 合并服务端快照
   - 记录最后消息时间戳 (`lastMessageTimestamp`)
   - 指数退避延迟 (1s → 2s → 4s → ... → 30s)
 
 - **自动消息恢复**
-  - 使用 Last-Event-ID 恢复错过的消息
+  - 使用服务端完整快照和客户端 merge 恢复消息
   - 页面可见时自动拉取最新消息
   - 30 秒无消息时主动验证连接
 
@@ -95,7 +94,7 @@ document.addEventListener('visibilitychange', function() {
   - 指数退避延迟 (1s → 2s → 4s → ... → 30s)
 
 - **自动消息恢复**
-  - 使用 Last-Event-ID 恢复错过的消息
+  - 使用服务端完整快照和客户端 merge 恢复消息
   - 窗口可见时自动拉取最新消息
   - 30 秒无消息时主动验证连接
 
@@ -132,9 +131,9 @@ document.addEventListener('visibilitychange', () => {
 ### 3. 测试覆盖
 
 #### 新增测试 (`server/util_test.go`)
-- ✅ `TestFilterMessagesAfter` - 测试消息过滤逻辑
+- ✅ `TestChatMessagesSnapshotIgnoresLastEventIDQuery` - 测试消息快照语义
 - ✅ `TestChatHealthEndpoint` - 测试健康检查端点
-- ✅ `TestChatLastEventIDRecovery` - 测试 Last-Event-ID 恢复
+- ✅ `TestChatPageMergesRecoveredSSEMessages` - 测试重连消息合并
 - ✅ `TestChatPageIncludesMessagingRoutes` - 验证客户端代码存在
 
 #### 测试结果
@@ -147,8 +146,8 @@ document.addEventListener('visibilitychange', () => {
 --- PASS: TestSafeChatFilename (0.00s)
 === RUN   TestChatHealthEndpoint
 --- PASS: TestChatHealthEndpoint (0.00s)
-=== RUN   TestChatLastEventIDRecovery
---- PASS: TestChatLastEventIDRecovery (0.00s)
+=== RUN   TestChatMessagesSnapshotIgnoresLastEventIDQuery
+--- PASS: TestChatMessagesSnapshotIgnoresLastEventIDQuery (0.00s)
 PASS
 ok      eqrcp/server    0.224s
 ```
@@ -169,9 +168,9 @@ ok      eqrcp/server    0.224s
    - 主动健康检查（30 秒无消息时）
 
 3. **消息恢复机制**
-   - 客户端保存最后接收的消息 ID
-   - 重连时通过 `?lastEventId=xxx` 传递
-   - 服务器只返回该 ID 之后的消息
+   - 客户端保存本地消息列表
+   - 重连时重新订阅 SSE 完整快照
+   - 服务器返回完整快照，客户端按消息 ID 合并
 
 ### 移动端优化
 
@@ -183,7 +182,7 @@ ok      eqrcp/server    0.224s
 2. **快速恢复**
    - 页面可见时立即检测连接状态
    - 1 秒内开始重连
-   - 优先使用 Last-Event-ID 恢复
+   - 优先使用完整快照恢复
 
 3. **网络切换支持**
    - 自动检测连接断开
@@ -194,8 +193,8 @@ ok      eqrcp/server    0.224s
 
 ### 修改的文件
 1. `server/chat.go`
-   - 新增 `filterMessagesAfter()` 函数
-   - 修改 `handleEvents()` 支持 Last-Event-ID
+   - 移除增量过滤逻辑
+   - 修改 `handleEvents()` 发送完整消息快照
    - 新增 `/health` 路由
    - 更新模板变量
 

@@ -103,8 +103,8 @@ Chat sessions are now fully integrated with the desktop agent:
 
 1. **Chat Status Tracking**
    - Added `ChatStatusSnapshot` with state, message count, and activity tracking
-   - Chat sessions report "waiting", "active", and "ended" states
-   - Status updates trigger on first message and every 10 messages
+   - Chat sessions report waiting, active, stopped, replaced, and failed states
+   - Status updates trigger for every text message and attachment
 
 2. **Desktop Agent Support**
    - `desktopAgentTaskRecord` includes chat-specific fields:
@@ -167,7 +167,7 @@ Implementing Page Visibility API + intelligent reconnection (Phase 1):
 
 - [x] Problem analysis and solution design completed
 - [x] Client-side reconnection logic with Page Visibility API
-- [x] Server-side Last-Event-ID support for message recovery
+- [x] Server-side SSE snapshot support for message recovery
 - [x] Connection health check endpoint
 - [x] Exponential backoff for reconnection attempts
 - [x] Visual connection status indicators
@@ -185,14 +185,14 @@ Client improvements:
 
 - Detect page visibility changes using Page Visibility API
 - Reconnect SSE only when page becomes visible
-- Use Last-Event-ID to recover missed messages
+- Use full SSE snapshots and client-side merge to recover missed messages
 - Verify connection health on visibility change
 - Exponential backoff with max delay cap (1s → 30s)
 - Automatic fallback to polling if EventSource unavailable
 
 Server improvements:
 
-- Support Last-Event-ID header and query parameter
+- Return full message snapshots from SSE and GET /messages
 - Filter messages after specified ID for recovery
 - Add /health endpoint for connection verification
 - Include message ID in SSE event stream
@@ -200,9 +200,9 @@ Server improvements:
 ### Testing Strategy
 
 Automated tests:
-- ✅ `TestFilterMessagesAfter` - Message recovery logic
+- ✅ `TestChatMessagesSnapshotIgnoresLastEventIDQuery` - Snapshot recovery semantics
 - ✅ `TestChatHealthEndpoint` - Health check endpoint
-- ✅ `TestChatLastEventIDRecovery` - Last-Event-ID support
+- ✅ `TestChatMessagesSnapshotIgnoresLastEventIDQuery` - SSE snapshot support
 - ✅ `TestChatPageIncludesMessagingRoutes` - Client-side reconnection code
 
 Manual testing required:

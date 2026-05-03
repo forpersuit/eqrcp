@@ -165,6 +165,68 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		AttachmentsRoute string
 		StopRoute        string
 		HealthRoute      string
+		HostToken        string
+		CanStop          bool
+		Version          string
+	}{
+		URL:              "http://127.0.0.1:8080/chat/test",
+		QRImageRoute:     "/chat/test/qr/image",
+		EventsRoute:      "/chat/test/events",
+		MessagesRoute:    "/chat/test/messages",
+		AttachmentsRoute: "/chat/test/attachments",
+		StopRoute:        "/chat/test/stop",
+		HealthRoute:      "/chat/test/health",
+		HostToken:        "host-token",
+		CanStop:          true,
+		Version:          "eqrcp test [date: now]",
+	}
+
+	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
+		t.Fatalf("serveTemplate() error = %v", err)
+	}
+	html := out.String()
+
+	// Debug: check if template variables are present
+	t.Logf("HTML length: %d", len(html))
+	t.Logf("Contains 'eqrcp chat': %v", strings.Contains(html, "eqrcp chat"))
+	t.Logf("Contains 'EventsRoute': %v", strings.Contains(html, "EventsRoute"))
+
+	// The template uses {{.EventsRoute}} which gets replaced with the actual value
+	// In JavaScript, forward slashes in strings are escaped as \/
+	for _, want := range []string{
+		"eqrcp chat",
+		`src="/chat/test/qr/image"`,
+		"connectSSE",        // Check for reconnection logic - this is the key new feature
+		"scheduleReconnect", // Check for reconnection scheduling
+		"verifyConnection",  // Check for connection verification
+		"isPageVisible",     // Check for visibility tracking
+		"visibilitychange",  // Check for Page Visibility API
+		`id="share-session"`,
+		`id="close-page"`,
+		`attachment-card`,
+		`downloadURL(message.url)`,
+		`Device `,
+		"Stop chat",
+		"Version: eqrcp test [date: now]",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("Chat page want to contain %q", want)
+		}
+	}
+}
+
+func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
+	var out bytes.Buffer
+	data := struct {
+		URL              string
+		QRImageRoute     string
+		EventsRoute      string
+		MessagesRoute    string
+		AttachmentsRoute string
+		StopRoute        string
+		HealthRoute      string
+		HostToken        string
+		CanStop          bool
 		Version          string
 	}{
 		URL:              "http://127.0.0.1:8080/chat/test",
@@ -180,35 +242,8 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
 		t.Fatalf("serveTemplate() error = %v", err)
 	}
-	html := out.String()
-	
-	// Debug: check if template variables are present
-	t.Logf("HTML length: %d", len(html))
-	t.Logf("Contains 'eqrcp chat': %v", strings.Contains(html, "eqrcp chat"))
-	t.Logf("Contains 'EventsRoute': %v", strings.Contains(html, "EventsRoute"))
-	
-	// The template uses {{.EventsRoute}} which gets replaced with the actual value
-	// In JavaScript, forward slashes in strings are escaped as \/
-	for _, want := range []string{
-		"eqrcp chat",
-		`src="/chat/test/qr/image"`,
-		"connectSSE",           // Check for reconnection logic - this is the key new feature
-		"scheduleReconnect",    // Check for reconnection scheduling
-		"verifyConnection",     // Check for connection verification
-		"lastMessageId",        // Check for Last-Event-ID support
-		"isPageVisible",        // Check for visibility tracking
-		"visibilitychange",     // Check for Page Visibility API
-		`id="share-session"`,
-		`id="close-page"`,
-		`attachment-card`,
-		`downloadURL(message.url)`,
-		`Device `,
-		"Stop chat",
-		"Version: eqrcp test [date: now]",
-	} {
-		if !strings.Contains(html, want) {
-			t.Fatalf("Chat page want to contain %q", want)
-		}
+	if strings.Contains(out.String(), "Stop chat") {
+		t.Fatalf("guest chat page includes host stop action")
 	}
 }
 
@@ -225,7 +260,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	}
 	defer os.RemoveAll(server.chatDir)
 
-	messageBody := strings.NewReader(`{"sender":"Desk One","text":"hello mobile"}`)
+	messageBody := strings.NewReader(`{"sender":"Desk One","token":"desk-token","text":"hello mobile"}`)
 	messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", messageBody)
 	messageRequest.Header.Set("Content-Type", "application/json")
 	messageResponse := httptest.NewRecorder()
@@ -244,7 +279,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if len(messages) != 1 || messages[0].Sender != "Desk One" || messages[0].Text != "hello mobile" {
 		t.Fatalf("messages = %#v, want named desktop text message", messages)
 	}
-	recallBody := strings.NewReader(`{"sender":"Desk One"}`)
+	recallBody := strings.NewReader(`{"sender":"Desk One","token":"desk-token"}`)
 	recallRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+messages[0].ID, recallBody)
 	recallRequest.Header.Set("Content-Type", "application/json")
 	recallResponse := httptest.NewRecorder()
@@ -264,6 +299,9 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	var uploadBody bytes.Buffer
 	writer := multipart.NewWriter(&uploadBody)
 	if err := writer.WriteField("sender", "Phone 2471"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("token", "phone-token"); err != nil {
 		t.Fatal(err)
 	}
 	part, err := writer.CreateFormFile("files", "photo.txt")
@@ -312,7 +350,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 		t.Fatalf("download content disposition = %q, want attachment filename", got)
 	}
 
-	recallAttachmentBody := strings.NewReader(`{"sender":"Phone 2471"}`)
+	recallAttachmentBody := strings.NewReader(`{"sender":"Phone 2471","token":"phone-token"}`)
 	recallAttachmentRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+uploaded[0].ID, recallAttachmentBody)
 	recallAttachmentRequest.Header.Set("Content-Type", "application/json")
 	recallAttachmentResponse := httptest.NewRecorder()
@@ -875,34 +913,6 @@ func TestTransferStatusConcurrentAccess(t *testing.T) {
 	waitGroup.Wait()
 }
 
-func TestFilterMessagesAfter(t *testing.T) {
-	messages := []chatMessage{
-		{ID: "1", Text: "first"},
-		{ID: "2", Text: "second"},
-		{ID: "3", Text: "third"},
-		{ID: "4", Text: "fourth"},
-	}
-
-	tests := []struct {
-		afterID string
-		want    int
-	}{
-		{"1", 3}, // After message 1, we have messages 2, 3, 4
-		{"2", 2}, // After message 2, we have messages 3, 4
-		{"3", 1}, // After message 3, we have message 4
-		{"4", 0}, // After message 4, no more messages
-		{"nonexistent", 4}, // ID not found, return all messages
-		{"", 4}, // Empty ID, return all messages
-	}
-
-	for _, test := range tests {
-		got := filterMessagesAfter(messages, test.afterID)
-		if len(got) != test.want {
-			t.Fatalf("filterMessagesAfter(messages, %q) returned %d messages, want %d", test.afterID, len(got), test.want)
-		}
-	}
-}
-
 func TestChatHealthEndpoint(t *testing.T) {
 	server := &Server{
 		BaseURL:     "http://127.0.0.1:8080",
@@ -943,7 +953,7 @@ func TestChatHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestChatLastEventIDRecovery(t *testing.T) {
+func TestChatMessagesSnapshotIgnoresLastEventIDQuery(t *testing.T) {
 	server := &Server{
 		BaseURL:     "http://127.0.0.1:8080",
 		ChatURL:     "http://127.0.0.1:8080/chat/test",
@@ -958,7 +968,7 @@ func TestChatLastEventIDRecovery(t *testing.T) {
 
 	// Send three messages
 	for i := 1; i <= 3; i++ {
-		messageBody := strings.NewReader(fmt.Sprintf(`{"sender":"Test","text":"message %d"}`, i))
+		messageBody := strings.NewReader(fmt.Sprintf(`{"sender":"Test","token":"test-token","text":"message %d"}`, i))
 		messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", messageBody)
 		messageRequest.Header.Set("Content-Type", "application/json")
 		messageResponse := httptest.NewRecorder()
@@ -980,7 +990,8 @@ func TestChatLastEventIDRecovery(t *testing.T) {
 		t.Fatalf("got %d messages, want 3", len(allMessages))
 	}
 
-	// Test recovery with Last-Event-ID (get messages after first one)
+	// GET /messages is a full snapshot endpoint. Reconnection recovery is
+	// handled by merging full SSE snapshots on the client.
 	recoveryRequest := httptest.NewRequest(http.MethodGet, "/chat/test/messages?lastEventId="+allMessages[0].ID, nil)
 	recoveryResponse := httptest.NewRecorder()
 	server.mux.ServeHTTP(recoveryResponse, recoveryRequest)
@@ -989,8 +1000,7 @@ func TestChatLastEventIDRecovery(t *testing.T) {
 		t.Fatalf("decode recovered messages: %v", err)
 	}
 
-	// Should get messages 2 and 3
 	if len(recoveredMessages) != 3 {
-		t.Fatalf("recovered %d messages, want 3 (all messages since we're using GET /messages, not SSE)", len(recoveredMessages))
+		t.Fatalf("recovered %d messages, want 3", len(recoveredMessages))
 	}
 }

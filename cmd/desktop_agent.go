@@ -92,7 +92,7 @@ type desktopAgent struct {
 	queue       []desktopAgentTask
 	history     []desktopAgentTaskRecord
 	nextID      int
-	activeStop  func()
+	activeStop  func(string)
 	shutdown    func()
 	lastError   string
 	runner      func(desktopAgentTask) error
@@ -556,6 +556,21 @@ func isTerminalDesktopTransferState(state string) bool {
 	return state == "completed" || state == "stopped" || state == "failed"
 }
 
+func isTerminalDesktopChatState(state string) bool {
+	return state == "ended" || state == "stopped" || state == "failed" || state == "replaced"
+}
+
+func desktopTaskStateForChatState(state string) string {
+	switch state {
+	case "ended":
+		return "completed"
+	case "stopped", "failed", "replaced":
+		return state
+	default:
+		return "running"
+	}
+}
+
 func (agent *desktopAgent) replaceActiveLocked(state string) {
 	if agent.current != nil && agent.current.State == "running" {
 		agent.current.State = state
@@ -566,7 +581,7 @@ func (agent *desktopAgent) replaceActiveLocked(state string) {
 		return
 	}
 	stop := agent.activeStop
-	go stop()
+	go stop(state)
 }
 
 func (agent *desktopAgent) finalizeActiveLocked(state string) {
@@ -662,8 +677,8 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	if !status.LastActivity.IsZero() {
 		agent.current.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
 	}
-	if status.State == "ended" && agent.current.State == "running" {
-		agent.current.State = "completed"
+	if isTerminalDesktopChatState(status.State) && agent.current.State == "running" {
+		agent.current.State = desktopTaskStateForChatState(status.State)
 		finishedAt := time.Now()
 		agent.current.FinishedAt = &finishedAt
 		record := *agent.current
@@ -878,7 +893,7 @@ func desktopAgentPathKind(action string, archive bool, paths []string) string {
 	return "file"
 }
 
-func (agent *desktopAgent) setActiveStop(stop func()) {
+func (agent *desktopAgent) setActiveStop(stop func(string)) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	agent.activeStop = stop
@@ -1039,7 +1054,13 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.observeTransferStatus(taskID, status)
 	})
 	srv.SetRepeatRoute(desktopAgentBaseURL + "/tasks/" + strconv.Itoa(taskID) + "/repeat")
-	agent.setActiveStop(srv.Shutdown)
+	agent.setActiveStop(func(state string) {
+		if task.Action == "chat" {
+			srv.ShutdownChat(state)
+			return
+		}
+		srv.Shutdown()
+	})
 	switch task.Action {
 	case "share":
 		agent.setCurrentPageURL(srv.BaseURL + "/qr")

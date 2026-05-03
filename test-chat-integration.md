@@ -127,7 +127,7 @@ Desktop agent status
 - state: idle
 - history:
   - #1 chat stopped
-    chat: ended (5 messages)
+    chat: stopped (5 messages)
     last activity: <timestamp>
     started: <timestamp>
     finished: <timestamp>
@@ -160,8 +160,8 @@ Desktop agent status
 
 ### ✅ 状态转换验证
 - [ ] waiting → active（发送第一条消息时）
-- [ ] active → ended（停止会话时）
-- [ ] running → completed（会话结束时）
+- [ ] active → stopped（停止会话时）
+- [ ] running → stopped（stop-current 停止时）或 completed（正常 ended 时）
 
 ### ✅ 显示验证
 - [ ] 命令行状态显示 chat 字段
@@ -172,7 +172,7 @@ Desktop agent status
 ## 已知限制
 
 1. Chat 会话不支持传输进度百分比（这是预期的，因为 chat 不是文件传输）
-2. Chat 状态更新每 10 条消息触发一次（可配置）
+2. Chat 状态会在每条文本消息和附件上传后更新
 3. 移动端重连需要 Page Visibility API 支持（Phase 1 已实现）
 
 ## 故障排查
