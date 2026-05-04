@@ -317,20 +317,37 @@ function renderChatSide() {
 
 function renderChatMessages() {
     if (!state.chatMessages.length) {
-        return `<div class="empty-state">No messages yet.</div>`;
+        return `
+            <div class="chat-empty-state">
+                <div class="chat-empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <div class="chat-empty-title">No messages yet.</div>
+                <div class="chat-empty-sub">Scan the QR code with your mobile device to start chatting.</div>
+            </div>
+        `;
     }
     return state.chatMessages.map((message) => {
         const mine = message.sender === 'Desktop';
+        const isSystem = message.type === 'system';
         const saved = state.chatSaved[message.id];
+        const senderLine = isSystem ? '' : `<div class="chat-sender"><span>${escapeHTML(message.sender || 'Guest')}</span><time>${escapeHTML(messageTime(message.createdAt))}</time></div>`;
+        let bubbleContent;
+        if (message.recalled) {
+            bubbleContent = `<div class="chat-text recalled">Message recalled.</div>${mine && message.type === 'text' && message.text ? `<button type="button" class="edit-recalled" data-edit-message="${escapeAttr(message.id)}">Edit again</button>` : ''}`;
+        } else if (isSystem) {
+            bubbleContent = `<div class="chat-text">${escapeHTML(message.text || '')}</div>`;
+        } else if (message.type === 'text') {
+            bubbleContent = `<div class="chat-text">${escapeHTML(message.text || '')}</div>`;
+        } else {
+            bubbleContent = renderChatAttachment(message, saved);
+        }
         return `
-            <div class="chat-message ${mine ? 'mine' : ''}" data-message-id="${escapeAttr(message.id)}">
-                <div class="chat-sender"><span>${escapeHTML(message.sender || 'Guest')}</span><time>${escapeHTML(messageTime(message.createdAt))}</time></div>
-                ${message.recalled ? `
-                    <div class="chat-text recalled">Message recalled.</div>
-                    ${mine && message.type === 'text' && message.text ? `<button type="button" class="edit-recalled" data-edit-message="${escapeAttr(message.id)}">Edit again</button>` : ''}
-                ` : message.type === 'text' || message.type === 'system' ? `
-                    <div class="chat-text">${escapeHTML(message.text || '')}</div>
-                ` : renderChatAttachment(message, saved)}
+            <div class="chat-message ${mine ? 'mine' : ''}${isSystem ? ' system-msg' : ''}" data-message-id="${escapeAttr(message.id)}">
+                ${senderLine}
+                <div class="chat-bubble">
+                    ${bubbleContent}
+                </div>
                 ${renderChatBubbleActions(message)}
             </div>
         `;

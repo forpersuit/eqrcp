@@ -1,5 +1,4 @@
 export namespace main {
-	
 	export class TaskRecord {
 	    id: number;
 	    action: string;
@@ -192,9 +191,6 @@ export namespace main {
 		        }
 		        return new classs(a);
 		    }
-		    return a;
+			    return a;
+			}
 		}
-	}
-	
-
-}
