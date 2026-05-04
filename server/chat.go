@@ -473,11 +473,16 @@ func rejectCrossOriginChat(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	parsed, err := url.Parse(origin)
-	if err != nil || !strings.EqualFold(parsed.Host, r.Host) {
+	if err != nil || (!strings.EqualFold(parsed.Host, r.Host) && !trustedWailsOrigin(parsed)) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return true
 	}
 	return false
+}
+
+func trustedWailsOrigin(parsed *url.URL) bool {
+	host := strings.ToLower(parsed.Hostname())
+	return parsed.Scheme == "wails" || host == "wails.localhost"
 }
 
 func (session *chatSession) addTextMessage(sender string, token string, text string) chatMessage {

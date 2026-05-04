@@ -736,15 +736,23 @@ var Chat = `
             touch-action: pan-y;
         }
         .message {
-            max-width: min(520px, 82%);
+            font-size: clamp(14px, 1.55vw, 15.5px);
+            line-height: 1.45;
+            max-width: min(520px, 70%);
             border-radius: 8px;
             background: var(--other);
             padding: 9px 11px 8px;
             overflow-wrap: anywhere;
+            width: fit-content;
         }
         .message.mine {
             align-self: flex-end;
             background: var(--bubble);
+            text-align: right;
+        }
+        .message:has(.attachment-card) {
+            max-width: min(330px, 76%);
+            text-align: left;
         }
         .message.system {
             align-self: center;
@@ -774,38 +782,61 @@ var Chat = `
             color: var(--muted);
             font-style: italic;
         }
+        .recalled-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 6px;
+        }
+        .edit-recalled {
+            min-height: 28px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.74);
+            color: var(--accent-strong);
+            font-size: 12px;
+            padding: 5px 9px;
+        }
         .attachment-card {
             display: grid;
-            gap: 6px;
-            max-width: min(360px, 100%);
+            gap: 5px;
+            max-width: min(300px, 100%);
         }
         .media-frame {
-            display: block;
+            display: grid;
+            place-items: center;
             position: relative;
+            width: min(280px, 68vw);
+            height: 190px;
+            border-radius: 8px;
+            background: #0f172a;
+            overflow: hidden;
+        }
+        button.media-frame {
+            border: 0;
+            background: transparent;
+            color: inherit;
+            cursor: zoom-in;
+            min-height: 0;
+            padding: 0;
+            text-align: left;
         }
         .media-preview {
             display: block;
             max-width: 100%;
-            max-height: min(300px, 58vh);
-            background: #0f172a;
+            max-height: 100%;
+            background: transparent;
             border-radius: 6px;
             object-fit: contain;
             width: auto;
+            height: auto;
         }
         video.media-preview {
             aspect-ratio: 16 / 9;
         }
         .media-meta {
-            position: absolute;
-            right: 7px;
-            bottom: 7px;
-            max-width: calc(100% - 14px);
-            border-radius: 5px;
-            background: rgba(15, 23, 42, 0.72);
-            color: #fff;
+            color: var(--muted);
             font-size: 11px;
+            line-height: 1.25;
             overflow-wrap: anywhere;
-            padding: 4px 6px;
             text-align: right;
         }
         .file-card {
@@ -882,12 +913,13 @@ var Chat = `
             padding: 10px 11px;
         }
         textarea {
-            min-height: 24px;
+            min-height: 38px;
             max-height: 128px;
             border: 0;
             background: transparent;
+            line-height: 20px;
             overflow-y: auto;
-            padding: 7px 2px;
+            padding: 9px 2px;
             resize: none;
         }
         textarea:focus {
@@ -949,6 +981,47 @@ var Chat = `
         .session-backdrop {
             display: none;
         }
+        .preview-backdrop {
+            display: none;
+        }
+        .preview-backdrop.open {
+            display: grid;
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            background: rgba(15, 23, 42, 0.78);
+            place-items: center;
+            padding: 22px;
+            touch-action: none;
+        }
+        .preview-box {
+            display: grid;
+            gap: 10px;
+            max-height: calc(100vh - 44px);
+            max-width: calc(100vw - 44px);
+        }
+        .preview-toolbar {
+            display: inline-flex;
+            justify-self: end;
+            gap: 8px;
+        }
+        .preview-toolbar button {
+            min-height: 34px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--text);
+            padding: 7px 12px;
+        }
+        .preview-image {
+            max-height: calc(100vh - 96px);
+            max-width: calc(100vw - 44px);
+            border-radius: 10px;
+            background: #020617;
+            object-fit: contain;
+            transform-origin: center center;
+            touch-action: none;
+            user-select: none;
+        }
         .qr {
             display: block;
             max-width: 240px;
@@ -995,7 +1068,15 @@ var Chat = `
                 grid-template-columns: auto minmax(0, 1fr) auto;
             }
             .message {
-                max-width: 94%;
+                font-size: clamp(14px, 3.7vw, 16px);
+                max-width: 88%;
+            }
+            .message:has(.attachment-card) {
+                max-width: 82%;
+            }
+            .media-frame {
+                width: min(260px, 74vw);
+                height: 176px;
             }
             .session-backdrop.open {
                 display: grid;
@@ -1082,6 +1163,16 @@ var Chat = `
                 <p class="meta">Version: {{.Version}}</p>
             </aside>
         </div>
+        <div class="preview-backdrop" id="preview-backdrop">
+            <div class="preview-box">
+                <div class="preview-toolbar">
+                    <button type="button" id="preview-zoom-out">-</button>
+                    <button type="button" id="preview-zoom-in">+</button>
+                    <button type="button" id="preview-close">Close</button>
+                </div>
+                <img class="preview-image" id="preview-image" alt="Image preview">
+            </div>
+        </div>
     </main>
     <script>
         var state = {
@@ -1094,6 +1185,12 @@ var Chat = `
         var fileEl = document.getElementById('file-input');
         var connectionEl = document.getElementById('connection-state');
         var sessionBackdrop = document.getElementById('session-backdrop');
+        var previewBackdrop = document.getElementById('preview-backdrop');
+        var previewImage = document.getElementById('preview-image');
+        var previewScale = 1;
+        var previewPointers = {};
+        var previewPinchDistance = 0;
+        var previewPinchScale = 1;
 
         function currentSender() {
             var params = new URLSearchParams(window.location.search);
@@ -1158,6 +1255,9 @@ var Chat = `
                     recalled.className = 'text recalled';
                     recalled.textContent = 'Message recalled.';
                     item.appendChild(recalled);
+                    if (message.sender === state.sender && message.type === 'text' && message.text) {
+                        item.appendChild(renderRecalledEdit(message));
+                    }
                 } else if (message.type === 'text' || message.type === 'system') {
                     var text = document.createElement('div');
                     text.className = 'text';
@@ -1169,6 +1269,21 @@ var Chat = `
                 item.appendChild(renderBubbleActions(message));
                 messagesEl.appendChild(item);
             });
+        }
+        function renderRecalledEdit(message) {
+            var wrap = document.createElement('div');
+            wrap.className = 'recalled-actions';
+            var edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'edit-recalled';
+            edit.textContent = 'Edit again';
+            edit.addEventListener('click', function() {
+                textEl.value = message.text || '';
+                resizeComposer();
+                textEl.focus();
+            });
+            wrap.appendChild(edit);
+            return wrap;
         }
         function renderBubbleActions(message) {
             var actions = document.createElement('div');
@@ -1205,11 +1320,12 @@ var Chat = `
             wrap.className = 'attachment-card';
             var sourceURL = attachmentURL(message.url);
             if (message.type === 'image') {
-                var open = document.createElement('a');
+                var open = document.createElement('button');
+                open.type = 'button';
                 open.className = 'media-frame';
-                open.href = sourceURL;
-                open.target = '_blank';
-                open.rel = 'noopener';
+                open.addEventListener('click', function() {
+                    openImagePreview(sourceURL, message.fileName || 'image attachment');
+                });
                 var image = document.createElement('img');
                 image.className = 'media-preview';
                 image.src = sourceURL;
@@ -1305,6 +1421,63 @@ var Chat = `
                 history.back();
             }
         }
+        function openImagePreview(url, label) {
+            previewScale = 1;
+            previewImage.src = url;
+            previewImage.alt = label || 'Image preview';
+            previewImage.style.transform = 'scale(1)';
+            previewBackdrop.classList.add('open');
+        }
+        function closeImagePreview() {
+            previewBackdrop.classList.remove('open');
+            previewImage.removeAttribute('src');
+            previewPointers = {};
+            previewPinchDistance = 0;
+        }
+        function zoomPreview(delta) {
+            previewScale = Math.max(0.5, Math.min(3, previewScale + delta));
+            previewImage.style.transform = 'scale(' + previewScale + ')';
+        }
+        function previewPointerDistance() {
+            var keys = Object.keys(previewPointers);
+            if (keys.length < 2) {
+                return 0;
+            }
+            var first = previewPointers[keys[0]];
+            var second = previewPointers[keys[1]];
+            var dx = second.x - first.x;
+            var dy = second.y - first.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        function previewPointerDown(event) {
+            if (!previewBackdrop.classList.contains('open')) {
+                return;
+            }
+            previewPointers[event.pointerId] = {x: event.clientX, y: event.clientY};
+            if (Object.keys(previewPointers).length === 2) {
+                previewPinchDistance = previewPointerDistance();
+                previewPinchScale = previewScale;
+            }
+        }
+        function previewPointerMove(event) {
+            if (!previewPointers[event.pointerId]) {
+                return;
+            }
+            event.preventDefault();
+            previewPointers[event.pointerId] = {x: event.clientX, y: event.clientY};
+            if (Object.keys(previewPointers).length >= 2 && previewPinchDistance > 0) {
+                var nextDistance = previewPointerDistance();
+                previewScale = Math.max(0.5, Math.min(3, previewPinchScale * (nextDistance / previewPinchDistance)));
+                previewImage.style.transform = 'scale(' + previewScale + ')';
+            }
+        }
+        function previewPointerUp(event) {
+            delete previewPointers[event.pointerId];
+            if (Object.keys(previewPointers).length < 2) {
+                previewPinchDistance = 0;
+                previewPinchScale = previewScale;
+            }
+        }
         function setMessages(messages) {
             var shouldStick = isNearBottom();
             state.messages = messages || [];
@@ -1373,7 +1546,7 @@ var Chat = `
             return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
         }
         function recallIcon() {
-            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5"></path><path d="M4 12a8 8 0 1 0 2.3-5.7"></path></svg>';
+            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 6l1 14h10l1-14"></path></svg>';
         }
         function uploadFiles() {
             if (!fileEl.files || !fileEl.files.length) {
@@ -1429,11 +1602,23 @@ var Chat = `
         document.getElementById('share-session').addEventListener('click', openSessionPanel);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
         document.getElementById('close-page').addEventListener('click', closePage);
+        document.getElementById('preview-close').addEventListener('click', closeImagePreview);
+        document.getElementById('preview-zoom-in').addEventListener('click', function() { zoomPreview(0.25); });
+        document.getElementById('preview-zoom-out').addEventListener('click', function() { zoomPreview(-0.25); });
         sessionBackdrop.addEventListener('click', function(event) {
             if (event.target === sessionBackdrop) {
                 closeSessionPanel();
             }
         });
+        previewBackdrop.addEventListener('click', function(event) {
+            if (event.target === previewBackdrop) {
+                closeImagePreview();
+            }
+        });
+        previewBackdrop.addEventListener('pointerdown', previewPointerDown);
+        previewBackdrop.addEventListener('pointermove', previewPointerMove);
+        previewBackdrop.addEventListener('pointerup', previewPointerUp);
+        previewBackdrop.addEventListener('pointercancel', previewPointerUp);
         setConnectionText();
         resizeComposer();
         

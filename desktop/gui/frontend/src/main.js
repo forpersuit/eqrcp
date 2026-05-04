@@ -33,6 +33,9 @@ const state = {
     chatMessages: [],
     chatSaved: {},
     chatSaveDir: '',
+    chatToken: currentChatToken(),
+    chatQRExpanded: true,
+    chatQRCollapsedAfterJoin: false,
     status: null,
     settings: null,
     appInfo: null,
@@ -114,12 +117,14 @@ function renderShare() {
     `).join('');
     const hasItems = state.sharePaths.length > 0;
     return `
-        <div class="dropzone" style="--wails-drop-target: drop">
-            <div class="drop-title">Drop files or folders here</div>
-            <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} item(s) ready` : 'Use drag and drop, or choose files manually.'}</div>
+        <div class="dropzone">
+            <div class="drop-target" style="--wails-drop-target: drop">
+                <div class="drop-title">Drop files or folders here</div>
+                <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} item(s) ready` : 'Drop more items here, or choose files manually.'}</div>
+            </div>
             <div class="actions">
-                <button id="choose-files">Choose files</button>
-                <button id="choose-folder" class="secondary">Choose folder</button>
+                <button type="button" id="choose-files">Choose files</button>
+                <button type="button" id="choose-folder" class="secondary">Choose folder</button>
             </div>
         </div>
         ${hasItems ? `
@@ -239,9 +244,9 @@ function renderChat() {
             </div>
             <form class="chat-compose" id="chat-compose">
                 <input id="chat-file-input" type="file" multiple hidden />
-                <button type="button" class="secondary" id="attach-chat-file">Attach</button>
-                <textarea id="chat-text" rows="1" placeholder="Type a message or paste an image">${escapeHTML(state.chatText)}</textarea>
-                <button class="primary" type="submit">Send</button>
+                <button type="button" class="compose-icon attach-icon" id="attach-chat-file" title="Attach files" aria-label="Attach files">${attachIcon()}</button>
+                <textarea id="chat-text" rows="1" placeholder="Message or paste an image">${escapeHTML(state.chatText)}</textarea>
+                <button class="compose-send" type="submit" title="Send message" aria-label="Send message">${sendIcon()}</button>
             </form>
         </div>
     `;
@@ -255,7 +260,7 @@ function renderChatSide() {
                 <div class="panel">
                     <div class="panel-head">
                         <h2>Chat session</h2>
-                        <button class="ghost" id="refresh">Refresh</button>
+                        <button type="button" class="side-icon-button" id="refresh" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
                     </div>
                     <div class="empty-state">No active chat.</div>
                 </div>
@@ -268,6 +273,7 @@ function renderChatSide() {
     const chatState = task.chatState || task.state || 'running';
     const messageCount = task.chatMessageCount || state.chatMessages.length;
     const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
+    syncChatQRVisibility(senders);
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
@@ -276,31 +282,34 @@ function renderChatSide() {
                         <div class="eyebrow">Chat ${escapeHTML(chatState)}</div>
                         <h2>${escapeHTML(messageCount)} message${messageCount === 1 ? '' : 's'}</h2>
                     </div>
-                    <button class="ghost" id="refresh">Refresh</button>
+                    <div class="side-head-actions">
+                        <button type="button" class="side-icon-button" id="refresh" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
+                        <button type="button" class="side-icon-button danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
+                    </div>
                 </div>
                 ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
-                ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code" />` : ''}
-                <input value="${escapeAttr(chatUrl)}" readonly />
-                <div class="chat-side-actions">
-                    <button class="ghost" id="copy-chat-url" ${chatUrl ? '' : 'disabled'}>Copy URL</button>
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(chatUrl)}" ${chatUrl ? '' : 'disabled'}>Open browser</button>
-                    <button class="danger inline stop-current-action">Stop</button>
+                <div class="chat-side-actions" aria-label="Chat sharing actions">
+                    <button type="button" class="side-icon-button" id="toggle-chat-qr" title="${state.chatQRExpanded ? 'Hide QR code' : 'Show QR code'}" aria-label="${state.chatQRExpanded ? 'Hide QR code' : 'Show QR code'}" ${qrImage ? '' : 'disabled'}>${qrIcon()}</button>
+                    <button type="button" class="side-icon-button" id="copy-chat-url" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
+                    <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
+                    <button type="button" class="side-icon-button" id="open-chat-save" title="Open default save path" aria-label="Open default save path" ${state.chatSaveDir ? '' : 'disabled'}>${folderIcon()}</button>
                 </div>
+                ${qrImage && state.chatQRExpanded ? `
+                    <button type="button" class="qr-card open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat page">
+                        <img src="${escapeAttr(qrImage)}" alt="Chat QR code" />
+                        <span>Scan to join</span>
+                    </button>
+                ` : ''}
             </div>
-            <div class="panel">
+            <div class="panel devices-panel">
                 <div class="panel-head">
-                    <h2>Auto-save</h2>
-                    <button class="ghost" id="open-chat-save" ${state.chatSaveDir ? '' : 'disabled'}>Open</button>
-                </div>
-                <p class="side-note">${escapeHTML(state.chatSaveDir || 'Attachments save automatically by day.')}</p>
-                <p class="side-note">Daily folders older than 7 days are cleaned automatically.</p>
-            </div>
-            <div class="panel">
-                <div class="panel-head">
-                    <h2>Devices</h2>
+                    <div>
+                        <h2>Devices</h2>
+                        <p class="side-note tight">${senders.length > 1 ? 'Nearby participants seen in this session.' : 'Share the QR to invite another device.'}</p>
+                    </div>
                     <span class="side-count">${senders.length}</span>
                 </div>
-                ${senders.length ? `<ul class="device-list">${senders.map((sender) => `<li>${escapeHTML(sender)}</li>`).join('')}</ul>` : '<div class="empty-state">Waiting for devices.</div>'}
+                ${senders.length ? `<div class="device-chips">${senders.map((sender) => renderDeviceItem(sender)).join('')}</div>` : '<div class="empty-state">Waiting for devices.</div>'}
             </div>
         </aside>
     `;
@@ -318,6 +327,7 @@ function renderChatMessages() {
                 <div class="chat-sender"><span>${escapeHTML(message.sender || 'Guest')}</span><time>${escapeHTML(messageTime(message.createdAt))}</time></div>
                 ${message.recalled ? `
                     <div class="chat-text recalled">Message recalled.</div>
+                    ${mine && message.type === 'text' && message.text ? `<button type="button" class="edit-recalled" data-edit-message="${escapeAttr(message.id)}">Edit again</button>` : ''}
                 ` : message.type === 'text' || message.type === 'system' ? `
                     <div class="chat-text">${escapeHTML(message.text || '')}</div>
                 ` : renderChatAttachment(message, saved)}
@@ -325,6 +335,29 @@ function renderChatMessages() {
             </div>
         `;
     }).join('');
+}
+
+function syncChatQRVisibility(senders) {
+    if (!state.chatQRCollapsedAfterJoin && senders.length > 1) {
+        state.chatQRExpanded = false;
+        state.chatQRCollapsedAfterJoin = true;
+    }
+}
+
+function renderDeviceItem(sender) {
+    const label = sender || 'Guest';
+    const isDesktop = label === 'Desktop';
+    return `
+        <span class="device-chip" title="${escapeAttr(isDesktop ? 'Host desktop' : 'Joined by chat activity')}">
+            <span class="device-avatar">${escapeHTML(deviceInitial(label))}</span>
+            <span class="device-name">${escapeHTML(label)}</span>
+        </span>
+    `;
+}
+
+function deviceInitial(sender) {
+    const text = String(sender || 'G').trim();
+    return (text[0] || 'G').toUpperCase();
 }
 
 function renderChatBubbleActions(message) {
@@ -346,9 +379,9 @@ function renderChatAttachment(message, saved) {
     const name = escapeHTML(message.fileName || 'attachment');
     const meta = escapeHTML(attachmentDescription(message));
     const preview = message.type === 'image'
-        ? `<button class="preview-button media-frame" ${saved ? `data-open-file="${escapeAttr(saved)}"` : `data-open-url="${escapeAttr(fullUrl)}"`} title="Open image"><img class="chat-preview" src="${escapeAttr(fullUrl)}" alt="${escapeAttr(message.fileName || 'image')}" /><span class="media-meta">${name} · ${meta}</span></button>`
+        ? `<button class="preview-button media-frame" ${saved ? `data-open-file="${escapeAttr(saved)}"` : `data-open-url="${escapeAttr(fullUrl)}"`} title="Open image"><img class="chat-preview" src="${escapeAttr(fullUrl)}" alt="${escapeAttr(message.fileName || 'image')}" /></button><span class="media-meta">${name} · ${meta}</span>`
         : message.type === 'video'
-            ? `<div class="media-frame"><video class="chat-preview" src="${escapeAttr(fullUrl)}" controls preload="metadata"></video><span class="media-meta">${name} · ${meta}</span></div>`
+            ? `<div class="media-frame"><video class="chat-preview" src="${escapeAttr(fullUrl)}" controls preload="metadata"></video></div><span class="media-meta">${name} · ${meta}</span>`
             : `<button class="chat-file file-open" ${saved ? `data-open-file="${escapeAttr(saved)}"` : ''}><strong>${name}</strong><span>${meta}</span></button>`;
     return `
         <div class="chat-attachment">
@@ -398,6 +431,11 @@ function renderSettingsPanel() {
                 <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
             </label>
+            <div class="settings-note">
+                <strong>Chat auto-save</strong>
+                <span>Attachments received by the desktop app are saved automatically by day. Folders older than 7 days are cleaned automatically.</span>
+                <button type="button" class="ghost inline" id="open-chat-save" ${state.chatSaveDir ? '' : 'disabled'}>Open default path</button>
+            </div>
             <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
     `;
@@ -580,8 +618,12 @@ function bindEvents() {
     document.querySelectorAll('[data-recall-message]').forEach((button) => {
         button.addEventListener('click', (event) => recallChatMessageByID(event.currentTarget.dataset.recallMessage));
     });
+    document.querySelectorAll('[data-edit-message]').forEach((button) => {
+        button.addEventListener('click', (event) => continueChatEditMessage(messageByID(event.currentTarget.dataset.editMessage)));
+    });
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
     document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
+    document.querySelector('#toggle-chat-qr')?.addEventListener('click', toggleChatQR);
     document.querySelector('#chat-compose')?.addEventListener('submit', sendChatText);
     document.querySelector('#attach-chat-file')?.addEventListener('click', () => document.querySelector('#chat-file-input')?.click());
     document.querySelector('#chat-file-input')?.addEventListener('change', uploadChatInputFiles);
@@ -656,6 +698,8 @@ async function startChat() {
         state.mode = 'chat';
         state.notice = 'Chat session started.';
         state.chatSaveDir = await ChatSaveDirectory();
+        state.chatQRExpanded = true;
+        state.chatQRCollapsedAfterJoin = false;
         connectActiveChat();
         render();
     });
@@ -679,6 +723,29 @@ function copyChatURL() {
     }
 }
 
+function currentChatToken() {
+    const key = 'eqrcp-desktop-chat-token';
+    const saved = window.localStorage.getItem(key);
+    if (saved) {
+        return saved;
+    }
+    let token = '';
+    if (window.crypto?.getRandomValues) {
+        const data = new Uint8Array(16);
+        window.crypto.getRandomValues(data);
+        token = Array.from(data).map((value) => value.toString(16).padStart(2, '0')).join('');
+    } else {
+        token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    window.localStorage.setItem(key, token);
+    return token;
+}
+
+function toggleChatQR() {
+    state.chatQRExpanded = !state.chatQRExpanded;
+    render();
+}
+
 async function sendChatText(event) {
     event.preventDefault();
     const task = activeChatTask();
@@ -696,12 +763,12 @@ async function sendChatText(event) {
         const response = await fetch(chatMessagesURL(task.pageUrl), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({sender: 'Desktop', text}),
+            body: JSON.stringify({sender: 'Desktop', token: state.chatToken, text}),
         });
         if (!response.ok) {
             throw new Error('chat send failed');
         }
-    }, {busy: false});
+    }, {busy: false, chatError: 'Message send failed'});
 }
 
 async function recallChatMessageByID(id) {
@@ -713,12 +780,12 @@ async function recallChatMessageByID(id) {
         const response = await fetch(`${chatMessagesURL(task.pageUrl)}/${encodeURIComponent(id)}`, {
             method: 'DELETE',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({sender: 'Desktop'}),
+            body: JSON.stringify({sender: 'Desktop', token: state.chatToken}),
         });
         if (!response.ok) {
             throw new Error('message recall failed');
         }
-    }, {busy: false});
+    }, {busy: false, chatError: 'Message recall failed'});
 }
 
 function continueChatEditMessage(message) {
@@ -769,6 +836,7 @@ async function uploadChatFiles(files) {
     await run(async () => {
         const data = new FormData();
         data.append('sender', 'Desktop');
+        data.append('token', state.chatToken);
         files.forEach((file) => data.append('files', file, file.name || `pasted-image-${Date.now()}.png`));
         const response = await fetch(chatAttachmentsURL(task.pageUrl), {
             method: 'POST',
@@ -777,7 +845,7 @@ async function uploadChatFiles(files) {
         if (!response.ok) {
             throw new Error('chat upload failed');
         }
-    }, {busy: false});
+    }, {busy: false, chatError: 'Attachment upload failed'});
 }
 
 async function saveSettings() {
@@ -893,6 +961,10 @@ async function saveAttachmentAsFromButton(event) {
 
 function messageFromElement(element) {
     const id = element.dataset.messageId || element.closest('.chat-message')?.dataset.messageId;
+    return messageByID(id);
+}
+
+function messageByID(id) {
     if (!id) {
         return null;
     }
@@ -1032,7 +1104,11 @@ async function run(fn, options = {}) {
     try {
         await fn();
     } catch (error) {
-        state.error = error?.message || String(error);
+        if (options.chatError && state.mode === 'chat') {
+            addLocalChatSystemMessage(options.chatError);
+        } else {
+            state.error = error?.message || String(error);
+        }
         render();
     } finally {
         if (showBusy) {
@@ -1040,6 +1116,19 @@ async function run(fn, options = {}) {
             render();
         }
     }
+}
+
+function addLocalChatSystemMessage(text) {
+    state.chatMessages = [
+        ...state.chatMessages,
+        {
+            id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            sender: 'system',
+            type: 'system',
+            text,
+            createdAt: new Date().toISOString(),
+        },
+    ];
 }
 
 function renderBusy() {
@@ -1177,23 +1266,17 @@ function scheduleChatReconnect(pageUrl) {
 
 async function verifyChatConnection(pageUrl) {
     try {
-        // Verify connection health
         const healthURL = pageUrl.replace(/\/$/, '') + '/health';
         const healthResponse = await fetch(healthURL, {cache: 'no-store'});
         if (!healthResponse.ok) {
             throw new Error('health check failed');
         }
-        
-        // Fetch latest messages
-        await loadChatMessages(pageUrl);
-        
-        // Reconnect SSE
+        // Server is healthy: reset backoff and reconnect SSE (which delivers fresh snapshot)
         chatReconnectDelay = 1000;
         connectChatSSE(pageUrl);
     } catch {
-        // Connection is broken, reconnect
-        chatReconnectDelay = 1000;
-        connectChatSSE(pageUrl);
+        // Server unreachable: use exponential backoff instead of hammering immediately
+        scheduleChatReconnect(pageUrl);
     }
 }
 
@@ -1242,17 +1325,27 @@ async function saveChatAttachments() {
             return;
         }
     }
-    for (const message of state.chatMessages) {
-        if (!message?.id || !message.url || message.type === 'text' || message.type === 'system' || state.chatSaved[message.id]) {
-            continue;
+    const pending = state.chatMessages.filter(
+        (message) => message?.id && message.url && message.type !== 'text' && message.type !== 'system' && !state.chatSaved[message.id]
+    );
+    if (!pending.length) {
+        return;
+    }
+    const results = await Promise.allSettled(
+        pending.map((message) =>
+            DownloadChatAttachment(absoluteChatURL(message.url), message.fileName || 'attachment')
+                .then((saved) => ({id: message.id, saved}))
+        )
+    );
+    let changed = false;
+    for (const result of results) {
+        if (result.status === 'fulfilled') {
+            state.chatSaved = {...state.chatSaved, [result.value.id]: result.value.saved};
+            changed = true;
         }
-        try {
-            const saved = await DownloadChatAttachment(absoluteChatURL(message.url), message.fileName || 'attachment');
-            state.chatSaved = {...state.chatSaved, [message.id]: saved};
-            updateChatThread();
-        } catch (error) {
-            state.error = error?.message || String(error);
-        }
+    }
+    if (changed) {
+        updateChatThread();
     }
 }
 
@@ -1373,6 +1466,7 @@ function bindSideEvents() {
     });
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
     document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
+    document.querySelector('#toggle-chat-qr')?.addEventListener('click', toggleChatQR);
 }
 
 function bindChatThreadEvents() {
@@ -1391,6 +1485,9 @@ function bindChatThreadEvents() {
     });
     document.querySelectorAll('#chat-thread [data-recall-message]').forEach((button) => {
         button.addEventListener('click', (event) => recallChatMessageByID(event.currentTarget.dataset.recallMessage));
+    });
+    document.querySelectorAll('#chat-thread [data-edit-message]').forEach((button) => {
+        button.addEventListener('click', (event) => continueChatEditMessage(messageByID(event.currentTarget.dataset.editMessage)));
     });
 }
 
@@ -1485,7 +1582,39 @@ function downloadIcon() {
 }
 
 function recallIcon() {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v5"></path><path d="M4 12a8 8 0 1 0 2.3-5.7"></path></svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 6l1 14h10l1-14"></path></svg>';
+}
+
+function refreshIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L4 9"></path><path d="M4 4v5h5"></path><path d="M4 13a8 8 0 0 0 14.8 4.2L20 15"></path><path d="M20 20v-5h-5"></path></svg>';
+}
+
+function stopIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>';
+}
+
+function copyIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>';
+}
+
+function browserIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13 13 0 0 1 0 18"></path><path d="M12 3a13 13 0 0 0 0 18"></path></svg>';
+}
+
+function qrIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>';
+}
+
+function folderIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
+}
+
+function attachIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>';
+}
+
+function sendIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>';
 }
 
 function shortName(path) {
@@ -1624,4 +1753,3 @@ document.addEventListener('visibilitychange', () => {
 
 render();
 loadSettings().then(connectAgentEvents);
-setInterval(() => refreshStatus(false), 1500);

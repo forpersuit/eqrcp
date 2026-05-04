@@ -138,6 +138,21 @@ func TestChatRejectsCrossOriginWrites(t *testing.T) {
 	}
 }
 
+func TestChatAllowsTrustedWailsOriginWrites(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	request := httptest.NewRequest(http.MethodPost, "/chat/test/messages", strings.NewReader(`{"sender":"Desktop","token":"token","text":"from app"}`))
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "wails://wails.localhost")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("wails-origin message status = %d, want %d; body = %q", response.Code, http.StatusOK, response.Body.String())
+	}
+}
+
 func TestChatAttachmentActiveContentDownloadsAsAttachment(t *testing.T) {
 	server := newTestChatServer(t)
 	defer os.RemoveAll(server.chatDir)
