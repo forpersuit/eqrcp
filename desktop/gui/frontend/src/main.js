@@ -50,7 +50,6 @@ let chatEvents = null;
 let chatEventsURL = '';
 let chatReconnectTimer = null;
 let chatReconnectDelay = 1000;
-let chatLastMessageId = null;
 let chatLastMessageTimestamp = Date.now();
 let chatIsPageVisible = !document.hidden;
 const app = document.querySelector('#app');
@@ -266,16 +265,20 @@ function renderChatSide() {
     const chatUrl = task.pageUrl || '';
     const qrImage = qrImageURL(chatUrl);
     const senders = chatSenders();
+    const chatState = task.chatState || task.state || 'running';
+    const messageCount = task.chatMessageCount || state.chatMessages.length;
+    const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <div>
-                        <div class="eyebrow">Chat active</div>
-                        <h2>${escapeHTML(task.transferState || task.state || 'Running')}</h2>
+                        <div class="eyebrow">Chat ${escapeHTML(chatState)}</div>
+                        <h2>${escapeHTML(messageCount)} message${messageCount === 1 ? '' : 's'}</h2>
                     </div>
                     <button class="ghost" id="refresh">Refresh</button>
                 </div>
+                ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
                 ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code" />` : ''}
                 <input value="${escapeAttr(chatUrl)}" readonly />
                 <div class="chat-side-actions">
@@ -1116,13 +1119,7 @@ function connectChatSSE(pageUrl) {
         chatEvents = null;
     }
     
-    // Build URL with Last-Event-ID for message recovery
-    let url = chatEventsRoute(pageUrl);
-    if (chatLastMessageId) {
-        url += (url.includes('?') ? '&' : '?') + 'lastEventId=' + encodeURIComponent(chatLastMessageId);
-    }
-    
-    chatEvents = new EventSource(url);
+    chatEvents = new EventSource(chatEventsRoute(pageUrl));
     
     chatEvents.onopen = () => {
         chatReconnectDelay = 1000;
@@ -1131,21 +1128,13 @@ function connectChatSSE(pageUrl) {
     
     chatEvents.onmessage = (event) => {
         try {
-            // Save the last message ID for recovery
-            if (event.lastEventId) {
-                chatLastMessageId = event.lastEventId;
-            }
-            
             const wasNearBottom = isChatNearBottom();
             const previousLastID = state.chatMessages.at(-1)?.id;
+            // The chat stream sends a complete bounded snapshot. Replacing local state
+            // keeps reconnect recovery idempotent after mobile browser suspension.
             state.chatMessages = JSON.parse(event.data) || [];
             const nextLast = state.chatMessages.at(-1);
-            
-            // Update last message ID from data
-            if (nextLast?.id) {
-                chatLastMessageId = nextLast.id;
-            }
-            
+
             chatLastMessageTimestamp = Date.now();
             saveChatAttachments();
             if (state.mode === 'chat') {
@@ -1218,7 +1207,6 @@ function disconnectChatEvents() {
         chatReconnectTimer = null;
     }
     chatEventsURL = '';
-    chatLastMessageId = null;
     chatReconnectDelay = 1000;
 }
 
@@ -1637,4 +1625,3 @@ document.addEventListener('visibilitychange', () => {
 render();
 loadSettings().then(connectAgentEvents);
 setInterval(() => refreshStatus(false), 1500);
-

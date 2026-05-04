@@ -45,12 +45,9 @@ func TestChatStatusHookUpdatesEveryMessageAndAttachment(t *testing.T) {
 	}
 }
 
-func TestChatPageMergesRecoveredSSEMessages(t *testing.T) {
-	if !strings.Contains(pages.Chat, "function mergeMessages") {
-		t.Fatal("chat page should merge recovered SSE messages instead of replacing the full list")
-	}
-	if !strings.Contains(pages.Chat, "mergeMessages(JSON.parse(event.data) || [])") {
-		t.Fatal("chat SSE onmessage should merge recovered messages")
+func TestChatPageReplacesRecoveredSSESnapshot(t *testing.T) {
+	if !strings.Contains(pages.Chat, "setMessages(JSON.parse(event.data) || [])") {
+		t.Fatal("chat SSE onmessage should replace local messages with the recovered snapshot")
 	}
 }
 

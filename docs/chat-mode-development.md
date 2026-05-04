@@ -185,7 +185,7 @@ Client improvements:
 
 - Detect page visibility changes using Page Visibility API
 - Reconnect SSE only when page becomes visible
-- Use full SSE snapshots and client-side merge to recover missed messages
+- Use full SSE snapshots and client-side snapshot replacement to recover missed messages
 - Verify connection health on visibility change
 - Exponential backoff with max delay cap (1s → 30s)
 - Automatic fallback to polling if EventSource unavailable
@@ -193,7 +193,7 @@ Client improvements:
 Server improvements:
 
 - Return full message snapshots from SSE and GET /messages
-- Filter messages after specified ID for recovery
+- Treat any client event ID as advisory only; the server always returns the bounded full snapshot
 - Add /health endpoint for connection verification
 - Include message ID in SSE event stream
 

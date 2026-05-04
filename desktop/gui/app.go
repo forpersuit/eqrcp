@@ -46,6 +46,9 @@ type TaskRecord struct {
 	BytesDone           int64      `json:"bytesDone,omitempty"`
 	BytesTotal          int64      `json:"bytesTotal,omitempty"`
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	ChatState           string     `json:"chatState,omitempty"`
+	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
+	ChatLastActivity    string     `json:"chatLastActivity,omitempty"`
 	PageURL             string     `json:"pageUrl,omitempty"`
 	Error               string     `json:"error,omitempty"`
 	StartedAt           time.Time  `json:"startedAt"`

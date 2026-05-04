@@ -15,6 +15,9 @@ export namespace main {
 	    bytesDone?: number;
 	    bytesTotal?: number;
 	    savedFiles?: string[];
+	    chatState?: string;
+	    chatMessageCount?: number;
+	    chatLastActivity?: string;
 	    pageUrl?: string;
 	    error?: string;
 	    // Go type: time
@@ -42,6 +45,9 @@ export namespace main {
 	        this.bytesDone = source["bytesDone"];
 	        this.bytesTotal = source["bytesTotal"];
 	        this.savedFiles = source["savedFiles"];
+	        this.chatState = source["chatState"];
+	        this.chatMessageCount = source["chatMessageCount"];
+	        this.chatLastActivity = source["chatLastActivity"];
 	        this.pageUrl = source["pageUrl"];
 	        this.error = source["error"];
 	        this.startedAt = this.convertValues(source["startedAt"], null);
@@ -192,4 +198,3 @@ export namespace main {
 	
 
 }
-

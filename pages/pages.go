@@ -1314,30 +1314,6 @@ var Chat = `
             }
             setConnectionText();
         }
-        function mergeMessages(messages) {
-            if (!messages || !messages.length) {
-                return;
-            }
-            var byId = {};
-            state.messages.forEach(function(message, index) {
-                if (message && message.id) {
-                    byId[message.id] = index;
-                }
-            });
-            var merged = state.messages.slice();
-            messages.forEach(function(message) {
-                if (!message || !message.id) {
-                    return;
-                }
-                if (Object.prototype.hasOwnProperty.call(byId, message.id)) {
-                    merged[byId[message.id]] = message;
-                    return;
-                }
-                byId[message.id] = merged.length;
-                merged.push(message);
-            });
-            setMessages(merged);
-        }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         }
@@ -1486,7 +1462,7 @@ var Chat = `
             };
             
             events.onmessage = function(event) {
-                mergeMessages(JSON.parse(event.data) || []);
+                setMessages(JSON.parse(event.data) || []);
                 lastMessageTimestamp = Date.now();
             };
             

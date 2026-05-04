@@ -19,7 +19,7 @@ server/chat.go
 ├── /chat/{path}/messages - 消息列表
 ├── /chat/{path}/health - 健康检查
 ├── /chat/{path}/attachments - 附件管理
-└── client-side merge - 消息恢复逻辑
+└── full snapshot replacement - 消息恢复逻辑
 ```
 
 **客户端（都使用同一套服务端API）**：

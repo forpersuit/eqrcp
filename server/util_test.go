@@ -366,6 +366,9 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if len(messages) != 2 || !messages[1].Recalled || messages[1].URL != "" || messages[1].FileName != "" {
 		t.Fatalf("messages = %#v, want recalled attachment without retrievable content", messages)
 	}
+	if _, err := os.Stat(filepath.Join(server.chatDir, uploaded[0].ID+"-photo.txt")); !os.IsNotExist(err) {
+		t.Fatalf("recalled attachment file stat error = %v, want not exist", err)
+	}
 	recalledDownloadResponse := httptest.NewRecorder()
 	server.mux.ServeHTTP(recalledDownloadResponse, downloadRequest)
 	if recalledDownloadResponse.Code != http.StatusNotFound {

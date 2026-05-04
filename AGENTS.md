@@ -4,6 +4,8 @@
 
 - git push do not with proxy
 - always base on First Principle
+- before handing work to manual Windows acceptance, close running eqrcp desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
+- keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
 
 ## Project Structure & Module Organization
 
@@ -29,6 +31,15 @@ For Windows binaries:
 GOOS=windows GOARCH=amd64 go build -o eqrcp.exe .
 GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqrcp-launcher.exe ./cmd/eqrcp-launcher
 ```
+
+Manual Windows acceptance deployment:
+
+```sh
+scripts/deploy-windows-results.sh
+scripts/install-hooks.sh
+```
+
+The deployment script closes `eqrcp.exe`, `eqrcp-launcher.exe`, and `eqrcp-desktop.exe`, then writes fresh Windows artifacts to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQRCP_RESULTS_DIR` only when the acceptance directory is intentionally different.
 
 ## Coding Style & Naming Conventions
 

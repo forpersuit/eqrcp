@@ -633,12 +633,16 @@ func (session *chatSession) recallMessage(id string, sender string, token string
 		}
 		session.messages[index].Recalled = true
 		if session.messages[index].URL != "" {
+			if attachment, ok := session.attachments[id]; ok && attachment.Path != "" {
+				_ = os.Remove(attachment.Path)
+			}
 			delete(session.attachments, id)
 			session.messages[index].URL = ""
 			session.messages[index].FileName = ""
 			session.messages[index].Size = 0
 			session.messages[index].MimeType = ""
 		}
+		session.lastActivity = time.Now()
 		session.notifyLocked()
 		return session.messages[index], true
 	}
