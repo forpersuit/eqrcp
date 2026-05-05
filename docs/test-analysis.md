@@ -357,12 +357,19 @@ Expected result:
 
 - Standalone browser chat opens as a self-contained session page with QR,
   copy URL, stop, message, attachment, and image preview controls.
-- Embedded Wails chat detects iframe context and uses the desktop shell for
-  status chrome, leaving the iframe focused on the message thread and composer.
+- Embedded Wails chat detects iframe context and keeps the same compact
+  chat-local header as the browser page, while the desktop shell owns only
+  app-level chrome such as mode switching and settings.
+- Wails chat mode uses a single-column workspace; it no longer duplicates chat
+  status, QR, device count, or stop controls in a separate right-side panel.
 - The message thread uses left/right bubbles, system messages, timestamps, and
   attachment cards without reserving an empty desktop side column.
 - The composer stays visible by default, is styled as a chat input dock, and
   keeps unsent text in local browser storage so refreshes can restore drafts.
+- The composer is docked to the bottom of the chat region. Its textarea grows
+  naturally up to a bounded maximum height and hides native scrollbars.
+- The shared chat header shows connection state, device count, QR access, and
+  the host stop action when the host token is present.
 - On desktop pointer devices, message download/recall actions appear on
   hover/focus; on mobile/touch layouts, these actions remain visible.
 - The composer disables empty sends, sends only from the button, keeps the
@@ -380,9 +387,11 @@ Expected result:
 
 - The chat template includes messaging, attachment, QR, stop, and reconnection
   routes.
-- The chat template includes embedded iframe detection, button-only composer
-  sending, pasted-file handling, draft restoration, and the disabled send
-  button.
+- The chat template includes embedded iframe detection, shared chat status
+  controls, button-only composer sending, pasted-file handling, draft
+  restoration, and the disabled send button.
+- The chat health endpoint returns message count, event sequence, session
+  state, device count, and activity timestamps for the shared status header.
 
 ## Mobile Upload Completion Page
 

@@ -684,7 +684,11 @@ var Chat = `
             border-radius: 0;
             height: 100%;
         }
-        html.embedded-chat .chat-head { display: none; }
+        html.embedded-chat .chat-head {
+            border-radius: 0;
+            min-height: 54px;
+            padding: 9px 12px;
+        }
         /* ── Chat shell ── */
         .chat-shell {
             background: linear-gradient(180deg, #ffffff 0%, #fbfcfa 100%);
@@ -705,10 +709,16 @@ var Chat = `
             justify-content: space-between;
             padding: 12px 16px;
         }
+        .chat-head.offline h1 { color: var(--muted); }
         .chat-head-title {
             display: flex;
             align-items: center;
             gap: 10px;
+            min-width: 0;
+        }
+        .chat-head-title h1 {
+            color: var(--accent-strong);
+            transition: color 0.16s;
         }
         .online-dot {
             background: #22c55e;
@@ -733,7 +743,82 @@ var Chat = `
         .head-actions {
             display: inline-flex;
             gap: 8px;
+            position: relative;
         }
+        .device-pill {
+            align-items: center;
+            background: #f4f8f4;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--accent-strong);
+            cursor: pointer;
+            display: inline-flex;
+            font-size: 12px;
+            font-weight: 800;
+            gap: 7px;
+            height: 36px;
+            padding: 0 11px;
+        }
+        .device-pill svg {
+            fill: none;
+            height: 16px;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 2;
+            width: 16px;
+        }
+        .device-panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 18px 36px rgba(24, 33, 31, 0.16);
+            display: none;
+            gap: 10px;
+            min-width: 220px;
+            padding: 12px;
+            position: absolute;
+            right: 0;
+            top: 44px;
+            z-index: 10;
+        }
+        .device-panel.open { display: grid; }
+        .device-row-lite {
+            align-items: center;
+            display: grid;
+            gap: 9px;
+            grid-template-columns: 26px minmax(0, 1fr) auto;
+        }
+        .device-row-lite svg {
+            background: var(--wash);
+            border-radius: 999px;
+            color: var(--accent-strong);
+            fill: none;
+            height: 26px;
+            padding: 6px;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 2;
+            width: 26px;
+        }
+        .device-row-lite strong {
+            display: block;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .device-row-lite span {
+            color: var(--muted);
+            font-size: 11px;
+        }
+        .device-state {
+            border-radius: 999px;
+            color: var(--accent-strong);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .head-stop-form { display: contents; }
         .icon-button {
             align-items: center;
             background: var(--wash);
@@ -748,6 +833,12 @@ var Chat = `
             width: 36px;
         }
         .icon-button:hover { background: #ddeade; }
+        .icon-button.danger {
+            background: #fff0ed;
+            border-color: #f5c6c0;
+            color: var(--danger);
+        }
+        .icon-button.danger:hover { background: #fde1dc; }
         .icon-button svg { height: 18px; width: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         /* ── Message thread ── */
         .messages {
@@ -1017,9 +1108,11 @@ var Chat = `
             background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
             border-top: 1px solid rgba(215, 222, 215, 0.92);
             box-shadow: 0 -10px 30px rgba(24, 33, 31, 0.06);
-            padding: 16px 14px 18px;
-            padding-bottom: max(16px, env(safe-area-inset-bottom));
-            position: relative;
+            bottom: 0;
+            padding: 12px 14px 14px;
+            padding-bottom: max(14px, env(safe-area-inset-bottom));
+            position: sticky;
+            z-index: 4;
         }
         .composer::before {
             background: linear-gradient(90deg, transparent, rgba(215, 222, 215, 0.95), transparent);
@@ -1035,43 +1128,13 @@ var Chat = `
             border: 1px solid rgba(201, 212, 203, 0.95);
             border-radius: 22px;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 8px 22px rgba(24, 33, 31, 0.03);
-            padding: 14px 14px 15px;
+            padding: 10px;
         }
         .compose-row {
             align-items: center;
             display: grid;
             gap: 10px;
             grid-template-columns: 44px minmax(0,1fr) 44px;
-        }
-        .composer-tip {
-            align-items: center;
-            color: var(--muted);
-            display: flex;
-            flex-wrap: wrap;
-            font-size: 12px;
-            gap: 8px;
-            justify-content: space-between;
-            line-height: 1.4;
-            margin-bottom: 10px;
-            padding: 0 2px;
-        }
-        .composer-tip strong {
-            color: var(--accent-strong);
-            font-weight: 800;
-        }
-        .composer-chip {
-            align-items: center;
-            background: #eaf5ee;
-            border: 1px solid #c8e0d1;
-            border-radius: 999px;
-            color: var(--accent-strong);
-            display: inline-flex;
-            font-size: 11px;
-            font-weight: 800;
-            gap: 6px;
-            min-height: 26px;
-            padding: 4px 10px;
-            white-space: nowrap;
         }
         textarea {
             background: linear-gradient(180deg, #f8fbf8, #ffffff);
@@ -1082,14 +1145,16 @@ var Chat = `
             font: inherit;
             font-size: 15px;
             line-height: 1.5;
-            max-height: 168px;
+            max-height: min(34vh, 168px);
             min-height: 52px;
             min-width: 0;
-            overflow-y: hidden;
+            overflow-y: auto;
             padding: 13px 15px;
             resize: none;
+            scrollbar-width: none;
             width: 100%;
         }
+        textarea::-webkit-scrollbar { display: none; }
         textarea::placeholder { color: #8b978e; }
         textarea:focus {
             border-color: var(--accent);
@@ -1257,9 +1322,13 @@ var Chat = `
             }
             .chat-head { position: sticky; top: 0; z-index: 2; }
             .messages { padding: 12px 12px 20px; }
-            .composer { padding: 10px 10px 12px; }
-            .composer-shell { padding: 10px; }
-            .composer-tip { gap: 6px; }
+            .composer { padding: 9px 10px 11px; padding-bottom: max(11px, env(safe-area-inset-bottom)); }
+            .composer-shell { padding: 8px; }
+            .compose-row { gap: 8px; grid-template-columns: 42px minmax(0,1fr) 42px; }
+            textarea { max-height: min(30vh, 140px); min-height: 48px; padding: 12px 14px; }
+            .file-label,
+            .send-button { height: 42px; width: 42px; }
+            .device-panel { right: 0; }
             .side { display: none; }
             .bubble-actions { opacity: 1; pointer-events: auto; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
@@ -1282,12 +1351,21 @@ var Chat = `
                 width: min(360px, 100%);
             }
         }
+        @media (max-width: 480px) {
+            .chat-head { gap: 8px; padding-left: 10px; padding-right: 10px; }
+            .chat-head-title { gap: 8px; }
+            .chat-head-title h1 { font-size: 15px; }
+            .connection-label { display: none; }
+            .head-actions { gap: 6px; }
+            .device-pill { padding: 0 9px; }
+            #close-page { display: none; }
+        }
     </style>
 </head>
 <body>
     <main>
         <section class="chat-shell">
-            <header class="chat-head">
+            <header class="chat-head offline" id="chat-head">
                 <div class="chat-head-title">
                     <div class="online-dot" id="online-dot"></div>
                     <div>
@@ -1296,12 +1374,34 @@ var Chat = `
                     </div>
                 </div>
                 <div class="head-actions">
+                    <button class="device-pill" type="button" id="devices-toggle" title="Show connected devices" aria-label="Show connected devices" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+                        <span id="device-count">0</span>
+                    </button>
                     <button class="icon-button" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
                     </button>
                     <button class="icon-button" type="button" id="close-page" title="Close" aria-label="Close">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
+                    {{if .CanStop}}<form class="head-stop-form" method="post" action="{{.StopRoute}}">
+                        <input type="hidden" name="hostToken" value="{{.HostToken}}">
+                        <button class="icon-button danger" type="submit" title="Stop chat" aria-label="Stop chat">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+                        </button>
+                    </form>{{end}}
+                    <div class="device-panel" id="device-panel">
+                        <div class="device-row-lite">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+                            <div><strong>This device</strong><span id="device-self-label">Connected as device</span></div>
+                            <div class="device-state" id="device-state">online</div>
+                        </div>
+                        <div class="device-row-lite">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg>
+                            <div><strong>Other devices</strong><span id="device-remote-label">0 connected</span></div>
+                            <div class="device-state">LAN</div>
+                        </div>
+                    </div>
                 </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
@@ -1310,9 +1410,6 @@ var Chat = `
             </button>
             <form class="composer" id="composer">
                 <div class="composer-shell">
-                    <div class="composer-tip">
-                        <span class="composer-chip">Send with button</span>
-                    </div>
                     <div class="compose-row">
                         <label class="file-label" for="file-input" title="Add attachment" aria-label="Add attachment">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7"></path></svg>
@@ -1374,8 +1471,15 @@ var Chat = `
         var textEl = document.getElementById('message-text');
         var sendButton = document.getElementById('send-button');
         var fileEl = document.getElementById('file-input');
+        var chatHead = document.getElementById('chat-head');
         var connectionEl = document.getElementById('connection-state');
         var onlineDot = document.getElementById('online-dot');
+        var deviceCountEl = document.getElementById('device-count');
+        var devicesToggle = document.getElementById('devices-toggle');
+        var devicePanel = document.getElementById('device-panel');
+        var deviceSelfLabel = document.getElementById('device-self-label');
+        var deviceRemoteLabel = document.getElementById('device-remote-label');
+        var deviceState = document.getElementById('device-state');
         var sessionBackdrop = document.getElementById('session-backdrop');
         var previewBackdrop = document.getElementById('preview-backdrop');
         var previewImage = document.getElementById('preview-image');
@@ -1453,9 +1557,31 @@ var Chat = `
         function setOnline(online) {
             if (online) {
                 onlineDot.classList.remove('offline');
+                chatHead.classList.remove('offline');
             } else {
                 onlineDot.classList.add('offline');
+                chatHead.classList.add('offline');
             }
+        }
+        function updateChatStatus(data) {
+            var count = Math.max(onlineDot.classList.contains('offline') ? 0 : 1, Number(data && data.deviceCount || 0));
+            var remoteCount = Math.max(0, count - 1);
+            deviceCountEl.textContent = String(count);
+            deviceSelfLabel.textContent = 'Connected as ' + state.sender;
+            deviceRemoteLabel.textContent = remoteCount + ' connected';
+            deviceState.textContent = onlineDot.classList.contains('offline') ? 'offline' : 'online';
+            if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
+                setConnectionState(false, 'Session ' + data.state + '.');
+            }
+        }
+        function refreshChatStatus() {
+            return fetch('{{.HealthRoute}}', {cache: 'no-store'})
+                .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
+                .then(function(data) {
+                    updateEventCursor(data.eventSeq);
+                    updateChatStatus(data);
+                    return data;
+                });
         }
         function renderMessages() {
             if (!state.messages.length) {
@@ -1682,6 +1808,7 @@ var Chat = `
         function setConnectionState(online, label) {
             setOnline(online);
             connectionEl.textContent = label;
+            updateChatStatus();
         }
         function openSessionPanel() { sessionBackdrop.classList.add('open'); }
         function closeSessionPanel() { sessionBackdrop.classList.remove('open'); }
@@ -1777,9 +1904,7 @@ var Chat = `
         }
         function loadMessages() {
             if (eventCursorSeq <= 0) {
-                return fetch('{{.HealthRoute}}', {cache: 'no-store'})
-                    .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
-                    .then(function(data) { updateEventCursor(data.eventSeq); })
+                return refreshChatStatus()
                     .catch(function() { setConnectionState(false, 'Disconnected. Retrying...'); });
             }
             return fetch(withAfterSeq('{{.MessagesRoute}}'), {cache: 'no-store'})
@@ -1856,9 +1981,23 @@ var Chat = `
             if (navigator.clipboard) { navigator.clipboard.writeText(input.value); return; }
             document.execCommand('copy');
         }
+        function toggleDevicePanel(event) {
+            if (event) { event.stopPropagation(); }
+            var open = !devicePanel.classList.contains('open');
+            devicePanel.classList.toggle('open', open);
+            devicesToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        function closeDevicePanel() {
+            devicePanel.classList.remove('open');
+            devicesToggle.setAttribute('aria-expanded', 'false');
+        }
         function resizeComposer() {
+            var viewport = Math.max(320, window.innerHeight || document.documentElement.clientHeight || 640);
+            var desktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
+            var max = desktop ? Math.min(viewport * 0.34, 168) : Math.min(viewport * 0.30, 140);
             textEl.style.height = 'auto';
-            textEl.style.height = Math.min(textEl.scrollHeight, 120) + 'px';
+            textEl.style.height = Math.min(textEl.scrollHeight, max) + 'px';
+            textEl.style.overflowY = textEl.scrollHeight > max ? 'auto' : 'hidden';
         }
         function updateComposerState() {
             sendButton.disabled = textEl.value.trim().length === 0;
@@ -1893,6 +2032,9 @@ var Chat = `
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
         document.getElementById('copy-url').addEventListener('click', copyURL);
+        devicesToggle.addEventListener('click', toggleDevicePanel);
+        devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });
+        document.addEventListener('click', closeDevicePanel);
         document.getElementById('share-session').addEventListener('click', openSessionPanel);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
         document.getElementById('close-page').addEventListener('click', closePage);
@@ -1910,6 +2052,7 @@ var Chat = `
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
         });
         window.addEventListener('pagehide', saveDraft);
+        window.addEventListener('resize', resizeComposer);
         window.addEventListener('beforeunload', function(event) {
             if (!textEl.value.trim()) { return; }
             saveDraft();
@@ -1963,6 +2106,7 @@ var Chat = `
                 reconnectDelay = 1000;
                 lastMessageTimestamp = Date.now();
                 setConnectionState(true, 'Connected as ' + state.sender + '.');
+                refreshChatStatus().catch(function() {});
             };
             events.onmessage = function(event) {
                 updateEventCursor(event.lastEventId);
@@ -1985,11 +2129,7 @@ var Chat = `
             }, reconnectDelay);
         }
         function verifyConnection() {
-            fetch('{{.HealthRoute}}', {cache: 'no-store'})
-                .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
-                .then(function(data) {
-                    if (eventCursorSeq <= 0) { updateEventCursor(data.eventSeq); }
-                })
+            refreshChatStatus()
                 .then(function() {
                     reconnectDelay = 1000;
                     connectSSE();
@@ -2013,6 +2153,7 @@ var Chat = `
 
         if (window.EventSource) {
             connectSSE();
+            setInterval(function() { if (isPageVisible) { refreshChatStatus().catch(function() {}); } }, 5000);
         } else {
             setConnectionState(false, 'EventSource not supported. Using polling...');
             setInterval(function() { if (isPageVisible) { loadMessages(); } }, 3000);

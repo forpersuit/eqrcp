@@ -204,8 +204,9 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`id="share-session"`,
 		`id="close-page"`,
 		`id="send-button"`,
+		`id="devices-toggle"`,
+		`id="device-count"`,
 		`embedded-chat`,
-		`Send with button`,
 		`eqrcp-chat-draft:`,
 		`clipboardData.files`,
 		`auto-save-file`,
@@ -962,6 +963,15 @@ func TestChatHealthEndpoint(t *testing.T) {
 
 	if _, ok := health["messageCount"]; !ok {
 		t.Fatal("health response missing messageCount")
+	}
+	if _, ok := health["deviceCount"]; !ok {
+		t.Fatal("health response missing deviceCount")
+	}
+	if _, ok := health["state"]; !ok {
+		t.Fatal("health response missing state")
+	}
+	if _, ok := health["lastActivity"]; !ok {
+		t.Fatal("health response missing lastActivity")
 	}
 }
 

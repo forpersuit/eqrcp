@@ -78,15 +78,23 @@ Status: implemented as a shared browser UI surface.
 - [x] Bridge attachment saving from the iframe to the native GUI with origin and
   source-window validation.
 - [x] Keep the mobile QR and shared chat behavior owned by the server page.
-- [x] Let the shared chat page detect Wails iframe embedding and present a
-  clean message/composer surface without duplicating the desktop app's outer
-  status header.
+- [x] Let the shared chat page detect Wails iframe embedding and present the
+  same compact chat status header, message thread, and composer that browser
+  users see.
 - [x] Align composer behavior with chat-first mobile and desktop usage:
   button sends the message, empty sends are disabled, the textarea keeps
   multiline input, and pasted clipboard files upload as attachments.
 - [x] Keep the chat composer visible by default, give it a stronger chat-style
   treatment, and preserve unsent text locally in the browser so reloads and
   accidental navigation can restore the draft.
+- [x] Keep the composer docked to the bottom of the chat region. Its normal
+  height stays compact for quick desktop/mobile device messaging, and the
+  textarea grows only up to a bounded share of the chat height.
+- [x] Move reliable chat-specific status into the shared template: connection
+  state, device count, QR access, and host stop control are available in both
+  standalone browser chat and the Wails iframe.
+- [x] Let Wails chat mode use a single-column workspace once the shared iframe
+  owns chat-local QR, device, and stop controls.
 
 Acceptance criteria:
 
@@ -98,6 +106,7 @@ Acceptance criteria:
   touch actions visible.
 - The composer is visually separated from the message thread and restores
   unsent text from local browser storage after refresh or revisit.
+- Browser chat and Wails iframe chat show the same chat-local status controls.
 
 ## Design Notes
 
@@ -114,9 +123,14 @@ Acceptance criteria:
   recover missed events that happened after they joined.
 - The Wails GUI embeds the browser chat page to keep desktop and browser
   behavior consistent and reduce duplicate UI work.
-- The shared chat page adapts its chrome by context: standalone browser pages
-  keep the session QR controls, while embedded Wails pages focus on the
-  message thread and composer because the desktop shell owns session status.
+- The shared chat page owns chat-local chrome: connection state, device count,
+  QR access, stop, message thread, and composer. The desktop shell should own
+  app-level chrome only, such as mode switching, settings, feedback, and native
+  attachment save behavior.
+- The current reliable device data is connection count, not a full named device
+  roster. A real roster should be added by having clients register a sanitized
+  sender/device label with the SSE connection and exposing that list through
+  the chat health/status payload.
 
 ## Desktop Agent Integration
 

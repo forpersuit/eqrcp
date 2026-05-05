@@ -207,6 +207,10 @@ func (s *Server) Chat() error {
 		session.mu.Lock()
 		messageCount := len(session.messages)
 		eventSeq := session.eventSeq
+		deviceCount := len(session.clients)
+		state := session.state
+		startedAt := session.startedAt
+		lastActivity := session.lastActivity
 		session.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -214,6 +218,10 @@ func (s *Server) Chat() error {
 			"timestamp":    time.Now().Unix(),
 			"messageCount": messageCount,
 			"eventSeq":     eventSeq,
+			"deviceCount":  deviceCount,
+			"state":        state,
+			"startedAt":    startedAt,
+			"lastActivity": lastActivity,
 		})
 	})
 	return nil

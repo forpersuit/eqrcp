@@ -138,6 +138,10 @@ h2 {
     min-height: 0;
 }
 
+.layout.chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .workspace,
 .panel {
     background: var(--panel);

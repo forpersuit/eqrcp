@@ -120,7 +120,7 @@ function render() {
                 </div>
             </header>
 
-            <section class="layout">
+            <section class="layout ${state.mode === 'chat' ? 'chat-layout' : ''}">
                 <div class="workspace">
                     ${renderWorkspace()}
                     ${state.notice ? `<div class="notice success">${escapeHTML(state.notice)}</div>` : ''}
@@ -148,17 +148,7 @@ function renderTopIntro() {
     if (state.mode !== 'chat') {
         return '<div class="eyebrow">Easy QR Transfer</div>';
     }
-    const task = activeChatTask();
-    const online = task ? 'Online' : 'Ready';
-    const deviceCount = chatDeviceCount(task);
-    return `
-        <div class="chat-top-meta">
-            <span class="status-dot ${task ? '' : 'muted'}"></span>
-            <span>${online}</span>
-            <span class="meta-separator">.</span>
-            <span>${deviceCount} device${deviceCount === 1 ? '' : 's'} connected</span>
-        </div>
-    `;
+    return '<div class="eyebrow">Local chat</div>';
 }
 
 function renderTopTitle() {
@@ -209,7 +199,7 @@ function renderShare() {
 
 function renderSide() {
     if (state.mode === 'chat') {
-        return renderChatSide();
+        return '';
     }
     const current = state.status?.current;
     const history = state.status?.history || [];
