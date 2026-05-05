@@ -365,8 +365,8 @@ Expected result:
   keeps unsent text in local browser storage so refreshes can restore drafts.
 - On desktop pointer devices, message download/recall actions appear on
   hover/focus; on mobile/touch layouts, these actions remain visible.
-- The composer disables empty sends, sends on Enter, preserves Shift+Enter for
-  new lines, and uploads pasted clipboard files as attachments.
+- The composer disables empty sends, sends only from the button, keeps the
+  textarea multiline, and uploads pasted clipboard files as attachments.
 - The composer and message thread are separated by a stronger dock boundary so
   the input area reads like a chat control rather than a generic form.
 
@@ -380,8 +380,8 @@ Expected result:
 
 - The chat template includes messaging, attachment, QR, stop, and reconnection
   routes.
-- The chat template includes embedded iframe detection, Enter-key composer
-  handling, pasted-file handling, draft restoration, and the disabled send
+- The chat template includes embedded iframe detection, button-only composer
+  sending, pasted-file handling, draft restoration, and the disabled send
   button.
 
 ## Mobile Upload Completion Page

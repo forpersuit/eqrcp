@@ -330,6 +330,10 @@ function renderChatSide() {
             </aside>
         `;
     }
+    return renderChatPanel(task);
+}
+
+function renderChatPanel(task) {
     const chatUrl = task.pageUrl || '';
     const chatState = task.chatState || task.state || 'running';
     const messageCount = task.chatMessageCount || 0;
@@ -657,6 +661,24 @@ function bindEvents() {
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
 }
 
+function bindChatQRPanelEvents() {
+    document.querySelectorAll('.refresh-action').forEach((button) => {
+        button.addEventListener('click', refreshStatus);
+    });
+    document.querySelectorAll('.open-qr').forEach((button) => {
+        button.addEventListener('click', openQRPage);
+    });
+    document.querySelectorAll('.stop-current-action').forEach((button) => {
+        button.addEventListener('click', stopCurrent);
+    });
+    document.querySelectorAll('.chat-qr-toggle-action').forEach((button) => {
+        button.addEventListener('click', toggleChatQR);
+    });
+    document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
+        button.addEventListener('click', copyChatURL);
+    });
+}
+
 function openPanel(panel) {
     state.activePanel = panel;
     clearMessages();
@@ -745,7 +767,7 @@ function copyChatURL() {
 
 function toggleChatQR() {
     state.chatQROpen = !state.chatQROpen;
-    render();
+    updateChatQRPanel();
 }
 
 function closeChatQROnOutside(event) {
@@ -753,7 +775,32 @@ function closeChatQROnOutside(event) {
         return;
     }
     state.chatQROpen = false;
-    render();
+    updateChatQRPanel();
+}
+
+function updateChatQRPanel() {
+    const task = activeChatTask();
+    if (!task) {
+        render();
+        return;
+    }
+    const existing = document.querySelector('.chat-qr-panel');
+    if (!existing) {
+        render();
+        return;
+    }
+    const next = document.createElement('template');
+    next.innerHTML = renderChatPanel(task).trim();
+    const nextSide = next.content.firstElementChild;
+    if (!nextSide) {
+        return;
+    }
+    existing.closest('.side')?.replaceWith(nextSide);
+    bindChatQRPanelEvents();
+    document.removeEventListener('pointerdown', closeChatQROnOutside);
+    if (state.chatQROpen) {
+        document.addEventListener('pointerdown', closeChatQROnOutside);
+    }
 }
 
 async function saveSettings() {

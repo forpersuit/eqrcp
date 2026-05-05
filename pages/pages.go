@@ -757,7 +757,7 @@ var Chat = `
             flex-direction: column;
             gap: 8px;
             overflow: auto;
-            padding: 16px 16px 22px;
+            padding: 18px 16px 28px;
             touch-action: pan-y;
         }
         /* ── Empty state ── */
@@ -1017,8 +1017,8 @@ var Chat = `
             background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
             border-top: 1px solid rgba(215, 222, 215, 0.92);
             box-shadow: 0 -10px 30px rgba(24, 33, 31, 0.06);
-            padding: 14px 14px 16px;
-            padding-bottom: max(14px, env(safe-area-inset-bottom));
+            padding: 16px 14px 18px;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
             position: relative;
         }
         .composer::before {
@@ -1033,9 +1033,9 @@ var Chat = `
         .composer-shell {
             background: rgba(255, 255, 255, 0.94);
             border: 1px solid rgba(201, 212, 203, 0.95);
-            border-radius: 20px;
+            border-radius: 22px;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 8px 22px rgba(24, 33, 31, 0.03);
-            padding: 14px;
+            padding: 14px 14px 15px;
         }
         .compose-row {
             align-items: center;
@@ -1052,7 +1052,7 @@ var Chat = `
             gap: 8px;
             justify-content: space-between;
             line-height: 1.4;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             padding: 0 2px;
         }
         .composer-tip strong {
@@ -1085,7 +1085,7 @@ var Chat = `
             max-height: 168px;
             min-height: 52px;
             min-width: 0;
-            overflow-y: auto;
+            overflow-y: hidden;
             padding: 13px 15px;
             resize: none;
             width: 100%;
@@ -1099,6 +1099,9 @@ var Chat = `
         button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: inherit; }
         .file-label,
         .send-button {
+            align-items: center;
+            display: inline-flex;
+            justify-content: center;
             border-radius: 999px;
             height: 46px;
             padding: 0;
@@ -1253,7 +1256,7 @@ var Chat = `
                 height: 100%;
             }
             .chat-head { position: sticky; top: 0; z-index: 2; }
-            .messages { padding: 12px 12px 18px; }
+            .messages { padding: 12px 12px 20px; }
             .composer { padding: 10px 10px 12px; }
             .composer-shell { padding: 10px; }
             .composer-tip { gap: 6px; }
@@ -1308,12 +1311,11 @@ var Chat = `
             <form class="composer" id="composer">
                 <div class="composer-shell">
                     <div class="composer-tip">
-                        <div><strong>Message</strong> Enter sends, Shift+Enter adds a new line. Paste images or files directly into the box.</div>
-                        <span class="composer-chip">Keyboard first</span>
+                        <span class="composer-chip">Send with button</span>
                     </div>
                     <div class="compose-row">
                         <label class="file-label" for="file-input" title="Add attachment" aria-label="Add attachment">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7"></path></svg>
                         </label>
                         <textarea id="message-text" placeholder="Type a message or paste an image" autocomplete="off"></textarea>
                         <button class="send-button" id="send-button" type="submit" aria-label="Send" disabled>
@@ -1866,12 +1868,6 @@ var Chat = `
             updateComposerState();
             saveDraft();
         }
-        function handleComposerKeydown(event) {
-            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
-                event.preventDefault();
-                sendText(event);
-            }
-        }
         function handleComposerPaste(event) {
             var files = event.clipboardData && event.clipboardData.files;
             if (!files || !files.length) { return; }
@@ -1895,7 +1891,6 @@ var Chat = `
         document.getElementById('composer').addEventListener('submit', sendText);
         fileEl.addEventListener('change', uploadFiles);
         textEl.addEventListener('input', handleComposerInput);
-        textEl.addEventListener('keydown', handleComposerKeydown);
         textEl.addEventListener('paste', handleComposerPaste);
         document.getElementById('copy-url').addEventListener('click', copyURL);
         document.getElementById('share-session').addEventListener('click', openSessionPanel);

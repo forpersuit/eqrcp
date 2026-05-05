@@ -81,9 +81,9 @@ Status: implemented as a shared browser UI surface.
 - [x] Let the shared chat page detect Wails iframe embedding and present a
   clean message/composer surface without duplicating the desktop app's outer
   status header.
-- [x] Align composer behavior with common chat expectations: Enter sends,
-  Shift+Enter inserts a newline, empty sends are disabled, and pasted
-  clipboard files upload as attachments.
+- [x] Align composer behavior with chat-first mobile and desktop usage:
+  button sends the message, empty sends are disabled, the textarea keeps
+  multiline input, and pasted clipboard files upload as attachments.
 - [x] Keep the chat composer visible by default, give it a stronger chat-style
   treatment, and preserve unsent text locally in the browser so reloads and
   accidental navigation can restore the draft.
