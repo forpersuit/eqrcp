@@ -667,9 +667,9 @@ var Chat = `
             grid-template-columns: minmax(0, 1fr) 300px;
             gap: 14px;
             height: 100%;
-            max-width: 1100px;
+            max-width: 960px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 16px 28px;
         }
         /* ── Chat shell ── */
         .chat-shell {
@@ -679,6 +679,7 @@ var Chat = `
             display: grid;
             grid-template-rows: auto minmax(0, 1fr) auto;
             overflow: hidden;
+            position: relative;
         }
         /* ── Header ── */
         .chat-head {
@@ -792,7 +793,16 @@ var Chat = `
             margin-bottom: 4px;
             padding: 0 2px;
         }
-        .sender time { font-weight: 500; white-space: nowrap; }
+        /* ── Bubble time (shown below bubble) ── */
+        .bubble-time {
+            color: var(--muted);
+            font-size: 11px;
+            margin-top: 3px;
+            padding: 0 2px;
+            white-space: nowrap;
+        }
+        .message.mine .bubble-time { text-align: right; }
+        .message:not(.mine):not(.system) .bubble-time { text-align: left; }
         /* ── Bubble ── */
         .bubble {
             background: var(--panel);
@@ -815,6 +825,19 @@ var Chat = `
             font-size: 12px;
             padding: 2px 0;
             text-align: center;
+        }
+        .message.system .bubble::before,
+        .message.system .bubble::after {
+            border-top: 1px solid var(--line);
+            content: '';
+            display: inline-block;
+            vertical-align: middle;
+            width: 28px;
+            margin: 0 6px;
+        }
+        .message.recalled .bubble {
+            border-style: dashed;
+            opacity: 0.7;
         }
         .text { white-space: pre-wrap; }
         .text.recalled { color: var(--muted); font-style: italic; }
@@ -891,11 +914,34 @@ var Chat = `
             width: 26px;
         }
         .bubble-action svg { fill: none; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 14px; }
+        /* ── Scroll-to-bottom arrow ── */
+        .scroll-arrow {
+            background: var(--accent);
+            border: 0;
+            border-radius: 999px;
+            bottom: 72px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+            color: white;
+            cursor: pointer;
+            display: grid;
+            height: 36px;
+            opacity: 0;
+            place-items: center;
+            pointer-events: none;
+            position: absolute;
+            right: 18px;
+            transition: opacity 0.15s;
+            width: 36px;
+            z-index: 5;
+        }
+        .scroll-arrow.visible { opacity: 1; pointer-events: auto; }
+        .scroll-arrow svg { fill: none; height: 18px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 18px; }
         /* ── Compose bar ── */
         .composer {
             background: var(--panel);
             border-top: 1px solid var(--line);
-            padding: 10px 14px 12px;
+            padding: 10px 14px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
         }
         .compose-row {
             align-items: center;
@@ -1102,6 +1148,9 @@ var Chat = `
                 </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
+            <button class="scroll-arrow" id="scroll-arrow" aria-label="Jump to latest message" title="Latest message">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m5 16 7 6 7-6"/></svg>
+            </button>
             <form class="composer" id="composer">
                 <div class="compose-row">
                     <label class="file-label" for="file-input" title="Attach file" aria-label="Attach file">
@@ -1166,6 +1215,8 @@ var Chat = `
         var sessionBackdrop = document.getElementById('session-backdrop');
         var previewBackdrop = document.getElementById('preview-backdrop');
         var previewImage = document.getElementById('preview-image');
+        var scrollArrow = document.getElementById('scroll-arrow');
+        var inWails = window.parent !== window;
         var previewScale = 1;
         var previewPointers = {};
         var previewPinchDistance = 0;
@@ -1212,6 +1263,7 @@ var Chat = `
         function renderMessages() {
             if (!state.messages.length) {
                 messagesEl.innerHTML = '<div class="messages-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><strong>No messages yet.</strong>Scan the QR code to join from another device.</div>';
+                updateScrollArrow();
                 return;
             }
             messagesEl.innerHTML = '';
@@ -1219,17 +1271,19 @@ var Chat = `
                 var mine = message.sender === state.sender;
                 var isSystem = message.type === 'system';
                 var item = document.createElement('div');
-                item.className = 'message' + (mine ? ' mine' : '') + (isSystem ? ' system' : '');
+                var cls = 'message';
+                if (mine) { cls += ' mine'; }
+                if (isSystem) { cls += ' system'; }
+                if (message.recalled) { cls += ' recalled'; }
+                item.className = cls;
                 item.dataset.messageId = message.id || '';
-                if (!isSystem) {
+                // Sender name: only shown for other people's messages (not own, not system)
+                if (!isSystem && !mine) {
                     var senderEl = document.createElement('div');
                     senderEl.className = 'sender';
                     var nameEl = document.createElement('span');
                     nameEl.textContent = message.sender || 'Guest';
-                    var timeEl = document.createElement('time');
-                    timeEl.textContent = messageTime(message.createdAt);
                     senderEl.appendChild(nameEl);
-                    senderEl.appendChild(timeEl);
                     item.appendChild(senderEl);
                 }
                 var bubble = document.createElement('div');
@@ -1251,9 +1305,17 @@ var Chat = `
                     bubble.appendChild(renderAttachment(message));
                 }
                 item.appendChild(bubble);
+                // Time shown below bubble (not in sender line)
+                if (!isSystem) {
+                    var timeEl = document.createElement('div');
+                    timeEl.className = 'bubble-time';
+                    timeEl.textContent = messageTime(message.createdAt);
+                    item.appendChild(timeEl);
+                }
                 item.appendChild(renderBubbleActions(message));
                 messagesEl.appendChild(item);
             });
+            updateScrollArrow();
         }
         function renderRecalledEdit(message) {
             var wrap = document.createElement('div');
@@ -1275,14 +1337,27 @@ var Chat = `
             actions.className = 'bubble-actions';
             var hasActions = false;
             if (message.url) {
-                var download = document.createElement('a');
-                download.className = 'bubble-action';
-                download.href = downloadURL(message.url);
-                download.setAttribute('download', message.fileName || 'attachment');
-                download.setAttribute('aria-label', 'Download');
-                download.title = 'Download';
-                download.innerHTML = downloadIcon();
-                actions.appendChild(download);
+                if (inWails) {
+                    var dlBtn = document.createElement('button');
+                    dlBtn.type = 'button';
+                    dlBtn.className = 'bubble-action';
+                    dlBtn.setAttribute('aria-label', 'Save');
+                    dlBtn.title = 'Save';
+                    dlBtn.innerHTML = downloadIcon();
+                    dlBtn.addEventListener('click', function() {
+                        window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
+                    });
+                    actions.appendChild(dlBtn);
+                } else {
+                    var download = document.createElement('a');
+                    download.className = 'bubble-action';
+                    download.href = downloadURL(message.url);
+                    download.setAttribute('download', message.fileName || 'attachment');
+                    download.setAttribute('aria-label', 'Download');
+                    download.title = 'Download';
+                    download.innerHTML = downloadIcon();
+                    actions.appendChild(download);
+                }
                 hasActions = true;
             }
             if (message.sender === state.sender && message.type !== 'system' && !message.recalled) {
@@ -1337,16 +1412,27 @@ var Chat = `
             return meta;
         }
         function renderFileCard(message) {
-            var card = document.createElement('a');
-            card.className = 'file-card';
-            card.href = downloadURL(message.url);
-            card.setAttribute('download', message.fileName || '');
             var name = document.createElement('div');
             name.className = 'file-name';
             name.textContent = message.fileName || 'attachment';
             var meta = document.createElement('div');
             meta.className = 'file-meta';
             meta.textContent = fileDescription(message);
+            if (inWails) {
+                var card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'file-card';
+                card.addEventListener('click', function() {
+                    window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
+                });
+                card.appendChild(name);
+                card.appendChild(meta);
+                return card;
+            }
+            var card = document.createElement('a');
+            card.className = 'file-card';
+            card.href = downloadURL(message.url);
+            card.setAttribute('download', message.fileName || '');
             card.appendChild(name);
             card.appendChild(meta);
             return card;
@@ -1433,19 +1519,52 @@ var Chat = `
                 previewPinchScale = previewScale;
             }
         }
+        function mergeMessages(incoming) {
+            var atBottom = isNearBottom();
+            if (!incoming || !incoming.length) { return; }
+            var knownIDs = {};
+            state.messages.forEach(function(m) { knownIDs[m.id] = true; });
+            // Also handle recalled updates (same ID, recalled flag changed)
+            var fresh = incoming.filter(function(m) { return !knownIDs[m.id]; });
+            var updated = incoming.filter(function(m) { return knownIDs[m.id]; });
+            // Apply updates to existing messages (e.g. recalled)
+            if (updated.length) {
+                var byID = {};
+                updated.forEach(function(m) { byID[m.id] = m; });
+                state.messages = state.messages.map(function(m) { return byID[m.id] || m; });
+            }
+            if (fresh.length) {
+                state.messages = state.messages.concat(fresh);
+            }
+            renderMessages();
+            if (atBottom) { messagesEl.scrollTop = messagesEl.scrollHeight; }
+        }
         function setMessages(messages) {
-            var shouldStick = isNearBottom();
+            var atBottom = isNearBottom();
             state.messages = messages || [];
             renderMessages();
-            if (shouldStick) { messagesEl.scrollTop = messagesEl.scrollHeight; }
+            if (atBottom) { messagesEl.scrollTop = messagesEl.scrollHeight; }
         }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         }
+        function updateScrollArrow() {
+            if (isNearBottom()) {
+                scrollArrow.classList.remove('visible');
+            } else {
+                scrollArrow.classList.add('visible');
+            }
+        }
         function loadMessages() {
-            return fetch('{{.MessagesRoute}}', {cache: 'no-store'})
+            if (eventCursorSeq <= 0) {
+                return fetch('{{.HealthRoute}}', {cache: 'no-store'})
+                    .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
+                    .then(function(data) { updateEventCursor(data.eventSeq); })
+                    .catch(function() { setConnectionState(false, 'Disconnected. Retrying...'); });
+            }
+            return fetch(withAfterSeq('{{.MessagesRoute}}'), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('load failed'); } return r.json(); })
-                .then(function(messages) { setMessages(messages); })
+                .then(function(messages) { mergeMessages(messages); })
                 .catch(function() { setConnectionState(false, 'Disconnected. Retrying...'); });
         }
         function sendText(event) {
@@ -1530,6 +1649,10 @@ var Chat = `
         previewBackdrop.addEventListener('pointermove', previewPointerMove);
         previewBackdrop.addEventListener('pointerup', previewPointerUp);
         previewBackdrop.addEventListener('pointercancel', previewPointerUp);
+        messagesEl.addEventListener('scroll', updateScrollArrow, {passive: true});
+        scrollArrow.addEventListener('click', function() {
+            messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
+        });
 
         setConnectionState(false, 'Connecting...');
         resizeComposer();
@@ -1541,17 +1664,39 @@ var Chat = `
         var isPageVisible = !document.hidden;
         var reconnectTimer = null;
         var lastMessageTimestamp = Date.now();
+        var joinSeq = 0;
+        var hasJoinSeq = false;
+        var eventCursorSeq = 0;
+
+        function updateEventCursor(value) {
+            var next = parseInt(value, 10);
+            if (!isNaN(next) && next >= 0) {
+                if (!hasJoinSeq) {
+                    joinSeq = next;
+                    hasJoinSeq = true;
+                }
+                if (next > eventCursorSeq) { eventCursorSeq = next; }
+            }
+        }
+        function withAfterSeq(route) {
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep +
+                'afterSeq=' + encodeURIComponent(String(eventCursorSeq)) +
+                '&joinSeq=' + encodeURIComponent(String(hasJoinSeq ? joinSeq : eventCursorSeq));
+        }
 
         function connectSSE() {
             if (events) { events.close(); events = null; }
-            events = new EventSource('{{.EventsRoute}}');
+            var route = eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}';
+            events = new EventSource(route);
             events.onopen = function() {
                 reconnectDelay = 1000;
                 lastMessageTimestamp = Date.now();
                 setConnectionState(true, 'Connected as ' + state.sender + '.');
             };
             events.onmessage = function(event) {
-                setMessages(JSON.parse(event.data) || []);
+                updateEventCursor(event.lastEventId);
+                mergeMessages(JSON.parse(event.data) || []);
                 lastMessageTimestamp = Date.now();
             };
             events.onerror = function() {
@@ -1571,7 +1716,10 @@ var Chat = `
         }
         function verifyConnection() {
             fetch('{{.HealthRoute}}', {cache: 'no-store'})
-                .then(function(r) { if (!r.ok) { throw new Error('health failed'); } })
+                .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
+                .then(function(data) {
+                    if (eventCursorSeq <= 0) { updateEventCursor(data.eventSeq); }
+                })
                 .then(function() {
                     reconnectDelay = 1000;
                     connectSSE();
@@ -1584,8 +1732,8 @@ var Chat = `
                 var timeSince = Date.now() - lastMessageTimestamp;
                 if (!events || events.readyState === EventSource.CLOSED) {
                     reconnectDelay = 1000;
-                    connectSSE();
-                } else if (events.readyState !== EventSource.CONNECTING && timeSince > 30000) {
+                    verifyConnection();
+                } else if (events.readyState !== EventSource.CONNECTING && timeSince > 10000) {
                     verifyConnection();
                 }
             } else {

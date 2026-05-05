@@ -191,6 +191,7 @@ export namespace main {
 		        }
 		        return new classs(a);
 		    }
-			    return a;
-			}
+		    return a;
 		}
+	}
+}

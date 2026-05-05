@@ -11,6 +11,7 @@ This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp). The
 - Receive files from a phone through a browser upload page.
 - Receive pasted text as a `.txt` file.
 - Receive pasted clipboard files and images from supported mobile browsers.
+- Start a local LAN chat session with text and attachments.
 - Choose a network interface, bind address, port, URL path, or FQDN.
 - Use HTTPS with a supplied certificate and key.
 - Generate shell completion for Bash, Zsh, Fish, and PowerShell.
@@ -67,6 +68,12 @@ Receive files into a specific directory:
 eqrcp receive --output /tmp/dir
 ```
 
+Start a local chat session:
+
+```sh
+eqrcp chat --browser
+```
+
 Run the configuration wizard:
 
 ```sh
@@ -78,6 +85,7 @@ Desktop launcher helpers:
 ```sh
 eqrcp desktop share /path/file.txt
 eqrcp desktop receive /path/directory
+eqrcp desktop chat
 ```
 
 Experimental Wails desktop GUI:
@@ -86,6 +94,9 @@ Experimental Wails desktop GUI:
 cd desktop/gui
 EQRCP_CLI=/path/to/eqrcp wails dev
 ```
+
+The Wails chat view embeds the same browser chat UI used by `eqrcp chat`, so
+desktop GUI and browser behavior stay aligned.
 
 On Windows, install user-level Explorer context menu entries:
 
@@ -162,6 +173,8 @@ Planning documents:
 
 - [Test analysis](docs/test-analysis.md)
 - [Desktop integration plan](docs/desktop-integration-plan.md)
+- [Chat mode development](docs/chat-mode-development.md)
+- [Chat reconnection testing](docs/chat-reconnection-testing.md)
 - [Desktop platform notes](docs/desktop-platform-notes.md)
 - [Security notes](docs/security-notes.md)
 

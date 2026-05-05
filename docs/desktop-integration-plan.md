@@ -310,6 +310,12 @@ Initial GUI scope:
   tray as a control surface over the same Wails GUI and desktop agent actions:
   open app, share, receive, open current QR, stop current, settings, About,
   feedback, and quit.
+- Chat mode through the desktop agent. The Wails app embeds the existing browser
+  chat page in an iframe rather than maintaining a separate native chat
+  implementation, so browser and GUI chat behavior stay identical.
+- Native save bridge for chat attachments. The bridge validates the iframe
+  source window, message origin, and attachment URL origin before invoking the
+  desktop save dialog.
 
 Commercial boundary:
 
@@ -323,9 +329,13 @@ Next priorities:
 1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
 2. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current QR action, stop-current action, and real quit.
 3. Refine tray state: disable unavailable actions, update tooltip text, and provide icon variants for idle, active, completed, and failed states.
-4. Render the active QR code independently inside the Wails window instead of relying on the existing browser QR image endpoint.
-5. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
-6. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
+4. Validate Wails chat on Windows with the shared browser UI: start chat,
+   mobile scan, post-join synchronization, attachment upload, native save, and
+   reconnect after background/foreground switching.
+5. Render transfer QR/status natively inside the Wails window where it reduces
+   dependency on browser control pages without duplicating chat UI.
+6. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
+7. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
 
 System tray note:
 

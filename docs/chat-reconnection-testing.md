@@ -2,18 +2,20 @@
 
 ## Overview
 
-This document provides detailed testing procedures for the chat mode reconnection feature implemented to handle mobile browser background/foreground switching.
+This document provides detailed testing procedures for chat mode reconnection
+and join-bound synchronization behavior.
 
 ## Feature Summary
 
-**Problem:** Mobile browsers suspend background tabs and close SSE connections when users switch apps, causing message sync failures.
+**Problem:** Mobile browsers suspend background tabs and close SSE connections when users switch apps, causing message sync failures. New devices can also join an existing chat and must not receive messages sent before their join time.
 
 **Solution:** Implemented Page Visibility API + intelligent reconnection with:
 - Automatic reconnection when page becomes visible
-- SSE snapshot support for message recovery
+- SSE event sequence support for post-join message recovery
 - Connection health verification
 - Exponential backoff (1s → 30s)
 - Visual connection status indicators
+- Join-bound synchronization with `joinSeq` and `afterSeq`
 
 ## Prerequisites
 
@@ -39,6 +41,10 @@ eqrcp chat
 1. Scan the QR code displayed in terminal with mobile browser
 2. Verify both desktop and mobile show "Connected as [Device Name]"
 3. Send a test message from each device to confirm bidirectional sync
+
+Important sync rule: a device receives messages and attachment events from its
+own join point onward. It should recover missed messages while it was already
+joined, but it should not receive earlier chat history when it joins late.
 
 ## Test Scenarios
 
@@ -163,25 +169,27 @@ eqrcp chat
 
 ### Scenario 6: Multi-Device Synchronization
 
-**Purpose:** Verify all devices stay synchronized
+**Purpose:** Verify devices stay synchronized from their own join point
 
 **Steps:**
 1. Connect desktop browser
 2. Connect mobile device 1
-3. Connect mobile device 2 (if available)
-4. Send message from desktop: "Test 6 - From desktop"
-5. Send message from mobile 1: "Test 6 - From mobile 1"
-6. Put mobile 1 in background for 2 minutes
-7. Send message from mobile 2: "Test 6 - From mobile 2"
-8. Send message from desktop: "Test 6 - While mobile 1 background"
-9. Bring mobile 1 back to foreground
+3. Send message from desktop: "Test 6 - Before mobile 2 joins"
+4. Connect mobile device 2
+5. Verify mobile device 2 does not receive "Test 6 - Before mobile 2 joins"
+6. Send message from mobile 1: "Test 6 - From mobile 1"
+7. Put mobile 1 in background for 2 minutes
+8. Send message from mobile 2: "Test 6 - From mobile 2"
+9. Send message from desktop: "Test 6 - While mobile 1 background"
+10. Bring mobile 1 back to foreground
 
 **Expected Results:**
-- All devices show all messages
-- Mobile 1 recovers missed messages
-- Message order is consistent across all devices
+- Desktop and mobile 1 show messages sent after their joins
+- Mobile 2 starts at its join point and does not show older messages
+- Mobile 1 recovers missed post-join messages
+- Message order is consistent for messages visible to each device
 
-**Pass Criteria:** ✅ All devices show identical message history
+**Pass Criteria:** All devices show only their allowed post-join history, with no missing or duplicated post-join messages
 
 ---
 
@@ -250,7 +258,7 @@ For debugging, use remote debugging:
 Look for:
 - EventSource connection status
 - Reconnection attempts
-- SSE event IDs and message IDs
+- SSE event sequence, `joinSeq`, and cursor values
 - Health check requests
 
 ---
@@ -272,7 +280,7 @@ Look for:
 In browser DevTools → Network tab, observe:
 - `/chat/[path]/events` - SSE connection (should show "pending" when active)
 - `/chat/[path]/health` - Health check requests (when verifying connection)
-- `/chat/[path]/messages` - Message fetch requests (during recovery)
+- `/chat/[path]/messages` - Post-join message fetch requests during recovery
 
 ---
 
@@ -300,7 +308,7 @@ In browser DevTools → Network tab, observe:
 
 **Debug Steps:**
 1. Check browser console for multiple EventSource connections
-2. Verify SSE reconnects and snapshots merge correctly
+2. Verify SSE reconnects and post-join event batches merge correctly
 3. Check server logs for duplicate connections
 
 ### Issue: Reconnection takes too long
@@ -326,7 +334,7 @@ In browser DevTools → Network tab, observe:
 | 3. Long background (10 min) | Reconnect < 15s, all messages recovered |
 | 4. Network interruption | Auto-reconnect without refresh |
 | 5. Network switching | Seamless transition |
-| 6. Multi-device sync | Identical history across devices |
+| 6. Multi-device sync | Join-bound history across devices |
 | 7. Rapid switching | Stable, no errors |
 | 8. Power saving mode | Functional despite delays |
 
@@ -367,7 +375,7 @@ After completing manual testing:
 3. Consider Phase 2 enhancements:
    - Polling fallback for unstable networks
    - WebSocket migration for better mobile support
-   - Persistent message history
+   - Optional persistent message history with explicit privacy controls
 
 ---
 
@@ -386,6 +394,6 @@ go test ./server -v -run "TestChatHealth|TestChatMessagesSnapshot|TestChatPageMe
 Current test coverage:
 - ✅ Message filtering logic
 - ✅ Health endpoint
-- ✅ SSE snapshot recovery
+- ✅ SSE event sequence recovery
 - ✅ Client-side reconnection code presence
 - ⚠️ End-to-end reconnection (requires manual testing)

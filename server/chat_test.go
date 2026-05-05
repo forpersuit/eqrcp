@@ -45,9 +45,56 @@ func TestChatStatusHookUpdatesEveryMessageAndAttachment(t *testing.T) {
 	}
 }
 
-func TestChatPageReplacesRecoveredSSESnapshot(t *testing.T) {
-	if !strings.Contains(pages.Chat, "setMessages(JSON.parse(event.data) || [])") {
-		t.Fatal("chat SSE onmessage should replace local messages with the recovered snapshot")
+func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {
+	if !strings.Contains(pages.Chat, "mergeMessages(JSON.parse(event.data) || [])") {
+		t.Fatal("chat SSE onmessage should merge incoming messages via mergeMessages()")
+	}
+	if !strings.Contains(pages.Chat, "afterSeq=") {
+		t.Fatal("chat SSE reconnects should pass the current event sequence cursor")
+	}
+}
+
+func TestChatMessagesAfterSeqStartsAtJoinBoundaryAndIncludesVisibleRecall(t *testing.T) {
+	session := &chatSession{
+		attachments:     map[string]chatAttachment{},
+		subscribers:     map[chan struct{}]struct{}{},
+		dir:             t.TempDir(),
+		attachmentRoute: "/attachments",
+		startedAt:       time.Now(),
+		lastActivity:    time.Now(),
+	}
+
+	beforeJoin := session.addTextMessage("Desk", "desk-token", "before")
+	joinSeq := session.currentEventSeq()
+	afterJoin := session.addTextMessage("Mobile", "mobile-token", "after")
+	if _, ok := session.recallMessage(beforeJoin.ID, "Desk", "desk-token"); !ok {
+		t.Fatal("recall before-join message failed")
+	}
+	updates, currentSeq := session.snapshotAfterSeq(joinSeq, joinSeq)
+	if len(updates) != 1 {
+		t.Fatalf("updates after pre-join recall = %#v, want only after-join message", updates)
+	}
+	if updates[0].ID != afterJoin.ID || updates[0].Text != "after" {
+		t.Fatalf("update = %#v, want after-join message %#v", updates[0], afterJoin)
+	}
+
+	recalled, ok := session.recallMessage(afterJoin.ID, "Mobile", "mobile-token")
+	if !ok {
+		t.Fatal("recall after-join message failed")
+	}
+
+	updates, currentSeq = session.snapshotAfterSeq(joinSeq, currentSeq)
+	if currentSeq <= joinSeq {
+		t.Fatalf("current seq = %d, want > join seq %d", currentSeq, joinSeq)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("updates = %#v, want recalled after-join message", updates)
+	}
+	if updates[0].ID != afterJoin.ID || !updates[0].Recalled || updates[0].Seq != recalled.Seq {
+		t.Fatalf("update = %#v, want recalled after-join message %#v", updates[0], recalled)
+	}
+	if history := messagesAfterSeq(session.snapshot(), joinSeq, currentSeq); len(history) != 0 {
+		t.Fatalf("messagesAfterSeq(currentSeq) = %#v, want no history leak", history)
 	}
 }
 

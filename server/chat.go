@@ -36,6 +36,7 @@ type chatSession struct {
 	startedAt       time.Time
 	lastActivity    time.Time
 	state           string
+	eventSeq        int64
 	statusSeq       int64
 	hostToken       string
 	statusHook      func(ChatStatusSnapshot)
@@ -61,6 +62,8 @@ type chatMessage struct {
 	MimeType   string    `json:"mimeType,omitempty"`
 	URL        string    `json:"url,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
+	Seq        int64     `json:"seq,omitempty"`
+	createdSeq int64
 	ownerToken string
 }
 
@@ -200,12 +203,14 @@ func (s *Server) Chat() error {
 		}
 		session.mu.Lock()
 		messageCount := len(session.messages)
+		eventSeq := session.eventSeq
 		session.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"messageCount": messageCount,
+			"eventSeq":     eventSeq,
 		})
 	})
 	return nil
@@ -249,13 +254,17 @@ func (s *Server) DisplayChat() error {
 	if err := s.Chat(); err != nil {
 		return err
 	}
+	return openBrowser(s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(s.ChatHostToken()))
+}
+
+// ChatHostToken returns the hostToken for the current chat session, or empty string if none.
+func (s *Server) ChatHostToken() string {
 	s.statusMu.Lock()
-	hostToken := ""
+	defer s.statusMu.Unlock()
 	if s.chatSession != nil {
-		hostToken = s.chatSession.hostToken
+		return s.chatSession.hostToken
 	}
-	s.statusMu.Unlock()
-	return openBrowser(s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(hostToken))
+	return ""
 }
 
 func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +273,20 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 	}
 	switch r.Method {
 	case http.MethodGet:
+		afterSeq, hasAfterSeq := chatEventCursorFromRequest(r, "afterSeq")
+		joinSeq, hasJoinSeq := chatEventCursorFromRequest(r, "joinSeq")
+		if !hasJoinSeq {
+			joinSeq = afterSeq
+		}
 		w.Header().Set("Content-Type", "application/json")
+		if hasAfterSeq {
+			messages, currentSeq := session.snapshotAfterSeq(joinSeq, afterSeq)
+			w.Header().Set("X-Eqrcp-Chat-Seq", strconv.FormatInt(currentSeq, 10))
+			if err := json.NewEncoder(w).Encode(messages); err != nil {
+				log.Println(err)
+			}
+			return
+		}
 		if err := json.NewEncoder(w).Encode(session.snapshot()); err != nil {
 			log.Println(err)
 		}
@@ -411,20 +433,30 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
+	seenSeq, hasCursor := chatEventCursorFromRequest(r, "afterSeq", "Last-Event-ID")
+	joinSeq, hasJoinSeq := chatEventCursorFromRequest(r, "joinSeq")
+	if !hasCursor {
+		// New devices join at the current event boundary. They do not receive
+		// earlier session history, but they will receive later changes.
+		seenSeq = session.currentEventSeq()
+	}
+	if !hasJoinSeq {
+		joinSeq = seenSeq
+	}
+
 	write := func() bool {
-		messages := session.snapshot()
-		data, err := json.Marshal(messages)
+		toSend, currentSeq := session.snapshotAfterSeq(joinSeq, seenSeq)
+		data, err := json.Marshal(toSend)
 		if err != nil {
 			return false
 		}
-		if lastID := latestChatMessageID(messages); lastID != "" {
-			if _, err := fmt.Fprintf(w, "id: %s\n", lastID); err != nil {
-				return false
-			}
+		if _, err := fmt.Fprintf(w, "id: %d\n", currentSeq); err != nil {
+			return false
 		}
 		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
 			return false
 		}
+		seenSeq = currentSeq
 		flusher.Flush()
 		return true
 	}
@@ -549,6 +581,8 @@ func (session *chatSession) saveAttachment(sender string, token string, name str
 		ownerToken: strings.TrimSpace(token),
 	}
 	session.mu.Lock()
+	message.Seq = session.nextEventSeqLocked()
+	message.createdSeq = message.Seq
 	session.attachments[id] = chatAttachment{
 		ID:       id,
 		Path:     path,
@@ -574,6 +608,8 @@ func (session *chatSession) addMessageWithStatus(message chatMessage, statusStat
 	session.mu.Lock()
 	message.ID = session.nextMessageIDLocked()
 	message.CreatedAt = time.Now()
+	message.Seq = session.nextEventSeqLocked()
+	message.createdSeq = message.Seq
 	session.messages = append(session.messages, message)
 	session.trimHistoryLocked()
 	session.lastActivity = time.Now()
@@ -592,6 +628,18 @@ func (session *chatSession) snapshot() []chatMessage {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return append([]chatMessage(nil), session.messages...)
+}
+
+func (session *chatSession) snapshotAfterSeq(joinSeq int64, afterSeq int64) ([]chatMessage, int64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return messagesAfterSeq(session.messages, joinSeq, afterSeq), session.eventSeq
+}
+
+func (session *chatSession) currentEventSeq() int64 {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.eventSeq
 }
 
 func (session *chatSession) trimHistoryLocked() {
@@ -615,11 +663,23 @@ func (session *chatSession) trimHistoryLocked() {
 	}
 }
 
-func latestChatMessageID(messages []chatMessage) string {
-	if len(messages) == 0 {
-		return ""
+func messagesAfterSeq(messages []chatMessage, joinSeq int64, afterSeq int64) []chatMessage {
+	if joinSeq < 0 {
+		joinSeq = 0
 	}
-	return messages[len(messages)-1].ID
+	if afterSeq < 0 {
+		afterSeq = 0
+	}
+	var result []chatMessage
+	for _, message := range messages {
+		if message.Seq > afterSeq && message.createdSeq > joinSeq {
+			result = append(result, message)
+		}
+	}
+	if result == nil {
+		return []chatMessage{}
+	}
+	return result
 }
 
 func (session *chatSession) recallMessage(id string, sender string, token string) (chatMessage, bool) {
@@ -637,6 +697,7 @@ func (session *chatSession) recallMessage(id string, sender string, token string
 			return chatMessage{}, false
 		}
 		session.messages[index].Recalled = true
+		session.messages[index].Seq = session.nextEventSeqLocked()
 		if session.messages[index].URL != "" {
 			if attachment, ok := session.attachments[id]; ok && attachment.Path != "" {
 				_ = os.Remove(attachment.Path)
@@ -749,6 +810,30 @@ func (session *chatSession) nextMessageID() string {
 func (session *chatSession) nextMessageIDLocked() string {
 	session.nextID++
 	return strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(session.nextID, 36)
+}
+
+func (session *chatSession) nextEventSeqLocked() int64 {
+	session.eventSeq++
+	return session.eventSeq
+}
+
+func chatEventCursorFromRequest(r *http.Request, names ...string) (int64, bool) {
+	for _, name := range names {
+		value := r.URL.Query().Get(name)
+		if value == "" {
+			value = r.Header.Get(name)
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		seq, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || seq < 0 {
+			continue
+		}
+		return seq, true
+	}
+	return 0, false
 }
 
 func sanitizeChatSender(sender string) string {

@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1085,10 +1086,6 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			return err
 		}
 	case "chat":
-		agent.setCurrentPageURL(srv.ChatURL)
-		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
-			agent.observeChatStatus(taskID, status)
-		})
 		if agentApp.Flags.Browser {
 			if err := srv.DisplayChat(); err != nil {
 				srv.Shutdown()
@@ -1100,6 +1097,11 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 				return err
 			}
 		}
+		chatPageURL := srv.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(srv.ChatHostToken())
+		agent.setCurrentPageURL(chatPageURL)
+		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
+			agent.observeChatStatus(taskID, status)
+		})
 	default:
 		srv.Shutdown()
 		return fmt.Errorf("unsupported desktop action %q", task.Action)

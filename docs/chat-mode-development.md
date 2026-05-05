@@ -20,8 +20,7 @@ Out of scope for the first pass:
 - Persistent chat history.
 - End-to-end encryption beyond the existing local HTTP/HTTPS configuration.
 - Multi-room management.
-- Native Wails chat UI.
-- Desktop agent `chat` task integration.
+- Persistent per-device offline storage.
 
 ## Implementation Phases
 
@@ -42,7 +41,7 @@ Acceptance criteria:
 
 - Running `eqrcp chat --browser` opens the desktop chat page.
 - The terminal prints a QR URL for mobile devices.
-- Desktop and mobile browsers see the same message history.
+- Devices receive messages from their own join point onward.
 - Sending text from either browser appears on the other side without refresh.
 - Uploading a file or image creates a chat message with a download link.
 - Stopping the CLI shuts down the session.
@@ -69,18 +68,21 @@ Acceptance criteria:
 
 ### Phase 3: Wails GUI Chat Surface
 
-Status: planned.
+Status: implemented as a shared browser UI surface.
 
-- Add a `Chat` mode to the GUI.
-- Render active chat session in the app.
-- Send text and attachments from the GUI.
-- Subscribe to chat events from the GUI.
-- Show mobile QR inside the GUI.
+- [x] Add a `Chat` mode to the GUI.
+- [x] Start chat through the desktop agent.
+- [x] Render the active chat session inside the app.
+- [x] Reuse the browser chat UI through an iframe instead of duplicating chat
+  components in Wails.
+- [x] Bridge attachment saving from the iframe to the native GUI with origin and
+  source-window validation.
+- [x] Keep the mobile QR and shared chat behavior owned by the server page.
 
 Acceptance criteria:
 
-- The desktop app can create and use a chat session without relying on the
-  browser page for desktop-side messaging.
+- The desktop app can create and use a chat session.
+- Browser chat and Wails GUI chat use one shared UI implementation.
 - Mobile browser and desktop GUI stay synchronized.
 
 ## Design Notes
@@ -90,12 +92,18 @@ Acceptance criteria:
 - Store attachments as files, not base64 JSON payloads.
 - Treat the random URL path as the access token.
 - Default to temporary attachment storage for privacy and cleanup.
-- Keep chat session state independent from `transferStatus`; agent integration
-  can wrap it later as a task record.
+- Keep chat session state independent from `transferStatus`; the desktop agent
+  wraps chat as a task record.
+- New devices join at the current event sequence and do not receive earlier
+  messages.
+- Existing joined devices reconnect with `joinSeq` and `afterSeq`, so they only
+  recover missed events that happened after they joined.
+- The Wails GUI embeds the browser chat page to keep desktop and browser
+  behavior consistent and reduce duplicate UI work.
 
 ## Desktop Agent Integration
 
-Status: **Phase 2 completed**.
+Status: completed.
 
 ### Implementation Summary
 
@@ -161,13 +169,13 @@ Mobile browsers (iOS Safari, Android Chrome) suspend background tabs and close
 SSE connections when users switch apps. The current implementation does not
 detect or recover from these disconnections, causing message sync failures.
 
-### Solution Plan
+### Solution
 
 Implementing Page Visibility API + intelligent reconnection (Phase 1):
 
 - [x] Problem analysis and solution design completed
 - [x] Client-side reconnection logic with Page Visibility API
-- [x] Server-side SSE snapshot support for message recovery
+- [x] Server-side event sequence support for post-join recovery
 - [x] Connection health check endpoint
 - [x] Exponential backoff for reconnection attempts
 - [x] Visual connection status indicators
@@ -185,25 +193,25 @@ Client improvements:
 
 - Detect page visibility changes using Page Visibility API
 - Reconnect SSE only when page becomes visible
-- Use full SSE snapshots and client-side snapshot replacement to recover missed messages
+- Track `joinSeq` and `eventCursorSeq` so reconnects recover missed post-join
+  messages without exposing pre-join history
 - Verify connection health on visibility change
 - Exponential backoff with max delay cap (1s → 30s)
 - Automatic fallback to polling if EventSource unavailable
 
 Server improvements:
 
-- Return full message snapshots from SSE and GET /messages
-- Treat any client event ID as advisory only; the server always returns the bounded full snapshot
+- Return only events newer than the client's join sequence and cursor
+- Treat `joinSeq` as the lower bound for a participant's visible session data
 - Add /health endpoint for connection verification
-- Include message ID in SSE event stream
+- Include event sequence metadata in SSE payloads
 
 ### Testing Strategy
 
 Automated tests:
-- ✅ `TestChatMessagesSnapshotIgnoresLastEventIDQuery` - Snapshot recovery semantics
+- ✅ `TestChatMessagesAfterSeqStartsAtJoinBoundaryAndIncludesVisibleRecall` - Join-bound recovery semantics
 - ✅ `TestChatHealthEndpoint` - Health check endpoint
-- ✅ `TestChatMessagesSnapshotIgnoresLastEventIDQuery` - SSE snapshot support
-- ✅ `TestChatPageIncludesMessagingRoutes` - Client-side reconnection code
+- ✅ `TestChatPageMergesIncrementalSSEUpdates` - Client-side incremental merge code
 
 Manual testing required:
 - [ ] Background/foreground switching (1 min, 5 min, 10 min)

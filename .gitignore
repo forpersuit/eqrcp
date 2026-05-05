@@ -22,6 +22,9 @@ go.work
 bin/
 dist/
 build/
+desktop/gui/eqrcp-desktop
+docs/img/venv/
+*:Zone.Identifier
 
 # IDE specific files
 .idea/

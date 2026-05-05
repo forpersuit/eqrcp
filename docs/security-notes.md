@@ -10,6 +10,7 @@ The current transfer model relies on:
 - A local HTTP server that exits after transfer unless `--keep-alive` is set.
 - A receive path that writes uploaded files into a chosen directory.
 - A send path that serves only the selected file or generated zip.
+- A chat path that grants access to one active local chat session.
 - Optional HTTPS with user-provided certificate and key.
 
 ## Boundaries
@@ -17,6 +18,10 @@ The current transfer model relies on:
 This is not a full authentication system.
 
 Anyone who can reach the generated URL can download from or upload to the active transfer endpoint while the server is running.
+
+For chat mode, anyone who can reach the generated chat URL can join that active
+conversation and send text or attachments from their join point onward. New chat
+participants do not receive messages that were sent before they joined.
 
 The random path reduces accidental discovery, but it is not a replacement for authentication when running on an untrusted network.
 
@@ -31,6 +36,11 @@ Risks to handle:
 - Desktop launch errors may be invisible without a terminal.
 - File manager paths may include unusual characters or network paths.
 - Receive mode can accept large uploads up to the configured limit.
+- Chat URLs can be shared accidentally and allow local-session participation.
+
+The Wails GUI chat surface embeds the same local browser chat page. Its native
+save bridge validates the iframe source window, message origin, and attachment
+URL origin before opening a native save dialog.
 
 ## Recommendations For Desktop Mode
 
@@ -66,3 +76,4 @@ Possible future improvements:
 - Clear warning when listening on `0.0.0.0`.
 - Explicit allowlist of local network interfaces.
 - Dedicated local status page with a stop button.
+- Optional chat join confirmation or participant list.

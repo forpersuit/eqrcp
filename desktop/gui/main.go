@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"net/http"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -27,6 +28,17 @@ func main() {
 		HideWindowOnClose: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+			// Inject CSP that allows the chat iframe (served by the local agent
+			// HTTP server at 127.0.0.1) to load inside this Wails webview.
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Security-Policy",
+						"default-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
+							"connect-src 'self' http://127.0.0.1:* http://localhost:*; "+
+							"frame-src http://*:* https://*:*")
+					next.ServeHTTP(w, r)
+				})
+			},
 		},
 		BackgroundColour: &options.RGBA{R: 245, G: 247, B: 244, A: 1},
 		OnStartup: func(ctx context.Context) {
