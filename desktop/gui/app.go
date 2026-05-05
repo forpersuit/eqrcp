@@ -112,6 +112,7 @@ func (a *App) showWindow() {
 	if a.ctx == nil {
 		return
 	}
+	wailsruntime.WindowUnminimise(a.ctx)
 	wailsruntime.WindowShow(a.ctx)
 }
 

@@ -793,6 +793,10 @@ dd {
     padding: 14px;
 }
 
+.chat-qr-card-large {
+    min-height: 280px;
+}
+
 .chat-qr-card img {
     background: white;
     border: 1px solid var(--line);
@@ -800,7 +804,7 @@ dd {
     image-rendering: pixelated;
     max-width: 100%;
     padding: 10px;
-    width: clamp(180px, 72%, 260px);
+    width: min(100%, 280px);
 }
 
 .chat-qr-content {
@@ -825,6 +829,10 @@ dd {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.chat-qr-diag {
+    color: #8b6a1b;
 }
 
 .chat-url-row svg,
@@ -1027,6 +1035,10 @@ dd {
     }
 
     .chat-qr-card img {
-        width: min(62vw, 260px);
+        width: min(66vw, 280px);
+    }
+
+    .chat-qr-card-large {
+        min-height: 240px;
     }
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -89,6 +90,25 @@ func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {
 	}
 	if !strings.Contains(pages.Chat, "token=") {
 		t.Fatal("chat SSE connects should identify the client token for presence")
+	}
+}
+
+func TestChatQRImageRouteReturnsPNG(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	req := httptest.NewRequest(http.MethodGet, "/chat/test/qr/image", nil)
+	resp := httptest.NewRecorder()
+	server.mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("qr image status = %d, want %d", resp.Code, http.StatusOK)
+	}
+	if got := resp.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("Content-Type = %q, want image/png", got)
+	}
+	if _, err := png.Decode(bytes.NewReader(resp.Body.Bytes())); err != nil {
+		t.Fatalf("qr image is not valid png: %v", err)
 	}
 }
 

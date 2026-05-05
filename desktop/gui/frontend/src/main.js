@@ -362,7 +362,7 @@ function renderChatSide() {
                 </div>
                 ${state.chatQROpen ? `
                     <div class="chat-qr-content">
-                        <div class="chat-qr-card">
+                        <div class="chat-qr-card chat-qr-card-large">
                             ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : '<div class="empty-state">Waiting for QR</div>'}
                         </div>
                         <div class="chat-url-row">

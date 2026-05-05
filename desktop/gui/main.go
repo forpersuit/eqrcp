@@ -35,13 +35,19 @@ func main() {
 					w.Header().Set("Content-Security-Policy",
 						"default-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
 							"connect-src 'self' http://127.0.0.1:* http://localhost:*; "+
-							"img-src 'self' data: http://127.0.0.1:* http://localhost:*; "+
+							"img-src 'self' data: http://127.0.0.1:* http://localhost:* http://*:* https://*:*; "+
 							"frame-src http://*:* https://*:*")
 					next.ServeHTTP(w, r)
 				})
 			},
 		},
 		BackgroundColour: &options.RGBA{R: 245, G: 247, B: 244, A: 1},
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "eqrcp-desktop",
+			OnSecondInstanceLaunch: func(data options.SecondInstanceData) {
+				app.showWindow()
+			},
+		},
 		OnStartup: func(ctx context.Context) {
 			app.startup(ctx)
 			tray.startTray()
