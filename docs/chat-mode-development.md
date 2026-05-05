@@ -78,12 +78,21 @@ Status: implemented as a shared browser UI surface.
 - [x] Bridge attachment saving from the iframe to the native GUI with origin and
   source-window validation.
 - [x] Keep the mobile QR and shared chat behavior owned by the server page.
+- [x] Let the shared chat page detect Wails iframe embedding and present a
+  clean message/composer surface without duplicating the desktop app's outer
+  status header.
+- [x] Align composer behavior with common chat expectations: Enter sends,
+  Shift+Enter inserts a newline, empty sends are disabled, and pasted
+  clipboard files upload as attachments.
 
 Acceptance criteria:
 
 - The desktop app can create and use a chat session.
 - Browser chat and Wails GUI chat use one shared UI implementation.
 - Mobile browser and desktop GUI stay synchronized.
+- Desktop iframe chat does not reserve an unused session-side column.
+- Message actions stay quiet on desktop until hover/focus, while mobile keeps
+  touch actions visible.
 
 ## Design Notes
 
@@ -100,6 +109,9 @@ Acceptance criteria:
   recover missed events that happened after they joined.
 - The Wails GUI embeds the browser chat page to keep desktop and browser
   behavior consistent and reduce duplicate UI work.
+- The shared chat page adapts its chrome by context: standalone browser pages
+  keep the session QR controls, while embedded Wails pages focus on the
+  message thread and composer because the desktop shell owns session status.
 
 ## Desktop Agent Integration
 

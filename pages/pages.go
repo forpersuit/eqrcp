@@ -641,6 +641,9 @@ var Chat = `
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>eqrcp chat</title>
+    <script>
+        if (window.parent !== window) { document.documentElement.classList.add('embedded-chat'); }
+    </script>
     <style>
         :root {
             --ink: #18211f;
@@ -664,13 +667,24 @@ var Chat = `
         }
         main {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 300px;
+            grid-template-columns: minmax(0, 1fr);
             gap: 14px;
             height: 100%;
-            max-width: 960px;
+            max-width: 860px;
             margin: 0 auto;
             padding: 16px 28px;
         }
+        html.embedded-chat body { background: transparent; }
+        html.embedded-chat main {
+            max-width: none;
+            padding: 0;
+        }
+        html.embedded-chat .chat-shell {
+            border: 0;
+            border-radius: 0;
+            height: 100%;
+        }
+        html.embedded-chat .chat-head { display: none; }
         /* ── Chat shell ── */
         .chat-shell {
             background: var(--panel);
@@ -741,7 +755,7 @@ var Chat = `
             background: var(--bg);
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
             overflow: auto;
             padding: 16px;
             touch-action: pan-y;
@@ -765,7 +779,7 @@ var Chat = `
         .message {
             display: flex;
             flex-direction: column;
-            max-width: min(480px, 72%);
+            max-width: min(560px, 78%);
             width: fit-content;
         }
         .message.mine {
@@ -781,7 +795,7 @@ var Chat = `
             max-width: 90%;
         }
         .message:has(.attachment-card) {
-            max-width: min(320px, 76%);
+            max-width: min(340px, 76%);
         }
         .sender {
             align-items: center;
@@ -898,7 +912,19 @@ var Chat = `
         .file-name { color: var(--ink); font-weight: 700; overflow-wrap: anywhere; }
         .file-meta { color: var(--muted); font-size: 12px; margin-top: 2px; text-align: right; }
         /* ── Bubble action buttons ── */
-        .bubble-actions { display: flex; gap: 5px; margin-top: 5px; }
+        .bubble-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.12s ease;
+        }
+        .message:hover .bubble-actions,
+        .message:focus-within .bubble-actions {
+            opacity: 1;
+            pointer-events: auto;
+        }
         .bubble-action {
             align-items: center;
             background: rgba(255,255,255,0.82);
@@ -984,7 +1010,7 @@ var Chat = `
         .file-label svg,
         .send-button svg { fill: none; height: 18px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 18px; }
         .send-button { background: var(--accent); color: white; }
-        .send-button:hover { background: var(--accent-strong); }
+        .send-button:hover:not(:disabled) { background: var(--accent-strong); }
         button:disabled { cursor: default; opacity: 0.6; }
         /* ── Right panel ── */
         .side {
@@ -1057,6 +1083,20 @@ var Chat = `
         .side-divider { border: 0; border-top: 1px solid var(--line); }
         /* ── Backdrops ── */
         .session-backdrop { display: none; }
+        .session-backdrop.open {
+            background: rgba(15,23,42,0.42);
+            display: grid;
+            inset: 0;
+            padding: 22px;
+            place-items: center;
+            position: fixed;
+            z-index: 20;
+        }
+        .session-backdrop.open .side {
+            align-self: center;
+            max-height: calc(100vh - 44px);
+            width: min(340px, calc(100vw - 44px));
+        }
         .preview-backdrop { display: none; }
         .preview-backdrop.open {
             background: rgba(15,23,42,0.78);
@@ -1105,6 +1145,7 @@ var Chat = `
             .messages { padding: 12px; }
             .composer { padding: 8px 10px 12px; }
             .side { display: none; }
+            .bubble-actions { opacity: 1; pointer-events: auto; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
             .message { max-width: 88%; }
             .message:has(.attachment-card) { max-width: 82%; }
@@ -1154,10 +1195,10 @@ var Chat = `
             <form class="composer" id="composer">
                 <div class="compose-row">
                     <label class="file-label" for="file-input" title="Attach file" aria-label="Attach file">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.83-2.83l8.49-8.48"></path></svg>
                     </label>
-                    <textarea id="message-text" placeholder="Type a message" autocomplete="off"></textarea>
-                    <button class="send-button" type="submit" aria-label="Send">
+                    <textarea id="message-text" placeholder="Type a message or paste an image" autocomplete="off"></textarea>
+                    <button class="send-button" id="send-button" type="submit" aria-label="Send" disabled>
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>
                     </button>
                 </div>
@@ -1209,6 +1250,7 @@ var Chat = `
         };
         var messagesEl = document.getElementById('messages');
         var textEl = document.getElementById('message-text');
+        var sendButton = document.getElementById('send-button');
         var fileEl = document.getElementById('file-input');
         var connectionEl = document.getElementById('connection-state');
         var onlineDot = document.getElementById('online-dot');
@@ -1327,6 +1369,7 @@ var Chat = `
             edit.addEventListener('click', function() {
                 textEl.value = message.text || '';
                 resizeComposer();
+                updateComposerState();
                 textEl.focus();
             });
             wrap.appendChild(edit);
@@ -1568,11 +1611,12 @@ var Chat = `
                 .catch(function() { setConnectionState(false, 'Disconnected. Retrying...'); });
         }
         function sendText(event) {
-            event.preventDefault();
+            if (event) { event.preventDefault(); }
             var text = textEl.value.trim();
             if (!text) { return; }
             textEl.value = '';
             resizeComposer();
+            updateComposerState();
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1584,6 +1628,7 @@ var Chat = `
                 setConnectionState(true, 'Message send failed.');
                 textEl.value = text;
                 resizeComposer();
+                updateComposerState();
             });
         }
         function recallMessage(message) {
@@ -1604,13 +1649,17 @@ var Chat = `
         }
         function uploadFiles() {
             if (!fileEl.files || !fileEl.files.length) { return; }
+            uploadFileList(fileEl.files);
+            fileEl.value = '';
+        }
+        function uploadFileList(files) {
+            if (!files || !files.length) { return; }
             var data = new FormData();
             data.append('sender', state.sender);
             data.append('token', state.token);
-            Array.prototype.forEach.call(fileEl.files, function(file) {
+            Array.prototype.forEach.call(files, function(file) {
                 data.append('files', file, file.name || 'attachment');
             });
-            fileEl.value = '';
             fetch('{{.AttachmentsRoute}}', {method: 'POST', body: data})
                 .then(function(r) { if (!r.ok) { throw new Error('upload failed'); } return r.json(); })
                 .catch(function() { setConnectionState(true, 'Attachment upload failed.'); });
@@ -1632,10 +1681,31 @@ var Chat = `
             textEl.style.height = 'auto';
             textEl.style.height = Math.min(textEl.scrollHeight, 120) + 'px';
         }
+        function updateComposerState() {
+            sendButton.disabled = textEl.value.trim().length === 0;
+        }
+        function handleComposerInput() {
+            resizeComposer();
+            updateComposerState();
+        }
+        function handleComposerKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+                event.preventDefault();
+                sendText(event);
+            }
+        }
+        function handleComposerPaste(event) {
+            var files = event.clipboardData && event.clipboardData.files;
+            if (!files || !files.length) { return; }
+            event.preventDefault();
+            uploadFileList(files);
+        }
 
         document.getElementById('composer').addEventListener('submit', sendText);
         fileEl.addEventListener('change', uploadFiles);
-        textEl.addEventListener('input', resizeComposer);
+        textEl.addEventListener('input', handleComposerInput);
+        textEl.addEventListener('keydown', handleComposerKeydown);
+        textEl.addEventListener('paste', handleComposerPaste);
         document.getElementById('copy-url').addEventListener('click', copyURL);
         document.getElementById('share-session').addEventListener('click', openSessionPanel);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
@@ -1656,6 +1726,7 @@ var Chat = `
 
         setConnectionState(false, 'Connecting...');
         resizeComposer();
+        updateComposerState();
 
         // ── SSE reconnection with Page Visibility API ──
         var reconnectDelay = 1000;

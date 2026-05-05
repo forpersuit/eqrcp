@@ -203,6 +203,11 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		"visibilitychange",  // Check for Page Visibility API
 		`id="share-session"`,
 		`id="close-page"`,
+		`id="send-button"`,
+		`embedded-chat`,
+		`handleComposerKeydown`,
+		`clipboardData.files`,
+		`Type a message or paste an image`,
 		`attachment-card`,
 		`downloadURL(message.url)`,
 		`Device `,

@@ -348,6 +348,37 @@ Expected result:
 - Posting to `/qr/stop` stops the server.
 - With the browser QR page enabled, successful one-shot transfers keep `/qr/status` available briefly after completion so the page can display `completed` before the process exits.
 
+## Chat UI Checks
+
+The chat surface is served by the Go template in `pages.Chat` and is reused by
+the Wails desktop app through an iframe.
+
+Expected result:
+
+- Standalone browser chat opens as a self-contained session page with QR,
+  copy URL, stop, message, attachment, and image preview controls.
+- Embedded Wails chat detects iframe context and uses the desktop shell for
+  status chrome, leaving the iframe focused on the message thread and composer.
+- The message thread uses left/right bubbles, system messages, timestamps, and
+  attachment cards without reserving an empty desktop side column.
+- On desktop pointer devices, message download/recall actions appear on
+  hover/focus; on mobile/touch layouts, these actions remain visible.
+- The composer disables empty sends, sends on Enter, preserves Shift+Enter for
+  new lines, and uploads pasted clipboard files as attachments.
+
+Automated checks:
+
+```sh
+GOCACHE=/tmp/eqrcp-go-build go test ./server
+```
+
+Expected result:
+
+- The chat template includes messaging, attachment, QR, stop, and reconnection
+  routes.
+- The chat template includes embedded iframe detection, Enter-key composer
+  handling, pasted-file handling, and the disabled send button.
+
 ## Mobile Upload Completion Page
 
 After a phone uploads files to a receive session, the browser response should make the result clear without needing the desktop QR page.
