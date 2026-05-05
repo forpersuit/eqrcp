@@ -61,6 +61,7 @@ type desktopAgentTaskRecord struct {
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
 	ChatState           string     `json:"chatState,omitempty"`
 	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
+	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`
 	ChatLastActivity    string     `json:"chatLastActivity,omitempty"`
 	PageURL             string     `json:"pageUrl,omitempty"`
 	Error               string     `json:"error,omitempty"`
@@ -675,6 +676,7 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	}
 	agent.current.ChatState = status.State
 	agent.current.ChatMessageCount = status.MessageCount
+	agent.current.ChatDeviceCount = status.DeviceCount
 	if !status.LastActivity.IsZero() {
 		agent.current.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
 	}
@@ -1520,6 +1522,9 @@ func writeDesktopAgentRecord(builder *strings.Builder, record desktopAgentTaskRe
 			builder.WriteString(fmt.Sprintf("%s  chat: %s", indent, record.ChatState))
 			if record.ChatMessageCount > 0 {
 				builder.WriteString(fmt.Sprintf(" (%d messages)", record.ChatMessageCount))
+			}
+			if record.ChatDeviceCount > 0 {
+				builder.WriteString(fmt.Sprintf(", %d devices", record.ChatDeviceCount))
 			}
 			builder.WriteString("\n")
 		}

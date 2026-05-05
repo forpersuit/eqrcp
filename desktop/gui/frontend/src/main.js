@@ -40,6 +40,8 @@ const state = {
     browserFallback: false,
     chatAutoSave: true,
     chatQROpen: false,
+    lastChatDeviceCount: 0,
+    activeChatTaskId: 0,
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
@@ -333,6 +335,7 @@ function renderChatSide() {
     const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
     const deviceCount = chatDeviceCount(task);
     const qrImage = qrImageURL(chatUrl);
+    const qrToggleLabel = state.chatQROpen ? 'Hide chat QR' : 'Show chat QR';
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
@@ -350,15 +353,14 @@ function renderChatSide() {
                 ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
                 <div class="chat-side-actions" aria-label="Chat actions">
                     <button type="button" class="side-icon-button with-label copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}<span>Copy URL</span></button>
-                    <button type="button" class="side-icon-button with-label refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}<span>Refresh</span></button>
-                    <button type="button" class="side-icon-button with-label open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}<span>Open</span></button>
-                    <button type="button" class="side-icon-button with-label danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}<span>Stop</span></button>
+                    <button type="button" class="side-icon-button with-label" id="chat-qr-toggle" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}<span>QR</span></button>
+                    <button type="button" class="side-icon-button with-label open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}<span>Browser</span></button>
                 </div>
             </div>
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <h2>Scan to Join Chat</h2>
-                    <button type="button" class="side-icon-button" id="chat-qr-toggle" title="Toggle QR" aria-label="Toggle QR">${chevronIcon(state.chatQROpen)}</button>
+                    <button type="button" class="side-icon-button chat-qr-toggle-action" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${chevronIcon(state.chatQROpen)}</button>
                 </div>
                 ${state.chatQROpen ? `
                     <div class="chat-qr-card">
@@ -402,7 +404,7 @@ function chatStateLabel(chatState) {
 }
 
 function chatDeviceCount(task) {
-    return task ? 1 : 0;
+    return task ? Math.max(1, Number(task.chatDeviceCount || 0)) : 0;
 }
 
 function renderPanel() {
@@ -639,6 +641,9 @@ function bindEvents() {
         button.addEventListener('click', copyChatURL);
     });
     document.querySelector('#chat-qr-toggle')?.addEventListener('click', toggleChatQR);
+    document.querySelectorAll('.chat-qr-toggle-action').forEach((button) => {
+        button.addEventListener('click', toggleChatQR);
+    });
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
 }
@@ -703,6 +708,7 @@ async function startChat() {
         state.status = await Chat();
         state.mode = 'chat';
         state.notice = 'Chat session started.';
+        reconcileChatQRState(state.status);
         if (state.chatAutoSave) {
             state.chatSaveDir = await ChatSaveDirectory();
         }
@@ -958,6 +964,7 @@ async function loadSettings() {
 
 async function loadStatusData() {
     state.status = await AgentStatus();
+    reconcileChatQRState(state.status);
     render();
 }
 
@@ -1011,6 +1018,7 @@ function connectAgentEvents() {
     agentEvents.onmessage = (event) => {
         try {
             state.status = JSON.parse(event.data);
+            reconcileChatQRState(state.status);
             render();
         } catch {
             refreshStatus(false);
@@ -1091,6 +1099,27 @@ function activeChatTask() {
     return task;
 }
 
+function reconcileChatQRState(status) {
+    const task = status?.current;
+    if (!task || task.action !== 'chat' || isTerminal(task)) {
+        state.activeChatTaskId = 0;
+        state.lastChatDeviceCount = 0;
+        state.chatQROpen = false;
+        return;
+    }
+    const deviceCount = chatDeviceCount(task);
+    if (state.activeChatTaskId !== task.id) {
+        state.activeChatTaskId = task.id;
+        state.lastChatDeviceCount = deviceCount;
+        state.chatQROpen = deviceCount <= 1;
+        return;
+    }
+    if (deviceCount > 1 && state.lastChatDeviceCount <= 1) {
+        state.chatQROpen = false;
+    }
+    state.lastChatDeviceCount = deviceCount;
+}
+
 function shareItemStatus(task, path) {
     const current = shortName(task.transferCurrent || '');
     if (current && current === shortName(path)) {
@@ -1148,6 +1177,10 @@ function copyIcon() {
 
 function browserIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13 13 0 0 1 0 18"></path><path d="M12 3a13 13 0 0 0 0 18"></path></svg>';
+}
+
+function qrIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>';
 }
 
 function folderIcon() {

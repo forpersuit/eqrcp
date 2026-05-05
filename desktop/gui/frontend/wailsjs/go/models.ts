@@ -16,6 +16,7 @@ export namespace main {
 	    savedFiles?: string[];
 	    chatState?: string;
 	    chatMessageCount?: number;
+	    chatDeviceCount?: number;
 	    chatLastActivity?: string;
 	    pageUrl?: string;
 	    error?: string;
@@ -46,6 +47,7 @@ export namespace main {
 	        this.savedFiles = source["savedFiles"];
 	        this.chatState = source["chatState"];
 	        this.chatMessageCount = source["chatMessageCount"];
+	        this.chatDeviceCount = source["chatDeviceCount"];
 	        this.chatLastActivity = source["chatLastActivity"];
 	        this.pageUrl = source["pageUrl"];
 	        this.error = source["error"];

@@ -45,12 +45,50 @@ func TestChatStatusHookUpdatesEveryMessageAndAttachment(t *testing.T) {
 	}
 }
 
+func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
+	var snapshots []ChatStatusSnapshot
+	session := &chatSession{
+		attachments: map[string]chatAttachment{},
+		subscribers: map[chan struct{}]struct{}{},
+		clients:     map[string]int{},
+		startedAt:   time.Now(),
+		state:       "waiting",
+		statusHook: func(snapshot ChatStatusSnapshot) {
+			snapshots = append(snapshots, snapshot)
+		},
+	}
+
+	desktopDone := session.registerClient("desktop-token", "")
+	mobileDone := session.registerClient("mobile-token", "")
+	mobileDone()
+	desktopDone()
+
+	if len(snapshots) != 4 {
+		t.Fatalf("status hook calls = %d, want 4", len(snapshots))
+	}
+	if snapshots[0].DeviceCount != 1 || snapshots[0].State != "waiting" {
+		t.Fatalf("snapshot[0] = %#v, want one waiting device", snapshots[0])
+	}
+	if snapshots[1].DeviceCount != 2 || snapshots[1].State != "active" {
+		t.Fatalf("snapshot[1] = %#v, want two active devices", snapshots[1])
+	}
+	if snapshots[2].DeviceCount != 1 {
+		t.Fatalf("snapshot[2] = %#v, want one device after mobile disconnect", snapshots[2])
+	}
+	if snapshots[3].DeviceCount != 0 {
+		t.Fatalf("snapshot[3] = %#v, want no connected devices", snapshots[3])
+	}
+}
+
 func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {
 	if !strings.Contains(pages.Chat, "mergeMessages(JSON.parse(event.data) || [])") {
 		t.Fatal("chat SSE onmessage should merge incoming messages via mergeMessages()")
 	}
 	if !strings.Contains(pages.Chat, "afterSeq=") {
 		t.Fatal("chat SSE reconnects should pass the current event sequence cursor")
+	}
+	if !strings.Contains(pages.Chat, "token=") {
+		t.Fatal("chat SSE connects should identify the client token for presence")
 	}
 }
 

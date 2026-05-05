@@ -840,6 +840,7 @@ func TestDesktopAgentObservesChatStatus(t *testing.T) {
 	agent.observeChatStatus(5, server.ChatStatusSnapshot{
 		State:        "active",
 		MessageCount: 12,
+		DeviceCount:  2,
 		StartedAt:    time.Now(),
 		LastActivity: time.Now(),
 	})
@@ -853,6 +854,9 @@ func TestDesktopAgentObservesChatStatus(t *testing.T) {
 	}
 	if status.Current.ChatMessageCount != 12 {
 		t.Fatalf("ChatMessageCount = %d, want 12", status.Current.ChatMessageCount)
+	}
+	if status.Current.ChatDeviceCount != 2 {
+		t.Fatalf("ChatDeviceCount = %d, want 2", status.Current.ChatDeviceCount)
 	}
 	if status.Current.ChatLastActivity == "" {
 		t.Fatal("ChatLastActivity is empty, want timestamp")

@@ -30,6 +30,7 @@ type chatSession struct {
 	messages        []chatMessage
 	attachments     map[string]chatAttachment
 	subscribers     map[chan struct{}]struct{}
+	clients         map[string]int
 	nextID          int64
 	dir             string
 	attachmentRoute string
@@ -46,6 +47,7 @@ type chatSession struct {
 type ChatStatusSnapshot struct {
 	State        string    `json:"state"` // "waiting", "active", "ended", "stopped", "failed", "replaced"
 	MessageCount int       `json:"messageCount"`
+	DeviceCount  int       `json:"deviceCount"`
 	StartedAt    time.Time `json:"startedAt"`
 	LastActivity time.Time `json:"lastActivity"`
 	Seq          int64     `json:"seq"`
@@ -95,6 +97,7 @@ func (s *Server) Chat() error {
 	session := &chatSession{
 		attachments:     map[string]chatAttachment{},
 		subscribers:     map[chan struct{}]struct{}{},
+		clients:         map[string]int{},
 		dir:             dir,
 		attachmentRoute: attachmentsRoute,
 		startedAt:       time.Now(),
@@ -443,6 +446,8 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	if !hasJoinSeq {
 		joinSeq = seenSeq
 	}
+	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.RemoteAddr)
+	defer unregisterClient()
 
 	write := func() bool {
 		toSend, currentSeq := session.snapshotAfterSeq(joinSeq, seenSeq)
@@ -481,6 +486,39 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 			}
 			flusher.Flush()
 		}
+	}
+}
+
+func (session *chatSession) registerClient(token string, fallback string) func() {
+	client := strings.TrimSpace(token)
+	if client == "" {
+		client = strings.TrimSpace(fallback)
+	}
+	if client == "" {
+		return func() {}
+	}
+	session.mu.Lock()
+	if session.clients == nil {
+		session.clients = map[string]int{}
+	}
+	session.clients[client]++
+	nextState := session.state
+	if len(session.clients) > 1 && !isTerminalChatState(session.state) {
+		nextState = "active"
+	}
+	hook, snapshot := session.statusSnapshotLocked(nextState)
+	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
+	return func() {
+		session.mu.Lock()
+		if count := session.clients[client]; count <= 1 {
+			delete(session.clients, client)
+		} else {
+			session.clients[client] = count - 1
+		}
+		hook, snapshot := session.statusSnapshotLocked(session.state)
+		session.mu.Unlock()
+		notifyChatStatusHook(hook, snapshot)
 	}
 }
 
@@ -770,6 +808,7 @@ func (session *chatSession) statusSnapshotLocked(state string) (func(ChatStatusS
 	snapshot := ChatStatusSnapshot{
 		State:        session.state,
 		MessageCount: len(session.messages),
+		DeviceCount:  len(session.clients),
 		StartedAt:    session.startedAt,
 		LastActivity: session.lastActivity,
 		Seq:          session.statusSeq,

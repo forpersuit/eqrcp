@@ -1841,10 +1841,14 @@ var Chat = `
                 'afterSeq=' + encodeURIComponent(String(eventCursorSeq)) +
                 '&joinSeq=' + encodeURIComponent(String(hasJoinSeq ? joinSeq : eventCursorSeq));
         }
+        function withClientToken(route) {
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep + 'token=' + encodeURIComponent(state.token);
+        }
 
         function connectSSE() {
             if (events) { events.close(); events = null; }
-            var route = eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}';
+            var route = withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}');
             events = new EventSource(route);
             events.onopen = function() {
                 reconnectDelay = 1000;
