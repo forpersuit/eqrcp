@@ -361,10 +361,14 @@ Expected result:
   status chrome, leaving the iframe focused on the message thread and composer.
 - The message thread uses left/right bubbles, system messages, timestamps, and
   attachment cards without reserving an empty desktop side column.
+- The composer stays visible by default, is styled as a chat input dock, and
+  keeps unsent text in local browser storage so refreshes can restore drafts.
 - On desktop pointer devices, message download/recall actions appear on
   hover/focus; on mobile/touch layouts, these actions remain visible.
 - The composer disables empty sends, sends on Enter, preserves Shift+Enter for
   new lines, and uploads pasted clipboard files as attachments.
+- The composer and message thread are separated by a stronger dock boundary so
+  the input area reads like a chat control rather than a generic form.
 
 Automated checks:
 
@@ -377,7 +381,8 @@ Expected result:
 - The chat template includes messaging, attachment, QR, stop, and reconnection
   routes.
 - The chat template includes embedded iframe detection, Enter-key composer
-  handling, pasted-file handling, and the disabled send button.
+  handling, pasted-file handling, draft restoration, and the disabled send
+  button.
 
 ## Mobile Upload Completion Page
 

@@ -687,9 +687,9 @@ var Chat = `
         html.embedded-chat .chat-head { display: none; }
         /* ── Chat shell ── */
         .chat-shell {
-            background: var(--panel);
+            background: linear-gradient(180deg, #ffffff 0%, #fbfcfa 100%);
             border: 1px solid var(--line);
-            border-radius: 10px;
+            border-radius: 12px;
             display: grid;
             grid-template-rows: auto minmax(0, 1fr) auto;
             overflow: hidden;
@@ -752,12 +752,12 @@ var Chat = `
         /* ── Message thread ── */
         .messages {
             -webkit-overflow-scrolling: touch;
-            background: var(--bg);
+            background: linear-gradient(180deg, #f4f7f4 0%, #f8faf7 100%);
             display: flex;
             flex-direction: column;
             gap: 8px;
             overflow: auto;
-            padding: 16px;
+            padding: 16px 16px 22px;
             touch-action: pan-y;
         }
         /* ── Empty state ── */
@@ -1014,53 +1014,114 @@ var Chat = `
         .scroll-arrow svg { fill: none; height: 18px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 18px; }
         /* ── Compose bar ── */
         .composer {
-            background: var(--panel);
-            border-top: 1px solid var(--line);
-            padding: 10px 14px;
-            padding-bottom: max(12px, env(safe-area-inset-bottom));
+            background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
+            border-top: 1px solid rgba(215, 222, 215, 0.92);
+            box-shadow: 0 -10px 30px rgba(24, 33, 31, 0.06);
+            padding: 14px 14px 16px;
+            padding-bottom: max(14px, env(safe-area-inset-bottom));
+            position: relative;
+        }
+        .composer::before {
+            background: linear-gradient(90deg, transparent, rgba(215, 222, 215, 0.95), transparent);
+            content: '';
+            height: 1px;
+            left: 16px;
+            position: absolute;
+            right: 16px;
+            top: 0;
+        }
+        .composer-shell {
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(201, 212, 203, 0.95);
+            border-radius: 20px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.78), 0 8px 22px rgba(24, 33, 31, 0.03);
+            padding: 14px;
         }
         .compose-row {
             align-items: center;
             display: grid;
+            gap: 10px;
+            grid-template-columns: 44px minmax(0,1fr) 44px;
+        }
+        .composer-tip {
+            align-items: center;
+            color: var(--muted);
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 12px;
             gap: 8px;
-            grid-template-columns: 40px minmax(0,1fr) 40px;
+            justify-content: space-between;
+            line-height: 1.4;
+            margin-bottom: 12px;
+            padding: 0 2px;
+        }
+        .composer-tip strong {
+            color: var(--accent-strong);
+            font-weight: 800;
+        }
+        .composer-chip {
+            align-items: center;
+            background: #eaf5ee;
+            border: 1px solid #c8e0d1;
+            border-radius: 999px;
+            color: var(--accent-strong);
+            display: inline-flex;
+            font-size: 11px;
+            font-weight: 800;
+            gap: 6px;
+            min-height: 26px;
+            padding: 4px 10px;
+            white-space: nowrap;
         }
         textarea {
-            background: var(--bg);
-            border: 1px solid var(--line);
+            background: linear-gradient(180deg, #f8fbf8, #ffffff);
+            border: 1px solid #c9d6cd;
             border-radius: 20px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
             color: var(--ink);
             font: inherit;
             font-size: 15px;
-            line-height: 20px;
-            max-height: 128px;
-            min-height: 40px;
+            line-height: 1.5;
+            max-height: 168px;
+            min-height: 52px;
             min-width: 0;
             overflow-y: auto;
-            padding: 10px 14px;
+            padding: 13px 15px;
             resize: none;
             width: 100%;
         }
-        textarea:focus { border-color: var(--accent); outline: none; }
+        textarea::placeholder { color: #8b978e; }
+        textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(21, 111, 90, 0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+            outline: none;
+        }
         button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: inherit; }
         .file-label,
         .send-button {
             border-radius: 999px;
-            height: 40px;
+            height: 46px;
             padding: 0;
-            width: 40px;
+            width: 46px;
         }
         .file-label {
-            background: var(--wash);
-            border: 1px solid var(--line);
+            background: #eef4ef;
+            border: 1px solid #cdd8cf;
             color: var(--accent-strong);
             cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
         }
-        .file-label:hover { background: #ddeade; }
+        .file-label:hover { background: #e2ece4; }
         .file-label svg,
         .send-button svg { fill: none; height: 18px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 18px; }
-        .send-button { background: var(--accent); color: white; }
-        .send-button:hover:not(:disabled) { background: var(--accent-strong); }
+        .send-button {
+            background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+            box-shadow: 0 10px 20px rgba(21, 111, 90, 0.24);
+            color: white;
+        }
+        .send-button:hover:not(:disabled) {
+            filter: brightness(1.03);
+        }
         button:disabled { cursor: default; opacity: 0.6; }
         /* ── Right panel ── */
         .side {
@@ -1192,8 +1253,10 @@ var Chat = `
                 height: 100%;
             }
             .chat-head { position: sticky; top: 0; z-index: 2; }
-            .messages { padding: 12px; }
-            .composer { padding: 8px 10px 12px; }
+            .messages { padding: 12px 12px 18px; }
+            .composer { padding: 10px 10px 12px; }
+            .composer-shell { padding: 10px; }
+            .composer-tip { gap: 6px; }
             .side { display: none; }
             .bubble-actions { opacity: 1; pointer-events: auto; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
@@ -1243,14 +1306,20 @@ var Chat = `
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m5 16 7 6 7-6"/></svg>
             </button>
             <form class="composer" id="composer">
-                <div class="compose-row">
-                    <label class="file-label" for="file-input" title="Add attachment" aria-label="Add attachment">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-                    </label>
-                    <textarea id="message-text" placeholder="Type a message or paste an image" autocomplete="off"></textarea>
-                    <button class="send-button" id="send-button" type="submit" aria-label="Send" disabled>
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>
-                    </button>
+                <div class="composer-shell">
+                    <div class="composer-tip">
+                        <div><strong>Message</strong> Enter sends, Shift+Enter adds a new line. Paste images or files directly into the box.</div>
+                        <span class="composer-chip">Keyboard first</span>
+                    </div>
+                    <div class="compose-row">
+                        <label class="file-label" for="file-input" title="Add attachment" aria-label="Add attachment">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                        </label>
+                        <textarea id="message-text" placeholder="Type a message or paste an image" autocomplete="off"></textarea>
+                        <button class="send-button" id="send-button" type="submit" aria-label="Send" disabled>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>
+                        </button>
+                    </div>
                 </div>
                 <input id="file-input" class="hidden" type="file" multiple>
             </form>
@@ -1298,6 +1367,7 @@ var Chat = `
             sender: currentSender(),
             token: currentClientToken()
         };
+        var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
         var textEl = document.getElementById('message-text');
         var sendButton = document.getElementById('send-button');
@@ -1345,6 +1415,38 @@ var Chat = `
             }
             window.localStorage.setItem(key, token);
             return token;
+        }
+        function readDraft() {
+            try {
+                var raw = window.localStorage.getItem(draftKey);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+        function saveDraft() {
+            try {
+                var text = textEl.value;
+                if (!text || !text.trim()) {
+                    window.localStorage.removeItem(draftKey);
+                    return;
+                }
+                window.localStorage.setItem(draftKey, JSON.stringify({text: text}));
+            } catch (e) {
+                // Draft saving is best-effort.
+            }
+        }
+        function clearDraft() {
+            try {
+                window.localStorage.removeItem(draftKey);
+            } catch (e) {
+                // Ignore storage failures when clearing.
+            }
+        }
+        function restoreDraft() {
+            var draft = readDraft();
+            if (!draft || typeof draft.text !== 'string') { return; }
+            textEl.value = draft.text;
         }
         function setOnline(online) {
             if (online) {
@@ -1687,9 +1789,6 @@ var Chat = `
             if (event) { event.preventDefault(); }
             var text = textEl.value.trim();
             if (!text) { return; }
-            textEl.value = '';
-            resizeComposer();
-            updateComposerState();
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1697,9 +1796,14 @@ var Chat = `
             }).then(function(r) {
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
+            }).then(function() {
+                textEl.value = '';
+                clearDraft();
+                resizeComposer();
+                updateComposerState();
             }).catch(function() {
                 setConnectionState(true, 'Message send failed.');
-                textEl.value = text;
+                saveDraft();
                 resizeComposer();
                 updateComposerState();
             });
@@ -1760,6 +1864,7 @@ var Chat = `
         function handleComposerInput() {
             resizeComposer();
             updateComposerState();
+            saveDraft();
         }
         function handleComposerKeydown(event) {
             if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
@@ -1809,8 +1914,17 @@ var Chat = `
         scrollArrow.addEventListener('click', function() {
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
         });
+        window.addEventListener('pagehide', saveDraft);
+        window.addEventListener('beforeunload', function(event) {
+            if (!textEl.value.trim()) { return; }
+            saveDraft();
+            event.preventDefault();
+            event.returnValue = '';
+            return '';
+        });
 
         setConnectionState(false, 'Connecting...');
+        restoreDraft();
         resizeComposer();
         updateComposerState();
 
@@ -1934,6 +2048,107 @@ var Upload = `
     <style>
         body {
             margin: 10px;
+        }
+        .upload-shell {
+            max-width: 980px;
+        }
+        .upload-intro {
+            align-items: flex-start;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin: 6px 0 18px;
+        }
+        .upload-intro h3 {
+            font-size: clamp(24px, 3.3vw, 34px);
+            font-weight: 800;
+            margin: 0;
+        }
+        .upload-intro p {
+            color: #5b6572;
+            font-size: 15px;
+            line-height: 1.5;
+            margin: 0;
+            max-width: 56ch;
+        }
+        .upload-composer {
+            background: #f8fbff;
+            border: 1px solid #d5e3f4;
+            border-radius: 16px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+            padding: 18px;
+        }
+        .composer-meta {
+            align-items: flex-start;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .composer-meta .label {
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+        }
+        .composer-meta .hint {
+            color: #5b6572;
+            font-size: 13px;
+            line-height: 1.45;
+            margin-top: 4px;
+            max-width: 58ch;
+        }
+        .composer-actions {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .composer-grid {
+            display: grid;
+            gap: 14px;
+        }
+        .composer-grid .form-group {
+            margin-bottom: 0;
+        }
+        .composer-grid label {
+            color: #334155;
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .composer-grid .form-control,
+        .composer-grid .form-control-file {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            box-shadow: none;
+            font-size: 15px;
+            min-height: 44px;
+        }
+        .composer-grid .form-control {
+            padding: 11px 12px;
+        }
+        .composer-grid textarea.form-control {
+            line-height: 1.55;
+            min-height: 180px;
+            resize: vertical;
+        }
+        .composer-grid .form-control:focus,
+        .composer-grid .form-control-file:focus,
+        .composer-grid textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            outline: none;
+        }
+        .composer-grid .submit-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+        .composer-grid .submit-row .btn {
+            min-width: 160px;
         }
         #pasted-file-container .pasted-file-wrapper {
             border: 2px dashed #00AEEF;
@@ -2082,145 +2297,236 @@ var Upload = `
                         </g>
                     </g>
                 </g>
-            </g>
+                </g>
             </svg>
         </div>
         <div class="row">
-            <form id="upload-form" onsubmit="submit.value = 'Transferring file, please wait.';
-                submit.disabled = true; return true;">
-                <h3>Send files or text</h3>
-                <div class="form-group">
-                    <label for="files">
-                        Files to transfer
-                    </label>
-                    <input class="form-control-file" type="file" id="files" name="files" multiple>
+            <form id="upload-form">
+                <div class="upload-intro">
+                    <h3>Send files or text</h3>
+                    <p>The text box is always visible, supports draft recovery, and accepts mixed text-and-file pastes.</p>
                 </div>
-                <div class="form-group form-check">
-                    <input type="checkbox" class="form-check-input" id="check-send-text">
-                    <label class="form-check-label" for="check-send-text">Show text and paste options</label>
-                </div>
-                <div id="send-text-form" style="display: none">
-                    <div class="form-group">
-                        <label for="plaintext-title">
-                            Title
-                        </label>
-                        <input class="form-control" id="plaintext-title">   
+                <div class="upload-composer">
+                    <div class="composer-meta">
+                        <div>
+                            <div class="label">Composer</div>
+                            <div class="hint">Enter sends the draft. Shift+Enter inserts a newline. Text is uploaded as a .txt file.</div>
+                        </div>
+                        <div class="composer-actions">
+                            <label for="files" class="btn btn-default" style="margin:0;">Add files</label>
+                            <input class="form-control-file" type="file" id="files" name="files" multiple style="display:none">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="plaintext-text">
-                            Text (You can paste files here)
-                        </label>
-                        <textarea class="form-control" id="plaintext-text" placeholder="Write text or paste files here"></textarea>
+                    <div class="composer-grid">
+                        <div class="form-group">
+                            <label for="plaintext-title">Text file name</label>
+                            <input class="form-control" id="plaintext-title" placeholder="Optional file name">
+                        </div>
+                        <div class="form-group">
+                            <label for="plaintext-text">Text</label>
+                            <textarea class="form-control" id="plaintext-text" placeholder="Write text or paste files here"></textarea>
+                        </div>
+                        <div id="pasted-file-container"></div>
+                        <div class="form-group submit-row">
+                            <input class="btn btn-primary form-control form-control-lg" type="submit" id="submit" name="submit" value="Transfer">
+                        </div>
                     </div>
-                </div>
-                <div id="pasted-file-container"></div>
-                <div class="form-group">
-                    <input class="btn btn-primary form-control form-control-lg" type="submit" 
-                        id="submit" name="submit" value="Transfer">
                 </div>
             </form>
         </div>
     </div>
     <script>
-        var textCheckbox = document.getElementById('check-send-text')
-        var textForm = document.getElementById('send-text-form')
-
-        textCheckbox.onclick = function(e) {
-            if (this.checked) {
-                textForm.style.display = 'block'
-            } else {
-                textForm.style.display = 'none'
-            }
-        }
-    </script>
-    <script>
         var uploadForm = document.getElementById('upload-form');
         var pastedFiles = [];
+        var draftKey = 'eqrcp-upload-draft:' + window.location.pathname;
+        var submitButton = document.getElementById('submit');
+        var titleInput = document.getElementById('plaintext-title');
         var textArea = document.getElementById('plaintext-text');
         var pastedFileContainer = document.getElementById('pasted-file-container');
 
-        textArea.addEventListener('paste', function (e) {
-            var clipboardData = e.clipboardData || window.clipboardData;
-            var items = clipboardData.items;
-            var foundFile = false;
+        function readDraft() {
+            try {
+                var raw = window.localStorage.getItem(draftKey);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
 
-            for (var i = 0; i < items.length; i++) {
-                var item = items[i];
-                if (item.kind === 'file') {
-                    var blob = item.getAsFile();
-                    foundFile = true;
-                    e.preventDefault();
-                    pastedFiles.push(blob);
+        function saveDraft() {
+            var draft = {
+                title: titleInput.value,
+                text: textArea.value
+            };
+            try {
+                if (!draft.title && !draft.text) {
+                    window.localStorage.removeItem(draftKey);
+                    return;
+                }
+                window.localStorage.setItem(draftKey, JSON.stringify(draft));
+            } catch (e) {
+                // Draft storage is best-effort only.
+            }
+        }
 
-                    var fileWrapper = document.createElement('div');
-                    fileWrapper.className = 'pasted-file-wrapper';
+        function clearDraft() {
+            try {
+                window.localStorage.removeItem(draftKey);
+            } catch (e) {
+                // Ignore storage failures when clearing.
+            }
+        }
 
-                    if (blob.type.startsWith('image/')) {
-                        // Display image
-                        var img = document.createElement('img');
-                        img.src = URL.createObjectURL(blob);
-                        fileWrapper.appendChild(img);
-                    } else {
-                        // Display file icon and name
-                        var fileInfo = document.createElement('div');
-                        fileInfo.className = 'file-info';
+        function restoreDraft() {
+            var draft = readDraft();
+            if (!draft) { return; }
+            titleInput.value = draft.title || '';
+            textArea.value = draft.text || '';
+        }
 
-                        var fileIcon = document.createElement('span');
-                        fileIcon.className = 'file-icon';
-                        fileIcon.innerHTML = '&#128196;'; // Document icon
+        function resizeTextArea() {
+            textArea.style.height = 'auto';
+            textArea.style.height = Math.min(textArea.scrollHeight, 240) + 'px';
+        }
 
-                        var fileName = document.createElement('span');
-                        fileName.className = 'file-name';
-                        fileName.textContent = blob.name || 'Pasted File';
+        function updateDraftState() {
+            resizeTextArea();
+            saveDraft();
+        }
 
-                        fileInfo.appendChild(fileIcon);
-                        fileInfo.appendChild(fileName);
-                        fileWrapper.appendChild(fileInfo);
+        function appendPastedFile(blob, index) {
+            if (!blob) { return; }
+            pastedFiles.push(blob);
+
+            var fileWrapper = document.createElement('div');
+            fileWrapper.className = 'pasted-file-wrapper';
+
+            if (blob.type && blob.type.indexOf('image/') === 0) {
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(blob);
+                img.alt = blob.name || 'Pasted image';
+                fileWrapper.appendChild(img);
+            } else {
+                var fileInfo = document.createElement('div');
+                fileInfo.className = 'file-info';
+
+                var fileIcon = document.createElement('span');
+                fileIcon.className = 'file-icon';
+                fileIcon.innerHTML = '&#128196;';
+
+                var fileName = document.createElement('span');
+                fileName.className = 'file-name';
+                fileName.textContent = blob.name || ('Pasted File ' + (index + 1));
+
+                fileInfo.appendChild(fileIcon);
+                fileInfo.appendChild(fileName);
+                fileWrapper.appendChild(fileInfo);
+            }
+
+            pastedFileContainer.appendChild(fileWrapper);
+        }
+
+        function readClipboardFiles(clipboardData) {
+            var files = [];
+            if (!clipboardData) { return files; }
+            if (clipboardData.items && clipboardData.items.length) {
+                for (var i = 0; i < clipboardData.items.length; i++) {
+                    var item = clipboardData.items[i];
+                    if (item.kind === 'file') {
+                        var blob = item.getAsFile();
+                        if (blob) { files.push(blob); }
                     }
-
-                    pastedFileContainer.appendChild(fileWrapper);
+                }
+            } else if (clipboardData.files && clipboardData.files.length) {
+                for (var j = 0; j < clipboardData.files.length; j++) {
+                    files.push(clipboardData.files[j]);
                 }
             }
+            return files;
+        }
 
-            if (foundFile) {
-                e.preventDefault();
+        function insertTextAtCursor(value) {
+            if (!value) { return; }
+            if (typeof textArea.setRangeText === 'function' && typeof textArea.selectionStart === 'number') {
+                textArea.setRangeText(value, textArea.selectionStart, textArea.selectionEnd, 'end');
+            } else {
+                var start = textArea.selectionStart || textArea.value.length;
+                var end = textArea.selectionEnd || textArea.value.length;
+                textArea.value = textArea.value.slice(0, start) + value + textArea.value.slice(end);
             }
+            textArea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        textArea.addEventListener('paste', function (e) {
+            var clipboardData = e.clipboardData || window.clipboardData;
+            var files = readClipboardFiles(clipboardData);
+            if (!files.length) { return; }
+            e.preventDefault();
+            var pastedText = clipboardData && clipboardData.getData ? clipboardData.getData('text/plain') : '';
+            if (pastedText) {
+                insertTextAtCursor(pastedText);
+            }
+            for (var i = 0; i < files.length; i++) {
+                appendPastedFile(files[i], i);
+            }
+            saveDraft();
         });
 
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
-
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    document.write(xhr.response)
-                }
-            }
-
+            submitButton.value = 'Transferring file, please wait.';
+            submitButton.disabled = true;
             var formData = new FormData(uploadForm)
-            var titleInput = document.getElementById('plaintext-title')
             var textInput = document.getElementById('plaintext-text')
-            var textCheckbox = document.getElementById('check-send-text')
 
-            if ((titleInput.value || textInput.value) && textCheckbox.checked) {
+            if (titleInput.value || textInput.value) {
                 var currentDate = new Date().toJSON().slice(0,19).replace(/[-T:]/g,'_')
-                // If the user didn't specify a file name, use 'eqrcp-text-file-${currentDate}'
                 var filename = titleInput.value || ("eqrcp-text-file-" + currentDate)
                 var blob = new Blob([textInput.value + '\n'], { type: "text/plain" })
-                // Append the text file to the form data with '.txt' extension
                 formData.append("textFile", blob, filename + ".txt")
             }
 
-            // Append pasted files to the form data
             for (var i = 0; i < pastedFiles.length; i++) {
                 var file = pastedFiles[i];
                 var fileName = file.name || ('pasted_file_' + i);
                 formData.append('files', file, fileName);
             }
 
-            xhr.open("POST", "{{.Route}}")
-            xhr.send(formData)
+            fetch("{{.Route}}", {
+                method: 'POST',
+                body: formData
+            }).then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+                return response.text();
+            }).then(function(html) {
+                clearDraft();
+                pastedFiles = [];
+                pastedFileContainer.innerHTML = '';
+                var parser = new DOMParser();
+                var nextDoc = parser.parseFromString(html, 'text/html');
+                document.title = nextDoc.title || document.title;
+                document.head.innerHTML = nextDoc.head.innerHTML;
+                document.body.innerHTML = nextDoc.body.innerHTML;
+            }).catch(function() {
+                submitButton.value = 'Transfer';
+                submitButton.disabled = false;
+            });
         })
+
+        titleInput.addEventListener('input', updateDraftState);
+        textArea.addEventListener('input', updateDraftState);
+        window.addEventListener('beforeunload', function(e) {
+            if (!titleInput.value.trim() && !textArea.value.trim() && !pastedFiles.length) {
+                return;
+            }
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        });
+        restoreDraft();
+        resizeTextArea();
     </script>
 </body>
 </html>

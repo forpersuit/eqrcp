@@ -84,6 +84,9 @@ Status: implemented as a shared browser UI surface.
 - [x] Align composer behavior with common chat expectations: Enter sends,
   Shift+Enter inserts a newline, empty sends are disabled, and pasted
   clipboard files upload as attachments.
+- [x] Keep the chat composer visible by default, give it a stronger chat-style
+  treatment, and preserve unsent text locally in the browser so reloads and
+  accidental navigation can restore the draft.
 
 Acceptance criteria:
 
@@ -93,6 +96,8 @@ Acceptance criteria:
 - Desktop iframe chat does not reserve an unused session-side column.
 - Message actions stay quiet on desktop until hover/focus, while mobile keeps
   touch actions visible.
+- The composer is visually separated from the message thread and restores
+  unsent text from local browser storage after refresh or revisit.
 
 ## Design Notes
 
