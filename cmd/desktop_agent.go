@@ -1920,6 +1920,13 @@ th {
           <input id="settings-chat-autosave" name="chatAutoSave" type="checkbox">
           <label for="settings-chat-autosave">Auto-save chat attachments</label>
         </div>
+        <div class="field">
+          <label for="settings-close-behavior">Window close action</label>
+          <select id="settings-close-behavior" name="closeBehavior">
+            <option value="tray">Keep EQT in taskbar tray</option>
+            <option value="quit">Quit EQT completely</option>
+          </select>
+        </div>
       </div>
       <div class="actions" style="margin-top: 12px;">
         <button class="primary" type="submit">Save Settings</button>
@@ -2299,6 +2306,7 @@ function renderSettings(settings) {
   document.getElementById('settings-config').value = settings.configPath || '';
   document.getElementById('settings-browser').checked = Boolean(settings.browser);
   document.getElementById('settings-chat-autosave').checked = settings.chatAutoSave !== false;
+  document.getElementById('settings-close-behavior').value = settings.closeBehavior === 'quit' ? 'quit' : 'tray';
   setText('settings-status', 'Settings loaded.');
 }
 function loadSettings() {
@@ -2362,7 +2370,8 @@ document.getElementById('settings-form').addEventListener('submit', function(eve
       interface: document.getElementById('settings-interface').value,
       port: Number.isNaN(port) ? 0 : port,
       browser: document.getElementById('settings-browser').checked,
-      chatAutoSave: document.getElementById('settings-chat-autosave').checked
+      chatAutoSave: document.getElementById('settings-chat-autosave').checked,
+      closeBehavior: document.getElementById('settings-close-behavior').value
     })
   })
     .then(function(response) {

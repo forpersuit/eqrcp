@@ -1208,12 +1208,12 @@ func TestDesktopAgentSettingsEndpointReadsAndWritesConfig(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.Output != "/tmp/old" || settings.Port != 19000 || !settings.Browser || !settings.ChatAutoSave || settings.ConfigPath != configPath || len(settings.InterfaceOptions) == 0 {
+	if settings.Output != "/tmp/old" || settings.Port != 19000 || !settings.Browser || !settings.ChatAutoSave || settings.CloseBehavior != config.DesktopCloseBehaviorTray || settings.ConfigPath != configPath || len(settings.InterfaceOptions) == 0 {
 		t.Fatalf("settings = %#v, want config values", settings)
 	}
 
 	newOutput := t.TempDir()
-	payload := bytes.NewBufferString(fmt.Sprintf(`{"output":%q,"interface":"any","port":19001,"browser":true,"chatAutoSave":false}`, newOutput))
+	payload := bytes.NewBufferString(fmt.Sprintf(`{"output":%q,"interface":"any","port":19001,"browser":true,"chatAutoSave":false,"closeBehavior":"quit"}`, newOutput))
 	response, err = http.Post(server.URL+"/settings", "application/json", payload)
 	if err != nil {
 		t.Fatal(err)
@@ -1226,14 +1226,14 @@ func TestDesktopAgentSettingsEndpointReadsAndWritesConfig(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.Output != newOutput || settings.Interface != "any" || settings.Port != 19001 || !settings.Browser || settings.ChatAutoSave {
+	if settings.Output != newOutput || settings.Interface != "any" || settings.Port != 19001 || !settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != config.DesktopCloseBehaviorQuit {
 		t.Fatalf("saved settings = %#v, want updated values", settings)
 	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"output: " + newOutput, "interface: any", "port: 19001", "browser: true", "chatautosave: false"} {
+	for _, want := range []string{"output: " + newOutput, "interface: any", "port: 19001", "browser: true", "chatautosave: false", "closebehavior: quit"} {
 		if !strings.Contains(string(data), want) {
 			t.Fatalf("config = %q, want to contain %q", string(data), want)
 		}

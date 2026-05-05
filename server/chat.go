@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	"mime"
@@ -127,8 +127,8 @@ func (s *Server) Chat() error {
 		if handleChatCORS(w, r, http.MethodGet) {
 			return
 		}
-		w.Header().Set("Content-Type", "image/jpeg")
-		if err := jpeg.Encode(w, qrImg, nil); err != nil {
+		w.Header().Set("Content-Type", "image/png")
+		if err := png.Encode(w, qrImg); err != nil {
 			log.Println(err)
 		}
 	})

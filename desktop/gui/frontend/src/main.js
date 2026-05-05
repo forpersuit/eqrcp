@@ -39,6 +39,7 @@ const state = {
     busy: false,
     browserFallback: false,
     chatAutoSave: true,
+    closeBehavior: 'tray',
     chatQROpen: false,
     lastChatDeviceCount: 0,
     activeChatTaskId: 0,
@@ -336,6 +337,7 @@ function renderChatSide() {
     const deviceCount = chatDeviceCount(task);
     const qrImage = qrImageURL(chatUrl);
     const qrToggleLabel = state.chatQROpen ? 'Hide chat QR' : 'Show chat QR';
+    const remoteDeviceCount = Math.max(0, deviceCount - 1);
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
@@ -346,31 +348,27 @@ function renderChatSide() {
                     </div>
                     <div class="side-head-actions">
                         <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
+                        <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
                         <button type="button" class="side-icon-button danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
                     </div>
                 </div>
                 <div class="chat-count">${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</div>
                 ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
-                <div class="chat-side-actions" aria-label="Chat actions">
-                    <button type="button" class="side-icon-button with-label copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}<span>Copy URL</span></button>
-                    <button type="button" class="side-icon-button with-label" id="chat-qr-toggle" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}<span>QR</span></button>
-                    <button type="button" class="side-icon-button with-label open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}<span>Browser</span></button>
-                </div>
             </div>
-            <div class="panel chat-session-panel">
+            <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
                 <div class="panel-head">
                     <h2>Scan to Join Chat</h2>
-                    <button type="button" class="side-icon-button chat-qr-toggle-action" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${chevronIcon(state.chatQROpen)}</button>
+                    <button type="button" class="side-icon-button chat-qr-toggle-action" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}</button>
                 </div>
                 ${state.chatQROpen ? `
-                    <div class="chat-qr-card">
-                        ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : ''}
-                        <p class="side-note">Open EQT Chat on another device, then scan this QR code to join.</p>
-                    </div>
-                    <div class="chat-url-row">
-                        <span>${linkIcon()}</span>
-                        <span>${escapeHTML(chatUrl || 'Waiting for chat URL')}</span>
-                        <button type="button" class="copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL">${copyIcon()}</button>
+                    <div class="chat-qr-content">
+                        <div class="chat-qr-card">
+                            ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : '<div class="empty-state">Waiting for QR</div>'}
+                        </div>
+                        <div class="chat-url-row">
+                            <span>${escapeHTML(chatUrl || 'Waiting for chat URL')}</span>
+                            <button type="button" class="copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
+                        </div>
                     </div>
                 ` : '<p class="side-note">Expand when you need to invite another device.</p>'}
             </div>
@@ -379,14 +377,17 @@ function renderChatSide() {
                     <h2>Devices</h2>
                     <span class="side-count">${deviceCount}</span>
                 </div>
-                <p class="side-note tight">Share the QR code to invite another device.</p>
-                <div class="device-card">
-                    <span class="device-icon">${phoneIcon()}</span>
-                    <div>
-                        <strong>${task ? 'Desktop' : 'No active device'}</strong>
-                        <span>${task ? 'Connected' : 'Start a chat session'}</span>
+                <div class="device-list compact">
+                    <div class="device-row">
+                        <span class="device-icon">${computerIcon()}</span>
+                        <strong>Desktop</strong>
+                        <span>Connected</span>
                     </div>
-                    <span class="device-signal">${signalIcon()}</span>
+                    <div class="device-row">
+                        <span class="device-icon">${phoneIcon()}</span>
+                        <strong>Remote</strong>
+                        <span>${remoteDeviceCount} connected</span>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -448,6 +449,11 @@ function renderSettingsPanel() {
                 <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
             </label>
+            <label>Window close action</label>
+            <select id="settings-close-behavior">
+                <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>Keep EQT in taskbar tray</option>
+                <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>Quit EQT completely</option>
+            </select>
             <div class="settings-note">
                 <label class="check">
                     <input id="settings-chat-autosave" type="checkbox" ${state.chatAutoSave ? 'checked' : ''} />
@@ -640,10 +646,13 @@ function bindEvents() {
     document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
         button.addEventListener('click', copyChatURL);
     });
-    document.querySelector('#chat-qr-toggle')?.addEventListener('click', toggleChatQR);
     document.querySelectorAll('.chat-qr-toggle-action').forEach((button) => {
         button.addEventListener('click', toggleChatQR);
     });
+    document.removeEventListener('pointerdown', closeChatQROnOutside);
+    if (state.chatQROpen) {
+        document.addEventListener('pointerdown', closeChatQROnOutside);
+    }
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
 }
@@ -739,6 +748,14 @@ function toggleChatQR() {
     render();
 }
 
+function closeChatQROnOutside(event) {
+    if (event.target.closest('.chat-qr-panel')) {
+        return;
+    }
+    state.chatQROpen = false;
+    render();
+}
+
 async function saveSettings() {
     await run(async () => {
         await saveSettingsData();
@@ -752,6 +769,7 @@ async function saveSettingsData() {
     const receiveBrowser = document.querySelector('#browser-open');
     const sideBrowser = document.querySelector('#settings-browser');
     const chatAutoSave = document.querySelector('#settings-chat-autosave');
+    const closeBehavior = document.querySelector('#settings-close-behavior');
     const iface = document.querySelector('#settings-interface');
     const port = document.querySelector('#settings-port');
     const settings = {
@@ -759,6 +777,7 @@ async function saveSettingsData() {
         output: receiveInput?.value || state.receiveDir || state.settings?.output || '',
         browser: Boolean(receiveBrowser?.checked ?? sideBrowser?.checked ?? state.browserFallback),
         chatAutoSave: Boolean(chatAutoSave?.checked ?? state.chatAutoSave),
+        closeBehavior: closeBehavior?.value || state.closeBehavior || 'tray',
         interface: iface?.value || state.settings?.interface || '',
         port: Number(port?.value ?? state.settings?.port ?? 0),
     };
@@ -766,6 +785,7 @@ async function saveSettingsData() {
     state.receiveDir = state.settings.output;
     state.browserFallback = state.settings.browser;
     state.chatAutoSave = state.settings.chatAutoSave !== false;
+    state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
 }
 
 async function stopCurrent() {
@@ -957,6 +977,7 @@ async function loadSettings() {
         state.receiveDir = state.settings.output || '';
         state.browserFallback = Boolean(state.settings.browser);
         state.chatAutoSave = state.settings.chatAutoSave !== false;
+        state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
         await loadStatusData();
         render();
     });
@@ -1177,6 +1198,10 @@ function copyIcon() {
 
 function browserIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13 13 0 0 1 0 18"></path><path d="M12 3a13 13 0 0 0 0 18"></path></svg>';
+}
+
+function computerIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>';
 }
 
 function qrIcon() {

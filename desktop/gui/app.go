@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -22,8 +23,11 @@ const agentBaseURL = "http://127.0.0.1:48176"
 const chatSaveRetentionDays = 7
 
 type App struct {
-	ctx    context.Context
-	client *http.Client
+	ctx           context.Context
+	client        *http.Client
+	mu            sync.Mutex
+	closeBehavior string
+	forceQuit     bool
 }
 
 type AgentTask struct {
@@ -74,6 +78,7 @@ type DesktopSettings struct {
 	Output           string            `json:"output"`
 	Browser          bool              `json:"browser"`
 	ChatAutoSave     bool              `json:"chatAutoSave"`
+	CloseBehavior    string            `json:"closeBehavior"`
 }
 
 type InterfaceOption struct {
@@ -94,7 +99,8 @@ type AppInfo struct {
 
 func NewApp() *App {
 	return &App{
-		client: &http.Client{Timeout: 5 * time.Second},
+		client:        &http.Client{Timeout: 5 * time.Second},
+		closeBehavior: "tray",
 	}
 }
 
@@ -107,6 +113,48 @@ func (a *App) showWindow() {
 		return
 	}
 	wailsruntime.WindowShow(a.ctx)
+}
+
+func (a *App) beforeClose(ctx context.Context) bool {
+	if a.consumeForceQuit() || a.currentCloseBehavior() == "quit" {
+		return false
+	}
+	wailsruntime.WindowHide(ctx)
+	return true
+}
+
+func (a *App) quit() {
+	a.mu.Lock()
+	a.forceQuit = true
+	a.mu.Unlock()
+	if a.ctx != nil {
+		wailsruntime.Quit(a.ctx)
+	}
+}
+
+func (a *App) consumeForceQuit() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.forceQuit {
+		return false
+	}
+	a.forceQuit = false
+	return true
+}
+
+func (a *App) currentCloseBehavior() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.closeBehavior
+}
+
+func (a *App) setCloseBehavior(value string) {
+	if value != "quit" {
+		value = "tray"
+	}
+	a.mu.Lock()
+	a.closeBehavior = value
+	a.mu.Unlock()
 }
 
 func (a *App) emitTrayCommand(command string) {
@@ -358,6 +406,7 @@ func (a *App) ReadSettings() (DesktopSettings, error) {
 	if err := a.getJSON("/settings", &settings); err != nil {
 		return DesktopSettings{}, err
 	}
+	a.setCloseBehavior(settings.CloseBehavior)
 	return settings, nil
 }
 
@@ -369,6 +418,7 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 	if err := a.postJSON("/settings", settings, &saved); err != nil {
 		return DesktopSettings{}, err
 	}
+	a.setCloseBehavior(saved.CloseBehavior)
 	return saved, nil
 }
 

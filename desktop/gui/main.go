@@ -25,7 +25,7 @@ func main() {
 		Height:            760,
 		MinWidth:          900,
 		MinHeight:         640,
-		HideWindowOnClose: true,
+		HideWindowOnClose: false,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 			// Inject CSP that allows the chat iframe (served by the local agent
@@ -35,6 +35,7 @@ func main() {
 					w.Header().Set("Content-Security-Policy",
 						"default-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
 							"connect-src 'self' http://127.0.0.1:* http://localhost:*; "+
+							"img-src 'self' data: http://127.0.0.1:* http://localhost:*; "+
 							"frame-src http://*:* https://*:*")
 					next.ServeHTTP(w, r)
 				})
@@ -45,6 +46,7 @@ func main() {
 			app.startup(ctx)
 			tray.startTray()
 		},
+		OnBeforeClose: app.beforeClose,
 		OnShutdown: func(ctx context.Context) {
 			tray.shutdown()
 		},

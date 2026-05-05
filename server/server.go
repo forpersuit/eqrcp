@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	"net"
@@ -189,8 +189,8 @@ func (s *Server) ServeQR(url string) error {
 		return err
 	}
 	s.mux.HandleFunc(imagePath, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/jpeg")
-		if err := jpeg.Encode(w, qrImg, nil); err != nil {
+		w.Header().Set("Content-Type", "image/png")
+		if err := png.Encode(w, qrImg); err != nil {
 			log.Println(err)
 		}
 	})

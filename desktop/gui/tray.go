@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"fyne.io/systray"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed frontend/src/assets/images/logo-universal.png
@@ -118,7 +117,5 @@ func (t *trayController) stopCurrent() {
 
 func (t *trayController) quit() {
 	systray.Quit()
-	if t.app.ctx != nil {
-		wailsruntime.Quit(t.app.ctx)
-	}
+	t.app.quit()
 }

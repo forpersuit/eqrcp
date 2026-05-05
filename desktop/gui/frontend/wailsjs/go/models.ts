@@ -164,6 +164,7 @@ export namespace main {
 	    output: string;
 	    browser: boolean;
 	    chatAutoSave: boolean;
+	    closeBehavior: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -178,6 +179,7 @@ export namespace main {
 	        this.output = source["output"];
 	        this.browser = source["browser"];
 	        this.chatAutoSave = source["chatAutoSave"];
+	        this.closeBehavior = source["closeBehavior"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

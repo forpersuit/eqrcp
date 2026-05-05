@@ -18,7 +18,13 @@ type DesktopSettings struct {
 	Output           string                   `json:"output"`
 	Browser          bool                     `json:"browser"`
 	ChatAutoSave     bool                     `json:"chatAutoSave"`
+	CloseBehavior    string                   `json:"closeBehavior"`
 }
+
+const (
+	DesktopCloseBehaviorTray = "tray"
+	DesktopCloseBehaviorQuit = "quit"
+)
 
 type DesktopInterfaceOption struct {
 	Name  string `json:"name"`
@@ -46,6 +52,13 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("chatAutoSave") {
 		chatAutoSave = v.GetBool("chatAutoSave")
 	}
+	closeBehavior := DesktopCloseBehaviorTray
+	if v.IsSet("closeBehavior") {
+		closeBehavior = normalizeDesktopCloseBehavior(v.GetString("closeBehavior"))
+		if closeBehavior == "" {
+			closeBehavior = DesktopCloseBehaviorTray
+		}
+	}
 	selectedInterface := v.GetString("interface")
 	if selectedInterface == "" {
 		selectedInterface = defaultDesktopInterface(options)
@@ -62,12 +75,17 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		Output:           output,
 		Browser:          browser,
 		ChatAutoSave:     chatAutoSave,
+		CloseBehavior:    closeBehavior,
 	}, nil
 }
 
 func WriteDesktopSettings(app application.App, settings DesktopSettings) (DesktopSettings, error) {
 	if settings.Port < 0 || settings.Port > 65535 {
 		return DesktopSettings{}, fmt.Errorf("port must be between 0 and 65535")
+	}
+	closeBehavior := normalizeDesktopCloseBehavior(settings.CloseBehavior)
+	if closeBehavior == "" {
+		return DesktopSettings{}, fmt.Errorf("close behavior must be %q or %q", DesktopCloseBehaviorTray, DesktopCloseBehaviorQuit)
 	}
 	if err := validateDesktopInterface(app, settings.Interface); err != nil {
 		return DesktopSettings{}, err
@@ -95,10 +113,22 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("output", output)
 	v.Set("browser", settings.Browser)
 	v.Set("chatAutoSave", settings.ChatAutoSave)
+	v.Set("closeBehavior", closeBehavior)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
 	return ReadDesktopSettings(app)
+}
+
+func normalizeDesktopCloseBehavior(value string) string {
+	switch value {
+	case "", DesktopCloseBehaviorTray:
+		return DesktopCloseBehaviorTray
+	case DesktopCloseBehaviorQuit:
+		return DesktopCloseBehaviorQuit
+	default:
+		return ""
+	}
 }
 
 func DefaultDesktopOutputDirectory() string {

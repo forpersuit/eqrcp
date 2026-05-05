@@ -426,6 +426,14 @@ dd {
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.chat-qr-panel {
+    position: relative;
+}
+
+.chat-qr-panel.expanded {
+    box-shadow: 0 16px 38px rgba(24, 33, 31, 0.18);
+    z-index: 3;
+}
 
 .compact-panel {
     display: grid;
@@ -781,9 +789,8 @@ dd {
     border: 1px solid var(--line);
     border-radius: 10px;
     display: grid;
-    gap: 12px;
-    grid-template-columns: 150px minmax(0, 1fr);
-    padding: 12px;
+    justify-items: center;
+    padding: 14px;
 }
 
 .chat-qr-card img {
@@ -791,8 +798,14 @@ dd {
     border: 1px solid var(--line);
     border-radius: 8px;
     image-rendering: pixelated;
-    padding: 8px;
-    width: 150px;
+    max-width: 100%;
+    padding: 10px;
+    width: clamp(180px, 72%, 260px);
+}
+
+.chat-qr-content {
+    display: grid;
+    gap: 10px;
 }
 
 .chat-url-row {
@@ -803,19 +816,19 @@ dd {
     color: var(--accent);
     display: grid;
     gap: 8px;
-    grid-template-columns: 18px minmax(0, 1fr) 30px;
+    grid-template-columns: minmax(0, 1fr) 30px;
     min-width: 0;
     padding: 9px 10px;
 }
 
-.chat-url-row span:nth-child(2) {
+.chat-url-row span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .chat-url-row svg,
-.device-card svg {
+.device-row svg {
     fill: none;
     height: 18px;
     stroke: currentColor;
@@ -835,25 +848,36 @@ dd {
     justify-content: center;
 }
 
-.device-card {
+.device-list.compact {
+    display: grid;
+    gap: 6px;
+}
+
+.device-row {
     align-items: center;
     background: #fbfcfb;
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: 8px;
     display: grid;
-    gap: 10px;
-    grid-template-columns: 34px minmax(0, 1fr) 42px;
-    padding: 12px;
+    gap: 8px;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    min-width: 0;
+    padding: 8px 10px;
 }
 
-.device-card strong,
-.device-card span {
-    display: block;
+.device-row strong {
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.device-card span {
+.device-row span:last-child {
     color: var(--muted);
     font-size: 12px;
+    justify-self: end;
+    white-space: nowrap;
 }
 
 .device-icon {
@@ -1000,5 +1024,9 @@ dd {
     .chat-panel {
         height: calc(100vh - 220px);
         min-height: 520px;
+    }
+
+    .chat-qr-card img {
+        width: min(62vw, 260px);
     }
 }

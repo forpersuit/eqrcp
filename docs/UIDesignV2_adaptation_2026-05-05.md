@@ -45,6 +45,14 @@ Implemented scope:
 - Keep Stop and Refresh in the Chat Status header; remove the repeated bottom
   Stop action, replace the repeated Refresh action with QR, and label the
   external open action as Browser.
+- Move the Browser action into the Chat Status header beside Refresh and Stop,
+  leaving the Scan to Join Chat panel as the only QR entry point.
+- Render QR images as PNG and allow local QR image sources in the desktop shell
+  CSP so Wails can display the generated code reliably.
+- Let the Scan to Join Chat panel expand with QR-first priority, show the URL
+  below the code, and collapse when the user clicks outside the panel.
+- Add a desktop close behavior setting so closing the window can either keep
+  EQT in the taskbar tray or quit the app completely.
 - Restructure the Wails chat side panel into:
   - Chat Status
   - Collapsible Scan to Join Chat
