@@ -72,6 +72,7 @@ type DesktopSettings struct {
 	Port             int               `json:"port"`
 	Output           string            `json:"output"`
 	Browser          bool              `json:"browser"`
+	ChatAutoSave     bool              `json:"chatAutoSave"`
 }
 
 type InterfaceOption struct {

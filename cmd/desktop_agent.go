@@ -1911,6 +1911,10 @@ th {
           <input id="settings-browser" name="browser" type="checkbox">
           <label for="settings-browser">Open browser pages automatically</label>
         </div>
+        <div class="field checkbox">
+          <input id="settings-chat-autosave" name="chatAutoSave" type="checkbox">
+          <label for="settings-chat-autosave">Auto-save chat attachments</label>
+        </div>
       </div>
       <div class="actions" style="margin-top: 12px;">
         <button class="primary" type="submit">Save Settings</button>
@@ -2289,6 +2293,7 @@ function renderSettings(settings) {
   document.getElementById('settings-port').value = String(settings.port || 0);
   document.getElementById('settings-config').value = settings.configPath || '';
   document.getElementById('settings-browser').checked = Boolean(settings.browser);
+  document.getElementById('settings-chat-autosave').checked = settings.chatAutoSave !== false;
   setText('settings-status', 'Settings loaded.');
 }
 function loadSettings() {
@@ -2351,7 +2356,8 @@ document.getElementById('settings-form').addEventListener('submit', function(eve
       output: document.getElementById('settings-output').value,
       interface: document.getElementById('settings-interface').value,
       port: Number.isNaN(port) ? 0 : port,
-      browser: document.getElementById('settings-browser').checked
+      browser: document.getElementById('settings-browser').checked,
+      chatAutoSave: document.getElementById('settings-chat-autosave').checked
     })
   })
     .then(function(response) {

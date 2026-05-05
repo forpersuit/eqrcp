@@ -8,6 +8,7 @@ import {
     Chat,
     ChatSaveDirectory,
     ClearHistory,
+    DownloadChatAttachment,
     OpenExternal,
     OpenFile,
     OpenPath,
@@ -37,11 +38,14 @@ const state = {
     notice: '',
     busy: false,
     browserFallback: false,
+    chatAutoSave: true,
+    chatQROpen: false,
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 let agentEvents = null;
 let agentEventsRetry = null;
+const autoSavedAttachments = new Set();
 const app = document.querySelector('#app');
 
 // postMessage bridge: handle native file operations requested by the chat iframe.
@@ -52,6 +56,20 @@ window.addEventListener('message', (e) => {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, e.origin)) { return; }
         SaveChatAttachmentAs(url, String(e.data.name || 'attachment')).catch(() => {});
+    } else if (e.data.type === 'auto-save-file') {
+        const url = String(e.data.url || '');
+        const id = String(e.data.id || url);
+        if (!state.chatAutoSave || autoSavedAttachments.has(id) || !isTrustedChatURL(url, e.origin)) { return; }
+        autoSavedAttachments.add(id);
+        DownloadChatAttachment(url, String(e.data.name || 'attachment'))
+            .then((path) => {
+                if (path) {
+                    state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
+                }
+            })
+            .catch(() => {
+                autoSavedAttachments.delete(id);
+            });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
     }
@@ -84,8 +102,8 @@ function render() {
         <main class="shell">
             <header class="topbar">
                 <div>
-                    <div class="eyebrow">Easy QR Transfer</div>
-                    <h1>${state.mode === 'share' ? 'Share files' : state.mode === 'receive' ? 'Receive files' : 'Chat'}</h1>
+                    ${renderTopIntro()}
+                    <h1>${renderTopTitle()}</h1>
                 </div>
                 <div class="top-actions">
                     <nav class="mode-switch" aria-label="Mode">
@@ -121,6 +139,33 @@ function renderWorkspace() {
         return renderReceive();
     }
     return renderChat();
+}
+
+function renderTopIntro() {
+    if (state.mode !== 'chat') {
+        return '<div class="eyebrow">Easy QR Transfer</div>';
+    }
+    const task = activeChatTask();
+    const online = task ? 'Online' : 'Ready';
+    const deviceCount = chatDeviceCount(task);
+    return `
+        <div class="chat-top-meta">
+            <span class="status-dot ${task ? '' : 'muted'}"></span>
+            <span>${online}</span>
+            <span class="meta-separator">.</span>
+            <span>${deviceCount} device${deviceCount === 1 ? '' : 's'} connected</span>
+        </div>
+    `;
+}
+
+function renderTopTitle() {
+    if (state.mode === 'share') {
+        return 'Share files';
+    }
+    if (state.mode === 'receive') {
+        return 'Receive files';
+    }
+    return 'EQT Chat';
 }
 
 function renderShare() {
@@ -252,7 +297,7 @@ function renderChat() {
                 <div>
                     <div class="eyebrow">Session mode</div>
                     <h2>Local chat with phones and nearby devices</h2>
-                    <p>Messages stay in this local session. Attachments received by the desktop app are saved automatically.</p>
+                    <p>Messages stay in this local session. Chat attachment auto-save is managed in Settings.</p>
                 </div>
                 <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start chat'}</button>
             </div>
@@ -272,10 +317,10 @@ function renderChatSide() {
     if (!task) {
         return `
             <aside class="side">
-                <div class="panel">
+                <div class="panel chat-session-panel">
                     <div class="panel-head">
                         <h2>Chat session</h2>
-                        <button type="button" class="side-icon-button" id="refresh" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
+                        <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
                     </div>
                     <div class="empty-state">No active chat.</div>
                 </div>
@@ -286,28 +331,78 @@ function renderChatSide() {
     const chatState = task.chatState || task.state || 'running';
     const messageCount = task.chatMessageCount || 0;
     const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
+    const deviceCount = chatDeviceCount(task);
+    const qrImage = qrImageURL(chatUrl);
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <div>
-                        <div class="eyebrow">Chat ${escapeHTML(chatState)}</div>
-                        <h2>${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</h2>
+                        <div class="panel-title-inline"><span class="status-dot"></span><h2>Chat Status</h2></div>
+                        <p class="side-note tight">${escapeHTML(chatStateLabel(chatState))}</p>
                     </div>
                     <div class="side-head-actions">
-                        <button type="button" class="side-icon-button" id="refresh" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
+                        <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
                         <button type="button" class="side-icon-button danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
                     </div>
                 </div>
+                <div class="chat-count">${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</div>
                 ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
                 <div class="chat-side-actions" aria-label="Chat actions">
-                    <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
-                    <button type="button" class="side-icon-button" id="copy-chat-url" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
-                    <button type="button" class="side-icon-button" id="open-chat-save" title="Open default save path" aria-label="Open default save path" ${state.chatSaveDir ? '' : 'disabled'}>${folderIcon()}</button>
+                    <button type="button" class="side-icon-button with-label copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}<span>Copy URL</span></button>
+                    <button type="button" class="side-icon-button with-label refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}<span>Refresh</span></button>
+                    <button type="button" class="side-icon-button with-label open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}<span>Open</span></button>
+                    <button type="button" class="side-icon-button with-label danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}<span>Stop</span></button>
+                </div>
+            </div>
+            <div class="panel chat-session-panel">
+                <div class="panel-head">
+                    <h2>Scan to Join Chat</h2>
+                    <button type="button" class="side-icon-button" id="chat-qr-toggle" title="Toggle QR" aria-label="Toggle QR">${chevronIcon(state.chatQROpen)}</button>
+                </div>
+                ${state.chatQROpen ? `
+                    <div class="chat-qr-card">
+                        ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : ''}
+                        <p class="side-note">Open EQT Chat on another device, then scan this QR code to join.</p>
+                    </div>
+                    <div class="chat-url-row">
+                        <span>${linkIcon()}</span>
+                        <span>${escapeHTML(chatUrl || 'Waiting for chat URL')}</span>
+                        <button type="button" class="copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL">${copyIcon()}</button>
+                    </div>
+                ` : '<p class="side-note">Expand when you need to invite another device.</p>'}
+            </div>
+            <div class="panel chat-session-panel">
+                <div class="panel-head">
+                    <h2>Devices</h2>
+                    <span class="side-count">${deviceCount}</span>
+                </div>
+                <p class="side-note tight">Share the QR code to invite another device.</p>
+                <div class="device-card">
+                    <span class="device-icon">${phoneIcon()}</span>
+                    <div>
+                        <strong>${task ? 'Desktop' : 'No active device'}</strong>
+                        <span>${task ? 'Connected' : 'Start a chat session'}</span>
+                    </div>
+                    <span class="device-signal">${signalIcon()}</span>
                 </div>
             </div>
         </aside>
     `;
+}
+
+function chatStateLabel(chatState) {
+    if (chatState === 'active') {
+        return 'Connected';
+    }
+    if (chatState === 'waiting' || chatState === 'running') {
+        return 'Waiting for connection';
+    }
+    return titleCase(chatState || 'waiting');
+}
+
+function chatDeviceCount(task) {
+    return task ? 1 : 0;
 }
 
 function renderPanel() {
@@ -352,9 +447,12 @@ function renderSettingsPanel() {
                 Browser fallback
             </label>
             <div class="settings-note">
-                <strong>Chat auto-save</strong>
-                <span>Attachments received by the desktop app are saved automatically by day. Folders older than 7 days are cleaned automatically.</span>
-                <button type="button" class="ghost inline" id="open-chat-save" ${state.chatSaveDir ? '' : 'disabled'}>Open default path</button>
+                <label class="check">
+                    <input id="settings-chat-autosave" type="checkbox" ${state.chatAutoSave ? 'checked' : ''} />
+                    <strong>Auto-save chat attachments</strong>
+                </label>
+                <span>When enabled, attachments received in the desktop chat are saved automatically by day. Folders older than 7 days are cleaned automatically.</span>
+                <button type="button" class="ghost inline" id="open-chat-save">Open chat save folder</button>
             </div>
             <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
@@ -487,6 +585,9 @@ function bindEvents() {
         });
     });
     document.querySelector('#refresh')?.addEventListener('click', refreshStatus);
+    document.querySelectorAll('.refresh-action').forEach((button) => {
+        button.addEventListener('click', refreshStatus);
+    });
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
     document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
     document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
@@ -534,6 +635,10 @@ function bindEvents() {
     });
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
     document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
+    document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
+        button.addEventListener('click', copyChatURL);
+    });
+    document.querySelector('#chat-qr-toggle')?.addEventListener('click', toggleChatQR);
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
 }
@@ -598,7 +703,9 @@ async function startChat() {
         state.status = await Chat();
         state.mode = 'chat';
         state.notice = 'Chat session started.';
-        state.chatSaveDir = await ChatSaveDirectory();
+        if (state.chatAutoSave) {
+            state.chatSaveDir = await ChatSaveDirectory();
+        }
         render();
     });
 }
@@ -621,6 +728,11 @@ function copyChatURL() {
     }
 }
 
+function toggleChatQR() {
+    state.chatQROpen = !state.chatQROpen;
+    render();
+}
+
 async function saveSettings() {
     await run(async () => {
         await saveSettingsData();
@@ -633,18 +745,21 @@ async function saveSettingsData() {
     const receiveInput = document.querySelector('#receive-dir');
     const receiveBrowser = document.querySelector('#browser-open');
     const sideBrowser = document.querySelector('#settings-browser');
+    const chatAutoSave = document.querySelector('#settings-chat-autosave');
     const iface = document.querySelector('#settings-interface');
     const port = document.querySelector('#settings-port');
     const settings = {
         ...(state.settings || {}),
         output: receiveInput?.value || state.receiveDir || state.settings?.output || '',
         browser: Boolean(receiveBrowser?.checked ?? sideBrowser?.checked ?? state.browserFallback),
+        chatAutoSave: Boolean(chatAutoSave?.checked ?? state.chatAutoSave),
         interface: iface?.value || state.settings?.interface || '',
         port: Number(port?.value ?? state.settings?.port ?? 0),
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;
     state.browserFallback = state.settings.browser;
+    state.chatAutoSave = state.settings.chatAutoSave !== false;
 }
 
 async function stopCurrent() {
@@ -835,6 +950,7 @@ async function loadSettings() {
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
         state.browserFallback = Boolean(state.settings.browser);
+        state.chatAutoSave = state.settings.chatAutoSave !== false;
         await loadStatusData();
         render();
     });
@@ -1036,6 +1152,24 @@ function browserIcon() {
 
 function folderIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>';
+}
+
+function chevronIcon(open) {
+    return open
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>';
+}
+
+function linkIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"></path><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"></path></svg>';
+}
+
+function phoneIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg>';
+}
+
+function signalIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20v-3"></path><path d="M9 20v-6"></path><path d="M14 20v-9"></path><path d="M19 20V7"></path></svg>';
 }
 
 function shortName(path) {

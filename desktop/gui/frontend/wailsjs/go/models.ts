@@ -161,6 +161,7 @@ export namespace main {
 	    port: number;
 	    output: string;
 	    browser: boolean;
+	    chatAutoSave: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -174,6 +175,7 @@ export namespace main {
 	        this.port = source["port"];
 	        this.output = source["output"];
 	        this.browser = source["browser"];
+	        this.chatAutoSave = source["chatAutoSave"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

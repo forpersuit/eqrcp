@@ -17,6 +17,7 @@ type DesktopSettings struct {
 	Port             int                      `json:"port"`
 	Output           string                   `json:"output"`
 	Browser          bool                     `json:"browser"`
+	ChatAutoSave     bool                     `json:"chatAutoSave"`
 }
 
 type DesktopInterfaceOption struct {
@@ -41,6 +42,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("browser") {
 		browser = v.GetBool("browser")
 	}
+	chatAutoSave := true
+	if v.IsSet("chatAutoSave") {
+		chatAutoSave = v.GetBool("chatAutoSave")
+	}
 	selectedInterface := v.GetString("interface")
 	if selectedInterface == "" {
 		selectedInterface = defaultDesktopInterface(options)
@@ -56,6 +61,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		Port:             v.GetInt("port"),
 		Output:           output,
 		Browser:          browser,
+		ChatAutoSave:     chatAutoSave,
 	}, nil
 }
 
@@ -88,6 +94,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("port", settings.Port)
 	v.Set("output", output)
 	v.Set("browser", settings.Browser)
+	v.Set("chatAutoSave", settings.ChatAutoSave)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
