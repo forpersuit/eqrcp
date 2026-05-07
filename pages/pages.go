@@ -680,11 +680,10 @@ var Chat = `
         html.embedded-chat body { background: transparent; }
         html.embedded-chat main {
             max-width: none;
-            padding: 0;
+            padding: 8px;
         }
         html.embedded-chat .chat-shell {
-            border: 0;
-            border-radius: 0;
+            border-radius: 12px;
             height: 100%;
         }
         html.embedded-chat .chat-head {
@@ -853,6 +852,7 @@ var Chat = `
             color: var(--danger);
         }
         .icon-button.danger:hover { background: #fde1dc; }
+        .mobile-close-action { display: none; }
         .icon-button svg { height: 18px; width: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .icon-button.qr-breathe {
             animation: qr-breathe-button 1.2s ease-in-out infinite;
@@ -1575,6 +1575,7 @@ var Chat = `
             }
             .device-panel { right: 0; }
             .side { display: none; }
+            .mobile-close-action { display: inline-flex; }
             .bubble-actions { opacity: 1; pointer-events: auto; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
             .message {
@@ -1635,6 +1636,9 @@ var Chat = `
                             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
                         </button>
                     </form>{{end}}
+                    <button class="icon-button mobile-close-action" type="button" id="close-page" title="Close" aria-label="Close">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                    </button>
                     <div class="device-panel" id="device-panel">
                         <div class="device-panel-title">Online devices</div>
                         <div class="device-roster" id="device-roster"></div>
@@ -2210,6 +2214,10 @@ var Chat = `
             sessionBackdrop.classList.add('open');
         }
         function closeSessionPanel() { sessionBackdrop.classList.remove('open'); }
+        function closePage() {
+            window.close();
+            if (history.length > 1) { history.back(); }
+        }
         function openImagePreview(url, label) {
             previewScale = 1;
             previewX = 0;
@@ -2655,6 +2663,7 @@ var Chat = `
         devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });
         document.addEventListener('click', closeDevicePanel);
         shareSessionButton.addEventListener('click', openSessionPanel);
+        document.getElementById('close-page').addEventListener('click', closePage);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
         document.getElementById('preview-close').addEventListener('click', closeImagePreview);
         document.getElementById('preview-zoom-in').addEventListener('click', function() { zoomPreview(0.25); });

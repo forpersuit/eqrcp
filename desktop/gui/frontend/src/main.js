@@ -41,6 +41,8 @@ const state = {
     chatAutoSave: true,
     closeBehavior: 'tray',
     chatQROpen: false,
+    chatQRPulseUntil: 0,
+    chatQRPromptDismissed: false,
     lastChatDeviceCount: 0,
     activeChatTaskId: 0,
 };
@@ -48,8 +50,33 @@ const state = {
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 let agentEvents = null;
 let agentEventsRetry = null;
+let chatQRPulseTimer = null;
 const autoSavedAttachments = new Set();
 const app = document.querySelector('#app');
+
+function triggerChatQRPulse() {
+    if (state.chatQRPromptDismissed) {
+        return;
+    }
+    state.chatQRPulseUntil = Date.now() + 10000;
+    if (chatQRPulseTimer) {
+        window.clearTimeout(chatQRPulseTimer);
+    }
+    chatQRPulseTimer = window.setTimeout(() => {
+        chatQRPulseTimer = null;
+        state.chatQRPulseUntil = 0;
+        render();
+    }, 10000);
+}
+
+function stopChatQRPulse() {
+    state.chatQRPromptDismissed = true;
+    state.chatQRPulseUntil = 0;
+    if (chatQRPulseTimer) {
+        window.clearTimeout(chatQRPulseTimer);
+        chatQRPulseTimer = null;
+    }
+}
 
 // postMessage bridge: handle native file operations requested by the chat iframe.
 window.addEventListener('message', (e) => {
@@ -331,6 +358,7 @@ function renderChatPanel(task) {
     const deviceCount = chatDeviceCount(task);
     const qrImage = qrImageURL(chatUrl);
     const qrToggleLabel = state.chatQROpen ? 'Hide chat QR' : 'Show chat QR';
+    const qrPulse = state.chatQRPulseUntil > Date.now();
     const remoteDeviceCount = Math.max(0, deviceCount - 1);
     return `
         <aside class="side">
@@ -352,7 +380,7 @@ function renderChatPanel(task) {
             <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
                 <div class="panel-head">
                     <h2>Scan to Join Chat</h2>
-                    <button type="button" class="side-icon-button chat-qr-toggle-action" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}</button>
+                    <button type="button" class="side-icon-button chat-qr-toggle-action ${qrPulse ? 'qr-breathe' : ''}" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}</button>
                 </div>
                 ${state.chatQROpen ? `
                     <div class="chat-qr-content">
@@ -757,6 +785,9 @@ function copyChatURL() {
 
 function toggleChatQR() {
     state.chatQROpen = !state.chatQROpen;
+    if (state.chatQROpen) {
+        stopChatQRPulse();
+    }
     updateChatQRPanel();
 }
 
@@ -1163,6 +1194,8 @@ function reconcileChatQRState(status) {
         state.activeChatTaskId = 0;
         state.lastChatDeviceCount = 0;
         state.chatQROpen = false;
+        state.chatQRPromptDismissed = false;
+        state.chatQRPulseUntil = 0;
         return;
     }
     const deviceCount = chatDeviceCount(task);
@@ -1170,6 +1203,8 @@ function reconcileChatQRState(status) {
         state.activeChatTaskId = task.id;
         state.lastChatDeviceCount = deviceCount;
         state.chatQROpen = deviceCount <= 1;
+        state.chatQRPromptDismissed = false;
+        triggerChatQRPulse();
         return;
     }
     if (deviceCount > 1 && state.lastChatDeviceCount <= 1) {

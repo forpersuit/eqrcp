@@ -413,6 +413,45 @@ dd {
     width: 16px;
 }
 
+.chat-qr-toggle-action.qr-breathe svg {
+    animation: qr-breathe 1.2s ease-in-out infinite;
+    transform-origin: center;
+    will-change: transform, opacity;
+}
+
+.chat-qr-toggle-action.qr-breathe {
+    animation: qr-breathe-button 1.2s ease-in-out infinite;
+    background: #eaf7f2;
+    border-color: #90c8b5;
+    box-shadow: 0 0 0 0 rgba(21, 111, 90, 0.0);
+    color: var(--accent-strong);
+    position: relative;
+}
+
+@keyframes qr-breathe {
+    0%,
+    100% {
+        opacity: 0.86;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.22);
+    }
+}
+
+@keyframes qr-breathe-button {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(21, 111, 90, 0.0);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(21, 111, 90, 0.18);
+        transform: scale(1.08);
+    }
+}
+
 .danger-icon {
     background: #fff0ed;
     border-color: #f5c6c0;
@@ -997,45 +1036,86 @@ dd {
         padding: 18px;
     }
 
-    .topbar,
     .layout {
-        display: grid;
         gap: 16px;
         grid-template-columns: 1fr;
     }
 
     .shell {
         height: auto;
-        min-height: 100vh;
-        overflow: auto;
+        min-height: 100dvh;
+        overflow: visible;
+    }
+
+    .shell:has(.chat-layout) {
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+        padding: 14px;
     }
 
     .layout {
         height: auto;
+        min-height: 0;
+        align-content: start;
     }
 
     .workspace {
-        min-height: 520px;
+        min-height: 0;
+    }
+
+    .side {
+        min-height: 0;
+    }
+
+    .topbar {
+        gap: 10px;
     }
 
     .top-actions {
         align-items: center;
-        display: grid;
-        grid-template-columns: 1fr 38px 38px 38px;
+        margin-left: auto;
     }
 
     .mode-switch,
-    .tool-button {
+    .tool-button,
+    .menu-button {
         align-self: center;
+    }
+
+    .menu-button {
+        gap: 0;
+        min-width: 38px;
+        padding: 0;
+        width: 38px;
+    }
+
+    .menu-label {
+        display: none;
+    }
+
+    .menu-icon {
+        height: 18px;
+        width: 18px;
     }
 
     .side {
         grid-row: auto;
     }
 
+    .layout.chat-layout {
+        height: calc(100dvh - 80px);
+        overflow: hidden;
+    }
+
+    .workspace:has(.chat-panel) {
+        height: 100%;
+        overflow: hidden;
+    }
+
     .chat-panel {
-        height: calc(100vh - 220px);
-        min-height: 520px;
+        height: 100%;
+        min-height: 0;
     }
 
     .chat-qr-card img {
