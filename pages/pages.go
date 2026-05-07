@@ -1094,6 +1094,9 @@ var Chat = `
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
         }
+        .message:has(.attachment-card):not(.mine) .bubble {
+            align-self: flex-start;
+        }
         .message:has(.attachment-card) .bubble {
             background: #f8fbf5;
             display: inline-block;
