@@ -1220,9 +1220,9 @@ var Chat = `
             opacity: 0;
             pointer-events: none;
             position: absolute;
-            top: 8px;
+            top: 50%;
             transition: opacity 0.16s ease, transform 0.16s ease;
-            transform: scale(0.92);
+            transform: translateY(-50%) scale(0.92);
             z-index: 2;
         }
         .side-copy-action {
@@ -1242,17 +1242,21 @@ var Chat = `
             right: auto;
         }
         @media (hover: hover) and (pointer: fine) {
-            .message:hover .side-message-action,
-            .message:focus-within .side-message-action {
+            .message.mine:hover .message-main,
+            .message.mine:focus-within .message-main {
+                padding-left: 36px;
+            }
+            .message.mine:hover .side-recall-action,
+            .message.mine:focus-within .side-recall-action {
                 opacity: 1;
                 pointer-events: auto;
-                transform: scale(1);
+                transform: translateY(-50%) scale(1);
             }
         }
         .message.touch-actions .side-message-action {
             opacity: 1;
             pointer-events: auto;
-            transform: scale(1);
+            transform: translateY(-50%) scale(1);
         }
         .chat-context-menu {
             background: var(--panel);

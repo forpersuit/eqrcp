@@ -45,6 +45,7 @@ const state = {
     chatQRPromptDismissed: false,
     lastChatDeviceCount: 0,
     activeChatTaskId: 0,
+    activeChatSessionKey: '',
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
@@ -358,7 +359,7 @@ function renderChatPanel(task) {
     const deviceCount = chatDeviceCount(task);
     const qrImage = qrImageURL(chatUrl);
     const qrToggleLabel = state.chatQROpen ? 'Hide chat QR' : 'Show chat QR';
-    const qrPulse = state.chatQRPulseUntil > Date.now();
+    const qrPulse = !state.chatQRPromptDismissed && state.chatQRPulseUntil > Date.now();
     const remoteDeviceCount = Math.max(0, deviceCount - 1);
     return `
         <aside class="side">
@@ -784,10 +785,8 @@ function copyChatURL() {
 }
 
 function toggleChatQR() {
+    stopChatQRPulse();
     state.chatQROpen = !state.chatQROpen;
-    if (state.chatQROpen) {
-        stopChatQRPulse();
-    }
     updateChatQRPanel();
 }
 
@@ -1192,6 +1191,7 @@ function reconcileChatQRState(status) {
     const task = status?.current;
     if (!task || task.action !== 'chat' || isTerminal(task)) {
         state.activeChatTaskId = 0;
+        state.activeChatSessionKey = '';
         state.lastChatDeviceCount = 0;
         state.chatQROpen = false;
         state.chatQRPromptDismissed = false;
@@ -1199,18 +1199,32 @@ function reconcileChatQRState(status) {
         return;
     }
     const deviceCount = chatDeviceCount(task);
-    if (state.activeChatTaskId !== task.id) {
+    const sessionKey = chatSessionKey(task);
+    const samePendingSession = state.activeChatSessionKey === `id:${task.id || 0}` && sessionKey.startsWith('url:');
+    if (samePendingSession) {
+        state.activeChatSessionKey = sessionKey;
+    } else if (state.activeChatSessionKey !== sessionKey) {
         state.activeChatTaskId = task.id;
+        state.activeChatSessionKey = sessionKey;
         state.lastChatDeviceCount = deviceCount;
         state.chatQROpen = false;
         state.chatQRPromptDismissed = false;
         triggerChatQRPulse();
         return;
     }
+    state.activeChatTaskId = task.id;
     if (deviceCount > 1 && state.lastChatDeviceCount <= 1) {
         state.chatQROpen = false;
     }
     state.lastChatDeviceCount = deviceCount;
+}
+
+function chatSessionKey(task) {
+    const pageUrl = String(task?.pageUrl || '').trim();
+    if (pageUrl) {
+        return `url:${pageUrl}`;
+    }
+    return `id:${task?.id || 0}`;
 }
 
 function shareItemStatus(task, path) {
