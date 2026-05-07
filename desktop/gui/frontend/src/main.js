@@ -60,7 +60,12 @@ function triggerChatQRPulse() {
     if (state.chatQRPromptDismissed) {
         return;
     }
-    state.chatQRPulseUntil = Date.now() + 10000;
+    const now = Date.now();
+    if (state.chatQRPulseUntil > now) {
+        return;
+    }
+    const pulseDuration = 10000;
+    state.chatQRPulseUntil = now + pulseDuration;
     if (chatQRPulseTimer) {
         window.clearTimeout(chatQRPulseTimer);
     }
@@ -68,7 +73,7 @@ function triggerChatQRPulse() {
         chatQRPulseTimer = null;
         state.chatQRPulseUntil = 0;
         render();
-    }, 10000);
+    }, pulseDuration);
 }
 
 function stopChatQRPulse() {

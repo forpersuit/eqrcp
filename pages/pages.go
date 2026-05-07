@@ -1304,16 +1304,16 @@ var Chat = `
             place-items: center;
             pointer-events: none;
             position: absolute;
-            right: 16px;
+            left: 50%;
             transition: opacity 0.15s ease, transform 0.15s ease;
-            transform: translateY(6px);
+            transform: translate(-50%, 6px);
             width: 34px;
             z-index: 5;
         }
         .scroll-arrow.visible {
             opacity: 1;
             pointer-events: auto;
-            transform: translateY(0);
+            transform: translate(-50%, 0);
         }
         .scroll-arrow svg { fill: none; height: 17px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 17px; }
         /* ── Compose bar ── */
@@ -1583,7 +1583,6 @@ var Chat = `
             .send-button { height: 36px; width: 36px; }
             .scroll-arrow {
                 bottom: calc(74px + env(safe-area-inset-bottom));
-                right: 12px;
             }
             .device-panel { right: 0; }
             .side { display: none; }
@@ -2486,10 +2485,9 @@ var Chat = `
             touchActionsCloserInstalled = true;
             document.addEventListener('pointerdown', function(event) {
                 if (event.target.closest('.chat-context-menu')) { return; }
-                if (event.target.closest('.message.touch-actions')) { return; }
-                if (event.target.closest('.message')) {
-                    closeTouchActions();
-                }
+                var active = document.querySelector('.message.touch-actions');
+                if (active && active.contains(event.target)) { return; }
+                closeTouchActions();
             });
         }
         function openTouchActions(item) {
