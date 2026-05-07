@@ -69,11 +69,24 @@ function triggerChatQRPulse() {
     if (chatQRPulseTimer) {
         window.clearTimeout(chatQRPulseTimer);
     }
+    updateChatQRPulseButton();
     chatQRPulseTimer = window.setTimeout(() => {
         chatQRPulseTimer = null;
         state.chatQRPulseUntil = 0;
-        render();
+        updateChatQRPulseButton();
     }, pulseDuration);
+}
+
+function updateChatQRPulseButton() {
+    const button = document.querySelector('.chat-qr-toggle-action');
+    if (button) {
+        const shouldPulse = !state.chatQRPromptDismissed && state.chatQRPulseUntil > Date.now();
+        if (shouldPulse) {
+            button.classList.add('qr-breathe');
+        } else {
+            button.classList.remove('qr-breathe');
+        }
+    }
 }
 
 function pulseChatFrameQR() {
@@ -102,6 +115,7 @@ function stopChatQRPulse() {
         window.clearTimeout(chatQRPulseTimer);
         chatQRPulseTimer = null;
     }
+    updateChatQRPulseButton();
 }
 
 // postMessage bridge: handle native file operations requested by the chat iframe.

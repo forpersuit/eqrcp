@@ -1092,6 +1092,8 @@ var Chat = `
         }
         .message:has(.attachment-card) .bubble {
             background: #f8fbf5;
+            display: inline-block;
+            max-width: 100%;
             padding: 6px;
         }
         .media-frame {
