@@ -1089,7 +1089,7 @@ var Chat = `
             max-width: min(280px, 100%);
         }
         .attachment-card.media-attachment {
-            width: min(var(--media-width, 300px), 100%);
+            max-width: min(var(--media-width, 320px), 100%);
         }
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
