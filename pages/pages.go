@@ -931,6 +931,10 @@ var Chat = `
         }
         .message:has(.attachment-card) {
             max-width: min(460px, 88%);
+            grid-template-columns: 32px auto;
+        }
+        .message.mine:has(.attachment-card) {
+            grid-template-columns: auto 32px;
         }
         .message-main {
             display: flex;
@@ -1079,10 +1083,10 @@ var Chat = `
             display: grid;
             gap: 7px;
             max-width: 100%;
-            width: min(300px, 100%);
+            width: fit-content;
         }
         .attachment-card.file-attachment {
-            width: min(280px, 100%);
+            max-width: min(280px, 100%);
         }
         .attachment-card.media-attachment {
             width: min(var(--media-width, 300px), 100%);
@@ -1099,9 +1103,9 @@ var Chat = `
         .media-frame {
             background: #f8fbf5;
             border-radius: 8px;
-            display: grid;
+            display: block;
+            line-height: 0;
             overflow: hidden;
-            place-items: center;
             position: relative;
             aspect-ratio: var(--media-aspect-ratio, 16 / 9);
             width: 100%;
@@ -1119,7 +1123,6 @@ var Chat = `
             border-radius: 8px;
             display: block;
             height: 100%;
-            max-height: min(320px, 48vh);
             object-fit: contain;
             width: 100%;
         }
@@ -1131,10 +1134,11 @@ var Chat = `
             border-radius: 8px;
             display: flex;
             gap: 10px;
-            min-width: min(260px, 100%);
+            max-width: 100%;
+            min-width: min(176px, 100%);
             padding: 6px;
             text-decoration: none;
-            width: 100%;
+            width: max-content;
         }
         .file-details {
             flex: 1 1 auto;
@@ -2251,8 +2255,8 @@ var Chat = `
         }
         function applyMediaAspect(container, width, height) {
             if (!container || !width || !height) { return; }
-            var ratio = Math.max(0.45, Math.min(width / height, 4));
-            var displayWidth = Math.max(160, Math.min(width, 320));
+            var ratio = Math.max(0.33, Math.min(width / height, 8));
+            var displayWidth = Math.max(96, Math.min(width, 320));
             container.style.setProperty('--media-aspect-ratio', ratio);
             container.style.setProperty('--media-width', displayWidth + 'px');
         }
