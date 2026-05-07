@@ -1081,6 +1081,9 @@ var Chat = `
             max-width: 100%;
             width: min(300px, 100%);
         }
+        .attachment-card.file-attachment {
+            width: min(280px, 100%);
+        }
         .attachment-card.media-attachment {
             width: min(var(--media-width, 300px), 100%);
         }
@@ -1129,6 +1132,11 @@ var Chat = `
             min-width: min(260px, 100%);
             padding: 6px;
             text-decoration: none;
+            width: 100%;
+        }
+        .file-details {
+            flex: 1 1 auto;
+            min-width: 0;
         }
         .file-icon {
             align-items: center;
@@ -1143,7 +1151,16 @@ var Chat = `
             justify-content: center;
             width: 38px;
         }
-        .file-name { color: var(--ink); font-weight: 700; overflow-wrap: anywhere; }
+        .file-name {
+            color: var(--ink);
+            font-weight: 700;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            white-space: nowrap;
+        }
+        .file-name::-webkit-scrollbar { display: none; }
         /* ── Bubble action buttons ── */
         .bubble-actions {
             display: flex;
@@ -1213,6 +1230,19 @@ var Chat = `
             transform: translateY(-50%) scale(0.92);
             z-index: 2;
         }
+        .side-message-action::before {
+            bottom: -6px;
+            content: '';
+            position: absolute;
+            top: -6px;
+            width: 14px;
+        }
+        .side-copy-action::before {
+            left: -12px;
+        }
+        .side-recall-action::before {
+            right: -12px;
+        }
         .side-copy-action {
             left: auto;
             right: -34px;
@@ -1230,6 +1260,8 @@ var Chat = `
             right: auto;
         }
         @media (hover: hover) and (pointer: fine) {
+            .message:hover .side-copy-action,
+            .message:focus-within .side-copy-action,
             .message.mine:hover .side-recall-action,
             .message.mine:focus-within .side-recall-action {
                 opacity: 1;
@@ -2217,7 +2249,7 @@ var Chat = `
         }
         function applyMediaAspect(container, width, height) {
             if (!container || !width || !height) { return; }
-            var ratio = Math.max(0.45, Math.min(width / height, 2.2));
+            var ratio = Math.max(0.45, Math.min(width / height, 4));
             var displayWidth = Math.max(160, Math.min(width, 320));
             container.style.setProperty('--media-aspect-ratio', ratio);
             container.style.setProperty('--media-width', displayWidth + 'px');
@@ -2233,9 +2265,11 @@ var Chat = `
             icon.className = 'file-icon';
             icon.textContent = fileExtension(message.fileName);
             var details = document.createElement('div');
+            details.className = 'file-details';
             var name = document.createElement('div');
             name.className = 'file-name';
             name.textContent = message.fileName || 'attachment';
+            name.title = message.fileName || 'attachment';
             details.appendChild(name);
             if (inWails) {
                 var card = document.createElement('button');

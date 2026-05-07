@@ -778,11 +778,15 @@ async function startReceive() {
 async function startChat() {
     await run(async () => {
         await saveSettingsData();
+        state.chatQRPulseArmed = true;
+        state.chatQRPromptDismissed = false;
         state.status = await Chat();
         state.mode = 'chat';
         state.notice = '';
-        state.chatQRPulseArmed = true;
         reconcileChatQRState(state.status);
+        if (!state.chatQRPulseUntil) {
+            triggerChatQRPulse();
+        }
         if (state.chatAutoSave) {
             state.chatSaveDir = await ChatSaveDirectory();
         }
