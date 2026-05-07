@@ -76,6 +76,24 @@ function triggerChatQRPulse() {
     }, pulseDuration);
 }
 
+function pulseChatFrameQR() {
+    if (state.chatQRPromptDismissed || state.chatQRPulseUntil <= Date.now()) {
+        return;
+    }
+    const frame = document.querySelector('#chat-iframe');
+    if (!frame) { return; }
+    const payload = {type: 'pulse-session-qr', until: state.chatQRPulseUntil};
+    const post = () => {
+        try {
+            frame.contentWindow?.postMessage(payload, activeChatFrameOrigin() || '*');
+        } catch {
+            // The iframe can still be navigating; the load handler is the reliable path.
+        }
+    };
+    frame.addEventListener('load', post, {once: true});
+    window.setTimeout(post, 0);
+}
+
 function stopChatQRPulse() {
     state.chatQRPulseArmed = false;
     state.chatQRPromptDismissed = true;
@@ -172,6 +190,7 @@ function render() {
         </main>
     `;
     bindEvents();
+    pulseChatFrameQR();
 }
 
 function renderWorkspace() {

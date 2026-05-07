@@ -1081,27 +1081,25 @@ var Chat = `
             max-width: 100%;
             width: min(300px, 100%);
         }
+        .attachment-card.media-attachment {
+            width: min(var(--media-width, 300px), 100%);
+        }
         .attachment-card.image-attachment {
-            justify-items: start;
-            width: fit-content;
+            --media-aspect-ratio: 4 / 3;
         }
         .message:has(.attachment-card) .bubble {
             background: #f8fbf5;
-            padding: 10px;
+            padding: 6px;
         }
         .media-frame {
             background: #f8fbf5;
-            border-radius: 10px;
+            border-radius: 8px;
             display: grid;
             overflow: hidden;
             place-items: center;
             position: relative;
+            aspect-ratio: var(--media-aspect-ratio, 16 / 9);
             width: 100%;
-        }
-        .image-attachment .media-frame {
-            display: inline-grid;
-            max-width: min(300px, 100%);
-            width: auto;
         }
         button.media-frame {
             border: 0;
@@ -1115,12 +1113,12 @@ var Chat = `
             background: transparent;
             border-radius: 8px;
             display: block;
+            height: 100%;
             max-height: min(320px, 48vh);
-            max-width: 100%;
             object-fit: contain;
-            width: auto;
+            width: 100%;
         }
-        video.media-preview { aspect-ratio: 16/9; width: 100%; }
+        video.media-preview { background: #101915; }
         .file-card {
             align-items: center;
             background: transparent;
@@ -1253,11 +1251,14 @@ var Chat = `
                 display: none;
             }
             .touch-message-actions {
+                align-items: center;
                 gap: 6px;
+                height: var(--touch-actions-height, 26px);
                 left: var(--touch-actions-left, 8px);
                 position: fixed;
                 top: var(--touch-actions-top, 50%);
                 transform: translateY(-50%);
+                width: var(--touch-actions-width, 26px);
                 z-index: 6;
             }
             .touch-message-actions.horizontal {
@@ -2179,6 +2180,7 @@ var Chat = `
             wrap.className = 'attachment-card';
             var sourceURL = attachmentURL(message.url);
             if (message.type === 'image') {
+                wrap.classList.add('media-attachment');
                 wrap.classList.add('image-attachment');
                 var open = document.createElement('button');
                 open.type = 'button';
@@ -2188,9 +2190,13 @@ var Chat = `
                 image.className = 'media-preview';
                 image.src = sourceURL;
                 image.alt = message.fileName || 'image';
+                image.addEventListener('load', function() {
+                    applyMediaAspect(wrap, image.naturalWidth, image.naturalHeight);
+                });
                 open.appendChild(image);
                 wrap.appendChild(open);
             } else if (message.type === 'video') {
+                wrap.classList.add('media-attachment');
                 var frame = document.createElement('div');
                 frame.className = 'media-frame';
                 var video = document.createElement('video');
@@ -2198,6 +2204,9 @@ var Chat = `
                 video.src = sourceURL;
                 video.controls = true;
                 video.preload = 'metadata';
+                video.addEventListener('loadedmetadata', function() {
+                    applyMediaAspect(wrap, video.videoWidth, video.videoHeight);
+                });
                 frame.appendChild(video);
                 wrap.appendChild(frame);
             } else {
@@ -2205,6 +2214,13 @@ var Chat = `
                 wrap.appendChild(renderFileCard(message));
             }
             return wrap;
+        }
+        function applyMediaAspect(container, width, height) {
+            if (!container || !width || !height) { return; }
+            var ratio = Math.max(0.45, Math.min(width / height, 2.2));
+            var displayWidth = Math.max(160, Math.min(width, 320));
+            container.style.setProperty('--media-aspect-ratio', ratio);
+            container.style.setProperty('--media-width', displayWidth + 'px');
         }
         function renderAttachmentMeta(message) {
             var meta = document.createElement('span');
@@ -2271,6 +2287,17 @@ var Chat = `
         }
         function stopSessionQRPulse() {
             shareSessionButton.classList.remove('qr-breathe');
+        }
+        var sessionQRPulseTimer = null;
+        function startSessionQRPulse(until) {
+            if (sessionQRPulseTimer) {
+                window.clearTimeout(sessionQRPulseTimer);
+                sessionQRPulseTimer = null;
+            }
+            var remaining = Math.max(0, Number(until || 0) - Date.now());
+            if (!remaining) { remaining = 10000; }
+            shareSessionButton.classList.add('qr-breathe');
+            sessionQRPulseTimer = window.setTimeout(stopSessionQRPulse, Math.min(remaining, 10000));
         }
         function openSessionPanel() {
             stopSessionQRPulse();
@@ -2533,6 +2560,8 @@ var Chat = `
                     actions.classList.remove('left', 'right', 'horizontal', 'vertical');
                     actions.style.removeProperty('--touch-actions-top');
                     actions.style.removeProperty('--touch-actions-left');
+                    actions.style.removeProperty('--touch-actions-width');
+                    actions.style.removeProperty('--touch-actions-height');
                 }
             });
         }
@@ -2576,6 +2605,8 @@ var Chat = `
             left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
             actions.style.setProperty('--touch-actions-top', top + 'px');
             actions.style.setProperty('--touch-actions-left', left + 'px');
+            actions.style.setProperty('--touch-actions-width', width + 'px');
+            actions.style.setProperty('--touch-actions-height', height + 'px');
             actions.classList.remove('left', 'right');
             actions.classList.add(item.classList.contains('mine') ? 'left' : 'right');
         }
@@ -2603,6 +2634,8 @@ var Chat = `
                 if (event.pointerType === 'mouse') { return; }
                 if (event.isPrimary === false) { return; }
                 start = {
+                    originX: event.clientX,
+                    originY: event.clientY,
                     x: event.clientX,
                     y: event.clientY,
                     pointerId: event.pointerId
@@ -2617,14 +2650,17 @@ var Chat = `
             }, {passive: true});
             item.addEventListener('pointermove', function(event) {
                 if (!start || event.pointerType === 'mouse') { return; }
-                var dx = event.clientX - start.x;
-                var dy = event.clientY - start.y;
+                var dx = event.clientX - start.originX;
+                var dy = event.clientY - start.originY;
                 if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                     clearLongPressTimer();
                 }
                 if (Math.abs(dx) > 14 || Math.abs(dy) > 14) {
                     start = null;
+                    return;
                 }
+                start.x = event.clientX;
+                start.y = event.clientY;
             }, {passive: true});
             item.addEventListener('pointerup', function(event) {
                 if (!start || event.pointerType === 'mouse') { return; }
@@ -2798,6 +2834,10 @@ var Chat = `
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
         });
         window.addEventListener('pagehide', saveDraft);
+        window.addEventListener('message', function(event) {
+            if (!event.data || event.data.type !== 'pulse-session-qr') { return; }
+            startSessionQRPulse(event.data.until);
+        });
         window.addEventListener('resize', resizeComposer);
         window.addEventListener('beforeunload', function(event) {
             if (!textEl.value.trim()) { return; }
