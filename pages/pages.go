@@ -867,11 +867,11 @@ var Chat = `
         }
         @keyframes qr-breathe {
             0%, 100% { opacity: 0.86; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.22); }
+            50% { opacity: 1; transform: scale(1.12); }
         }
         @keyframes qr-breathe-button {
             0%, 100% { box-shadow: 0 0 0 0 rgba(21, 111, 90, 0); transform: scale(1); }
-            50% { box-shadow: 0 0 0 10px rgba(21, 111, 90, 0.18); transform: scale(1.08); }
+            50% { box-shadow: 0 0 0 5px rgba(21, 111, 90, 0.14); transform: scale(1.03); }
         }
         /* ── Message thread ── */
         .messages {
@@ -929,9 +929,6 @@ var Chat = `
             max-width: 100%;
             width: 100%;
         }
-        .message.touch-actions {
-            max-width: min(680px, 78%);
-        }
         .message:has(.attachment-card) {
             max-width: min(460px, 88%);
         }
@@ -945,20 +942,13 @@ var Chat = `
         }
         .message.touch-actions .message-main {
             padding-left: 0;
-            padding-right: 36px;
-        }
-        .message.mine.touch-actions .message-main {
-            padding-left: 36px;
-            padding-right: 36px;
+            padding-right: 0;
         }
         .message.mine .message-main {
             align-items: flex-end;
         }
         @media (min-width: 821px) {
             .message {
-                max-width: min(680px, 61.8%);
-            }
-            .message.touch-actions {
                 max-width: min(680px, 61.8%);
             }
         }
@@ -970,9 +960,6 @@ var Chat = `
             .message {
                 column-gap: 8px;
                 max-width: 90%;
-            }
-            .message.touch-actions {
-                max-width: 96%;
             }
             .message:has(.attachment-card) {
                 max-width: 92%;
@@ -1043,11 +1030,6 @@ var Chat = `
             background: #edf8f0;
             border-color: #c8e4d3;
         }
-        .message.touch-actions .bubble {
-            border-color: rgba(21, 111, 90, 0.32);
-            box-shadow: 0 8px 18px rgba(24, 33, 31, 0.12);
-            transform: translateY(-1px);
-        }
         .message.system .bubble {
             align-items: center;
             background: rgba(21, 111, 90, 0.08);
@@ -1071,15 +1053,13 @@ var Chat = `
             opacity: 0.7;
         }
         .text {
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: text;
+            user-select: text;
             white-space: pre-wrap;
         }
         .message:not(.system):not(:has(.attachment-card)) .bubble {
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: text;
+            user-select: text;
         }
         .text.recalled { color: var(--muted); font-style: italic; }
         .recalled-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
@@ -1102,6 +1082,7 @@ var Chat = `
             width: min(300px, 100%);
         }
         .attachment-card.image-attachment {
+            justify-items: start;
             width: fit-content;
         }
         .message:has(.attachment-card) .bubble {
@@ -1118,8 +1099,9 @@ var Chat = `
             width: 100%;
         }
         .image-attachment .media-frame {
-            max-width: 100%;
-            width: fit-content;
+            display: inline-grid;
+            max-width: min(300px, 100%);
+            width: auto;
         }
         button.media-frame {
             border: 0;
@@ -1134,7 +1116,7 @@ var Chat = `
             border-radius: 8px;
             display: block;
             max-height: min(320px, 48vh);
-            max-width: min(300px, 100%);
+            max-width: 100%;
             object-fit: contain;
             width: auto;
         }
@@ -1235,25 +1217,21 @@ var Chat = `
         }
         .side-copy-action {
             left: auto;
-            right: 0;
+            right: -34px;
         }
         .side-recall-action {
             display: none;
         }
         .message.mine .side-copy-action {
             left: auto;
-            right: 0;
+            right: -34px;
         }
         .message.mine .side-recall-action {
             display: flex;
-            left: 0;
+            left: -34px;
             right: auto;
         }
         @media (hover: hover) and (pointer: fine) {
-            .message.mine:hover .message-main,
-            .message.mine:focus-within .message-main {
-                padding-left: 36px;
-            }
             .message.mine:hover .side-recall-action,
             .message.mine:focus-within .side-recall-action {
                 opacity: 1;
@@ -1261,10 +1239,44 @@ var Chat = `
                 transform: translateY(-50%) scale(1);
             }
         }
+        @media (hover: none), (pointer: coarse) {
+            .text,
+            .message:not(.system):not(:has(.attachment-card)) .bubble {
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            .message {
+                max-width: min(560px, calc(100% - 74px));
+            }
+            .message.touch-actions .side-message-action {
+                display: none;
+            }
+            .touch-message-actions {
+                gap: 6px;
+                left: var(--touch-actions-left, 8px);
+                position: fixed;
+                top: var(--touch-actions-top, 50%);
+                transform: translateY(-50%);
+                z-index: 6;
+            }
+            .touch-message-actions.horizontal {
+                flex-direction: row;
+            }
+            .touch-message-actions.vertical {
+                flex-direction: column;
+            }
+            .message.touch-actions .touch-message-actions {
+                display: flex;
+            }
+        }
         .message.touch-actions .side-message-action {
             opacity: 1;
             pointer-events: auto;
             transform: translateY(-50%) scale(1);
+        }
+        .touch-message-actions {
+            display: none;
         }
         .chat-context-menu {
             background: var(--panel);
@@ -1295,6 +1307,7 @@ var Chat = `
             border: 0;
             border-radius: 999px;
             bottom: 86px;
+            bottom: calc(var(--composer-height, 74px) + 12px);
             box-shadow: 0 8px 22px rgba(21, 111, 90, 0.28);
             color: white;
             cursor: pointer;
@@ -1582,7 +1595,7 @@ var Chat = `
             .file-label,
             .send-button { height: 36px; width: 36px; }
             .scroll-arrow {
-                bottom: calc(74px + env(safe-area-inset-bottom));
+                bottom: calc(var(--composer-height, 58px) + 12px);
             }
             .device-panel { right: 0; }
             .side { display: none; }
@@ -1592,7 +1605,7 @@ var Chat = `
             .message {
                 column-gap: 6px;
                 grid-template-columns: 32px minmax(0, 1fr);
-                max-width: 88%;
+                max-width: min(560px, calc(100% - 74px));
             }
             .message.mine {
                 grid-template-columns: minmax(0, 1fr) 32px;
@@ -1638,7 +1651,7 @@ var Chat = `
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
                         <span id="device-count">0</span>
                     </button>
-                    <button class="icon-button{{if .CanStop}} qr-breathe{{end}}" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
+                    <button class="icon-button" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
                     </button>
                     {{if .CanStop}}<form class="head-stop-form" method="post" action="{{.StopRoute}}">
@@ -1666,7 +1679,7 @@ var Chat = `
                         <label class="file-label" for="file-input" title="Add attachment" aria-label="Add attachment">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7"></path></svg>
                         </label>
-                        <textarea id="message-text" rows="1" placeholder="Type a message or paste an image" autocomplete="off"></textarea>
+                        <textarea id="message-text" rows="1" placeholder="Message" autocomplete="off"></textarea>
                         <button class="send-button" id="send-button" type="submit" aria-label="Send" disabled>
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z"></path></svg>
                         </button>
@@ -1721,6 +1734,7 @@ var Chat = `
         };
         var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
+        var composerEl = document.getElementById('composer');
         var textEl = document.getElementById('message-text');
         var sendButton = document.getElementById('send-button');
         var fileEl = document.getElementById('file-input');
@@ -2007,6 +2021,7 @@ var Chat = `
                 if (!isSystem) {
                     main.appendChild(renderMessageFooter(message));
                     main.appendChild(renderOutsideActions(message));
+                    main.appendChild(renderTouchActions(message));
                     bindMessageGestures(item, bubble, message);
                 }
                 messagesEl.appendChild(item);
@@ -2127,6 +2142,38 @@ var Chat = `
             fragment.appendChild(copyActions);
             return fragment;
         }
+        function renderTouchActions(message) {
+            if (message.type !== 'text' || message.recalled) {
+                return document.createDocumentFragment();
+            }
+            var wrap = document.createElement('div');
+            wrap.className = 'touch-message-actions';
+            if (message.sender === state.sender) {
+                var recall = document.createElement('button');
+                recall.type = 'button';
+                recall.className = 'bubble-action';
+                recall.setAttribute('aria-label', 'Delete');
+                recall.title = 'Delete';
+                recall.innerHTML = recallIcon();
+                recall.addEventListener('click', function() {
+                    recallMessage(message);
+                    closeTouchActions();
+                });
+                wrap.appendChild(recall);
+            }
+            var copy = document.createElement('button');
+            copy.type = 'button';
+            copy.className = 'bubble-action';
+            copy.setAttribute('aria-label', 'Copy');
+            copy.title = 'Copy';
+            copy.innerHTML = copyIcon();
+            copy.addEventListener('click', function() {
+                copyMessageText(message);
+                closeTouchActions();
+            });
+            wrap.appendChild(copy);
+            return wrap;
+        }
         function renderAttachment(message) {
             var wrap = document.createElement('div');
             wrap.className = 'attachment-card';
@@ -2222,8 +2269,11 @@ var Chat = `
             chatHead.title = label || '';
             updateChatStatus();
         }
-        function openSessionPanel() {
+        function stopSessionQRPulse() {
             shareSessionButton.classList.remove('qr-breathe');
+        }
+        function openSessionPanel() {
+            stopSessionQRPulse();
             sessionBackdrop.classList.add('open');
         }
         function closeSessionPanel() { sessionBackdrop.classList.remove('open'); }
@@ -2478,6 +2528,12 @@ var Chat = `
         function closeTouchActions() {
             document.querySelectorAll('.message.touch-actions').forEach(function(active) {
                 active.classList.remove('touch-actions');
+                var actions = active.querySelector('.touch-message-actions');
+                if (actions) {
+                    actions.classList.remove('left', 'right', 'horizontal', 'vertical');
+                    actions.style.removeProperty('--touch-actions-top');
+                    actions.style.removeProperty('--touch-actions-left');
+                }
             });
         }
         function installTouchActionsCloser() {
@@ -2490,10 +2546,38 @@ var Chat = `
                 closeTouchActions();
             });
         }
-        function openTouchActions(item) {
+        function openTouchActions(item, bubble, clientX, clientY) {
             closeMessageContextMenu();
             closeTouchActions();
             item.classList.add('touch-actions');
+            positionTouchActions(item, bubble, clientX, clientY);
+        }
+        function positionTouchActions(item, bubble, clientX, clientY) {
+            var actions = item.querySelector('.touch-message-actions');
+            if (!actions || !bubble) { return; }
+            var bubbleRect = bubble.getBoundingClientRect();
+            var buttons = actions.querySelectorAll('.bubble-action').length || 1;
+            var actionSize = 26;
+            var actionGap = 6;
+            var gap = 8;
+            var verticalHeight = buttons * actionSize + Math.max(0, buttons - 1) * actionGap;
+            var horizontalWidth = buttons * actionSize + Math.max(0, buttons - 1) * actionGap;
+            var useHorizontal = buttons <= 1 || bubbleRect.width >= horizontalWidth;
+            var useVertical = !useHorizontal && bubbleRect.height >= verticalHeight;
+            actions.classList.remove('horizontal', 'vertical');
+            actions.classList.add(useVertical ? 'vertical' : 'horizontal');
+            var width = useVertical ? actionSize : horizontalWidth;
+            var height = useVertical ? verticalHeight : actionSize;
+            var top = typeof clientY === 'number' ? clientY : bubbleRect.top + bubbleRect.height / 2;
+            top = Math.max(8 + height / 2, Math.min(top, window.innerHeight - 8 - height / 2));
+            var left = item.classList.contains('mine') ? bubbleRect.left - width - gap : bubbleRect.right + gap;
+            if (left < 8) { left = bubbleRect.right + gap; }
+            if (left + width > window.innerWidth - 8) { left = bubbleRect.left - width - gap; }
+            left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+            actions.style.setProperty('--touch-actions-top', top + 'px');
+            actions.style.setProperty('--touch-actions-left', left + 'px');
+            actions.classList.remove('left', 'right');
+            actions.classList.add(item.classList.contains('mine') ? 'left' : 'right');
         }
         function bindMessageGestures(item, bubble, message) {
             if (!message || message.type !== 'text' || message.recalled) { return; }
@@ -2502,7 +2586,7 @@ var Chat = `
                 event.preventDefault();
                 var touchLike = event.pointerType ? event.pointerType !== 'mouse' : (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
                 if (touchLike) {
-                    openTouchActions(item);
+                    openTouchActions(item, bubble, event.clientX, event.clientY);
                     return;
                 }
                 showMessageContextMenu(message, event.clientX, event.clientY);
@@ -2526,7 +2610,7 @@ var Chat = `
                 clearLongPressTimer();
                 longPressTimer = window.setTimeout(function() {
                     if (!start) { return; }
-                    openTouchActions(item);
+                    openTouchActions(item, bubble, start.x, start.y);
                     if (navigator.vibrate) { navigator.vibrate(8); }
                     start = null;
                 }, 460);
@@ -2639,6 +2723,10 @@ var Chat = `
             textEl.style.height = 'auto';
             textEl.style.height = Math.max(min, Math.min(textEl.scrollHeight + border, max)) + 'px';
             textEl.style.overflowY = textEl.scrollHeight + border > max ? 'auto' : 'hidden';
+            updateComposerMetrics();
+        }
+        function updateComposerMetrics() {
+            document.documentElement.style.setProperty('--composer-height', composerEl.offsetHeight + 'px');
         }
         function updateComposerState() {
             sendButton.disabled = textEl.value.trim().length === 0;
@@ -2726,6 +2814,9 @@ var Chat = `
         messagesEl.scrollTop = messagesEl.scrollHeight;
         resizeComposer();
         updateComposerState();
+        if (shareSessionButton.classList.contains('qr-breathe')) {
+            window.setTimeout(stopSessionQRPulse, 10000);
+        }
 
         // ── SSE reconnection with Page Visibility API ──
         function updateEventCursor(value) {

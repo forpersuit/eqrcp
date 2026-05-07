@@ -139,19 +139,24 @@ function render() {
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
-                <div>
-                    ${renderTopIntro()}
-                    <h1>${renderTopTitle()}</h1>
-                </div>
-                <div class="top-actions">
-                    <nav class="mode-switch" aria-label="Mode">
-                        <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
-                        <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
-                        <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
-                    </nav>
-                    <button class="tool-button" id="open-settings" title="Settings" aria-label="Settings">&#9881;</button>
-                    <button class="tool-button" id="open-about" title="About EQT" aria-label="About EQT">i</button>
-                    <button class="tool-button" id="open-feedback" title="Send feedback" aria-label="Send feedback">?</button>
+                <nav class="mode-switch" aria-label="Transfer modes">
+                    <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
+                    <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
+                    <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
+                </nav>
+                <div class="top-actions" role="menubar" aria-label="Application menu">
+                    <button class="menu-button" id="open-settings" title="Settings" aria-label="Settings">
+                        <span class="menu-icon">${settingsIcon()}</span>
+                        <span class="menu-label">Settings</span>
+                    </button>
+                    <button class="menu-button" id="open-about" title="About EQT" aria-label="About EQT">
+                        <span class="menu-icon">${aboutIcon()}</span>
+                        <span class="menu-label">About</span>
+                    </button>
+                    <button class="menu-button" id="open-feedback" title="Send feedback" aria-label="Send feedback">
+                        <span class="menu-icon">${feedbackIcon()}</span>
+                        <span class="menu-label">Feedback</span>
+                    </button>
                 </div>
             </header>
 
@@ -177,23 +182,6 @@ function renderWorkspace() {
         return renderReceive();
     }
     return renderChat();
-}
-
-function renderTopIntro() {
-    if (state.mode !== 'chat') {
-        return '<div class="eyebrow">Easy QR Transfer</div>';
-    }
-    return '<div class="eyebrow">Local chat</div>';
-}
-
-function renderTopTitle() {
-    if (state.mode === 'share') {
-        return 'Share files';
-    }
-    if (state.mode === 'receive') {
-        return 'Receive files';
-    }
-    return 'EQT Chat';
 }
 
 function renderShare() {
@@ -469,6 +457,8 @@ function renderSettingsPanel() {
     const options = (state.settings.interfaceOptions || []).map((option) => `
         <option value="${escapeAttr(option.name)}" ${option.name === state.settings.interface ? 'selected' : ''}>${escapeHTML(option.label || option.name)}</option>
     `).join('');
+    const chatSender = state.settings.chatSender || '';
+    const chatAvatar = state.settings.chatAvatar || '';
     return `
         <div class="settings-panel">
             <label>Network interface</label>
@@ -479,6 +469,13 @@ function renderSettingsPanel() {
                 <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
             </label>
+            <div class="settings-note profile-note">
+                <label>Chat username</label>
+                <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                <label>Chat avatar</label>
+                <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="🙂 or AB" />
+                <span>Used as the desktop sender label and avatar when this app opens a chat session.</span>
+            </div>
             <label>Window close action</label>
             <select id="settings-close-behavior">
                 <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>Keep EQT in taskbar tray</option>
@@ -847,6 +844,10 @@ async function saveSettingsData() {
     const closeBehavior = document.querySelector('#settings-close-behavior');
     const iface = document.querySelector('#settings-interface');
     const port = document.querySelector('#settings-port');
+    const chatSender = document.querySelector('#settings-chat-sender');
+    const chatAvatar = document.querySelector('#settings-chat-avatar');
+    const chatSenderValue = chatSender ? chatSender.value : state.settings?.chatSender || '';
+    const chatAvatarValue = chatAvatar ? chatAvatar.value : state.settings?.chatAvatar || '';
     const settings = {
         ...(state.settings || {}),
         output: receiveInput?.value || state.receiveDir || state.settings?.output || '',
@@ -855,6 +856,8 @@ async function saveSettingsData() {
         closeBehavior: closeBehavior?.value || state.closeBehavior || 'tray',
         interface: iface?.value || state.settings?.interface || '',
         port: Number(port?.value ?? state.settings?.port ?? 0),
+        chatSender: cleanChatProfileName(chatSenderValue),
+        chatAvatar: cleanChatAvatar(chatAvatarValue),
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;
@@ -1156,7 +1159,7 @@ function handleTrayCommand(command) {
     if (command === 'chat') {
         state.mode = 'chat';
         state.activePanel = '';
-        state.notice = 'Ready to chat.';
+        state.notice = '';
         render();
         return;
     }
@@ -1302,6 +1305,18 @@ function browserIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a13 13 0 0 1 0 18"></path><path d="M12 3a13 13 0 0 0 0 18"></path></svg>';
 }
 
+function settingsIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7z"></path><path d="M19.4 13.5a7.8 7.8 0 0 0 .1-1.5 7.8 7.8 0 0 0-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.5-1.5L14 2h-4l-.5 2.5a8 8 0 0 0-2.5 1.5l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0-.1 1.5c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.5 1.5L10 22h4l.5-2.5a8 8 0 0 0 2.5-1.5l2.4 1 2-3.5z"></path></svg>';
+}
+
+function aboutIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7h.01"></path></svg>';
+}
+
+function feedbackIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>';
+}
+
 function computerIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>';
 }
@@ -1334,6 +1349,15 @@ function signalIcon() {
 
 function shortName(path) {
     return String(path || '').split(/[\\/]/).filter(Boolean).pop() || path || '';
+}
+
+function cleanChatProfileName(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+function cleanChatAvatar(value) {
+    const text = String(value || '').trim();
+    return Array.from(text).slice(0, 4).join('');
 }
 
 function qrImageURL(pageUrl) {

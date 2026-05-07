@@ -79,6 +79,8 @@ type DesktopSettings struct {
 	Browser          bool              `json:"browser"`
 	ChatAutoSave     bool              `json:"chatAutoSave"`
 	CloseBehavior    string            `json:"closeBehavior"`
+	ChatSender       string            `json:"chatSender"`
+	ChatAvatar       string            `json:"chatAvatar"`
 }
 
 type InterfaceOption struct {

@@ -734,6 +734,9 @@ func (agent *desktopAgent) notifyTransferStatusLocked(record desktopAgentTaskRec
 }
 
 func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
+	if record.Action == "chat" {
+		return "", ""
+	}
 	action := desktopAgentActionLabel(record.Action)
 	target := desktopAgentPathsSummary(record.Paths)
 	switch record.State {
@@ -1045,6 +1048,10 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	if task.Action == "receive" {
 		agentApp.Flags.Output = task.Paths[0]
 	}
+	desktopSettings, err := agent.readSettings()
+	if err != nil {
+		desktopSettings = config.DesktopSettings{}
+	}
 	cfg, err := config.New(agentApp)
 	if err != nil {
 		return err
@@ -1088,8 +1095,11 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			return err
 		}
 	case "chat":
+		chatPageURLBuilder := func() string {
+			return desktopChatPageURL(srv.ChatURL, srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar)
+		}
 		if agentApp.Flags.Browser {
-			if err := srv.DisplayChat(); err != nil {
+			if err := srv.DisplayChatWithURL(chatPageURLBuilder); err != nil {
 				srv.Shutdown()
 				return err
 			}
@@ -1099,7 +1109,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 				return err
 			}
 		}
-		chatPageURL := srv.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(srv.ChatHostToken())
+		chatPageURL := chatPageURLBuilder()
 		agent.setCurrentPageURL(chatPageURL)
 		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
 			agent.observeChatStatus(taskID, status)
@@ -1116,6 +1126,31 @@ func serveDesktopTaskQR(srv *server.Server, url string, openBrowser bool) error 
 		return srv.DisplayQR(url)
 	}
 	return srv.ServeQR(url)
+}
+
+func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar string) string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		query := "?peer=desktop&hostToken=" + url.QueryEscape(hostToken)
+		if sender = strings.TrimSpace(sender); sender != "" {
+			query += "&sender=" + url.QueryEscape(sender)
+		}
+		if avatar = strings.TrimSpace(avatar); avatar != "" {
+			query += "&avatar=" + url.QueryEscape(avatar)
+		}
+		return baseURL + query
+	}
+	params := parsed.Query()
+	params.Set("peer", "desktop")
+	params.Set("hostToken", hostToken)
+	if sender = strings.TrimSpace(sender); sender != "" {
+		params.Set("sender", sender)
+	}
+	if avatar = strings.TrimSpace(avatar); avatar != "" {
+		params.Set("avatar", avatar)
+	}
+	parsed.RawQuery = params.Encode()
+	return parsed.String()
 }
 
 func validateDesktopAgentTask(task desktopAgentTask) error {
@@ -1921,6 +1956,15 @@ th {
           <label for="settings-chat-autosave">Auto-save chat attachments</label>
         </div>
         <div class="field">
+          <label for="settings-chat-sender">Chat username</label>
+          <input id="settings-chat-sender" name="chatSender" autocomplete="off" maxlength="40">
+        </div>
+        <div class="field">
+          <label for="settings-chat-avatar">Chat avatar</label>
+          <input id="settings-chat-avatar" name="chatAvatar" autocomplete="off" maxlength="8" placeholder="🙂 or AB">
+          <p class="settings-status">Used as the desktop sender label and avatar in chat sessions.</p>
+        </div>
+        <div class="field">
           <label for="settings-close-behavior">Window close action</label>
           <select id="settings-close-behavior" name="closeBehavior">
             <option value="tray">Keep EQT in taskbar tray</option>
@@ -2306,6 +2350,8 @@ function renderSettings(settings) {
   document.getElementById('settings-config').value = settings.configPath || '';
   document.getElementById('settings-browser').checked = Boolean(settings.browser);
   document.getElementById('settings-chat-autosave').checked = settings.chatAutoSave !== false;
+  document.getElementById('settings-chat-sender').value = settings.chatSender || '';
+  document.getElementById('settings-chat-avatar').value = settings.chatAvatar || '';
   document.getElementById('settings-close-behavior').value = settings.closeBehavior === 'quit' ? 'quit' : 'tray';
   setText('settings-status', 'Settings loaded.');
 }
@@ -2371,6 +2417,8 @@ document.getElementById('settings-form').addEventListener('submit', function(eve
       port: Number.isNaN(port) ? 0 : port,
       browser: document.getElementById('settings-browser').checked,
       chatAutoSave: document.getElementById('settings-chat-autosave').checked,
+      chatSender: document.getElementById('settings-chat-sender').value,
+      chatAvatar: document.getElementById('settings-chat-avatar').value,
       closeBehavior: document.getElementById('settings-close-behavior').value
     })
   })

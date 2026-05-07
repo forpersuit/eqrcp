@@ -51,7 +51,7 @@ func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
 	session := &chatSession{
 		attachments: map[string]chatAttachment{},
 		subscribers: map[chan struct{}]struct{}{},
-		clients:     map[string]int{},
+		clients:     map[string]chatClient{},
 		startedAt:   time.Now(),
 		state:       "waiting",
 		statusHook: func(snapshot ChatStatusSnapshot) {
@@ -59,8 +59,8 @@ func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
 		},
 	}
 
-	desktopDone := session.registerClient("desktop-token", "")
-	mobileDone := session.registerClient("mobile-token", "")
+	desktopDone := session.registerClient("desktop-token", "Desktop", "")
+	mobileDone := session.registerClient("mobile-token", "Phone", "")
 	mobileDone()
 	desktopDone()
 
@@ -90,6 +90,27 @@ func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {
 	}
 	if !strings.Contains(pages.Chat, "token=") {
 		t.Fatal("chat SSE connects should identify the client token for presence")
+	}
+}
+
+func TestChatPageStopsSessionQRPulse(t *testing.T) {
+	if !strings.Contains(pages.Chat, "function stopSessionQRPulse()") {
+		t.Fatal("chat page should define a helper to stop the session QR pulse")
+	}
+	if !strings.Contains(pages.Chat, "window.setTimeout(stopSessionQRPulse, 10000)") {
+		t.Fatal("chat page should stop the session QR pulse after 10 seconds")
+	}
+}
+
+func TestChatPageTouchActionsDoNotResizeBubbles(t *testing.T) {
+	if strings.Contains(pages.Chat, ".message.touch-actions {\n            max-width") {
+		t.Fatal("touch actions should not change message max-width")
+	}
+	if !strings.Contains(pages.Chat, "max-width: min(560px, calc(100% - 74px))") {
+		t.Fatal("touch layouts should reserve horizontal action-button space")
+	}
+	if !strings.Contains(pages.Chat, "actions.classList.add(useVertical ? 'vertical' : 'horizontal')") {
+		t.Fatal("touch actions should switch between vertical and horizontal layouts")
 	}
 }
 
@@ -347,6 +368,22 @@ func newTestChatServer(t *testing.T) *Server {
 		t.Fatalf("Chat() error = %v", err)
 	}
 	return server
+}
+
+func TestChatStartupAddsSystemMessage(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	if len(server.chatSession.messages) != 1 {
+		t.Fatalf("message count = %d, want 1", len(server.chatSession.messages))
+	}
+	message := server.chatSession.messages[0]
+	if message.Sender != "system" || message.Type != "system" {
+		t.Fatalf("message = %#v, want system startup message", message)
+	}
+	if message.Text != "Chat session started." {
+		t.Fatalf("message text = %q, want %q", message.Text, "Chat session started.")
+	}
 }
 
 func postChatMessage(t *testing.T, server *Server, sender string, token string, text string) chatMessage {

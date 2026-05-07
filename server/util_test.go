@@ -188,21 +188,20 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 
 	// Debug: check if template variables are present
 	t.Logf("HTML length: %d", len(html))
-	t.Logf("Contains 'eqrcp chat': %v", strings.Contains(html, "eqrcp chat"))
+	t.Logf("Contains 'EQT Chat': %v", strings.Contains(html, "EQT Chat"))
 	t.Logf("Contains 'EventsRoute': %v", strings.Contains(html, "EventsRoute"))
 
 	// The template uses {{.EventsRoute}} which gets replaced with the actual value
 	// In JavaScript, forward slashes in strings are escaped as \/
 	for _, want := range []string{
-		"eqrcp chat",
+		"EQT Chat",
 		`src="/chat/test/qr/image"`,
 		"connectSSE",        // Check for reconnection logic - this is the key new feature
 		"scheduleReconnect", // Check for reconnection scheduling
 		"verifyConnection",  // Check for connection verification
 		"isPageVisible",     // Check for visibility tracking
 		"visibilitychange",  // Check for Page Visibility API
-		`id="share-session"`,
-		`id="close-page"`,
+		`class="icon-button" type="button" id="share-session"`,
 		`id="send-button"`,
 		`id="devices-toggle"`,
 		`id="device-count"`,
@@ -210,9 +209,12 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`eqrcp-chat-draft:`,
 		`clipboardData.files`,
 		`auto-save-file`,
+		`currentAvatar`,
+		`showSystemNotice`,
+		`chatConnectionLost`,
 		`message-avatar`,
 		`file-icon`,
-		`Type a message or paste an image`,
+		`placeholder="Message"`,
 		`attachment-card`,
 		`downloadURL(message.url)`,
 		`Device `,
@@ -286,11 +288,11 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
 		t.Fatalf("decode messages: %v", err)
 	}
-	if len(messages) != 1 || messages[0].Sender != "Desk One" || messages[0].Text != "hello mobile" {
-		t.Fatalf("messages = %#v, want named desktop text message", messages)
+	if len(messages) != 2 || messages[0].Sender != "system" || messages[0].Text != "Chat session started." || messages[1].Sender != "Desk One" || messages[1].Text != "hello mobile" {
+		t.Fatalf("messages = %#v, want startup system message plus desktop text message", messages)
 	}
 	recallBody := strings.NewReader(`{"sender":"Desk One","token":"desk-token"}`)
-	recallRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+messages[0].ID, recallBody)
+	recallRequest := httptest.NewRequest(http.MethodDelete, "/chat/test/messages/"+messages[1].ID, recallBody)
 	recallRequest.Header.Set("Content-Type", "application/json")
 	recallResponse := httptest.NewRecorder()
 	server.mux.ServeHTTP(recallResponse, recallRequest)
@@ -302,7 +304,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
 		t.Fatalf("decode recalled messages: %v", err)
 	}
-	if len(messages) != 1 || !messages[0].Recalled || messages[0].Text != "hello mobile" {
+	if len(messages) != 2 || messages[1].Sender != "Desk One" || !messages[1].Recalled || messages[1].Text != "hello mobile" {
 		t.Fatalf("messages = %#v, want recalled message retaining original text", messages)
 	}
 
@@ -373,7 +375,7 @@ func TestChatMessagesAndAttachments(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&messages); err != nil {
 		t.Fatalf("decode attachment recall messages: %v", err)
 	}
-	if len(messages) != 2 || !messages[1].Recalled || messages[1].URL != "" || messages[1].FileName != "" {
+	if len(messages) != 3 || !messages[2].Recalled || messages[2].URL != "" || messages[2].FileName != "" {
 		t.Fatalf("messages = %#v, want recalled attachment without retrievable content", messages)
 	}
 	if _, err := os.Stat(filepath.Join(server.chatDir, uploaded[0].ID+"-photo.txt")); !os.IsNotExist(err) {
@@ -967,6 +969,9 @@ func TestChatHealthEndpoint(t *testing.T) {
 	if _, ok := health["deviceCount"]; !ok {
 		t.Fatal("health response missing deviceCount")
 	}
+	if _, ok := health["devices"]; !ok {
+		t.Fatal("health response missing devices")
+	}
 	if _, ok := health["state"]; !ok {
 		t.Fatal("health response missing state")
 	}
@@ -1008,8 +1013,8 @@ func TestChatMessagesSnapshotIgnoresLastEventIDQuery(t *testing.T) {
 	if err := json.NewDecoder(listResponse.Body).Decode(&allMessages); err != nil {
 		t.Fatalf("decode messages: %v", err)
 	}
-	if len(allMessages) != 3 {
-		t.Fatalf("got %d messages, want 3", len(allMessages))
+	if len(allMessages) != 4 {
+		t.Fatalf("got %d messages, want 4", len(allMessages))
 	}
 
 	// GET /messages is a full snapshot endpoint. Reconnection recovery is
@@ -1022,7 +1027,7 @@ func TestChatMessagesSnapshotIgnoresLastEventIDQuery(t *testing.T) {
 		t.Fatalf("decode recovered messages: %v", err)
 	}
 
-	if len(recoveredMessages) != 3 {
-		t.Fatalf("recovered %d messages, want 3", len(recoveredMessages))
+	if len(recoveredMessages) != 4 {
+		t.Fatalf("recovered %d messages, want 4", len(recoveredMessages))
 	}
 }

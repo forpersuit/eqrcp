@@ -1,4 +1,5 @@
 export namespace main {
+	
 	export class TaskRecord {
 	    id: number;
 	    action: string;
@@ -165,6 +166,8 @@ export namespace main {
 	    browser: boolean;
 	    chatAutoSave: boolean;
 	    closeBehavior: string;
+	    chatSender: string;
+	    chatAvatar: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -180,6 +183,8 @@ export namespace main {
 	        this.browser = source["browser"];
 	        this.chatAutoSave = source["chatAutoSave"];
 	        this.closeBehavior = source["closeBehavior"];
+	        this.chatSender = source["chatSender"];
+	        this.chatAvatar = source["chatAvatar"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -200,4 +205,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
+
 }
+

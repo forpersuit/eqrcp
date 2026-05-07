@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ type chatSession struct {
 	messages        []chatMessage
 	attachments     map[string]chatAttachment
 	subscribers     map[chan struct{}]struct{}
-	clients         map[string]int
+	clients         map[string]chatClient
 	nextID          int64
 	dir             string
 	attachmentRoute string
@@ -77,6 +78,12 @@ type chatAttachment struct {
 	MimeType string
 }
 
+type chatClient struct {
+	Label    string    `json:"label"`
+	Count    int       `json:"count"`
+	LastSeen time.Time `json:"lastSeen"`
+}
+
 // Chat adds handlers for a browser-based chat session.
 func (s *Server) Chat() error {
 	dir, err := os.MkdirTemp("", "eqrcp-chat-*")
@@ -97,7 +104,7 @@ func (s *Server) Chat() error {
 	session := &chatSession{
 		attachments:     map[string]chatAttachment{},
 		subscribers:     map[chan struct{}]struct{}{},
-		clients:         map[string]int{},
+		clients:         map[string]chatClient{},
 		dir:             dir,
 		attachmentRoute: attachmentsRoute,
 		startedAt:       time.Now(),
@@ -117,6 +124,11 @@ func (s *Server) Chat() error {
 	s.chatSession = session
 	s.statusMu.Unlock()
 	s.setStatus("waiting", "Chat session waiting for a device to connect.")
+	session.addMessageWithStatus(chatMessage{
+		Sender: "system",
+		Type:   "system",
+		Text:   "Chat session started.",
+	}, "waiting")
 	s.updateStatus(func(status *transferStatus) {
 		status.Mode = "chat"
 		status.Title = "Chat session"
@@ -208,6 +220,7 @@ func (s *Server) Chat() error {
 		messageCount := len(session.messages)
 		eventSeq := session.eventSeq
 		deviceCount := len(session.clients)
+		devices := session.deviceRosterLocked()
 		state := session.state
 		startedAt := session.startedAt
 		lastActivity := session.lastActivity
@@ -219,6 +232,7 @@ func (s *Server) Chat() error {
 			"messageCount": messageCount,
 			"eventSeq":     eventSeq,
 			"deviceCount":  deviceCount,
+			"devices":      devices,
 			"state":        state,
 			"startedAt":    startedAt,
 			"lastActivity": lastActivity,
@@ -262,10 +276,20 @@ func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) DisplayChat() error {
+	return s.DisplayChatWithURL(func() string {
+		return s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(s.ChatHostToken())
+	})
+}
+
+// DisplayChatWithURL serves the chat page and opens the provided URL in the browser.
+func (s *Server) DisplayChatWithURL(browserURL func() string) error {
 	if err := s.Chat(); err != nil {
 		return err
 	}
-	return openBrowser(s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(s.ChatHostToken()))
+	if browserURL == nil {
+		return nil
+	}
+	return openBrowser(browserURL())
 }
 
 // ChatHostToken returns the hostToken for the current chat session, or empty string if none.
@@ -454,7 +478,7 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	if !hasJoinSeq {
 		joinSeq = seenSeq
 	}
-	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.RemoteAddr)
+	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.RemoteAddr)
 	defer unregisterClient()
 
 	write := func() bool {
@@ -497,7 +521,7 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (session *chatSession) registerClient(token string, fallback string) func() {
+func (session *chatSession) registerClient(token string, label string, fallback string) func() {
 	client := strings.TrimSpace(token)
 	if client == "" {
 		client = strings.TrimSpace(fallback)
@@ -507,9 +531,13 @@ func (session *chatSession) registerClient(token string, fallback string) func()
 	}
 	session.mu.Lock()
 	if session.clients == nil {
-		session.clients = map[string]int{}
+		session.clients = map[string]chatClient{}
 	}
-	session.clients[client]++
+	info := session.clients[client]
+	info.Count++
+	info.Label = sanitizeChatSender(label)
+	info.LastSeen = time.Now()
+	session.clients[client] = info
 	nextState := session.state
 	if len(session.clients) > 1 && !isTerminalChatState(session.state) {
 		nextState = "active"
@@ -519,15 +547,35 @@ func (session *chatSession) registerClient(token string, fallback string) func()
 	notifyChatStatusHook(hook, snapshot)
 	return func() {
 		session.mu.Lock()
-		if count := session.clients[client]; count <= 1 {
+		info := session.clients[client]
+		if info.Count <= 1 {
 			delete(session.clients, client)
 		} else {
-			session.clients[client] = count - 1
+			info.Count--
+			info.LastSeen = time.Now()
+			session.clients[client] = info
 		}
 		hook, snapshot := session.statusSnapshotLocked(session.state)
 		session.mu.Unlock()
 		notifyChatStatusHook(hook, snapshot)
 	}
+}
+
+func (session *chatSession) deviceRosterLocked() []chatClient {
+	devices := make([]chatClient, 0, len(session.clients))
+	for _, client := range session.clients {
+		if client.Label == "" {
+			client.Label = "Guest"
+		}
+		devices = append(devices, client)
+	}
+	sort.SliceStable(devices, func(i, j int) bool {
+		if devices[i].Label == devices[j].Label {
+			return devices[i].LastSeen.Before(devices[j].LastSeen)
+		}
+		return devices[i].Label < devices[j].Label
+	})
+	return devices
 }
 
 func handleChatCORS(w http.ResponseWriter, r *http.Request, methods ...string) bool {

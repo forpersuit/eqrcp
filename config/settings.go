@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"eqrcp/application"
 	"eqrcp/util"
@@ -19,6 +20,8 @@ type DesktopSettings struct {
 	Browser          bool                     `json:"browser"`
 	ChatAutoSave     bool                     `json:"chatAutoSave"`
 	CloseBehavior    string                   `json:"closeBehavior"`
+	ChatSender       string                   `json:"chatSender"`
+	ChatAvatar       string                   `json:"chatAvatar"`
 }
 
 const (
@@ -59,6 +62,8 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 			closeBehavior = DesktopCloseBehaviorTray
 		}
 	}
+	chatSender := strings.TrimSpace(v.GetString("chatSender"))
+	chatAvatar := strings.TrimSpace(v.GetString("chatAvatar"))
 	selectedInterface := v.GetString("interface")
 	if selectedInterface == "" {
 		selectedInterface = defaultDesktopInterface(options)
@@ -76,6 +81,8 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		Browser:          browser,
 		ChatAutoSave:     chatAutoSave,
 		CloseBehavior:    closeBehavior,
+		ChatSender:       chatSender,
+		ChatAvatar:       chatAvatar,
 	}, nil
 }
 
@@ -114,6 +121,8 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("browser", settings.Browser)
 	v.Set("chatAutoSave", settings.ChatAutoSave)
 	v.Set("closeBehavior", closeBehavior)
+	v.Set("chatSender", strings.TrimSpace(settings.ChatSender))
+	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
