@@ -948,8 +948,8 @@ var Chat = `
             padding-right: 36px;
         }
         .message.mine.touch-actions .message-main {
-            padding-left: 68px;
-            padding-right: 0;
+            padding-left: 36px;
+            padding-right: 36px;
         }
         .message.mine .message-main {
             align-items: flex-end;
@@ -1233,18 +1233,22 @@ var Chat = `
             display: none;
         }
         .message.mine .side-copy-action {
-            left: 34px;
-            right: auto;
+            left: auto;
+            right: 0;
         }
         .message.mine .side-recall-action {
             display: flex;
             left: 0;
             right: auto;
         }
-        .message:hover .side-message-action,
-        .message:focus-within .side-message-action,
-        .message:hover .side-recall-action,
-        .message:focus-within .side-recall-action,
+        @media (hover: hover) and (pointer: fine) {
+            .message:hover .side-message-action,
+            .message:focus-within .side-message-action {
+                opacity: 1;
+                pointer-events: auto;
+                transform: scale(1);
+            }
+        }
         .message.touch-actions .side-message-action {
             opacity: 1;
             pointer-events: auto;
@@ -1622,7 +1626,7 @@ var Chat = `
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
                         <span id="device-count">0</span>
                     </button>
-                    <button class="icon-button qr-breathe" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
+                    <button class="icon-button{{if .CanStop}} qr-breathe{{end}}" type="button" id="share-session" title="Show session QR" aria-label="Show session QR">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
                     </button>
                     {{if .CanStop}}<form class="head-stop-form" method="post" action="{{.StopRoute}}">
@@ -1711,6 +1715,7 @@ var Chat = `
         var devicesToggle = document.getElementById('devices-toggle');
         var devicePanel = document.getElementById('device-panel');
         var deviceRoster = document.getElementById('device-roster');
+        var shareSessionButton = document.getElementById('share-session');
         var sessionBackdrop = document.getElementById('session-backdrop');
         var previewBackdrop = document.getElementById('preview-backdrop');
         var previewBox = previewBackdrop.querySelector('.preview-box');
@@ -2061,8 +2066,8 @@ var Chat = `
                 var recall = document.createElement('button');
                 recall.type = 'button';
                 recall.className = 'bubble-action';
-                recall.setAttribute('aria-label', 'Recall');
-                recall.title = 'Recall';
+                recall.setAttribute('aria-label', 'Delete');
+                recall.title = 'Delete';
                 recall.innerHTML = recallIcon();
                 recall.addEventListener('click', function() { recallMessage(message); });
                 actions.appendChild(recall);
@@ -2081,8 +2086,8 @@ var Chat = `
                 var recall = document.createElement('button');
                 recall.type = 'button';
                 recall.className = 'bubble-action';
-                recall.setAttribute('aria-label', 'Recall');
-                recall.title = 'Recall';
+                recall.setAttribute('aria-label', 'Delete');
+                recall.title = 'Delete';
                 recall.innerHTML = recallIcon();
                 recall.addEventListener('click', function() {
                     recallMessage(message);
@@ -2200,7 +2205,10 @@ var Chat = `
             chatHead.title = label || '';
             updateChatStatus();
         }
-        function openSessionPanel() { sessionBackdrop.classList.add('open'); }
+        function openSessionPanel() {
+            shareSessionButton.classList.remove('qr-breathe');
+            sessionBackdrop.classList.add('open');
+        }
         function closeSessionPanel() { sessionBackdrop.classList.remove('open'); }
         function openImagePreview(url, label) {
             previewScale = 1;
@@ -2646,10 +2654,7 @@ var Chat = `
         devicesToggle.addEventListener('click', toggleDevicePanel);
         devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });
         document.addEventListener('click', closeDevicePanel);
-        document.getElementById('share-session').addEventListener('click', openSessionPanel);
-        window.setTimeout(function() {
-            document.getElementById('share-session').classList.remove('qr-breathe');
-        }, 10000);
+        shareSessionButton.addEventListener('click', openSessionPanel);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
         document.getElementById('preview-close').addEventListener('click', closeImagePreview);
         document.getElementById('preview-zoom-in').addEventListener('click', function() { zoomPreview(0.25); });
