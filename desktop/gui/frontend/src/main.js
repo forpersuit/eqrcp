@@ -46,6 +46,7 @@ const state = {
     lastChatDeviceCount: 0,
     activeChatTaskId: 0,
     activeChatSessionKey: '',
+    chatQRPulseArmed: false,
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
@@ -71,6 +72,7 @@ function triggerChatQRPulse() {
 }
 
 function stopChatQRPulse() {
+    state.chatQRPulseArmed = false;
     state.chatQRPromptDismissed = true;
     state.chatQRPulseUntil = 0;
     if (chatQRPulseTimer) {
@@ -757,7 +759,8 @@ async function startChat() {
         await saveSettingsData();
         state.status = await Chat();
         state.mode = 'chat';
-        state.notice = 'Chat session started.';
+        state.notice = '';
+        state.chatQRPulseArmed = true;
         reconcileChatQRState(state.status);
         if (state.chatAutoSave) {
             state.chatSaveDir = await ChatSaveDirectory();
@@ -1192,6 +1195,7 @@ function reconcileChatQRState(status) {
     if (!task || task.action !== 'chat' || isTerminal(task)) {
         state.activeChatTaskId = 0;
         state.activeChatSessionKey = '';
+        state.chatQRPulseArmed = false;
         state.lastChatDeviceCount = 0;
         state.chatQROpen = false;
         state.chatQRPromptDismissed = false;
@@ -1204,14 +1208,21 @@ function reconcileChatQRState(status) {
     if (samePendingSession) {
         state.activeChatSessionKey = sessionKey;
     } else if (state.activeChatSessionKey !== sessionKey) {
+        const shouldPulse = state.chatQRPulseArmed;
+        state.chatQRPulseArmed = false;
         state.activeChatTaskId = task.id;
         state.activeChatSessionKey = sessionKey;
         state.lastChatDeviceCount = deviceCount;
         state.chatQROpen = false;
-        state.chatQRPromptDismissed = false;
-        triggerChatQRPulse();
+        state.chatQRPromptDismissed = !shouldPulse;
+        if (shouldPulse) {
+            triggerChatQRPulse();
+        } else {
+            state.chatQRPulseUntil = 0;
+        }
         return;
     }
+    state.chatQRPulseArmed = false;
     state.activeChatTaskId = task.id;
     if (deviceCount > 1 && state.lastChatDeviceCount <= 1) {
         state.chatQROpen = false;

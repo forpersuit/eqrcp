@@ -1101,6 +1101,9 @@ var Chat = `
             max-width: 100%;
             width: min(300px, 100%);
         }
+        .attachment-card.image-attachment {
+            width: fit-content;
+        }
         .message:has(.attachment-card) .bubble {
             background: #f8fbf5;
             padding: 10px;
@@ -1114,10 +1117,15 @@ var Chat = `
             position: relative;
             width: 100%;
         }
+        .image-attachment .media-frame {
+            max-width: 100%;
+            width: fit-content;
+        }
         button.media-frame {
             border: 0;
             cursor: zoom-in;
             min-height: 0;
+            max-width: 100%;
             padding: 0;
             text-align: left;
         }
@@ -1126,7 +1134,7 @@ var Chat = `
             border-radius: 8px;
             display: block;
             max-height: min(320px, 48vh);
-            max-width: 100%;
+            max-width: min(300px, 100%);
             object-fit: contain;
             width: auto;
         }
@@ -2125,6 +2133,7 @@ var Chat = `
             wrap.className = 'attachment-card';
             var sourceURL = attachmentURL(message.url);
             if (message.type === 'image') {
+                wrap.classList.add('image-attachment');
                 var open = document.createElement('button');
                 open.type = 'button';
                 open.className = 'media-frame';
@@ -2146,6 +2155,7 @@ var Chat = `
                 frame.appendChild(video);
                 wrap.appendChild(frame);
             } else {
+                wrap.classList.add('file-attachment');
                 wrap.appendChild(renderFileCard(message));
             }
             return wrap;
@@ -2477,7 +2487,9 @@ var Chat = `
             document.addEventListener('pointerdown', function(event) {
                 if (event.target.closest('.chat-context-menu')) { return; }
                 if (event.target.closest('.message.touch-actions')) { return; }
-                closeTouchActions();
+                if (event.target.closest('.message')) {
+                    closeTouchActions();
+                }
             });
         }
         function openTouchActions(item) {
