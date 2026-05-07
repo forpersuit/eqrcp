@@ -1202,7 +1202,7 @@ function reconcileChatQRState(status) {
     if (state.activeChatTaskId !== task.id) {
         state.activeChatTaskId = task.id;
         state.lastChatDeviceCount = deviceCount;
-        state.chatQROpen = deviceCount <= 1;
+        state.chatQROpen = false;
         state.chatQRPromptDismissed = false;
         triggerChatQRPulse();
         return;
