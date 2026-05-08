@@ -1107,7 +1107,7 @@ var Chat = `
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
-            max-width: min(360px, 100%);
+            max-width: min(380px, 100%);
         }
         .attachment-card.media-attachment {
             max-width: min(var(--media-width, 360px), 100%);
@@ -1158,47 +1158,76 @@ var Chat = `
         }
         .file-card {
             align-items: center;
-            background: transparent;
-            border: 0;
-            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.48) 0%, rgba(255,255,255,0.22) 100%);
+            border: 1px solid rgba(24, 33, 31, 0.08);
+            border-radius: 12px;
             display: flex;
-            gap: 10px;
+            gap: 12px;
             max-width: 100%;
-            min-width: min(220px, 100%);
-            padding: 8px;
+            min-height: 64px;
+            min-width: min(232px, 100%);
+            padding: 10px 12px;
             text-align: left;
             text-decoration: none;
+            transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
             width: 100%;
+        }
+        a.file-card:hover,
+        button.file-card:hover {
+            background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.34) 100%);
+            border-color: rgba(21, 111, 90, 0.18);
+            transform: translateY(-1px);
+        }
+        a.file-card:focus-visible,
+        button.file-card:focus-visible {
+            outline: 2px solid rgba(21, 111, 90, 0.22);
+            outline-offset: 2px;
         }
         .file-details {
             display: grid;
             flex: 1 1 auto;
-            gap: 3px;
+            gap: 4px;
             min-width: 0;
         }
         .file-icon {
             align-items: center;
+            align-self: stretch;
             background: #fff1ed;
-            border-radius: 8px;
+            border-radius: 10px;
             color: var(--danger);
             display: inline-flex;
-            flex: 0 0 auto;
+            flex: 0 0 42px;
             font-size: 11px;
             font-weight: 900;
-            height: 38px;
             justify-content: center;
-            width: 38px;
+            letter-spacing: 0.04em;
+            min-height: 42px;
+            width: 42px;
         }
         .file-name {
             color: var(--ink);
-            display: block;
+            display: -webkit-box;
             font-weight: 700;
+            line-height: 1.3;
+            max-height: calc(1.3em * 2);
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .file-subtitle {
+            color: var(--muted);
+            display: block;
+            font-size: 12px;
+            line-height: 1.25;
             max-width: 100%;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .file-name::-webkit-scrollbar { display: none; }
         /* ── Bubble action buttons ── */
         .bubble-actions {
             display: flex;
@@ -2337,22 +2366,28 @@ var Chat = `
             return meta;
         }
         function renderFileCard(message) {
+            var fileName = message.fileName || 'attachment';
             var icon = document.createElement('div');
             icon.className = 'file-icon';
-            icon.textContent = fileExtension(message.fileName);
+            icon.textContent = fileExtension(fileName);
             var details = document.createElement('div');
             details.className = 'file-details';
             var name = document.createElement('div');
             name.className = 'file-name';
-            name.textContent = message.fileName || 'attachment';
-            name.title = message.fileName || 'attachment';
+            name.textContent = fileName;
+            name.title = fileName;
             details.appendChild(name);
+            var subtitle = document.createElement('div');
+            subtitle.className = 'file-subtitle';
+            subtitle.textContent = fileDescription(message).replace(/ - /g, ' · ');
+            subtitle.title = subtitle.textContent;
+            details.appendChild(subtitle);
             if (inWails) {
                 var card = document.createElement('button');
                 card.type = 'button';
                 card.className = 'file-card';
                 card.addEventListener('click', function() {
-                    window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
+                    window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: fileName}, '*');
                 });
                 card.appendChild(icon);
                 card.appendChild(details);
@@ -2361,7 +2396,7 @@ var Chat = `
             var card = document.createElement('a');
             card.className = 'file-card';
             card.href = downloadURL(message.url);
-            card.setAttribute('download', message.fileName || '');
+            card.setAttribute('download', fileName);
             card.appendChild(icon);
             card.appendChild(details);
             return card;
