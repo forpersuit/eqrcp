@@ -662,6 +662,8 @@ func (session *chatSession) saveAttachment(sender string, token string, name str
 		messageType = "image"
 	} else if strings.HasPrefix(mimeType, "video/") {
 		messageType = "video"
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		messageType = "audio"
 	}
 	message := chatMessage{
 		ID:         id,

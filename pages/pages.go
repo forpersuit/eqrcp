@@ -929,12 +929,9 @@ var Chat = `
             max-width: 100%;
             width: 100%;
         }
+        .message.attachment-message,
         .message:has(.attachment-card) {
-            max-width: min(460px, 88%);
-            grid-template-columns: 32px auto;
-        }
-        .message.mine:has(.attachment-card) {
-            grid-template-columns: auto 32px;
+            max-width: min(520px, 88%);
         }
         .message-main {
             display: flex;
@@ -955,6 +952,10 @@ var Chat = `
             .message {
                 max-width: min(680px, 61.8%);
             }
+            .message.attachment-message,
+            .message:has(.attachment-card) {
+                max-width: min(520px, 56%);
+            }
         }
         @media (max-width: 520px) {
             .messages {
@@ -965,8 +966,9 @@ var Chat = `
                 column-gap: 8px;
                 max-width: 90%;
             }
+            .message.attachment-message,
             .message:has(.attachment-card) {
-                max-width: 92%;
+                max-width: 94%;
             }
         }
         .message-avatar {
@@ -1079,33 +1081,50 @@ var Chat = `
             padding: 4px 10px;
         }
         /* ── Attachments ── */
+        .message.attachment-message .bubble,
+        .message:has(.attachment-card) .bubble {
+            display: grid;
+            gap: 8px;
+            max-width: 100%;
+            padding: 8px;
+        }
+        .message.attachment-message:not(.mine) .bubble,
+        .message:has(.attachment-card):not(.mine) .bubble {
+            align-self: flex-start;
+            background: #f8fbf5;
+        }
+        .message.mine.attachment-message .bubble,
+        .message.mine:has(.attachment-card) .bubble {
+            background: #e6f3ea;
+            border-color: #bdd9c7;
+        }
         .attachment-card {
             display: grid;
-            gap: 7px;
+            gap: 8px;
             max-width: 100%;
-            width: fit-content;
+            min-width: min(220px, 100%);
+            width: 100%;
         }
-        .attachment-card.file-attachment {
-            max-width: min(280px, 100%);
+        .attachment-card.file-attachment,
+        .attachment-card.audio-attachment {
+            max-width: min(360px, 100%);
         }
         .attachment-card.media-attachment {
-            max-width: min(var(--media-width, 320px), 100%);
+            max-width: min(var(--media-width, 360px), 100%);
+            min-width: min(220px, 100%);
         }
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
         }
-        .message:has(.attachment-card):not(.mine) .bubble {
-            align-self: flex-start;
+        .attachment-card.video-attachment {
+            --media-aspect-ratio: 16 / 9;
         }
-        .message:has(.attachment-card) .bubble {
-            background: #f8fbf5;
-            display: inline-block;
-            max-width: 100%;
-            padding: 6px;
+        .attachment-card.audio-attachment {
+            gap: 10px;
         }
         .media-frame {
-            background: #f8fbf5;
-            border-radius: 8px;
+            background: rgba(255,255,255,0.66);
+            border-radius: 10px;
             display: block;
             line-height: 0;
             overflow: hidden;
@@ -1123,28 +1142,38 @@ var Chat = `
         }
         .media-preview {
             background: transparent;
-            border-radius: 8px;
+            border-radius: 10px;
             display: block;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
             width: 100%;
         }
-        video.media-preview { background: #101915; }
+        video.media-preview {
+            background: #101915;
+            object-fit: contain;
+        }
+        .audio-player {
+            display: block;
+            width: 100%;
+        }
         .file-card {
             align-items: center;
             background: transparent;
             border: 0;
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             gap: 10px;
             max-width: 100%;
-            min-width: min(176px, 100%);
-            padding: 6px;
+            min-width: min(220px, 100%);
+            padding: 8px;
+            text-align: left;
             text-decoration: none;
-            width: max-content;
+            width: 100%;
         }
         .file-details {
+            display: grid;
             flex: 1 1 auto;
+            gap: 3px;
             min-width: 0;
         }
         .file-icon {
@@ -1162,11 +1191,11 @@ var Chat = `
         }
         .file-name {
             color: var(--ink);
+            display: block;
             font-weight: 700;
             max-width: 100%;
-            overflow-x: auto;
-            overflow-y: hidden;
-            scrollbar-width: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
             white-space: nowrap;
         }
         .file-name::-webkit-scrollbar { display: none; }
@@ -1179,11 +1208,8 @@ var Chat = `
             transition: opacity 0.12s ease;
         }
         .message:hover .bubble-actions,
-        .message:focus-within .bubble-actions {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .message:has(.attachment-card) .bubble-actions {
+        .message:focus-within .bubble-actions,
+        .message.touch-actions .bubble-actions {
             opacity: 1;
             pointer-events: auto;
         }
@@ -1192,7 +1218,7 @@ var Chat = `
             display: flex;
             gap: 6px;
             justify-content: space-between;
-            margin-top: 2px;
+            margin-top: 4px;
             min-height: 26px;
             padding: 0 2px;
             width: 100%;
@@ -1208,6 +1234,8 @@ var Chat = `
             min-width: 0;
             overflow: hidden;
             text-align: left;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .message.mine .message-footer-meta {
             text-align: right;
@@ -1280,7 +1308,7 @@ var Chat = `
         }
         @media (hover: none), (pointer: coarse) {
             .text,
-            .message:not(.system):not(:has(.attachment-card)) .bubble {
+            .message:not(.system):not(.attachment-message):not(:has(.attachment-card)) .bubble {
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
                 user-select: none;
@@ -1652,7 +1680,16 @@ var Chat = `
             .message.mine {
                 grid-template-columns: minmax(0, 1fr) 32px;
             }
+            .message.attachment-message,
             .message:has(.attachment-card) { max-width: 94%; }
+            .attachment-card.media-attachment {
+                max-width: min(100%, 320px);
+                min-width: min(180px, 100%);
+            }
+            html.embedded-chat .messages {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
             .session-backdrop.open {
                 background: rgba(15,23,42,0.42);
                 display: grid;
@@ -2013,6 +2050,7 @@ var Chat = `
                 if (mine) { cls += ' mine'; }
                 if (isSystem) { cls += ' system'; }
                 if (message.recalled) { cls += ' recalled'; }
+                if (!isSystem && !message.recalled && message.type !== 'text') { cls += ' attachment-message'; }
                 item.className = cls;
                 item.dataset.messageId = message.id || '';
                 var main = item;
@@ -2148,7 +2186,26 @@ var Chat = `
             return hasActions ? actions : document.createDocumentFragment();
         }
         function renderOutsideActions(message) {
-            if (message.type !== 'text' || message.recalled) {
+            if (message.recalled) {
+                return document.createDocumentFragment();
+            }
+            if (message.type !== 'text') {
+                if (message.sender === state.sender) {
+                    var recallActions = document.createElement('div');
+                    recallActions.className = 'side-message-action side-recall-action';
+                    var recall = document.createElement('button');
+                    recall.type = 'button';
+                    recall.className = 'bubble-action';
+                    recall.setAttribute('aria-label', 'Delete');
+                    recall.title = 'Delete';
+                    recall.innerHTML = recallIcon();
+                    recall.addEventListener('click', function() {
+                        recallMessage(message);
+                        closeTouchActions();
+                    });
+                    recallActions.appendChild(recall);
+                    return recallActions;
+                }
                 return document.createDocumentFragment();
             }
             var fragment = document.createDocumentFragment();
@@ -2238,6 +2295,7 @@ var Chat = `
                 wrap.appendChild(open);
             } else if (message.type === 'video') {
                 wrap.classList.add('media-attachment');
+                wrap.classList.add('video-attachment');
                 var frame = document.createElement('div');
                 frame.className = 'media-frame';
                 var video = document.createElement('video');
@@ -2250,6 +2308,15 @@ var Chat = `
                 });
                 frame.appendChild(video);
                 wrap.appendChild(frame);
+            } else if (message.type === 'audio') {
+                wrap.classList.add('audio-attachment');
+                var player = document.createElement('audio');
+                player.className = 'audio-player';
+                player.src = sourceURL;
+                player.controls = true;
+                player.preload = 'metadata';
+                wrap.appendChild(renderFileCard(message));
+                wrap.appendChild(player);
             } else {
                 wrap.classList.add('file-attachment');
                 wrap.appendChild(renderFileCard(message));
@@ -2259,7 +2326,7 @@ var Chat = `
         function applyMediaAspect(container, width, height) {
             if (!container || !width || !height) { return; }
             var ratio = Math.max(0.33, Math.min(width / height, 8));
-            var displayWidth = Math.max(96, Math.min(width, 320));
+            var displayWidth = Math.max(96, Math.min(width, 360));
             container.style.setProperty('--media-aspect-ratio', ratio);
             container.style.setProperty('--media-width', displayWidth + 'px');
         }
@@ -2654,7 +2721,35 @@ var Chat = `
             actions.classList.add(item.classList.contains('mine') ? 'left' : 'right');
         }
         function bindMessageGestures(item, bubble, message) {
-            if (!message || message.type !== 'text' || message.recalled) { return; }
+            if (!message || message.recalled) { return; }
+            if (message.type !== 'text') {
+                if (message.sender === state.sender) {
+                    installTouchActionsCloser();
+                    bubble.addEventListener('contextmenu', function(event) {
+                        event.preventDefault();
+                        var touchLike = event.pointerType ? event.pointerType !== 'mouse' : (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+                        if (touchLike) {
+                            openTouchActions(item, bubble, event.clientX, event.clientY);
+                        }
+                    });
+                    item.addEventListener('pointerdown', function(event) {
+                        if (event.pointerType === 'mouse') { return; }
+                        if (event.isPrimary === false) { return; }
+                        var start = { x: event.clientX, y: event.clientY };
+                        var timer = window.setTimeout(function() {
+                            openTouchActions(item, bubble, start.x, start.y);
+                            if (navigator.vibrate) { navigator.vibrate(8); }
+                        }, 460);
+                        function cancel() { window.clearTimeout(timer); item.removeEventListener('pointermove', onMove); item.removeEventListener('pointerup', onCancel); item.removeEventListener('pointercancel', onCancel); }
+                        function onMove(ev) { if (Math.abs(ev.clientX - start.x) > 14 || Math.abs(ev.clientY - start.y) > 14) { cancel(); } }
+                        function onCancel() { cancel(); }
+                        item.addEventListener('pointermove', onMove, {passive: true});
+                        item.addEventListener('pointerup', onCancel);
+                        item.addEventListener('pointercancel', onCancel);
+                    }, {passive: true});
+                }
+                return;
+            }
             installTouchActionsCloser();
             bubble.addEventListener('contextmenu', function(event) {
                 event.preventDefault();
