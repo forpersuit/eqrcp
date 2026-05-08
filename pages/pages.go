@@ -1087,6 +1087,7 @@ var Chat = `
             gap: 8px;
             max-width: 100%;
             padding: 8px;
+            width: fit-content;
         }
         .message.attachment-message:not(.mine) .bubble,
         .message:has(.attachment-card):not(.mine) .bubble {
@@ -1103,11 +1104,12 @@ var Chat = `
             gap: 8px;
             max-width: 100%;
             min-width: min(220px, 100%);
-            width: 100%;
+            width: fit-content;
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
             max-width: min(380px, 100%);
+            width: fit-content;
         }
         .attachment-card.media-attachment {
             max-width: min(var(--media-width, 360px), 100%);
@@ -1170,7 +1172,7 @@ var Chat = `
             text-align: left;
             text-decoration: none;
             transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
-            width: 100%;
+            width: fit-content;
         }
         a.file-card:hover,
         button.file-card:hover {
