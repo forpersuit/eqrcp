@@ -102,15 +102,54 @@ func TestChatPageStopsSessionQRPulse(t *testing.T) {
 	}
 }
 
-func TestChatPageTouchActionsDoNotResizeBubbles(t *testing.T) {
+func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if strings.Contains(pages.Chat, ".message.touch-actions {\n            max-width") {
-		t.Fatal("touch actions should not change message max-width")
+		t.Fatal("message actions should not use touch-only max-width expansion")
 	}
 	if !strings.Contains(pages.Chat, "max-width: min(560px, calc(100% - 74px))") {
 		t.Fatal("touch layouts should reserve horizontal action-button space")
 	}
-	if !strings.Contains(pages.Chat, "actions.classList.add(useVertical ? 'vertical' : 'horizontal')") {
-		t.Fatal("touch actions should switch between vertical and horizontal layouts")
+	if !strings.Contains(pages.Chat, "align-self: flex-end") || !strings.Contains(pages.Chat, ".message.mine .side-message-action") {
+		t.Fatal("message actions should render below the bubble edge")
+	}
+	if !strings.Contains(pages.Chat, ".side-message-action") || !strings.Contains(pages.Chat, "opacity: 1") || !strings.Contains(pages.Chat, "pointer-events: auto") {
+		t.Fatal("message actions should stay visible with the bubble")
+	}
+	if strings.Contains(pages.Chat, "function renderFooterActions(message)") || strings.Contains(pages.Chat, "className = 'bubble-actions'") {
+		t.Fatal("attachment actions should use the same outside action bar as text messages")
+	}
+	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
+		t.Fatal("only text messages should expose copy actions")
+	}
+	if !strings.Contains(pages.Chat, "function renderDownloadAction(message)") || !strings.Contains(pages.Chat, "message.type === 'text'") || !strings.Contains(pages.Chat, "download.setAttribute('aria-label', 'Download')") {
+		t.Fatal("non-text messages should expose the shared download action")
+	}
+	if !strings.Contains(pages.Chat, "--message-actions-min-width: 58px") || !strings.Contains(pages.Chat, "min-width: var(--message-actions-min-width)") {
+		t.Fatal("message bubbles should be at least as wide as two action buttons")
+	}
+	if !strings.Contains(pages.Chat, "function confirmThenRecall(button, message)") || !strings.Contains(pages.Chat, "confirm-delete") {
+		t.Fatal("delete actions should require a confirmation click")
+	}
+	if !strings.Contains(pages.Chat, "function keepActionFocus(control)") || !strings.Contains(pages.Chat, "function restoreFocusAfterCopy(active)") {
+		t.Fatal("message action clicks should not steal composer focus")
+	}
+	if !strings.Contains(pages.Chat, "function mergeMessages(incoming, forceScroll)") || !strings.Contains(pages.Chat, "target.focus({preventScroll: true})") || !strings.Contains(pages.Chat, "scrollIntoView({block: 'end', inline: 'nearest'})") {
+		t.Fatal("locally sent messages should focus and scroll to the newest message")
+	}
+	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottom(incoming[incoming.length - 1]") {
+		t.Fatal("duplicate local send echoes should focus without rerendering")
+	}
+	if !strings.Contains(pages.Chat, "function captureMessageFocus()") || !strings.Contains(pages.Chat, "function restoreMessageFocus(focusState)") {
+		t.Fatal("passive message refreshes should preserve message-local focus")
+	}
+	if strings.Contains(pages.Chat, "openTouchActions(item)") || strings.Contains(pages.Chat, "bindMessageGestures(item") {
+		t.Fatal("message actions should not require long press or hover-only gesture binding")
+	}
+	if strings.Contains(pages.Chat, ".text,\n            .message:not(.system):not(.attachment-message):not(:has(.attachment-card)) .bubble") {
+		t.Fatal("message actions should not disable message text selection")
+	}
+	if !strings.Contains(pages.Chat, "function messageTimestamp(value)") || !strings.Contains(pages.Chat, "+ '\\n' +") {
+		t.Fatal("avatar timestamps should render date and 24-hour time on two lines")
 	}
 }
 

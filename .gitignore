@@ -58,3 +58,6 @@ Thumbs.db
 
 .codex
 currentStatus
+
+.gitignore
+.kiro

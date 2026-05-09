@@ -655,6 +655,7 @@ var Chat = `
             --danger: #a63232;
             --wash: #edf2eb;
             --bg: #f4f7f4;
+            --message-actions-min-width: 58px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
@@ -908,14 +909,14 @@ var Chat = `
             align-items: start;
             column-gap: 10px;
             display: grid;
-            grid-template-columns: 32px minmax(0, 1fr);
+            grid-template-columns: 40px minmax(0, 1fr);
             max-width: min(680px, 78%);
             position: relative;
             width: fit-content;
         }
         .message.mine {
             align-self: flex-end;
-            grid-template-columns: minmax(0, 1fr) 32px;
+            grid-template-columns: minmax(0, 1fr) 40px;
         }
         .message:not(.mine):not(.system) {
             align-self: flex-start;
@@ -941,12 +942,14 @@ var Chat = `
             position: relative;
             transition: padding-inline 0.16s ease;
         }
-        .message.touch-actions .message-main {
-            padding-left: 0;
-            padding-right: 0;
-        }
         .message.mine .message-main {
             align-items: flex-end;
+        }
+        .message:focus {
+            outline: none;
+        }
+        .message:focus-visible .bubble {
+            box-shadow: 0 0 0 2px rgba(21, 111, 90, 0.16);
         }
         @media (min-width: 821px) {
             .message {
@@ -989,6 +992,7 @@ var Chat = `
             display: grid;
             gap: 6px;
             justify-items: center;
+            width: 40px;
         }
         .message.mine .avatar-stack {
             grid-column: 2;
@@ -1010,10 +1014,12 @@ var Chat = `
         }
         .bubble-time {
             color: var(--muted);
-            font-size: 11px;
-            line-height: 1.2;
+            font-size: 10px;
+            line-height: 1.12;
             margin-top: 1px;
-            white-space: nowrap;
+            text-align: center;
+            white-space: pre-line;
+            width: 40px;
         }
         /* ── Bubble ── */
         .bubble {
@@ -1025,6 +1031,9 @@ var Chat = `
             overflow-wrap: anywhere;
             padding: 10px 14px;
             transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+        }
+        .message:not(.system) .bubble {
+            min-width: var(--message-actions-min-width);
         }
         .message-main,
         .bubble,
@@ -1084,9 +1093,9 @@ var Chat = `
         .message.attachment-message .bubble,
         .message:has(.attachment-card) .bubble {
             display: grid;
-            gap: 8px;
+            gap: 6px;
             max-width: 100%;
-            padding: 8px;
+            padding: 6px;
             width: fit-content;
         }
         .message.attachment-message:not(.mine) .bubble,
@@ -1108,12 +1117,14 @@ var Chat = `
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
-            max-width: min(380px, 100%);
-            width: fit-content;
+            max-width: 100%;
+            min-width: min(232px, 100%);
+            width: 320px;
         }
         .attachment-card.media-attachment {
-            max-width: min(var(--media-width, 360px), 100%);
-            min-width: min(220px, 100%);
+            max-width: 100%;
+            min-width: min(180px, 100%);
+            width: var(--media-width, 320px);
         }
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
@@ -1167,12 +1178,12 @@ var Chat = `
             gap: 12px;
             max-width: 100%;
             min-height: 64px;
-            min-width: min(232px, 100%);
+            min-width: 0;
             padding: 10px 12px;
             text-align: left;
             text-decoration: none;
             transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
-            width: fit-content;
+            width: 100%;
         }
         a.file-card:hover,
         button.file-card:hover {
@@ -1230,20 +1241,6 @@ var Chat = `
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        /* ── Bubble action buttons ── */
-        .bubble-actions {
-            display: flex;
-            gap: 5px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.12s ease;
-        }
-        .message:hover .bubble-actions,
-        .message:focus-within .bubble-actions,
-        .message.touch-actions .bubble-actions {
-            opacity: 1;
-            pointer-events: auto;
-        }
         .message-footer {
             align-items: center;
             display: flex;
@@ -1287,120 +1284,32 @@ var Chat = `
         }
         .bubble-action svg { fill: none; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 14px; }
         .side-message-action {
-            align-self: center;
+            align-items: center;
             display: flex;
-            gap: 5px;
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
-            top: 50%;
-            transition: opacity 0.16s ease, transform 0.16s ease;
-            transform: translateY(-50%) scale(0.92);
-            z-index: 2;
+            flex-direction: row;
+            gap: 6px;
+            align-self: flex-end;
+            justify-content: flex-end;
+            margin-top: 4px;
+            min-height: 26px;
+            min-width: var(--message-actions-min-width);
+            opacity: 1;
+            overflow: visible;
+            pointer-events: auto;
         }
-        .side-message-action::before {
-            bottom: -6px;
-            content: '';
-            position: absolute;
-            top: -6px;
-            width: 14px;
+        .message.mine .side-message-action {
+            align-self: flex-start;
+            justify-content: flex-start;
         }
-        .side-copy-action::before {
-            left: -12px;
-        }
-        .side-recall-action::before {
-            right: -12px;
-        }
-        .side-copy-action {
-            left: auto;
-            right: -34px;
-        }
-        .side-recall-action {
-            display: none;
-        }
-        .message.mine .side-copy-action {
-            left: auto;
-            right: -34px;
-        }
-        .message.mine .side-recall-action {
-            display: flex;
-            left: -34px;
-            right: auto;
-        }
-        @media (hover: hover) and (pointer: fine) {
-            .message:hover .side-copy-action,
-            .message:focus-within .side-copy-action,
-            .message.mine:hover .side-recall-action,
-            .message.mine:focus-within .side-recall-action {
-                opacity: 1;
-                pointer-events: auto;
-                transform: translateY(-50%) scale(1);
-            }
+        .bubble-action.confirm-delete {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #b91c1c;
         }
         @media (hover: none), (pointer: coarse) {
-            .text,
-            .message:not(.system):not(.attachment-message):not(:has(.attachment-card)) .bubble {
-                -webkit-touch-callout: none;
-                -webkit-user-select: none;
-                user-select: none;
-            }
             .message {
                 max-width: min(560px, calc(100% - 74px));
             }
-            .message.touch-actions .side-message-action {
-                display: none;
-            }
-            .touch-message-actions {
-                align-items: center;
-                gap: 6px;
-                height: var(--touch-actions-height, 26px);
-                left: var(--touch-actions-left, 8px);
-                position: fixed;
-                top: var(--touch-actions-top, 50%);
-                transform: translateY(-50%);
-                width: var(--touch-actions-width, 26px);
-                z-index: 6;
-            }
-            .touch-message-actions.horizontal {
-                flex-direction: row;
-            }
-            .touch-message-actions.vertical {
-                flex-direction: column;
-            }
-            .message.touch-actions .touch-message-actions {
-                display: flex;
-            }
-        }
-        .message.touch-actions .side-message-action {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translateY(-50%) scale(1);
-        }
-        .touch-message-actions {
-            display: none;
-        }
-        .chat-context-menu {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            box-shadow: 0 12px 28px rgba(24, 33, 31, 0.18);
-            display: grid;
-            gap: 2px;
-            padding: 6px;
-            position: fixed;
-            z-index: 40;
-        }
-        .chat-context-menu button {
-            background: transparent;
-            border-radius: 6px;
-            color: var(--ink);
-            font-size: 13px;
-            min-height: 30px;
-            padding: 6px 14px;
-            white-space: nowrap;
-        }
-        .chat-context-menu button:hover {
-            background: var(--wash);
         }
         /* ── Scroll-to-bottom arrow ── */
         .scroll-arrow {
@@ -1701,18 +1610,17 @@ var Chat = `
             .device-panel { right: 0; }
             .side { display: none; }
             .mobile-close-action { display: inline-flex; }
-            .bubble-actions { opacity: 1; pointer-events: auto; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
             .message {
                 column-gap: 6px;
-                grid-template-columns: 32px minmax(0, 1fr);
+                grid-template-columns: 40px minmax(0, 1fr);
                 max-width: min(560px, calc(100% - 74px));
             }
             .message.mine {
-                grid-template-columns: minmax(0, 1fr) 32px;
+                grid-template-columns: minmax(0, 1fr) 40px;
             }
             .message.attachment-message,
-            .message:has(.attachment-card) { max-width: 94%; }
+            .message:has(.attachment-card) { max-width: min(560px, calc(100% - 74px)); }
             .attachment-card.media-attachment {
                 max-width: min(100%, 320px);
                 min-width: min(180px, 100%);
@@ -2067,6 +1975,7 @@ var Chat = `
                 });
         }
         function renderMessages() {
+            var focusState = captureMessageFocus();
             if (!state.messages.length) {
                 messagesEl.innerHTML = '<div class="messages-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><strong>No messages yet.</strong>Scan the QR code to join from another device.</div>';
                 updateScrollArrow();
@@ -2084,6 +1993,7 @@ var Chat = `
                 if (!isSystem && !message.recalled && message.type !== 'text') { cls += ' attachment-message'; }
                 item.className = cls;
                 item.dataset.messageId = message.id || '';
+                if (!isSystem) { item.tabIndex = -1; }
                 var main = item;
                 if (!isSystem) {
                     var avatarStack = document.createElement('div');
@@ -2093,7 +2003,7 @@ var Chat = `
                     avatar.textContent = mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest');
                     var timeEl = document.createElement('div');
                     timeEl.className = 'bubble-time';
-                    timeEl.textContent = messageTime(message.createdAt);
+                    timeEl.textContent = messageTimestamp(message.createdAt);
                     avatarStack.appendChild(avatar);
                     avatarStack.appendChild(timeEl);
                     main = document.createElement('div');
@@ -2132,11 +2042,10 @@ var Chat = `
                 if (!isSystem) {
                     main.appendChild(renderMessageFooter(message));
                     main.appendChild(renderOutsideActions(message));
-                    main.appendChild(renderTouchActions(message));
-                    bindMessageGestures(item, bubble, message);
                 }
                 messagesEl.appendChild(item);
             });
+            restoreMessageFocus(focusState);
             updateScrollArrow();
         }
         function senderInitial(value) {
@@ -2169,139 +2078,104 @@ var Chat = `
             meta.className = 'message-footer-meta';
             renderAttachmentDescription(meta, message);
             footer.appendChild(meta);
-            footer.appendChild(renderFooterActions(message));
             return footer;
         }
         function renderAttachmentDescription(container, message) {
             container.textContent = fileDescription(message);
         }
-        function renderFooterActions(message) {
-            var actions = document.createElement('div');
-            actions.className = 'bubble-actions';
-            var hasActions = false;
-            if (message.url) {
-                if (inWails) {
-                    var dlBtn = document.createElement('button');
-                    dlBtn.type = 'button';
-                    dlBtn.className = 'bubble-action';
-                    dlBtn.setAttribute('aria-label', 'Save');
-                    dlBtn.title = 'Save';
-                    dlBtn.innerHTML = downloadIcon();
-                    dlBtn.addEventListener('click', function() {
-                        window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
-                    });
-                    actions.appendChild(dlBtn);
-                } else {
-                    var download = document.createElement('a');
-                    download.className = 'bubble-action';
-                    download.href = downloadURL(message.url);
-                    download.setAttribute('download', message.fileName || 'attachment');
-                    download.setAttribute('aria-label', 'Download');
-                    download.title = 'Download';
-                    download.innerHTML = downloadIcon();
-                    actions.appendChild(download);
+        function captureMessageFocus() {
+            var active = document.activeElement;
+            if (!active || !messagesEl.contains(active)) { return null; }
+            var item = active.closest('.message[data-message-id]');
+            if (!item) { return null; }
+            var action = active.closest('.side-message-action') ? active.getAttribute('aria-label') || active.title || '' : '';
+            return {messageID: item.dataset.messageId || '', action: action};
+        }
+        function restoreMessageFocus(focusState) {
+            if (!focusState || !focusState.messageID) { return; }
+            if (document.activeElement && document.activeElement !== document.body) { return; }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(focusState.messageID) + '"]');
+            if (!item) { return; }
+            if (focusState.action) {
+                var actions = item.querySelectorAll('.side-message-action .bubble-action');
+                for (var i = 0; i < actions.length; i++) {
+                    var label = actions[i].getAttribute('aria-label') || actions[i].title || '';
+                    if (label === focusState.action) {
+                        actions[i].focus({preventScroll: true});
+                        return;
+                    }
                 }
-                hasActions = true;
             }
-            if (message.sender === state.sender && message.type !== 'system' && message.type !== 'text' && !message.recalled) {
-                var recall = document.createElement('button');
-                recall.type = 'button';
-                recall.className = 'bubble-action';
-                recall.setAttribute('aria-label', 'Delete');
-                recall.title = 'Delete';
-                recall.innerHTML = recallIcon();
-                recall.addEventListener('click', function() { recallMessage(message); });
-                actions.appendChild(recall);
-                hasActions = true;
+            item.focus({preventScroll: true});
+        }
+        function renderDownloadAction(message) {
+            if (!message || !message.url || message.type === 'text') {
+                return null;
             }
-            return hasActions ? actions : document.createDocumentFragment();
+            if (inWails) {
+                var save = document.createElement('button');
+                save.type = 'button';
+                save.className = 'bubble-action';
+                save.setAttribute('aria-label', 'Save');
+                save.title = 'Save';
+                save.innerHTML = downloadIcon();
+                keepActionFocus(save);
+                save.addEventListener('click', function() {
+                    window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
+                });
+                return save;
+            }
+            var download = document.createElement('a');
+            download.className = 'bubble-action';
+            download.href = downloadURL(message.url);
+            download.setAttribute('download', message.fileName || 'attachment');
+            download.setAttribute('aria-label', 'Download');
+            download.title = 'Download';
+            download.innerHTML = downloadIcon();
+            keepActionFocus(download);
+            return download;
         }
         function renderOutsideActions(message) {
             if (message.recalled) {
                 return document.createDocumentFragment();
             }
-            if (message.type !== 'text') {
-                if (message.sender === state.sender) {
-                    var recallActions = document.createElement('div');
-                    recallActions.className = 'side-message-action side-recall-action';
-                    var recall = document.createElement('button');
-                    recall.type = 'button';
-                    recall.className = 'bubble-action';
-                    recall.setAttribute('aria-label', 'Delete');
-                    recall.title = 'Delete';
-                    recall.innerHTML = recallIcon();
-                    recall.addEventListener('click', function() {
-                        recallMessage(message);
-                        closeTouchActions();
-                    });
-                    recallActions.appendChild(recall);
-                    return recallActions;
-                }
-                return document.createDocumentFragment();
-            }
-            var fragment = document.createDocumentFragment();
-            if (message.sender === state.sender) {
-                var recallActions = document.createElement('div');
-                recallActions.className = 'side-message-action side-recall-action';
-                var recall = document.createElement('button');
-                recall.type = 'button';
-                recall.className = 'bubble-action';
-                recall.setAttribute('aria-label', 'Delete');
-                recall.title = 'Delete';
-                recall.innerHTML = recallIcon();
-                recall.addEventListener('click', function() {
-                    recallMessage(message);
-                    closeTouchActions();
-                });
-                recallActions.appendChild(recall);
-                fragment.appendChild(recallActions);
-            }
-            var copyActions = document.createElement('div');
-            copyActions.className = 'side-message-action side-copy-action';
-            var copy = document.createElement('button');
-            copy.type = 'button';
-            copy.className = 'bubble-action';
-            copy.setAttribute('aria-label', 'Copy');
-            copy.title = 'Copy';
-            copy.innerHTML = copyIcon();
-            copy.addEventListener('click', function() {
-                copyMessageText(message);
-                closeTouchActions();
-            });
-            copyActions.appendChild(copy);
-            fragment.appendChild(copyActions);
-            return fragment;
-        }
-        function renderTouchActions(message) {
-            if (message.type !== 'text' || message.recalled) {
-                return document.createDocumentFragment();
-            }
             var wrap = document.createElement('div');
-            wrap.className = 'touch-message-actions';
-            if (message.sender === state.sender) {
+            wrap.className = 'side-message-action';
+            var hasActions = false;
+            if (message.type === 'text' && messageCopyText(message)) {
+                var copy = document.createElement('button');
+                copy.type = 'button';
+                copy.className = 'bubble-action';
+                copy.setAttribute('aria-label', 'Copy');
+                copy.title = 'Copy';
+                copy.innerHTML = copyIcon();
+                keepActionFocus(copy);
+                copy.addEventListener('click', function() {
+                    copyMessage(message);
+                });
+                wrap.appendChild(copy);
+                hasActions = true;
+            }
+            var download = renderDownloadAction(message);
+            if (download) {
+                wrap.appendChild(download);
+                hasActions = true;
+            }
+            if (message.sender === state.sender && message.type !== 'system') {
                 var recall = document.createElement('button');
                 recall.type = 'button';
                 recall.className = 'bubble-action';
                 recall.setAttribute('aria-label', 'Delete');
                 recall.title = 'Delete';
                 recall.innerHTML = recallIcon();
-                recall.addEventListener('click', function() {
-                    recallMessage(message);
-                    closeTouchActions();
-                });
+                keepActionFocus(recall);
+                recall.addEventListener('click', function() { confirmThenRecall(recall, message); });
                 wrap.appendChild(recall);
+                hasActions = true;
             }
-            var copy = document.createElement('button');
-            copy.type = 'button';
-            copy.className = 'bubble-action';
-            copy.setAttribute('aria-label', 'Copy');
-            copy.title = 'Copy';
-            copy.innerHTML = copyIcon();
-            copy.addEventListener('click', function() {
-                copyMessageText(message);
-                closeTouchActions();
-            });
-            wrap.appendChild(copy);
+            if (!hasActions) {
+                return document.createDocumentFragment();
+            }
             return wrap;
         }
         function renderAttachment(message) {
@@ -2422,10 +2296,13 @@ var Chat = `
             var resolved = attachmentURL(url);
             return resolved + (resolved.indexOf('?') === -1 ? '?download=1' : '&download=1');
         }
-        function messageTime(value) {
+        function padTimePart(value) {
+            return String(value).padStart(2, '0');
+        }
+        function messageTimestamp(value) {
             var date = new Date(value || '');
             if (isNaN(date.getTime())) { return ''; }
-            return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            return padTimePart(date.getMonth() + 1) + '/' + padTimePart(date.getDate()) + '\n' + padTimePart(date.getHours()) + ':' + padTimePart(date.getMinutes());
         }
         function setConnectionState(online, label) {
             setOnline(online);
@@ -2557,14 +2434,26 @@ var Chat = `
                 previewImage.classList.remove('dragging');
             }
         }
-        function mergeMessages(incoming) {
+        function mergeMessages(incoming, forceScroll) {
             var atBottom = isNearBottom();
             if (!incoming || !incoming.length) { return; }
             var knownIDs = {};
             state.messages.forEach(function(m) { knownIDs[m.id] = true; });
             // Also handle recalled updates (same ID, recalled flag changed)
             var fresh = incoming.filter(function(m) { return !knownIDs[m.id]; });
-            var updated = incoming.filter(function(m) { return knownIDs[m.id]; });
+            var updated = incoming.filter(function(m) {
+                if (!knownIDs[m.id]) { return false; }
+                return state.messages.some(function(existing) {
+                    return existing.id === m.id && existing.seq !== m.seq;
+                });
+            });
+            if (!fresh.length && !updated.length) {
+                saveChatCache();
+                if (forceScroll) {
+                    scrollMessagesToBottom(incoming[incoming.length - 1] && incoming[incoming.length - 1].id);
+                }
+                return;
+            }
             // Apply updates to existing messages (e.g. recalled)
             if (updated.length) {
                 var byID = {};
@@ -2577,18 +2466,32 @@ var Chat = `
             }
             renderMessages();
             saveChatCache();
-            if (atBottom) { messagesEl.scrollTop = messagesEl.scrollHeight; }
+            var focusID = forceScroll && incoming.length ? incoming[incoming.length - 1].id || '' : '';
+            if (atBottom || forceScroll) { scrollMessagesToBottom(focusID); }
         }
         function setMessages(messages) {
             var atBottom = isNearBottom();
             state.messages = messages || [];
             renderMessages();
             saveChatCache();
-            if (atBottom) { messagesEl.scrollTop = messagesEl.scrollHeight; }
+            if (atBottom) { scrollMessagesToBottom(); }
             notifyAutoSaveCandidates(state.messages);
         }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
+        }
+        function scrollMessagesToBottom(focusMessageID) {
+            var target = focusMessageID ? messagesEl.querySelector('[data-message-id="' + cssEscape(focusMessageID) + '"]') : null;
+            if (target) {
+                target.focus({preventScroll: true});
+                target.scrollIntoView({block: 'end', inline: 'nearest'});
+                return;
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function cssEscape(value) {
+            if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
+            return String(value || '').replace(/["\\]/g, '\\$&');
         }
         function updateScrollArrow() {
             if (isNearBottom()) {
@@ -2638,11 +2541,12 @@ var Chat = `
             }).then(function(r) {
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
-            }).then(function() {
+            }).then(function(message) {
                 textEl.value = '';
                 clearDraft();
                 resizeComposer();
                 updateComposerState();
+                mergeMessages([message], true);
             }).catch(function() {
                 showSystemNotice('Message send failed.');
                 setConnectionState(true, 'Message send failed.');
@@ -2682,11 +2586,29 @@ var Chat = `
         function closeIcon() {
             return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
         }
-        function copyMessageText(message) {
-            var text = String(message && message.text || '');
+        function keepActionFocus(control) {
+            control.addEventListener('mousedown', function(event) {
+                event.preventDefault();
+            });
+        }
+        function restoreFocusAfterCopy(active) {
+            if (!active || !active.isConnected || typeof active.focus !== 'function') { return; }
+            window.setTimeout(function() {
+                if (active.isConnected) { active.focus({preventScroll: true}); }
+            }, 0);
+        }
+        function messageCopyText(message) {
+            if (!message || message.recalled) { return ''; }
+            if (message.type === 'text') { return String(message.text || ''); }
+            return '';
+        }
+        function copyMessage(message) {
+            var text = messageCopyText(message);
             if (!text) { return; }
+            var active = document.activeElement;
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(text);
+                restoreFocusAfterCopy(active);
                 return;
             }
             var input = document.createElement('textarea');
@@ -2697,189 +2619,23 @@ var Chat = `
             input.select();
             document.execCommand('copy');
             input.remove();
+            restoreFocusAfterCopy(active);
         }
-        var touchActionsCloserInstalled = false;
-        function closeTouchActions() {
-            document.querySelectorAll('.message.touch-actions').forEach(function(active) {
-                active.classList.remove('touch-actions');
-                var actions = active.querySelector('.touch-message-actions');
-                if (actions) {
-                    actions.classList.remove('left', 'right', 'horizontal', 'vertical');
-                    actions.style.removeProperty('--touch-actions-top');
-                    actions.style.removeProperty('--touch-actions-left');
-                    actions.style.removeProperty('--touch-actions-width');
-                    actions.style.removeProperty('--touch-actions-height');
-                }
-            });
-        }
-        function installTouchActionsCloser() {
-            if (touchActionsCloserInstalled) { return; }
-            touchActionsCloserInstalled = true;
-            document.addEventListener('pointerdown', function(event) {
-                if (event.target.closest('.chat-context-menu')) { return; }
-                var active = document.querySelector('.message.touch-actions');
-                if (active && active.contains(event.target)) { return; }
-                closeTouchActions();
-            });
-        }
-        function openTouchActions(item, bubble, clientX, clientY) {
-            closeMessageContextMenu();
-            closeTouchActions();
-            item.classList.add('touch-actions');
-            positionTouchActions(item, bubble, clientX, clientY);
-        }
-        function positionTouchActions(item, bubble, clientX, clientY) {
-            var actions = item.querySelector('.touch-message-actions');
-            if (!actions || !bubble) { return; }
-            var bubbleRect = bubble.getBoundingClientRect();
-            var buttons = actions.querySelectorAll('.bubble-action').length || 1;
-            var actionSize = 26;
-            var actionGap = 6;
-            var gap = 8;
-            var verticalHeight = buttons * actionSize + Math.max(0, buttons - 1) * actionGap;
-            var horizontalWidth = buttons * actionSize + Math.max(0, buttons - 1) * actionGap;
-            var useHorizontal = buttons <= 1 || bubbleRect.width >= horizontalWidth;
-            var useVertical = !useHorizontal && bubbleRect.height >= verticalHeight;
-            actions.classList.remove('horizontal', 'vertical');
-            actions.classList.add(useVertical ? 'vertical' : 'horizontal');
-            var width = useVertical ? actionSize : horizontalWidth;
-            var height = useVertical ? verticalHeight : actionSize;
-            var top = typeof clientY === 'number' ? clientY : bubbleRect.top + bubbleRect.height / 2;
-            top = Math.max(8 + height / 2, Math.min(top, window.innerHeight - 8 - height / 2));
-            var left = item.classList.contains('mine') ? bubbleRect.left - width - gap : bubbleRect.right + gap;
-            if (left < 8) { left = bubbleRect.right + gap; }
-            if (left + width > window.innerWidth - 8) { left = bubbleRect.left - width - gap; }
-            left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
-            actions.style.setProperty('--touch-actions-top', top + 'px');
-            actions.style.setProperty('--touch-actions-left', left + 'px');
-            actions.style.setProperty('--touch-actions-width', width + 'px');
-            actions.style.setProperty('--touch-actions-height', height + 'px');
-            actions.classList.remove('left', 'right');
-            actions.classList.add(item.classList.contains('mine') ? 'left' : 'right');
-        }
-        function bindMessageGestures(item, bubble, message) {
-            if (!message || message.recalled) { return; }
-            if (message.type !== 'text') {
-                if (message.sender === state.sender) {
-                    installTouchActionsCloser();
-                    bubble.addEventListener('contextmenu', function(event) {
-                        event.preventDefault();
-                        var touchLike = event.pointerType ? event.pointerType !== 'mouse' : (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-                        if (touchLike) {
-                            openTouchActions(item, bubble, event.clientX, event.clientY);
-                        }
-                    });
-                    item.addEventListener('pointerdown', function(event) {
-                        if (event.pointerType === 'mouse') { return; }
-                        if (event.isPrimary === false) { return; }
-                        var start = { x: event.clientX, y: event.clientY };
-                        var timer = window.setTimeout(function() {
-                            openTouchActions(item, bubble, start.x, start.y);
-                            if (navigator.vibrate) { navigator.vibrate(8); }
-                        }, 460);
-                        function cancel() { window.clearTimeout(timer); item.removeEventListener('pointermove', onMove); item.removeEventListener('pointerup', onCancel); item.removeEventListener('pointercancel', onCancel); }
-                        function onMove(ev) { if (Math.abs(ev.clientX - start.x) > 14 || Math.abs(ev.clientY - start.y) > 14) { cancel(); } }
-                        function onCancel() { cancel(); }
-                        item.addEventListener('pointermove', onMove, {passive: true});
-                        item.addEventListener('pointerup', onCancel);
-                        item.addEventListener('pointercancel', onCancel);
-                    }, {passive: true});
-                }
+        function confirmThenRecall(button, message) {
+            if (!button || !message) { return; }
+            if (button.classList.contains('confirm-delete')) {
+                recallMessage(message);
                 return;
             }
-            installTouchActionsCloser();
-            bubble.addEventListener('contextmenu', function(event) {
-                event.preventDefault();
-                var touchLike = event.pointerType ? event.pointerType !== 'mouse' : (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-                if (touchLike) {
-                    openTouchActions(item, bubble, event.clientX, event.clientY);
-                    return;
-                }
-                showMessageContextMenu(message, event.clientX, event.clientY);
-            });
-            var start = null;
-            var longPressTimer = null;
-            function clearLongPressTimer() {
-                if (longPressTimer) {
-                    window.clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                }
-            }
-            item.addEventListener('pointerdown', function(event) {
-                if (event.pointerType === 'mouse') { return; }
-                if (event.isPrimary === false) { return; }
-                start = {
-                    originX: event.clientX,
-                    originY: event.clientY,
-                    x: event.clientX,
-                    y: event.clientY,
-                    pointerId: event.pointerId
-                };
-                clearLongPressTimer();
-                longPressTimer = window.setTimeout(function() {
-                    if (!start) { return; }
-                    openTouchActions(item, bubble, start.x, start.y);
-                    if (navigator.vibrate) { navigator.vibrate(8); }
-                    start = null;
-                }, 460);
-            }, {passive: true});
-            item.addEventListener('pointermove', function(event) {
-                if (!start || event.pointerType === 'mouse') { return; }
-                var dx = event.clientX - start.originX;
-                var dy = event.clientY - start.originY;
-                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                    clearLongPressTimer();
-                }
-                if (Math.abs(dx) > 14 || Math.abs(dy) > 14) {
-                    start = null;
-                    return;
-                }
-                start.x = event.clientX;
-                start.y = event.clientY;
-            }, {passive: true});
-            item.addEventListener('pointerup', function(event) {
-                if (!start || event.pointerType === 'mouse') { return; }
-                clearLongPressTimer();
-                start = null;
-            });
-            item.addEventListener('pointercancel', function(event) {
-                clearLongPressTimer();
-                start = null;
-            });
-        }
-        function showMessageContextMenu(message, x, y) {
-            closeTouchActions();
-            closeMessageContextMenu();
-            var menu = document.createElement('div');
-            menu.className = 'chat-context-menu';
-            var copy = document.createElement('button');
-            copy.type = 'button';
-            copy.textContent = 'Copy';
-            copy.addEventListener('click', function() {
-                copyMessageText(message);
-                closeMessageContextMenu();
-            });
-            menu.appendChild(copy);
-            document.body.appendChild(menu);
-            var rect = menu.getBoundingClientRect();
-            menu.style.left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
-            menu.style.top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)) + 'px';
+            button.classList.add('confirm-delete');
+            button.setAttribute('aria-label', 'Confirm delete');
+            button.title = 'Confirm delete';
             window.setTimeout(function() {
-                document.addEventListener('pointerdown', closeMessageContextMenuOnOutside);
-                document.addEventListener('keydown', closeMessageContextMenuOnEscape);
-            }, 0);
-        }
-        function closeMessageContextMenuOnOutside(event) {
-            if (!event.target.closest('.chat-context-menu')) { closeMessageContextMenu(); }
-        }
-        function closeMessageContextMenuOnEscape(event) {
-            if (event.key === 'Escape') { closeMessageContextMenu(); }
-        }
-        function closeMessageContextMenu() {
-            var menu = document.querySelector('.chat-context-menu');
-            if (menu) { menu.remove(); }
-            document.removeEventListener('pointerdown', closeMessageContextMenuOnOutside);
-            document.removeEventListener('keydown', closeMessageContextMenuOnEscape);
+                if (!button.isConnected) { return; }
+                button.classList.remove('confirm-delete');
+                button.setAttribute('aria-label', 'Delete');
+                button.title = 'Delete';
+            }, 2200);
         }
         function uploadFiles() {
             if (!fileEl.files || !fileEl.files.length) { return; }
@@ -2896,6 +2652,7 @@ var Chat = `
             });
             fetch('{{.AttachmentsRoute}}', {method: 'POST', body: data})
                 .then(function(r) { if (!r.ok) { throw new Error('upload failed'); } return r.json(); })
+                .then(function(messages) { mergeMessages(messages || [], true); })
                 .catch(function() {
                     showSystemNotice('Attachment upload failed.');
                     setConnectionState(true, 'Attachment upload failed.');
@@ -3003,7 +2760,6 @@ var Chat = `
         previewImage.addEventListener('pointercancel', previewPointerUp);
         messagesEl.addEventListener('scroll', function() {
             updateScrollArrow();
-            closeTouchActions();
         }, {passive: true});
         scrollArrow.addEventListener('click', function() {
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
