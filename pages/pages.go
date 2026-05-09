@@ -973,6 +973,17 @@ var Chat = `
             .message:has(.attachment-card) {
                 max-width: 94%;
             }
+            .attachment-card {
+                min-width: 0;
+                width: 100%;
+            }
+            .attachment-card.file-attachment,
+            .attachment-card.audio-attachment {
+                width: 100%;
+            }
+            .attachment-card.media-attachment {
+                width: 100%;
+            }
         }
         .message-avatar {
             align-items: center;
@@ -1095,8 +1106,9 @@ var Chat = `
             display: grid;
             gap: 6px;
             max-width: 100%;
+            overflow: hidden;
             padding: 6px;
-            width: fit-content;
+            width: min(100%, fit-content);
         }
         .message.attachment-message:not(.mine) .bubble,
         .message:has(.attachment-card):not(.mine) .bubble {
@@ -1113,18 +1125,18 @@ var Chat = `
             gap: 8px;
             max-width: 100%;
             min-width: min(220px, 100%);
-            width: fit-content;
+            width: min(100%, fit-content);
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
             max-width: 100%;
             min-width: min(232px, 100%);
-            width: 320px;
+            width: min(320px, 100%);
         }
         .attachment-card.media-attachment {
             max-width: 100%;
             min-width: min(180px, 100%);
-            width: var(--media-width, 320px);
+            width: min(var(--media-width, 320px), 100%);
         }
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
@@ -1251,8 +1263,17 @@ var Chat = `
             padding: 0 2px;
             width: 100%;
         }
+        .message-footer:has(.message-footer-meta):not(:has(.message-footer-actions)) {
+            display: flex;
+        }
+        .message-footer:not(:has(.message-footer-meta)) {
+            justify-content: flex-end;
+        }
         .message.mine .message-footer {
             flex-direction: row-reverse;
+        }
+        .message.mine .message-footer:not(:has(.message-footer-meta)) {
+            justify-content: flex-start;
         }
         .message-footer-meta {
             color: var(--muted);
@@ -1267,6 +1288,11 @@ var Chat = `
         }
         .message.mine .message-footer-meta {
             text-align: right;
+        }
+        .message-footer-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
         }
         .bubble-action {
             align-items: center;
@@ -1283,24 +1309,6 @@ var Chat = `
             width: 26px;
         }
         .bubble-action svg { fill: none; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 14px; }
-        .side-message-action {
-            align-items: center;
-            display: flex;
-            flex-direction: row;
-            gap: 6px;
-            align-self: flex-end;
-            justify-content: flex-end;
-            margin-top: 4px;
-            min-height: 26px;
-            min-width: var(--message-actions-min-width);
-            opacity: 1;
-            overflow: visible;
-            pointer-events: auto;
-        }
-        .message.mine .side-message-action {
-            align-self: flex-start;
-            justify-content: flex-start;
-        }
         .bubble-action.confirm-delete {
             background: #fee2e2;
             border-color: #fca5a5;
@@ -1621,9 +1629,13 @@ var Chat = `
             }
             .message.attachment-message,
             .message:has(.attachment-card) { max-width: min(560px, calc(100% - 74px)); }
+            .attachment-card {
+                min-width: 0;
+                width: 100%;
+            }
             .attachment-card.media-attachment {
                 max-width: min(100%, 320px);
-                min-width: min(180px, 100%);
+                min-width: 0;
             }
             html.embedded-chat .messages {
                 padding-left: 10px;
@@ -2041,7 +2053,6 @@ var Chat = `
                 main.appendChild(bubble);
                 if (!isSystem) {
                     main.appendChild(renderMessageFooter(message));
-                    main.appendChild(renderOutsideActions(message));
                 }
                 messagesEl.appendChild(item);
             });
@@ -2069,16 +2080,60 @@ var Chat = `
             return wrap;
         }
         function renderMessageFooter(message) {
-            if (!message.url) {
+            var hasMeta = Boolean(message.url);
+            var actions = renderFooterActions(message);
+            var hasActions = actions && actions.childNodes && actions.childNodes.length > 0;
+            if (!hasMeta && !hasActions) {
                 return document.createDocumentFragment();
             }
             var footer = document.createElement('div');
             footer.className = 'message-footer';
-            var meta = document.createElement('div');
-            meta.className = 'message-footer-meta';
-            renderAttachmentDescription(meta, message);
-            footer.appendChild(meta);
+            if (hasMeta) {
+                var meta = document.createElement('div');
+                meta.className = 'message-footer-meta';
+                renderAttachmentDescription(meta, message);
+                footer.appendChild(meta);
+            }
+            if (hasActions) {
+                footer.appendChild(actions);
+            }
             return footer;
+        }
+        function renderFooterActions(message) {
+            if (message.recalled) {
+                return document.createDocumentFragment();
+            }
+            var wrap = document.createElement('div');
+            wrap.className = 'message-footer-actions';
+            if (message.type === 'text' && messageCopyText(message)) {
+                var copy = document.createElement('button');
+                copy.type = 'button';
+                copy.className = 'bubble-action';
+                copy.setAttribute('aria-label', 'Copy');
+                copy.title = 'Copy';
+                copy.innerHTML = copyIcon();
+                keepActionFocus(copy);
+                copy.addEventListener('click', function() {
+                    copyMessage(message);
+                });
+                wrap.appendChild(copy);
+            }
+            var download = renderDownloadAction(message);
+            if (download) {
+                wrap.appendChild(download);
+            }
+            if (message.sender === state.sender && message.type !== 'system') {
+                var recall = document.createElement('button');
+                recall.type = 'button';
+                recall.className = 'bubble-action';
+                recall.setAttribute('aria-label', 'Delete');
+                recall.title = 'Delete';
+                recall.innerHTML = recallIcon();
+                keepActionFocus(recall);
+                recall.addEventListener('click', function() { confirmThenRecall(recall, message); });
+                wrap.appendChild(recall);
+            }
+            return wrap;
         }
         function renderAttachmentDescription(container, message) {
             container.textContent = fileDescription(message);
@@ -2088,7 +2143,7 @@ var Chat = `
             if (!active || !messagesEl.contains(active)) { return null; }
             var item = active.closest('.message[data-message-id]');
             if (!item) { return null; }
-            var action = active.closest('.side-message-action') ? active.getAttribute('aria-label') || active.title || '' : '';
+            var action = active.closest('.message-footer-actions') ? active.getAttribute('aria-label') || active.title || '' : '';
             return {messageID: item.dataset.messageId || '', action: action};
         }
         function restoreMessageFocus(focusState) {
@@ -2097,7 +2152,7 @@ var Chat = `
             var item = messagesEl.querySelector('[data-message-id="' + cssEscape(focusState.messageID) + '"]');
             if (!item) { return; }
             if (focusState.action) {
-                var actions = item.querySelectorAll('.side-message-action .bubble-action');
+                var actions = item.querySelectorAll('.message-footer-actions .bubble-action');
                 for (var i = 0; i < actions.length; i++) {
                     var label = actions[i].getAttribute('aria-label') || actions[i].title || '';
                     if (label === focusState.action) {
@@ -2134,49 +2189,6 @@ var Chat = `
             download.innerHTML = downloadIcon();
             keepActionFocus(download);
             return download;
-        }
-        function renderOutsideActions(message) {
-            if (message.recalled) {
-                return document.createDocumentFragment();
-            }
-            var wrap = document.createElement('div');
-            wrap.className = 'side-message-action';
-            var hasActions = false;
-            if (message.type === 'text' && messageCopyText(message)) {
-                var copy = document.createElement('button');
-                copy.type = 'button';
-                copy.className = 'bubble-action';
-                copy.setAttribute('aria-label', 'Copy');
-                copy.title = 'Copy';
-                copy.innerHTML = copyIcon();
-                keepActionFocus(copy);
-                copy.addEventListener('click', function() {
-                    copyMessage(message);
-                });
-                wrap.appendChild(copy);
-                hasActions = true;
-            }
-            var download = renderDownloadAction(message);
-            if (download) {
-                wrap.appendChild(download);
-                hasActions = true;
-            }
-            if (message.sender === state.sender && message.type !== 'system') {
-                var recall = document.createElement('button');
-                recall.type = 'button';
-                recall.className = 'bubble-action';
-                recall.setAttribute('aria-label', 'Delete');
-                recall.title = 'Delete';
-                recall.innerHTML = recallIcon();
-                keepActionFocus(recall);
-                recall.addEventListener('click', function() { confirmThenRecall(recall, message); });
-                wrap.appendChild(recall);
-                hasActions = true;
-            }
-            if (!hasActions) {
-                return document.createDocumentFragment();
-            }
-            return wrap;
         }
         function renderAttachment(message) {
             var wrap = document.createElement('div');

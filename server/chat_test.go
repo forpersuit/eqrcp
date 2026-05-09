@@ -109,14 +109,11 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "max-width: min(560px, calc(100% - 74px))") {
 		t.Fatal("touch layouts should reserve horizontal action-button space")
 	}
-	if !strings.Contains(pages.Chat, "align-self: flex-end") || !strings.Contains(pages.Chat, ".message.mine .side-message-action") {
-		t.Fatal("message actions should render below the bubble edge")
+	if !strings.Contains(pages.Chat, "message-footer-actions") {
+		t.Fatal("message actions should render inside the message footer")
 	}
-	if !strings.Contains(pages.Chat, ".side-message-action") || !strings.Contains(pages.Chat, "opacity: 1") || !strings.Contains(pages.Chat, "pointer-events: auto") {
-		t.Fatal("message actions should stay visible with the bubble")
-	}
-	if strings.Contains(pages.Chat, "function renderFooterActions(message)") || strings.Contains(pages.Chat, "className = 'bubble-actions'") {
-		t.Fatal("attachment actions should use the same outside action bar as text messages")
+	if !strings.Contains(pages.Chat, "function renderFooterActions(message)") {
+		t.Fatal("message actions should use a shared renderFooterActions helper")
 	}
 	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
 		t.Fatal("only text messages should expose copy actions")
