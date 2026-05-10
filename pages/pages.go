@@ -896,23 +896,6 @@ var Chat = `
             position: relative;
         }
         .messages::-webkit-scrollbar { display: none; }
-        .messages.flash-track::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 25%;
-            right: 25%;
-            display: block;
-            height: 3px;
-            pointer-events: none;
-            border-radius: 0 0 12px 12px;
-            animation: track-glow-bell 1.4s ease-out forwards;
-        }
-        @keyframes track-glow-bell {
-            0%   { box-shadow: 0 0 8px 2px rgba(var(--accent-rgb, 21,111,90), 0.55), 0 0 20px 4px rgba(var(--accent-rgb, 21,111,90), 0.22); opacity: 1; }
-            25%  { box-shadow: 0 0 12px 3px rgba(var(--accent-rgb, 21,111,90), 0.40), 0 0 28px 6px rgba(var(--accent-rgb, 21,111,90), 0.14); opacity: 0.85; }
-            100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 21,111,90), 0), 0 0 0 0 rgba(var(--accent-rgb, 21,111,90), 0); opacity: 0; }
-        }
         /* ── Empty state ── */
         .messages-empty {
             align-items: center;
@@ -1359,50 +1342,62 @@ var Chat = `
         }
         /* ── Scroll-to-bottom arrow ── */
         .scroll-arrow {
-            background: var(--accent);
-            border: 0;
+            background: var(--panel);
+            border: 1px solid rgba(var(--accent-rgb, 21,111,90), 0.18);
             border-radius: 999px;
             bottom: 86px;
             bottom: calc(var(--composer-height, 74px) + 12px);
-            box-shadow: 0 4px 14px rgba(var(--accent-rgb, 21,111,90), 0.35);
-            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 0 0 1px rgba(var(--accent-rgb, 21,111,90), 0.06);
+            color: var(--accent);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            height: auto;
-            min-height: 32px;
+            justify-content: center;
+            gap: 4px;
+            height: 36px;
+            width: 36px;
             opacity: 0;
             overflow: visible;
             pointer-events: none;
             position: absolute;
             left: 50%;
-            padding: 4px 10px 4px 8px;
+            padding: 0;
             -webkit-tap-highlight-color: transparent;
-            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease;
+            transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.34,1.56,.64,1), box-shadow 0.2s ease, background 0.15s ease;
             transform: translate(-50%, 8px);
             white-space: nowrap;
             z-index: 5;
             font-size: 12px;
         }
         .scroll-arrow:hover {
-            box-shadow: 0 6px 20px rgba(var(--accent-rgb, 21,111,90), 0.45);
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 4px 16px rgba(var(--accent-rgb, 21,111,90), 0.3);
+            color: #fff;
+        }
+        .scroll-arrow:active {
+            transform: translate(-50%, 0) scale(0.94);
         }
         .scroll-arrow.visible {
             opacity: 1;
             pointer-events: auto;
             transform: translate(-50%, 0);
         }
-        .scroll-arrow svg { fill: none; height: 15px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 15px; flex-shrink: 0; }
+        .scroll-arrow svg { fill: none; height: 16px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; width: 16px; flex-shrink: 0; transition: stroke 0.15s ease; }
         .scroll-arrow-badge {
-            background: rgba(255,255,255,0.30);
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: var(--accent);
             border-radius: 999px;
+            color: #fff;
             font-size: 10px;
             font-weight: 700;
             line-height: 1;
             min-width: 16px;
-            padding: 1px 5px;
+            padding: 2px 5px;
             text-align: center;
+            box-shadow: 0 1px 4px rgba(var(--accent-rgb, 21,111,90), 0.3);
         }
         .scroll-arrow-badge:empty { display: none; }
         /* ── Compose bar ── */
@@ -2014,7 +2009,6 @@ var Chat = `
             if (atBottom) {
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
-            updateBottomGlow();
         }
         function setOnline(online) {
             if (online) {
@@ -2179,20 +2173,7 @@ var Chat = `
             return color;
         }
         // ── Device theme: apply this device's senderColor as UI accent ──
-        var deviceThemePalette = [
-            {accent: '#156f5a', accentStrong: '#0d4e42', accentRgb: '21,111,90',  wash: '#edf2eb', bg: '#f4f7f4', line: '#d7ded7'},
-            {accent: '#6f5a15', accentStrong: '#4e420d', accentRgb: '111,90,21',  wash: '#f2f0eb', bg: '#f7f5f4', line: '#ded7c2'},
-            {accent: '#5e4a2a', accentStrong: '#4a3a1e', accentRgb: '94,74,42',   wash: '#f4f0ee', bg: '#f7f5f3', line: '#d9cfc2'},
-            {accent: '#2a5e5e', accentStrong: '#1e4a4a', accentRgb: '42,94,94',   wash: '#eef4f4', bg: '#f4f7f7', line: '#c2d9d9'},
-            {accent: '#5e2a3e', accentStrong: '#4a1e2e', accentRgb: '94,42,62',   wash: '#f4eeef', bg: '#f7f4f5', line: '#d9c2c8'},
-            {accent: '#362a5e', accentStrong: '#2a1e4a', accentRgb: '54,42,94',   wash: '#eff0f4', bg: '#f5f4f7', line: '#c6c2d9'},
-            {accent: '#4a5e2a', accentStrong: '#3a4a1e', accentRgb: '74,94,42',   wash: '#f2f4ee', bg: '#f6f7f4', line: '#cdd9c2'},
-            {accent: '#5e3e2a', accentStrong: '#4a321e', accentRgb: '94,62,42',   wash: '#f4f1ee', bg: '#f7f5f3', line: '#d9cdc2'},
-            {accent: '#2a5e52', accentStrong: '#1e4a42', accentRgb: '42,94,82',   wash: '#eef4f2', bg: '#f4f7f5', line: '#c2d9d1'},
-            {accent: '#5e2a4a', accentStrong: '#4a1e3a', accentRgb: '94,42,74',   wash: '#f4eef2', bg: '#f7f4f6', line: '#d9c2d1'},
-            {accent: '#3e5e2a', accentStrong: '#324a1e', accentRgb: '62,94,42',   wash: '#f0f4ee', bg: '#f5f7f4', line: '#c8d9c2'},
-            {accent: '#5e3a2a', accentStrong: '#4a2e1e', accentRgb: '94,58,42',   wash: '#f4f2ee', bg: '#f7f6f4', line: '#d9cfc2'}
-        ];
+        var _lastThemeIdx = -1;
         function applyDeviceTheme() {
             var sc = senderColor(state.sender);
             if (!sc) { return; }
@@ -2200,16 +2181,31 @@ var Chat = `
             for (var i = 0; i < senderPalette.length; i++) {
                 if (senderPalette[i].bg === sc.bg && senderPalette[i].text === sc.text) { idx = i; break; }
             }
-            if (idx < 0) { return; }
-            var t = deviceThemePalette[idx % deviceThemePalette.length];
+            if (idx < 0 || idx === _lastThemeIdx) { return; }
+            _lastThemeIdx = idx;
+            var t = _deviceThemes[idx % _deviceThemes.length];
             var root = document.documentElement;
-            root.style.setProperty('--accent', t.accent);
-            root.style.setProperty('--accent-strong', t.accentStrong);
-            root.style.setProperty('--accent-rgb', t.accentRgb);
-            root.style.setProperty('--wash', t.wash);
-            root.style.setProperty('--bg', t.bg);
-            root.style.setProperty('--line', t.line);
+            root.style.setProperty('--accent', t.a);
+            root.style.setProperty('--accent-strong', t.as);
+            root.style.setProperty('--accent-rgb', t.ar);
+            root.style.setProperty('--wash', t.w);
+            root.style.setProperty('--bg', t.b);
+            root.style.setProperty('--line', t.l);
         }
+        var _deviceThemes = [
+            {a:'#156f5a',as:'#0d4e42',ar:'21,111,90', w:'#edf2eb',b:'#f4f7f4',l:'#d7ded7'},
+            {a:'#6f5a15',as:'#4e420d',ar:'111,90,21', w:'#f2f0eb',b:'#f7f5f4',l:'#ded7c2'},
+            {a:'#5e4a2a',as:'#4a3a1e',ar:'94,74,42',  w:'#f4f0ee',b:'#f7f5f3',l:'#d9cfc2'},
+            {a:'#2a5e5e',as:'#1e4a4a',ar:'42,94,94',  w:'#eef4f4',b:'#f4f7f7',l:'#c2d9d9'},
+            {a:'#5e2a3e',as:'#4a1e2e',ar:'94,42,62',  w:'#f4eeef',b:'#f7f4f5',l:'#d9c2c8'},
+            {a:'#362a5e',as:'#2a1e4a',ar:'54,42,94',  w:'#eff0f4',b:'#f5f4f7',l:'#c6c2d9'},
+            {a:'#4a5e2a',as:'#3a4a1e',ar:'74,94,42',  w:'#f2f4ee',b:'#f6f7f4',l:'#cdd9c2'},
+            {a:'#5e3e2a',as:'#4a321e',ar:'94,62,42',  w:'#f4f1ee',b:'#f7f5f3',l:'#d9cdc2'},
+            {a:'#2a5e52',as:'#1e4a42',ar:'42,94,82',  w:'#eef4f2',b:'#f4f7f5',l:'#c2d9d1'},
+            {a:'#5e2a4a',as:'#4a1e3a',ar:'94,42,74',  w:'#f4eef2',b:'#f7f4f6',l:'#d9c2d1'},
+            {a:'#3e5e2a',as:'#324a1e',ar:'62,94,42',  w:'#f0f4ee',b:'#f5f7f4',l:'#c8d9c2'},
+            {a:'#5e3a2a',as:'#4a2e1e',ar:'94,58,42',  w:'#f4f2ee',b:'#f7f6f4',l:'#d9cfc2'}
+        ];
         function renderRecalledEdit(message) {
             var wrap = document.createElement('div');
             wrap.className = 'recalled-actions';
@@ -2634,7 +2630,6 @@ var Chat = `
             saveChatCache();
             if (atBottom) { scrollMessagesToBottom(); }
             notifyAutoSaveCandidates(state.messages);
-            updateBottomGlow();
         }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
@@ -2644,19 +2639,9 @@ var Chat = `
             if (target) {
                 target.focus({preventScroll: true});
                 target.scrollIntoView({block: 'end', inline: 'nearest'});
-                updateBottomGlow();
-                flashTrackGlow();
                 return;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
-            updateBottomGlow();
-            flashTrackGlow();
-        }
-        function flashTrackGlow() {
-            messagesEl.classList.remove('flash-track');
-            void messagesEl.offsetWidth;
-            messagesEl.classList.add('flash-track');
-            setTimeout(function() { messagesEl.classList.remove('flash-track'); }, 1500);
         }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
@@ -2670,10 +2655,6 @@ var Chat = `
             } else {
                 scrollArrow.classList.add('visible');
             }
-            updateBottomGlow();
-        }
-        function updateBottomGlow() {
-            /* intentionally empty — retained as no-op for call-site compatibility */
         }
         function loadMessages() {
             if (eventCursorSeq <= 0) {
@@ -2955,21 +2936,13 @@ var Chat = `
         previewImage.addEventListener('pointermove', previewPointerMove);
         previewImage.addEventListener('pointerup', previewPointerUp);
         previewImage.addEventListener('pointercancel', previewPointerUp);
-        var wasNearBottom = true;
         messagesEl.addEventListener('scroll', function() {
-            var nowNearBottom = isNearBottom();
-            if (nowNearBottom && !wasNearBottom) {
-                flashTrackGlow();
-            }
-            wasNearBottom = nowNearBottom;
             updateScrollArrow();
         }, {passive: true});
         scrollArrow.addEventListener('click', function() {
             unreadSinceScroll = 0;
             scrollArrowBadge.textContent = '';
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
-            updateBottomGlow();
-            flashTrackGlow();
         });
         window.addEventListener('pagehide', saveDraft);
         window.addEventListener('message', function(event) {
@@ -2991,7 +2964,6 @@ var Chat = `
         restoreChatCache();
         renderMessages();
         messagesEl.scrollTop = messagesEl.scrollHeight;
-        updateBottomGlow();
         resizeComposer();
         updateComposerState();
         if (shareSessionButton.classList.contains('qr-breathe')) {
