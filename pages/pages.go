@@ -1399,22 +1399,13 @@ var Chat = `
         }
         .scroll-arrow-badge:empty { display: none; }
         /* ── Bottom glow flash (track-latest signal) ── */
-        .messages .track-glow {
-            position: sticky;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: block;
-            height: 6px;
-            margin-top: -6px;
-            pointer-events: none;
-            border-radius: 0 0 12px 12px;
+        .composer.flash-track::before {
             animation: track-glow-flash 1.2s ease-out forwards;
         }
         @keyframes track-glow-flash {
-            0% { background: linear-gradient(0deg, var(--accent) 0%, transparent 100%); opacity: 0.7; }
-            40% { background: linear-gradient(0deg, var(--accent) 0%, transparent 100%); opacity: 0.5; }
-            100% { background: linear-gradient(0deg, var(--accent) 0%, transparent 100%); opacity: 0; }
+            0% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0.28) 0%, transparent 100%); height: 18px; opacity: 1; }
+            30% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0.18) 0%, transparent 100%); height: 14px; opacity: 0.8; }
+            100% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0) 0%, transparent 100%); height: 8px; opacity: 0; }
         }
         /* ── Compose bar ── */
         .composer {
@@ -2664,12 +2655,10 @@ var Chat = `
             flashTrackGlow();
         }
         function flashTrackGlow() {
-            var old = messagesEl.querySelector('.track-glow');
-            if (old) { old.remove(); }
-            var glow = document.createElement('div');
-            glow.className = 'track-glow';
-            messagesEl.appendChild(glow);
-            setTimeout(function() { if (glow.parentNode) { glow.remove(); } }, 1300);
+            composerEl.classList.remove('flash-track');
+            void composerEl.offsetWidth;
+            composerEl.classList.add('flash-track');
+            setTimeout(function() { composerEl.classList.remove('flash-track'); }, 1300);
         }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
