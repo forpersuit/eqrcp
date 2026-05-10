@@ -945,9 +945,8 @@ var Chat = `
             max-width: 100%;
             width: 100%;
         }
-        .message.attachment-message,
-        .message:has(.attachment-card) {
-            max-width: min(520px, 88%);
+        .message.attachment-message {
+            max-width: var(--attach-max, min(520px, 88%));
         }
         .message-main {
             display: flex;
@@ -970,10 +969,7 @@ var Chat = `
             .message {
                 max-width: min(680px, 61.8%);
             }
-            .message.attachment-message,
-            .message:has(.attachment-card) {
-                max-width: min(520px, 56%);
-            }
+            :root { --attach-max: min(520px, 56%); }
         }
         @media (max-width: 520px) {
             .messages {
@@ -984,21 +980,18 @@ var Chat = `
                 column-gap: 8px;
                 max-width: 90%;
             }
-            .message.attachment-message,
-            .message:has(.attachment-card) {
-                max-width: 94%;
+            .message.attachment-message {
+                max-width: var(--attach-max, 94%);
             }
             .attachment-card {
+                --attach-card-width: min(320px, 100%);
                 min-width: 0;
                 width: fit-content;
                 max-width: 100%;
             }
-            .attachment-card.file-attachment,
-            .attachment-card.audio-attachment {
-                width: min(320px, 100%);
-            }
             .attachment-card.media-attachment {
-                width: min(var(--media-width, 320px), 100%);
+                --attach-card-width: min(var(--media-width, 320px), 100%);
+                width: var(--attach-card-width);
             }
         }
         .message-avatar {
@@ -1100,7 +1093,7 @@ var Chat = `
             user-select: text;
             white-space: pre-wrap;
         }
-        .message:not(.system):not(:has(.attachment-card)) .bubble {
+        .message:not(.system):not(.attachment-message) .bubble {
             -webkit-user-select: text;
             user-select: text;
         }
@@ -1118,27 +1111,29 @@ var Chat = `
             padding: 4px 10px;
         }
         /* ── Attachments ── */
-        .message.attachment-message .bubble,
-        .message:has(.attachment-card) .bubble {
+        .bubble-content {
+            max-width: 100%;
+            min-width: 0;
+        }
+        .message.attachment-message .bubble {
+            overflow: hidden;
+            padding: 6px;
+        }
+        .message.attachment-message .bubble-content {
             display: grid;
             gap: 6px;
             justify-items: start;
             max-width: 100%;
-            overflow: hidden;
-            padding: 6px;
             width: fit-content;
         }
-        .message.mine.attachment-message .bubble,
-        .message.mine:has(.attachment-card) .bubble {
+        .message.mine.attachment-message .bubble-content {
             justify-items: end;
         }
-        .message.attachment-message:not(.mine) .bubble,
-        .message:has(.attachment-card):not(.mine) .bubble {
+        .message.attachment-message:not(.mine) .bubble {
             align-self: flex-start;
             background: #f8fbf5;
         }
-        .message.mine.attachment-message .bubble,
-        .message.mine:has(.attachment-card) .bubble {
+        .message.mine.attachment-message .bubble {
             background: #e6f3ea;
             border-color: #bdd9c7;
         }
@@ -1172,6 +1167,8 @@ var Chat = `
             line-height: 0;
             overflow: hidden;
             position: relative;
+        }
+        .attachment-card.media-attachment .media-frame {
             aspect-ratio: var(--media-aspect-ratio, 16 / 9);
             width: 100%;
         }
@@ -1653,15 +1650,16 @@ var Chat = `
             .message.mine {
                 grid-template-columns: minmax(0, 1fr) 40px;
             }
-            .message.attachment-message,
-            .message:has(.attachment-card) { max-width: min(560px, calc(100% - 74px)); }
+            :root { --attach-max: min(560px, calc(100% - 74px)); }
+            .message.attachment-message { max-width: var(--attach-max); }
             .attachment-card {
+                --attach-card-width: min(320px, 100%);
                 min-width: 0;
-                width: fit-content;
+                width: var(--attach-card-width);
                 max-width: 100%;
             }
             .attachment-card.media-attachment {
-                width: min(var(--media-width, 320px), 100%);
+                --attach-card-width: min(var(--media-width, 320px), 100%);
                 min-width: 0;
             }
             html.embedded-chat .messages {
@@ -2068,26 +2066,38 @@ var Chat = `
                 }
                 var bubble = document.createElement('div');
                 bubble.className = 'bubble';
+                var content = document.createElement('div');
+                content.className = 'bubble-content';
                 var sc2 = senderColor(message.sender);
-                if (sc2 && !isSystem) {
+                if (sc2 && !isSystem && message.type === 'text') {
                     bubble.style.borderColor = sc2.border;
                 }
                 if (message.recalled) {
                     var recalled = document.createElement('div');
                     recalled.className = 'text recalled';
                     recalled.textContent = 'Message recalled.';
-                    bubble.appendChild(recalled);
+                    content.appendChild(recalled);
                     if (mine && message.type === 'text' && message.text) {
-                        bubble.appendChild(renderRecalledEdit(message));
+                        content.appendChild(renderRecalledEdit(message));
                     }
-                } else if (message.type === 'text' || isSystem) {
-                    var text = document.createElement('div');
-                    text.className = 'text';
-                    text.textContent = message.text || '';
-                    bubble.appendChild(text);
                 } else {
-                    bubble.appendChild(renderAttachment(message));
+                    if (message.text && !isSystem) {
+                        var text = document.createElement('div');
+                        text.className = 'text';
+                        text.textContent = message.text;
+                        content.appendChild(text);
+                    }
+                    if (message.type !== 'text' && !isSystem) {
+                        content.appendChild(renderAttachment(message));
+                    }
+                    if (isSystem) {
+                        var text = document.createElement('div');
+                        text.className = 'text';
+                        text.textContent = message.text || '';
+                        content.appendChild(text);
+                    }
                 }
+                bubble.appendChild(content);
                 main.appendChild(bubble);
                 if (!isSystem) {
                     main.appendChild(renderMessageFooter(message));

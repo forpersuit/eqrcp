@@ -2,6 +2,7 @@
 
 ## Need to obey
 
+- use Chinese when we chat
 - git push do not with proxy
 - always base on First Principle
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
