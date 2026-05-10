@@ -887,8 +887,23 @@ var Chat = `
             overscroll-behavior: contain;
             scrollbar-width: none;
             touch-action: pan-y;
+            position: relative;
         }
         .messages::-webkit-scrollbar { display: none; }
+        .messages.at-bottom::after {
+            content: '';
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: block;
+            height: 18px;
+            margin-top: -18px;
+            pointer-events: none;
+            background: linear-gradient(0deg, rgba(21,111,90,0.07) 0%, rgba(21,111,90,0.02) 50%, transparent 100%);
+            border-radius: 0 0 12px 12px;
+            transition: opacity 0.3s ease;
+        }
         /* ── Empty state ── */
         .messages-empty {
             align-items: center;
@@ -975,14 +990,15 @@ var Chat = `
             }
             .attachment-card {
                 min-width: 0;
-                width: 100%;
+                width: fit-content;
+                max-width: 100%;
             }
             .attachment-card.file-attachment,
             .attachment-card.audio-attachment {
-                width: 100%;
+                width: min(320px, 100%);
             }
             .attachment-card.media-attachment {
-                width: 100%;
+                width: min(var(--media-width, 320px), 100%);
             }
         }
         .message-avatar {
@@ -1110,7 +1126,7 @@ var Chat = `
             max-width: 100%;
             overflow: hidden;
             padding: 6px;
-            width: min(100%, fit-content);
+            width: fit-content;
         }
         .message.mine.attachment-message .bubble,
         .message.mine:has(.attachment-card) .bubble {
@@ -1131,17 +1147,13 @@ var Chat = `
             gap: 8px;
             max-width: 100%;
             min-width: min(220px, 100%);
-            width: min(100%, fit-content);
+            width: fit-content;
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
-            max-width: 100%;
-            min-width: min(232px, 100%);
             width: min(320px, 100%);
         }
         .attachment-card.media-attachment {
-            max-width: 100%;
-            min-width: min(180px, 100%);
             width: min(var(--media-width, 320px), 100%);
         }
         .attachment-card.image-attachment {
@@ -1645,10 +1657,11 @@ var Chat = `
             .message:has(.attachment-card) { max-width: min(560px, calc(100% - 74px)); }
             .attachment-card {
                 min-width: 0;
-                width: 100%;
+                width: fit-content;
+                max-width: 100%;
             }
             .attachment-card.media-attachment {
-                max-width: min(100%, 320px);
+                width: min(var(--media-width, 320px), 100%);
                 min-width: 0;
             }
             html.embedded-chat .messages {
@@ -1960,6 +1973,7 @@ var Chat = `
             if (atBottom) {
                 messagesEl.scrollTop = messagesEl.scrollHeight;
             }
+            updateBottomGlow();
         }
         function setOnline(online) {
             if (online) {
@@ -2531,6 +2545,7 @@ var Chat = `
             saveChatCache();
             if (atBottom) { scrollMessagesToBottom(); }
             notifyAutoSaveCandidates(state.messages);
+            updateBottomGlow();
         }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
@@ -2540,9 +2555,11 @@ var Chat = `
             if (target) {
                 target.focus({preventScroll: true});
                 target.scrollIntoView({block: 'end', inline: 'nearest'});
+                updateBottomGlow();
                 return;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
+            updateBottomGlow();
         }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
@@ -2553,6 +2570,14 @@ var Chat = `
                 scrollArrow.classList.remove('visible');
             } else {
                 scrollArrow.classList.add('visible');
+            }
+            updateBottomGlow();
+        }
+        function updateBottomGlow() {
+            if (isNearBottom()) {
+                messagesEl.classList.add('at-bottom');
+            } else {
+                messagesEl.classList.remove('at-bottom');
             }
         }
         function loadMessages() {
@@ -2840,6 +2865,7 @@ var Chat = `
         }, {passive: true});
         scrollArrow.addEventListener('click', function() {
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
+            updateBottomGlow();
         });
         window.addEventListener('pagehide', saveDraft);
         window.addEventListener('message', function(event) {
@@ -2860,6 +2886,7 @@ var Chat = `
         restoreChatCache();
         renderMessages();
         messagesEl.scrollTop = messagesEl.scrollHeight;
+        updateBottomGlow();
         resizeComposer();
         updateComposerState();
         if (shareSessionButton.classList.contains('qr-breathe')) {
