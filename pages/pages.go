@@ -210,6 +210,7 @@ var QR = `
             font-size: 14px;
             font-weight: 700;
             padding: 9px 13px;
+            -webkit-tap-highlight-color: transparent;
         }
         button:disabled {
             cursor: default;
@@ -755,7 +756,9 @@ var Chat = `
             font-weight: 800;
             gap: 7px;
             height: 36px;
+            overflow: hidden;
             padding: 0 11px;
+            -webkit-tap-highlight-color: transparent;
         }
         .device-pill svg {
             fill: none;
@@ -843,7 +846,9 @@ var Chat = `
             display: inline-flex;
             height: 36px;
             justify-content: center;
+            overflow: hidden;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
             width: 36px;
         }
         .icon-button:hover { background: #ddeade; }
@@ -1108,7 +1113,9 @@ var Chat = `
             font-size: 12px;
             font-weight: 700;
             min-height: 26px;
+            overflow: hidden;
             padding: 4px 10px;
+            -webkit-tap-highlight-color: transparent;
         }
         /* ── Attachments ── */
         .bubble-content {
@@ -1117,7 +1124,7 @@ var Chat = `
         }
         .message.attachment-message .bubble {
             overflow: hidden;
-            padding: 6px;
+            padding: 0;
         }
         .message.attachment-message .bubble-content {
             display: grid;
@@ -1322,7 +1329,9 @@ var Chat = `
             display: inline-flex;
             height: 26px;
             justify-content: center;
+            overflow: hidden;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
             text-decoration: none;
             width: 26px;
         }
@@ -1355,10 +1364,12 @@ var Chat = `
             display: grid;
             height: 34px;
             opacity: 0;
+            overflow: hidden;
             place-items: center;
             pointer-events: none;
             position: absolute;
             left: 50%;
+            -webkit-tap-highlight-color: transparent;
             transition: opacity 0.15s ease, transform 0.15s ease;
             transform: translate(-50%, 6px);
             width: 34px;
@@ -1431,7 +1442,7 @@ var Chat = `
             box-shadow: 0 0 0 3px rgba(21, 111, 90, 0.12), inset 0 1px 0 rgba(255,255,255,0.9);
             outline: none;
         }
-        button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: inherit; }
+        button { border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: inherit; -webkit-tap-highlight-color: transparent; }
         .file-label,
         .send-button {
             align-items: center;
@@ -1439,6 +1450,7 @@ var Chat = `
             justify-content: center;
             border-radius: 999px;
             height: 36px;
+            overflow: hidden;
             padding: 0;
             width: 36px;
         }
@@ -1499,7 +1511,9 @@ var Chat = `
             gap: 5px;
             height: 34px;
             justify-content: center;
+            overflow: hidden;
             padding: 0 10px;
+            -webkit-tap-highlight-color: transparent;
         }
         .side-btn:hover { background: #ddeade; }
         .side-btn.danger { background: #fff0ed; border-color: #f5c6c0; color: var(--danger); }
@@ -1584,7 +1598,9 @@ var Chat = `
             display: inline-flex;
             height: 38px;
             justify-content: center;
+            overflow: hidden;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
             width: 38px;
         }
         .preview-toolbar button svg {
