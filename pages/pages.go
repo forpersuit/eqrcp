@@ -896,19 +896,22 @@ var Chat = `
             position: relative;
         }
         .messages::-webkit-scrollbar { display: none; }
-        .messages.at-bottom::after {
+        .messages.flash-track::after {
             content: '';
-            position: sticky;
+            position: absolute;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 25%;
+            right: 25%;
             display: block;
-            height: 18px;
-            margin-top: -18px;
+            height: 3px;
             pointer-events: none;
-            background: linear-gradient(0deg, rgba(21,111,90,0.07) 0%, rgba(21,111,90,0.02) 50%, transparent 100%);
             border-radius: 0 0 12px 12px;
-            transition: opacity 0.3s ease;
+            animation: track-glow-bell 1.4s ease-out forwards;
+        }
+        @keyframes track-glow-bell {
+            0%   { box-shadow: 0 0 8px 2px rgba(var(--accent-rgb, 21,111,90), 0.55), 0 0 20px 4px rgba(var(--accent-rgb, 21,111,90), 0.22); opacity: 1; }
+            25%  { box-shadow: 0 0 12px 3px rgba(var(--accent-rgb, 21,111,90), 0.40), 0 0 28px 6px rgba(var(--accent-rgb, 21,111,90), 0.14); opacity: 0.85; }
+            100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 21,111,90), 0), 0 0 0 0 rgba(var(--accent-rgb, 21,111,90), 0); opacity: 0; }
         }
         /* ── Empty state ── */
         .messages-empty {
@@ -1361,52 +1364,47 @@ var Chat = `
             border-radius: 999px;
             bottom: 86px;
             bottom: calc(var(--composer-height, 74px) + 12px);
-            box-shadow: 0 6px 20px rgba(var(--accent-rgb, 21,111,90), 0.30), 0 0 0 3px rgba(255,255,255,0.85);
+            box-shadow: 0 4px 14px rgba(var(--accent-rgb, 21,111,90), 0.35);
             color: white;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             height: auto;
-            min-height: 36px;
+            min-height: 32px;
             opacity: 0;
             overflow: visible;
             pointer-events: none;
             position: absolute;
             left: 50%;
-            padding: 6px 12px;
+            padding: 4px 10px 4px 8px;
             -webkit-tap-highlight-color: transparent;
-            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.34,1.56,.64,1);
+            transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease;
             transform: translate(-50%, 8px);
             white-space: nowrap;
             z-index: 5;
+            font-size: 12px;
+        }
+        .scroll-arrow:hover {
+            box-shadow: 0 6px 20px rgba(var(--accent-rgb, 21,111,90), 0.45);
         }
         .scroll-arrow.visible {
             opacity: 1;
             pointer-events: auto;
             transform: translate(-50%, 0);
         }
-        .scroll-arrow svg { fill: none; height: 16px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 16px; flex-shrink: 0; }
+        .scroll-arrow svg { fill: none; height: 15px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; width: 15px; flex-shrink: 0; }
         .scroll-arrow-badge {
-            background: rgba(255,255,255,0.28);
+            background: rgba(255,255,255,0.30);
             border-radius: 999px;
-            font-size: 11px;
-            font-weight: 800;
+            font-size: 10px;
+            font-weight: 700;
             line-height: 1;
-            min-width: 18px;
-            padding: 2px 6px;
+            min-width: 16px;
+            padding: 1px 5px;
             text-align: center;
         }
         .scroll-arrow-badge:empty { display: none; }
-        /* ── Bottom glow flash (track-latest signal) ── */
-        .composer.flash-track::before {
-            animation: track-glow-flash 1.2s ease-out forwards;
-        }
-        @keyframes track-glow-flash {
-            0% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0.28) 0%, transparent 100%); height: 18px; opacity: 1; }
-            30% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0.18) 0%, transparent 100%); height: 14px; opacity: 0.8; }
-            100% { background: linear-gradient(0deg, rgba(var(--accent-rgb, 21,111,90), 0) 0%, transparent 100%); height: 8px; opacity: 0; }
-        }
         /* ── Compose bar ── */
         .composer {
             background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
@@ -2655,10 +2653,10 @@ var Chat = `
             flashTrackGlow();
         }
         function flashTrackGlow() {
-            composerEl.classList.remove('flash-track');
-            void composerEl.offsetWidth;
-            composerEl.classList.add('flash-track');
-            setTimeout(function() { composerEl.classList.remove('flash-track'); }, 1300);
+            messagesEl.classList.remove('flash-track');
+            void messagesEl.offsetWidth;
+            messagesEl.classList.add('flash-track');
+            setTimeout(function() { messagesEl.classList.remove('flash-track'); }, 1500);
         }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
@@ -2675,11 +2673,7 @@ var Chat = `
             updateBottomGlow();
         }
         function updateBottomGlow() {
-            if (isNearBottom()) {
-                messagesEl.classList.add('at-bottom');
-            } else {
-                messagesEl.classList.remove('at-bottom');
-            }
+            /* intentionally empty — retained as no-op for call-site compatibility */
         }
         function loadMessages() {
             if (eventCursorSeq <= 0) {
@@ -2961,7 +2955,13 @@ var Chat = `
         previewImage.addEventListener('pointermove', previewPointerMove);
         previewImage.addEventListener('pointerup', previewPointerUp);
         previewImage.addEventListener('pointercancel', previewPointerUp);
+        var wasNearBottom = true;
         messagesEl.addEventListener('scroll', function() {
+            var nowNearBottom = isNearBottom();
+            if (nowNearBottom && !wasNearBottom) {
+                flashTrackGlow();
+            }
+            wasNearBottom = nowNearBottom;
             updateScrollArrow();
         }, {passive: true});
         scrollArrow.addEventListener('click', function() {
