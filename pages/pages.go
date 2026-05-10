@@ -1105,10 +1105,15 @@ var Chat = `
         .message:has(.attachment-card) .bubble {
             display: grid;
             gap: 6px;
+            justify-items: start;
             max-width: 100%;
             overflow: hidden;
             padding: 6px;
             width: min(100%, fit-content);
+        }
+        .message.mine.attachment-message .bubble,
+        .message.mine:has(.attachment-card) .bubble {
+            justify-items: end;
         }
         .message.attachment-message:not(.mine) .bubble,
         .message:has(.attachment-card):not(.mine) .bubble {
@@ -1269,9 +1274,6 @@ var Chat = `
         .message-footer:not(:has(.message-footer-meta)) {
             justify-content: flex-end;
         }
-        .message.mine .message-footer {
-            flex-direction: row-reverse;
-        }
         .message.mine .message-footer:not(:has(.message-footer-meta)) {
             justify-content: flex-start;
         }
@@ -1313,6 +1315,11 @@ var Chat = `
             background: #fee2e2;
             border-color: #fca5a5;
             color: #b91c1c;
+        }
+        .bubble-action.copy-success {
+            background: #eaf7ee;
+            border-color: #90c8b5;
+            color: var(--ok);
         }
         @media (hover: none), (pointer: coarse) {
             .message {
@@ -2114,7 +2121,7 @@ var Chat = `
                 copy.innerHTML = copyIcon();
                 keepActionFocus(copy);
                 copy.addEventListener('click', function() {
-                    copyMessage(message);
+                    copyMessage(message, copy);
                 });
                 wrap.appendChild(copy);
             }
@@ -2265,11 +2272,6 @@ var Chat = `
             name.textContent = fileName;
             name.title = fileName;
             details.appendChild(name);
-            var subtitle = document.createElement('div');
-            subtitle.className = 'file-subtitle';
-            subtitle.textContent = fileDescription(message).replace(/ - /g, ' · ');
-            subtitle.title = subtitle.textContent;
-            details.appendChild(subtitle);
             if (inWails) {
                 var card = document.createElement('button');
                 card.type = 'button';
@@ -2598,6 +2600,9 @@ var Chat = `
         function closeIcon() {
             return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
         }
+        function checkIcon() {
+            return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+        }
         function keepActionFocus(control) {
             control.addEventListener('mousedown', function(event) {
                 event.preventDefault();
@@ -2614,24 +2619,43 @@ var Chat = `
             if (message.type === 'text') { return String(message.text || ''); }
             return '';
         }
-        function copyMessage(message) {
+        function copyMessage(message, button) {
             var text = messageCopyText(message);
             if (!text) { return; }
             var active = document.activeElement;
+            var copied = false;
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(text);
-                restoreFocusAfterCopy(active);
-                return;
+                navigator.clipboard.writeText(text).then(function() {
+                    showCopySuccess(button);
+                }).catch(function() {});
+                copied = true;
             }
-            var input = document.createElement('textarea');
-            input.value = text;
-            input.style.position = 'fixed';
-            input.style.left = '-9999px';
-            document.body.appendChild(input);
-            input.select();
-            document.execCommand('copy');
-            input.remove();
+            if (!copied) {
+                var input = document.createElement('textarea');
+                input.value = text;
+                input.style.position = 'fixed';
+                input.style.left = '-9999px';
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                input.remove();
+                showCopySuccess(button);
+            }
             restoreFocusAfterCopy(active);
+        }
+        function showCopySuccess(button) {
+            if (!button || !button.isConnected) { return; }
+            button.classList.add('copy-success');
+            button.setAttribute('aria-label', 'Copied');
+            button.title = 'Copied';
+            button.innerHTML = checkIcon();
+            window.setTimeout(function() {
+                if (!button || !button.isConnected) { return; }
+                button.classList.remove('copy-success');
+                button.setAttribute('aria-label', 'Copy');
+                button.title = 'Copy';
+                button.innerHTML = copyIcon();
+            }, 1400);
         }
         function confirmThenRecall(button, message) {
             if (!button || !message) { return; }
