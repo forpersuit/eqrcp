@@ -1131,7 +1131,7 @@ var Chat = `
             gap: 6px;
             justify-items: start;
             max-width: 100%;
-            width: fit-content;
+            width: 100%;
         }
         .message.mine.attachment-message .bubble-content {
             justify-items: end;
@@ -1149,14 +1149,14 @@ var Chat = `
             gap: 8px;
             max-width: 100%;
             min-width: min(220px, 100%);
-            width: fit-content;
+            width: 100%;
         }
         .attachment-card.file-attachment,
         .attachment-card.audio-attachment {
-            width: min(320px, 100%);
+            width: 100%;
         }
         .attachment-card.media-attachment {
-            width: min(var(--media-width, 320px), 100%);
+            width: 100%;
         }
         .attachment-card.image-attachment {
             --media-aspect-ratio: 4 / 3;
