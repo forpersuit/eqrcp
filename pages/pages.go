@@ -997,6 +997,7 @@ var Chat = `
             height: 32px;
             justify-content: center;
             width: 32px;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
         }
         .avatar-stack {
             align-items: center;
@@ -1276,6 +1277,12 @@ var Chat = `
         }
         .message.mine .message-footer:not(:has(.message-footer-meta)) {
             justify-content: flex-start;
+        }
+        .message-footer:has(.message-footer-meta) {
+            flex-direction: row;
+        }
+        .message.mine .message-footer:has(.message-footer-meta) {
+            flex-direction: row-reverse;
         }
         .message-footer-meta {
             color: var(--muted);
@@ -2020,6 +2027,12 @@ var Chat = `
                     var avatar = document.createElement('div');
                     avatar.className = 'message-avatar';
                     avatar.textContent = mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest');
+                    var sc = senderColor(message.sender);
+                    if (sc) {
+                        avatar.style.background = sc.bg;
+                        avatar.style.borderColor = sc.border;
+                        avatar.style.color = sc.text;
+                    }
                     var timeEl = document.createElement('div');
                     timeEl.className = 'bubble-time';
                     timeEl.textContent = messageTimestamp(message.createdAt);
@@ -2041,6 +2054,10 @@ var Chat = `
                 }
                 var bubble = document.createElement('div');
                 bubble.className = 'bubble';
+                var sc2 = senderColor(message.sender);
+                if (sc2 && !isSystem) {
+                    bubble.style.borderColor = sc2.border;
+                }
                 if (message.recalled) {
                     var recalled = document.createElement('div');
                     recalled.className = 'text recalled';
@@ -2069,6 +2086,30 @@ var Chat = `
         function senderInitial(value) {
             var text = String(value || '').trim();
             return (text ? text.charAt(0) : 'D').toUpperCase();
+        }
+        var senderColorMap = {};
+        var senderColorIndex = 0;
+        var senderPalette = [
+            {bg: '#eaf2ec', border: '#c8e4d3', text: '#0d4e42'},
+            {bg: '#eae8f2', border: '#c8c5e4', text: '#3d0d42'},
+            {bg: '#f2ece8', border: '#e4cec0', text: '#4e2e0d'},
+            {bg: '#e8eff2', border: '#c0d4e4', text: '#0d3a4e'},
+            {bg: '#f2e8ec', border: '#e4c0cc', text: '#4e0d28'},
+            {bg: '#eceef2', border: '#c8cce4', text: '#1a0d4e'},
+            {bg: '#f0f2e8', border: '#d6e4c0', text: '#3a4e0d'},
+            {bg: '#f2ece8', border: '#e4d6c0', text: '#4e3a0d'},
+            {bg: '#e8f2f0', border: '#c0e4dc', text: '#0d4e40'},
+            {bg: '#f2e8f0', border: '#e4c0dc', text: '#4e0d3a'},
+            {bg: '#eef2e8', border: '#cce4c0', text: '#2e4e0d'},
+            {bg: '#f2eee8', border: '#e4d0c0', text: '#4e240d'}
+        ];
+        function senderColor(sender) {
+            if (!sender || sender === 'system') { return null; }
+            if (senderColorMap[sender]) { return senderColorMap[sender]; }
+            var color = senderPalette[senderColorIndex % senderPalette.length];
+            senderColorMap[sender] = color;
+            senderColorIndex++;
+            return color;
         }
         function renderRecalledEdit(message) {
             var wrap = document.createElement('div');
@@ -2481,7 +2522,7 @@ var Chat = `
             renderMessages();
             saveChatCache();
             var focusID = forceScroll && incoming.length ? incoming[incoming.length - 1].id || '' : '';
-            if (atBottom || forceScroll) { scrollMessagesToBottom(focusID); }
+            if (forceScroll || atBottom) { scrollMessagesToBottom(focusID); }
         }
         function setMessages(messages) {
             var atBottom = isNearBottom();
