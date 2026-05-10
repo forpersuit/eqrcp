@@ -1018,7 +1018,10 @@ var Chat = `
             display: grid;
             gap: 6px;
             justify-items: center;
+            position: sticky;
+            top: 0;
             width: 40px;
+            z-index: 1;
         }
         .message.mine .avatar-stack {
             grid-column: 2;
@@ -1050,7 +1053,7 @@ var Chat = `
         /* ── Bubble ── */
         .bubble {
             background: var(--panel);
-            border: 1px solid var(--line);
+            border: 1.5px solid var(--line);
             border-radius: 12px;
             font-size: clamp(14px, 1.4vw, 15px);
             line-height: 1.5;
@@ -1223,7 +1226,6 @@ var Chat = `
         button.file-card:hover {
             background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.34) 100%);
             border-color: rgba(21, 111, 90, 0.18);
-            transform: translateY(-1px);
         }
         a.file-card:focus-visible,
         button.file-card:focus-visible {
@@ -2130,18 +2132,18 @@ var Chat = `
         var senderColorMap = {};
         var senderColorIndex = 0;
         var senderPalette = [
-            {bg: '#eaf2ec', border: '#c8e4d3', text: '#0d4e42'},
-            {bg: '#eae8f2', border: '#c8c5e4', text: '#3d0d42'},
-            {bg: '#f2ece8', border: '#e4cec0', text: '#4e2e0d'},
-            {bg: '#e8eff2', border: '#c0d4e4', text: '#0d3a4e'},
-            {bg: '#f2e8ec', border: '#e4c0cc', text: '#4e0d28'},
-            {bg: '#eceef2', border: '#c8cce4', text: '#1a0d4e'},
-            {bg: '#f0f2e8', border: '#d6e4c0', text: '#3a4e0d'},
-            {bg: '#f2ece8', border: '#e4d6c0', text: '#4e3a0d'},
-            {bg: '#e8f2f0', border: '#c0e4dc', text: '#0d4e40'},
-            {bg: '#f2e8f0', border: '#e4c0dc', text: '#4e0d3a'},
-            {bg: '#eef2e8', border: '#cce4c0', text: '#2e4e0d'},
-            {bg: '#f2eee8', border: '#e4d0c0', text: '#4e240d'}
+            {bg: '#eef4f0', border: '#c2d9cc', text: '#2a5e4a'},
+            {bg: '#f0eef4', border: '#c8c2d9', text: '#4a2a5e'},
+            {bg: '#f4f0ee', border: '#d9cfc2', text: '#5e4a2a'},
+            {bg: '#eef1f4', border: '#c2cdd9', text: '#2a4a5e'},
+            {bg: '#f4eeef', border: '#d9c2c8', text: '#5e2a3e'},
+            {bg: '#eff0f4', border: '#c6c2d9', text: '#362a5e'},
+            {bg: '#f2f4ee', border: '#cdd9c2', text: '#4a5e2a'},
+            {bg: '#f4f1ee', border: '#d9cdc2', text: '#5e3e2a'},
+            {bg: '#eef4f2', border: '#c2d9d1', text: '#2a5e52'},
+            {bg: '#f4eef2', border: '#d9c2d1', text: '#5e2a4a'},
+            {bg: '#f0f4ee', border: '#c8d9c2', text: '#3e5e2a'},
+            {bg: '#f4f2ee', border: '#d9cfc2', text: '#5e3a2a'}
         ];
         function senderColor(sender) {
             if (!sender || sender === 'system') { return null; }
