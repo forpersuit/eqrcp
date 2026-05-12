@@ -2241,7 +2241,10 @@ var Chat = `
         }
         function messageColor(message) {
             if (!message || isSystemMessage(message)) { return null; }
-            return themeColor(message.theme) || senderColor(message.sender);
+            // Prefer the server-assigned theme; fall back to the current
+            // device's own theme so that bubbles match the UI accent even
+            // before the server confirms the first theme assignment.
+            return themeColor(message.theme) || themeColor(state.theme);
         }
         // ── Device theme: apply this device's senderColor as UI accent ──
         var _lastThemeIdx = -1;
