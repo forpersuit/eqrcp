@@ -1,0 +1,94 @@
+        function hslToHex(h, s, l) {
+            s /= 100;
+            l /= 100;
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            let r = 0, g = 0, b = 0;
+            
+            if (0 <= h && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (60 <= h && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (120 <= h && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (180 <= h && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (240 <= h && h < 300) {
+                r = x; g = 0; b = c;
+            } else if (300 <= h < 360) {
+                r = c; g = 0; b = x;
+            }
+            
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+            
+            return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+        }
+        
+        function generateSenderColor(themeIndex) {
+            // theme-0 固定使用原来的绿色（桌面端）
+            if (themeIndex === 0) {
+                return {
+                    bg: '#eef4f0', 
+                    border: '#c2d9cc', 
+                    text: '#2a5e4a'
+                };
+            }
+            
+            // 其他主题动态计算，无数量限制
+            const hue = (themeIndex * 137.5) % 360; // 黄金角度分布
+            const saturation = 45 + (themeIndex % 3) * 10; // 45%, 55%, 65% 变化
+            const lightness = 85 + (themeIndex % 2) * 5;    // 85%, 90% 变化
+            
+            // 背景色：高明度、低饱和度
+            const bg = hslToHex(hue, 20, 92);
+            
+            // 边框色：中等饱和度、中等明度
+            const border = hslToHex(hue, saturation, 50);
+            
+            // 文字色：深色调
+            const text = hslToHex(hue, saturation + 10, 25);
+            
+            return { bg, border, text };
+        }
+        function themeColor(theme) {
+            var index = themeIndex(theme);
+            if (index < 0) { return null; }
+            return generateSenderColor(index);
+        }
+        function messageColor(message) {
+            if (!message || isSystemMessage(message)) { return null; }
+            // Prefer the server-assigned theme; fall back to the current
+            // device's own theme so that bubbles match the UI accent even
+            // before the server confirms the first theme assignment.
+            return themeColor(message.theme) || themeColor(state.theme);
+        }
+        // ── Device theme: apply this device's theme as UI accent ──
+        var _lastThemeIdx = -1;
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? 
+                parseInt(result[1], 16) + ',' + 
+                parseInt(result[2], 16) + ',' + 
+                parseInt(result[3], 16) : null;
+        }
+        function applyDeviceTheme() {
+            var idx = themeIndex(state.theme);
+            if (idx < 0) { return; }
+            if (idx === _lastThemeIdx) { return; }
+            _lastThemeIdx = idx;
+            
+            // 使用 senderPalette 替代 _deviceThemes
+            var t = senderPalette[idx];
+            var root = document.documentElement;
+            
+            // 从senderPalette推导CSS变量
+            root.style.setProperty('--accent', t.border);     // 使用边框色作为主色
+            root.style.setProperty('--accent-strong', t.text); // 使用文字色作为强色
+            root.style.setProperty('--accent-rgb', hexToRgb(t.border)); // 转换RGB
+            root.style.setProperty('--wash', t.bg);          // 使用背景色
+            root.style.setProperty('--bg', t.bg);             // 使用背景色
+            root.style.setProperty('--line', t.border);        // 使用边框色
+        }

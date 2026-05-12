@@ -2234,10 +2234,66 @@ var Chat = `
             if (!validThemeID(theme)) { return -1; }
             return parseInt(String(theme).replace('theme-', ''), 10);
         }
+        function hslToHex(h, s, l) {
+            s /= 100;
+            l /= 100;
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            let r = 0, g = 0, b = 0;
+            
+            if (0 <= h && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (60 <= h && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (120 <= h && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (180 <= h && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (240 <= h && h < 300) {
+                r = x; g = 0; b = c;
+            } else if (300 <= h < 360) {
+                r = c; g = 0; b = x;
+            }
+            
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+            
+            return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+        }
+        
+        function generateSenderColor(themeIndex) {
+            // theme-0 固定使用原来的绿色（桌面端）
+            if (themeIndex === 0) {
+                return {
+                    bg: '#eef4f0', 
+                    border: '#c2d9cc', 
+                    text: '#2a5e4a'
+                };
+            }
+            
+            // 其他主题动态计算，无数量限制
+            const hue = (themeIndex * 137.5) % 360; // 黄金角度分布
+            const saturation = 45 + (themeIndex % 3) * 10; // 45%, 55%, 65% 变化
+            const lightness = 85 + (themeIndex % 2) * 5;    // 85%, 90% 变化
+            
+            // 背景色：高明度、低饱和度
+            const bg = hslToHex(hue, 20, 92);
+            
+            // 边框色：中等饱和度、中等明度
+            const border = hslToHex(hue, saturation, 50);
+            
+            // 文字色：深色调
+            const text = hslToHex(hue, saturation + 10, 25);
+            
+            return { bg, border, text };
+        }
+        
         function themeColor(theme) {
             var index = themeIndex(theme);
-            if (index < 0 || index >= senderPalette.length) { return null; }
-            return senderPalette[index];
+            if (index < 0) { return null; }
+            return generateSenderColor(index);
         }
         function messageColor(message) {
             if (!message || isSystemMessage(message)) { return null; }
@@ -2248,34 +2304,31 @@ var Chat = `
         }
         // ── Device theme: apply this device's theme as UI accent ──
         var _lastThemeIdx = -1;
+       function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? 
+                parseInt(result[1], 16) + ',' + 
+                parseInt(result[2], 16) + ',' + 
+                parseInt(result[3], 16) : null;
+        } 
         function applyDeviceTheme() {
             var idx = themeIndex(state.theme);
             if (idx < 0) { return; }
             if (idx === _lastThemeIdx) { return; }
             _lastThemeIdx = idx;
-            var t = _deviceThemes[idx % _deviceThemes.length];
+            
+            // 使用动态生成的颜色替代 _deviceThemes
+            var t = generateSenderColor(idx);
             var root = document.documentElement;
-            root.style.setProperty('--accent', t.a);
-            root.style.setProperty('--accent-strong', t.as);
-            root.style.setProperty('--accent-rgb', t.ar);
-            root.style.setProperty('--wash', t.w);
-            root.style.setProperty('--bg', t.b);
-            root.style.setProperty('--line', t.l);
+            
+            // 从动态颜色推导CSS变量
+            root.style.setProperty('--accent', t.border);     // 使用边框色作为主色
+            root.style.setProperty('--accent-strong', t.text); // 使用文字色作为强色
+            root.style.setProperty('--accent-rgb', hexToRgb(t.border)); // 转换RGB
+            root.style.setProperty('--wash', t.bg);          // 使用背景色
+            root.style.setProperty('--bg', t.bg);             // 使用背景色
+            root.style.setProperty('--line', t.border);        // 使用边框色
         }
-        var _deviceThemes = [
-            {a:'#156f5a',as:'#0d4e42',ar:'21,111,90', w:'#edf2eb',b:'#f4f7f4',l:'#d7ded7'},
-            {a:'#6f5a15',as:'#4e420d',ar:'111,90,21', w:'#f2f0eb',b:'#f7f5f4',l:'#ded7c2'},
-            {a:'#5e4a2a',as:'#4a3a1e',ar:'94,74,42',  w:'#f4f0ee',b:'#f7f5f3',l:'#d9cfc2'},
-            {a:'#2a5e5e',as:'#1e4a4a',ar:'42,94,94',  w:'#eef4f4',b:'#f4f7f7',l:'#c2d9d9'},
-            {a:'#5e2a3e',as:'#4a1e2e',ar:'94,42,62',  w:'#f4eeef',b:'#f7f4f5',l:'#d9c2c8'},
-            {a:'#362a5e',as:'#2a1e4a',ar:'54,42,94',  w:'#eff0f4',b:'#f5f4f7',l:'#c6c2d9'},
-            {a:'#4a5e2a',as:'#3a4a1e',ar:'74,94,42',  w:'#f2f4ee',b:'#f6f7f4',l:'#cdd9c2'},
-            {a:'#5e3e2a',as:'#4a321e',ar:'94,62,42',  w:'#f4f1ee',b:'#f7f5f3',l:'#d9cdc2'},
-            {a:'#2a5e52',as:'#1e4a42',ar:'42,94,82',  w:'#eef4f2',b:'#f4f7f5',l:'#c2d9d1'},
-            {a:'#5e2a4a',as:'#4a1e3a',ar:'94,42,74',  w:'#f4eef2',b:'#f7f4f6',l:'#d9c2d1'},
-            {a:'#3e5e2a',as:'#324a1e',ar:'62,94,42',  w:'#f0f4ee',b:'#f5f7f4',l:'#c8d9c2'},
-            {a:'#5e3a2a',as:'#4a2e1e',ar:'94,58,42',  w:'#f4f2ee',b:'#f7f6f4',l:'#d9cfc2'}
-        ];
         function renderRecalledEdit(message) {
             var wrap = document.createElement('div');
             wrap.className = 'recalled-actions';

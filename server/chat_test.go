@@ -59,8 +59,8 @@ func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
 		},
 	}
 
-	desktopDone := session.registerClient("desktop-token", "Desktop", "")
-	mobileDone := session.registerClient("mobile-token", "Phone", "")
+	desktopDone := session.registerClient("desktop-token", "Desktop", "desktop", "", "")
+	mobileDone := session.registerClient("mobile-token", "Phone", "", "", "")
 	mobileDone()
 	desktopDone()
 
@@ -78,6 +78,64 @@ func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
 	}
 	if snapshots[3].DeviceCount != 0 {
 		t.Fatalf("snapshot[3] = %#v, want no connected devices", snapshots[3])
+	}
+}
+
+func TestChatThemesAreAssignedPerClientToken(t *testing.T) {
+	session := &chatSession{
+		attachments:  map[string]chatAttachment{},
+		subscribers:  map[chan struct{}]struct{}{},
+		clients:      map[string]chatClient{},
+		clientThemes: map[string]string{},
+		nextTheme:    1,
+		hostToken:    "host-token",
+		startedAt:    time.Now(),
+		state:        "waiting",
+	}
+
+	desktopDone := session.registerClient("host-token", "Desktop", "desktop", "", "")
+	mobileDone := session.registerClient("mobile-token", "Phone", "", "theme-5", "")
+	defer desktopDone()
+	defer mobileDone()
+
+	desktopMessage := session.addTextMessage("Desktop", "host-token", "from desktop")
+	mobileMessage := session.addTextMessage("Phone", "mobile-token", "from phone")
+
+	if desktopMessage.Theme != "theme-0" {
+		t.Fatalf("desktop theme = %q, want default theme-0", desktopMessage.Theme)
+	}
+	if mobileMessage.Theme != "theme-5" {
+		t.Fatalf("mobile theme = %q, want preferred theme-5", mobileMessage.Theme)
+	}
+	devices := session.deviceRosterLocked()
+	var sawMobile bool
+	for _, device := range devices {
+		if device.Label == "Phone" {
+			sawMobile = true
+			if device.Theme != "theme-5" {
+				t.Fatalf("mobile device theme = %q, want theme-5", device.Theme)
+			}
+		}
+	}
+	if !sawMobile {
+		t.Fatal("mobile device missing from roster")
+	}
+}
+
+func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {
+	session := &chatSession{
+		attachments:  map[string]chatAttachment{},
+		subscribers:  map[chan struct{}]struct{}{},
+		clientThemes: map[string]string{},
+		nextTheme:    1,
+		startedAt:    time.Now(),
+	}
+
+	first := session.addTextMessage("Phone", "mobile-token", "one")
+	second := session.addTextMessage("Renamed Phone", "mobile-token", "two")
+
+	if first.Theme == "" || second.Theme == "" || first.Theme != second.Theme {
+		t.Fatalf("themes = %q, %q; want same non-empty theme for one token", first.Theme, second.Theme)
 	}
 }
 
