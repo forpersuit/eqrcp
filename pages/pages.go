@@ -1547,7 +1547,8 @@ var Chat = `
         }
         .qr { background: white; border: 1px solid var(--line); border-radius: 8px; display: block; image-rendering: pixelated; max-width: 220px; padding: 8px; width: 100%; }
         /* URL input */
-        .url-row { display: grid; gap: 8px; }
+        .url-row { display: flex; gap: 8px; align-items: center; }
+        .url-row input { flex: 1; min-width: 0; }
         input {
             background: var(--bg);
             border: 1px solid var(--line);
@@ -1559,6 +1560,24 @@ var Chat = `
             width: 100%;
         }
         input:focus { border-color: var(--accent); outline: none; }
+        /* ── Session collapsible QR ── */
+        .session-collapsible { display: grid; gap: 8px; }
+        .session-collapsible.collapsed { display: none; }
+        .session-toggle {
+            background: var(--wash);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--accent-strong);
+            cursor: pointer;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 8px 12px;
+            text-align: center;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.14s ease;
+        }
+        .session-toggle:hover { background: #ddeade; }
         /* divider */
         .side-divider { border: 0; border-top: 1px solid var(--line); }
         /* ── Backdrops ── */
@@ -1785,21 +1804,17 @@ var Chat = `
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
                 </div>
-                <p class="side-note">Scan this code to join from another device.</p>
-                <div class="qr-frame">
-                    <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
-                </div>
-                <div class="url-row">
-                    <input id="chat-url" value="{{.URL}}" readonly>
-                    <div class="side-actions">
-                        <button class="side-btn" type="button" id="copy-url">Copy URL</button>
-                        {{if .CanStop}}<form method="post" action="{{.StopRoute}}" style="display:contents">
-                            <input type="hidden" name="hostToken" value="{{.HostToken}}">
-                            <button class="side-btn danger" type="submit">Stop chat</button>
-                        </form>{{end}}
+                <div class="session-collapsible collapsed" id="session-collapsible">
+                    <p class="side-note">Scan this code to join from another device.</p>
+                    <div class="qr-frame">
+                        <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
                     </div>
                 </div>
-                <hr class="side-divider">
+                <button class="session-toggle" type="button" id="session-toggle" aria-expanded="false">Show QR code</button>
+                <div class="url-row">
+                    <input id="chat-url" value="{{.URL}}" readonly>
+                    <button class="side-btn" type="button" id="copy-url">Copy</button>
+                </div>
                 <p class="side-note">Version: {{.Version}}</p>
             </aside>
         </div>
@@ -1936,9 +1951,9 @@ var Chat = `
             var key = 'eqrcp-chat-theme:' + window.location.pathname + ':' + token;
             var saved = window.sessionStorage.getItem(key);
             if (validThemeID(saved)) { return saved; }
-            // Do not randomly generate a theme; wait for the server to assign one
-            // via the health/SSE endpoint. Return empty string to indicate
-            // "pending assignment" – updateChatStatus will set it later.
+            // No saved theme yet. The server will assign one on first health/SSE
+            // request. In the meantime, use senderColor as a preview so that
+            // the UI is not blank before the server responds.
             return '';
         }
         function readDraft() {
@@ -2730,6 +2745,12 @@ var Chat = `
         function loadMessages() {
             if (eventCursorSeq <= 0) {
                 return refreshChatStatus()
+                    .then(function() {
+                        // After health check confirms the session is alive,
+                        // fetch the full message history for this device so
+                        // reconnections don't start with an empty thread.
+                        return fetchFullHistory();
+                    })
                     .catch(function() {
                         if (!chatConnectionLost) {
                             chatConnectionLost = true;
@@ -2749,9 +2770,31 @@ var Chat = `
                     setConnectionState(false, 'Disconnected. Retrying...');
                 });
         }
+        function fetchFullHistory() {
+            // Fetch all messages the server has for this session, using
+            // afterSeq=0 and joinSeq=0 to get the complete history.
+            var route = '{{.MessagesRoute}}?afterSeq=0&joinSeq=0';
+            return fetch(route, {cache: 'no-store'})
+                .then(function(r) { if (!r.ok) { throw new Error('history failed'); } return r.json(); })
+                .then(function(messages) {
+                    if (messages && messages.length) {
+                        // Replace local state with server history – this
+                        // recovers messages after a long disconnection.
+                        state.messages = messages;
+                        renderMessages();
+                        saveChatCache();
+                        messagesEl.scrollTop = messagesEl.scrollHeight;
+                    }
+                })
+                .catch(function() {
+                    // Full-history fetch is best-effort; SSE will still
+                    // deliver incremental updates.
+                });
+        }
         function recoverMissedMessages() {
             if (eventCursorSeq <= 0) {
-                return Promise.resolve();
+                // No cursor yet – fetch full history instead.
+                return fetchFullHistory();
             }
             return fetch(withAfterSeq('{{.MessagesRoute}}'), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('recovery failed'); } return r.json(); })
@@ -2985,6 +3028,20 @@ var Chat = `
         shareSessionButton.addEventListener('click', openSessionPanel);
         document.getElementById('close-page').addEventListener('click', closePage);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
+        document.getElementById('session-toggle').addEventListener('click', function() {
+            var collapsible = document.getElementById('session-collapsible');
+            var toggle = document.getElementById('session-toggle');
+            var isCollapsed = collapsible.classList.contains('collapsed');
+            if (isCollapsed) {
+                collapsible.classList.remove('collapsed');
+                toggle.textContent = 'Hide QR code';
+                toggle.setAttribute('aria-expanded', 'true');
+            } else {
+                collapsible.classList.add('collapsed');
+                toggle.textContent = 'Show QR code';
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
         document.getElementById('preview-close').addEventListener('click', closeImagePreview);
         document.getElementById('preview-zoom-in').addEventListener('click', function() { zoomPreview(0.25); });
         document.getElementById('preview-zoom-out').addEventListener('click', function() { zoomPreview(-0.25); });
