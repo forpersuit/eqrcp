@@ -3090,6 +3090,22 @@ var Chat = `
         });
 
         setConnectionState(false, 'Connecting...');
+        // Fetch the server-assigned theme immediately so that the device
+        // accent, bubbles, and avatar all use a consistent colour from the
+        // very first paint – no senderColor fallback window.
+        if (state.token && currentPeer() !== 'desktop') {
+            fetch(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))), {cache: 'no-store'})
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (data && validThemeID(data.theme) && data.theme !== state.theme) {
+                        state.theme = data.theme;
+                        rememberClientTheme(data.theme);
+                        applyDeviceTheme();
+                        renderMessages();
+                    }
+                })
+                .catch(function() { /* best-effort; SSE/health will retry */ });
+        }
         applyDeviceTheme();
         restoreDraft();
         restoreChatCache();
