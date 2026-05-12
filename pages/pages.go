@@ -1058,8 +1058,7 @@ var Chat = `
             min-width: 0;
         }
         .message.mine .bubble {
-            background: #edf8f0;
-            border-color: #c8e4d3;
+            /* Bubble color comes from the sender's theme via JS messageColor(); no hardcoded override. */
         }
         .message.system .bubble {
             align-items: center;
@@ -1128,11 +1127,10 @@ var Chat = `
         }
         .message.attachment-message:not(.mine) .bubble {
             align-self: flex-start;
-            background: #f8fbf5;
+            /* Bubble color comes from the sender's theme via JS messageColor(); no hardcoded override. */
         }
         .message.mine.attachment-message .bubble {
-            background: #e6f3ea;
-            border-color: #bdd9c7;
+            /* Bubble color comes from the sender's theme via JS messageColor(); no hardcoded override. */
         }
         .attachment-card {
             display: grid;
@@ -1817,11 +1815,13 @@ var Chat = `
         </div>
     </main>
     <script>
+        var clientToken = currentClientToken();
         var state = {
             messages: [],
             sender: currentSender(),
             avatar: currentAvatar(),
-            token: currentClientToken()
+            token: clientToken,
+            theme: currentClientTheme(clientToken)
         };
         var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
@@ -1898,6 +1898,10 @@ var Chat = `
             }
             return '';
         }
+        function currentPeer() {
+            var params = new URLSearchParams(window.location.search);
+            return params.get('peer') || '';
+        }
         function cleanSenderName(value) {
             var text = String(value || '').replace(/\s+/g, ' ').trim();
             return text ? text.slice(0, 40) : 'Guest';
@@ -1908,8 +1912,13 @@ var Chat = `
             return Array.from(text).slice(0, 4).join('');
         }
         function currentClientToken() {
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('peer') === 'desktop' && params.get('hostToken')) {
+                return params.get('hostToken');
+            }
             var key = 'eqrcp-chat-token:' + window.location.pathname;
-            var saved = window.localStorage.getItem(key);
+            var storage = params.get('peer') === 'desktop' ? window.localStorage : window.sessionStorage;
+            var saved = storage.getItem(key);
             if (saved) { return saved; }
             var token = '';
             if (window.crypto && window.crypto.getRandomValues) {
@@ -1919,8 +1928,18 @@ var Chat = `
             } else {
                 token = String(Date.now()) + '-' + String(Math.random()).slice(2);
             }
-            window.localStorage.setItem(key, token);
+            storage.setItem(key, token);
             return token;
+        }
+        function currentClientTheme(token) {
+            if (currentPeer() === 'desktop') { return 'theme-0'; }
+            var key = 'eqrcp-chat-theme:' + window.location.pathname + ':' + token;
+            var saved = window.sessionStorage.getItem(key);
+            if (validThemeID(saved)) { return saved; }
+            var index = 1 + Math.floor(Math.random() * 11);
+            var theme = 'theme-' + index;
+            window.sessionStorage.setItem(key, theme);
+            return theme;
         }
         function readDraft() {
             try {
@@ -2020,6 +2039,11 @@ var Chat = `
             }
         }
         function updateChatStatus(data) {
+            if (data && validThemeID(data.theme) && data.theme !== state.theme) {
+                state.theme = data.theme;
+                rememberClientTheme(data.theme);
+                applyDeviceTheme();
+            }
             var devices = (data && data.devices) || [];
             var count = Math.max(onlineDot.classList.contains('offline') ? 0 : 1, Number(data && data.deviceCount || devices.length || 0));
             deviceCountEl.textContent = String(count);
@@ -2036,13 +2060,21 @@ var Chat = `
                 setConnectionState(false, 'Session ' + data.state + '.');
             }
         }
+        function rememberClientTheme(theme) {
+            if (currentPeer() === 'desktop' || !validThemeID(theme)) { return; }
+            try {
+                window.sessionStorage.setItem('eqrcp-chat-theme:' + window.location.pathname + ':' + state.token, theme);
+            } catch (e) {
+                // Theme persistence is best-effort for the current scanned page.
+            }
+        }
         function escapeHTML(value) {
             return String(value || '').replace(/[&<>"']/g, function(ch) {
                 return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
             });
         }
         function refreshChatStatus() {
-            return fetch('{{.HealthRoute}}', {cache: 'no-store'})
+            return fetch(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
                 .then(function(data) {
                     updateChatStatus(data);
@@ -2076,7 +2108,7 @@ var Chat = `
                     var avatar = document.createElement('div');
                     avatar.className = 'message-avatar';
                     avatar.textContent = mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest');
-                    var sc = senderColor(message.sender);
+                    var sc = messageColor(message);
                     if (sc) {
                         avatar.style.background = sc.bg;
                         avatar.style.borderColor = sc.border;
@@ -2105,8 +2137,9 @@ var Chat = `
                 bubble.className = 'bubble';
                 var content = document.createElement('div');
                 content.className = 'bubble-content';
-                var sc2 = senderColor(message.sender);
-                if (sc2 && !isSystem && message.type === 'text') {
+                var sc2 = messageColor(message);
+                if (sc2 && !isSystem) {
+                    bubble.style.background = sc2.bg;
                     bubble.style.borderColor = sc2.border;
                 }
                 if (message.recalled) {
@@ -2148,8 +2181,6 @@ var Chat = `
             var text = String(value || '').trim();
             return (text ? text.charAt(0) : 'D').toUpperCase();
         }
-        var senderColorMap = {};
-        var senderColorIndex = 0;
         var senderPalette = [
             {bg: '#eef4f0', border: '#c2d9cc', text: '#2a5e4a'},
             {bg: '#f0eef4', border: '#c8c2d9', text: '#4a2a5e'},
@@ -2164,18 +2195,39 @@ var Chat = `
             {bg: '#f0f4ee', border: '#c8d9c2', text: '#3e5e2a'},
             {bg: '#f4f2ee', border: '#d9cfc2', text: '#5e3a2a'}
         ];
+        var senderColorMap = {};
         function senderColor(sender) {
             if (!sender || sender === 'system') { return null; }
             if (senderColorMap[sender]) { return senderColorMap[sender]; }
-            var color = senderPalette[senderColorIndex % senderPalette.length];
+            var hash = 0;
+            String(sender).split('').forEach(function(ch) {
+                hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
+            });
+            var index = Math.abs(hash) % senderPalette.length;
+            var color = senderPalette[index];
             senderColorMap[sender] = color;
-            senderColorIndex++;
             return color;
+        }
+        function validThemeID(theme) {
+            return /^theme-([0-9]|1[01])$/.test(String(theme || ''));
+        }
+        function themeIndex(theme) {
+            if (!validThemeID(theme)) { return -1; }
+            return parseInt(String(theme).replace('theme-', ''), 10);
+        }
+        function themeColor(theme) {
+            var index = themeIndex(theme);
+            if (index < 0 || index >= senderPalette.length) { return null; }
+            return senderPalette[index];
+        }
+        function messageColor(message) {
+            if (!message || isSystemMessage(message)) { return null; }
+            return themeColor(message.theme) || senderColor(message.sender);
         }
         // ── Device theme: apply this device's senderColor as UI accent ──
         var _lastThemeIdx = -1;
         function applyDeviceTheme() {
-            var sc = senderColor(state.sender);
+            var sc = themeColor(state.theme) || senderColor(state.sender);
             if (!sc) { return; }
             var idx = -1;
             for (var i = 0; i < senderPalette.length; i++) {
@@ -2587,6 +2639,13 @@ var Chat = `
         function mergeMessages(incoming, forceScroll) {
             var atBottom = isNearBottom();
             if (!incoming || !incoming.length) { return; }
+            incoming.forEach(function(message) {
+                if (message && message.sender === state.sender && validThemeID(message.theme) && message.theme !== state.theme) {
+                    state.theme = message.theme;
+                    rememberClientTheme(message.theme);
+                    applyDeviceTheme();
+                }
+            });
             var knownIDs = {};
             state.messages.forEach(function(m) { knownIDs[m.id] = true; });
             // Also handle recalled updates (same ID, recalled flag changed)
@@ -2693,7 +2752,7 @@ var Chat = `
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.sender, token: state.token, text: text})
+                body: JSON.stringify({sender: state.sender, token: state.token, theme: state.theme, text: text})
             }).then(function(r) {
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
@@ -2825,6 +2884,7 @@ var Chat = `
             var data = new FormData();
             data.append('sender', state.sender);
             data.append('token', state.token);
+            data.append('theme', state.theme);
             Array.prototype.forEach.call(files, function(file) {
                 data.append('files', file, file.name || 'attachment');
             });
@@ -2992,10 +3052,21 @@ var Chat = `
             var sep = route.indexOf('?') === -1 ? '?' : '&';
             return route + sep + 'token=' + encodeURIComponent(state.token);
         }
+        function withClientPeer(route) {
+            var peer = currentPeer();
+            if (!peer) { return route; }
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep + 'peer=' + encodeURIComponent(peer);
+        }
+        function withClientTheme(route) {
+            if (!validThemeID(state.theme)) { return route; }
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep + 'theme=' + encodeURIComponent(state.theme);
+        }
 
         function connectSSE() {
             if (events) { events.close(); events = null; }
-            var route = withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}');
+            var route = withClientTheme(withClientPeer(withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}')));
             route += (route.indexOf('?') === -1 ? '?' : '&') + 'label=' + encodeURIComponent(state.sender);
             events = new EventSource(route);
             events.onopen = function() {

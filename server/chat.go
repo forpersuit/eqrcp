@@ -24,7 +24,11 @@ import (
 	"eqrcp/version"
 )
 
-const maxChatHistory = 200
+const (
+	maxChatHistory     = 200
+	chatThemeCount     = 12
+	defaultChatThemeID = "theme-0"
+)
 
 type chatSession struct {
 	mu              sync.Mutex
@@ -32,6 +36,8 @@ type chatSession struct {
 	attachments     map[string]chatAttachment
 	subscribers     map[chan struct{}]struct{}
 	clients         map[string]chatClient
+	clientThemes    map[string]string
+	nextTheme       int
 	nextID          int64
 	dir             string
 	attachmentRoute string
@@ -64,6 +70,7 @@ type chatMessage struct {
 	Size       int64     `json:"size,omitempty"`
 	MimeType   string    `json:"mimeType,omitempty"`
 	URL        string    `json:"url,omitempty"`
+	Theme      string    `json:"theme,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
 	Seq        int64     `json:"seq,omitempty"`
 	createdSeq int64
@@ -81,6 +88,7 @@ type chatAttachment struct {
 type chatClient struct {
 	Label    string    `json:"label"`
 	Count    int       `json:"count"`
+	Theme    string    `json:"theme,omitempty"`
 	LastSeen time.Time `json:"lastSeen"`
 }
 
@@ -105,6 +113,8 @@ func (s *Server) Chat() error {
 		attachments:     map[string]chatAttachment{},
 		subscribers:     map[chan struct{}]struct{}{},
 		clients:         map[string]chatClient{},
+		clientThemes:    map[string]string{},
+		nextTheme:       1,
 		dir:             dir,
 		attachmentRoute: attachmentsRoute,
 		startedAt:       time.Now(),
@@ -224,6 +234,7 @@ func (s *Server) Chat() error {
 		state := session.state
 		startedAt := session.startedAt
 		lastActivity := session.lastActivity
+		theme := session.chatThemeForClientLocked(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"))
 		session.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -234,6 +245,7 @@ func (s *Server) Chat() error {
 			"deviceCount":  deviceCount,
 			"devices":      devices,
 			"state":        state,
+			"theme":        theme,
 			"startedAt":    startedAt,
 			"lastActivity": lastActivity,
 		})
@@ -333,6 +345,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			Sender string `json:"sender"`
 			Text   string `json:"text"`
 			Token  string `json:"token"`
+			Theme  string `json:"theme"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
 			http.Error(w, "invalid message", http.StatusBadRequest)
@@ -346,6 +359,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "missing token", http.StatusBadRequest)
 			return
 		}
+		session.ensureChatTheme(request.Token, request.Sender, "", request.Theme)
 		message := session.addTextMessage(sanitizeChatSender(request.Sender), request.Token, request.Text)
 		if message.ID == "" {
 			http.Error(w, "message text is empty", http.StatusBadRequest)
@@ -389,6 +403,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		http.Error(w, "missing token", http.StatusBadRequest)
 		return
 	}
+	session.ensureChatTheme(token, sender, "", r.FormValue("theme"))
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
 		files = r.MultipartForm.File["file"]
@@ -478,7 +493,7 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	if !hasJoinSeq {
 		joinSeq = seenSeq
 	}
-	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.RemoteAddr)
+	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.RemoteAddr)
 	defer unregisterClient()
 
 	write := func() bool {
@@ -521,7 +536,7 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (session *chatSession) registerClient(token string, label string, fallback string) func() {
+func (session *chatSession) registerClient(token string, label string, peer string, preferredTheme string, fallback string) func() {
 	client := strings.TrimSpace(token)
 	if client == "" {
 		client = strings.TrimSpace(fallback)
@@ -533,9 +548,11 @@ func (session *chatSession) registerClient(token string, label string, fallback 
 	if session.clients == nil {
 		session.clients = map[string]chatClient{}
 	}
+	theme := session.chatThemeForClientLocked(client, label, peer, preferredTheme)
 	info := session.clients[client]
 	info.Count++
 	info.Label = sanitizeChatSender(label)
+	info.Theme = theme
 	info.LastSeen = time.Now()
 	session.clients[client] = info
 	nextState := session.state
@@ -578,6 +595,92 @@ func (session *chatSession) deviceRosterLocked() []chatClient {
 	return devices
 }
 
+func (session *chatSession) chatThemeForToken(token string, label string) string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.chatThemeForClientLocked(token, label, "", "")
+}
+
+func (session *chatSession) ensureChatTheme(token string, label string, peer string, preferredTheme string) string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.chatThemeForClientLocked(token, label, peer, preferredTheme)
+}
+
+func (session *chatSession) chatThemeForClientLocked(token string, label string, peer string, preferredTheme string) string {
+	client := strings.TrimSpace(token)
+	if client == "" {
+		return defaultChatThemeID
+	}
+	if session.clientThemes == nil {
+		session.clientThemes = map[string]string{}
+	}
+	if session.isDesktopChatClient(client, label, peer) {
+		session.clientThemes[client] = defaultChatThemeID
+		return defaultChatThemeID
+	}
+	if theme := session.clientThemes[client]; validChatTheme(theme) {
+		return theme
+	}
+	if validChatTheme(preferredTheme) && preferredTheme != defaultChatThemeID && !session.themeInUseByOtherClientLocked(client, preferredTheme) {
+		session.clientThemes[client] = preferredTheme
+		return preferredTheme
+	}
+	theme := session.nextAvailableChatThemeLocked(client)
+	session.clientThemes[client] = theme
+	return theme
+}
+
+func (session *chatSession) isDesktopChatClient(token string, label string, peer string) bool {
+	if session.validHostToken(token) {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(peer), "desktop") {
+		return true
+	}
+	return false
+}
+
+func (session *chatSession) nextAvailableChatThemeLocked(client string) string {
+	if session.nextTheme <= 0 {
+		session.nextTheme = 1
+	}
+	for tries := 0; tries < chatThemeCount-1; tries++ {
+		index := session.nextTheme
+		session.nextTheme++
+		if session.nextTheme >= chatThemeCount {
+			session.nextTheme = 1
+		}
+		theme := fmt.Sprintf("theme-%d", index)
+		if !session.themeInUseByOtherClientLocked(client, theme) {
+			return theme
+		}
+	}
+	index := session.nextTheme
+	session.nextTheme++
+	if session.nextTheme >= chatThemeCount {
+		session.nextTheme = 1
+	}
+	return fmt.Sprintf("theme-%d", index)
+}
+
+func (session *chatSession) themeInUseByOtherClientLocked(client string, theme string) bool {
+	for other, assigned := range session.clientThemes {
+		if other != client && assigned == theme {
+			return true
+		}
+	}
+	return false
+}
+
+func validChatTheme(theme string) bool {
+	if !strings.HasPrefix(theme, "theme-") {
+		return false
+	}
+	index, err := strconv.Atoi(strings.TrimPrefix(theme, "theme-"))
+	return err == nil && index >= 0 && index < chatThemeCount
+}
+
 func handleChatCORS(w http.ResponseWriter, r *http.Request, methods ...string) bool {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -616,10 +719,12 @@ func (session *chatSession) addTextMessage(sender string, token string, text str
 	if text == "" {
 		return chatMessage{}
 	}
+	theme := session.chatThemeForToken(strings.TrimSpace(token), sender)
 	return session.addMessageWithStatus(chatMessage{
 		Sender:     sender,
 		Type:       "text",
 		Text:       text,
+		Theme:      theme,
 		ownerToken: strings.TrimSpace(token),
 	}, "active")
 }
@@ -665,6 +770,7 @@ func (session *chatSession) saveAttachment(sender string, token string, name str
 	} else if strings.HasPrefix(mimeType, "audio/") {
 		messageType = "audio"
 	}
+	ownerToken := strings.TrimSpace(token)
 	message := chatMessage{
 		ID:         id,
 		Sender:     sender,
@@ -673,8 +779,9 @@ func (session *chatSession) saveAttachment(sender string, token string, name str
 		Size:       size,
 		MimeType:   mimeType,
 		URL:        strings.TrimRight(session.attachmentRoute, "/") + "/" + id,
+		Theme:      session.chatThemeForToken(ownerToken, sender),
 		CreatedAt:  time.Now(),
-		ownerToken: strings.TrimSpace(token),
+		ownerToken: ownerToken,
 	}
 	session.mu.Lock()
 	message.Seq = session.nextEventSeqLocked()
