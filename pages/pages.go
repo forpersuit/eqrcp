@@ -2246,16 +2246,12 @@ var Chat = `
             // before the server confirms the first theme assignment.
             return themeColor(message.theme) || themeColor(state.theme);
         }
-        // ── Device theme: apply this device's senderColor as UI accent ──
+        // ── Device theme: apply this device's theme as UI accent ──
         var _lastThemeIdx = -1;
         function applyDeviceTheme() {
-            var sc = themeColor(state.theme);
-            if (!sc) { return; }
-            var idx = -1;
-            for (var i = 0; i < senderPalette.length; i++) {
-                if (senderPalette[i].bg === sc.bg && senderPalette[i].text === sc.text) { idx = i; break; }
-            }
-            if (idx < 0 || idx === _lastThemeIdx) { return; }
+            var idx = themeIndex(state.theme);
+            if (idx < 0) { return; }
+            if (idx === _lastThemeIdx) { return; }
             _lastThemeIdx = idx;
             var t = _deviceThemes[idx % _deviceThemes.length];
             var root = document.documentElement;
