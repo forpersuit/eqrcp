@@ -1936,10 +1936,10 @@ var Chat = `
             var key = 'eqrcp-chat-theme:' + window.location.pathname + ':' + token;
             var saved = window.sessionStorage.getItem(key);
             if (validThemeID(saved)) { return saved; }
-            var index = 1 + Math.floor(Math.random() * 11);
-            var theme = 'theme-' + index;
-            window.sessionStorage.setItem(key, theme);
-            return theme;
+            // Do not randomly generate a theme; wait for the server to assign one
+            // via the health/SSE endpoint. Return empty string to indicate
+            // "pending assignment" – updateChatStatus will set it later.
+            return '';
         }
         function readDraft() {
             try {
@@ -2039,10 +2039,15 @@ var Chat = `
             }
         }
         function updateChatStatus(data) {
-            if (data && validThemeID(data.theme) && data.theme !== state.theme) {
-                state.theme = data.theme;
-                rememberClientTheme(data.theme);
-                applyDeviceTheme();
+            if (data && validThemeID(data.theme)) {
+                // Always adopt the server-assigned theme – this is the single
+                // source of truth for the device's identity colour.  It is set
+                // on first connect and stays fixed for the session (per-token).
+                if (data.theme !== state.theme) {
+                    state.theme = data.theme;
+                    rememberClientTheme(data.theme);
+                    applyDeviceTheme();
+                }
             }
             var devices = (data && data.devices) || [];
             var count = Math.max(onlineDot.classList.contains('offline') ? 0 : 1, Number(data && data.deviceCount || devices.length || 0));
@@ -2640,10 +2645,17 @@ var Chat = `
             var atBottom = isNearBottom();
             if (!incoming || !incoming.length) { return; }
             incoming.forEach(function(message) {
-                if (message && message.sender === state.sender && validThemeID(message.theme) && message.theme !== state.theme) {
-                    state.theme = message.theme;
-                    rememberClientTheme(message.theme);
-                    applyDeviceTheme();
+                // When our own message comes back with a server-assigned theme,
+                // adopt it as our identity colour.  This handles both the
+                // first message after connect (before health/SSE theme is
+                // confirmed) and any edge-case where the server corrects the
+                // assignment.
+                if (message && message.sender === state.sender && validThemeID(message.theme)) {
+                    if (message.theme !== state.theme) {
+                        state.theme = message.theme;
+                        rememberClientTheme(message.theme);
+                        applyDeviceTheme();
+                    }
                 }
             });
             var knownIDs = {};
