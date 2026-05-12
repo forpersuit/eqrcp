@@ -2246,7 +2246,7 @@ var Chat = `
         // ── Device theme: apply this device's senderColor as UI accent ──
         var _lastThemeIdx = -1;
         function applyDeviceTheme() {
-            var sc = themeColor(state.theme) || senderColor(state.sender);
+            var sc = themeColor(state.theme);
             if (!sc) { return; }
             var idx = -1;
             for (var i = 0; i < senderPalette.length; i++) {
