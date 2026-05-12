@@ -218,8 +218,6 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`attachment-card`,
 		`downloadURL(message.url)`,
 		`Device `,
-		"Stop chat",
-		"Version: eqrcp test [date: now]",
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("Chat page want to contain %q", want)

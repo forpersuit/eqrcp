@@ -1804,18 +1804,17 @@ var Chat = `
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
                 </div>
+                <p class="side-note">Scan this code to join from another device.</p>
+                <div class="qr-frame">
+                    <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
+                </div>
                 <div class="session-collapsible collapsed" id="session-collapsible">
-                    <p class="side-note">Scan this code to join from another device.</p>
-                    <div class="qr-frame">
-                        <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
+                    <div class="url-row">
+                        <input id="chat-url" value="{{.URL}}" readonly>
+                        <button class="side-btn" type="button" id="copy-url">Copy</button>
                     </div>
                 </div>
-                <button class="session-toggle" type="button" id="session-toggle" aria-expanded="false">Show QR code</button>
-                <div class="url-row">
-                    <input id="chat-url" value="{{.URL}}" readonly>
-                    <button class="side-btn" type="button" id="copy-url">Copy</button>
-                </div>
-                <p class="side-note">Version: {{.Version}}</p>
+                <button class="session-toggle" type="button" id="session-toggle" aria-expanded="true">Hide URL</button>
             </aside>
         </div>
         <div class="preview-backdrop" id="preview-backdrop">
@@ -2747,9 +2746,10 @@ var Chat = `
                 return refreshChatStatus()
                     .then(function() {
                         // After health check confirms the session is alive,
-                        // fetch the full message history for this device so
-                        // reconnections don't start with an empty thread.
-                        return fetchFullHistory();
+                        // fetch the messages this device has already seen
+                        // (from its joinSeq onward) so reconnections restore
+                        // the device's own history, not the entire session.
+                        return fetchDeviceHistory();
                     })
                     .catch(function() {
                         if (!chatConnectionLost) {
@@ -2770,31 +2770,30 @@ var Chat = `
                     setConnectionState(false, 'Disconnected. Retrying...');
                 });
         }
-        function fetchFullHistory() {
-            // Fetch all messages the server has for this session, using
-            // afterSeq=0 and joinSeq=0 to get the complete history.
-            var route = '{{.MessagesRoute}}?afterSeq=0&joinSeq=0';
+        function fetchDeviceHistory() {
+            // Fetch messages from this device's joinSeq onward (what it
+            // has already seen), not the entire session history. This
+            // restores only the device's own history after reconnection.
+            var myJoinSeq = hasJoinSeq ? joinSeq : 0;
+            var route = '{{.MessagesRoute}}?afterSeq=0&joinSeq=' + encodeURIComponent(String(myJoinSeq));
             return fetch(route, {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('history failed'); } return r.json(); })
                 .then(function(messages) {
                     if (messages && messages.length) {
-                        // Replace local state with server history – this
-                        // recovers messages after a long disconnection.
-                        state.messages = messages;
-                        renderMessages();
-                        saveChatCache();
-                        messagesEl.scrollTop = messagesEl.scrollHeight;
+                        // Merge with existing local messages rather than
+                        // replacing – this preserves any local-only state.
+                        mergeMessages(messages);
                     }
                 })
                 .catch(function() {
-                    // Full-history fetch is best-effort; SSE will still
-                    // deliver incremental updates.
+                    // History fetch is best-effort; SSE will still deliver
+                    // incremental updates.
                 });
         }
         function recoverMissedMessages() {
             if (eventCursorSeq <= 0) {
-                // No cursor yet – fetch full history instead.
-                return fetchFullHistory();
+                // No cursor yet – fetch the device's history from its join point.
+                return fetchDeviceHistory();
             }
             return fetch(withAfterSeq('{{.MessagesRoute}}'), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('recovery failed'); } return r.json(); })
@@ -3034,11 +3033,11 @@ var Chat = `
             var isCollapsed = collapsible.classList.contains('collapsed');
             if (isCollapsed) {
                 collapsible.classList.remove('collapsed');
-                toggle.textContent = 'Hide QR code';
+                toggle.textContent = 'Hide URL';
                 toggle.setAttribute('aria-expanded', 'true');
             } else {
                 collapsible.classList.add('collapsed');
-                toggle.textContent = 'Show QR code';
+                toggle.textContent = 'Show URL';
                 toggle.setAttribute('aria-expanded', 'false');
             }
         });
