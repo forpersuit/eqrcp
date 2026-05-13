@@ -2092,7 +2092,7 @@
             if (!fresh.length && !updated.length) {
                 saveChatCache();
                 if (forceScroll) {
-                    scrollMessagesToBottom(incoming[incoming.length - 1] && incoming[incoming.length - 1].id);
+                    scrollMessagesToBottomSoon(incoming[incoming.length - 1] && incoming[incoming.length - 1].id);
                 }
                 return;
             }
@@ -2113,7 +2113,7 @@
             renderMessages();
             saveChatCache();
             var focusID = forceScroll && incoming.length ? incoming[incoming.length - 1].id || '' : '';
-            if (followLatest || forceScroll) { scrollMessagesToBottom(focusID); }
+            if (followLatest || forceScroll) { scrollMessagesToBottomSoon(focusID); }
         }
         function setMessages(messages) {
             state.messages = messages || [];
@@ -2145,15 +2145,27 @@
                 }
             }, 800);
         }
-        function scrollMessagesToBottom(focusMessageID) {
+        function scrollMessagesToBottom(focusMessageID, options) {
+            options = options || {};
             markProgrammaticScroll();
             var target = focusMessageID ? messagesEl.querySelector('[data-message-id="' + cssEscape(focusMessageID) + '"]') : null;
             if (target) {
-                target.focus({preventScroll: true});
+                if (options.focusTarget) {
+                    target.focus({preventScroll: true});
+                }
                 messagesEl.scrollTop = target.offsetTop + target.offsetHeight + messagesBottomSpace() - messagesEl.clientHeight;
                 return;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function scrollMessagesToBottomSoon(focusMessageID) {
+            scrollMessagesToBottom(focusMessageID);
+            window.requestAnimationFrame(function() {
+                scrollMessagesToBottom(focusMessageID);
+            });
+            window.setTimeout(function() {
+                if (followLatest) { scrollMessagesToBottom(focusMessageID); }
+            }, 140);
         }
         function messagesBottomSpace() {
             var style = window.getComputedStyle(messagesEl);
@@ -2249,10 +2261,16 @@
                 .then(function(r) { if (!r.ok) { throw new Error('recovery failed'); } return r.json(); })
                 .then(function(messages) { mergeMessages(messages); });
         }
+        function refocusComposer() {
+            if (document.activeElement === textEl || !textEl.isConnected) { return; }
+            textEl.focus({preventScroll: true});
+        }
         function sendText(event) {
             if (event) { event.preventDefault(); }
             var text = textEl.value.trim();
             if (!text) { return; }
+            setFollowLatest(true);
+            refocusComposer();
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -2265,6 +2283,7 @@
                 clearDraft();
                 resizeComposer();
                 updateComposerState();
+                refocusComposer();
                 mergeMessages([message], true);
             }).catch(function() {
                 showSystemNotice('Message send failed.');
@@ -2272,6 +2291,7 @@
                 saveDraft();
                 resizeComposer();
                 updateComposerState();
+                refocusComposer();
             });
         }
         function recallMessage(message) {
@@ -2471,6 +2491,9 @@
         fileEl.addEventListener('change', uploadFiles);
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
+        sendButton.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+        });
         document.getElementById('copy-url').addEventListener('click', copyURL);
         devicesToggle.addEventListener('click', toggleDevicePanel);
         devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });

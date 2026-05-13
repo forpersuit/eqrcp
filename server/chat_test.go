@@ -235,11 +235,17 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function mergeMessages(incoming, forceScroll)") || !strings.Contains(pages.Chat, "target.focus({preventScroll: true})") || !strings.Contains(pages.Chat, "messagesBottomSpace() - messagesEl.clientHeight") {
 		t.Fatal("locally sent messages should focus and scroll to the newest message with bottom spacing")
 	}
+	if !strings.Contains(pages.Chat, "function refocusComposer()") || !strings.Contains(pages.Chat, "sendButton.addEventListener('mousedown'") || !strings.Contains(pages.Chat, "textEl.focus({preventScroll: true})") {
+		t.Fatal("sending messages should keep the composer ready for continued typing")
+	}
+	if !strings.Contains(pages.Chat, "function scrollMessagesToBottomSoon(focusMessageID)") || !strings.Contains(pages.Chat, "window.requestAnimationFrame(function()") || !strings.Contains(pages.Chat, "window.setTimeout(function()") {
+		t.Fatal("mobile send scrolling should retry after viewport and composer layout settle")
+	}
 	if !strings.Contains(pages.Chat, "--messages-bottom-space: clamp(16px, 2.2vh, 22px)") || !strings.Contains(pages.Chat, "scroll-padding-bottom: var(--messages-bottom-space)") {
 		t.Fatal("message history bottom spacing should be explicit and bounded")
 	}
-	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottom(incoming[incoming.length - 1]") {
-		t.Fatal("duplicate local send echoes should focus without rerendering")
+	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottomSoon(incoming[incoming.length - 1]") {
+		t.Fatal("duplicate local send echoes should scroll without rerendering")
 	}
 	if !strings.Contains(pages.Chat, "var followLatest = true") || !strings.Contains(pages.Chat, "function setFollowLatest(value)") {
 		t.Fatal("chat scroll behavior should track the user's follow-latest intent explicitly")
