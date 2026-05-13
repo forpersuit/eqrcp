@@ -208,6 +208,8 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`embedded-chat`,
 		`eqrcp-chat-draft:`,
 		`clipboardData.files`,
+		`read-clipboard-text`,
+		`clipboard-text`,
 		`auto-save-file`,
 		`currentAvatar`,
 		`showSystemNotice`,

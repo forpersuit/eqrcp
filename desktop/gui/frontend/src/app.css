@@ -619,6 +619,28 @@ dd {
     background: var(--wash);
 }
 
+.avatar-setting-row {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.avatar-preview {
+    align-items: center;
+    background: #edf7f1;
+    border: 1px solid #2f9e73;
+    border-radius: 999px;
+    color: #14533f;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 900;
+    height: 34px;
+    justify-content: center;
+    overflow: hidden;
+    width: 34px;
+}
+
 .help-tooltip {
     background: #17211e;
     border: 1px solid rgba(255, 255, 255, 0.12);

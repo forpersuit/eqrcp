@@ -1960,9 +1960,9 @@ th {
           <input id="settings-chat-sender" name="chatSender" autocomplete="off" maxlength="40">
         </div>
         <div class="field">
-          <label for="settings-chat-avatar">Chat avatar</label>
-          <input id="settings-chat-avatar" name="chatAvatar" autocomplete="off" maxlength="8" placeholder="🙂 or AB">
-          <p class="settings-status">Used as the desktop sender label and avatar in chat sessions.</p>
+          <label for="settings-chat-avatar">Chat avatar badge</label>
+          <input id="settings-chat-avatar" name="chatAvatar" autocomplete="off" maxlength="8" placeholder="Emoji or initials">
+          <p class="settings-status">Use an emoji or 1-4 initials. New desktop chat sessions sync this badge to other devices.</p>
         </div>
         <div class="field">
           <label for="settings-close-behavior">Window close action</label>

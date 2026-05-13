@@ -305,6 +305,23 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	}
 }
 
+func TestChatPageUsesAvatarForMessagesRosterAndDesktopClipboardPaste(t *testing.T) {
+	for _, want := range []string{
+		"cleanAvatarLabel(message.avatar || '')",
+		"cleanAvatarLabel(device.avatar || '')",
+		"avatar: state.avatar",
+		"data.append('avatar', state.avatar)",
+		"withClientAvatar",
+		"read-clipboard-text",
+		"clipboard-text",
+		"insertComposerText(text)",
+	} {
+		if !strings.Contains(pages.Chat, want) {
+			t.Fatalf("chat page should contain %q", want)
+		}
+	}
+}
+
 func TestChatQRImageRouteReturnsPNG(t *testing.T) {
 	server := newTestChatServer(t)
 	defer os.RemoveAll(server.chatDir)

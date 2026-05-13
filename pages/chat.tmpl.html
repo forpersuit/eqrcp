@@ -1307,6 +1307,8 @@
         var followLatest = true;
         var programmaticScroll = false;
         var programmaticScrollTimer = null;
+        var clipboardRequestID = 0;
+        var clipboardRequests = {};
 
         function currentSender() {
             var params = new URLSearchParams(window.location.search);
@@ -2542,23 +2544,58 @@
             document.execCommand(command);
             handleComposerInput();
         }
+        function insertComposerText(text) {
+            if (!text) { return; }
+            textEl.focus({preventScroll: true});
+            var start = textEl.selectionStart || 0;
+            var end = textEl.selectionEnd || 0;
+            textEl.setRangeText(text, start, end, 'end');
+            handleComposerInput();
+        }
+        function requestNativeClipboardText() {
+            if (!inWails || window.parent === window) {
+                return Promise.resolve('');
+            }
+            var requestId = 'clipboard-' + Date.now() + '-' + (++clipboardRequestID);
+            return new Promise(function(resolve) {
+                clipboardRequests[requestId] = resolve;
+                window.parent.postMessage({type: 'read-clipboard-text', requestId: requestId}, '*');
+                window.setTimeout(function() {
+                    if (!clipboardRequests[requestId]) { return; }
+                    delete clipboardRequests[requestId];
+                    resolve('');
+                }, 1200);
+            });
+        }
         function pasteComposerText() {
             textEl.focus({preventScroll: true});
             if (navigator.clipboard && navigator.clipboard.readText) {
                 navigator.clipboard.readText().then(function(text) {
-                    if (!text) { return; }
-                    var start = textEl.selectionStart || 0;
-                    var end = textEl.selectionEnd || 0;
-                    textEl.setRangeText(text, start, end, 'end');
-                    handleComposerInput();
+                    if (text) {
+                        insertComposerText(text);
+                        return;
+                    }
+                    return requestNativeClipboardText().then(insertComposerText);
                 }).catch(function() {
-                    document.execCommand('paste');
-                    handleComposerInput();
+                    requestNativeClipboardText().then(function(text) {
+                        if (text) {
+                            insertComposerText(text);
+                            return;
+                        }
+                        document.execCommand('paste');
+                        handleComposerInput();
+                    });
                 });
                 return;
             }
-            document.execCommand('paste');
-            handleComposerInput();
+            requestNativeClipboardText().then(function(text) {
+                if (text) {
+                    insertComposerText(text);
+                    return;
+                }
+                document.execCommand('paste');
+                handleComposerInput();
+            });
         }
         function showComposerContextMenu(event) {
             event.preventDefault();
@@ -2687,8 +2724,18 @@
         });
         window.addEventListener('pagehide', saveDraft);
         window.addEventListener('message', function(event) {
-            if (!event.data || event.data.type !== 'pulse-session-qr') { return; }
-            startSessionQRPulse(event.data.until);
+            if (!event.data || typeof event.data !== 'object') { return; }
+            if (event.data.type === 'pulse-session-qr') {
+                startSessionQRPulse(event.data.until);
+                return;
+            }
+            if (event.data.type === 'clipboard-text') {
+                var requestId = String(event.data.requestId || '');
+                var resolve = clipboardRequests[requestId];
+                if (!resolve) { return; }
+                delete clipboardRequests[requestId];
+                resolve(String(event.data.text || ''));
+            }
         });
         window.addEventListener('resize', resizeComposer);
         window.addEventListener('beforeunload', function(event) {

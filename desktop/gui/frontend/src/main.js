@@ -1,7 +1,7 @@
 import './style.css';
 import './app.css';
 
-import {EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
+import {ClipboardGetText, EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
@@ -119,7 +119,7 @@ function stopChatQRPulse() {
     updateChatQRPulseButton();
 }
 
-// postMessage bridge: handle native file operations requested by the chat iframe.
+// postMessage bridge: handle native operations requested by the chat iframe.
 window.addEventListener('message', (e) => {
     if (!isTrustedChatFrameMessage(e)) { return; }
     if (!e.data || typeof e.data !== 'object') { return; }
@@ -143,6 +143,16 @@ window.addEventListener('message', (e) => {
             });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
+    } else if (e.data.type === 'read-clipboard-text') {
+        const requestId = String(e.data.requestId || '');
+        if (!requestId) { return; }
+        ClipboardGetText()
+            .then((text) => {
+                e.source?.postMessage({type: 'clipboard-text', requestId, text: String(text || '')}, e.origin);
+            })
+            .catch(() => {
+                e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, e.origin);
+            });
     }
 });
 
@@ -357,7 +367,7 @@ function renderChat() {
     const src = chatUrl;
     return `
         <div class="chat-panel">
-            <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-write" title="Chat"></iframe>
+            <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write" title="Chat"></iframe>
         </div>
     `;
 }
@@ -493,6 +503,7 @@ function renderSettingsPanel() {
     `).join('');
     const chatSender = state.settings.chatSender || '';
     const chatAvatar = state.settings.chatAvatar || '';
+    const chatAvatarPreview = cleanChatAvatar(chatAvatar) || (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase();
     return `
         <div class="settings-panel">
             <label>Network interface</label>
@@ -506,9 +517,12 @@ function renderSettingsPanel() {
             <div class="settings-note profile-note">
                 <label>Chat username</label>
                 <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
-                <label>Chat avatar</label>
-                <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="🙂 or AB" />
-                <span>Used when this app opens a new desktop chat session. Existing chat pages keep the name and avatar they joined with.</span>
+                <label>Chat avatar badge</label>
+                <div class="avatar-setting-row">
+                    <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
+                    <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="Emoji or initials" />
+                </div>
+                <span>Use an emoji or 1-4 initials. New desktop chat sessions sync this badge to other devices; existing chat pages keep the profile they joined with.</span>
             </div>
             <label>Window close action</label>
             <select id="settings-close-behavior">
