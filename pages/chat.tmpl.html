@@ -180,6 +180,11 @@
             stroke-width: 2;
             width: 26px;
         }
+        .device-row-lite .message-avatar {
+            font-size: 11px;
+            height: 26px;
+            width: 26px;
+        }
         .device-row-lite strong {
             color: var(--device-text, inherit);
             display: block;
@@ -1045,6 +1050,40 @@
             cursor: grabbing;
         }
         .hidden { display: none; }
+        .composer-context-menu {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 14px 34px rgba(24, 33, 31, 0.18);
+            display: grid;
+            gap: 2px;
+            min-width: 150px;
+            padding: 6px;
+            position: fixed;
+            z-index: 40;
+        }
+        .composer-context-menu button {
+            background: transparent;
+            border: 0;
+            border-radius: 6px;
+            color: var(--ink);
+            cursor: pointer;
+            display: block;
+            font: inherit;
+            padding: 8px 10px;
+            text-align: left;
+            width: 100%;
+        }
+        .composer-context-menu button:hover:not(:disabled),
+        .composer-context-menu button:focus-visible:not(:disabled) {
+            background: var(--wash);
+            outline: none;
+        }
+        .composer-context-menu button:disabled {
+            color: var(--muted);
+            cursor: default;
+            opacity: 0.58;
+        }
         /* ── Mobile ── */
         @media (max-width: 820px) {
             main {
@@ -1465,11 +1504,12 @@
             }
             deviceRoster.innerHTML = devices.length ? devices.map(function(device) {
                 var label = cleanSenderName(device.label || 'Guest');
+                var avatarLabel = cleanAvatarLabel(device.avatar || '') || senderInitial(label);
                 var self = label === state.sender ? 'This device' : 'Connected';
                 var color = themeColor(device.theme);
                 var avatarStyle = color ? ' style="background:' + color.bg + ';border-color:' + color.border + ';color:' + color.text + ';"' : '';
                 var rowStyle = color ? ' style="--device-text:' + color.text + ';--device-muted:' + color.text + 'cc;"' : '';
-                return '<div class="device-row-lite roster-row"' + rowStyle + '><svg viewBox="0 0 24 24" aria-hidden="true"' + avatarStyle + '><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
+                return '<div class="device-row-lite roster-row"' + rowStyle + '><div class="message-avatar"' + avatarStyle + '>' + escapeHTML(avatarLabel) + '</div><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
             }).join('') : '<div class="device-empty">No active device connection.</div>';
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
@@ -1482,7 +1522,7 @@
             });
         }
         function refreshChatStatus() {
-            return fetch(withClientJoin(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}')))), {cache: 'no-store'})
+            return fetch(withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))))), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
                 .then(function(data) {
                     updateChatStatus(data);
@@ -1515,7 +1555,7 @@
                     avatarStack.className = 'avatar-stack';
                     var avatar = document.createElement('div');
                     avatar.className = 'message-avatar';
-                    avatar.textContent = mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest');
+                    avatar.textContent = cleanAvatarLabel(message.avatar || '') || (mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest'));
                     var sc = messageColor(message);
                     if (sc) {
                         avatar.style.background = sc.bg;
@@ -2294,7 +2334,7 @@
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.sender, token: state.token, theme: state.theme, join: joinToken, text: text})
+                body: JSON.stringify({sender: state.sender, avatar: state.avatar, token: state.token, theme: state.theme, join: joinToken, text: text})
             }).then(function(r) {
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
@@ -2427,6 +2467,7 @@
             if (!files || !files.length) { return; }
             var data = new FormData();
             data.append('sender', state.sender);
+            data.append('avatar', state.avatar);
             data.append('token', state.token);
             data.append('theme', state.theme);
             data.append('join', joinToken);
@@ -2493,6 +2534,82 @@
             event.preventDefault();
             uploadFileList(files);
         }
+        function selectedComposerText() {
+            return textEl.value.slice(textEl.selectionStart || 0, textEl.selectionEnd || 0);
+        }
+        function runComposerCommand(command) {
+            textEl.focus({preventScroll: true});
+            document.execCommand(command);
+            handleComposerInput();
+        }
+        function pasteComposerText() {
+            textEl.focus({preventScroll: true});
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                navigator.clipboard.readText().then(function(text) {
+                    if (!text) { return; }
+                    var start = textEl.selectionStart || 0;
+                    var end = textEl.selectionEnd || 0;
+                    textEl.setRangeText(text, start, end, 'end');
+                    handleComposerInput();
+                }).catch(function() {
+                    document.execCommand('paste');
+                    handleComposerInput();
+                });
+                return;
+            }
+            document.execCommand('paste');
+            handleComposerInput();
+        }
+        function showComposerContextMenu(event) {
+            event.preventDefault();
+            closeComposerContextMenu();
+            var menu = document.createElement('div');
+            menu.className = 'composer-context-menu';
+            var hasSelection = selectedComposerText().length > 0;
+            [
+                {label: 'Undo', disabled: false, action: function() { runComposerCommand('undo'); }},
+                {label: 'Cut', disabled: !hasSelection, action: function() { runComposerCommand('cut'); }},
+                {label: 'Copy', disabled: !hasSelection, action: function() { runComposerCommand('copy'); }},
+                {label: 'Paste', disabled: false, action: pasteComposerText},
+                {label: 'Select all', disabled: !textEl.value, action: function() { textEl.focus({preventScroll: true}); textEl.select(); }},
+            ].forEach(function(item) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = item.label;
+                button.disabled = item.disabled;
+                button.addEventListener('click', function() {
+                    closeComposerContextMenu();
+                    item.action();
+                });
+                menu.appendChild(button);
+            });
+            document.body.appendChild(menu);
+            var rect = menu.getBoundingClientRect();
+            var left = Math.min(event.clientX, window.innerWidth - rect.width - 8);
+            var top = Math.min(event.clientY, window.innerHeight - rect.height - 8);
+            menu.style.left = Math.max(8, left) + 'px';
+            menu.style.top = Math.max(8, top) + 'px';
+            window.setTimeout(function() {
+                document.addEventListener('pointerdown', closeComposerContextMenuOnOutside);
+                document.addEventListener('keydown', closeComposerContextMenuOnEscape);
+            }, 0);
+        }
+        function closeComposerContextMenuOnOutside(event) {
+            if (!event.target.closest('.composer-context-menu')) {
+                closeComposerContextMenu();
+            }
+        }
+        function closeComposerContextMenuOnEscape(event) {
+            if (event.key === 'Escape') {
+                closeComposerContextMenu();
+            }
+        }
+        function closeComposerContextMenu() {
+            var menu = document.querySelector('.composer-context-menu');
+            if (menu) { menu.remove(); }
+            document.removeEventListener('pointerdown', closeComposerContextMenuOnOutside);
+            document.removeEventListener('keydown', closeComposerContextMenuOnEscape);
+        }
         function notifyAutoSaveCandidates(messages) {
             if (!inWails || !messages || !messages.length) { return; }
             messages.forEach(function(message) {
@@ -2511,6 +2628,7 @@
         fileEl.addEventListener('change', uploadFiles);
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
+        textEl.addEventListener('contextmenu', showComposerContextMenu);
         sendButton.addEventListener('mousedown', function(event) {
             event.preventDefault();
         });
@@ -2586,7 +2704,7 @@
         // accent, bubbles, and avatar all use a consistent colour from the
         // very first paint – no senderColor fallback window.
         if (state.token && currentPeer() !== 'desktop') {
-            fetch(withClientJoin(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}')))), {cache: 'no-store'})
+            fetch(withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))))), {cache: 'no-store'})
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(data) {
                     if (data && validThemeID(data.theme) && data.theme !== state.theme) {
@@ -2641,6 +2759,11 @@
             var sep = route.indexOf('?') === -1 ? '?' : '&';
             return route + sep + 'theme=' + encodeURIComponent(state.theme);
         }
+        function withClientAvatar(route) {
+            if (!state.avatar) { return route; }
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep + 'avatar=' + encodeURIComponent(state.avatar);
+        }
         function withClientJoin(route) {
             if (!joinToken) { return route; }
             var sep = route.indexOf('?') === -1 ? '?' : '&';
@@ -2649,7 +2772,7 @@
 
         function connectSSE() {
             if (events) { events.close(); events = null; }
-            var route = withClientJoin(withClientTheme(withClientPeer(withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}'))));
+            var route = withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}')))));
             route += (route.indexOf('?') === -1 ? '?' : '&') + 'label=' + encodeURIComponent(state.sender);
             events = new EventSource(route);
             events.onopen = function() {

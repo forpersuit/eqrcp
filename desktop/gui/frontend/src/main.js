@@ -55,6 +55,7 @@ let agentEventsRetry = null;
 let chatQRPulseTimer = null;
 const autoSavedAttachments = new Set();
 const app = document.querySelector('#app');
+const portHelpText = 'Port 0 chooses an available port automatically. Use a fixed port only when firewall rules, bookmarks, or device workflows need a stable address.';
 
 function triggerChatQRPulse() {
     if (state.chatQRPromptDismissed) {
@@ -496,8 +497,8 @@ function renderSettingsPanel() {
         <div class="settings-panel">
             <label>Network interface</label>
             <select id="settings-interface">${options}</select>
-            <label class="setting-label-with-help" title="Port 0 chooses an available port automatically. Use a fixed port only when firewall rules, bookmarks, or device workflows need a stable address.">Port <span aria-hidden="true">?</span></label>
-            <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" title="Port 0 chooses an available port automatically. Fixed ports make the address predictable, but can fail if another app is already using that port." />
+            <label class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></label>
+            <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
             <label class="check">
                 <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
@@ -681,6 +682,7 @@ function bindEvents() {
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
     document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
+    document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
     });
@@ -1004,6 +1006,52 @@ function showContextMenu(items, x, y) {
         document.addEventListener('pointerdown', closeContextMenuOnOutside);
         document.addEventListener('keydown', closeContextMenuOnEscape);
     }, 0);
+}
+
+function bindHelpTooltip(element) {
+    element.addEventListener('mouseenter', showHelpTooltip);
+    element.addEventListener('focus', showHelpTooltip);
+    element.addEventListener('mousemove', positionHelpTooltip);
+    element.addEventListener('mouseleave', closeHelpTooltip);
+    element.addEventListener('blur', closeHelpTooltip);
+}
+
+function showHelpTooltip(event) {
+    closeHelpTooltip();
+    const target = event.currentTarget;
+    const text = target.dataset.help || '';
+    if (!text) {
+        return;
+    }
+    const tip = document.createElement('div');
+    tip.className = 'help-tooltip';
+    tip.textContent = text;
+    document.body.appendChild(tip);
+    positionHelpTooltip(event);
+}
+
+function positionHelpTooltip(event) {
+    const tip = document.querySelector('.help-tooltip');
+    if (!tip) {
+        return;
+    }
+    const anchor = event.currentTarget?.getBoundingClientRect?.() || {left: event.clientX || 0, bottom: event.clientY || 0};
+    const x = typeof event.clientX === 'number' && event.clientX > 0 ? event.clientX : anchor.left + 12;
+    const y = typeof event.clientY === 'number' && event.clientY > 0 ? event.clientY : anchor.bottom;
+    const margin = 8;
+    tip.style.maxWidth = `${Math.max(180, Math.min(320, window.innerWidth - margin * 2))}px`;
+    const rect = tip.getBoundingClientRect();
+    const left = Math.min(Math.max(margin, x + 10), window.innerWidth - rect.width - margin);
+    let top = y + 12;
+    if (top + rect.height + margin > window.innerHeight) {
+        top = Math.max(margin, y - rect.height - 12);
+    }
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+}
+
+function closeHelpTooltip() {
+    document.querySelector('.help-tooltip')?.remove();
 }
 
 function closeContextMenuOnOutside(event) {

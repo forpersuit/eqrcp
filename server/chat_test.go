@@ -121,6 +121,35 @@ func TestChatThemesAreAssignedPerClientToken(t *testing.T) {
 	}
 }
 
+func TestChatAvatarTravelsWithMessagesAndRoster(t *testing.T) {
+	session := &chatSession{
+		attachments:      map[string]chatAttachment{},
+		subscribers:      map[chan struct{}]struct{}{},
+		clients:          map[string]chatClient{},
+		clientThemes:     map[string]string{},
+		clientThemeJoins: map[string]string{},
+		dir:              t.TempDir(),
+		attachmentRoute:  "/attachments",
+		startedAt:        time.Now(),
+	}
+
+	done := session.registerClientWithAvatar("mobile-token", "Phone", "📱", "", "", "join-1", "")
+	defer done()
+	text := session.addTextMessageWithAvatar("Phone", "📱", "mobile-token", "hello")
+	attachment, err := session.saveAttachmentWithAvatar("Phone", "📱", "mobile-token", "note.txt", "text/plain", 4, strings.NewReader("file"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if text.Avatar != "📱" || attachment.Avatar != "📱" {
+		t.Fatalf("avatars = %q, %q; want messages to carry configured avatar", text.Avatar, attachment.Avatar)
+	}
+	devices := session.deviceRosterLocked()
+	if len(devices) != 1 || devices[0].Avatar != "📱" {
+		t.Fatalf("devices = %#v; want avatar in roster", devices)
+	}
+}
+
 func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {
 	session := &chatSession{
 		attachments:  map[string]chatAttachment{},

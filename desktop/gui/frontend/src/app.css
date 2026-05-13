@@ -619,6 +619,22 @@ dd {
     background: var(--wash);
 }
 
+.help-tooltip {
+    background: #17211e;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    box-shadow: 0 12px 30px rgba(24, 33, 31, 0.24);
+    color: #f7faf8;
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    padding: 8px 10px;
+    pointer-events: none;
+    position: fixed;
+    white-space: normal;
+    z-index: 20;
+}
+
 .receive-box label {
     color: var(--muted);
     font-size: 13px;

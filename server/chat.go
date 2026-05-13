@@ -64,6 +64,7 @@ type ChatStatusSnapshot struct {
 type chatMessage struct {
 	ID         string    `json:"id"`
 	Sender     string    `json:"sender"`
+	Avatar     string    `json:"avatar,omitempty"`
 	Type       string    `json:"type"`
 	Text       string    `json:"text,omitempty"`
 	Recalled   bool      `json:"recalled,omitempty"`
@@ -88,6 +89,7 @@ type chatAttachment struct {
 
 type chatClient struct {
 	Label    string    `json:"label"`
+	Avatar   string    `json:"avatar,omitempty"`
 	Count    int       `json:"count"`
 	Theme    string    `json:"theme,omitempty"`
 	LastSeen time.Time `json:"lastSeen"`
@@ -344,6 +346,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		}
 		var request struct {
 			Sender string `json:"sender"`
+			Avatar string `json:"avatar"`
 			Text   string `json:"text"`
 			Token  string `json:"token"`
 			Theme  string `json:"theme"`
@@ -362,7 +365,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		session.ensureChatTheme(request.Token, request.Sender, "", request.Theme, request.Join)
-		message := session.addTextMessage(sanitizeChatSender(request.Sender), request.Token, request.Text)
+		message := session.addTextMessageWithAvatar(sanitizeChatSender(request.Sender), sanitizeChatAvatar(request.Avatar), request.Token, request.Text)
 		if message.ID == "" {
 			http.Error(w, "message text is empty", http.StatusBadRequest)
 			return
@@ -400,6 +403,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		defer r.MultipartForm.RemoveAll()
 	}
 	sender := sanitizeChatSender(r.FormValue("sender"))
+	avatar := sanitizeChatAvatar(r.FormValue("avatar"))
 	token := strings.TrimSpace(r.FormValue("token"))
 	if token == "" {
 		http.Error(w, "missing token", http.StatusBadRequest)
@@ -421,7 +425,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "upload failed", http.StatusBadRequest)
 			return
 		}
-		message, err := session.saveAttachment(sender, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
+		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
 		file.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -495,7 +499,7 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	if !hasJoinSeq {
 		joinSeq = seenSeq
 	}
-	unregisterClient := session.registerClient(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"), r.RemoteAddr)
+	unregisterClient := session.registerClientWithAvatar(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("avatar"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"), r.RemoteAddr)
 	defer unregisterClient()
 
 	write := func() bool {
@@ -539,6 +543,10 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 }
 
 func (session *chatSession) registerClient(token string, label string, peer string, preferredTheme string, join string, fallback string) func() {
+	return session.registerClientWithAvatar(token, label, "", peer, preferredTheme, join, fallback)
+}
+
+func (session *chatSession) registerClientWithAvatar(token string, label string, avatar string, peer string, preferredTheme string, join string, fallback string) func() {
 	client := strings.TrimSpace(token)
 	if client == "" {
 		client = strings.TrimSpace(fallback)
@@ -554,6 +562,7 @@ func (session *chatSession) registerClient(token string, label string, peer stri
 	info := session.clients[client]
 	info.Count++
 	info.Label = sanitizeChatSender(label)
+	info.Avatar = sanitizeChatAvatar(avatar)
 	info.Theme = theme
 	info.LastSeen = time.Now()
 	session.clients[client] = info
@@ -715,6 +724,10 @@ func trustedWailsOrigin(parsed *url.URL) bool {
 }
 
 func (session *chatSession) addTextMessage(sender string, token string, text string) chatMessage {
+	return session.addTextMessageWithAvatar(sender, "", token, text)
+}
+
+func (session *chatSession) addTextMessageWithAvatar(sender string, avatar string, token string, text string) chatMessage {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return chatMessage{}
@@ -722,6 +735,7 @@ func (session *chatSession) addTextMessage(sender string, token string, text str
 	theme := session.chatThemeForToken(strings.TrimSpace(token), sender)
 	return session.addMessageWithStatus(chatMessage{
 		Sender:     sender,
+		Avatar:     avatar,
 		Type:       "text",
 		Text:       text,
 		Theme:      theme,
@@ -738,6 +752,10 @@ func (session *chatSession) addSystemMessage(text string) chatMessage {
 }
 
 func (session *chatSession) saveAttachment(sender string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
+	return session.saveAttachmentWithAvatar(sender, "", token, name, mimeType, size, reader)
+}
+
+func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
 	if name == "" {
 		name = "attachment"
 	}
@@ -774,6 +792,7 @@ func (session *chatSession) saveAttachment(sender string, token string, name str
 	message := chatMessage{
 		ID:         id,
 		Sender:     sender,
+		Avatar:     avatar,
 		Type:       messageType,
 		FileName:   name,
 		Size:       size,
@@ -1050,6 +1069,18 @@ func sanitizeChatSender(sender string) string {
 		sender = string([]rune(sender)[:40])
 	}
 	return sender
+}
+
+func sanitizeChatAvatar(avatar string) string {
+	avatar = strings.TrimSpace(avatar)
+	if avatar == "" {
+		return ""
+	}
+	runes := []rune(avatar)
+	if len(runes) > 4 {
+		avatar = string(runes[:4])
+	}
+	return avatar
 }
 
 func safeChatFilename(name string) string {
