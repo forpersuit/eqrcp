@@ -1242,6 +1242,7 @@
         var hasJoinSeq = false;
         var eventCursorSeq = 0;
         var chatConnectionLost = false;
+        var senderColorMap = {};
 
         function currentSender() {
             var params = new URLSearchParams(window.location.search);
@@ -1358,7 +1359,7 @@
         }
         function readChatCache() {
             try {
-                var raw = window.sessionStorage.getItem(chatCacheKey);
+                var raw = window.localStorage.getItem(chatCacheKey);
                 return raw ? JSON.parse(raw) : null;
             } catch (e) {
                 return null;
@@ -1369,14 +1370,14 @@
                 var messages = state.messages.filter(function(message) {
                     return Boolean(message) && !message.localNotice;
                 });
-                window.sessionStorage.setItem(chatCacheKey, JSON.stringify({
+                window.localStorage.setItem(chatCacheKey, JSON.stringify({
                     messages: messages,
                     eventCursorSeq: eventCursorSeq,
                     joinSeq: joinSeq,
                     hasJoinSeq: hasJoinSeq
                 }));
             } catch (e) {
-                // Chat cache is best-effort and only preserves this window session.
+                // Chat cache is best-effort and follows this device token.
             }
         }
         function restoreChatCache() {
@@ -1560,36 +1561,11 @@
             var text = String(value || '').trim();
             return (text ? text.charAt(0) : 'D').toUpperCase();
         }
-        var senderPalette = [
-            {bg: '#eef4f0', border: '#c2d9cc', text: '#2a5e4a'},
-            {bg: '#f0eef4', border: '#c8c2d9', text: '#4a2a5e'},
-            {bg: '#f4f0ee', border: '#d9cfc2', text: '#5e4a2a'},
-            {bg: '#eef1f4', border: '#c2cdd9', text: '#2a4a5e'},
-            {bg: '#f4eeef', border: '#d9c2c8', text: '#5e2a3e'},
-            {bg: '#eff0f4', border: '#c6c2d9', text: '#362a5e'},
-            {bg: '#f2f4ee', border: '#cdd9c2', text: '#4a5e2a'},
-            {bg: '#f4f1ee', border: '#d9cdc2', text: '#5e3e2a'},
-            {bg: '#eef4f2', border: '#c2d9d1', text: '#2a5e52'},
-            {bg: '#f4eef2', border: '#d9c2d1', text: '#5e2a4a'},
-            {bg: '#f0f4ee', border: '#c8d9c2', text: '#3e5e2a'},
-            {bg: '#f4f2ee', border: '#d9cfc2', text: '#5e3a2a'}
-        ];
-        var senderColorMap = {};
-        function senderColor(sender) {
-            if (!sender || sender === 'system') { return null; }
-            if (senderColorMap[sender]) { return senderColorMap[sender]; }
-            var hash = 0;
-            String(sender).split('').forEach(function(ch) {
-                hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
-            });
-            var index = Math.abs(hash) % senderPalette.length;
-            var color = senderPalette[index];
-            senderColorMap[sender] = color;
-            return color;
-        }
         function validThemeID(theme) {
             return /^theme-(0|[1-9]\d{0,9})$/.test(String(theme || ''));
         }
+
+        // Color
         function themeIndex(theme) {
             if (!validThemeID(theme)) { return -1; }
             return parseInt(String(theme).replace('theme-', ''), 10);
@@ -1672,6 +1648,7 @@
                 parseInt(result[2], 16) + ',' + 
                 parseInt(result[3], 16) : null;
         } 
+
         function applyDeviceTheme() {
             var idx = themeIndex(state.theme);
             if (idx < 0) { return; }

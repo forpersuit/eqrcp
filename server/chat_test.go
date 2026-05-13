@@ -180,6 +180,15 @@ func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {
 	}
 }
 
+func TestChatPageKeepsDeviceCacheAcrossRescans(t *testing.T) {
+	if !strings.Contains(pages.Chat, "var joinToken = currentJoinToken()") {
+		t.Fatal("chat page should create a per-scan join token")
+	}
+	if !strings.Contains(pages.Chat, "window.localStorage.getItem(chatCacheKey)") || !strings.Contains(pages.Chat, "window.localStorage.setItem(chatCacheKey") {
+		t.Fatal("chat cache should follow the stable device token across rescans")
+	}
+}
+
 func TestChatPageStopsSessionQRPulse(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function stopSessionQRPulse()") {
 		t.Fatal("chat page should define a helper to stop the session QR pulse")
