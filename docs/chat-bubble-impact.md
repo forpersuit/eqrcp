@@ -2,7 +2,7 @@
 
 > 日期：2026-05-10  
 > 基于：[`docs/chat-bubble-analysis.md`](chat-bubble-analysis.md)  
-> 代码入口：[`pages/pages.go`](pages/pages.go) — Chat 页面 637–3003 行
+> 代码入口：[`pages/pages.go`](../pages/pages.go) 通过 [`pages/chat.tmpl.html`](../pages/chat.tmpl.html) 提供 Chat 页面
 
 ---
 
@@ -26,7 +26,7 @@
 
 ### 1. 修复发送者颜色覆盖附件边框 (6.3)
 
-**当前代码**：[`pages.go:2072`](pages/pages.go:2072)
+**当前代码**：[`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
 
 ```js
 if (sc2 && !isSystem) {
@@ -64,7 +64,7 @@ if (sc2 && !isSystem) {
 
 ### 2. 引入 .bubble-content 消除循环宽度依赖 (6.1)
 
-**当前代码**：[`pages.go:1121-1130`](pages/pages.go:1121)
+**当前代码**：[`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
 
 ```css
 .message.attachment-message .bubble {
@@ -108,7 +108,7 @@ if (sc2 && !isSystem) {
 
 ### 3. 支持文字+附件混合消息 (6.5)
 
-**当前代码**：[`pages.go:2083-2090`](pages/pages.go:2083)
+**当前代码**：[`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
 
 ```js
 } else if (message.type === 'text' || isSystem) {
@@ -149,7 +149,7 @@ if (sc2 && !isSystem) {
 
 ### 4. 用 CSS 自定义属性统一 max-width (6.2)
 
-**当前代码**：5 处 max-width 散落在不同断点
+**当前代码**：5 处 max-width 散落在不同断点，位于 [`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
 
 | 位置 | 选择器 | max-width |
 |------|--------|-----------|
@@ -196,7 +196,7 @@ if (sc2 && !isSystem) {
 
 ### 5. 移除 :has() 冗余选择器 (6.7)
 
-**当前代码**：[`pages.go:1121-1144`](pages/pages.go:1121)
+**当前代码**：[`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
 
 ```css
 .message.attachment-message .bubble,
@@ -207,7 +207,7 @@ if (sc2 && !isSystem) {
 
 #### 当前问题
 
-- `.attachment-message` class 由 JS 在 [`pages.go:2033`](pages/pages.go:2033) 添加，已保证正确性
+- `.attachment-message` class 由 JS 在 [`pages/chat.tmpl.html`](../pages/chat.tmpl.html) 中添加，已保证正确性
 - `:has()` 作为防御性回退，但增加了选择器特异性（两个选择器合并声明 = 特异性取两者中较高的）
 - `:has()` 在 Firefox < 121（2023年12月前）不支持
 - 合并声明使得覆盖样式时需要匹配更高的特异性

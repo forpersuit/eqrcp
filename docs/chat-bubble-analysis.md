@@ -1,6 +1,6 @@
 # Chat Bubble Implementation Analysis
 
-> File: [`pages/pages.go`](pages/pages.go) — Chat page spans lines 637–3003  
+> File: [`pages/pages.go`](../pages/pages.go) and [`pages/*.tmpl.html`](../pages)  
 > Date: 2026-05-10
 
 ---
@@ -20,11 +20,21 @@
 
 ### 1.1 File Structure
 
-The entire Chat page — HTML, CSS, and JavaScript — lives in a single Go string variable [`var Chat`](pages/pages.go:637) spanning ~2366 lines. The monolithic structure makes it difficult to:
+The chat page is now split into normal template files under `pages/` and embedded back into Go with `//go:embed`.
+
+- [`pages/pages.go`](../pages/pages.go) exposes the API surface
+- [`pages/chat.tmpl.html`](../pages/chat.tmpl.html)
+- [`pages/qr.tmpl.html`](../pages/qr.tmpl.html)
+- [`pages/upload.tmpl.html`](../pages/upload.tmpl.html)
+- [`pages/done.tmpl.html`](../pages/done.tmpl.html)
+
+This keeps runtime behavior unchanged while letting the IDE parse HTML, CSS, JS, and Go template markers as real source. The monolithic structure has moved out of Go, which makes it much easier to:
 
 - Navigate between related CSS rules and the JS that depends on them
 - Test individual components in isolation
 - Reason about CSS specificity conflicts
+
+The line references below are kept as historical anchors from the original review; the actual source now lives in the extracted template files.
 
 ### 1.2 DOM Hierarchy
 
@@ -300,7 +310,7 @@ Width flows strictly top-down. No circular `fit-content` ↔ `100%` dependency.
 
 ### 4.1 Should Bubble Code Be Extracted?
 
-**Yes**, but incrementally. The 3652-line file is well beyond maintainable for a single Go string literal. However, the Go `embed` package or `html/template` are better mechanisms than manual string concatenation.
+**Already done at the page level.** The chat page now lives in `pages/chat.tmpl.html` and is embedded from `pages/pages.go`, which solves the IDE visibility problem without changing runtime behavior.
 
 **Recommended extraction strategy:**
 
@@ -337,10 +347,11 @@ Step-by-step:
 
 ### 4.2 Migration Safety
 
-- Keep the `var Chat` string as the fallback during migration
-- Add a build tag or environment variable to switch between embedded and inline
+The page-level migration is complete. If we keep splitting `chat.tmpl.html` into smaller pieces, use the same discipline:
+
 - Run `go test ./...` after each extraction step
-- Visual regression: compare screenshots before/after at each breakpoint
+- Compare screenshots before/after at each breakpoint
+- Keep Go template variables stable while moving markup around
 
 ---
 
@@ -475,15 +486,14 @@ if (message.recalled) {
 
 ### 6.6 Extract CSS/JS into Separate Files
 
-**Problem**: 3652-line monolithic Go string.  
-**Fix**: Use `//go:embed` to separate concerns.
+**Status**: the top-level HTML templates are already extracted. If we still want more IDE help, the next step is splitting `chat.tmpl.html` into smaller embedded partials.
 
-See [Section 4.1](#41-should-bubble-code-be-extracted) for the full extraction plan. Priority order:
+Priority order:
 
-1. Extract CSS → `pages/chat/style.css`
-2. Extract JS → `pages/chat/chat.js`
-3. Extract HTML → `pages/chat/markup.html`
-4. Create `pages/embed.go` with `//go:embed` directives
+1. Extract reusable CSS blocks into `pages/chat/style.css`
+2. Extract the large JS block into `pages/chat/chat.js`
+3. Keep `pages/chat.tmpl.html` as a thin page shell
+4. Preserve `pages/pages.go` as the embedded API surface
 
 ### 6.7 Remove `:has()` Redundancy
 
@@ -520,6 +530,19 @@ If `:has()` is desired for robustness, keep it but in a **separate rule** with t
 
 ---
 
+## 7. Current Optimization Suggestions
+
+These are the improvements that still look worthwhile after the template split:
+
+1. Introduce `.bubble-content` so `.bubble` stays a pure decorator. This is the cleanest fix for the width and padding coupling.
+2. Move sender-border coloring to text-only bubbles, so attachment borders keep their own palette.
+3. Normalize attachment width with one CSS variable instead of repeating breakpoint-specific hardcoded values.
+4. Let the server provide media dimensions when it can, so image and video cards do not jump after load.
+5. Allow text plus attachment in one message payload if the chat model ever needs captions or notes.
+6. Remove the redundant `:has()` fallback once we are happy that `.attachment-message` is reliably added by JS.
+
+---
+
 ## Summary of Issues by Severity
 
 | # | Issue | Severity | Effort | Section |
@@ -534,7 +557,7 @@ If `:has()` is desired for robustness, keep it but in a **separate rule** with t
 | 8 | Inconsistent `--media-width` clamping | 🟢 Low | Low | 2.6 |
 | 9 | Grid/flexbox nesting mismatch | 🟢 Low | Low | 2.7 |
 | 10 | Mobile overrides duplication | 🟢 Low | Low | 2.8, 6.8 |
-| 11 | Monolithic 3652-line file | 🔵 Structural | Medium | 2.1, 4.1, 6.6 |
+| 11 | Monolithic 3652-line file | ✅ Resolved via `//go:embed` | Done | 1.1, 4.1 |
 
 ---
 
