@@ -235,6 +235,15 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottom(incoming[incoming.length - 1]") {
 		t.Fatal("duplicate local send echoes should focus without rerendering")
 	}
+	if !strings.Contains(pages.Chat, "var followLatest = true") || !strings.Contains(pages.Chat, "function setFollowLatest(value)") {
+		t.Fatal("chat scroll behavior should track the user's follow-latest intent explicitly")
+	}
+	if !strings.Contains(pages.Chat, "if (!followLatest && !forceScroll)") || !strings.Contains(pages.Chat, "if (followLatest || forceScroll)") {
+		t.Fatal("incoming messages should respect the follow-latest state")
+	}
+	if !strings.Contains(pages.Chat, "messagesEl.addEventListener('wheel', noteUserScrollIntent") || !strings.Contains(pages.Chat, "messagesEl.addEventListener('touchstart', noteUserScrollIntent") {
+		t.Fatal("manual history scrolling should disable follow-latest tracking")
+	}
 	if !strings.Contains(pages.Chat, "function captureMessageFocus()") || !strings.Contains(pages.Chat, "function restoreMessageFocus(focusState)") {
 		t.Fatal("passive message refreshes should preserve message-local focus")
 	}

@@ -1244,6 +1244,9 @@
         var eventCursorSeq = 0;
         var chatConnectionLost = false;
         var senderColorMap = {};
+        var followLatest = true;
+        var programmaticScroll = false;
+        var programmaticScrollTimer = null;
 
         function currentSender() {
             var params = new URLSearchParams(window.location.search);
@@ -1814,6 +1817,7 @@
                 image.alt = message.fileName || 'image';
                 image.addEventListener('load', function() {
                     applyMediaAspect(wrap, image.naturalWidth, image.naturalHeight);
+                    keepLatestVisible();
                 });
                 open.appendChild(image);
                 wrap.appendChild(open);
@@ -1829,6 +1833,7 @@
                 video.preload = 'metadata';
                 video.addEventListener('loadedmetadata', function() {
                     applyMediaAspect(wrap, video.videoWidth, video.videoHeight);
+                    keepLatestVisible();
                 });
                 frame.appendChild(video);
                 wrap.appendChild(frame);
@@ -2049,8 +2054,10 @@
             }
         }
         function mergeMessages(incoming, forceScroll) {
-            var atBottom = isNearBottom();
             if (!incoming || !incoming.length) { return; }
+            if (forceScroll) {
+                setFollowLatest(true);
+            }
             incoming.forEach(function(message) {
                 // When our own message comes back with a server-assigned theme,
                 // adopt it as our identity colour.  This handles both the
@@ -2090,28 +2097,48 @@
             if (fresh.length) {
                 state.messages = state.messages.concat(fresh);
                 notifyAutoSaveCandidates(fresh);
-                if (!atBottom && !forceScroll) {
+                if (!followLatest && !forceScroll) {
                     unreadSinceScroll += fresh.length;
-                    scrollArrowBadge.textContent = unreadSinceScroll > 99 ? '99+' : String(unreadSinceScroll);
+                    updateScrollArrow();
                 }
             }
             renderMessages();
             saveChatCache();
             var focusID = forceScroll && incoming.length ? incoming[incoming.length - 1].id || '' : '';
-            if (forceScroll || atBottom) { scrollMessagesToBottom(focusID); }
+            if (followLatest || forceScroll) { scrollMessagesToBottom(focusID); }
         }
         function setMessages(messages) {
-            var atBottom = isNearBottom();
             state.messages = messages || [];
             renderMessages();
             saveChatCache();
-            if (atBottom) { scrollMessagesToBottom(); }
+            if (followLatest) { scrollMessagesToBottom(); }
             notifyAutoSaveCandidates(state.messages);
         }
         function isNearBottom() {
             return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
         }
+        function setFollowLatest(value) {
+            followLatest = Boolean(value);
+            if (followLatest) {
+                unreadSinceScroll = 0;
+                scrollArrowBadge.textContent = '';
+            }
+            updateScrollArrow();
+        }
+        function markProgrammaticScroll() {
+            programmaticScroll = true;
+            if (programmaticScrollTimer) {
+                window.clearTimeout(programmaticScrollTimer);
+            }
+            programmaticScrollTimer = window.setTimeout(function() {
+                programmaticScroll = false;
+                if (isNearBottom()) {
+                    setFollowLatest(true);
+                }
+            }, 800);
+        }
         function scrollMessagesToBottom(focusMessageID) {
+            markProgrammaticScroll();
             var target = focusMessageID ? messagesEl.querySelector('[data-message-id="' + cssEscape(focusMessageID) + '"]') : null;
             if (target) {
                 target.focus({preventScroll: true});
@@ -2120,17 +2147,36 @@
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
+        function keepLatestVisible() {
+            if (followLatest) {
+                scrollMessagesToBottom();
+            }
+        }
+        function noteUserScrollIntent() {
+            programmaticScroll = false;
+        }
+        function handleMessageScroll() {
+            if (isNearBottom()) {
+                setFollowLatest(true);
+                return;
+            }
+            if (!programmaticScroll) {
+                setFollowLatest(false);
+                return;
+            }
+            updateScrollArrow();
+        }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
             return String(value || '').replace(/["\\]/g, '\\$&');
         }
         function updateScrollArrow() {
-            if (isNearBottom()) {
+            if (followLatest || isNearBottom()) {
                 scrollArrow.classList.remove('visible');
-                unreadSinceScroll = 0;
                 scrollArrowBadge.textContent = '';
             } else {
                 scrollArrow.classList.add('visible');
+                scrollArrowBadge.textContent = unreadSinceScroll > 99 ? '99+' : (unreadSinceScroll > 0 ? String(unreadSinceScroll) : '');
             }
         }
         function loadMessages() {
@@ -2457,12 +2503,13 @@
         previewImage.addEventListener('pointermove', previewPointerMove);
         previewImage.addEventListener('pointerup', previewPointerUp);
         previewImage.addEventListener('pointercancel', previewPointerUp);
-        messagesEl.addEventListener('scroll', function() {
-            updateScrollArrow();
-        }, {passive: true});
+        messagesEl.addEventListener('wheel', noteUserScrollIntent, {passive: true});
+        messagesEl.addEventListener('touchstart', noteUserScrollIntent, {passive: true});
+        messagesEl.addEventListener('pointerdown', noteUserScrollIntent, {passive: true});
+        messagesEl.addEventListener('scroll', handleMessageScroll, {passive: true});
         scrollArrow.addEventListener('click', function() {
-            unreadSinceScroll = 0;
-            scrollArrowBadge.textContent = '';
+            setFollowLatest(true);
+            markProgrammaticScroll();
             messagesEl.scrollTo({top: messagesEl.scrollHeight, behavior: 'smooth'});
         });
         window.addEventListener('pagehide', saveDraft);
@@ -2499,7 +2546,7 @@
         restoreDraft();
         restoreChatCache();
         renderMessages();
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        scrollMessagesToBottom();
         resizeComposer();
         updateComposerState();
         if (shareSessionButton.classList.contains('qr-breathe')) {
