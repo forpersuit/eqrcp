@@ -211,6 +211,9 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function renderFooterActions(message)") {
 		t.Fatal("message actions should use a shared renderFooterActions helper")
 	}
+	if !strings.Contains(pages.Chat, "var color = themeColor(device.theme)") || !strings.Contains(pages.Chat, "border-color:' + color.border") {
+		t.Fatal("device roster should render each device with its assigned theme color")
+	}
 	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
 		t.Fatal("only text messages should expose copy actions")
 	}

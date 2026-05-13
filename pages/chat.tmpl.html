@@ -167,6 +167,7 @@
         }
         .device-row-lite svg {
             background: var(--wash);
+            border: 1px solid transparent;
             border-radius: 999px;
             color: var(--accent-strong);
             fill: none;
@@ -1441,7 +1442,9 @@
             deviceRoster.innerHTML = devices.length ? devices.map(function(device) {
                 var label = cleanSenderName(device.label || 'Guest');
                 var self = label === state.sender ? 'This device' : 'Connected';
-                return '<div class="device-row-lite roster-row"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
+                var color = themeColor(device.theme);
+                var avatarStyle = color ? ' style="background:' + color.bg + ';border-color:' + color.border + ';color:' + color.text + ';"' : '';
+                return '<div class="device-row-lite roster-row"><svg viewBox="0 0 24 24" aria-hidden="true"' + avatarStyle + '><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
             }).join('') : '<div class="device-empty">No active device connection.</div>';
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
