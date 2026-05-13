@@ -1,0 +1,140 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>eqrcp</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #f4f7f6;
+            color: #15221f;
+        }
+
+        main {
+            width: min(100%, 720px);
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+            color: #0f6b55;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .status-mark {
+            display: inline-grid;
+            place-items: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: #0f8a68;
+            color: #fff;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 32px;
+            line-height: 1.15;
+            letter-spacing: 0;
+        }
+
+        .summary {
+            margin: 0 0 26px;
+            color: #465653;
+            font-size: 17px;
+            line-height: 1.5;
+        }
+
+        .section-title {
+            margin: 0 0 12px;
+            color: #263532;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .file-list {
+            display: grid;
+            gap: 10px;
+            margin: 0 0 24px;
+            padding: 0;
+            list-style: none;
+        }
+
+        .file-list li,
+        .file-fallback {
+            overflow-wrap: anywhere;
+            border: 1px solid #d8e2df;
+            border-radius: 8px;
+            background: #fff;
+            padding: 13px 14px;
+            color: #15221f;
+            font-size: 15px;
+            line-height: 1.45;
+            box-shadow: 0 1px 2px rgba(21, 34, 31, 0.05);
+        }
+
+        .file-fallback {
+            margin: 0 0 24px;
+        }
+
+        .hint {
+            margin: 0;
+            color: #647470;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 420px) {
+            main {
+                padding: 24px 14px 34px;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="status"><span class="status-mark">OK</span> Transfer complete</div>
+        <h1>Upload complete</h1>
+        {{if eq .Count 1}}
+        <p class="summary">1 file was sent to this device.</p>
+        {{else}}
+        <p class="summary">{{.Count}} files were sent to this device.</p>
+        {{end}}
+
+        {{if .Files}}
+        <p class="section-title">Saved files</p>
+        <ul class="file-list">
+            {{range .Files}}<li>{{.}}</li>{{end}}
+        </ul>
+        {{else if .File}}
+        <p class="section-title">Saved file</p>
+        <p class="file-fallback">{{.File}}</p>
+        {{end}}
+
+        <p class="hint">You can close this page now.</p>
+    </main>
+</body>
+</html>
