@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"math/big"
 	"mime"
 	"net/http"
 	"net/url"
@@ -37,7 +38,6 @@ type chatSession struct {
 	subscribers     map[chan struct{}]struct{}
 	clients         map[string]chatClient
 	clientThemes    map[string]string
-	nextTheme       int
 	nextID          int64
 	dir             string
 	attachmentRoute string
@@ -114,7 +114,6 @@ func (s *Server) Chat() error {
 		subscribers:     map[chan struct{}]struct{}{},
 		clients:         map[string]chatClient{},
 		clientThemes:    map[string]string{},
-		nextTheme:       1,
 		dir:             dir,
 		attachmentRoute: attachmentsRoute,
 		startedAt:       time.Now(),
@@ -622,10 +621,6 @@ func (session *chatSession) chatThemeForClientLocked(token string, label string,
 	if theme := session.clientThemes[client]; validChatTheme(theme) {
 		return theme
 	}
-	if validChatTheme(preferredTheme) && preferredTheme != defaultChatThemeID && !session.themeInUseByOtherClientLocked(client, preferredTheme) {
-		session.clientThemes[client] = preferredTheme
-		return preferredTheme
-	}
 	theme := session.nextAvailableChatThemeLocked(client)
 	session.clientThemes[client] = theme
 	return theme
@@ -642,26 +637,23 @@ func (session *chatSession) isDesktopChatClient(token string, label string, peer
 }
 
 func (session *chatSession) nextAvailableChatThemeLocked(client string) string {
-	if session.nextTheme <= 0 {
-		session.nextTheme = 1
-	}
-	for tries := 0; tries < chatThemeCount-1; tries++ {
-		index := session.nextTheme
-		session.nextTheme++
-		if session.nextTheme >= chatThemeCount {
-			session.nextTheme = 1
-		}
+	available := make([]string, 0, chatThemeCount-1)
+	for index := 1; index < chatThemeCount; index++ {
 		theme := fmt.Sprintf("theme-%d", index)
 		if !session.themeInUseByOtherClientLocked(client, theme) {
-			return theme
+			available = append(available, theme)
 		}
 	}
-	index := session.nextTheme
-	session.nextTheme++
-	if session.nextTheme >= chatThemeCount {
-		session.nextTheme = 1
+	if len(available) == 0 {
+		for index := 1; index < chatThemeCount; index++ {
+			available = append(available, fmt.Sprintf("theme-%d", index))
+		}
 	}
-	return fmt.Sprintf("theme-%d", index)
+	index, err := rand.Int(rand.Reader, big.NewInt(int64(len(available))))
+	if err != nil {
+		return available[int(time.Now().UnixNano()%int64(len(available)))]
+	}
+	return available[int(index.Int64())]
 }
 
 func (session *chatSession) themeInUseByOtherClientLocked(client string, theme string) bool {

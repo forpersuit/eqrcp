@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"mime/multipart"
 	"net/http"
@@ -87,7 +88,6 @@ func TestChatThemesAreAssignedPerClientToken(t *testing.T) {
 		subscribers:  map[chan struct{}]struct{}{},
 		clients:      map[string]chatClient{},
 		clientThemes: map[string]string{},
-		nextTheme:    1,
 		hostToken:    "host-token",
 		startedAt:    time.Now(),
 		state:        "waiting",
@@ -104,16 +104,16 @@ func TestChatThemesAreAssignedPerClientToken(t *testing.T) {
 	if desktopMessage.Theme != "theme-0" {
 		t.Fatalf("desktop theme = %q, want default theme-0", desktopMessage.Theme)
 	}
-	if mobileMessage.Theme != "theme-5" {
-		t.Fatalf("mobile theme = %q, want preferred theme-5", mobileMessage.Theme)
+	if mobileMessage.Theme == "" || mobileMessage.Theme == "theme-0" {
+		t.Fatalf("mobile theme = %q, want non-desktop theme", mobileMessage.Theme)
 	}
 	devices := session.deviceRosterLocked()
 	var sawMobile bool
 	for _, device := range devices {
 		if device.Label == "Phone" {
 			sawMobile = true
-			if device.Theme != "theme-5" {
-				t.Fatalf("mobile device theme = %q, want theme-5", device.Theme)
+			if device.Theme != mobileMessage.Theme {
+				t.Fatalf("mobile device theme = %q, want message theme %q", device.Theme, mobileMessage.Theme)
 			}
 		}
 	}
@@ -127,7 +127,6 @@ func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {
 		attachments:  map[string]chatAttachment{},
 		subscribers:  map[chan struct{}]struct{}{},
 		clientThemes: map[string]string{},
-		nextTheme:    1,
 		startedAt:    time.Now(),
 	}
 
@@ -136,6 +135,26 @@ func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {
 
 	if first.Theme == "" || second.Theme == "" || first.Theme != second.Theme {
 		t.Fatalf("themes = %q, %q; want same non-empty theme for one token", first.Theme, second.Theme)
+	}
+}
+
+func TestChatThemeIgnoresPreferredThemeForNewClient(t *testing.T) {
+	session := &chatSession{
+		attachments:  map[string]chatAttachment{},
+		subscribers:  map[chan struct{}]struct{}{},
+		clientThemes: map[string]string{},
+		startedAt:    time.Now(),
+	}
+	for index := 1; index < chatThemeCount; index++ {
+		if index == 7 {
+			continue
+		}
+		session.clientThemes[fmt.Sprintf("client-%d", index)] = fmt.Sprintf("theme-%d", index)
+	}
+
+	theme := session.chatThemeForClientLocked("mobile-token", "Phone", "", "theme-5")
+	if theme != "theme-7" {
+		t.Fatalf("theme = %q, want only available random candidate theme-7", theme)
 	}
 }
 

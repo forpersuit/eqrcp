@@ -1310,12 +1310,8 @@
         }
         function currentClientTheme(token) {
             if (currentPeer() === 'desktop') { return 'theme-0'; }
-            var key = 'eqrcp-chat-theme:' + window.location.pathname + ':' + token;
-            var saved = window.sessionStorage.getItem(key);
-            if (validThemeID(saved)) { return saved; }
-            // No saved theme yet. The server will assign one on first health/SSE
-            // request. In the meantime, use senderColor as a preview so that
-            // the UI is not blank before the server responds.
+            // The server assigns a fresh random theme when this client joins.
+            // Do not reuse a browser-stored theme across chat sessions.
             return '';
         }
         function readDraft() {
@@ -1422,7 +1418,6 @@
                 // on first connect and stays fixed for the session (per-token).
                 if (data.theme !== state.theme) {
                     state.theme = data.theme;
-                    rememberClientTheme(data.theme);
                     applyDeviceTheme();
                 }
             }
@@ -1440,14 +1435,6 @@
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
                 setConnectionState(false, 'Session ' + data.state + '.');
-            }
-        }
-        function rememberClientTheme(theme) {
-            if (currentPeer() === 'desktop' || !validThemeID(theme)) { return; }
-            try {
-                window.sessionStorage.setItem('eqrcp-chat-theme:' + window.location.pathname + ':' + state.token, theme);
-            } catch (e) {
-                // Theme persistence is best-effort for the current scanned page.
             }
         }
         function escapeHTML(value) {
