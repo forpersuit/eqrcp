@@ -1193,6 +1193,7 @@
     </main>
     <script>
         var clientToken = currentClientToken();
+        var joinToken = currentJoinToken();
         var state = {
             messages: [],
             sender: currentSender(),
@@ -1294,8 +1295,7 @@
                 return params.get('hostToken');
             }
             var key = 'eqrcp-chat-token:' + window.location.pathname;
-            var storage = params.get('peer') === 'desktop' ? window.localStorage : window.sessionStorage;
-            var saved = storage.getItem(key);
+            var saved = window.localStorage.getItem(key);
             if (saved) { return saved; }
             var token = '';
             if (window.crypto && window.crypto.getRandomValues) {
@@ -1305,8 +1305,18 @@
             } else {
                 token = String(Date.now()) + '-' + String(Math.random()).slice(2);
             }
-            storage.setItem(key, token);
+            window.localStorage.setItem(key, token);
             return token;
+        }
+        function currentJoinToken() {
+            var token = '';
+            if (window.crypto && window.crypto.getRandomValues) {
+                var data = new Uint8Array(8);
+                window.crypto.getRandomValues(data);
+                Array.prototype.forEach.call(data, function(v) { token += ('0' + v.toString(16)).slice(-2); });
+                return token;
+            }
+            return String(Date.now()) + '-' + String(Math.random()).slice(2);
         }
         function currentClientTheme(token) {
             if (currentPeer() === 'desktop') { return 'theme-0'; }
@@ -1415,7 +1425,7 @@
             if (data && validThemeID(data.theme)) {
                 // Always adopt the server-assigned theme – this is the single
                 // source of truth for the device's identity colour.  It is set
-                // on first connect and stays fixed for the session (per-token).
+                // on first connect and stays fixed for this page join.
                 if (data.theme !== state.theme) {
                     state.theme = data.theme;
                     applyDeviceTheme();
@@ -1443,7 +1453,7 @@
             });
         }
         function refreshChatStatus() {
-            return fetch(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))), {cache: 'no-store'})
+            return fetch(withClientJoin(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}')))), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
                 .then(function(data) {
                     updateChatStatus(data);
@@ -1578,7 +1588,7 @@
             return color;
         }
         function validThemeID(theme) {
-            return /^theme-([0-9]|1[01])$/.test(String(theme || ''));
+            return /^theme-(0|[1-9]\d{0,9})$/.test(String(theme || ''));
         }
         function themeIndex(theme) {
             if (!validThemeID(theme)) { return -1; }
@@ -1602,7 +1612,7 @@
                 r = 0; g = x; b = c;
             } else if (240 <= h && h < 300) {
                 r = x; g = 0; b = c;
-            } else if (300 <= h < 360) {
+            } else if (300 <= h && h < 360) {
                 r = c; g = 0; b = x;
             }
             
@@ -1612,34 +1622,35 @@
             
             return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
         }
-        
+        function seededUnit(seed, salt) {
+            var x = Math.sin(seed * 12.9898 + salt * 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
         function generateSenderColor(themeIndex) {
             // theme-0 固定使用原来的绿色（桌面端）
             if (themeIndex === 0) {
                 return {
-                    bg: '#eef4f0', 
-                    border: '#c2d9cc', 
-                    text: '#2a5e4a'
+                    bg: '#edf7f1',
+                    border: '#2f9e73',
+                    text: '#14533f'
                 };
             }
             
-            // 其他主题动态计算，无数量限制
-            const hue = (themeIndex * 137.5) % 360; // 黄金角度分布
-            const saturation = 45 + (themeIndex % 3) * 10; // 45%, 55%, 65% 变化
-            const lightness = 85 + (themeIndex % 2) * 5;    // 85%, 90% 变化
+            // 其他主题由服务端随机 seed 决定，不限制在固定调色板内。
+            const hue = seededUnit(themeIndex, 1) * 360;
+            const saturation = 50 + seededUnit(themeIndex, 2) * 18;
             
             // 背景色：高明度、低饱和度
-            const bg = hslToHex(hue, 20, 92);
+            const bg = hslToHex(hue, 22, 93);
             
             // 边框色：中等饱和度、中等明度
-            const border = hslToHex(hue, saturation, 50);
+            const border = hslToHex(hue, saturation, 48);
             
             // 文字色：深色调
             const text = hslToHex(hue, saturation + 10, 25);
             
             return { bg, border, text };
         }
-        
         function themeColor(theme) {
             var index = themeIndex(theme);
             if (index < 0) { return null; }
@@ -2069,7 +2080,6 @@
                 if (message && message.sender === state.sender && validThemeID(message.theme)) {
                     if (message.theme !== state.theme) {
                         state.theme = message.theme;
-                        rememberClientTheme(message.theme);
                         applyDeviceTheme();
                     }
                 }
@@ -2208,7 +2218,7 @@
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({sender: state.sender, token: state.token, theme: state.theme, text: text})
+                body: JSON.stringify({sender: state.sender, token: state.token, theme: state.theme, join: joinToken, text: text})
             }).then(function(r) {
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
@@ -2341,6 +2351,7 @@
             data.append('sender', state.sender);
             data.append('token', state.token);
             data.append('theme', state.theme);
+            data.append('join', joinToken);
             Array.prototype.forEach.call(files, function(file) {
                 data.append('files', file, file.name || 'attachment');
             });
@@ -2493,12 +2504,11 @@
         // accent, bubbles, and avatar all use a consistent colour from the
         // very first paint – no senderColor fallback window.
         if (state.token && currentPeer() !== 'desktop') {
-            fetch(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))), {cache: 'no-store'})
+            fetch(withClientJoin(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}')))), {cache: 'no-store'})
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(data) {
                     if (data && validThemeID(data.theme) && data.theme !== state.theme) {
                         state.theme = data.theme;
-                        rememberClientTheme(data.theme);
                         applyDeviceTheme();
                         renderMessages();
                     }
@@ -2549,10 +2559,15 @@
             var sep = route.indexOf('?') === -1 ? '?' : '&';
             return route + sep + 'theme=' + encodeURIComponent(state.theme);
         }
+        function withClientJoin(route) {
+            if (!joinToken) { return route; }
+            var sep = route.indexOf('?') === -1 ? '?' : '&';
+            return route + sep + 'join=' + encodeURIComponent(joinToken);
+        }
 
         function connectSSE() {
             if (events) { events.close(); events = null; }
-            var route = withClientTheme(withClientPeer(withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}')));
+            var route = withClientJoin(withClientTheme(withClientPeer(withClientToken(eventCursorSeq > 0 ? withAfterSeq('{{.EventsRoute}}') : '{{.EventsRoute}}'))));
             route += (route.indexOf('?') === -1 ? '?' : '&') + 'label=' + encodeURIComponent(state.sender);
             events = new EventSource(route);
             events.onopen = function() {

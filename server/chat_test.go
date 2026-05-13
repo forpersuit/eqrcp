@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"image/png"
 	"mime/multipart"
 	"net/http"
@@ -60,8 +59,8 @@ func TestChatStatusHookTracksConnectedDevices(t *testing.T) {
 		},
 	}
 
-	desktopDone := session.registerClient("desktop-token", "Desktop", "desktop", "", "")
-	mobileDone := session.registerClient("mobile-token", "Phone", "", "", "")
+	desktopDone := session.registerClient("desktop-token", "Desktop", "desktop", "", "", "")
+	mobileDone := session.registerClient("mobile-token", "Phone", "", "", "join-1", "")
 	mobileDone()
 	desktopDone()
 
@@ -93,8 +92,8 @@ func TestChatThemesAreAssignedPerClientToken(t *testing.T) {
 		state:        "waiting",
 	}
 
-	desktopDone := session.registerClient("host-token", "Desktop", "desktop", "", "")
-	mobileDone := session.registerClient("mobile-token", "Phone", "", "theme-5", "")
+	desktopDone := session.registerClient("host-token", "Desktop", "desktop", "", "", "")
+	mobileDone := session.registerClient("mobile-token", "Phone", "", "theme-5", "join-1", "")
 	defer desktopDone()
 	defer mobileDone()
 
@@ -138,23 +137,34 @@ func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {
 	}
 }
 
-func TestChatThemeIgnoresPreferredThemeForNewClient(t *testing.T) {
+func TestChatThemeChangesForNewJoinWithoutChangingDeviceIdentity(t *testing.T) {
 	session := &chatSession{
-		attachments:  map[string]chatAttachment{},
-		subscribers:  map[chan struct{}]struct{}{},
-		clientThemes: map[string]string{},
-		startedAt:    time.Now(),
-	}
-	for index := 1; index < chatThemeCount; index++ {
-		if index == 7 {
-			continue
-		}
-		session.clientThemes[fmt.Sprintf("client-%d", index)] = fmt.Sprintf("theme-%d", index)
+		attachments:      map[string]chatAttachment{},
+		subscribers:      map[chan struct{}]struct{}{},
+		clients:          map[string]chatClient{},
+		clientThemes:     map[string]string{},
+		clientThemeJoins: map[string]string{},
+		startedAt:        time.Now(),
 	}
 
-	theme := session.chatThemeForClientLocked("mobile-token", "Phone", "", "theme-5")
-	if theme != "theme-7" {
-		t.Fatalf("theme = %q, want only available random candidate theme-7", theme)
+	firstDone := session.registerClient("mobile-token", "Phone", "", "theme-5", "join-1", "")
+	firstTheme := session.clientThemes["mobile-token"]
+	secondDone := session.registerClient("mobile-token", "Phone", "", firstTheme, "join-2", "")
+	secondTheme := session.clientThemes["mobile-token"]
+	defer firstDone()
+	defer secondDone()
+
+	if firstTheme == "" || firstTheme == "theme-0" {
+		t.Fatalf("first theme = %q, want non-desktop theme", firstTheme)
+	}
+	if secondTheme == "" || secondTheme == "theme-0" {
+		t.Fatalf("second theme = %q, want non-desktop theme", secondTheme)
+	}
+	if firstTheme == secondTheme {
+		t.Fatalf("themes = %q then %q, want new scan join to refresh the theme", firstTheme, secondTheme)
+	}
+	if len(session.clients) != 1 {
+		t.Fatalf("clients = %d, want one device identity for repeated scans", len(session.clients))
 	}
 }
 
