@@ -21,6 +21,7 @@
             --wash: #edf2eb;
             --bg: #f4f7f4;
             --message-actions-min-width: 58px;
+            --messages-bottom-space: clamp(16px, 2.2vh, 22px);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body {
@@ -180,17 +181,18 @@
             width: 26px;
         }
         .device-row-lite strong {
+            color: var(--device-text, inherit);
             display: block;
             font-size: 12px;
             line-height: 1.2;
         }
         .device-row-lite span {
-            color: var(--muted);
+            color: var(--device-muted, var(--muted));
             font-size: 11px;
         }
         .device-state {
             border-radius: 999px;
-            color: var(--accent-strong);
+            color: var(--device-text, var(--accent-strong));
             font-size: 11px;
             font-weight: 800;
             text-transform: uppercase;
@@ -253,8 +255,9 @@
             gap: 12px;
             overflow-x: hidden;
             overflow-y: auto;
-            padding: 18px 16px 28px;
+            padding: 18px 16px var(--messages-bottom-space);
             overscroll-behavior: contain;
+            scroll-padding-bottom: var(--messages-bottom-space);
             scrollbar-width: none;
             touch-action: pan-y;
             position: relative;
@@ -1044,7 +1047,11 @@
             }
             body { touch-action: pan-y; }
             .chat-head { position: sticky; top: 0; z-index: 2; }
-            .messages { gap: 12px; padding: 12px 12px 20px; }
+            .messages {
+                --messages-bottom-space: 16px;
+                gap: 12px;
+                padding: 12px 12px var(--messages-bottom-space);
+            }
             .composer { padding: 9px 10px 11px; padding-bottom: max(11px, env(safe-area-inset-bottom)); }
             .composer-shell { padding: 6px; }
             .compose-row { column-gap: 6px; grid-template-columns: 36px minmax(0,1fr) 36px; }
@@ -1163,7 +1170,7 @@
         <div class="session-backdrop" id="session-backdrop">
             <aside class="side" id="session-panel">
                 <div class="side-section-head">
-                    <h2>Session</h2>
+                    <h2>QR</h2>
                     <button class="icon-button" type="button" id="close-session" title="Close" aria-label="Close session panel">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
@@ -1414,7 +1421,7 @@
             renderMessages();
             saveChatCache();
             if (atBottom) {
-                messagesEl.scrollTop = messagesEl.scrollHeight;
+                scrollMessagesToBottom();
             }
         }
         function setOnline(online) {
@@ -1447,7 +1454,8 @@
                 var self = label === state.sender ? 'This device' : 'Connected';
                 var color = themeColor(device.theme);
                 var avatarStyle = color ? ' style="background:' + color.bg + ';border-color:' + color.border + ';color:' + color.text + ';"' : '';
-                return '<div class="device-row-lite roster-row"><svg viewBox="0 0 24 24" aria-hidden="true"' + avatarStyle + '><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
+                var rowStyle = color ? ' style="--device-text:' + color.text + ';--device-muted:' + color.text + 'cc;"' : '';
+                return '<div class="device-row-lite roster-row"' + rowStyle + '><svg viewBox="0 0 24 24" aria-hidden="true"' + avatarStyle + '><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><div><strong>' + escapeHTML(label) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></div>';
             }).join('') : '<div class="device-empty">No active device connection.</div>';
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
@@ -2142,10 +2150,14 @@
             var target = focusMessageID ? messagesEl.querySelector('[data-message-id="' + cssEscape(focusMessageID) + '"]') : null;
             if (target) {
                 target.focus({preventScroll: true});
-                target.scrollIntoView({block: 'end', inline: 'nearest'});
+                messagesEl.scrollTop = target.offsetTop + target.offsetHeight + messagesBottomSpace() - messagesEl.clientHeight;
                 return;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        function messagesBottomSpace() {
+            var style = window.getComputedStyle(messagesEl);
+            return parseFloat(style.paddingBottom || '0') || 0;
         }
         function keepLatestVisible() {
             if (followLatest) {
@@ -2472,11 +2484,11 @@
             var isCollapsed = collapsible.classList.contains('collapsed');
             if (isCollapsed) {
                 collapsible.classList.remove('collapsed');
-                toggle.textContent = 'Hide URL';
+                toggle.textContent = 'Show URL';
                 toggle.setAttribute('aria-expanded', 'true');
             } else {
                 collapsible.classList.add('collapsed');
-                toggle.textContent = 'Show URL';
+                toggle.textContent = 'Hide URL';
                 toggle.setAttribute('aria-expanded', 'false');
             }
         });

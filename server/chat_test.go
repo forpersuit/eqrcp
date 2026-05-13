@@ -214,6 +214,9 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "var color = themeColor(device.theme)") || !strings.Contains(pages.Chat, "border-color:' + color.border") {
 		t.Fatal("device roster should render each device with its assigned theme color")
 	}
+	if !strings.Contains(pages.Chat, "--device-text:' + color.text") || !strings.Contains(pages.Chat, "color: var(--device-text") {
+		t.Fatal("device roster text should use each device's assigned theme color")
+	}
 	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
 		t.Fatal("only text messages should expose copy actions")
 	}
@@ -229,8 +232,11 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function keepActionFocus(control)") || !strings.Contains(pages.Chat, "function restoreFocusAfterCopy(active)") {
 		t.Fatal("message action clicks should not steal composer focus")
 	}
-	if !strings.Contains(pages.Chat, "function mergeMessages(incoming, forceScroll)") || !strings.Contains(pages.Chat, "target.focus({preventScroll: true})") || !strings.Contains(pages.Chat, "scrollIntoView({block: 'end', inline: 'nearest'})") {
-		t.Fatal("locally sent messages should focus and scroll to the newest message")
+	if !strings.Contains(pages.Chat, "function mergeMessages(incoming, forceScroll)") || !strings.Contains(pages.Chat, "target.focus({preventScroll: true})") || !strings.Contains(pages.Chat, "messagesBottomSpace() - messagesEl.clientHeight") {
+		t.Fatal("locally sent messages should focus and scroll to the newest message with bottom spacing")
+	}
+	if !strings.Contains(pages.Chat, "--messages-bottom-space: clamp(16px, 2.2vh, 22px)") || !strings.Contains(pages.Chat, "scroll-padding-bottom: var(--messages-bottom-space)") {
+		t.Fatal("message history bottom spacing should be explicit and bounded")
 	}
 	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottom(incoming[incoming.length - 1]") {
 		t.Fatal("duplicate local send echoes should focus without rerendering")
