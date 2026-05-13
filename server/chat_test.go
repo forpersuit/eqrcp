@@ -226,6 +226,12 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "--message-actions-min-width: 58px") || !strings.Contains(pages.Chat, "min-width: var(--message-actions-min-width)") {
 		t.Fatal("message bubbles should be at least as wide as two action buttons")
 	}
+	if !strings.Contains(pages.Chat, "--message-action-bg") || !strings.Contains(pages.Chat, "footer.style.setProperty('--message-action-text', sc.text)") {
+		t.Fatal("message actions should inherit the sender theme color")
+	}
+	if !strings.Contains(pages.Chat, ".file-label:active") || !strings.Contains(pages.Chat, "-webkit-tap-highlight-color: transparent") {
+		t.Fatal("mobile attachment button taps should keep a rounded button feedback")
+	}
 	if !strings.Contains(pages.Chat, "function confirmThenRecall(button, message)") || !strings.Contains(pages.Chat, "confirm-delete") {
 		t.Fatal("delete actions should require a confirmation click")
 	}

@@ -995,6 +995,26 @@ dd {
     font-weight: 800;
 }
 
+.setting-label-with-help {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+    width: fit-content;
+}
+
+.setting-label-with-help span {
+    align-items: center;
+    background: var(--wash);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--accent-strong);
+    display: inline-flex;
+    font-size: 10px;
+    height: 16px;
+    justify-content: center;
+    width: 16px;
+}
+
 .settings-panel input,
 .settings-panel select,
 .feedback-panel select,

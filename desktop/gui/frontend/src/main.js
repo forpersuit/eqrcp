@@ -496,8 +496,8 @@ function renderSettingsPanel() {
         <div class="settings-panel">
             <label>Network interface</label>
             <select id="settings-interface">${options}</select>
-            <label>Port</label>
-            <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" />
+            <label class="setting-label-with-help" title="Port 0 chooses an available port automatically. Use a fixed port only when firewall rules, bookmarks, or device workflows need a stable address.">Port <span aria-hidden="true">?</span></label>
+            <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" title="Port 0 chooses an available port automatically. Fixed ports make the address predictable, but can fail if another app is already using that port." />
             <label class="check">
                 <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
                 Browser fallback
@@ -507,7 +507,7 @@ function renderSettingsPanel() {
                 <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
                 <label>Chat avatar</label>
                 <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="🙂 or AB" />
-                <span>Used as the desktop sender label and avatar when this app opens a chat session.</span>
+                <span>Used when this app opens a new desktop chat session. Existing chat pages keep the name and avatar they joined with.</span>
             </div>
             <label>Window close action</label>
             <select id="settings-close-behavior">

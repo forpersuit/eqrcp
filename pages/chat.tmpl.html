@@ -675,10 +675,10 @@
         }
         .bubble-action {
             align-items: center;
-            background: rgba(255,255,255,0.82);
-            border: 1px solid var(--line);
+            background: var(--message-action-bg, rgba(255,255,255,0.82));
+            border: 1px solid var(--message-action-border, var(--line));
             border-radius: 999px;
-            color: var(--accent-strong);
+            color: var(--message-action-text, var(--accent-strong));
             cursor: pointer;
             display: inline-flex;
             height: 26px;
@@ -844,8 +844,21 @@
             color: var(--accent-strong);
             cursor: pointer;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            transition: background 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
         }
         .file-label:hover { background: #e2ece4; }
+        .file-label:active {
+            background: #dce9df;
+            border-radius: 999px;
+            box-shadow: inset 0 1px 2px rgba(24,33,31,0.12);
+            transform: scale(0.94);
+        }
+        .file-label:focus-within {
+            box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 21,111,90), 0.14), inset 0 1px 0 rgba(255,255,255,0.75);
+            outline: none;
+        }
         .file-label svg,
         .send-button svg { fill: none; height: 17px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 17px; }
         .send-button {
@@ -876,6 +889,7 @@
             justify-content: space-between;
             margin-bottom: 4px;
         }
+        .side-section-head h1,
         .side-section-head h2 { font-size: 14px; font-weight: 700; }
         .side-note { color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
         .side-actions {
@@ -1170,7 +1184,7 @@
         <div class="session-backdrop" id="session-backdrop">
             <aside class="side" id="session-panel">
                 <div class="side-section-head">
-                    <h2>QR</h2>
+                    <h1>QR</h1>
                     <button class="icon-button" type="button" id="close-session" title="Close" aria-label="Close session panel">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
@@ -1185,7 +1199,7 @@
                         <button class="side-btn" type="button" id="copy-url">Copy</button>
                     </div>
                 </div>
-                <button class="session-toggle" type="button" id="session-toggle" aria-expanded="true">Hide URL</button>
+                <button class="session-toggle" type="button" id="session-toggle" aria-expanded="true">Show URL</button>
             </aside>
         </div>
         <div class="preview-backdrop" id="preview-backdrop">
@@ -1706,6 +1720,12 @@
             }
             var footer = document.createElement('div');
             footer.className = 'message-footer';
+            var sc = messageColor(message);
+            if (sc) {
+                footer.style.setProperty('--message-action-bg', sc.bg);
+                footer.style.setProperty('--message-action-border', sc.border);
+                footer.style.setProperty('--message-action-text', sc.text);
+            }
             if (hasMeta) {
                 var meta = document.createElement('div');
                 meta.className = 'message-footer-meta';
@@ -2507,11 +2527,11 @@
             var isCollapsed = collapsible.classList.contains('collapsed');
             if (isCollapsed) {
                 collapsible.classList.remove('collapsed');
-                toggle.textContent = 'Show URL';
+                toggle.textContent = 'Hide URL';
                 toggle.setAttribute('aria-expanded', 'true');
             } else {
                 collapsible.classList.add('collapsed');
-                toggle.textContent = 'Hide URL';
+                toggle.textContent = 'Show URL';
                 toggle.setAttribute('aria-expanded', 'false');
             }
         });
