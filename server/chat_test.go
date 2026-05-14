@@ -222,21 +222,29 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 	for _, want := range []string{
 		"--chat-viewport-height: 100vh",
 		"--chat-viewport-height: 100dvh",
-		"--chat-viewport-offset-top: 0px",
 		"height: var(--chat-viewport-height)",
 		"position: fixed",
-		"transform: translateY(var(--chat-viewport-offset-top))",
+		"touch-action: none",
 		"function measuredViewportHeight()",
-		"function measuredViewportOffsetTop()",
 		"window.visualViewport",
-		"root.style.setProperty('--chat-viewport-height'",
-		"root.style.setProperty('--chat-viewport-offset-top'",
+		"document.documentElement.style.setProperty('--chat-viewport-height'",
 		"window.visualViewport.addEventListener('resize', handleViewportChange)",
-		"window.visualViewport.addEventListener('scroll', handleViewportChange)",
+		"function preventOuterTouchMove(event)",
+		"document.addEventListener('touchmove', preventOuterTouchMove, {passive: false})",
 		"var viewport = measuredViewportHeight()",
 	} {
 		if !strings.Contains(pages.Chat, want) {
 			t.Fatalf("chat page should contain %q", want)
+		}
+	}
+	for _, removed := range []string{
+		"transform: translateY(var(--chat-viewport-offset-top))",
+		"function measuredViewportOffsetTop()",
+		"window.visualViewport.addEventListener('scroll', handleViewportChange)",
+		"window.scrollTo(0, 0)",
+	} {
+		if strings.Contains(pages.Chat, removed) {
+			t.Fatalf("chat page should not contain %q", removed)
 		}
 	}
 }
