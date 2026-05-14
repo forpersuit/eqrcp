@@ -21,6 +21,7 @@
             --wash: #edf2eb;
             --bg: #f4f7f4;
             --chat-viewport-height: 100vh;
+            --chat-viewport-offset-top: 0px;
             --message-actions-min-width: 58px;
             --messages-bottom-space: clamp(16px, 2.2vh, 22px);
         }
@@ -1090,19 +1091,19 @@
         }
         /* ── Mobile ── */
         @media (max-width: 820px) {
-            html,
-            body {
-                height: var(--chat-viewport-height);
-                min-height: var(--chat-viewport-height);
-                overflow: hidden;
-            }
             main {
                 display: grid;
                 gap: 0;
                 height: var(--chat-viewport-height);
-                min-height: var(--chat-viewport-height);
+                left: 0;
+                min-height: 0;
                 overflow: hidden;
                 padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+                position: fixed;
+                right: 0;
+                top: 0;
+                transform: translateY(var(--chat-viewport-offset-top));
+                width: 100%;
             }
             .chat-shell {
                 border-radius: 14px;
@@ -1330,11 +1331,21 @@
             return Math.max(1, Math.floor(height || 640));
         }
 
+        function measuredViewportOffsetTop() {
+            var visual = window.visualViewport;
+            return Math.max(0, Math.floor((visual && visual.offsetTop) || 0));
+        }
+
         function syncViewportMetrics() {
-            document.documentElement.style.setProperty('--chat-viewport-height', measuredViewportHeight() + 'px');
+            var root = document.documentElement;
+            root.style.setProperty('--chat-viewport-height', measuredViewportHeight() + 'px');
+            root.style.setProperty('--chat-viewport-offset-top', measuredViewportOffsetTop() + 'px');
         }
 
         function handleViewportChange() {
+            if (window.scrollY) {
+                window.scrollTo(0, 0);
+            }
             syncViewportMetrics();
             resizeComposer();
             window.requestAnimationFrame(function() {
