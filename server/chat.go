@@ -29,6 +29,7 @@ const (
 	maxChatHistory     = 200
 	defaultChatThemeID = "theme-0"
 	maxChatThemeSeed   = int64(1<<31 - 1)
+	maxChatDebugBytes  = 64 << 10
 )
 
 type chatSession struct {
@@ -112,6 +113,7 @@ func (s *Server) Chat() error {
 	attachmentsRoute := route + "/attachments"
 	stopRoute := route + "/stop"
 	healthRoute := route + "/health"
+	viewportDebugRoute := route + "/viewport-debug"
 	session := &chatSession{
 		attachments:      map[string]chatAttachment{},
 		subscribers:      map[chan struct{}]struct{}{},
@@ -170,27 +172,29 @@ func (s *Server) Chat() error {
 			return
 		}
 		variables := struct {
-			URL              string
-			QRImageRoute     string
-			EventsRoute      string
-			MessagesRoute    string
-			AttachmentsRoute string
-			StopRoute        string
-			HealthRoute      string
-			HostToken        string
-			CanStop          bool
-			Version          string
+			URL                string
+			QRImageRoute       string
+			EventsRoute        string
+			MessagesRoute      string
+			AttachmentsRoute   string
+			StopRoute          string
+			HealthRoute        string
+			ViewportDebugRoute string
+			HostToken          string
+			CanStop            bool
+			Version            string
 		}{
-			URL:              s.ChatURL,
-			QRImageRoute:     imageRoute,
-			EventsRoute:      eventsRoute,
-			MessagesRoute:    messagesRoute,
-			AttachmentsRoute: attachmentsRoute,
-			StopRoute:        stopRoute,
-			HealthRoute:      healthRoute,
-			HostToken:        session.hostToken,
-			CanStop:          session.validHostToken(r.URL.Query().Get("hostToken")),
-			Version:          version.String(),
+			URL:                s.ChatURL,
+			QRImageRoute:       imageRoute,
+			EventsRoute:        eventsRoute,
+			MessagesRoute:      messagesRoute,
+			AttachmentsRoute:   attachmentsRoute,
+			StopRoute:          stopRoute,
+			HealthRoute:        healthRoute,
+			ViewportDebugRoute: viewportDebugRoute,
+			HostToken:          session.hostToken,
+			CanStop:            session.validHostToken(r.URL.Query().Get("hostToken")),
+			Version:            version.String(),
 		}
 		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -203,6 +207,7 @@ func (s *Server) Chat() error {
 	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
 	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
 	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
+	s.mux.HandleFunc(viewportDebugRoute, session.handleViewportDebug)
 	s.mux.HandleFunc(stopRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -287,6 +292,56 @@ func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(message); err != nil {
 		log.Println(err)
+	}
+}
+
+func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodGet, http.MethodPost) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+		http.ServeFile(w, r, filepath.Join(session.dir, "viewport-debug.ndjson"))
+	case http.MethodPost:
+		if rejectCrossOriginChat(w, r) {
+			return
+		}
+		defer r.Body.Close()
+		var payload map[string]interface{}
+		decoder := json.NewDecoder(io.LimitReader(r.Body, maxChatDebugBytes))
+		decoder.UseNumber()
+		if err := decoder.Decode(&payload); err != nil {
+			http.Error(w, "invalid debug payload", http.StatusBadRequest)
+			return
+		}
+		payload["serverTime"] = time.Now().Format(time.RFC3339Nano)
+		payload["remoteAddr"] = r.RemoteAddr
+		line, err := json.Marshal(payload)
+		if err != nil {
+			http.Error(w, "invalid debug payload", http.StatusBadRequest)
+			return
+		}
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		file, err := os.OpenFile(filepath.Join(session.dir, "viewport-debug.ndjson"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
+			return
+		}
+		if _, err := file.Write(append(line, '\n')); err != nil {
+			file.Close()
+			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
+			return
+		}
+		if err := file.Close(); err != nil {
+			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, `{"status":"ok"}`)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 

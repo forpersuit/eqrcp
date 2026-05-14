@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -234,6 +235,8 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"id=\"viewport-debug\"",
 		"var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1'",
 		"function updateViewportDebug(reason)",
+		"function sendViewportDebug(snapshot)",
+		"fetch(viewportDebugRoute",
 		"window.visualViewport.addEventListener('scroll', function() { updateViewportDebug('visual-scroll'); })",
 		"updateViewportDebug('init')",
 	} {
@@ -254,6 +257,49 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		if strings.Contains(pages.Chat, removed) {
 			t.Fatalf("chat page should not contain %q", removed)
 		}
+	}
+}
+
+func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	body := strings.NewReader(`{"reason":"focus","token":"device-token","visualViewport":{"height":412},"rects":{"composer":{"bottom":390}}}`)
+	request := httptest.NewRequest(http.MethodPost, "/chat/test/viewport-debug", body)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	server.mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("debug post status = %d, want %d", response.Code, http.StatusOK)
+	}
+	data, err := os.ReadFile(filepath.Join(server.chatDir, "viewport-debug.ndjson"))
+	if err != nil {
+		t.Fatalf("read debug log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("debug log lines = %d, want 1", len(lines))
+	}
+	var entry map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &entry); err != nil {
+		t.Fatalf("decode debug entry: %v", err)
+	}
+	if entry["reason"] != "focus" || entry["token"] != "device-token" {
+		t.Fatalf("debug entry = %#v, want reason and token preserved", entry)
+	}
+	if _, ok := entry["serverTime"]; !ok {
+		t.Fatal("debug entry missing serverTime")
+	}
+
+	get := httptest.NewRequest(http.MethodGet, "/chat/test/viewport-debug", nil)
+	getResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(getResponse, get)
+	if getResponse.Code != http.StatusOK {
+		t.Fatalf("debug get status = %d, want %d", getResponse.Code, http.StatusOK)
+	}
+	if !strings.Contains(getResponse.Body.String(), `"reason":"focus"`) {
+		t.Fatalf("debug get body = %q, want stored snapshot", getResponse.Body.String())
 	}
 }
 

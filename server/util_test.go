@@ -158,27 +158,29 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
-		URL              string
-		QRImageRoute     string
-		EventsRoute      string
-		MessagesRoute    string
-		AttachmentsRoute string
-		StopRoute        string
-		HealthRoute      string
-		HostToken        string
-		CanStop          bool
-		Version          string
+		URL                string
+		QRImageRoute       string
+		EventsRoute        string
+		MessagesRoute      string
+		AttachmentsRoute   string
+		StopRoute          string
+		HealthRoute        string
+		ViewportDebugRoute string
+		HostToken          string
+		CanStop            bool
+		Version            string
 	}{
-		URL:              "http://127.0.0.1:8080/chat/test",
-		QRImageRoute:     "/chat/test/qr/image",
-		EventsRoute:      "/chat/test/events",
-		MessagesRoute:    "/chat/test/messages",
-		AttachmentsRoute: "/chat/test/attachments",
-		StopRoute:        "/chat/test/stop",
-		HealthRoute:      "/chat/test/health",
-		HostToken:        "host-token",
-		CanStop:          true,
-		Version:          "eqrcp test [date: now]",
+		URL:                "http://127.0.0.1:8080/chat/test",
+		QRImageRoute:       "/chat/test/qr/image",
+		EventsRoute:        "/chat/test/events",
+		MessagesRoute:      "/chat/test/messages",
+		AttachmentsRoute:   "/chat/test/attachments",
+		StopRoute:          "/chat/test/stop",
+		HealthRoute:        "/chat/test/health",
+		ViewportDebugRoute: "/chat/test/viewport-debug",
+		HostToken:          "host-token",
+		CanStop:            true,
+		Version:            "eqrcp test [date: now]",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
@@ -214,6 +216,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`currentAvatar`,
 		`showSystemNotice`,
 		`chatConnectionLost`,
+		`\/chat\/test\/viewport-debug`,
 		`message-avatar`,
 		`file-icon`,
 		`placeholder="Message"`,
@@ -230,25 +233,27 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
-		URL              string
-		QRImageRoute     string
-		EventsRoute      string
-		MessagesRoute    string
-		AttachmentsRoute string
-		StopRoute        string
-		HealthRoute      string
-		HostToken        string
-		CanStop          bool
-		Version          string
+		URL                string
+		QRImageRoute       string
+		EventsRoute        string
+		MessagesRoute      string
+		AttachmentsRoute   string
+		StopRoute          string
+		HealthRoute        string
+		ViewportDebugRoute string
+		HostToken          string
+		CanStop            bool
+		Version            string
 	}{
-		URL:              "http://127.0.0.1:8080/chat/test",
-		QRImageRoute:     "/chat/test/qr/image",
-		EventsRoute:      "/chat/test/events",
-		MessagesRoute:    "/chat/test/messages",
-		AttachmentsRoute: "/chat/test/attachments",
-		StopRoute:        "/chat/test/stop",
-		HealthRoute:      "/chat/test/health",
-		Version:          "eqrcp test [date: now]",
+		URL:                "http://127.0.0.1:8080/chat/test",
+		QRImageRoute:       "/chat/test/qr/image",
+		EventsRoute:        "/chat/test/events",
+		MessagesRoute:      "/chat/test/messages",
+		AttachmentsRoute:   "/chat/test/attachments",
+		StopRoute:          "/chat/test/stop",
+		HealthRoute:        "/chat/test/health",
+		ViewportDebugRoute: "/chat/test/viewport-debug",
+		Version:            "eqrcp test [date: now]",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {

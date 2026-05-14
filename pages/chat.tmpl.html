@@ -1355,6 +1355,7 @@
         var viewportSettleTimer = null;
         var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1';
         var viewportDebugEl = document.getElementById('viewport-debug');
+        var viewportDebugRoute = '{{.ViewportDebugRoute}}';
 
         function measuredViewportHeight() {
             var visual = window.visualViewport;
@@ -1390,46 +1391,113 @@
 
         syncViewportMetrics();
 
-        function rectSummary(el) {
+        function rectData(el) {
             if (!el || !el.getBoundingClientRect) { return 'n/a'; }
             var rect = el.getBoundingClientRect();
+            return {
+                x: Math.round(rect.left),
+                y: Math.round(rect.top),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+                bottom: Math.round(rect.bottom)
+            };
+        }
+
+        function rectSummary(rect) {
+            if (!rect || rect === 'n/a') { return 'n/a'; }
             return [
-                'x=' + Math.round(rect.left),
-                'y=' + Math.round(rect.top),
-                'w=' + Math.round(rect.width),
-                'h=' + Math.round(rect.height),
-                'b=' + Math.round(rect.bottom)
+                'x=' + rect.x,
+                'y=' + rect.y,
+                'w=' + rect.width,
+                'h=' + rect.height,
+                'b=' + rect.bottom
             ].join(' ');
+        }
+
+        function collectViewportDebug(reason) {
+            var visual = window.visualViewport;
+            var textStyle = window.getComputedStyle(textEl);
+            var rootStyle = window.getComputedStyle(document.documentElement);
+            return {
+                reason: reason,
+                clientTime: new Date().toISOString(),
+                sender: state.sender,
+                token: state.token,
+                peer: currentPeer(),
+                userAgent: navigator.userAgent,
+                inner: {width: window.innerWidth, height: window.innerHeight},
+                client: {width: document.documentElement.clientWidth, height: document.documentElement.clientHeight},
+                scroll: {x: Math.round(window.scrollX || 0), y: Math.round(window.scrollY || 0)},
+                visualViewport: visual ? {
+                    width: Math.round(visual.width),
+                    height: Math.round(visual.height),
+                    offsetLeft: Math.round(visual.offsetLeft),
+                    offsetTop: Math.round(visual.offsetTop),
+                    pageLeft: Math.round(visual.pageLeft),
+                    pageTop: Math.round(visual.pageTop),
+                    scale: visual.scale
+                } : null,
+                chatViewportHeight: rootStyle.getPropertyValue('--chat-viewport-height').trim(),
+                activeElement: document.activeElement ? (document.activeElement.id || document.activeElement.tagName || 'unknown') : 'none',
+                textareaStyle: {
+                    fontSize: textStyle.fontSize,
+                    lineHeight: textStyle.lineHeight,
+                    height: textStyle.height
+                },
+                rects: {
+                    main: rectData(document.querySelector('main')),
+                    shell: rectData(document.querySelector('.chat-shell')),
+                    messages: rectData(messagesEl),
+                    composer: rectData(composerEl),
+                    textarea: rectData(textEl)
+                }
+            };
+        }
+
+        function formatViewportDebug(snapshot) {
+            var visual = snapshot.visualViewport;
+            return [
+                'reason=' + snapshot.reason,
+                'time=' + new Date(snapshot.clientTime).toLocaleTimeString(),
+                'ua=' + snapshot.userAgent,
+                'inner=' + snapshot.inner.width + 'x' + snapshot.inner.height,
+                'client=' + snapshot.client.width + 'x' + snapshot.client.height,
+                'scroll=' + snapshot.scroll.x + ',' + snapshot.scroll.y,
+                'vv=' + (visual ? [
+                    visual.width + 'x' + visual.height,
+                    'offset=' + visual.offsetLeft + ',' + visual.offsetTop,
+                    'page=' + visual.pageLeft + ',' + visual.pageTop,
+                    'scale=' + visual.scale
+                ].join(' ') : 'none'),
+                '--chat-viewport-height=' + snapshot.chatViewportHeight,
+                'active=' + snapshot.activeElement,
+                'textarea font=' + snapshot.textareaStyle.fontSize + ' line=' + snapshot.textareaStyle.lineHeight + ' height=' + snapshot.textareaStyle.height,
+                'main ' + rectSummary(snapshot.rects.main),
+                'shell ' + rectSummary(snapshot.rects.shell),
+                'messages ' + rectSummary(snapshot.rects.messages),
+                'composer ' + rectSummary(snapshot.rects.composer),
+                'textarea ' + rectSummary(snapshot.rects.textarea)
+            ].join('\n');
+        }
+
+        function sendViewportDebug(snapshot) {
+            if (!viewportDebugRoute) { return; }
+            fetch(viewportDebugRoute, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(snapshot),
+                keepalive: true
+            }).catch(function() {
+                // Viewport diagnostics are best-effort.
+            });
         }
 
         function updateViewportDebug(reason) {
             if (!viewportDebugEnabled || !viewportDebugEl) { return; }
-            var visual = window.visualViewport;
-            var textStyle = window.getComputedStyle(textEl);
-            var rootStyle = window.getComputedStyle(document.documentElement);
+            var snapshot = collectViewportDebug(reason);
             viewportDebugEl.classList.add('open');
-            viewportDebugEl.textContent = [
-                'reason=' + reason,
-                'time=' + new Date().toLocaleTimeString(),
-                'ua=' + navigator.userAgent,
-                'inner=' + window.innerWidth + 'x' + window.innerHeight,
-                'client=' + document.documentElement.clientWidth + 'x' + document.documentElement.clientHeight,
-                'scroll=' + Math.round(window.scrollX || 0) + ',' + Math.round(window.scrollY || 0),
-                'vv=' + (visual ? [
-                    Math.round(visual.width) + 'x' + Math.round(visual.height),
-                    'offset=' + Math.round(visual.offsetLeft) + ',' + Math.round(visual.offsetTop),
-                    'page=' + Math.round(visual.pageLeft) + ',' + Math.round(visual.pageTop),
-                    'scale=' + visual.scale
-                ].join(' ') : 'none'),
-                '--chat-viewport-height=' + rootStyle.getPropertyValue('--chat-viewport-height').trim(),
-                'active=' + (document.activeElement ? (document.activeElement.id || document.activeElement.tagName || 'unknown') : 'none'),
-                'textarea font=' + textStyle.fontSize + ' line=' + textStyle.lineHeight + ' height=' + textStyle.height,
-                'main ' + rectSummary(document.querySelector('main')),
-                'shell ' + rectSummary(document.querySelector('.chat-shell')),
-                'messages ' + rectSummary(messagesEl),
-                'composer ' + rectSummary(composerEl),
-                'textarea ' + rectSummary(textEl)
-            ].join('\n');
+            viewportDebugEl.textContent = formatViewportDebug(snapshot);
+            sendViewportDebug(snapshot);
         }
 
         function currentSender() {
