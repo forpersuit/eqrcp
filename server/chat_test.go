@@ -218,6 +218,24 @@ func TestChatPageKeepsDeviceCacheAcrossRescans(t *testing.T) {
 	}
 }
 
+func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
+	for _, want := range []string{
+		"--chat-viewport-height: 100vh",
+		"--chat-viewport-height: 100dvh",
+		"height: var(--chat-viewport-height)",
+		"function measuredViewportHeight()",
+		"window.visualViewport",
+		"document.documentElement.style.setProperty('--chat-viewport-height'",
+		"window.visualViewport.addEventListener('resize', handleViewportChange)",
+		"window.visualViewport.addEventListener('scroll', handleViewportChange)",
+		"var viewport = measuredViewportHeight()",
+	} {
+		if !strings.Contains(pages.Chat, want) {
+			t.Fatalf("chat page should contain %q", want)
+		}
+	}
+}
+
 func TestChatPageStopsSessionQRPulse(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function stopSessionQRPulse()") {
 		t.Fatal("chat page should define a helper to stop the session QR pulse")
