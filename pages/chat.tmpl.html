@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>EQT Chat</title>
     <script>
         if (window.parent !== window) { document.documentElement.classList.add('embedded-chat'); }
@@ -1092,24 +1092,19 @@
         @media (max-width: 820px) {
             html,
             body {
+                height: 100%;
                 min-height: 100%;
                 overflow: hidden;
                 width: 100%;
-            }
-            body {
-                inset: 0;
-                position: fixed;
-                touch-action: none;
             }
             main {
                 display: grid;
                 gap: 0;
                 height: var(--chat-viewport-height);
-                inset: 0;
+                max-height: var(--chat-viewport-height);
                 min-height: 0;
                 overflow: hidden;
                 padding: calc(8px + env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
-                position: fixed;
                 width: 100%;
             }
             .chat-shell {
@@ -2301,12 +2296,6 @@
             }
             updateScrollArrow();
         }
-        function preventOuterTouchMove(event) {
-            if (window.matchMedia && !window.matchMedia('(max-width: 820px)').matches) { return; }
-            if (previewBackdrop.classList.contains('open')) { return; }
-            if (event.target.closest('.messages') || event.target === textEl) { return; }
-            event.preventDefault();
-        }
         function cssEscape(value) {
             if (window.CSS && CSS.escape) { return CSS.escape(String(value || '')); }
             return String(value || '').replace(/["\\]/g, '\\$&');
@@ -2772,7 +2761,6 @@
         messagesEl.addEventListener('touchstart', noteUserScrollIntent, {passive: true});
         messagesEl.addEventListener('pointerdown', noteUserScrollIntent, {passive: true});
         messagesEl.addEventListener('scroll', handleMessageScroll, {passive: true});
-        document.addEventListener('touchmove', preventOuterTouchMove, {passive: false});
         scrollArrow.addEventListener('click', function() {
             setFollowLatest(true);
             markProgrammaticScroll();

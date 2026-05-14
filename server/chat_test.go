@@ -220,17 +220,15 @@ func TestChatPageKeepsDeviceCacheAcrossRescans(t *testing.T) {
 
 func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 	for _, want := range []string{
+		"viewport-fit=cover",
 		"--chat-viewport-height: 100vh",
 		"--chat-viewport-height: 100dvh",
 		"height: var(--chat-viewport-height)",
-		"position: fixed",
-		"touch-action: none",
+		"max-height: var(--chat-viewport-height)",
 		"function measuredViewportHeight()",
 		"window.visualViewport",
 		"document.documentElement.style.setProperty('--chat-viewport-height'",
 		"window.visualViewport.addEventListener('resize', handleViewportChange)",
-		"function preventOuterTouchMove(event)",
-		"document.addEventListener('touchmove', preventOuterTouchMove, {passive: false})",
 		"var viewport = measuredViewportHeight()",
 	} {
 		if !strings.Contains(pages.Chat, want) {
@@ -242,6 +240,8 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"function measuredViewportOffsetTop()",
 		"window.visualViewport.addEventListener('scroll', handleViewportChange)",
 		"window.scrollTo(0, 0)",
+		"function preventOuterTouchMove(event)",
+		"document.addEventListener('touchmove', preventOuterTouchMove",
 	} {
 		if strings.Contains(pages.Chat, removed) {
 			t.Fatalf("chat page should not contain %q", removed)
