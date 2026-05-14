@@ -1094,6 +1094,7 @@
             border-radius: 8px;
             bottom: 8px;
             color: #f8fafc;
+            cursor: move;
             display: none;
             font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
             left: 8px;
@@ -1102,6 +1103,8 @@
             overflow: auto;
             padding: 8px;
             position: fixed;
+            touch-action: none;
+            user-select: none;
             white-space: pre-wrap;
             z-index: 60;
         }
@@ -1356,6 +1359,7 @@
         var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1';
         var viewportDebugEl = document.getElementById('viewport-debug');
         var viewportDebugRoute = '{{.ViewportDebugRoute}}';
+        var viewportDebugDrag = null;
 
         function measuredViewportHeight() {
             var visual = window.visualViewport;
@@ -1498,6 +1502,40 @@
             viewportDebugEl.classList.add('open');
             viewportDebugEl.textContent = formatViewportDebug(snapshot);
             sendViewportDebug(snapshot);
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function viewportDebugPointerDown(event) {
+            if (!viewportDebugEnabled || !viewportDebugEl) { return; }
+            var rect = viewportDebugEl.getBoundingClientRect();
+            viewportDebugDrag = {
+                pointerId: event.pointerId,
+                offsetX: event.clientX - rect.left,
+                offsetY: event.clientY - rect.top
+            };
+            viewportDebugEl.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        }
+
+        function viewportDebugPointerMove(event) {
+            if (!viewportDebugDrag || viewportDebugDrag.pointerId !== event.pointerId) { return; }
+            var width = viewportDebugEl.offsetWidth;
+            var height = viewportDebugEl.offsetHeight;
+            var left = clamp(event.clientX - viewportDebugDrag.offsetX, 0, Math.max(0, window.innerWidth - width));
+            var top = clamp(event.clientY - viewportDebugDrag.offsetY, 0, Math.max(0, window.innerHeight - height));
+            viewportDebugEl.style.left = Math.round(left) + 'px';
+            viewportDebugEl.style.top = Math.round(top) + 'px';
+            viewportDebugEl.style.bottom = 'auto';
+            event.preventDefault();
+        }
+
+        function viewportDebugPointerUp(event) {
+            if (!viewportDebugDrag || viewportDebugDrag.pointerId !== event.pointerId) { return; }
+            viewportDebugDrag = null;
+            updateViewportDebug('debug-drag');
         }
 
         function currentSender() {
@@ -2859,6 +2897,10 @@
         textEl.addEventListener('focus', function() { updateViewportDebug('focus'); });
         textEl.addEventListener('blur', function() { updateViewportDebug('blur'); });
         textEl.addEventListener('input', function() { updateViewportDebug('input'); });
+        viewportDebugEl.addEventListener('pointerdown', viewportDebugPointerDown);
+        viewportDebugEl.addEventListener('pointermove', viewportDebugPointerMove);
+        viewportDebugEl.addEventListener('pointerup', viewportDebugPointerUp);
+        viewportDebugEl.addEventListener('pointercancel', viewportDebugPointerUp);
         sendButton.addEventListener('mousedown', function(event) {
             event.preventDefault();
         });
