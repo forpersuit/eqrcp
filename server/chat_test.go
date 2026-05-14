@@ -229,6 +229,7 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"window.visualViewport",
 		"document.documentElement.style.setProperty('--chat-viewport-height'",
 		"window.visualViewport.addEventListener('resize', handleViewportChange)",
+		"input,\n            textarea {\n                font-size: 16px;",
 		"var viewport = measuredViewportHeight()",
 	} {
 		if !strings.Contains(pages.Chat, want) {
@@ -242,6 +243,8 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"window.scrollTo(0, 0)",
 		"function preventOuterTouchMove(event)",
 		"document.addEventListener('touchmove', preventOuterTouchMove",
+		"maximum-scale=1",
+		"user-scalable=no",
 	} {
 		if strings.Contains(pages.Chat, removed) {
 			t.Fatalf("chat page should not contain %q", removed)

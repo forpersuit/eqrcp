@@ -1120,9 +1120,19 @@
             .composer { padding: 9px 10px 11px; padding-bottom: max(11px, env(safe-area-inset-bottom)); }
             .composer-shell { padding: 6px; }
             .compose-row { column-gap: 6px; grid-template-columns: 36px minmax(0,1fr) 36px; }
-            textarea { max-height: min(30vh, 140px); min-height: 36px; padding: 7px 12px; }
+            input,
+            textarea {
+                font-size: 16px;
+            }
+            textarea {
+                height: 38px;
+                line-height: 22px;
+                max-height: min(30vh, 140px);
+                min-height: 38px;
+                padding: 7px 12px;
+            }
             .file-label,
-            .send-button { height: 36px; width: 36px; }
+            .send-button { height: 38px; width: 38px; }
             .scroll-arrow {
                 bottom: calc(var(--composer-height, 58px) + 12px);
             }
