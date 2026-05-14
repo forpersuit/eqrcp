@@ -231,6 +231,11 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"window.visualViewport.addEventListener('resize', handleViewportChange)",
 		"input,\n            textarea {\n                font-size: 16px;",
 		"var viewport = measuredViewportHeight()",
+		"id=\"viewport-debug\"",
+		"var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1'",
+		"function updateViewportDebug(reason)",
+		"window.visualViewport.addEventListener('scroll', function() { updateViewportDebug('visual-scroll'); })",
+		"updateViewportDebug('init')",
 	} {
 		if !strings.Contains(pages.Chat, want) {
 			t.Fatalf("chat page should contain %q", want)

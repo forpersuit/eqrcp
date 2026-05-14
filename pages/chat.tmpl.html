@@ -1088,6 +1088,26 @@
             cursor: default;
             opacity: 0.58;
         }
+        .viewport-debug {
+            background: rgba(2, 6, 23, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 8px;
+            bottom: 8px;
+            color: #f8fafc;
+            display: none;
+            font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+            left: 8px;
+            max-height: min(46vh, 260px);
+            max-width: min(420px, calc(100vw - 16px));
+            overflow: auto;
+            padding: 8px;
+            position: fixed;
+            white-space: pre-wrap;
+            z-index: 60;
+        }
+        .viewport-debug.open {
+            display: block;
+        }
         /* ── Mobile ── */
         @media (max-width: 820px) {
             html,
@@ -1274,6 +1294,7 @@
             </div>
         </div>
     </main>
+    <pre class="viewport-debug" id="viewport-debug" aria-hidden="true"></pre>
     <script>
         var clientToken = currentClientToken();
         var joinToken = currentJoinToken();
@@ -1332,6 +1353,8 @@
         var clipboardRequestID = 0;
         var clipboardRequests = {};
         var viewportSettleTimer = null;
+        var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1';
+        var viewportDebugEl = document.getElementById('viewport-debug');
 
         function measuredViewportHeight() {
             var visual = window.visualViewport;
@@ -1349,9 +1372,11 @@
         function handleViewportChange() {
             syncViewportMetrics();
             resizeComposer();
+            updateViewportDebug('viewport');
             window.requestAnimationFrame(function() {
                 resizeComposer();
                 if (followLatest) { scrollMessagesToBottom(); }
+                updateViewportDebug('frame');
             });
             if (viewportSettleTimer) {
                 window.clearTimeout(viewportSettleTimer);
@@ -1359,10 +1384,53 @@
             viewportSettleTimer = window.setTimeout(function() {
                 resizeComposer();
                 if (followLatest) { scrollMessagesToBottom(); }
+                updateViewportDebug('settle');
             }, 180);
         }
 
         syncViewportMetrics();
+
+        function rectSummary(el) {
+            if (!el || !el.getBoundingClientRect) { return 'n/a'; }
+            var rect = el.getBoundingClientRect();
+            return [
+                'x=' + Math.round(rect.left),
+                'y=' + Math.round(rect.top),
+                'w=' + Math.round(rect.width),
+                'h=' + Math.round(rect.height),
+                'b=' + Math.round(rect.bottom)
+            ].join(' ');
+        }
+
+        function updateViewportDebug(reason) {
+            if (!viewportDebugEnabled || !viewportDebugEl) { return; }
+            var visual = window.visualViewport;
+            var textStyle = window.getComputedStyle(textEl);
+            var rootStyle = window.getComputedStyle(document.documentElement);
+            viewportDebugEl.classList.add('open');
+            viewportDebugEl.textContent = [
+                'reason=' + reason,
+                'time=' + new Date().toLocaleTimeString(),
+                'ua=' + navigator.userAgent,
+                'inner=' + window.innerWidth + 'x' + window.innerHeight,
+                'client=' + document.documentElement.clientWidth + 'x' + document.documentElement.clientHeight,
+                'scroll=' + Math.round(window.scrollX || 0) + ',' + Math.round(window.scrollY || 0),
+                'vv=' + (visual ? [
+                    Math.round(visual.width) + 'x' + Math.round(visual.height),
+                    'offset=' + Math.round(visual.offsetLeft) + ',' + Math.round(visual.offsetTop),
+                    'page=' + Math.round(visual.pageLeft) + ',' + Math.round(visual.pageTop),
+                    'scale=' + visual.scale
+                ].join(' ') : 'none'),
+                '--chat-viewport-height=' + rootStyle.getPropertyValue('--chat-viewport-height').trim(),
+                'active=' + (document.activeElement ? (document.activeElement.id || document.activeElement.tagName || 'unknown') : 'none'),
+                'textarea font=' + textStyle.fontSize + ' line=' + textStyle.lineHeight + ' height=' + textStyle.height,
+                'main ' + rectSummary(document.querySelector('main')),
+                'shell ' + rectSummary(document.querySelector('.chat-shell')),
+                'messages ' + rectSummary(messagesEl),
+                'composer ' + rectSummary(composerEl),
+                'textarea ' + rectSummary(textEl)
+            ].join('\n');
+        }
 
         function currentSender() {
             var params = new URLSearchParams(window.location.search);
@@ -2720,6 +2788,9 @@
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
         textEl.addEventListener('contextmenu', showComposerContextMenu);
+        textEl.addEventListener('focus', function() { updateViewportDebug('focus'); });
+        textEl.addEventListener('blur', function() { updateViewportDebug('blur'); });
+        textEl.addEventListener('input', function() { updateViewportDebug('input'); });
         sendButton.addEventListener('mousedown', function(event) {
             event.preventDefault();
         });
@@ -2794,6 +2865,7 @@
         window.addEventListener('resize', handleViewportChange);
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleViewportChange);
+            window.visualViewport.addEventListener('scroll', function() { updateViewportDebug('visual-scroll'); });
         }
         window.addEventListener('beforeunload', function(event) {
             if (!textEl.value.trim()) { return; }
@@ -2826,6 +2898,7 @@
         scrollMessagesToBottom();
         resizeComposer();
         updateComposerState();
+        updateViewportDebug('init');
         if (shareSessionButton.classList.contains('qr-breathe')) {
             window.setTimeout(stopSessionQRPulse, 10000);
         }
