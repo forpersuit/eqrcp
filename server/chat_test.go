@@ -228,6 +228,8 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"max-height: var(--chat-viewport-height)",
 		"function measuredViewportHeight()",
 		"window.visualViewport",
+		"var pageTop = visual && visual.pageTop ? visual.pageTop : 0",
+		"Math.floor((height || 640) + pageTop)",
 		"document.documentElement.style.setProperty('--chat-viewport-height'",
 		"window.visualViewport.addEventListener('resize', handleViewportChange)",
 		"input,\n            textarea {\n                font-size: 16px;",

@@ -1364,10 +1364,11 @@
         function measuredViewportHeight() {
             var visual = window.visualViewport;
             var height = visual && visual.height ? visual.height : 0;
+            var pageTop = visual && visual.pageTop ? visual.pageTop : 0;
             if (!height) {
                 height = window.innerHeight || document.documentElement.clientHeight || 0;
             }
-            return Math.max(1, Math.floor(height || 640));
+            return Math.max(1, Math.floor((height || 640) + pageTop));
         }
 
         function syncViewportMetrics() {
