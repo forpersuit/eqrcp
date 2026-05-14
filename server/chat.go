@@ -42,6 +42,7 @@ type chatSession struct {
 	clientThemeJoins map[string]string
 	nextID           int64
 	dir              string
+	viewportDebugLog string
 	attachmentRoute  string
 	startedAt        time.Time
 	lastActivity     time.Time
@@ -114,6 +115,7 @@ func (s *Server) Chat() error {
 	stopRoute := route + "/stop"
 	healthRoute := route + "/health"
 	viewportDebugRoute := route + "/viewport-debug"
+	viewportDebugLog := chatViewportDebugLogPath()
 	session := &chatSession{
 		attachments:      map[string]chatAttachment{},
 		subscribers:      map[chan struct{}]struct{}{},
@@ -121,6 +123,7 @@ func (s *Server) Chat() error {
 		clientThemes:     map[string]string{},
 		clientThemeJoins: map[string]string{},
 		dir:              dir,
+		viewportDebugLog: viewportDebugLog,
 		attachmentRoute:  attachmentsRoute,
 		startedAt:        time.Now(),
 		lastActivity:     time.Now(),
@@ -302,7 +305,7 @@ func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.R
 	switch r.Method {
 	case http.MethodGet:
 		w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
-		http.ServeFile(w, r, filepath.Join(session.dir, "viewport-debug.ndjson"))
+		http.ServeFile(w, r, session.viewportDebugLog)
 	case http.MethodPost:
 		if rejectCrossOriginChat(w, r) {
 			return
@@ -324,17 +327,7 @@ func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.R
 		}
 		session.mu.Lock()
 		defer session.mu.Unlock()
-		file, err := os.OpenFile(filepath.Join(session.dir, "viewport-debug.ndjson"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
-		if err != nil {
-			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
-			return
-		}
-		if _, err := file.Write(append(line, '\n')); err != nil {
-			file.Close()
-			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
-			return
-		}
-		if err := file.Close(); err != nil {
+		if err := appendChatViewportDebugLine(session.viewportDebugLog, line); err != nil {
 			http.Error(w, "debug log unavailable", http.StatusInternalServerError)
 			return
 		}
@@ -343,6 +336,26 @@ func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.R
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func chatViewportDebugLogPath() string {
+	name := "viewport-debug-" + time.Now().Format("20060102-150405.000000000") + "-" + randomChatToken()[:8] + ".ndjson"
+	return filepath.Join(os.TempDir(), "eqrcp-viewport-debug", name)
+}
+
+func appendChatViewportDebugLine(path string, line []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(append(line, '\n')); err != nil {
+		file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func (s *Server) DisplayChat() error {

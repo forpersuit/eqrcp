@@ -265,6 +265,7 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 }
 
 func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	server := newTestChatServer(t)
 	defer os.RemoveAll(server.chatDir)
 
@@ -277,7 +278,7 @@ func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("debug post status = %d, want %d", response.Code, http.StatusOK)
 	}
-	data, err := os.ReadFile(filepath.Join(server.chatDir, "viewport-debug.ndjson"))
+	data, err := os.ReadFile(server.chatSession.viewportDebugLog)
 	if err != nil {
 		t.Fatalf("read debug log: %v", err)
 	}
@@ -294,6 +295,9 @@ func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
 	}
 	if _, ok := entry["serverTime"]; !ok {
 		t.Fatal("debug entry missing serverTime")
+	}
+	if filepath.Dir(server.chatSession.viewportDebugLog) == server.chatDir {
+		t.Fatal("debug log should persist outside the chat session temp directory")
 	}
 
 	get := httptest.NewRequest(http.MethodGet, "/chat/test/viewport-debug", nil)
