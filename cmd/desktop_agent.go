@@ -1096,7 +1096,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		}
 	case "chat":
 		chatPageURLBuilder := func() string {
-			return desktopChatPageURL(srv.ChatURL, srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar)
+			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar)
 		}
 		if agentApp.Flags.Browser {
 			if err := srv.DisplayChatWithURL(chatPageURLBuilder); err != nil {

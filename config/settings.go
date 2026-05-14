@@ -15,6 +15,7 @@ type DesktopSettings struct {
 	ConfigPath       string                   `json:"configPath"`
 	Interface        string                   `json:"interface"`
 	InterfaceOptions []DesktopInterfaceOption `json:"interfaceOptions"`
+	Mode             string                   `json:"mode,omitempty"`
 	Port             int                      `json:"port"`
 	Output           string                   `json:"output"`
 	Browser          bool                     `json:"browser"`
@@ -76,6 +77,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		ConfigPath:       v.ConfigFileUsed(),
 		Interface:        selectedInterface,
 		InterfaceOptions: options,
+		Mode:             strings.ToLower(strings.TrimSpace(v.GetString("mode"))),
 		Port:             v.GetInt("port"),
 		Output:           output,
 		Browser:          browser,
@@ -116,6 +118,9 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
 	}
 	v.Set("interface", settings.Interface)
+	if mode := strings.ToLower(strings.TrimSpace(settings.Mode)); mode != "" {
+		v.Set("mode", mode)
+	}
 	v.Set("port", settings.Port)
 	v.Set("output", output)
 	v.Set("browser", settings.Browser)

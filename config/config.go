@@ -21,6 +21,7 @@ type Config struct {
 	Interface string `yaml:",omitempty"`
 	Port      int    `yaml:",omitempty"`
 	Bind      string `yaml:",omitempty"`
+	Mode      string `yaml:",omitempty"`
 	KeepAlive bool   `yaml:",omitempty"`
 	Path      string `yaml:",omitempty"`
 	Secure    bool   `yaml:",omitempty"`
@@ -56,6 +57,7 @@ func New(app application.App) (Config, error) {
 	// Load file
 	cfg.Interface = v.GetString("interface")
 	cfg.Bind = v.GetString("bind")
+	cfg.Mode = strings.ToLower(strings.TrimSpace(v.GetString("mode")))
 	cfg.Port = v.GetInt("port")
 	cfg.KeepAlive = v.GetBool("keepAlive")
 	cfg.Path = v.GetString("path")

@@ -135,3 +135,22 @@ func TestNew(t *testing.T) {
 		})
 	}
 }
+
+func TestNewReadsMode(t *testing.T) {
+	configFile, err := os.CreateTemp("", "eqrcp*mode.yml")
+	if err != nil {
+		t.Skip()
+	}
+	defer os.Remove(configFile.Name())
+	if err := os.WriteFile(configFile.Name(), []byte("mode: dev\n"), os.ModePerm); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := New(application.App{Flags: application.Flags{Config: configFile.Name()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Mode != "dev" {
+		t.Fatalf("Mode = %q, want dev", cfg.Mode)
+	}
+}

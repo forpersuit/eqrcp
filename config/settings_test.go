@@ -11,7 +11,7 @@ import (
 
 func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yml")
-	if err := os.WriteFile(configPath, []byte("output: /tmp/old\ninterface: any\nport: 19000\nbrowser: false\nchatAutoSave: false\ncloseBehavior: quit\nchatSender: Desk\nchatAvatar: D\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("output: /tmp/old\ninterface: any\nmode: dev\nport: 19000\nbrowser: false\nchatAutoSave: false\ncloseBehavior: quit\nchatSender: Desk\nchatAvatar: D\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -22,7 +22,7 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" {
+	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Mode != "dev" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" {
 		t.Fatalf("settings = %#v, want config values", settings)
 	}
 
@@ -41,7 +41,7 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Output != newOutput || saved.Interface != "any" || saved.Port != 19001 || !saved.Browser || saved.ChatAutoSave || saved.CloseBehavior != DesktopCloseBehaviorQuit || saved.ChatSender != "Alice" || saved.ChatAvatar != "A" {
+	if saved.Output != newOutput || saved.Interface != "any" || saved.Mode != "dev" || saved.Port != 19001 || !saved.Browser || saved.ChatAutoSave || saved.CloseBehavior != DesktopCloseBehaviorQuit || saved.ChatSender != "Alice" || saved.ChatAvatar != "A" {
 		t.Fatalf("saved settings = %#v, want updated values", saved)
 	}
 
@@ -52,6 +52,7 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	for _, want := range []string{
 		"output: " + strings.ToLower(newOutput),
 		"interface: any",
+		"mode: dev",
 		"port: 19001",
 		"browser: true",
 		"chatautosave: false",

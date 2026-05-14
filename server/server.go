@@ -44,6 +44,7 @@ type Server struct {
 	ReceiveURL string
 	// ChatURL is the URL used for a browser chat session
 	ChatURL        string
+	ChatDebug      bool
 	instance       *http.Server
 	mux            *http.ServeMux
 	body           body.Body
@@ -643,6 +644,7 @@ func New(cfg *config.Config) (*Server, error) {
 		app.BaseURL, path)
 	app.ChatURL = fmt.Sprintf("%s/chat/%s",
 		app.BaseURL, path)
+	app.ChatDebug = strings.EqualFold(cfg.Mode, "dev")
 	// Create a server
 	mux := http.NewServeMux()
 	app.mux = mux

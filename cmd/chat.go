@@ -22,8 +22,8 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 		return err
 	}
 	log.Print(`Scan the following URL with a QR reader to join the chat session, press CTRL+C or "q" to exit:`)
-	log.Print(srv.ChatURL)
-	if err := qr.RenderString(srv.ChatURL, cfg.Reversed); err != nil {
+	log.Print(srv.ChatJoinURL())
+	if err := qr.RenderString(srv.ChatJoinURL(), cfg.Reversed); err != nil {
 		return err
 	}
 	if app.Flags.Browser {

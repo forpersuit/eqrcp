@@ -129,7 +129,7 @@ func (s *Server) Chat() error {
 		statusHook:       s.chatStatusHook,
 	}
 	session.notifyStatus("waiting")
-	qrImg, err := qr.RenderImage(s.ChatURL)
+	qrImg, err := qr.RenderImage(s.ChatJoinURL())
 	if err != nil {
 		os.RemoveAll(dir)
 		return err
@@ -147,7 +147,7 @@ func (s *Server) Chat() error {
 	s.updateStatus(func(status *transferStatus) {
 		status.Mode = "chat"
 		status.Title = "Chat session"
-		status.Target = s.ChatURL
+		status.Target = s.ChatJoinURL()
 		status.Message = "Scan to join this chat session."
 	})
 	s.mux.HandleFunc(imageRoute, func(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +184,7 @@ func (s *Server) Chat() error {
 			CanStop            bool
 			Version            string
 		}{
-			URL:                s.ChatURL,
+			URL:                s.ChatJoinURL(),
 			QRImageRoute:       imageRoute,
 			EventsRoute:        eventsRoute,
 			MessagesRoute:      messagesRoute,
@@ -347,8 +347,51 @@ func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.R
 
 func (s *Server) DisplayChat() error {
 	return s.DisplayChatWithURL(func() string {
-		return s.ChatURL + "?peer=desktop&hostToken=" + url.QueryEscape(s.ChatHostToken())
+		return appendChatQuery(s.ChatJoinURL(), map[string]string{
+			"peer":      "desktop",
+			"hostToken": s.ChatHostToken(),
+		})
 	})
+}
+
+// ChatJoinURL returns the user-facing chat URL, including debug query
+// parameters when the application is running in development mode.
+func (s *Server) ChatJoinURL() string {
+	if !s.ChatDebug {
+		return s.ChatURL
+	}
+	return appendChatQuery(s.ChatURL, map[string]string{"viewportDebug": "1"})
+}
+
+func appendChatQuery(baseURL string, values map[string]string) string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		sep := "?"
+		if strings.Contains(baseURL, "?") {
+			sep = "&"
+		}
+		parts := make([]string, 0, len(values))
+		for key, value := range values {
+			if value == "" {
+				continue
+			}
+			parts = append(parts, url.QueryEscape(key)+"="+url.QueryEscape(value))
+		}
+		sort.Strings(parts)
+		if len(parts) == 0 {
+			return baseURL
+		}
+		return baseURL + sep + strings.Join(parts, "&")
+	}
+	params := parsed.Query()
+	for key, value := range values {
+		if value == "" {
+			continue
+		}
+		params.Set(key, value)
+	}
+	parsed.RawQuery = params.Encode()
+	return parsed.String()
 }
 
 // DisplayChatWithURL serves the chat page and opens the provided URL in the browser.

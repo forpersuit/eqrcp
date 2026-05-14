@@ -303,6 +303,18 @@ func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
 	}
 }
 
+func TestChatJoinURLAddsViewportDebugInDevMode(t *testing.T) {
+	server := &Server{ChatURL: "http://127.0.0.1:8080/chat/test", ChatDebug: true}
+	if got := server.ChatJoinURL(); got != "http://127.0.0.1:8080/chat/test?viewportDebug=1" {
+		t.Fatalf("ChatJoinURL() = %q, want viewport debug query", got)
+	}
+
+	server.ChatDebug = false
+	if got := server.ChatJoinURL(); got != server.ChatURL {
+		t.Fatalf("ChatJoinURL() = %q, want base chat URL", got)
+	}
+}
+
 func TestChatPageStopsSessionQRPulse(t *testing.T) {
 	if !strings.Contains(pages.Chat, "function stopSessionQRPulse()") {
 		t.Fatal("chat page should define a helper to stop the session QR pulse")
