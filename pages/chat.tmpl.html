@@ -21,6 +21,7 @@
             --wash: #edf2eb;
             --bg: #f4f7f4;
             --chat-viewport-height: 100vh;
+            --chat-viewport-top: 0px;
             --message-actions-min-width: 58px;
             --messages-bottom-space: clamp(16px, 2.2vh, 22px);
         }
@@ -1128,7 +1129,9 @@
                 min-height: 0;
                 overflow: hidden;
                 padding: calc(8px + env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+                transform: translateY(var(--chat-viewport-top));
                 width: 100%;
+                will-change: transform;
             }
             .chat-shell {
                 border-radius: 14px;
@@ -1364,15 +1367,21 @@
         function measuredViewportHeight() {
             var visual = window.visualViewport;
             var height = visual && visual.height ? visual.height : 0;
-            var pageTop = visual && visual.pageTop ? visual.pageTop : 0;
             if (!height) {
                 height = window.innerHeight || document.documentElement.clientHeight || 0;
             }
-            return Math.max(1, Math.floor((height || 640) + pageTop));
+            return Math.max(1, Math.floor(height || 640));
+        }
+
+        function measuredViewportTop() {
+            var visual = window.visualViewport;
+            var top = visual && visual.pageTop ? visual.pageTop : window.scrollY || 0;
+            return Math.max(0, Math.round(top));
         }
 
         function syncViewportMetrics() {
             document.documentElement.style.setProperty('--chat-viewport-height', measuredViewportHeight() + 'px');
+            document.documentElement.style.setProperty('--chat-viewport-top', measuredViewportTop() + 'px');
         }
 
         function handleViewportChange() {
@@ -1392,6 +1401,11 @@
                 if (followLatest) { scrollMessagesToBottom(); }
                 updateViewportDebug('settle');
             }, 180);
+        }
+
+        function handleViewportScroll() {
+            syncViewportMetrics();
+            updateViewportDebug('visual-scroll');
         }
 
         syncViewportMetrics();
@@ -1443,6 +1457,7 @@
                     scale: visual.scale
                 } : null,
                 chatViewportHeight: rootStyle.getPropertyValue('--chat-viewport-height').trim(),
+                chatViewportTop: rootStyle.getPropertyValue('--chat-viewport-top').trim(),
                 activeElement: document.activeElement ? (document.activeElement.id || document.activeElement.tagName || 'unknown') : 'none',
                 textareaStyle: {
                     fontSize: textStyle.fontSize,
@@ -1475,6 +1490,7 @@
                     'scale=' + visual.scale
                 ].join(' ') : 'none'),
                 '--chat-viewport-height=' + snapshot.chatViewportHeight,
+                '--chat-viewport-top=' + snapshot.chatViewportTop,
                 'active=' + snapshot.activeElement,
                 'textarea font=' + snapshot.textareaStyle.fontSize + ' line=' + snapshot.textareaStyle.lineHeight + ' height=' + snapshot.textareaStyle.height,
                 'main ' + rectSummary(snapshot.rects.main),
@@ -2976,7 +2992,7 @@
         window.addEventListener('resize', handleViewportChange);
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', handleViewportChange);
-            window.visualViewport.addEventListener('scroll', function() { updateViewportDebug('visual-scroll'); });
+            window.visualViewport.addEventListener('scroll', handleViewportScroll);
         }
         window.addEventListener('beforeunload', function(event) {
             if (!textEl.value.trim()) { return; }
