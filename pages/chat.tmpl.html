@@ -21,7 +21,9 @@
             --wash: #edf2eb;
             --bg: #f4f7f4;
             --chat-viewport-height: 100vh;
+            --chat-viewport-width: 100vw;
             --chat-viewport-top: 0px;
+            --chat-viewport-left: 0px;
             --message-actions-min-width: 58px;
             --messages-bottom-space: clamp(16px, 2.2vh, 22px);
         }
@@ -40,6 +42,11 @@
             font-size: 15px;
             overflow: hidden;
         }
+        .chat-viewport {
+            height: 100%;
+            overflow: hidden;
+            width: 100%;
+        }
         main {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
@@ -50,6 +57,7 @@
             padding: 16px 28px;
         }
         html.embedded-chat body { background: transparent; }
+        html.embedded-chat .chat-viewport { height: 100%; }
         html.embedded-chat main {
             max-width: none;
             padding: 8px;
@@ -1121,17 +1129,26 @@
                 overflow: hidden;
                 width: 100%;
             }
+            .chat-viewport {
+                background: var(--bg);
+                height: var(--chat-viewport-height);
+                left: var(--chat-viewport-left);
+                max-height: var(--chat-viewport-height);
+                overflow: hidden;
+                position: fixed;
+                top: var(--chat-viewport-top);
+                width: var(--chat-viewport-width);
+                z-index: 0;
+            }
             main {
                 display: grid;
                 gap: 0;
-                height: var(--chat-viewport-height);
-                max-height: var(--chat-viewport-height);
+                height: 100%;
+                max-height: 100%;
                 min-height: 0;
                 overflow: hidden;
                 padding: calc(8px + env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
-                transform: translateY(var(--chat-viewport-top));
                 width: 100%;
-                will-change: transform;
             }
             .chat-shell {
                 border-radius: 14px;
@@ -1216,8 +1233,9 @@
     </style>
 </head>
 <body>
-    <main>
-        <section class="chat-shell">
+    <div class="chat-viewport" id="chat-viewport">
+        <main>
+            <section class="chat-shell">
             <header class="chat-head offline" id="chat-head">
                 <div class="chat-head-title">
                     <div class="online-dot" id="online-dot"></div>
@@ -1267,8 +1285,8 @@
                 </div>
                 <input id="file-input" class="hidden" type="file" multiple>
             </form>
-        </section>
-        <div class="session-backdrop" id="session-backdrop">
+            </section>
+            <div class="session-backdrop" id="session-backdrop">
             <aside class="side" id="session-panel">
                 <div class="side-section-head">
                     <h1>QR</h1>
@@ -1288,8 +1306,8 @@
                 </div>
                 <button class="session-toggle" type="button" id="session-toggle" aria-expanded="true">Show URL</button>
             </aside>
-        </div>
-        <div class="preview-backdrop" id="preview-backdrop">
+            </div>
+            <div class="preview-backdrop" id="preview-backdrop">
             <div class="preview-box">
                 <img class="preview-image" id="preview-image" alt="Image preview">
                 <div class="preview-toolbar">
@@ -1298,8 +1316,9 @@
                     <button type="button" id="preview-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
                 </div>
             </div>
-        </div>
-    </main>
+            </div>
+        </main>
+    </div>
     <pre class="viewport-debug" id="viewport-debug" aria-hidden="true"></pre>
     <script>
         var clientToken = currentClientToken();
@@ -1359,6 +1378,8 @@
         var clipboardRequestID = 0;
         var clipboardRequests = {};
         var viewportSettleTimer = null;
+        var scrollCorrectionTimer = null;
+        var chatViewportEl = document.getElementById('chat-viewport');
         var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1';
         var viewportDebugEl = document.getElementById('viewport-debug');
         var viewportDebugRoute = '{{.ViewportDebugRoute}}';
@@ -1373,15 +1394,53 @@
             return Math.max(1, Math.floor(height || 640));
         }
 
+        function measuredViewportWidth() {
+            var visual = window.visualViewport;
+            var width = visual && visual.width ? visual.width : 0;
+            if (!width) {
+                width = window.innerWidth || document.documentElement.clientWidth || 0;
+            }
+            return Math.max(1, Math.floor(width || 360));
+        }
+
         function measuredViewportTop() {
             var visual = window.visualViewport;
-            var top = visual && visual.pageTop ? visual.pageTop : window.scrollY || 0;
+            var top = visual && visual.offsetTop ? visual.offsetTop : 0;
             return Math.max(0, Math.round(top));
         }
 
+        function measuredViewportLeft() {
+            var visual = window.visualViewport;
+            var left = visual && visual.offsetLeft ? visual.offsetLeft : 0;
+            return Math.max(0, Math.round(left));
+        }
+
         function syncViewportMetrics() {
+            document.documentElement.style.setProperty('--chat-viewport-width', measuredViewportWidth() + 'px');
             document.documentElement.style.setProperty('--chat-viewport-height', measuredViewportHeight() + 'px');
+            document.documentElement.style.setProperty('--chat-viewport-left', measuredViewportLeft() + 'px');
             document.documentElement.style.setProperty('--chat-viewport-top', measuredViewportTop() + 'px');
+        }
+
+        function correctDocumentScroll(reason) {
+            if (!window.matchMedia || !window.matchMedia('(max-width: 820px)').matches) { return; }
+            if (!(window.scrollX || window.scrollY)) { return; }
+            window.scrollTo(0, 0);
+            syncViewportMetrics();
+            updateViewportDebug(reason);
+        }
+
+        function scheduleScrollCorrection(reason) {
+            if (scrollCorrectionTimer) {
+                window.clearTimeout(scrollCorrectionTimer);
+            }
+            window.requestAnimationFrame(function() {
+                correctDocumentScroll(reason + '-frame');
+            });
+            scrollCorrectionTimer = window.setTimeout(function() {
+                correctDocumentScroll(reason + '-settle');
+                scrollCorrectionTimer = null;
+            }, 80);
         }
 
         function handleViewportChange() {
@@ -1406,6 +1465,7 @@
         function handleViewportScroll() {
             syncViewportMetrics();
             updateViewportDebug('visual-scroll');
+            scheduleScrollCorrection('visual-scroll');
         }
 
         syncViewportMetrics();
@@ -1456,7 +1516,9 @@
                     pageTop: Math.round(visual.pageTop),
                     scale: visual.scale
                 } : null,
+                chatViewportWidth: rootStyle.getPropertyValue('--chat-viewport-width').trim(),
                 chatViewportHeight: rootStyle.getPropertyValue('--chat-viewport-height').trim(),
+                chatViewportLeft: rootStyle.getPropertyValue('--chat-viewport-left').trim(),
                 chatViewportTop: rootStyle.getPropertyValue('--chat-viewport-top').trim(),
                 activeElement: document.activeElement ? (document.activeElement.id || document.activeElement.tagName || 'unknown') : 'none',
                 textareaStyle: {
@@ -1465,6 +1527,7 @@
                     height: textStyle.height
                 },
                 rects: {
+                    viewport: rectData(chatViewportEl),
                     main: rectData(document.querySelector('main')),
                     shell: rectData(document.querySelector('.chat-shell')),
                     messages: rectData(messagesEl),
@@ -1489,10 +1552,13 @@
                     'page=' + visual.pageLeft + ',' + visual.pageTop,
                     'scale=' + visual.scale
                 ].join(' ') : 'none'),
+                '--chat-viewport-width=' + snapshot.chatViewportWidth,
                 '--chat-viewport-height=' + snapshot.chatViewportHeight,
+                '--chat-viewport-left=' + snapshot.chatViewportLeft,
                 '--chat-viewport-top=' + snapshot.chatViewportTop,
                 'active=' + snapshot.activeElement,
                 'textarea font=' + snapshot.textareaStyle.fontSize + ' line=' + snapshot.textareaStyle.lineHeight + ' height=' + snapshot.textareaStyle.height,
+                'viewport ' + rectSummary(snapshot.rects.viewport),
                 'main ' + rectSummary(snapshot.rects.main),
                 'shell ' + rectSummary(snapshot.rects.shell),
                 'messages ' + rectSummary(snapshot.rects.messages),
@@ -2911,7 +2977,11 @@
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
         textEl.addEventListener('contextmenu', showComposerContextMenu);
-        textEl.addEventListener('focus', function() { updateViewportDebug('focus'); });
+        textEl.addEventListener('focus', function() {
+            syncViewportMetrics();
+            updateViewportDebug('focus');
+            scheduleScrollCorrection('focus');
+        });
         textEl.addEventListener('blur', function() { updateViewportDebug('blur'); });
         textEl.addEventListener('input', function() { updateViewportDebug('input'); });
         viewportDebugEl.addEventListener('pointerdown', viewportDebugPointerDown);
