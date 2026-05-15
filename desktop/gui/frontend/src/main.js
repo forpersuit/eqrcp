@@ -1,7 +1,7 @@
 import './style.css';
 import './app.css';
 
-import {ClipboardGetText, EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
+import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
@@ -574,14 +574,20 @@ function renderFeedbackPanel() {
                 <option>Purchase or license issue</option>
                 <option>Other</option>
             </select>
+            <label>Contact email</label>
+            <input id="feedback-contact" type="email" placeholder="Optional" />
             <label>Message</label>
             <textarea id="feedback-message" rows="5" placeholder="What happened?"></textarea>
             <label class="check">
                 <input id="feedback-diagnostics" type="checkbox" checked />
-                Include diagnostics preview
+                Include diagnostics
             </label>
+            <div class="feedback-note">Diagnostics are shown below before sending. EQT never attaches files being transferred.</div>
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
-            <button class="primary full" id="send-feedback" data-mailto="${escapeAttr(mailto)}">Open email draft</button>
+            <div class="feedback-actions">
+                <button class="primary" id="send-feedback" data-mailto="${escapeAttr(mailto)}">Open email draft</button>
+                <button class="ghost" id="copy-feedback">Copy feedback</button>
+            </div>
         </div>
     `;
 }
@@ -731,6 +737,7 @@ function bindEvents() {
     }
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
+    document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
 }
 
 function bindChatQRPanelEvents() {
@@ -1126,15 +1133,24 @@ async function openExternal(event) {
 
 async function sendFeedback(event) {
     await run(async () => {
-        const category = document.querySelector('#feedback-category')?.value || 'Feedback';
-        const message = document.querySelector('#feedback-message')?.value || '';
-        const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
-        const body = [
-            message,
-            includeDiagnostics ? '\n\nDiagnostics:\n' + buildDiagnostics() : '',
-        ].join('');
-        const mailto = feedbackMailto(body, category);
+        const feedback = collectFeedback();
+        const mailto = feedbackMailto(feedback.body, feedback.category);
         await OpenExternal(mailto || event.currentTarget.dataset.mailto);
+    }, {busy: false});
+}
+
+async function copyFeedback(event) {
+    await run(async () => {
+        const feedback = collectFeedback();
+        await ClipboardSetText(feedback.body);
+        const button = event.currentTarget;
+        const original = button.textContent;
+        button.textContent = 'Copied';
+        button.disabled = true;
+        window.setTimeout(() => {
+            button.textContent = original;
+            button.disabled = false;
+        }, 1600);
     }, {busy: false});
 }
 
@@ -1495,6 +1511,27 @@ function buildDiagnostics() {
         `history count: ${(status.history || []).length}`,
         `config: ${state.settings?.configPath || 'unknown'}`,
     ].join('\n');
+}
+
+function collectFeedback() {
+    const category = document.querySelector('#feedback-category')?.value || 'Feedback';
+    const contact = document.querySelector('#feedback-contact')?.value.trim() || '';
+    const message = document.querySelector('#feedback-message')?.value.trim() || '';
+    const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
+    const sections = [
+        `Category: ${category}`,
+        contact ? `Contact: ${contact}` : 'Contact: not provided',
+        '',
+        'Message:',
+        message || '(No message provided)',
+    ];
+    if (includeDiagnostics) {
+        sections.push('', 'Diagnostics:', buildDiagnostics());
+    }
+    return {
+        category,
+        body: sections.join('\n'),
+    };
 }
 
 function feedbackMailto(body, category = 'Feedback') {

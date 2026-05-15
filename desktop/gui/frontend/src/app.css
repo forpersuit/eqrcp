@@ -1055,6 +1055,7 @@ dd {
 
 .settings-panel input,
 .settings-panel select,
+.feedback-panel input,
 .feedback-panel select,
 .feedback-panel textarea {
     border: 1px solid var(--line);
@@ -1098,6 +1099,26 @@ dd {
 .feedback-panel {
     display: grid;
     gap: 12px;
+}
+
+.feedback-note {
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 10px;
+}
+
+.feedback-actions {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.feedback-actions button {
+    width: 100%;
 }
 
 .brand-mark {
