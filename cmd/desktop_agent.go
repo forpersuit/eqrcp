@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -153,10 +154,11 @@ func (agent *desktopAgent) handlePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (agent *desktopAgent) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	if r.Method == http.MethodOptions {
+	if handleDesktopAgentCORS(w, r, http.MethodGet) {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -167,10 +169,11 @@ func (agent *desktopAgent) handleHealth(w http.ResponseWriter, r *http.Request) 
 }
 
 func (agent *desktopAgent) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	if r.Method == http.MethodOptions {
+	if handleDesktopAgentCORS(w, r, http.MethodGet) {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -181,10 +184,11 @@ func (agent *desktopAgent) handleStatus(w http.ResponseWriter, r *http.Request) 
 }
 
 func (agent *desktopAgent) handleEvents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	if r.Method == http.MethodOptions {
+	if handleDesktopAgentCORS(w, r, http.MethodGet) {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -269,6 +273,9 @@ func (agent *desktopAgent) touchLocked() {
 }
 
 func (agent *desktopAgent) handleRestart(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -318,6 +325,9 @@ func (agent *desktopAgent) handleRestart(w http.ResponseWriter, r *http.Request)
 }
 
 func (agent *desktopAgent) handleSettings(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		settings, err := agent.readSettings()
@@ -360,6 +370,9 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 }
 
 func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -393,10 +406,11 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (agent *desktopAgent) handleTaskAction(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	if r.Method == http.MethodOptions {
+	if handleDesktopAgentCORS(w, r, http.MethodPost) {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -428,7 +442,65 @@ func parseDesktopAgentTaskActionPath(path string) (int, string, bool) {
 	return id, parts[2], true
 }
 
+func handleDesktopAgentCORS(w http.ResponseWriter, r *http.Request, methods ...string) bool {
+	origin := r.Header.Get("Origin")
+	if origin != "" && trustedDesktopAgentOrigin(origin, r.Host) {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if len(methods) > 0 {
+			allowed := append([]string(nil), methods...)
+			allowed = append(allowed, http.MethodOptions)
+			w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowed, ", "))
+		}
+	}
+	return r.Method == http.MethodOptions
+}
+
+func rejectCrossOriginDesktopAgent(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return false
+	}
+	if trustedDesktopAgentOrigin(origin, r.Host) {
+		return false
+	}
+	http.Error(w, "forbidden", http.StatusForbidden)
+	return true
+}
+
+func trustedDesktopAgentOrigin(origin string, requestHost string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if trustedDesktopAgentWailsOrigin(parsed) {
+		return true
+	}
+	if strings.EqualFold(parsed.Host, requestHost) {
+		return true
+	}
+	return trustedDesktopAgentLocalHost(parsed.Hostname())
+}
+
+func trustedDesktopAgentWailsOrigin(parsed *url.URL) bool {
+	host := strings.ToLower(parsed.Hostname())
+	return parsed.Scheme == "wails" || host == "wails.localhost"
+}
+
+func trustedDesktopAgentLocalHost(host string) bool {
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
+}
+
 func (agent *desktopAgent) handleHistory(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -441,6 +513,9 @@ func (agent *desktopAgent) handleHistory(w http.ResponseWriter, r *http.Request)
 }
 
 func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -458,6 +533,9 @@ func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Requ
 }
 
 func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

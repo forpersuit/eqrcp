@@ -451,6 +451,80 @@ func TestDesktopAgentRepeatMissingTask(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentRejectsCrossOriginControlRequests(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/tasks", strings.NewReader(`{"action":"share","paths":["secret.txt"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", "https://example.invalid")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-origin task status = %d, want %d", response.StatusCode, http.StatusForbidden)
+	}
+	if got := response.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want empty for rejected origin", got)
+	}
+}
+
+func TestDesktopAgentAllowsLocalAndWailsOrigins(t *testing.T) {
+	for _, origin := range []string{"http://127.0.0.1:19000", "http://localhost:19000", "http://192.168.1.40:19000", "wails://wails.localhost"} {
+		t.Run(origin, func(t *testing.T) {
+			agent := newDesktopAgent(application.Flags{})
+			server := httptest.NewServer(agent.routes())
+			defer server.Close()
+
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/status", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Origin", origin)
+			response, err := http.DefaultClient.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("trusted origin status = %d, want %d", response.StatusCode, http.StatusOK)
+			}
+			if got := response.Header.Get("Access-Control-Allow-Origin"); got != origin {
+				t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, origin)
+			}
+		})
+	}
+}
+
+func TestDesktopAgentHandlesTrustedPreflight(t *testing.T) {
+	agent := newDesktopAgent(application.Flags{})
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+
+	request, err := http.NewRequest(http.MethodOptions, server.URL+"/tasks/1/repeat", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Origin", "http://127.0.0.1:19000")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want %d", response.StatusCode, http.StatusNoContent)
+	}
+	if got := response.Header.Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodPost) {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want POST", got)
+	}
+}
+
 func TestDesktopAgentShutdownStopsActiveTask(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{})

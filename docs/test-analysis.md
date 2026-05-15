@@ -16,6 +16,33 @@ Expected result:
 - All package tests pass.
 - The root package builds without producing a checked-in binary.
 
+## Current Risk Review
+
+Reviewed against the current desktop-agent, Wails GUI, QR status page, chat, and
+Windows deployment flow on 2026-05-16.
+
+Confirmed major issue:
+
+- The desktop agent is a loopback HTTP control service. Control and status
+  endpoints must not be readable or writable from arbitrary browser origins,
+  because a public web page could otherwise trigger local task creation, task
+  repeat, stop, restart, shutdown, settings changes, or status disclosure while
+  the agent is running. The agent now rejects untrusted `Origin` values and only
+  allows empty-origin local clients, same-origin agent pages, local-network QR
+  pages, and the Wails desktop origin.
+
+No other confirmed release-blocking defects were found during this pass. The
+remaining high-risk areas are validation gaps rather than known broken behavior:
+
+- Windows Explorer integration still needs manual acceptance after changes that
+  touch desktop launch, agent forwarding, Wails UI, or transfer lifecycle.
+- Chat reconnection and mobile browser behavior still require physical-device
+  checks; automated server tests cover route contracts and recovery mechanics,
+  not OS backgrounding behavior.
+- The feedback surface is still an email/clipboard handoff rather than a ticket
+  endpoint. This is acceptable for the current product stage, but support
+  reliability still depends on user follow-through.
+
 ## CLI Checks
 
 ```sh
@@ -434,6 +461,10 @@ Expected result:
 - `GET /status` returns `idle` when no transfer is running.
 - `GET /status` includes recent task history with `completed`, `failed`, or `replaced` states.
 - `GET /events` streams agent status with server-sent events.
+- Status and control endpoints reject untrusted browser `Origin` values with
+  `403 Forbidden`.
+- Same-origin agent pages, local-network QR pages, Wails desktop pages, and local
+  non-browser clients continue to access agent status and control endpoints.
 - `GET /` returns a browser status page with the current task, recent history, clear-history action, stop-current action, stop-agent action, and EventSource-based status updates with `/status` polling fallback.
 - `GET /settings` returns editable desktop settings from the existing per-user config file, including detected interface options.
 - `POST /settings` updates output directory, interface, port, and browser-open preference in the existing config file.
@@ -489,6 +520,11 @@ Expected result:
 - The agent trims persisted recent task history to the configured limit and keeps new task IDs monotonic.
 - The history-clear endpoint and command clear both in-memory and persisted history.
 - The agent status formatter renders current task details and recent history.
+- Cross-origin browser requests from untrusted public origins are rejected before
+  they can create tasks or read agent status.
+- Trusted local-network and Wails origins receive scoped CORS headers instead of
+  `Access-Control-Allow-Origin: *`.
+- Trusted CORS preflight requests for QR-page repeat actions return `204`.
 - The agent status page renders the current task, recent history, lifecycle guidance for when a task remains in `Current` or moves into `History`, local clear/stop actions, EventSource updates, and fallback status polling.
 - The agent status formatter and page both render `current file` and `saved files` when those fields are available from transfer snapshots.
 - The browser agent page renders Stop Current on the active Current row instead of as a global header action.
