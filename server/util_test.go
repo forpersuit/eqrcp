@@ -636,7 +636,9 @@ func TestCompletedOneShotReceiveReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 	defer server.Shutdown()
 	server.setStatus("completed", "Transfer completed.")
-	server.ReceiveTo(server.outputDir)
+	if err := server.ReceiveTo(server.outputDir); err != nil {
+		t.Fatal(err)
+	}
 
 	response, err := http.Get(server.ReceiveURL)
 	if err != nil {

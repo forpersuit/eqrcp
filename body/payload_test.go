@@ -51,7 +51,9 @@ func TestFromArgsDirectoryZipName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromArgs() error = %v", err)
 	}
-	defer got.Delete()
+	defer func() {
+		_ = got.Delete()
+	}()
 
 	if got.Filename != "photos-directory-20260422-010203.zip" {
 		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "photos-directory-20260422-010203.zip")
@@ -83,7 +85,9 @@ func TestFromArgsMultipleFilesZipName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromArgs() error = %v", err)
 	}
-	defer got.Delete()
+	defer func() {
+		_ = got.Delete()
+	}()
 
 	if got.Filename != "eqrcp-multiple-files-20260422-010203.zip" {
 		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqrcp-multiple-files-20260422-010203.zip")

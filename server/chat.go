@@ -248,7 +248,7 @@ func (s *Server) Chat() error {
 		theme := session.chatThemeForClientLocked(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"))
 		session.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"messageCount": messageCount,
@@ -259,7 +259,9 @@ func (s *Server) Chat() error {
 			"theme":        theme,
 			"startedAt":    startedAt,
 			"lastActivity": lastActivity,
-		})
+		}); err != nil {
+			log.Println(err)
+		}
 	})
 	return nil
 }
@@ -511,7 +513,9 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		return
 	}
 	if r.MultipartForm != nil {
-		defer r.MultipartForm.RemoveAll()
+		defer func() {
+			_ = r.MultipartForm.RemoveAll()
+		}()
 	}
 	sender := sanitizeChatSender(r.FormValue("sender"))
 	avatar := sanitizeChatAvatar(r.FormValue("avatar"))
@@ -931,10 +935,6 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 	session.mu.Unlock()
 	notifyChatStatusHook(hook, snapshot)
 	return message, nil
-}
-
-func (session *chatSession) addMessage(message chatMessage) chatMessage {
-	return session.addMessageWithStatus(message, "active")
 }
 
 func (session *chatSession) addMessageWithStatus(message chatMessage, statusState string) chatMessage {
