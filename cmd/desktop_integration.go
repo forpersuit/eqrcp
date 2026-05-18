@@ -16,6 +16,9 @@ import (
 const windowsStartupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 const windowsStartupValueName = "eqrcp-agent"
 
+const linuxAutostartFile = "eqrcp-agent.desktop"
+const darwinLaunchAgentLabel = "io.github.forpersuit.eqrcp-agent"
+
 func installDesktopIntegration() error {
 	switch runtime.GOOS {
 	case "windows":
@@ -38,6 +41,10 @@ func installDesktopStartup() error {
 	switch runtime.GOOS {
 	case "windows":
 		return installWindowsDesktopStartup()
+	case "linux":
+		return installLinuxDesktopStartup()
+	case "darwin":
+		return installDarwinDesktopStartup()
 	default:
 		return fmt.Errorf("desktop startup is not implemented for %s yet", runtime.GOOS)
 	}
@@ -47,6 +54,10 @@ func uninstallDesktopStartup() error {
 	switch runtime.GOOS {
 	case "windows":
 		return uninstallWindowsDesktopStartup()
+	case "linux":
+		return uninstallLinuxDesktopStartup()
+	case "darwin":
+		return uninstallDarwinDesktopStartup()
 	default:
 		return fmt.Errorf("desktop startup is not implemented for %s yet", runtime.GOOS)
 	}
@@ -56,6 +67,10 @@ func desktopStartupStatus() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		return windowsDesktopStartupStatus()
+	case "linux":
+		return linuxDesktopStartupStatus()
+	case "darwin":
+		return darwinDesktopStartupStatus()
 	default:
 		return fmt.Sprintf("Desktop startup status is not implemented for %s yet.\n", runtime.GOOS), nil
 	}
@@ -573,4 +588,266 @@ func windowsHiddenCommand(exe string, args ...string) string {
 
 func windowsVBString(value string) string {
 	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+}
+
+// Linux autostart support: writes a freedesktop ~/.config/autostart/*.desktop
+// file that re-launches `eqrcp desktop agent` on session start. Honours
+// $XDG_CONFIG_HOME via os.UserConfigDir.
+
+func linuxAutostartPath() (string, error) {
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cfg, "autostart", linuxAutostartFile), nil
+}
+
+func linuxAutostartContent(exe string) string {
+	return fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=eqrcp Desktop Agent
+Comment=Background agent for eqrcp QR transfer and chat
+Exec=%s desktop agent
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+`, exe)
+}
+
+func installLinuxDesktopStartup() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	path, err := linuxAutostartPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(linuxAutostartContent(exe)), 0o644)
+}
+
+func uninstallLinuxDesktopStartup() error {
+	path, err := linuxAutostartPath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+type linuxStartupStatusEnv struct {
+	executable func() (string, error)
+	pathFn     func() (string, error)
+	readFile   func(string) ([]byte, error)
+}
+
+func linuxDesktopStartupStatus() (string, error) {
+	env := linuxStartupStatusEnv{
+		executable: os.Executable,
+		pathFn:     linuxAutostartPath,
+		readFile:   os.ReadFile,
+	}
+	return formatLinuxDesktopStartupStatus(env)
+}
+
+func formatLinuxDesktopStartupStatus(env linuxStartupStatusEnv) (string, error) {
+	var b strings.Builder
+	b.WriteString("Linux desktop startup status\n")
+	path, err := env.pathFn()
+	if err != nil {
+		b.WriteString(fmt.Sprintf("- autostart path: unavailable (%v)\n", err))
+		return b.String(), nil
+	}
+	b.WriteString(fmt.Sprintf("- autostart file: %s\n", path))
+	data, err := env.readFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			b.WriteString("- state: not installed\n")
+			return b.String(), nil
+		}
+		b.WriteString(fmt.Sprintf("- state: read error (%v)\n", err))
+		return b.String(), nil
+	}
+	exec := parseDesktopEntryExec(string(data))
+	b.WriteString(fmt.Sprintf("- Exec: %s\n", exec))
+	exe, exeErr := env.executable()
+	if exeErr != nil {
+		b.WriteString(fmt.Sprintf("- state: installed (current executable unknown: %v)\n", exeErr))
+		return b.String(), nil
+	}
+	expected := fmt.Sprintf("%s desktop agent", exe)
+	state := "installed"
+	if strings.TrimSpace(exec) != expected {
+		state = "needs repair"
+	}
+	b.WriteString(fmt.Sprintf("- expected Exec: %s\n", expected))
+	b.WriteString(fmt.Sprintf("- state: %s\n", state))
+	return b.String(), nil
+}
+
+func parseDesktopEntryExec(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "Exec=") {
+			return strings.TrimPrefix(line, "Exec=")
+		}
+	}
+	return ""
+}
+
+// macOS autostart support: writes a LaunchAgent plist to
+// ~/Library/LaunchAgents/<bundle-label>.plist with RunAtLoad=true so the
+// agent process starts on user login. The user can `launchctl load` it
+// immediately or just sign out / in.
+
+func darwinAutostartPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "Library", "LaunchAgents", darwinLaunchAgentLabel+".plist"), nil
+}
+
+func darwinAutostartContent(exe string) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>%s</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>%s</string>
+        <string>desktop</string>
+        <string>agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>
+`, darwinLaunchAgentLabel, escapeXMLText(exe))
+}
+
+func installDarwinDesktopStartup() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	path, err := darwinAutostartPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(darwinAutostartContent(exe)), 0o644)
+}
+
+func uninstallDarwinDesktopStartup() error {
+	path, err := darwinAutostartPath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+type darwinStartupStatusEnv struct {
+	executable func() (string, error)
+	pathFn     func() (string, error)
+	readFile   func(string) ([]byte, error)
+}
+
+func darwinDesktopStartupStatus() (string, error) {
+	env := darwinStartupStatusEnv{
+		executable: os.Executable,
+		pathFn:     darwinAutostartPath,
+		readFile:   os.ReadFile,
+	}
+	return formatDarwinDesktopStartupStatus(env)
+}
+
+func formatDarwinDesktopStartupStatus(env darwinStartupStatusEnv) (string, error) {
+	var b strings.Builder
+	b.WriteString("macOS desktop startup status\n")
+	path, err := env.pathFn()
+	if err != nil {
+		b.WriteString(fmt.Sprintf("- LaunchAgent path: unavailable (%v)\n", err))
+		return b.String(), nil
+	}
+	b.WriteString(fmt.Sprintf("- LaunchAgent file: %s\n", path))
+	b.WriteString(fmt.Sprintf("- Label: %s\n", darwinLaunchAgentLabel))
+	data, err := env.readFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			b.WriteString("- state: not installed\n")
+			return b.String(), nil
+		}
+		b.WriteString(fmt.Sprintf("- state: read error (%v)\n", err))
+		return b.String(), nil
+	}
+	program := parseLaunchAgentFirstProgram(string(data))
+	b.WriteString(fmt.Sprintf("- ProgramArguments[0]: %s\n", program))
+	exe, exeErr := env.executable()
+	if exeErr != nil {
+		b.WriteString(fmt.Sprintf("- state: installed (current executable unknown: %v)\n", exeErr))
+		return b.String(), nil
+	}
+	state := "installed"
+	if strings.TrimSpace(program) != exe {
+		state = "needs repair"
+	}
+	b.WriteString(fmt.Sprintf("- expected ProgramArguments[0]: %s\n", exe))
+	b.WriteString(fmt.Sprintf("- state: %s\n", state))
+	return b.String(), nil
+}
+
+// parseLaunchAgentFirstProgram extracts the first <string> inside
+// <key>ProgramArguments</key>'s <array>. Light XML parsing, no full DOM.
+func parseLaunchAgentFirstProgram(content string) string {
+	key := "<key>ProgramArguments</key>"
+	idx := strings.Index(content, key)
+	if idx < 0 {
+		return ""
+	}
+	rest := content[idx+len(key):]
+	arrStart := strings.Index(rest, "<array>")
+	if arrStart < 0 {
+		return ""
+	}
+	rest = rest[arrStart+len("<array>"):]
+	strStart := strings.Index(rest, "<string>")
+	if strStart < 0 {
+		return ""
+	}
+	rest = rest[strStart+len("<string>"):]
+	end := strings.Index(rest, "</string>")
+	if end < 0 {
+		return ""
+	}
+	return unescapeXMLText(rest[:end])
+}
+
+func escapeXMLText(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+func unescapeXMLText(s string) string {
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	return s
 }
