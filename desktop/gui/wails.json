@@ -9,5 +9,12 @@
   "author": {
     "name": "forpersuit",
     "email": "jinxpeeter@outlook.com"
+  },
+  "info": {
+    "productName": "eqrcp Desktop",
+    "productVersion": "0.1.0",
+    "companyName": "forpersuit",
+    "copyright": "Copyright © 2026 forpersuit",
+    "comments": "Easy QR Transfer — share files and chat over QR codes"
   }
 }

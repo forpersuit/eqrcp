@@ -154,9 +154,9 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
       落地：4 个 job（go-test 1.25/1.26、desktop GUI module、frontend
       build、golangci-lint）。lint 暂设 `continue-on-error`，待一次
       基线清理后转为强制。
-- [ ] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
+- [x] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
       加 `release.prerelease: auto`、加 changelog groups (符合规范第六节)。
-- [ ] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
+- [x] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
       companyName/copyright/comments`，让 NSIS 安装器版本字段正确。
 
 ### Track B — 跨平台 (macOS / Linux 提升到可发布)

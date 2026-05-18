@@ -47,9 +47,26 @@ changelog:
     - '^docs:'
     - '^test:'
     - '^chore:'
+  groups:
+    - title: '🚀 Features'
+      regexp: "^.*feat(\\(.+\\))?:.*$"
+      order: 0
+    - title: '🐛 Bug fixes'
+      regexp: "^.*fix(\\(.+\\))?:.*$"
+      order: 1
+    - title: '⚡ Performance'
+      regexp: "^.*perf(\\(.+\\))?:.*$"
+      order: 2
+    - title: '♻️ Refactor'
+      regexp: "^.*refactor(\\(.+\\))?:.*$"
+      order: 3
+    - title: 'Other'
+      order: 999
+release:
+  prerelease: auto
 nfpms:
   - package_name: eqrcp
-    homepage: https://github.com/claudiodangelis/qrcp
+    homepage: https://github.com/forpersuit/eqrcp
     maintainer: eqrcp maintainers
     description: Transfer files over wifi from your computer to your mobile device by scanning a QR code without leaving the terminal.
     license: MIT
