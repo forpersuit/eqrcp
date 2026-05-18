@@ -2452,15 +2452,18 @@
                     }
                 }
             });
-            var knownIDs = {};
-            state.messages.forEach(function(m) { knownIDs[m.id] = true; });
+            var byExistingID = {};
+            state.messages.forEach(function(m) { byExistingID[m.id] = m; });
             // Also handle recalled updates (same ID, recalled flag changed)
-            var fresh = incoming.filter(function(m) { return !knownIDs[m.id]; });
-            var updated = incoming.filter(function(m) {
-                if (!knownIDs[m.id]) { return false; }
-                return state.messages.some(function(existing) {
-                    return existing.id === m.id && existing.seq !== m.seq;
-                });
+            var fresh = [];
+            var updated = [];
+            incoming.forEach(function(m) {
+                var existing = byExistingID[m.id];
+                if (!existing) {
+                    fresh.push(m);
+                } else if (existing.seq !== m.seq) {
+                    updated.push(m);
+                }
             });
             if (!fresh.length && !updated.length) {
                 saveChatCache();
