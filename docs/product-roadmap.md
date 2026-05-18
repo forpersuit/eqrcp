@@ -149,8 +149,11 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 - [x] A1 决定 Go 版本基准。`go mod tidy` 推算出最低 `go 1.25`（依赖要求），
       最终采用 `go 1.25` + `toolchain go1.26.2`；workflow guide 的 CI 矩阵同步
       改为 `1.25 / 1.26`。`desktop/gui/go.mod` 仍是 1.23，独立 module 可保留。
-- [ ] A2 `.github/workflows/ci.yml`：matrix go-test、frontend build、lint。
+- [x] A2 `.github/workflows/ci.yml`：matrix go-test、frontend build、lint。
       CI runner 不安装 `scripts/install-hooks.sh`，hook 不进入 CI 路径。
+      落地：4 个 job（go-test 1.25/1.26、desktop GUI module、frontend
+      build、golangci-lint）。lint 暂设 `continue-on-error`，待一次
+      基线清理后转为强制。
 - [ ] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
       加 `release.prerelease: auto`、加 changelog groups (符合规范第六节)。
 - [ ] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
