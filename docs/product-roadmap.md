@@ -161,12 +161,17 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 
 ### Track B — 跨平台 (macOS / Linux 提升到可发布)
 
-- [ ] B1 扩展 `scripts/build-artifacts.sh`：darwin 与 linux 分支调用 wails，
-      产物落入 `dist/{platform}-{arch}/`，与 Windows 路径对齐。
-- [ ] B2 macOS Wails：渲染 `desktop/gui/build/darwin/Info.plist`（bundle id
-      `io.eqrcp.desktop`），生成 icns，文档化 codesign + notarize 流程。
-- [ ] B3 Linux Wails：新增 `desktop/gui/build/linux/` 模板，AppImage 打包，
-      `apt install libwebkit2gtk-4.1-dev` 列入 CI 前置。
+- [x] B1 扩展 `scripts/build-artifacts.sh`：darwin 与 linux 分支调用 wails，
+      产物落入 `dist/{platform}-{arch}/`，与 Windows 路径对齐。新增
+      `--cli-linux / --cli-macos / --cli-all` 选项交叉编译 CLI，host 为
+      darwin 时 `build_gui_current` 会复制 `.app` 到 `dist/darwin-<arch>/`。
+- [x] B2 macOS Wails：bundle id 改为 `io.github.forpersuit.eqrcp-desktop`
+      (`build/darwin/Info.plist` + `Info.dev.plist`)，icns 由 Wails 从
+      `build/appicon.png` 自动生成。codesign + notarize 流程文档化在
+      `docs/wails-build-issue.md`，实际签名延后到 C3。
+- [x] B3 Linux Wails：复用现有 `webkit2_41` build tag 支持，docs 补充
+      `tar.gz / AppImage / deb` 三种打包选项的说明；AppImage 工具链
+      具体接入留到 C1 (release.yml) 里再决定。
 - [ ] B4 `cmd/desktop_integration.go` 的 install/uninstall/startup/status：
       Linux 用 `.desktop` 文件 + `~/.config/autostart`，
       macOS 用 `LaunchAgents plist` + Finder Services。

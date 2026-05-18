@@ -137,3 +137,75 @@ git commit -m "Release v1.0.0"
 - [Git Hooks Setup](./git-hooks-setup.md)
 - [Pre-commit Hook Summary](./pre-commit-hook-summary.md)
 - [Wails官方文档](https://wails.io/)
+
+## 跨平台构建命令
+
+各平台的 Wails GUI 构建必须在对应宿主上执行（macOS 的 `.app` 不能在
+Linux/Windows 上生成，反之亦然）。Bundle id 已统一为
+`io.github.forpersuit.eqrcp-desktop`，定义在
+`desktop/gui/build/darwin/Info.plist` 与对应 NSIS 模板里。
+
+### Windows（amd64 / arm64）
+
+```bash
+cd desktop/gui
+wails build -clean -platform windows/amd64
+wails build -clean -platform windows/arm64
+# 产生 NSIS 安装器
+wails build -clean -nsis -platform windows/amd64
+```
+
+输出在 `desktop/gui/build/bin/`。
+
+### macOS（需在 macOS 主机上跑）
+
+```bash
+cd desktop/gui
+# 通用二进制（同时支持 Intel 与 Apple Silicon）
+wails build -clean -platform darwin/universal
+# 或者分开打两份
+wails build -clean -platform darwin/amd64
+wails build -clean -platform darwin/arm64
+```
+
+产物 `eqrcp-desktop.app/` 在 `desktop/gui/build/bin/`。Wails 会从
+`desktop/gui/build/appicon.png` 自动生成 `.icns`。
+
+**Codesign + Notarize**（需要 Apple Developer ID 证书）：
+
+```bash
+codesign --deep --force --verbose --sign "Developer ID Application: <Name>" \
+  --options runtime \
+  desktop/gui/build/bin/eqrcp-desktop.app
+
+# 打包成 dmg（需要 create-dmg）
+create-dmg desktop/gui/build/bin/eqrcp-desktop.app
+
+# 公证
+xcrun notarytool submit eqrcp-desktop.dmg \
+  --apple-id "$APPLE_ID" --team-id "$TEAM_ID" \
+  --password "$APP_SPECIFIC_PASSWORD" --wait
+
+xcrun stapler staple eqrcp-desktop.dmg
+```
+
+签名/公证留到首个 stable release 之前再做（Track C3）。
+
+### Linux
+
+```bash
+cd desktop/gui
+# 系统需要 libwebkit2gtk-4.1-dev
+wails build -clean -tags webkit2_41
+```
+
+产物 `eqrcp-desktop` 二进制在 `desktop/gui/build/bin/`。
+
+**打包**：Linux 没有标准格式，常见三种：
+
+- `.tar.gz` —— 最简单，直接 `tar czf eqrcp-desktop-linux-amd64.tar.gz -C build/bin eqrcp-desktop`。
+- `.AppImage` —— 用 `linuxdeploy` + `appimagetool`，参考 Wails 官方示例。
+- `.deb` —— 用 `nfpms`（goreleaser 已支持 CLI 的 deb，但 GUI 需要单独配置）。
+
+`scripts/build-artifacts.sh --gui` 会调用对应宿主平台的 Wails 构建，并
+把产物拷到 `dist/test-artifacts/{linux,darwin,windows}-{arch}/`。

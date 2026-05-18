@@ -21,7 +21,8 @@ go.work
 # Build directories
 bin/
 dist/
-build/
+/build/
+desktop/gui/build/bin/
 desktop/gui/eqrcp-desktop
 docs/img/venv/
 *:Zone.Identifier
