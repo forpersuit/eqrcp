@@ -76,8 +76,6 @@ jobs:
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
-    # Advisory until baseline cleanup pass — see roadmap A2.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

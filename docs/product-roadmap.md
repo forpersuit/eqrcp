@@ -152,8 +152,8 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 - [x] A2 `.github/workflows/ci.yml`：matrix go-test、frontend build、lint。
       CI runner 不安装 `scripts/install-hooks.sh`，hook 不进入 CI 路径。
       落地：4 个 job（go-test 1.25/1.26、desktop GUI module、frontend
-      build、golangci-lint）。lint 暂设 `continue-on-error`，待一次
-      基线清理后转为强制。
+      build、golangci-lint）。lint 已经过 errcheck/unused 基线清理
+      (commit `d889987`)，现在是强制 gate。
 - [x] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
       加 `release.prerelease: auto`、加 changelog groups (符合规范第六节)。
 - [x] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
@@ -216,3 +216,22 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 
 每完成一个条目，把 `[ ]` 改为 `[x]` 并补一行执行摘要（commit 哈希 + 一句
 话影响），保留时间顺序。Bug/阻塞写到对应条目下方缩进。
+
+### 已完成首次端到端验证
+
+`v0.1.0-rc.2` (commit `d26b9c4`) 是第一次成功跑通发布流水线的 tag，产物：
+- CLI: linux/darwin/windows × 386/amd64/arm/arm64 (tar.gz + zip)
+- Linux: `.deb` + `.rpm` × 4 arch
+- Wails GUI: `eqrcp-desktop-windows-amd64.exe`、
+  `eqrcp-desktop-darwin-universal.tar.gz`、
+  `eqrcp-desktop-linux-amd64.tar.gz`
+- `checksums.txt`
+
+首跑 CI/Release 红的根因 (commit `d26b9c4`):
+1. goreleaser 报「archive has different count of binaries」——加
+   `allow_different_binary_count: true`。
+2. `go-test-desktop` 报 `pattern all:frontend/dist: no matching files`——
+   在测试前补 `npm ci && npm run build`。
+3. golangci-lint 报 Go toolchain 1.26 不兼容——改 `install-mode: goinstall`
+   用 runner 自带 Go 重编 lint。
+4. 6 条 errcheck/unused 基线清理 (commit `d889987`)。
