@@ -138,3 +138,68 @@ Paid feature candidates:
 - Multi-device presets.
 - Organization deployment controls.
 - Priority support and managed update channels.
+
+## 跨平台、P2P、Release 流水线开发计划
+
+Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
+`[x]` done, `[-]` deferred. Update inline as work lands.
+
+### Track A — CI 基础 (unblocks everything else)
+
+- [x] A1 决定 Go 版本基准。`go mod tidy` 推算出最低 `go 1.25`（依赖要求），
+      最终采用 `go 1.25` + `toolchain go1.26.2`；workflow guide 的 CI 矩阵同步
+      改为 `1.25 / 1.26`。`desktop/gui/go.mod` 仍是 1.23，独立 module 可保留。
+- [ ] A2 `.github/workflows/ci.yml`：matrix go-test、frontend build、lint。
+      CI runner 不安装 `scripts/install-hooks.sh`，hook 不进入 CI 路径。
+- [ ] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
+      加 `release.prerelease: auto`、加 changelog groups (符合规范第六节)。
+- [ ] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
+      companyName/copyright/comments`，让 NSIS 安装器版本字段正确。
+
+### Track B — 跨平台 (macOS / Linux 提升到可发布)
+
+- [ ] B1 扩展 `scripts/build-artifacts.sh`：darwin 与 linux 分支调用 wails，
+      产物落入 `dist/{platform}-{arch}/`，与 Windows 路径对齐。
+- [ ] B2 macOS Wails：渲染 `desktop/gui/build/darwin/Info.plist`（bundle id
+      `io.eqrcp.desktop`），生成 icns，文档化 codesign + notarize 流程。
+- [ ] B3 Linux Wails：新增 `desktop/gui/build/linux/` 模板，AppImage 打包，
+      `apt install libwebkit2gtk-4.1-dev` 列入 CI 前置。
+- [ ] B4 `cmd/desktop_integration.go` 的 install/uninstall/startup/status：
+      Linux 用 `.desktop` 文件 + `~/.config/autostart`，
+      macOS 用 `LaunchAgents plist` + Finder Services。
+
+### Track C — Release 流程 (依赖 A、B)
+
+- [ ] C1 `.github/workflows/release.yml`：tag `v*` 触发，五个 job：
+      `goreleaser-cli`、`wails-windows`、`wails-macos`、`wails-linux`、
+      `aggregate-release`（softprops/action-gh-release 上传到同一 tag）。
+- [ ] C2 `.github/release-drafter.yml`：按 Conventional Commits 自动分组
+      草拟 release notes，替代手写 CHANGELOG。
+- [-] C3 签名/公证：Apple Developer ID + Windows EV/OV 证书，延后到首个
+      stable release 之前再做（钱+资质门槛）。
+
+### Track D — P2P / STUN 跨网传输 (独立轨道)
+
+- [ ] D1 抽出 `Transport` interface，把现 HTTP handler 改写为
+      `httpTransport` 实现 (LAN 模式默认保留)。
+- [ ] D2 Signaling 服务 MVP：轻量 WS 中继，短码复用现有 `random-path`，
+      托管在公网小机器上 (或 Cloudflare Workers)。
+- [ ] D3 集成 `github.com/pion/webrtc/v4`：PeerConnection + 两条
+      DataChannel (`ctrl` JSON / `data` 二进制)。STUN 用
+      `stun:stun.l.google.com:19302` 起步。
+- [ ] D4 QR 内容升级为 `https://signal.eqrcp.io/j/<code>#k=<key>`，
+      CLI 加 `--lan` / `--p2p` flag，握手失败时降级提示。
+- [-] D5 TURN fallback：监控 ICE 失败率，超阈值再上 `coturn`。
+
+### 推进顺序
+
+1. A1 → A2 → A3 → A4 (CI 解死结，无外部依赖)
+2. B1 → B2 / B3 并行 → B4 (macOS / Linux 提升到「能打包」)
+3. C1 → C2 (打通自动发布)
+4. D 与 A/B/C 并行；D1 之后才能继续 D2/D3
+5. C3、D5 延后到产品需要时
+
+### 进度同步
+
+每完成一个条目，把 `[ ]` 改为 `[x]` 并补一行执行摘要（commit 哈希 + 一句
+话影响），保留时间顺序。Bug/阻塞写到对应条目下方缩进。

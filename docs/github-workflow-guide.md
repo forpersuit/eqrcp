@@ -104,7 +104,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.23']
+        go-version: ['1.25', '1.26']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
@@ -150,7 +150,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.25'
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
