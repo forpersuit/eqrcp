@@ -235,3 +235,4 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 3. golangci-lint 报 Go toolchain 1.26 不兼容——改 `install-mode: goinstall`
    用 runner 自带 Go 重编 lint。
 4. 6 条 errcheck/unused 基线清理 (commit `d889987`)。
+5. lint 转为强制 gate (commit `609d80f`)。
