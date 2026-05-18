@@ -63,9 +63,10 @@ func ZipFiles(files []string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			defer file.Close()
-			if err := zip.Add(filename, file, fileinfo); err != nil {
-				return "", err
+			addErr := zip.Add(filename, file, fileinfo)
+			file.Close()
+			if addErr != nil {
+				return "", addErr
 			}
 		}
 	}
