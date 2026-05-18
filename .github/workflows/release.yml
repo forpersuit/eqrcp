@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-cli:
+    name: Release CLI (goreleaser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-wails-windows:
+    name: Release Windows GUI
+    runs-on: windows-latest
+    needs: release-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build Wails (windows/amd64)
+        working-directory: desktop/gui
+        run: wails build -clean -platform windows/amd64
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          cp desktop/gui/build/bin/eqrcp-desktop.exe out/eqrcp-desktop-windows-amd64.exe
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: out/*
+
+  release-wails-macos:
+    name: Release macOS GUI
+    runs-on: macos-latest
+    needs: release-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build Wails (darwin/universal)
+        working-directory: desktop/gui
+        run: wails build -clean -platform darwin/universal
+      - name: Stage artifacts
+        run: |
+          mkdir -p out
+          cd desktop/gui/build/bin
+          tar -czf "$GITHUB_WORKSPACE/out/eqrcp-desktop-darwin-universal.tar.gz" eqrcp-desktop.app
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: out/*
+
+  release-wails-linux:
+    name: Release Linux GUI
+    runs-on: ubuntu-latest
+    needs: release-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+      - name: Install Wails system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build Wails (linux/amd64)
+        working-directory: desktop/gui
+        run: wails build -clean -tags webkit2_41
+      - name: Stage artifacts
+        run: |
+          mkdir -p out
+          cd desktop/gui/build/bin
+          tar -czf "$GITHUB_WORKSPACE/out/eqrcp-desktop-linux-amd64.tar.gz" eqrcp-desktop
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: out/*

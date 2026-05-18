@@ -178,11 +178,16 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 
 ### Track C — Release 流程 (依赖 A、B)
 
-- [ ] C1 `.github/workflows/release.yml`：tag `v*` 触发，五个 job：
-      `goreleaser-cli`、`wails-windows`、`wails-macos`、`wails-linux`、
-      `aggregate-release`（softprops/action-gh-release 上传到同一 tag）。
-- [ ] C2 `.github/release-drafter.yml`：按 Conventional Commits 自动分组
-      草拟 release notes，替代手写 CHANGELOG。
+- [x] C1 `.github/workflows/release.yml`：tag `v*` 触发，4 个 job：
+      `release-cli` (goreleaser ubuntu)、`release-wails-windows`、
+      `release-wails-macos`、`release-wails-linux`。各 Wails job 用
+      `softprops/action-gh-release@v2` 把 `.tar.gz`（macOS 是
+      `eqrcp-desktop.app` 压成 tar.gz）追加到同一 tag。NSIS / AppImage /
+      dmg 留到下一轮。
+- [-] C2 release-drafter 暂不引入。当前流程「直接 commit 到 master + tag」
+      不经过 PR，release-drafter 的 PR-based 草稿没数据可用。
+      `.goreleaser.yml` 的 changelog groups (A3 已加) 已覆盖按 type 分组
+      展示 changelog 的需求；切到 PR 流程后再开 C2。
 - [-] C3 签名/公证：Apple Developer ID + Windows EV/OV 证书，延后到首个
       stable release 之前再做（钱+资质门槛）。
 
