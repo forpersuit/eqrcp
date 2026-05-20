@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>04-软件使用说明书.md</title>
+<style>
+  @page {
+    size: A4;
+    margin: 25mm 20mm 25mm 20mm;
+    @top-center {
+      content: "eqrcp V1.0";
+      font-family: "DejaVu Sans", sans-serif;
+      font-size: 9pt;
+    }
+    @bottom-center {
+      content: "Page " counter(page);
+      font-size: 9pt;
+    }
+  }
+  body {
+    font-family: "DejaVu Sans", "Noto Sans CJK SC", "WenQuanYi Micro Hei", sans-serif;
+    font-size: 11pt;
+    line-height: 1.7;
+    color: #333;
+    max-width: 100%;
+  }
+  h1 { font-size: 18pt; border-bottom: 2px solid #333; padding-bottom: 4pt; margin-top: 20pt; }
+  h2 { font-size: 14pt; border-bottom: 1px solid #999; padding-bottom: 2pt; margin-top: 16pt; }
+  h3 { font-size: 12pt; margin-top: 12pt; }
+  h4 { font-size: 11pt; margin-top: 8pt; }
+  pre, code {
+    font-family: "DejaVu Sans Mono", "Courier New", monospace;
+    font-size: 9pt;
+    background: #f5f5f5;
+    padding: 2pt 4pt;
+    border-radius: 2pt;
+  }
+  pre {
+    padding: 8pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  pre code { background: none; padding: 0; }
+  blockquote {
+    border-left: 3pt solid #ccc;
+    margin-left: 0;
+    padding-left: 12pt;
+    color: #666;
+  }
+  table { border-collapse: collapse; margin: 8pt 0; }
+  th, td { border: 1px solid #ccc; padding: 4pt 8pt; text-align: left; }
+  th { background: #eee; }
+  hr { border: none; border-top: 1px solid #ccc; margin: 12pt 0; }
+  ul, ol { padding-left: 20pt; }
+  img { max-width: 100%; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+<h1>eqrcp局域网文件传输系统 软件使用说明书</h1>
+
+<p><strong>软件名称</strong>: eqrcp局域网文件传输系统  </p>
+<p><strong>软件版本</strong>: V1.0  </p>
+<p><strong>适用平台</strong>: Windows/Linux/macOS  </p>
+<p><strong>编制日期</strong>: 2026年5月</p>
+
+<div class="page-break"></div>
+
+<h2>1. 软件概述</h2>
+
+<h3>1.1 软件简介</h3>
+<p>eqrcp是一款简单易用的局域网文件传输工具，通过在计算机终端显示二维码，实现计算机与移动设备之间的快速文件传输。无需安装移动端应用，移动设备通过浏览器扫码即可访问。</p>
+
+<h3>1.2 主要功能</h3>
+<p>1. <strong>文件发送</strong>: 将计算机上的文件发送到移动设备</p>
+<p>2. <strong>文件接收</strong>: 从移动设备接收文件到计算机</p>
+<p>3. <strong>实时聊天</strong>: 局域网内多设备实时文本和文件交流</p>
+<p>4. <strong>桌面集成</strong>: Windows系统右键菜单快速分享</p>
+<p>5. <strong>安全传输</strong>: 支持HTTPS加密传输</p>
+
+<h3>1.3 系统要求</h3>
+
+<p><strong>计算机端</strong>:</p>
+<li>操作系统: Windows 7+/Linux/macOS 10.12+</li>
+<li>内存: 512MB及以上</li>
+<li>硬盘: 50MB可用空间</li>
+<li>网络: 局域网连接</li>
+
+<p><strong>移动设备端</strong>:</p>
+<li>浏览器: Chrome、Safari、Firefox等现代浏览器</li>
+<li>网络: 与计算机在同一局域网</li>
+
+<div class="page-break"></div>
+
+<h2>2. 安装与配置</h2>
+
+<h3>2.1 Windows系统安装</h3>
+
+<h4>2.1.1 下载安装</h4>
+<p>1. 下载<code>eqrcp.exe</code>可执行文件</p>
+<p>2. 将文件放到任意目录（建议：<code>C:\Program Files\eqrcp\</code>）</p>
+<p>3. 将该目录添加到系统PATH环境变量</p>
+
+<p><strong>添加PATH步骤</strong>:</p>
+<p>1. 右键&quot;此电脑&quot; → &quot;属性&quot;</p>
+<p>2. 点击&quot;高级系统设置&quot;</p>
+<p>3. 点击&quot;环境变量&quot;</p>
+<p>4. 在&quot;系统变量&quot;中找到&quot;Path&quot;，点击&quot;编辑&quot;</p>
+<p>5. 点击&quot;新建&quot;，输入eqrcp所在目录路径</p>
+<p>6. 点击&quot;确定&quot;保存</p>
+
+<h4>2.1.2 验证安装</h4>
+<p>打开命令提示符（cmd），输入：</p>
+<pre><code>eqrcp version
+</code></pre>
+<p>如果显示版本信息，说明安装成功。</p>
+
+<h4>2.1.3 桌面集成（可选）</h4>
+<p>在命令提示符中执行：</p>
+<pre><code>eqrcp desktop install
+</code></pre>
+<p>安装完成后，右键点击文件或文件夹，会出现&quot;Share with eqrcp&quot;选项。</p>
+
+<h3>2.2 Linux系统安装</h3>
+
+<h4>2.2.1 下载安装</h4>
+<p>1. 下载<code>eqrcp</code>可执行文件</p>
+<p>2. 添加执行权限：</p>
+<pre><code>chmod +x eqrcp
+</code></pre>
+<p>3. 移动到系统PATH目录：</p>
+<pre><code>sudo mv eqrcp /usr/local/bin/
+</code></pre>
+
+<h4>2.2.2 验证安装</h4>
+<pre><code>eqrcp version
+</code></pre>
+
+<h3>2.3 macOS系统安装</h3>
+
+<h4>2.3.1 下载安装</h4>
+<p>1. 下载<code>eqrcp</code>可执行文件</p>
+<p>2. 添加执行权限：</p>
+<pre><code>chmod +x eqrcp
+</code></pre>
+<p>3. 移动到系统PATH目录：</p>
+<pre><code>sudo mv eqrcp /usr/local/bin/
+</code></pre>
+
+<h4>2.3.2 首次运行</h4>
+<p>macOS可能提示&quot;无法验证开发者&quot;，解决方法：</p>
+<p>1. 打开&quot;系统偏好设置&quot; → &quot;安全性与隐私&quot;</p>
+<p>2. 点击&quot;仍要打开&quot;</p>
+<p>3. 或在终端执行：</p>
+<pre><code>sudo xattr -r -d com.apple.quarantine /usr/local/bin/eqrcp
+</code></pre>
+
+<h3>2.4 配置向导</h3>
+
+<p>首次使用建议运行配置向导：</p>
+<pre><code>eqrcp config
+</code></pre>
+
+<p>配置向导会引导您设置：</p>
+<li>默认网络接口</li>
+<li>默认端口</li>
+<li>是否启用HTTPS</li>
+<li>接收文件保存目录</li>
+<li>其他选项</li>
+
+<p>配置文件保存位置：</p>
+<li>Linux/macOS: <code>~/.config/eqrcp/config.yml</code></li>
+<li>Windows: <code>%APPDATA%\eqrcp\config.yml</code></li>
+
+<div class="page-break"></div>
+
+<h2>3. 基本使用</h2>
+
+<h3>3.1 发送文件</h3>
+
+<h4>3.1.1 发送单个文件</h4>
+<p>在终端中执行：</p>
+<pre><code>eqrcp 文件路径
+</code></pre>
+
+<p><strong>示例</strong>:</p>
+<pre><code>eqrcp ~/Documents/report.pdf
+</code></pre>
+
+<p>执行后，终端会显示：</p>
+<p>1. 访问URL</p>
+<p>2. 二维码</p>
+<p>3. 等待连接提示</p>
+
+<p>使用移动设备扫描二维码，浏览器会自动打开下载页面，点击下载即可。</p>
+
+<h4>3.1.2 发送多个文件</h4>
+<pre><code>eqrcp 文件1 文件2 文件3
+</code></pre>
+
+<p><strong>示例</strong>:</p>
+<pre><code>eqrcp photo1.jpg photo2.jpg photo3.jpg
+</code></pre>
+
+<p>系统会自动将多个文件打包成zip压缩包供下载。</p>
+
+<h4>3.1.3 发送整个目录</h4>
+<pre><code>eqrcp 目录路径/
+</code></pre>
+
+<p><strong>示例</strong>:</p>
+<pre><code>eqrcp ~/Pictures/Vacation/
+</code></pre>
+
+<p>目录会被打包成zip压缩包，下载后解压即可。</p>
+
+<h4>3.1.4 强制使用zip压缩</h4>
+<p>即使是单个文件，也可以强制打包成zip：</p>
+<pre><code>eqrcp --zip large-video.mp4
+</code></pre>
+
+<h3>3.2 接收文件</h3>
+
+<h4>3.2.1 接收到当前目录</h4>
+<p>在终端中执行：</p>
+<pre><code>eqrcp receive
+</code></pre>
+
+<p>终端显示二维码后，用移动设备扫码，会打开上传页面。</p>
+
+<h4>3.2.2 接收到指定目录</h4>
+<pre><code>eqrcp receive --output /path/to/directory
+</code></pre>
+
+<p><strong>示例</strong>:</p>
+<pre><code>eqrcp receive --output ~/Downloads/
+</code></pre>
+
+<h4>3.2.3 上传文件</h4>
+<p>在移动设备浏览器中：</p>
+<p>1. 点击&quot;选择文件&quot;按钮</p>
+<p>2. 选择一个或多个文件</p>
+<p>3. 点击&quot;上传&quot;按钮</p>
+<p>4. 等待上传完成</p>
+
+<h4>3.2.4 粘贴文本</h4>
+<p>在上传页面中：</p>
+<p>1. 在文本框中输入或粘贴文本</p>
+<p>2. 点击&quot;发送文本&quot;按钮</p>
+<p>3. 文本会保存为<code>.txt</code>文件</p>
+
+<h4>3.2.5 粘贴图片</h4>
+<p>在支持的浏览器中（Chrome、Safari）：</p>
+<p>1. 复制图片到剪贴板</p>
+<p>2. 在上传页面点击&quot;粘贴剪贴板&quot;</p>
+<p>3. 图片会自动上传并保存为<code>.png</code>文件</p>
+
+<h3>3.3 实时聊天</h3>
+
+<h4>3.3.1 启动聊天</h4>
+<pre><code>eqrcp chat
+</code></pre>
+
+<p>如果想同时在浏览器中打开：</p>
+<pre><code>eqrcp chat --browser
+</code></pre>
+
+<h4>3.3.2 使用聊天功能</h4>
+<p>1. 移动设备扫码进入聊天页面</p>
+<p>2. 在输入框输入消息，点击发送</p>
+<p>3. 消息会实时显示在所有连接的设备上</p>
+<p>4. 点击附件按钮可以发送文件</p>
+
+<h4>3.3.3 多设备聊天</h4>
+<p>多个设备可以同时扫码加入同一个聊天室，实现多人聊天。</p>
+
+<h4>3.3.4 退出聊天</h4>
+<p>在终端按<code>Ctrl+C</code>停止服务。</p>
+
+<div class="page-break"></div>
+
+<h2>4. 高级功能</h2>
+
+<h3>4.1 网络配置</h3>
+
+<h4>4.1.1 指定网络接口</h4>
+<p>如果计算机有多个网络接口（如有线和无线），可以指定使用哪个：</p>
+<pre><code>eqrcp --interface wlan0 file.pdf
+</code></pre>
+
+<p>查看可用接口：</p>
+<pre><code>ip addr  # Linux
+ifconfig  # macOS
+ipconfig  # Windows
+</code></pre>
+
+<h4>4.1.2 指定端口</h4>
+<pre><code>eqrcp --port 8080 file.pdf
+</code></pre>
+
+<p>使用随机端口（默认）：</p>
+<pre><code>eqrcp --port 0 file.pdf
+</code></pre>
+
+<h4>4.1.3 指定URL路径</h4>
+<pre><code>eqrcp --path myfiles file.pdf
+</code></pre>
+
+<p>生成的URL会是：<code>http://192.168.1.100:8080/myfiles</code></p>
+
+<p>使用随机路径（默认，更安全）：</p>
+<pre><code>eqrcp --path &quot;&quot; file.pdf
+</code></pre>
+
+<h4>4.1.4 使用域名</h4>
+<p>如果配置了局域网DNS或hosts：</p>
+<pre><code>eqrcp --fqdn mycomputer.local file.pdf
+</code></pre>
+
+<h3>4.2 安全功能</h3>
+
+<h4>4.2.1 启用HTTPS</h4>
+<pre><code>eqrcp --secure --tls-cert cert.pem --tls-key key.pem file.pdf
+</code></pre>
+
+<h4>4.2.2 生成自签名证书</h4>
+<pre><code>openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+</code></pre>
+
+<p><strong>注意</strong>: 使用自签名证书时，移动设备浏览器会显示安全警告，需要手动信任。</p>
+
+<h3>4.3 保持服务运行</h3>
+
+<p>默认情况下，传输完成后服务会自动关闭。如果需要保持运行：</p>
+<pre><code>eqrcp --keep-alive file.pdf
+</code></pre>
+
+<p>这样可以多次下载同一个文件，或接收多个文件。</p>
+
+<p>手动停止服务：按<code>Ctrl+C</code></p>
+
+<h3>4.4 在浏览器中打开</h3>
+
+<p>除了在终端显示二维码，还可以在浏览器中打开：</p>
+<pre><code>eqrcp --browser file.pdf
+</code></pre>
+
+<p>浏览器会打开一个页面显示二维码，方便截图分享。</p>
+
+<h3>4.5 反色二维码</h3>
+
+<p>如果终端背景是浅色，二维码可能不清晰，可以使用反色：</p>
+<pre><code>eqrcp --reversed file.pdf
+</code></pre>
+
+<div class="page-break"></div>
+
+<h2>5. 桌面集成（Windows）</h2>
+
+<h3>5.1 安装桌面集成</h3>
+
+<p>在命令提示符中执行：</p>
+<pre><code>eqrcp desktop install
+</code></pre>
+
+<p>安装后会添加：</p>
+<p>1. 文件右键菜单：&quot;Share with eqrcp&quot;</p>
+<p>2. 文件夹右键菜单：&quot;Share with eqrcp&quot;</p>
+<p>3. &quot;发送到&quot;菜单：&quot;Share with eqrcp&quot;</p>
+
+<h3>5.2 使用右键菜单</h3>
+
+<h4>5.2.1 分享单个文件</h4>
+<p>1. 右键点击文件</p>
+<p>2. 选择&quot;Share with eqrcp&quot;</p>
+<p>3. 会弹出窗口显示二维码</p>
+<p>4. 移动设备扫码下载</p>
+
+<h4>5.2.2 分享多个文件</h4>
+<p>1. 选中多个文件</p>
+<p>2. 右键选择&quot;发送到&quot; → &quot;Share with eqrcp&quot;</p>
+<p>3. 文件会打包成zip供下载</p>
+
+<h4>5.2.3 分享文件夹</h4>
+<p>1. 右键点击文件夹</p>
+<p>2. 选择&quot;Share with eqrcp&quot;</p>
+<p>3. 文件夹会打包成zip供下载</p>
+
+<h3>5.3 桌面接收文件</h3>
+
+<p>右键点击文件夹，选择&quot;Receive with eqrcp&quot;（如果已配置），可以直接接收文件到该文件夹。</p>
+
+<h3>5.4 查看集成状态</h3>
+
+<pre><code>eqrcp desktop status
+</code></pre>
+
+<p>会显示当前桌面集成的安装状态。</p>
+
+<h3>5.5 卸载桌面集成</h3>
+
+<pre><code>eqrcp desktop uninstall
+</code></pre>
+
+<p>会移除所有右键菜单项。</p>
+
+<div class="page-break"></div>
+
+<h2>6. 配置文件</h2>
+
+<h3>6.1 配置文件位置</h3>
+
+<li><strong>Linux/macOS</strong>: <code>~/.config/eqrcp/config.yml</code></li>
+<li><strong>Windows</strong>: <code>%APPDATA%\eqrcp\config.yml</code></li>
+
+<h3>6.2 配置文件示例</h3>
+
+<pre><code># 网络接口（any表示自动选择）
+interface: any
+
+# 端口（0表示随机端口）
+port: 0
+
+# URL路径（空表示随机路径）
+path: &quot;&quot;
+
+# 完全限定域名
+fqdn: &quot;&quot;
+
+# 保持服务运行
+keepalive: false
+
+# 启用HTTPS
+secure: false
+
+# TLS证书路径
+tls-cert: &quot;&quot;
+
+# TLS私钥路径
+tls-key: &quot;&quot;
+
+# 接收文件保存目录
+output: &quot;.&quot;
+
+# 在浏览器中打开
+browser: false
+
+# 反色二维码
+reversed: false
+</code></pre>
+
+<h3>6.3 使用自定义配置文件</h3>
+
+<pre><code>eqrcp --config /path/to/config.yml file.pdf
+</code></pre>
+
+<h3>6.4 环境变量配置</h3>
+
+<p>所有配置项都可以通过环境变量设置，使用<code>EQRCP_</code>前缀：</p>
+
+<p><strong>Linux/macOS</strong>:</p>
+<pre><code>export EQRCP_INTERFACE=wlan0
+export EQRCP_PORT=8080
+export EQRCP_KEEPALIVE=true
+eqrcp file.pdf
+</code></pre>
+
+<p><strong>Windows</strong>:</p>
+<pre><code>set EQRCP_INTERFACE=WiFi
+set EQRCP_PORT=8080
+set EQRCP_KEEPALIVE=true
+eqrcp file.pdf
+</code></pre>
+
+<h3>6.5 配置优先级</h3>
+
+<p>命令行参数 &gt; 环境变量 &gt; 配置文件 &gt; 默认值</p>
+
+<div class="page-break"></div>
+
+<h2>7. 常见问题</h2>
+
+<h3>7.1 移动设备无法访问</h3>
+
+<p><strong>问题</strong>: 扫码后浏览器无法打开页面</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 确认计算机和移动设备在同一局域网</p>
+<p>2. 检查计算机防火墙是否阻止了端口</p>
+<p>3. 尝试手动输入URL而不是扫码</p>
+<p>4. 尝试指定不同的网络接口</p>
+
+<p><strong>Windows防火墙设置</strong>:</p>
+<p>1. 打开&quot;Windows Defender 防火墙&quot;</p>
+<p>2. 点击&quot;允许应用通过防火墙&quot;</p>
+<p>3. 点击&quot;更改设置&quot;</p>
+<p>4. 找到eqrcp或添加新应用</p>
+<p>5. 勾选&quot;专用&quot;和&quot;公用&quot;网络</p>
+
+<h3>7.2 二维码显示不清晰</h3>
+
+<p><strong>问题</strong>: 终端中的二维码无法扫描</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 调整终端窗口大小，使二维码更大</p>
+<p>2. 使用<code>--reversed</code>参数反色显示</p>
+<p>3. 使用<code>--browser</code>参数在浏览器中显示</p>
+<p>4. 手动输入URL</p>
+
+<h3>7.3 文件传输中断</h3>
+
+<p><strong>问题</strong>: 传输大文件时中途失败</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 确保网络连接稳定</p>
+<p>2. 使用<code>--keep-alive</code>参数保持服务运行</p>
+<p>3. 移动设备浏览器支持断点续传的话可以重新下载</p>
+<p>4. 尝试使用<code>--zip</code>压缩后传输</p>
+
+<h3>7.4 端口被占用</h3>
+
+<p><strong>问题</strong>: 提示端口已被占用</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 使用<code>--port 0</code>让系统自动分配端口</p>
+<p>2. 或指定其他端口：<code>--port 8888</code></p>
+<p>3. 查找占用端口的程序并关闭</p>
+
+<p><strong>查找占用端口的程序</strong>:</p>
+<pre><code># Linux/macOS
+lsof -i :8080
+
+# Windows
+netstat -ano | findstr :8080
+</code></pre>
+
+<h3>7.5 上传文件失败</h3>
+
+<p><strong>问题</strong>: 移动设备上传文件时失败</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 检查接收目录是否有写入权限</p>
+<p>2. 检查磁盘空间是否充足</p>
+<p>3. 尝试上传较小的文件测试</p>
+<p>4. 查看终端错误信息</p>
+
+<h3>7.6 HTTPS证书警告</h3>
+
+<p><strong>问题</strong>: 使用HTTPS时浏览器显示证书警告</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 如果使用自签名证书，这是正常现象</p>
+<p>2. 在浏览器中点击&quot;高级&quot; → &quot;继续访问&quot;</p>
+<p>3. 或使用受信任的CA签发的证书</p>
+
+<h3>7.7 中文文件名乱码</h3>
+
+<p><strong>问题</strong>: 下载的文件名显示乱码</p>
+
+<p><strong>解决方法</strong>:</p>
+<p>1. 确保终端使用UTF-8编码</p>
+<p>2. 文件名尽量使用英文和数字</p>
+<p>3. 更新到最新版本</p>
+
+<div class="page-break"></div>
+
+<h2>8. 命令参考</h2>
+
+<h3>8.1 全局选项</h3>
+
+<pre><code>--config string      配置文件路径
+--interface, -i      网络接口名称
+--port, -p          端口号（0表示随机）
+--path              URL路径（空表示随机）
+--bind              绑定地址
+--fqdn, -d          完全限定域名
+--keep-alive, -k    保持服务运行
+--secure, -s        启用HTTPS
+--tls-cert          TLS证书路径
+--tls-key           TLS私钥路径
+--browser, -b       在浏览器中打开
+--reversed, -r      反色二维码
+--zip               强制使用zip压缩
+</code></pre>
+
+<h3>8.2 主要命令</h3>
+
+<h4>发送文件</h4>
+<pre><code>eqrcp [选项] &lt;文件路径...&gt;
+</code></pre>
+
+<h4>接收文件</h4>
+<pre><code>eqrcp receive [选项]
+  --output, -o      接收文件保存目录
+</code></pre>
+
+<h4>聊天模式</h4>
+<pre><code>eqrcp chat [选项]
+</code></pre>
+
+<h4>配置向导</h4>
+<pre><code>eqrcp config
+</code></pre>
+
+<h4>桌面集成</h4>
+<pre><code>eqrcp desktop install      # 安装
+eqrcp desktop uninstall    # 卸载
+eqrcp desktop status       # 状态
+eqrcp desktop share &lt;文件&gt; # 分享
+eqrcp desktop receive &lt;目录&gt; # 接收
+eqrcp desktop chat         # 聊天
+</code></pre>
+
+<h4>版本信息</h4>
+<pre><code>eqrcp version
+</code></pre>
+
+<h4>帮助信息</h4>
+<pre><code>eqrcp help
+eqrcp help &lt;命令&gt;
+</code></pre>
+
+<h4>Shell补全</h4>
+<pre><code>eqrcp completion bash   # Bash
+eqrcp completion zsh    # Zsh
+eqrcp completion fish   # Fish
+eqrcp completion powershell  # PowerShell
+</code></pre>
+
+<div class="page-break"></div>
+
+<h2>9. 使用技巧</h2>
+
+<h3>9.1 快速分享</h3>
+<p>创建Shell别名快速启动：</p>
+
+<p><strong>Linux/macOS</strong> (添加到<code>~/.bashrc</code>或<code>~/.zshrc</code>):</p>
+<pre><code>alias share='eqrcp'
+alias receive='eqrcp receive'
+alias chat='eqrcp chat --browser'
+</code></pre>
+
+<p><strong>Windows</strong> (PowerShell配置文件):</p>
+<pre><code>function share { eqrcp $args }
+function receive { eqrcp receive $args }
+function chat { eqrcp chat --browser }
+</code></pre>
+
+<h3>9.2 固定端口和路径</h3>
+<p>如果经常使用，可以在配置文件中设置固定端口和路径：</p>
+<pre><code>port: 8080
+path: share
+</code></pre>
+
+<p>这样URL总是<code>http://your-ip:8080/share</code>，可以保存为书签。</p>
+
+<h3>9.3 局域网文件服务器</h3>
+<p>使用<code>--keep-alive</code>参数，可以将eqrcp作为临时文件服务器：</p>
+<pre><code>eqrcp --keep-alive --port 8080 ~/Documents/
+</code></pre>
+
+<h3>9.4 批量传输</h3>
+<p>编写脚本批量传输文件：</p>
+<pre><code>#!/bin/bash
+for file in *.jpg; do
+    eqrcp &quot;$file&quot;
+    read -p &quot;按Enter继续下一个文件...&quot;
+done
+</code></pre>
+
+<h3>9.5 与其他工具结合</h3>
+<pre><code># 截图后立即分享
+scrot -s /tmp/screenshot.png &amp;&amp; eqrcp /tmp/screenshot.png
+
+# 压缩后分享
+tar czf archive.tar.gz directory/ &amp;&amp; eqrcp archive.tar.gz
+
+# 从剪贴板分享
+xclip -o &gt; /tmp/clipboard.txt &amp;&amp; eqrcp /tmp/clipboard.txt
+</code></pre>
+
+<div class="page-break"></div>
+
+<h2>10. 安全建议</h2>
+
+<h3>10.1 局域网使用</h3>
+<p>eqrcp设计用于局域网环境，不建议在公网使用。</p>
+
+<h3>10.2 敏感文件</h3>
+<p>传输敏感文件时建议启用HTTPS：</p>
+<pre><code>eqrcp --secure --tls-cert cert.pem --tls-key key.pem sensitive.pdf
+</code></pre>
+
+<h3>10.3 随机路径</h3>
+<p>使用随机URL路径（默认）可以防止未授权访问：</p>
+<pre><code>eqrcp file.pdf  # URL会包含随机字符串
+</code></pre>
+
+<h3>10.4 及时关闭</h3>
+<p>传输完成后及时关闭服务（默认行为），或按<code>Ctrl+C</code>手动停止。</p>
+
+<h3>10.5 防火墙</h3>
+<p>在公共网络环境下，确保防火墙只允许局域网访问。</p>
+
+<div class="page-break"></div>
+
+<h2>11. 更新与卸载</h2>
+
+<h3>11.1 检查更新</h3>
+<p>访问项目主页查看最新版本。</p>
+
+<h3>11.2 更新软件</h3>
+<p>下载新版本可执行文件，替换旧文件即可。</p>
+
+<h3>11.3 卸载软件</h3>
+
+<p><strong>Windows</strong>:</p>
+<p>1. 如果安装了桌面集成，先执行：</p>
+<pre><code>eqrcp desktop uninstall
+</code></pre>
+<p>2. 删除可执行文件</p>
+<p>3. 删除配置文件：<code>%APPDATA%\eqrcp\</code></p>
+<p>4. 从PATH环境变量中移除</p>
+
+<p><strong>Linux/macOS</strong>:</p>
+<p>1. 删除可执行文件：</p>
+<pre><code>sudo rm /usr/local/bin/eqrcp
+</code></pre>
+<p>2. 删除配置文件：</p>
+<pre><code>rm -rf ~/.config/eqrcp/
+</code></pre>
+
+<div class="page-break"></div>
+
+<h2>12. 技术支持</h2>
+
+<h3>12.1 获取帮助</h3>
+<pre><code>eqrcp help
+</code></pre>
+
+<h3>12.2 查看日志</h3>
+<p>eqrcp的运行日志会输出到终端，可以重定向到文件：</p>
+<pre><code>eqrcp file.pdf 2&gt;&amp;1 | tee eqrcp.log
+</code></pre>
+
+<h3>12.3 报告问题</h3>
+<p>如遇到问题，请提供：</p>
+<p>1. 操作系统和版本</p>
+<p>2. eqrcp版本（<code>eqrcp version</code>）</p>
+<p>3. 完整的错误信息</p>
+<p>4. 复现步骤</p>
+
+<div class="page-break"></div>
+
+<h2>13. 附录</h2>
+
+<h3>13.1 支持的文件类型</h3>
+<p>eqrcp支持传输任何类型的文件，没有限制。</p>
+
+<h3>13.2 文件大小限制</h3>
+<p>理论上没有文件大小限制，但受限于：</p>
+<p>1. 可用磁盘空间</p>
+<p>2. 网络传输时间</p>
+<p>3. 浏览器内存限制（对于非常大的文件，建议使用专业下载工具）</p>
+
+<h3>13.3 浏览器兼容性</h3>
+<li>Chrome/Chromium: 完全支持</li>
+<li>Safari: 完全支持</li>
+<li>Firefox: 完全支持</li>
+<li>Edge: 完全支持</li>
+<li>其他现代浏览器: 基本功能支持</li>
+
+<h3>13.4 网络要求</h3>
+<li>计算机和移动设备必须在同一局域网</li>
+<li>支持IPv4和IPv6</li>
+<li>不需要互联网连接</li>
+
+<div class="page-break"></div>
+
+<p><strong>文档版本</strong>: V1.0  </p>
+<p><strong>最后更新</strong>: 2026年5月</p>
+
+</body>
+</html>

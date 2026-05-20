@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>03-软件设计说明书.md</title>
+<style>
+  @page {
+    size: A4;
+    margin: 25mm 20mm 25mm 20mm;
+    @top-center {
+      content: "eqrcp V1.0";
+      font-family: "DejaVu Sans", sans-serif;
+      font-size: 9pt;
+    }
+    @bottom-center {
+      content: "Page " counter(page);
+      font-size: 9pt;
+    }
+  }
+  body {
+    font-family: "DejaVu Sans", "Noto Sans CJK SC", "WenQuanYi Micro Hei", sans-serif;
+    font-size: 11pt;
+    line-height: 1.7;
+    color: #333;
+    max-width: 100%;
+  }
+  h1 { font-size: 18pt; border-bottom: 2px solid #333; padding-bottom: 4pt; margin-top: 20pt; }
+  h2 { font-size: 14pt; border-bottom: 1px solid #999; padding-bottom: 2pt; margin-top: 16pt; }
+  h3 { font-size: 12pt; margin-top: 12pt; }
+  h4 { font-size: 11pt; margin-top: 8pt; }
+  pre, code {
+    font-family: "DejaVu Sans Mono", "Courier New", monospace;
+    font-size: 9pt;
+    background: #f5f5f5;
+    padding: 2pt 4pt;
+    border-radius: 2pt;
+  }
+  pre {
+    padding: 8pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  pre code { background: none; padding: 0; }
+  blockquote {
+    border-left: 3pt solid #ccc;
+    margin-left: 0;
+    padding-left: 12pt;
+    color: #666;
+  }
+  table { border-collapse: collapse; margin: 8pt 0; }
+  th, td { border: 1px solid #ccc; padding: 4pt 8pt; text-align: left; }
+  th { background: #eee; }
+  hr { border: none; border-top: 1px solid #ccc; margin: 12pt 0; }
+  ul, ol { padding-left: 20pt; }
+  img { max-width: 100%; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+<h1>eqrcp局域网文件传输系统 软件设计说明书</h1>
+
+<p><strong>软件名称</strong>: eqrcp局域网文件传输系统  </p>
+<p><strong>软件版本</strong>: V1.0  </p>
+<p><strong>编制日期</strong>: 2026年5月  </p>
+<p><strong>开发语言</strong>: Go 1.26.2、JavaScript、HTML5、CSS3</p>
+
+<div class="page-break"></div>
+
+<h2>1. 引言</h2>
+
+<h3>1.1 编写目的</h3>
+<p>本文档详细描述eqrcp局域网文件传输系统的软件架构、功能模块、技术实现和设计思路，为软件著作权登记提供技术说明，同时为后续维护和升级提供参考。</p>
+
+<h3>1.2 项目背景</h3>
+<p>在日常工作和生活中，用户经常需要在计算机和移动设备之间传输文件。传统方法如数据线连接、云存储上传下载、即时通讯工具传输等，存在操作繁琐、需要网络流量、传输速度慢等问题。eqrcp通过局域网直连方式，利用二维码快速建立连接，实现高速、便捷、安全的文件传输。</p>
+
+<h3>1.3 术语定义</h3>
+<li><strong>局域网（LAN）</strong>: Local Area Network，本地区域网络</li>
+<li><strong>二维码（QR Code）</strong>: Quick Response Code，快速响应码</li>
+<li><strong>HTTP/HTTPS</strong>: 超文本传输协议及其安全版本</li>
+<li><strong>WebSocket</strong>: 基于TCP的全双工通信协议</li>
+<li><strong>TLS</strong>: Transport Layer Security，传输层安全协议</li>
+<li><strong>CLI</strong>: Command Line Interface，命令行接口</li>
+<li><strong>GUI</strong>: Graphical User Interface，图形用户界面</li>
+
+<h3>1.4 参考资料</h3>
+<li>Go语言官方文档：https://go.dev/doc/</li>
+<li>HTTP/1.1 RFC 7230-7235</li>
+<li>WebSocket协议 RFC 6455</li>
+<li>QR Code标准 ISO/IEC 18004</li>
+
+<div class="page-break"></div>
+
+<h2>2. 系统概述</h2>
+
+<h3>2.1 系统目标</h3>
+<p>eqrcp旨在提供一个简单、快速、安全的局域网文件传输解决方案，主要目标包括：</p>
+<p>1. 零配置：无需复杂设置，即开即用</p>
+<p>2. 跨平台：支持Windows、Linux、macOS</p>
+<p>3. 高性能：利用局域网带宽实现高速传输</p>
+<p>4. 易用性：通过二维码扫描快速连接</p>
+<p>5. 安全性：支持HTTPS加密传输</p>
+<p>6. 多功能：支持文件发送、接收、实时聊天</p>
+
+<h3>2.2 系统特点</h3>
+<p>1. <strong>命令行优先设计</strong>: 通过简洁的命令行接口快速启动服务</p>
+<p>2. <strong>自动网络配置</strong>: 自动检测可用网络接口和IP地址</p>
+<p>3. <strong>二维码连接</strong>: 在终端显示二维码，移动设备扫码即可访问</p>
+<p>4. <strong>内置Web服务器</strong>: 无需外部Web服务器，独立运行</p>
+<p>5. <strong>桌面集成</strong>: Windows系统支持右键菜单快速分享</p>
+<p>6. <strong>实时通信</strong>: 基于WebSocket的实时聊天功能</p>
+<p>7. <strong>灵活配置</strong>: 支持配置文件、环境变量、命令行参数多种配置方式</p>
+
+<h3>2.3 应用场景</h3>
+<p>1. 手机拍摄的照片快速传输到电脑</p>
+<p>2. 电脑文档发送到手机查看</p>
+<p>3. 团队成员间局域网内快速共享文件</p>
+<p>4. 临时文本内容在设备间传递</p>
+<p>5. 局域网内多人实时聊天和文件共享</p>
+
+<div class="page-break"></div>
+
+<h2>3. 系统架构</h2>
+
+<h3>3.1 总体架构</h3>
+<p>eqrcp采用客户端-服务器（C/S）架构，计算机端运行服务器程序，移动设备通过浏览器作为客户端访问。</p>
+
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    eqrcp 系统架构                        │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────┐              ┌──────────────┐        │
+│  │  命令行接口   │              │  桌面集成     │        │
+│  │   (CLI)      │              │  (Desktop)   │        │
+│  └──────┬───────┘              └──────┬───────┘        │
+│         │                              │                │
+│         └──────────┬───────────────────┘                │
+│                    │                                    │
+│         ┌──────────▼──────────┐                        │
+│         │   应用层 (Application)│                       │
+│         │  - 命令处理           │                       │
+│         │  - 参数解析           │                       │
+│         │  - 配置管理           │                       │
+│         └──────────┬──────────┘                        │
+│                    │                                    │
+│         ┌──────────▼──────────┐                        │
+│         │   服务层 (Server)    │                       │
+│         │  - HTTP服务器        │                       │
+│         │  - 路由处理           │                       │
+│         │  - WebSocket服务     │                       │
+│         └──────────┬──────────┘                        │
+│                    │                                    │
+│         ┌──────────▼──────────┐                        │
+│         │   业务层 (Body)      │                       │
+│         │  - 文件处理           │                       │
+│         │  - 数据封装           │                       │
+│         │  - 压缩/解压          │                       │
+│         └──────────┬──────────┘                        │
+│                    │                                    │
+│         ┌──────────▼──────────┐                        │
+│         │   工具层 (Util)      │                       │
+│         │  - 网络工具           │                       │
+│         │  - 二维码生成         │                       │
+│         │  - 日志记录           │                       │
+│         └─────────────────────┘                        │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+                         │
+                         │ HTTP/HTTPS
+                         │ WebSocket
+                         ▼
+              ┌──────────────────┐
+              │   移动设备浏览器   │
+              │  - 文件上传/下载   │
+              │  - 聊天界面       │
+              │  - 文本输入       │
+              └──────────────────┘
+</code></pre>
+
+<h3>3.2 技术架构</h3>
+<li><strong>后端框架</strong>: Go标准库（net/http）</li>
+<li><strong>前端技术</strong>: 原生JavaScript + HTML5 + CSS3</li>
+<li><strong>通信协议</strong>: HTTP/HTTPS、WebSocket</li>
+<li><strong>数据格式</strong>: JSON、Multipart Form Data</li>
+<li><strong>加密技术</strong>: TLS 1.2+</li>
+<li><strong>二维码</strong>: go-qrcode库</li>
+<li><strong>命令行</strong>: Cobra框架</li>
+<li><strong>配置管理</strong>: Viper库</li>
+
+<h3>3.3 模块划分</h3>
+<p>系统主要分为以下模块：</p>
+
+<p>1. <strong>命令行接口模块（cmd）</strong>: 处理用户命令和参数</p>
+<p>2. <strong>应用层模块（application）</strong>: 应用逻辑和流程控制</p>
+<p>3. <strong>服务器模块（server）</strong>: HTTP服务和WebSocket服务</p>
+<p>4. <strong>文件处理模块（body）</strong>: 文件读取、压缩、传输</p>
+<p>5. <strong>配置模块（config）</strong>: 配置文件读写和管理</p>
+<p>6. <strong>二维码模块（qr）</strong>: 二维码生成和显示</p>
+<p>7. <strong>工具模块（util）</strong>: 网络、日志等通用工具</p>
+<p>8. <strong>桌面集成模块（desktop）</strong>: 操作系统集成功能</p>
+<p>9. <strong>日志模块（logger）</strong>: 日志记录和输出</p>
+<p>10. <strong>版本模块（version）</strong>: 版本信息管理</p>
+
+<div class="page-break"></div>
+
+<h2>4. 功能模块设计</h2>
+
+<h3>4.1 命令行接口模块</h3>
+
+<h4>4.1.1 模块功能</h4>
+<p>提供用户交互的命令行接口，解析用户输入的命令和参数，调用相应的功能模块。</p>
+
+<h4>4.1.2 主要命令</h4>
+<p>1. <strong>发送文件</strong>: <code>eqrcp &lt;文件路径&gt;</code></p>
+<p>2. <strong>接收文件</strong>: <code>eqrcp receive</code></p>
+<p>3. <strong>聊天模式</strong>: <code>eqrcp chat</code></p>
+<p>4. <strong>配置向导</strong>: <code>eqrcp config</code></p>
+<p>5. <strong>桌面集成</strong>: <code>eqrcp desktop [install|uninstall|status]</code></p>
+<p>6. <strong>版本信息</strong>: <code>eqrcp version</code></p>
+<p>7. <strong>帮助信息</strong>: <code>eqrcp help</code></p>
+
+<h4>4.1.3 参数支持</h4>
+<li><code>--interface, -i</code>: 指定网络接口</li>
+<li><code>--port, -p</code>: 指定服务端口</li>
+<li><code>--path</code>: 指定URL路径</li>
+<li><code>--output, -o</code>: 指定接收文件保存目录</li>
+<li><code>--secure, -s</code>: 启用HTTPS</li>
+<li><code>--tls-cert</code>: TLS证书路径</li>
+<li><code>--tls-key</code>: TLS私钥路径</li>
+<li><code>--browser, -b</code>: 在浏览器中打开</li>
+<li><code>--keep-alive, -k</code>: 保持服务运行</li>
+<li><code>--zip</code>: 强制使用zip压缩</li>
+
+<h4>4.1.4 技术实现</h4>
+<p>使用Cobra框架构建命令行接口，支持子命令、标志参数、环境变量等多种输入方式。</p>
+
+<h3>4.2 文件发送模块</h3>
+
+<h4>4.2.1 模块功能</h4>
+<p>将计算机上的文件通过HTTP服务提供给移动设备下载。</p>
+
+<h4>4.2.2 处理流程</h4>
+<p>1. 用户指定要发送的文件或目录</p>
+<p>2. 系统检查文件是否存在和可读</p>
+<p>3. 如果是多个文件或目录，自动创建临时zip压缩包</p>
+<p>4. 启动HTTP服务器，提供文件下载接口</p>
+<p>5. 生成访问URL和二维码</p>
+<p>6. 在终端显示二维码</p>
+<p>7. 移动设备扫码访问并下载文件</p>
+<p>8. 下载完成后关闭服务（或根据--keep-alive参数保持运行）</p>
+
+<h4>4.2.3 技术细节</h4>
+<li>单文件直接提供下载</li>
+<li>多文件/目录使用zip格式压缩</li>
+<li>支持断点续传（HTTP Range请求）</li>
+<li>自动设置Content-Type和Content-Disposition头</li>
+<li>临时文件在传输完成后自动清理</li>
+
+<h3>4.3 文件接收模块</h3>
+
+<h4>4.3.1 模块功能</h4>
+<p>启动HTTP服务器，提供文件上传界面，接收移动设备上传的文件。</p>
+
+<h4>4.3.2 处理流程</h4>
+<p>1. 用户执行<code>eqrcp receive</code>命令</p>
+<p>2. 系统启动HTTP服务器</p>
+<p>3. 生成上传页面URL和二维码</p>
+<p>4. 移动设备扫码访问上传页面</p>
+<p>5. 用户选择文件并上传</p>
+<p>6. 服务器接收文件并保存到指定目录</p>
+<p>7. 显示上传成功信息</p>
+
+<h4>4.3.3 支持的上传类型</h4>
+<li>文件上传（支持多文件）</li>
+<li>文本粘贴（保存为.txt文件）</li>
+<li>剪贴板文件（支持的浏览器）</li>
+<li>剪贴板图片（保存为.png文件）</li>
+
+<h4>4.3.4 技术实现</h4>
+<li>使用multipart/form-data处理文件上传</li>
+<li>支持大文件分块上传</li>
+<li>文件名冲突自动重命名</li>
+<li>上传进度实时显示</li>
+
+<h3>4.4 实时聊天模块</h3>
+
+<h4>4.4.1 模块功能</h4>
+<p>提供基于WebSocket的实时聊天功能，支持文本消息和文件附件。</p>
+
+<h4>4.4.2 功能特性</h4>
+<p>1. 实时双向消息传输</p>
+<p>2. 支持文本消息</p>
+<p>3. 支持文件附件发送</p>
+<p>4. 消息历史记录</p>
+<p>5. 多设备同时连接</p>
+<p>6. 连接状态显示</p>
+<p>7. 设备主题颜色标识</p>
+
+<h4>4.4.3 技术实现</h4>
+<li>使用WebSocket协议实现全双工通信</li>
+<li>消息格式采用JSON</li>
+<li>文件通过Base64编码传输或单独HTTP上传</li>
+<li>服务端维护连接池管理多个客户端</li>
+<li>心跳机制检测连接状态</li>
+
+<h4>4.4.4 消息类型</h4>
+<li><code>text</code>: 文本消息</li>
+<li><code>file</code>: 文件附件</li>
+<li><code>system</code>: 系统通知</li>
+<li><code>ping/pong</code>: 心跳消息</li>
+
+<h3>4.5 配置管理模块</h3>
+
+<h4>4.5.1 模块功能</h4>
+<p>管理软件配置，支持配置文件、环境变量、命令行参数三种配置方式。</p>
+
+<h4>4.5.2 配置优先级</h4>
+<p>命令行参数 &gt; 环境变量 &gt; 配置文件 &gt; 默认值</p>
+
+<h4>4.5.3 配置文件位置</h4>
+<li>Linux/macOS: <code>~/.config/eqrcp/config.yml</code></li>
+<li>Windows: <code>%APPDATA%\eqrcp\config.yml</code></li>
+
+<h4>4.5.4 主要配置项</h4>
+<pre><code>interface: any          # 网络接口
+port: 0                 # 端口（0表示随机）
+path: &quot;&quot;                # URL路径（空表示随机）
+fqdn: &quot;&quot;                # 完全限定域名
+keepalive: false        # 保持服务运行
+secure: false           # 启用HTTPS
+tls-cert: &quot;&quot;            # TLS证书路径
+tls-key: &quot;&quot;             # TLS私钥路径
+output: &quot;.&quot;             # 接收文件保存目录
+</code></pre>
+
+<h4>4.5.5 环境变量</h4>
+<p>所有配置项都支持通过<code>EQRCP_</code>前缀的环境变量设置，例如：</p>
+<li><code>EQRCP_INTERFACE=wlan0</code></li>
+<li><code>EQRCP_PORT=8080</code></li>
+<li><code>EQRCP_KEEPALIVE=true</code></li>
+
+<h3>4.6 网络模块</h3>
+
+<h4>4.6.1 模块功能</h4>
+<p>处理网络相关功能，包括网络接口检测、IP地址获取、端口分配等。</p>
+
+<h4>4.6.2 主要功能</h4>
+<p>1. <strong>网络接口检测</strong>: 自动检测可用的网络接口</p>
+<p>2. <strong>IP地址获取</strong>: 获取本机局域网IP地址</p>
+<p>3. <strong>外网IP检测</strong>: 可选的外网IP获取（用于FQDN场景）</p>
+<p>4. <strong>端口分配</strong>: 自动分配可用端口或使用指定端口</p>
+<p>5. <strong>URL生成</strong>: 根据IP、端口、路径生成访问URL</p>
+
+<h4>4.6.3 网络接口选择策略</h4>
+<p>1. 如果指定了接口名称，使用指定接口</p>
+<p>2. 如果指定了<code>any</code>，自动选择第一个可用接口</p>
+<p>3. 如果未指定，提示用户选择</p>
+
+<h3>4.7 二维码模块</h3>
+
+<h4>4.7.1 模块功能</h4>
+<p>生成二维码并在终端显示，方便移动设备扫描。</p>
+
+<h4>4.7.2 技术实现</h4>
+<li>使用go-qrcode库生成二维码</li>
+<li>将二维码转换为ASCII字符在终端显示</li>
+<li>支持正常和反色两种显示模式</li>
+<li>自动调整二维码大小适应终端宽度</li>
+
+<h4>4.7.3 显示方式</h4>
+<p>1. 终端ASCII显示（默认）</p>
+<p>2. 浏览器显示（--browser参数）</p>
+<p>3. 同时显示URL文本</p>
+
+<h3>4.8 桌面集成模块</h3>
+
+<h4>4.8.1 模块功能</h4>
+<p>将eqrcp集成到操作系统桌面环境，提供右键菜单等快捷操作。</p>
+
+<h4>4.8.2 Windows集成</h4>
+<p>1. <strong>右键菜单</strong>: 文件/文件夹右键菜单添加&quot;Share with eqrcp&quot;</p>
+<p>2. <strong>发送到菜单</strong>: 添加到&quot;发送到&quot;菜单</p>
+<p>3. <strong>多文件选择</strong>: 支持选择多个文件一起分享</p>
+<p>4. <strong>注册表管理</strong>: 自动管理Windows注册表项</p>
+
+<h4>4.8.3 桌面命令</h4>
+<li><code>eqrcp desktop install</code>: 安装桌面集成</li>
+<li><code>eqrcp desktop uninstall</code>: 卸载桌面集成</li>
+<li><code>eqrcp desktop status</code>: 查看集成状态</li>
+<li><code>eqrcp desktop share &lt;文件&gt;</code>: 分享文件</li>
+<li><code>eqrcp desktop receive &lt;目录&gt;</code>: 接收文件到指定目录</li>
+<li><code>eqrcp desktop chat</code>: 启动聊天</li>
+
+<h4>4.8.4 启动器程序</h4>
+<p>提供<code>eqrcp-launcher.exe</code>，用于在Windows资源管理器中启动eqrcp并显示GUI窗口。</p>
+
+<h3>4.9 安全模块</h3>
+
+<h4>4.9.1 HTTPS支持</h4>
+<li>支持自定义TLS证书和私钥</li>
+<li>自动生成自签名证书（开发模式）</li>
+<li>TLS 1.2及以上版本</li>
+
+<h4>4.9.2 安全特性</h4>
+<p>1. 仅监听局域网地址，不暴露到公网</p>
+<p>2. 随机URL路径防止猜测</p>
+<p>3. 传输完成后自动关闭服务</p>
+<p>4. 临时文件自动清理</p>
+<p>5. 文件名安全过滤</p>
+
+<div class="page-break"></div>
+
+<h2>5. 数据结构设计</h2>
+
+<h3>5.1 配置数据结构</h3>
+<pre><code>type Config struct {
+    Interface  string   // 网络接口
+    Port       int      // 端口
+    Path       string   // URL路径
+    FQDN       string   // 域名
+    KeepAlive  bool     // 保持运行
+    Secure     bool     // HTTPS
+    TLSCert    string   // 证书路径
+    TLSKey     string   // 私钥路径
+    Output     string   // 输出目录
+    Bind       string   // 绑定地址
+    Browser    bool     // 打开浏览器
+    Reversed   bool     // 反色二维码
+    Zip        bool     // 强制zip
+}
+</code></pre>
+
+<h3>5.2 文件传输数据结构</h3>
+<pre><code>type Payload struct {
+    Path        string   // 文件路径
+    IsArchive   bool     // 是否压缩包
+    DeleteAfter bool     // 传输后删除
+    ArchiveName string   // 压缩包名称
+}
+</code></pre>
+
+<h3>5.3 聊天消息数据结构</h3>
+<pre><code>{
+    &quot;type&quot;: &quot;text|file|system&quot;,
+    &quot;sender&quot;: &quot;device-id&quot;,
+    &quot;content&quot;: &quot;消息内容&quot;,
+    &quot;timestamp&quot;: 1234567890,
+    &quot;filename&quot;: &quot;文件名（仅file类型）&quot;,
+    &quot;filesize&quot;: 12345,
+    &quot;filedata&quot;: &quot;base64编码数据&quot;
+}
+</code></pre>
+
+<h3>5.4 网络信息数据结构</h3>
+<pre><code>type NetworkInfo struct {
+    InterfaceName string   // 接口名称
+    IPAddress     string   // IP地址
+    Port          int      // 端口
+    URL           string   // 完整URL
+}
+</code></pre>
+
+<div class="page-break"></div>
+
+<h2>6. 接口设计</h2>
+
+<h3>6.1 HTTP接口</h3>
+
+<h4>6.1.1 文件下载接口</h4>
+<li><strong>路径</strong>: <code>GET /{random-path}</code></li>
+<li><strong>功能</strong>: 下载文件</li>
+<li><strong>响应</strong>: 文件流</li>
+<li><strong>头部</strong>: Content-Disposition, Content-Type, Content-Length</li>
+
+<h4>6.1.2 文件上传接口</h4>
+<li><strong>路径</strong>: <code>POST /{random-path}/upload</code></li>
+<li><strong>功能</strong>: 上传文件</li>
+<li><strong>请求</strong>: multipart/form-data</li>
+<li><strong>响应</strong>: JSON状态</li>
+
+<h4>6.1.3 上传页面接口</h4>
+<li><strong>路径</strong>: <code>GET /{random-path}</code></li>
+<li><strong>功能</strong>: 显示上传页面</li>
+<li><strong>响应</strong>: HTML页面</li>
+
+<h4>6.1.4 聊天页面接口</h4>
+<li><strong>路径</strong>: <code>GET /{random-path}</code></li>
+<li><strong>功能</strong>: 显示聊天页面</li>
+<li><strong>响应</strong>: HTML页面</li>
+
+<h3>6.2 WebSocket接口</h3>
+
+<h4>6.2.1 聊天连接</h4>
+<li><strong>路径</strong>: <code>WS /{random-path}/ws</code></li>
+<li><strong>功能</strong>: 建立WebSocket连接</li>
+<li><strong>消息格式</strong>: JSON</li>
+
+<h4>6.2.2 消息类型</h4>
+<p>1. <strong>文本消息</strong>: <code>{&quot;type&quot;:&quot;text&quot;,&quot;content&quot;:&quot;...&quot;}</code></p>
+<p>2. <strong>文件消息</strong>: <code>{&quot;type&quot;:&quot;file&quot;,&quot;filename&quot;:&quot;...&quot;,&quot;filedata&quot;:&quot;...&quot;}</code></p>
+<p>3. <strong>系统消息</strong>: <code>{&quot;type&quot;:&quot;system&quot;,&quot;content&quot;:&quot;...&quot;}</code></p>
+<p>4. <strong>心跳消息</strong>: <code>{&quot;type&quot;:&quot;ping&quot;}</code> / <code>{&quot;type&quot;:&quot;pong&quot;}</code></p>
+
+<div class="page-break"></div>
+
+<h2>7. 关键技术实现</h2>
+
+<h3>7.1 自动网络配置</h3>
+<p>系统启动时自动检测可用网络接口，选择合适的IP地址和端口，无需用户手动配置。</p>
+
+<h3>7.2 二维码快速连接</h3>
+<p>将访问URL编码为二维码，在终端显示，移动设备扫码即可访问，省去手动输入URL的麻烦。</p>
+
+<h3>7.3 临时文件管理</h3>
+<p>多文件传输时自动创建临时zip压缩包，传输完成后自动清理，不占用磁盘空间。</p>
+
+<h3>7.4 WebSocket实时通信</h3>
+<p>使用WebSocket协议实现全双工通信，消息实时推送，无需轮询，降低延迟和服务器负载。</p>
+
+<h3>7.5 跨平台支持</h3>
+<p>使用Go语言开发，天然支持跨平台编译，一套代码可编译为Windows、Linux、macOS可执行文件。</p>
+
+<h3>7.6 桌面集成</h3>
+<p>通过操作系统API和注册表操作，将eqrcp集成到系统右键菜单，提供原生体验。</p>
+
+<div class="page-break"></div>
+
+<h2>8. 性能设计</h2>
+
+<h3>8.1 传输性能</h3>
+<li>利用局域网带宽，传输速度可达100Mbps+</li>
+<li>支持HTTP Range请求，实现断点续传</li>
+<li>大文件分块传输，避免内存溢出</li>
+
+<h3>8.2 并发处理</h3>
+<li>HTTP服务器支持多并发连接</li>
+<li>WebSocket连接池管理多个客户端</li>
+<li>Go协程处理并发请求，高效利用CPU</li>
+
+<h3>8.3 资源占用</h3>
+<li>单进程运行，内存占用小于50MB</li>
+<li>临时文件及时清理，不占用磁盘空间</li>
+<li>空闲时CPU占用接近0%</li>
+
+<div class="page-break"></div>
+
+<h2>9. 安全设计</h2>
+
+<h3>9.1 网络安全</h3>
+<li>仅监听局域网地址，不暴露到公网</li>
+<li>支持HTTPS加密传输</li>
+<li>随机URL路径，防止未授权访问</li>
+
+<h3>9.2 文件安全</h3>
+<li>文件名安全过滤，防止路径遍历攻击</li>
+<li>上传文件大小限制</li>
+<li>临时文件权限控制</li>
+
+<h3>9.3 隐私保护</h3>
+<li>不收集用户数据</li>
+<li>不连接外部服务器</li>
+<li>所有数据在局域网内传输</li>
+
+<div class="page-break"></div>
+
+<h2>10. 可扩展性设计</h2>
+
+<h3>10.1 模块化设计</h3>
+<p>各功能模块独立，便于维护和扩展。</p>
+
+<h3>10.2 配置灵活性</h3>
+<p>支持配置文件、环境变量、命令行参数多种配置方式，适应不同使用场景。</p>
+
+<h3>10.3 插件机制</h3>
+<p>预留接口，未来可支持插件扩展功能。</p>
+
+<div class="page-break"></div>
+
+<h2>11. 测试设计</h2>
+
+<h3>11.1 单元测试</h3>
+<p>对各功能模块编写单元测试，确保代码质量。</p>
+
+<h3>11.2 集成测试</h3>
+<p>测试模块间协作，验证整体功能。</p>
+
+<h3>11.3 跨平台测试</h3>
+<p>在Windows、Linux、macOS上测试，确保跨平台兼容性。</p>
+
+<div class="page-break"></div>
+
+<h2>12. 部署说明</h2>
+
+<h3>12.1 编译</h3>
+<pre><code>go build -o eqrcp .
+</code></pre>
+
+<h3>12.2 安装</h3>
+<p>将编译后的可执行文件放到系统PATH目录即可。</p>
+
+<h3>12.3 配置</h3>
+<p>首次运行执行<code>eqrcp config</code>进行配置向导。</p>
+
+<div class="page-break"></div>
+
+<h2>13. 维护说明</h2>
+
+<h3>13.1 日志</h3>
+<p>系统运行日志记录在标准输出，可重定向到文件。</p>
+
+<h3>13.2 错误处理</h3>
+<p>所有错误都有明确的错误信息，便于排查问题。</p>
+
+<h3>13.3 版本管理</h3>
+<p>使用语义化版本号，主版本号.次版本号.修订号。</p>
+
+<div class="page-break"></div>
+
+<h2>14. 总结</h2>
+
+<p>eqrcp局域网文件传输系统采用模块化设计，功能完善，性能优异，安全可靠。通过命令行接口和桌面集成，为用户提供便捷的文件传输体验。系统采用Go语言开发，具有良好的跨平台性和可维护性，为后续功能扩展奠定了坚实基础。</p>
+
+</body>
+</html>
