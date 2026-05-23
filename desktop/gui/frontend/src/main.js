@@ -53,12 +53,19 @@ const state = {
     activeChatTaskId: 0,
     activeChatSessionKey: '',
     chatQRPulseArmed: false,
+    chatUsageDate: '',
+    chatUsageMs: 0,
+    chatUsageStartedAt: 0,
+    chatQuotaNoticeShown: false,
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
+const chatDailyFreeMs = 5 * 60 * 1000;
+const chatUsageStorageKey = 'eqt.chat.dailyFreeUsage';
 let agentEvents = null;
 let agentEventsRetry = null;
 let chatQRPulseTimer = null;
+let chatUsageTimer = null;
 const autoSavedAttachments = new Set();
 const app = document.querySelector('#app');
 const portHelpText = 'Port 0 chooses an available port automatically. Use a fixed port only when firewall rules, bookmarks, or device workflows need a stable address.';
@@ -357,15 +364,17 @@ function renderReceive() {
 
 function renderChat() {
     const task = activeChatTask();
+    const remaining = chatRemainingMs();
+    const exhausted = remaining <= 0;
     if (!task) {
         return `
             <div class="chat-start">
                 <div>
                     <div class="eyebrow">Session mode</div>
                     <h2>Local chat with phones and nearby devices</h2>
-                    <p>Messages stay in this local session. Chat attachment auto-save is managed in Settings.</p>
+                    <p>${exhausted ? 'Daily free chat time is used up. Upgrade to keep using chat today.' : `Daily free chat time left: ${formatDuration(remaining)}.`}</p>
                 </div>
-                <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start chat'}</button>
+                <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${state.busy ? 'Working...' : exhausted ? 'Upgrade required' : 'Start chat'}</button>
             </div>
         `;
     }
@@ -644,7 +653,7 @@ function renderStatusBadge(status) {
     if (status.enabled) {
         return '<span class="setting-status ok">enabled</span>';
     }
-    return '<span class="setting-status muted">off</span>';
+    return '';
 }
 
 function integrationStatusText(status, fallback) {
@@ -784,13 +793,8 @@ function renderHistoryTarget(task) {
 function bindEvents() {
     document.querySelectorAll('[data-mode]').forEach((button) => {
         button.addEventListener('click', () => {
-            state.mode = button.dataset.mode;
+            setMode(button.dataset.mode);
             clearMessages();
-            if (state.mode !== 'chat') {
-                // nothing extra needed
-            } else {
-                render();
-            }
             render();
         });
     });
@@ -936,12 +940,17 @@ async function startReceive() {
 }
 
 async function startChat() {
+    if (chatRemainingMs() <= 0) {
+        state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
+        render();
+        return;
+    }
     await run(async () => {
         await saveSettingsData();
         state.chatQRPulseArmed = true;
         state.chatQRPromptDismissed = false;
         state.status = await Chat();
-        state.mode = 'chat';
+        setMode('chat');
         state.notice = '';
         reconcileChatQRState(state.status);
         if (!state.chatQRPulseUntil) {
@@ -1306,6 +1315,7 @@ async function refreshStatus(shouldRender = true) {
 
 async function loadSettings() {
     await run(async () => {
+        loadChatUsage();
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
@@ -1412,28 +1422,28 @@ function connectAgentEvents() {
 }
 
 function handleFileDrop(paths) {
-    state.mode = 'share';
+    setMode('share');
     addSharePaths(paths || []);
 }
 
 function handleTrayCommand(command) {
     clearMessages();
     if (command === 'share') {
-        state.mode = 'share';
+        setMode('share');
         state.activePanel = '';
         state.notice = 'Ready to share.';
         render();
         return;
     }
     if (command === 'receive') {
-        state.mode = 'receive';
+        setMode('receive');
         state.activePanel = '';
         state.notice = 'Ready to receive.';
         render();
         return;
     }
     if (command === 'chat') {
-        state.mode = 'chat';
+        setMode('chat');
         state.activePanel = '';
         state.notice = '';
         render();
@@ -1447,6 +1457,139 @@ function handleTrayCommand(command) {
     if (command === 'refresh') {
         refreshStatus();
     }
+}
+
+function setMode(mode) {
+    if (state.mode === mode) {
+        if (mode === 'chat') {
+            startChatUsage();
+        }
+        return;
+    }
+    if (state.mode === 'chat') {
+        stopChatUsage();
+    }
+    state.mode = mode;
+    if (mode === 'chat') {
+        startChatUsage();
+    }
+}
+
+function loadChatUsage() {
+    const today = todayKey();
+    state.chatUsageDate = today;
+    state.chatUsageMs = 0;
+    state.chatUsageStartedAt = 0;
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(chatUsageStorageKey) || '{}');
+        if (saved.date === today) {
+            state.chatUsageMs = Math.max(0, Number(saved.usedMs || 0));
+        }
+    } catch {
+        state.chatUsageMs = 0;
+    }
+}
+
+function saveChatUsage() {
+    window.localStorage.setItem(chatUsageStorageKey, JSON.stringify({
+        date: todayKey(),
+        usedMs: Math.min(chatDailyFreeMs, Math.max(0, Math.round(state.chatUsageMs))),
+    }));
+}
+
+function startChatUsage() {
+    rollChatUsageDay();
+    if (state.chatUsageStartedAt || chatRemainingMs() <= 0) {
+        return;
+    }
+    state.chatUsageStartedAt = Date.now();
+    scheduleChatUsageTimer();
+}
+
+function stopChatUsage() {
+    if (!state.chatUsageStartedAt) {
+        return;
+    }
+    state.chatUsageMs = Math.min(chatDailyFreeMs, state.chatUsageMs + Date.now() - state.chatUsageStartedAt);
+    state.chatUsageStartedAt = 0;
+    saveChatUsage();
+    clearChatUsageTimer();
+}
+
+function scheduleChatUsageTimer() {
+    clearChatUsageTimer();
+    chatUsageTimer = window.setInterval(async () => {
+        saveChatUsageSnapshot();
+        if (state.mode === 'chat' && chatRemainingMs() <= 0) {
+            clearChatUsageTimer();
+            if (!state.chatQuotaNoticeShown) {
+                state.chatQuotaNoticeShown = true;
+                state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
+            }
+            if (activeChatTask()) {
+                try {
+                    state.status = await StopCurrent();
+                } catch {
+                    // Quota state is local; a failed stop should not hide the upgrade prompt.
+                }
+            }
+            render();
+        } else if (state.mode === 'chat') {
+            render();
+        }
+    }, 1000);
+}
+
+function clearChatUsageTimer() {
+    if (chatUsageTimer) {
+        window.clearInterval(chatUsageTimer);
+        chatUsageTimer = null;
+    }
+}
+
+function saveChatUsageSnapshot() {
+    rollChatUsageDay();
+    if (!state.chatUsageStartedAt) {
+        saveChatUsage();
+        return;
+    }
+    const usedMs = Math.min(chatDailyFreeMs, state.chatUsageMs + Date.now() - state.chatUsageStartedAt);
+    window.localStorage.setItem(chatUsageStorageKey, JSON.stringify({
+        date: todayKey(),
+        usedMs: Math.round(usedMs),
+    }));
+}
+
+function chatRemainingMs() {
+    rollChatUsageDay();
+    const activeMs = state.chatUsageStartedAt ? Date.now() - state.chatUsageStartedAt : 0;
+    return Math.max(0, chatDailyFreeMs - state.chatUsageMs - activeMs);
+}
+
+function rollChatUsageDay() {
+    const today = todayKey();
+    if (state.chatUsageDate === today) {
+        return;
+    }
+    state.chatUsageDate = today;
+    state.chatUsageMs = 0;
+    state.chatUsageStartedAt = 0;
+    state.chatQuotaNoticeShown = false;
+    saveChatUsage();
+}
+
+function todayKey() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function formatDuration(ms) {
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
 }
 
 function clearMessages() {
@@ -1721,5 +1864,8 @@ OnFileDrop((_x, _y, paths) => {
 
 EventsOn('eqt:tray-command', handleTrayCommand);
 
+window.addEventListener('beforeunload', stopChatUsage);
+
+loadChatUsage();
 render();
 loadSettings().then(connectAgentEvents);

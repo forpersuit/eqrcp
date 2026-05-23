@@ -127,7 +127,7 @@ protection and support ticket IDs.
 
 ## Plus Trial Model
 
-Working proposal:
+Current GUI behavior:
 
 - Chat mode has a daily free usage allowance of 5 minutes.
 - The timer starts when the user opens or starts chat mode, not when the app
@@ -135,8 +135,8 @@ Working proposal:
 - Closing the app or leaving chat mode stops the active timer.
 - Returning later on the same local calendar day continues using the remaining
   allowance until the 5 minutes are exhausted.
-- After the allowance is exhausted, chat is disabled for that day and the user
-  sees a paid upgrade prompt.
+- After the allowance is exhausted, the GUI disables new chat sessions for that
+  day, shows a paid upgrade prompt, and tries to stop the active chat task.
 
 Product judgment:
 
@@ -146,7 +146,8 @@ Product judgment:
   allowance resets every day.
 - The gate should live in the desktop GUI/agent layer. Do not restrict the
   open-source CLI transfer primitives with a brittle paywall.
-- Local-only metering is acceptable for early validation but is not enough for
+- Current metering is local to the desktop GUI and stored on the device. This is
+  acceptable for early validation but is not enough for
   serious paid enforcement; a later license/account path should reconcile usage
   across reinstalls and multiple machines.
 
