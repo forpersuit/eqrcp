@@ -24,6 +24,7 @@
             --chat-viewport-width: 100vw;
             --chat-viewport-top: 0px;
             --chat-viewport-left: 0px;
+            --chat-head-height: 62px;
             --message-actions-min-width: 58px;
             --messages-bottom-space: clamp(16px, 2.2vh, 22px);
         }
@@ -80,6 +81,7 @@
             grid-template-rows: auto minmax(0, 1fr) auto;
             overflow: hidden;
             position: relative;
+            touch-action: none;
         }
         /* ── Header ── */
         .chat-head {
@@ -783,6 +785,29 @@
             box-shadow: 0 1px 4px rgba(var(--accent-rgb, 21,111,90), 0.3);
         }
         .scroll-arrow-badge:empty { display: none; }
+        .history-progress {
+            bottom: calc(var(--composer-height, 74px) + 14px);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+            right: 7px;
+            top: calc(var(--chat-head-height, 62px) + 12px);
+            transition: opacity 0.18s ease;
+            width: 3px;
+            z-index: 3;
+        }
+        .history-progress.visible {
+            opacity: 1;
+        }
+        .history-progress span {
+            background: rgba(var(--accent-rgb, 21,111,90), 0.42);
+            border-radius: 999px;
+            display: block;
+            min-height: 22px;
+            transform: translateY(var(--history-progress-top, 0px));
+            transition: height 0.12s ease, transform 0.12s ease;
+            width: 100%;
+        }
         /* ── Compose bar ── */
         .composer {
             background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
@@ -835,6 +860,7 @@
             padding: 7px 12px;
             resize: none;
             scrollbar-width: none;
+            touch-action: pan-y;
             width: 100%;
         }
         textarea::-webkit-scrollbar { display: none; }
@@ -1179,6 +1205,9 @@
             .scroll-arrow {
                 bottom: calc(var(--composer-height, 58px) + 12px);
             }
+            .history-progress {
+                right: 5px;
+            }
             .device-panel { right: 0; }
             .side { display: none; }
             .mobile-close-action { display: inline-flex; }
@@ -1267,6 +1296,7 @@
                 </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
+            <div class="history-progress" id="history-progress" aria-hidden="true"><span id="history-progress-thumb"></span></div>
             <button class="scroll-arrow" id="scroll-arrow" aria-label="Jump to latest message" title="Latest message">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m5 16 7 6 7-6"/></svg>
                 <span class="scroll-arrow-badge" id="scroll-arrow-badge"></span>
@@ -1333,6 +1363,8 @@
         var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
         var composerEl = document.getElementById('composer');
+        var historyProgressEl = document.getElementById('history-progress');
+        var historyProgressThumbEl = document.getElementById('history-progress-thumb');
         var textEl = document.getElementById('message-text');
         var sendButton = document.getElementById('send-button');
         var fileEl = document.getElementById('file-input');
@@ -1466,6 +1498,18 @@
             syncViewportMetrics();
             updateViewportDebug('visual-scroll');
             scheduleScrollCorrection('visual-scroll');
+        }
+
+        function isInsideScrollSurface(target) {
+            if (!target || !target.closest) { return false; }
+            return Boolean(target.closest('#messages') || target.closest('textarea') || target.closest('.side') || target.closest('.preview-backdrop'));
+        }
+
+        function preventOuterTouchMove(event) {
+            if (!window.matchMedia || !window.matchMedia('(max-width: 820px)').matches) { return; }
+            if (isInsideScrollSurface(event.target)) { return; }
+            event.preventDefault();
+            scheduleScrollCorrection('outer-touch');
         }
 
         syncViewportMetrics();
@@ -2530,9 +2574,11 @@
                     target.focus({preventScroll: true});
                 }
                 messagesEl.scrollTop = target.offsetTop + target.offsetHeight + messagesBottomSpace() - messagesEl.clientHeight;
+                updateHistoryProgress();
                 return;
             }
             messagesEl.scrollTop = messagesEl.scrollHeight;
+            updateHistoryProgress();
         }
         function scrollMessagesToBottomSoon(focusMessageID) {
             scrollMessagesToBottom(focusMessageID);
@@ -2558,10 +2604,12 @@
         function handleMessageScroll() {
             if (isNearBottom()) {
                 setFollowLatest(true);
+                updateHistoryProgress();
                 return;
             }
             if (!programmaticScroll) {
                 setFollowLatest(false);
+                updateHistoryProgress();
                 return;
             }
             updateScrollArrow();
@@ -2578,6 +2626,23 @@
                 scrollArrow.classList.add('visible');
                 scrollArrowBadge.textContent = unreadSinceScroll > 99 ? '99+' : (unreadSinceScroll > 0 ? String(unreadSinceScroll) : '');
             }
+            updateHistoryProgress();
+        }
+        function updateHistoryProgress() {
+            var scrollable = Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight);
+            if (!scrollable) {
+                historyProgressEl.classList.remove('visible');
+                historyProgressThumbEl.style.height = '0px';
+                historyProgressThumbEl.style.setProperty('--history-progress-top', '0px');
+                return;
+            }
+            var trackHeight = Math.max(1, historyProgressEl.clientHeight || 1);
+            var thumbHeight = Math.max(22, Math.round(trackHeight * messagesEl.clientHeight / messagesEl.scrollHeight));
+            var maxTop = Math.max(0, trackHeight - thumbHeight);
+            var top = Math.round(maxTop * messagesEl.scrollTop / scrollable);
+            historyProgressThumbEl.style.height = Math.min(trackHeight, thumbHeight) + 'px';
+            historyProgressThumbEl.style.setProperty('--history-progress-top', top + 'px');
+            historyProgressEl.classList.toggle('visible', !isNearBottom() || messagesEl.matches(':hover') || document.activeElement === messagesEl);
         }
         function loadMessages() {
             if (eventCursorSeq <= 0) {
@@ -2835,6 +2900,8 @@
         }
         function updateComposerMetrics() {
             document.documentElement.style.setProperty('--composer-height', composerEl.offsetHeight + 'px');
+            document.documentElement.style.setProperty('--chat-head-height', chatHead.offsetHeight + 'px');
+            updateHistoryProgress();
         }
         function updateComposerState() {
             sendButton.disabled = textEl.value.trim().length === 0;
@@ -3042,6 +3109,9 @@
         messagesEl.addEventListener('touchstart', noteUserScrollIntent, {passive: true});
         messagesEl.addEventListener('pointerdown', noteUserScrollIntent, {passive: true});
         messagesEl.addEventListener('scroll', handleMessageScroll, {passive: true});
+        messagesEl.addEventListener('pointerenter', updateHistoryProgress, {passive: true});
+        messagesEl.addEventListener('pointerleave', updateHistoryProgress, {passive: true});
+        document.addEventListener('touchmove', preventOuterTouchMove, {passive: false});
         scrollArrow.addEventListener('click', function() {
             setFollowLatest(true);
             markProgrammaticScroll();

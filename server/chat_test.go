@@ -264,6 +264,9 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"window.visualViewport.addEventListener('scroll', handleViewportScroll)",
 		"scheduleScrollCorrection('focus')",
 		"updateViewportDebug('init')",
+		"function isInsideScrollSurface(target)",
+		"function preventOuterTouchMove(event)",
+		"document.addEventListener('touchmove', preventOuterTouchMove, {passive: false})",
 	} {
 		if !strings.Contains(pages.Chat, want) {
 			t.Fatalf("chat page should contain %q", want)
@@ -274,8 +277,6 @@ func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {
 		"transform: translateY(var(--chat-viewport-top))",
 		"function measuredViewportOffsetTop()",
 		"window.visualViewport.addEventListener('scroll', handleViewportChange)",
-		"function preventOuterTouchMove(event)",
-		"document.addEventListener('touchmove', preventOuterTouchMove",
 		"maximum-scale=1",
 		"user-scalable=no",
 	} {
@@ -407,6 +408,9 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	}
 	if !strings.Contains(pages.Chat, "if (!fresh.length && !updated.length)") || !strings.Contains(pages.Chat, "scrollMessagesToBottomSoon(incoming[incoming.length - 1]") {
 		t.Fatal("duplicate local send echoes should scroll without rerendering")
+	}
+	if !strings.Contains(pages.Chat, "class=\"history-progress\"") || !strings.Contains(pages.Chat, "function updateHistoryProgress()") || !strings.Contains(pages.Chat, "--history-progress-top") {
+		t.Fatal("message history should expose a minimal scroll progress indicator")
 	}
 	if !strings.Contains(pages.Chat, "var followLatest = true") || !strings.Contains(pages.Chat, "function setFollowLatest(value)") {
 		t.Fatal("chat scroll behavior should track the user's follow-latest intent explicitly")

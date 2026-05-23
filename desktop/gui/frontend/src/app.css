@@ -1216,7 +1216,12 @@ dd {
     max-width: 560px;
     overflow: auto;
     padding: 20px;
+    scrollbar-width: none;
     width: min(560px, 100%);
+}
+
+.modal::-webkit-scrollbar {
+    display: none;
 }
 
 .modal-head {
