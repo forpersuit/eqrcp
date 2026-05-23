@@ -1,6 +1,6 @@
 // gen-softcopy-pdf generates the source code PDF for software copyright (软著) application.
 // Usage: go run scripts/gen-softcopy-pdf.go
-// Output: 软著申请材料/eqrcp-source-code-V1.0.pdf
+// Output: 软著申请材料/EQT-source-code-V1.0.pdf
 
 package main
 
@@ -15,18 +15,18 @@ import (
 )
 
 const (
-	softwareName  = "eqrcp V1.0"
-	linesPerPage  = 50
-	targetLines   = linesPerPage * 30 // 1500 lines for 30 pages
-	outputPath    = "软著申请材料/eqrcp-source-code-V1.0.pdf"
-	pageWidth     = 595.0
-	pageHeight    = 842.0
-	marginLeft    = 50.0
-	marginTop     = 50.0
+	softwareName   = "EQT Easy QR Transfer V1.0"
+	linesPerPage   = 50
+	targetLines    = linesPerPage * 30 // 1500 lines for 30 pages
+	outputPath     = "软著申请材料/EQT-source-code-V1.0.pdf"
+	pageWidth      = 595.0
+	pageHeight     = 842.0
+	marginLeft     = 50.0
+	marginTop      = 50.0
 	headerFontSize = 8.0
-	codeFontSize  = 7.0
-	lineHeight    = 9.5
-	charsPerLine  = 100
+	codeFontSize   = 7.0
+	lineHeight     = 9.5
+	charsPerLine   = 100
 )
 
 type FileInfo struct {
@@ -47,7 +47,7 @@ func main() {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(info.Name(), "_test.go") {
+		if !isSourceFile(path, info.Name()) {
 			return nil
 		}
 		lines, err := countLines(path)
@@ -91,6 +91,26 @@ func main() {
 		outputPath, len(pages), len(pages)/2, len(pages)-len(pages)/2, len(allLines))
 }
 
+func isSourceFile(path string, name string) bool {
+	if strings.Contains(path, "/node_modules/") ||
+		strings.Contains(path, "/build/") ||
+		strings.Contains(path, "/dist/") ||
+		strings.Contains(path, "/wailsjs/") ||
+		strings.HasPrefix(path, "scripts/") ||
+		strings.Contains(path, "软著申请材料/") {
+		return false
+	}
+	if strings.HasSuffix(name, "_test.go") {
+		return false
+	}
+	for _, ext := range []string{".go", ".js", ".css", ".html"} {
+		if strings.HasSuffix(path, ext) {
+			return true
+		}
+	}
+	return false
+}
+
 func findProjectRoot() (string, error) {
 	exe, _ := os.Executable()
 	for dir := filepath.Dir(exe); dir != "/" && dir != "."; dir = filepath.Dir(dir) {
@@ -117,41 +137,47 @@ func countLines(path string) (int, error) {
 
 func fileOrder(path string) int {
 	order := map[string]int{
-		"main.go":                                0,
-		"application/application.go":             1,
-		"cmd/qrcp.go":                            10,
-		"cmd/send.go":                            11,
-		"cmd/receive.go":                         12,
-		"cmd/chat.go":                            13,
-		"cmd/config.go":                          14,
-		"cmd/version.go":                         15,
-		"cmd/completion.go":                      16,
-		"cmd/desktop.go":                         17,
-		"cmd/desktop_agent.go":                   18,
-		"cmd/desktop_integration.go":             19,
+		"main.go":                                 0,
+		"application/application.go":              1,
+		"cmd/qrcp.go":                             10,
+		"cmd/send.go":                             11,
+		"cmd/receive.go":                          12,
+		"cmd/chat.go":                             13,
+		"cmd/config.go":                           14,
+		"cmd/version.go":                          15,
+		"cmd/completion.go":                       16,
+		"cmd/desktop.go":                          17,
+		"cmd/desktop_agent.go":                    18,
+		"cmd/desktop_integration.go":              19,
 		"cmd/desktop_agent_background_windows.go": 20,
 		"cmd/desktop_agent_background_other.go":   21,
-		"cmd/eqrcp-launcher/main.go":             25,
+		"cmd/eqrcp-launcher/main.go":              25,
 		"cmd/eqrcp-launcher/launcher_windows.go":  26,
 		"cmd/eqrcp-launcher/launcher_other.go":    27,
-		"config/config.go":                       30,
-		"config/settings.go":                     31,
-		"config/migrate.go":                      32,
-		"config/util.go":                         33,
-		"body/payload.go":                        40,
-		"server/server.go":                       50,
-		"server/chat.go":                         51,
-		"server/util.go":                         52,
+		"config/config.go":                        30,
+		"config/settings.go":                      31,
+		"config/migrate.go":                       32,
+		"config/util.go":                          33,
+		"body/payload.go":                         40,
+		"server/server.go":                        50,
+		"server/chat.go":                          51,
+		"server/util.go":                          52,
 		"server/tcpkeepalivelistener.go":          53,
-		"qr/qr.go":                               60,
-		"util/util.go":                           70,
-		"util/net.go":                            71,
-		"logger/logger.go":                       80,
-		"pages/pages.go":                         90,
-		"version/version.go":                     100,
-		"desktop/gui/main.go":                    110,
-		"desktop/gui/app.go":                     111,
-		"desktop/gui/tray.go":                    112,
+		"qr/qr.go":                                60,
+		"util/util.go":                            70,
+		"util/net.go":                             71,
+		"logger/logger.go":                        80,
+		"pages/pages.go":                          90,
+		"version/version.go":                      100,
+		"desktop/gui/main.go":                     110,
+		"desktop/gui/app.go":                      111,
+		"desktop/gui/tray.go":                     112,
+		"desktop/gui/frontend/src/main.js":        120,
+		"desktop/gui/frontend/src/app.css":        121,
+		"desktop/gui/frontend/src/style.css":      122,
+		"pages/chat.tmpl.html":                    130,
+		"pages/qr.tmpl.html":                      131,
+		"pages/upload.tmpl.html":                  132,
 	}
 	if o, ok := order[path]; ok {
 		return o

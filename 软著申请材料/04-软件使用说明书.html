@@ -8,7 +8,7 @@
     size: A4;
     margin: 25mm 20mm 25mm 20mm;
     @top-center {
-      content: "eqrcp V1.0";
+      content: "EQT Easy QR Transfer V1.0";
       font-family: "DejaVu Sans", sans-serif;
       font-size: 9pt;
     }
@@ -59,9 +59,9 @@
 </style>
 </head>
 <body>
-<h1>eqrcp局域网文件传输系统 软件使用说明书</h1>
+<h1>EQT Easy QR Transfer 局域网文件传输系统 软件使用说明书</h1>
 
-<p><strong>软件名称</strong>: eqrcp局域网文件传输系统  </p>
+<p><strong>软件名称</strong>: EQT Easy QR Transfer 局域网文件传输系统  </p>
 <p><strong>软件版本</strong>: V1.0  </p>
 <p><strong>适用平台</strong>: Windows/Linux/macOS  </p>
 <p><strong>编制日期</strong>: 2026年5月</p>
@@ -71,7 +71,7 @@
 <h2>1. 软件概述</h2>
 
 <h3>1.1 软件简介</h3>
-<p>eqrcp是一款简单易用的局域网文件传输工具，通过在计算机终端显示二维码，实现计算机与移动设备之间的快速文件传输。无需安装移动端应用，移动设备通过浏览器扫码即可访问。</p>
+<p>EQT 是一款简单易用的局域网文件传输工具，通过在计算机终端显示二维码，实现计算机与移动设备之间的快速文件传输。无需安装移动端应用，移动设备通过浏览器扫码即可访问。</p>
 
 <h3>1.2 主要功能</h3>
 <p>1. <strong>文件发送</strong>: 将计算机上的文件发送到移动设备</p>
@@ -83,7 +83,7 @@
 <h3>1.3 系统要求</h3>
 
 <p><strong>计算机端</strong>:</p>
-<li>操作系统: Windows 7+/Linux/macOS 10.12+</li>
+<li>操作系统: Windows 10+/Linux/macOS 11+</li>
 <li>内存: 512MB及以上</li>
 <li>硬盘: 50MB可用空间</li>
 <li>网络: 局域网连接</li>
@@ -686,7 +686,7 @@ xclip -o &gt; /tmp/clipboard.txt &amp;&amp; eqrcp /tmp/clipboard.txt
 <h2>10. 安全建议</h2>
 
 <h3>10.1 局域网使用</h3>
-<p>eqrcp设计用于局域网环境，不建议在公网使用。</p>
+<p>EQT 设计用于局域网环境，不建议在公网使用。</p>
 
 <h3>10.2 敏感文件</h3>
 <p>传输敏感文件时建议启用HTTPS：</p>
@@ -741,14 +741,14 @@ xclip -o &gt; /tmp/clipboard.txt &amp;&amp; eqrcp /tmp/clipboard.txt
 </code></pre>
 
 <h3>12.2 查看日志</h3>
-<p>eqrcp的运行日志会输出到终端，可以重定向到文件：</p>
+<p>eqrcp 命令的运行日志会输出到终端，可以重定向到文件：</p>
 <pre><code>eqrcp file.pdf 2&gt;&amp;1 | tee eqrcp.log
 </code></pre>
 
 <h3>12.3 报告问题</h3>
 <p>如遇到问题，请提供：</p>
 <p>1. 操作系统和版本</p>
-<p>2. eqrcp版本（<code>eqrcp version</code>）</p>
+<p>2. eqrcp 命令版本（<code>eqrcp version</code>）</p>
 <p>3. 完整的错误信息</p>
 <p>4. 复现步骤</p>
 
@@ -757,7 +757,7 @@ xclip -o &gt; /tmp/clipboard.txt &amp;&amp; eqrcp /tmp/clipboard.txt
 <h2>13. 附录</h2>
 
 <h3>13.1 支持的文件类型</h3>
-<p>eqrcp支持传输任何类型的文件，没有限制。</p>
+<p>EQT 支持传输任何类型的文件，没有限制。</p>
 
 <h3>13.2 文件大小限制</h3>
 <p>理论上没有文件大小限制，但受限于：</p>

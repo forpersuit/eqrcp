@@ -8,7 +8,7 @@
     size: A4;
     margin: 25mm 20mm 25mm 20mm;
     @top-center {
-      content: "eqrcp V1.0";
+      content: "EQT Easy QR Transfer V1.0";
       font-family: "DejaVu Sans", sans-serif;
       font-size: 9pt;
     }
@@ -59,9 +59,9 @@
 </style>
 </head>
 <body>
-<h1>eqrcp局域网文件传输系统 软件设计说明书</h1>
+<h1>EQT Easy QR Transfer 局域网文件传输系统 软件设计说明书</h1>
 
-<p><strong>软件名称</strong>: eqrcp局域网文件传输系统  </p>
+<p><strong>软件名称</strong>: EQT Easy QR Transfer 局域网文件传输系统  </p>
 <p><strong>软件版本</strong>: V1.0  </p>
 <p><strong>编制日期</strong>: 2026年5月  </p>
 <p><strong>开发语言</strong>: Go 1.26.2、JavaScript、HTML5、CSS3</p>
@@ -71,16 +71,16 @@
 <h2>1. 引言</h2>
 
 <h3>1.1 编写目的</h3>
-<p>本文档详细描述eqrcp局域网文件传输系统的软件架构、功能模块、技术实现和设计思路，为软件著作权登记提供技术说明，同时为后续维护和升级提供参考。</p>
+<p>本文档详细描述EQT Easy QR Transfer 局域网文件传输系统的软件架构、功能模块、技术实现和设计思路，为软件著作权登记提供技术说明，同时为后续维护和升级提供参考。</p>
 
 <h3>1.2 项目背景</h3>
-<p>在日常工作和生活中，用户经常需要在计算机和移动设备之间传输文件。传统方法如数据线连接、云存储上传下载、即时通讯工具传输等，存在操作繁琐、需要网络流量、传输速度慢等问题。eqrcp通过局域网直连方式，利用二维码快速建立连接，实现高速、便捷、安全的文件传输。</p>
+<p>在日常工作和生活中，用户经常需要在计算机和移动设备之间传输文件。传统方法如数据线连接、云存储上传下载、即时通讯工具传输等，存在操作繁琐、需要网络流量、传输速度慢等问题。EQT 通过局域网直连方式，利用二维码快速建立连接，实现高速、便捷、安全的文件传输。</p>
 
 <h3>1.3 术语定义</h3>
 <li><strong>局域网（LAN）</strong>: Local Area Network，本地区域网络</li>
 <li><strong>二维码（QR Code）</strong>: Quick Response Code，快速响应码</li>
 <li><strong>HTTP/HTTPS</strong>: 超文本传输协议及其安全版本</li>
-<li><strong>WebSocket</strong>: 基于TCP的全双工通信协议</li>
+<li><strong>SSE</strong>: Server-Sent Events，服务器向浏览器推送事件的单向事件流机制</li>
 <li><strong>TLS</strong>: Transport Layer Security，传输层安全协议</li>
 <li><strong>CLI</strong>: Command Line Interface，命令行接口</li>
 <li><strong>GUI</strong>: Graphical User Interface，图形用户界面</li>
@@ -88,7 +88,7 @@
 <h3>1.4 参考资料</h3>
 <li>Go语言官方文档：https://go.dev/doc/</li>
 <li>HTTP/1.1 RFC 7230-7235</li>
-<li>WebSocket协议 RFC 6455</li>
+<li>HTML Living Standard 中的 Server-Sent Events 机制</li>
 <li>QR Code标准 ISO/IEC 18004</li>
 
 <div class="page-break"></div>
@@ -96,7 +96,7 @@
 <h2>2. 系统概述</h2>
 
 <h3>2.1 系统目标</h3>
-<p>eqrcp旨在提供一个简单、快速、安全的局域网文件传输解决方案，主要目标包括：</p>
+<p>EQT 旨在提供一个简单、快速、安全的局域网文件传输解决方案，主要目标包括：</p>
 <p>1. 零配置：无需复杂设置，即开即用</p>
 <p>2. 跨平台：支持Windows、Linux、macOS</p>
 <p>3. 高性能：利用局域网带宽实现高速传输</p>
@@ -110,7 +110,7 @@
 <p>3. <strong>二维码连接</strong>: 在终端显示二维码，移动设备扫码即可访问</p>
 <p>4. <strong>内置Web服务器</strong>: 无需外部Web服务器，独立运行</p>
 <p>5. <strong>桌面集成</strong>: Windows系统支持右键菜单快速分享</p>
-<p>6. <strong>实时通信</strong>: 基于WebSocket的实时聊天功能</p>
+<p>6. <strong>实时通信</strong>: 基于SSE的实时聊天功能</p>
 <p>7. <strong>灵活配置</strong>: 支持配置文件、环境变量、命令行参数多种配置方式</p>
 
 <h3>2.3 应用场景</h3>
@@ -125,10 +125,10 @@
 <h2>3. 系统架构</h2>
 
 <h3>3.1 总体架构</h3>
-<p>eqrcp采用客户端-服务器（C/S）架构，计算机端运行服务器程序，移动设备通过浏览器作为客户端访问。</p>
+<p>EQT 采用客户端-服务器（C/S）架构，计算机端运行服务器程序，移动设备通过浏览器作为客户端访问。</p>
 
 <pre><code>┌─────────────────────────────────────────────────────────┐
-│                    eqrcp 系统架构                        │
+│                    EQT 系统架构                          │
 ├─────────────────────────────────────────────────────────┤
 │                                                          │
 │  ┌──────────────┐              ┌──────────────┐        │
@@ -149,7 +149,7 @@
 │         │   服务层 (Server)    │                       │
 │         │  - HTTP服务器        │                       │
 │         │  - 路由处理           │                       │
-│         │  - WebSocket服务     │                       │
+│         │  - SSE事件推送服务     │                │
 │         └──────────┬──────────┘                        │
 │                    │                                    │
 │         ┌──────────▼──────────┐                        │
@@ -169,7 +169,7 @@
 └─────────────────────────────────────────────────────────┘
                          │
                          │ HTTP/HTTPS
-                         │ WebSocket
+                         │ SSE
                          ▼
               ┌──────────────────┐
               │   移动设备浏览器   │
@@ -182,7 +182,7 @@
 <h3>3.2 技术架构</h3>
 <li><strong>后端框架</strong>: Go标准库（net/http）</li>
 <li><strong>前端技术</strong>: 原生JavaScript + HTML5 + CSS3</li>
-<li><strong>通信协议</strong>: HTTP/HTTPS、WebSocket</li>
+<li><strong>通信协议</strong>: HTTP/HTTPS、SSE事件流</li>
 <li><strong>数据格式</strong>: JSON、Multipart Form Data</li>
 <li><strong>加密技术</strong>: TLS 1.2+</li>
 <li><strong>二维码</strong>: go-qrcode库</li>
@@ -194,7 +194,7 @@
 
 <p>1. <strong>命令行接口模块（cmd）</strong>: 处理用户命令和参数</p>
 <p>2. <strong>应用层模块（application）</strong>: 应用逻辑和流程控制</p>
-<p>3. <strong>服务器模块（server）</strong>: HTTP服务和WebSocket服务</p>
+<p>3. <strong>服务器模块（server）</strong>: HTTP服务、SSE事件推送和Chat接口</p>
 <p>4. <strong>文件处理模块（body）</strong>: 文件读取、压缩、传输</p>
 <p>5. <strong>配置模块（config）</strong>: 配置文件读写和管理</p>
 <p>6. <strong>二维码模块（qr）</strong>: 二维码生成和显示</p>
@@ -287,10 +287,10 @@
 <h3>4.4 实时聊天模块</h3>
 
 <h4>4.4.1 模块功能</h4>
-<p>提供基于WebSocket的实时聊天功能，支持文本消息和文件附件。</p>
+<p>提供基于SSE事件流和HTTP接口的实时聊天功能，支持文本消息和文件附件。</p>
 
 <h4>4.4.2 功能特性</h4>
-<p>1. 实时双向消息传输</p>
+<p>1. 实时消息同步</p>
 <p>2. 支持文本消息</p>
 <p>3. 支持文件附件发送</p>
 <p>4. 消息历史记录</p>
@@ -299,17 +299,18 @@
 <p>7. 设备主题颜色标识</p>
 
 <h4>4.4.3 技术实现</h4>
-<li>使用WebSocket协议实现全双工通信</li>
+<li>浏览器通过SSE事件流接收消息更新</li>
+<li>发送文本消息、上传附件、撤回消息等操作通过HTTP接口提交</li>
 <li>消息格式采用JSON</li>
-<li>文件通过Base64编码传输或单独HTTP上传</li>
-<li>服务端维护连接池管理多个客户端</li>
-<li>心跳机制检测连接状态</li>
+<li>文件附件通过独立HTTP上传和下载接口传输</li>
+<li>服务端维护订阅者列表并向多个客户端广播事件</li>
+<li>浏览器使用事件游标恢复断线后的消息同步</li>
 
 <h4>4.4.4 消息类型</h4>
 <li><code>text</code>: 文本消息</li>
 <li><code>file</code>: 文件附件</li>
 <li><code>system</code>: 系统通知</li>
-<li><code>ping/pong</code>: 心跳消息</li>
+<li><code>presence</code>: 设备在线和会话状态消息</li>
 
 <h3>4.5 配置管理模块</h3>
 
@@ -490,18 +491,18 @@ output: &quot;.&quot;             # 接收文件保存目录
 <li><strong>功能</strong>: 显示聊天页面</li>
 <li><strong>响应</strong>: HTML页面</li>
 
-<h3>6.2 WebSocket接口</h3>
+<h3>6.2 SSE接口</h3>
 
 <h4>6.2.1 聊天连接</h4>
-<li><strong>路径</strong>: <code>WS /{random-path}/ws</code></li>
-<li><strong>功能</strong>: 建立WebSocket连接</li>
+<li><strong>路径</strong>: <code>GET /chat/{token}/events</code></li>
+<li><strong>功能</strong>: 建立SSE事件流连接</li>
 <li><strong>消息格式</strong>: JSON</li>
 
 <h4>6.2.2 消息类型</h4>
 <p>1. <strong>文本消息</strong>: <code>{&quot;type&quot;:&quot;text&quot;,&quot;content&quot;:&quot;...&quot;}</code></p>
 <p>2. <strong>文件消息</strong>: <code>{&quot;type&quot;:&quot;file&quot;,&quot;filename&quot;:&quot;...&quot;,&quot;filedata&quot;:&quot;...&quot;}</code></p>
 <p>3. <strong>系统消息</strong>: <code>{&quot;type&quot;:&quot;system&quot;,&quot;content&quot;:&quot;...&quot;}</code></p>
-<p>4. <strong>心跳消息</strong>: <code>{&quot;type&quot;:&quot;ping&quot;}</code> / <code>{&quot;type&quot;:&quot;pong&quot;}</code></p>
+<p>4. <strong>状态消息</strong>: 会话状态、设备列表、消息序列等同步数据</p>
 
 <div class="page-break"></div>
 
@@ -516,8 +517,8 @@ output: &quot;.&quot;             # 接收文件保存目录
 <h3>7.3 临时文件管理</h3>
 <p>多文件传输时自动创建临时zip压缩包，传输完成后自动清理，不占用磁盘空间。</p>
 
-<h3>7.4 WebSocket实时通信</h3>
-<p>使用WebSocket协议实现全双工通信，消息实时推送，无需轮询，降低延迟和服务器负载。</p>
+<h3>7.4 SSE实时通信</h3>
+<p>使用SSE事件流向浏览器推送消息更新，使用HTTP接口提交消息和附件。该方式避免频繁轮询，降低延迟和服务器负载，同时便于浏览器在断线后按事件序列恢复。</p>
 
 <h3>7.5 跨平台支持</h3>
 <p>使用Go语言开发，天然支持跨平台编译，一套代码可编译为Windows、Linux、macOS可执行文件。</p>
@@ -536,7 +537,7 @@ output: &quot;.&quot;             # 接收文件保存目录
 
 <h3>8.2 并发处理</h3>
 <li>HTTP服务器支持多并发连接</li>
-<li>WebSocket连接池管理多个客户端</li>
+<li>SSE订阅者列表管理多个客户端</li>
 <li>Go协程处理并发请求，高效利用CPU</li>
 
 <h3>8.3 资源占用</h3>
@@ -620,7 +621,7 @@ output: &quot;.&quot;             # 接收文件保存目录
 
 <h2>14. 总结</h2>
 
-<p>eqrcp局域网文件传输系统采用模块化设计，功能完善，性能优异，安全可靠。通过命令行接口和桌面集成，为用户提供便捷的文件传输体验。系统采用Go语言开发，具有良好的跨平台性和可维护性，为后续功能扩展奠定了坚实基础。</p>
+<p>EQT Easy QR Transfer 局域网文件传输系统采用模块化设计，功能完善，性能优异，安全可靠。通过命令行接口和桌面集成，为用户提供便捷的文件传输体验。系统采用Go语言开发，具有良好的跨平台性和可维护性，为后续功能扩展奠定了坚实基础。</p>
 
 </body>
 </html>

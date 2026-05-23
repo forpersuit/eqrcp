@@ -89,7 +89,7 @@ func mdToHTML(md string, title string) string {
     size: A4;
     margin: 25mm 20mm 25mm 20mm;
     @top-center {
-      content: "eqrcp V1.0";
+      content: "EQT Easy QR Transfer V1.0";
       font-family: "DejaVu Sans", sans-serif;
       font-size: 9pt;
     }
