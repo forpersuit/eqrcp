@@ -141,6 +141,24 @@ export namespace main {
 	        this.cliPath = source["cliPath"];
 	    }
 	}
+	export class DesktopIntegrationStatus {
+	    supported: boolean;
+	    enabled: boolean;
+	    needsRepair: boolean;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DesktopIntegrationStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.supported = source["supported"];
+	        this.enabled = source["enabled"];
+	        this.needsRepair = source["needsRepair"];
+	        this.detail = source["detail"];
+	    }
+	}
 	export class InterfaceOption {
 	    name: string;
 	    ip: string;

@@ -1,0 +1,98 @@
+  Summary
+
+  - Scope analyzed: repo 自有 Go 代码、嵌入式 HTML/JS、Wails 前端入口；排除了未跟踪的 node_modules/ 第三方依赖。
+  - Stack detected: Go CLI + net/http server + Cobra + Wails desktop frontend.
+  - Test/build commands detected: go test ./...、go test ./server ./cmd、go build -o eqrcp .、Windows artifact
+    build scripts。
+  - Highest-impact hotspot: chat page message merge uses repeated linear scans, bounded by history but still on
+    an interactive hot path.
+  - Patch status: proposed only.
+  - Files modified: no.
+
+  Findings
+
+  1. pages/chat.tmpl.html:2455
+
+  - Current pattern: incoming message merge builds knownIDs, then incoming.filter(... state.messages.some(...)),
+    then maps existing messages. The some inside filter makes update detection O(i * m).
+  - Estimated current complexity: O(m + i*m + m), where m is current chat messages and i is incoming messages.
+    Server caps chat history at 200, so bounded but still repeated during polling/SSE recovery.
+  - Recommended change: build byExistingID map once with {id: message} and use O(1) lookup for fresh/updated
+    classification.
+  - Estimated after: O(m + i).
+  - Risk level: low-medium. Must preserve recall/update semantics and ordering.
+  - Tests/measurements needed: extend chat template tests around recalled messages and duplicate incoming IDs;
+    optionally browser-side benchmark for 200-message history.
+
+  2. desktop/gui/frontend/src/main.js:1227
+
+  - Current pattern: every agent SSE message calls full render(), which rewrites #app.innerHTML and rebinds all
+    event listeners. Transfer progress can emit frequent updates.
+  - Estimated current complexity: O(D + h + p) DOM rebuild per status event, where D is rendered DOM size, h
+    history displayed, p selected paths. History display is sliced to 8, so algorithmic risk is mostly constant-
+    factor UI churn.
+  - Recommended change: keep full render for mode/panel changes, but add targeted status rendering for current
+    task/progress/history. Existing updateChatQRPanel() already shows the intended pattern.
+  - Estimated after: O(changed status subtree) per event.
+  - Risk level: medium, because frontend state and event binding are coupled to full render.
+  - Tests/measurements needed: Wails/manual UI smoke test; verify share/receive/chat status updates, QR panel,
+    stop/repeat buttons.
+
+  3. cmd/desktop_agent.go:1006
+
+  - Current pattern: every /status and SSE event snapshot clones current/history records, including Paths,
+    SavedFiles, and TransferItems.
+  - Estimated current complexity: O(history + total slice fields). History is capped at 20 and queue at 16, so
+    this is bounded.
+  - Recommended change: no immediate optimization needed. If status frequency or history cap grows, introduce a
+    cached immutable response per revision and invalidate in touchLocked().
+  - Estimated after if changed: O(1) read per unchanged revision, O(n) only on mutation.
+  - Risk level: medium due to concurrency and aliasing safety; current cloning is intentionally defensive.
+  - Tests/measurements needed: race test with SSE subscribers, status mutation tests.
+
+  4. cmd/desktop_agent.go:1028
+
+  - Current pattern: addHistoryLocked prepends with append([]desktopAgentTaskRecord{record}, agent.history...),
+    then writes full JSON history to disk on every finalized task.
+  - Estimated current complexity: O(h + serialized bytes), capped at 20 records.
+  - Recommended change: keep as-is unless task completion rate becomes high. If needed, use preallocated slice
+    prepend or async/debounced persistence.
+  - Estimated after: still O(h) for ordering, lower allocation/I/O pressure.
+  - Risk level: low for preallocation, medium for async persistence because shutdown consistency matters.
+  - Tests/measurements needed: history ordering/persistence tests, shutdown-after-task manual check.
+
+  5. server/chat.go:999
+
+  - Current pattern: messagesAfterSeq scans full retained chat history for every snapshot-after-seq request.
+  - Estimated current complexity: O(m), capped by maxChatHistory = 200.
+  - Recommended change: keep as-is for current cap. Binary search by Seq would only pay off if chat history
+    grows substantially.
+  - Estimated after if changed: O(log m + k).
+  - Risk level: medium, because createdSeq > joinSeq and recall updates make the filter semantics more nuanced
+    than plain seq pagination.
+  - Tests/measurements needed: join/reconnect/recall tests with messages before and after join seq.
+
+  6. util/util.go:52
+
+  - Current pattern: ZipFiles stats each input and defers file.Close() inside the loop for regular files.
+  - Estimated current complexity: O(number of selected files + archived content size). Not algorithmically bad,
+    but many selected files can keep descriptors open until the whole archive finishes.
+  - Recommended change: close each regular file immediately after zip.Add, not via loop-scoped defer.
+  - Estimated after: same Big-O, lower peak file descriptor usage.
+  - Risk level: low, but this is resource complexity rather than algorithmic complexity.
+  - Tests/measurements needed: payload zip test with many files; verify archive content unchanged.
+
+  Scanner Notes
+  The first-pass scanner flagged many “nested loop” sites in cmd/desktop_agent.go, cmd/desktop.go, and tests.
+  Most are false positives or bounded loops: Cobra command setup, HTTP/SSE loops, notification fan-out over
+  subscribers, and history rendering capped to small constants. I would not optimize those without profiling
+  evidence.
+
+  Verification
+
+  - Tests run: none, because this was report-only and no files were changed.
+  - Build/type/lint run: none.
+  - Benchmark/measurement: static scan plus targeted source inspection.
+  - Residual risk: this is a static complexity audit, not a profiler run. The most useful next measurement would
+    be frontend render frequency during active transfer/chat and a small JS benchmark for chat message merge at
+    the 200-message cap.

@@ -268,16 +268,17 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 - Port `0` remains the recommended default because it lets the OS choose an available port. Fixed ports are supported for predictable URLs, but transfers fail visibly if the chosen port is already occupied.
 - When no output directory is configured, desktop settings resolve to the current user's `Downloads` directory if it exists, otherwise the user's home directory. Saving an empty output value writes that resolved user-directory default instead of leaving receive behavior dependent on the process working directory.
 - The config file stays in the current user's config directory. This remains the right default for installer builds because installation directories are often read-only, shared by multiple users, and unsuitable for mutable per-user preferences.
+- The Wails GUI settings surface now exposes `Windows right-click share and receive` and `Start EQT at login` toggles. These wrap the existing `eqrcp desktop install/uninstall/status` and `startup-enable/startup-disable/startup-status` command paths instead of duplicating platform registry or autostart logic inside the GUI.
 - Agent restart: the browser status page includes `Restart Agent`, which asks the current process to stop and launch a fresh background agent from the same executable.
 - Transfer pages opened by the desktop agent now show a compact agent status pill in the top-right corner. It uses green, red, or gray state coloring for reachable, offline, and idle/restarting states. If the per-task QR service disappears after agent restart or replacement, the page falls back to the agent `/status` endpoint, shows whether the agent is reachable, and renders the task's final agent state when it can still find the task in current or history.
 - Agent restart now synchronously finalizes the active task into persisted history before the old agent exits, so an already-open task page can still use `Transfer again` after the new agent starts.
 
 Next priorities:
 
-1. Extend the settings surface with startup choice/status and stronger output directory validation guidance.
-2. Add history refinements: configurable retention and open/export actions for saved history.
-3. Evaluate tray icon options after the settings surface is usable; the tray should wrap the same local agent actions rather than introduce a second control path.
-4. Build Windows binaries and run the deferred Windows validation batch when the next Windows development slice is ready.
+1. Build Windows binaries and run the deferred Windows validation batch, including the new GUI toggles for right-click integration and login startup.
+2. Tighten tray semantics: distinguish closing the GUI from stopping the background agent, rename current-task actions so they also fit chat sessions, and disable unavailable tray actions when the agent is idle.
+3. Improve notification backends without making notifications part of the transfer-critical path. Keep Linux/macOS on OS notification channels and prefer Windows Toast when packaging metadata makes it reliable, with the current balloon path as fallback.
+4. Add history refinements: configurable retention and open/export actions for saved history.
 
 ### Phase 6: Cross-Platform Desktop GUI
 

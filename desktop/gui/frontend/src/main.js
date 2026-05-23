@@ -21,7 +21,11 @@ import {
     SelectFiles,
     SelectReceiveDirectory,
     SelectShareDirectory,
+    RightClickIntegrationStatus,
     Share,
+    SetRightClickIntegrationEnabled,
+    SetStartupEnabled,
+    StartupStatus,
     StopCurrent,
 } from '../wailsjs/go/main/App';
 
@@ -32,6 +36,8 @@ const state = {
     chatSaveDir: '',
     status: null,
     settings: null,
+    rightClickIntegration: null,
+    startupIntegration: null,
     appInfo: null,
     activePanel: '',
     error: '',
@@ -531,6 +537,20 @@ function renderSettingsPanel() {
             </select>
             <div class="settings-note">
                 <label class="check">
+                    <input id="settings-right-click" type="checkbox" ${state.rightClickIntegration?.enabled ? 'checked' : ''} ${state.rightClickIntegration?.supported === false ? 'disabled' : ''} />
+                    <strong>Windows right-click share and receive</strong>
+                </label>
+                <span>${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
+            </div>
+            <div class="settings-note">
+                <label class="check">
+                    <input id="settings-startup" type="checkbox" ${state.startupIntegration?.enabled ? 'checked' : ''} ${state.startupIntegration?.supported === false ? 'disabled' : ''} />
+                    <strong>Start EQT at login</strong>
+                </label>
+                <span>${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
+            </div>
+            <div class="settings-note">
+                <label class="check">
                     <input id="settings-chat-autosave" type="checkbox" ${state.chatAutoSave ? 'checked' : ''} />
                     <strong>Auto-save chat attachments</strong>
                 </label>
@@ -540,6 +560,22 @@ function renderSettingsPanel() {
             <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
     `;
+}
+
+function integrationStatusText(status, fallback) {
+    if (!status) {
+        return 'Checking status...';
+    }
+    if (status.supported === false) {
+        return 'Not available on this platform yet.';
+    }
+    if (status.needsRepair) {
+        return 'Needs repair. Turn this off and on again to reinstall it.';
+    }
+    if (status.enabled) {
+        return 'Enabled.';
+    }
+    return fallback;
 }
 
 function renderAboutPanel() {
@@ -702,6 +738,8 @@ function bindEvents() {
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
     document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
+    document.querySelector('#settings-right-click')?.addEventListener('change', toggleRightClickIntegration);
+    document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
@@ -924,6 +962,24 @@ async function saveSettingsData() {
     state.browserFallback = state.settings.browser;
     state.chatAutoSave = state.settings.chatAutoSave !== false;
     state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
+}
+
+async function toggleRightClickIntegration(event) {
+    const enabled = Boolean(event.currentTarget?.checked);
+    await run(async () => {
+        state.rightClickIntegration = await SetRightClickIntegrationEnabled(enabled);
+        state.notice = enabled ? 'Right-click sharing enabled.' : 'Right-click sharing disabled.';
+        render();
+    });
+}
+
+async function toggleStartupIntegration(event) {
+    const enabled = Boolean(event.currentTarget?.checked);
+    await run(async () => {
+        state.startupIntegration = await SetStartupEnabled(enabled);
+        state.notice = enabled ? 'EQT will start at login.' : 'EQT will not start at login.';
+        render();
+    });
 }
 
 async function stopCurrent() {
@@ -1171,9 +1227,29 @@ async function loadSettings() {
         state.browserFallback = Boolean(state.settings.browser);
         state.chatAutoSave = state.settings.chatAutoSave !== false;
         state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
+        await loadIntegrationStatusData();
         await loadStatusData();
         render();
     });
+}
+
+async function loadIntegrationStatusData() {
+    const [rightClick, startup] = await Promise.all([
+        RightClickIntegrationStatus().catch((error) => ({
+            supported: false,
+            enabled: false,
+            needsRepair: false,
+            detail: String(error?.message || error),
+        })),
+        StartupStatus().catch((error) => ({
+            supported: false,
+            enabled: false,
+            needsRepair: false,
+            detail: String(error?.message || error),
+        })),
+    ]);
+    state.rightClickIntegration = rightClick;
+    state.startupIntegration = startup;
 }
 
 async function loadStatusData() {

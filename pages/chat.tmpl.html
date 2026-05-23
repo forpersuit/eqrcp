@@ -714,9 +714,9 @@
             color: #b91c1c;
         }
         .bubble-action.copy-success {
-            background: var(--wash);
-            border-color: var(--line);
-            color: var(--ok);
+            background: var(--message-action-bg, var(--wash));
+            border-color: var(--message-action-border, var(--line));
+            color: var(--message-action-text, var(--ok));
         }
         @media (hover: none), (pointer: coarse) {
             .message {

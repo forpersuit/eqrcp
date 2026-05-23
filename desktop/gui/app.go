@@ -99,6 +99,15 @@ type AppInfo struct {
 	CLIPath     string `json:"cliPath,omitempty"`
 }
 
+type DesktopIntegrationStatus struct {
+	Supported   bool   `json:"supported"`
+	Enabled     bool   `json:"enabled"`
+	NeedsRepair bool   `json:"needsRepair"`
+	Detail      string `json:"detail"`
+}
+
+var desktopCommandRunner = runDesktopCommand
+
 func NewApp() *App {
 	return &App{
 		client:        &http.Client{Timeout: 5 * time.Second},
@@ -425,6 +434,57 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 	return saved, nil
 }
 
+func (a *App) RightClickIntegrationStatus() (DesktopIntegrationStatus, error) {
+	output, err := a.runEqrcpDesktopCommand("status")
+	if err != nil {
+		return DesktopIntegrationStatus{}, err
+	}
+	return parseDesktopIntegrationStatus(output), nil
+}
+
+func (a *App) SetRightClickIntegrationEnabled(enabled bool) (DesktopIntegrationStatus, error) {
+	command := "uninstall"
+	if enabled {
+		command = "install"
+	}
+	if _, err := a.runEqrcpDesktopCommand(command); err != nil {
+		return DesktopIntegrationStatus{}, err
+	}
+	return a.RightClickIntegrationStatus()
+}
+
+func (a *App) StartupStatus() (DesktopIntegrationStatus, error) {
+	output, err := a.runEqrcpDesktopCommand("startup-status")
+	if err != nil {
+		return DesktopIntegrationStatus{}, err
+	}
+	return parseDesktopStartupStatus(output), nil
+}
+
+func (a *App) SetStartupEnabled(enabled bool) (DesktopIntegrationStatus, error) {
+	command := "startup-disable"
+	if enabled {
+		command = "startup-enable"
+	}
+	if _, err := a.runEqrcpDesktopCommand(command); err != nil {
+		return DesktopIntegrationStatus{}, err
+	}
+	return a.StartupStatus()
+}
+
+func (a *App) runEqrcpDesktopCommand(args ...string) (string, error) {
+	cli, err := findEqrcpCLI()
+	if err != nil {
+		return "", err
+	}
+	commandArgs := append([]string{"desktop"}, args...)
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return desktopCommandRunner(ctx, cli, commandArgs...)
+}
+
 func (a *App) SelectFiles() ([]string, error) {
 	return wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Choose files to share",
@@ -606,6 +666,72 @@ func findEqrcpLauncher(cli string) (string, bool) {
 		return candidate, true
 	}
 	return "", false
+}
+
+func runDesktopCommand(ctx context.Context, cli string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, cli, args...)
+	output, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(output))
+	if err != nil {
+		if text == "" {
+			return "", err
+		}
+		return text, fmt.Errorf("%w: %s", err, text)
+	}
+	return text, nil
+}
+
+func parseDesktopIntegrationStatus(output string) DesktopIntegrationStatus {
+	status := DesktopIntegrationStatus{
+		Supported: !strings.Contains(output, "not implemented"),
+		Detail:    output,
+	}
+	if !status.Supported {
+		return status
+	}
+	installed, needsRepair, notInstalled, ok := parseDesktopSummary(output)
+	if ok {
+		status.Enabled = installed > 0 && needsRepair == 0 && notInstalled == 0
+		status.NeedsRepair = needsRepair > 0
+		return status
+	}
+	status.Enabled = strings.Contains(output, ": installed") && !strings.Contains(output, ": needs repair") && !strings.Contains(output, ": not installed")
+	status.NeedsRepair = strings.Contains(output, ": needs repair")
+	return status
+}
+
+func parseDesktopStartupStatus(output string) DesktopIntegrationStatus {
+	status := DesktopIntegrationStatus{
+		Supported: !strings.Contains(output, "not implemented"),
+		Detail:    output,
+	}
+	if !status.Supported {
+		return status
+	}
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- Agent startup:") {
+			value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- Agent startup:"))
+			status.Enabled = value == "enabled"
+			status.NeedsRepair = value == "needs repair"
+			return status
+		}
+	}
+	status.Enabled = strings.Contains(output, "Agent startup: enabled")
+	status.NeedsRepair = strings.Contains(output, "Agent startup: needs repair")
+	return status
+}
+
+func parseDesktopSummary(output string) (installed int, needsRepair int, notInstalled int, ok bool) {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "- summary:") {
+			continue
+		}
+		_, err := fmt.Sscanf(line, "- summary: %d installed, %d needs repair, %d not installed", &installed, &needsRepair, &notInstalled)
+		return installed, needsRepair, notInstalled, err == nil
+	}
+	return 0, 0, 0, false
 }
 
 func openPathCommand(path string) (*exec.Cmd, error) {

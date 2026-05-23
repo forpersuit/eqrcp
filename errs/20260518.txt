@@ -1,0 +1,211 @@
+❯ 1. 使用公共stun还是自己搭建? 自己搭建有什么要求,难点
+  2. 我想将eqrcp全部改为eqt,这是我们这个软件的简写
+  3. 边等agent, 边推进B4, 但是 #2 这个改名,难度大吗? 不大的话,推进, 大的话就后续再说;
+
+● 我先 grep 看改名规模，再决定推不推。
+
+  Searched for 3 patterns (ctrl+o to expand)
+
+● 933 处出现、77 个文件、还涉及 软著申请材料/。简短回答：改名很大，建议后续做。详细分析见下。
+
+  ---
+  Q1：STUN 公共 vs 自建
+
+  公共 STUN（推荐起步）
+
+  可用的：
+  - stun:stun.l.google.com:19302（默认首选）
+  - stun:stun.cloudflare.com:3478
+  - stun:global.stun.twilio.com:3478
+
+  优：零成本、零运维、99.9% 可用、全球分布。
+  劣：
+  - 无 SLA（Google 不承诺，但很少挂）
+  - 中国大陆：Google STUN 偶尔被墙、Cloudflare 国内访问不稳定
+  - 共享，所有人都在用——不是隐私风险（STUN 只回你的公网地址），但稳定性看运气
+
+  自建 STUN/TURN 要求
+
+  关键区分：
+  - STUN = 无状态查询服务："你的公网 IP/端口是 X" + 1 个 UDP 包来回，流量极低
+  - TURN = relay 中继服务：P2P 直连失败时，所有数据都过中转服务器，流量贵
+
+  ┌───────────────────────────┬──────────────────────────┬─────────────────────────────────┐
+  │                           │           STUN           │              TURN               │
+  ├───────────────────────────┼──────────────────────────┼─────────────────────────────────┤
+  │ 用户量 1000，每月成本估算 │ $5 VPS 撑得住            │ 取决于流量；100GB 中转 ≈ $10-30 │
+  ├───────────────────────────┼──────────────────────────┼─────────────────────────────────┤
+  │ 必备资源                  │ 公网 IP（不能在 NAT 后） │ 同左 + 带宽                     │
+  ├───────────────────────────┼──────────────────────────┼─────────────────────────────────┤
+  │ 端口                      │ UDP 3478                 │ UDP/TCP 3478 + UDP 49152-65535  │
+  ├───────────────────────────┼──────────────────────────┼─────────────────────────────────┤
+  │ 标准实现                  │ coturn / pion/turn       │ 同左                            │
+  └───────────────────────────┴──────────────────────────┴─────────────────────────────────┘
+
+  自建难点：
+  1. 必须有公网 IPv4 IP——VPS 都有，但家里 NAT 内的机器不行
+  2. 滥用风险：开放的 STUN/TURN 易被用作反射放大攻击或被白嫖；TURN 必须开启认证（time-limited credential, RFC
+  7635）
+  3. 中国大陆部署：阿里云/腾讯云 VPS 备案（不备案可能被关），月成本 $5-15
+  4. HA：单机故障 STUN 直接挂；想冗余得多机房 + DNS 轮询
+  5. 监控：连接成功率、ICE gathering 耗时、对称 NAT 比例
+  6. 运维更新：coturn 偶有 CVE，需要打补丁
+
+  对 eqrcp/EQT 的实际建议：
+
+  阶段        STUN              TURN
+  ─────────────────────────────────────────────────
+  Phase 1     公共 Google       不做（连不上就提示用户）
+  Phase 2     公共 + 国内自建    暂不做
+  Phase 3     多区域自建        coturn @ 1 节点
+  Phase 4     商业 SLA          多区域 coturn
+
+  Pro 套餐的护城河实际上在 signaling 服务——STUN 自己用公共的就行，但 signaling endpoint 必须自托管，付费才给
+  endpoint URL。这是天然的服务绑定，技术上无法绕过（防破解的核心见 Q5 文档）。
+
+  ---
+  Q2/Q3：改名 eqrcp → eqt 的难度评估
+
+  规模实证
+
+  ┌────────────┬───────────────────────────────────────────────────────────────────────────────┐
+  │    维度    │                                     数量                                      │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
+  │ 涉及文件   │ 77                                                                            │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
+  │ 字符串出现 │ 933                                                                           │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
+  │ Go 模块    │ eqrcp + eqrcp-desktop 两个                                                    │
+  ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
+  │ 跨类型     │ Go / Markdown / YAML / JSON / HTML / Shell / NSIS / Plist / 软著申请材料 6 份 │
+  └────────────┴───────────────────────────────────────────────────────────────────────────────┘
+
+  实际涉及面
+
+  机械替换部分（中等工作量）：
+  - module eqrcp → module eqt + module eqrcp-desktop → module eqt-desktop
+  - 所有 import path: eqrcp/server → eqt/server 等
+  - binary: eqrcp 在 goreleaser
+  - outputfilename: "eqrcp-desktop" 在 wails.json
+  - 二进制名、cobra command 名、各 template 里的字符串
+
+  非机械部分（真正的麻烦）：
+  1. 现有用户配置迁移：~/.config/eqrcp/config.yml →
+  ~/.config/eqt/config.yml，要写自动迁移逻辑（首次运行检测旧目录，复制+提示）
+  2. 环境变量前缀：EQRCP_* → EQT_*，旧 env var 失效的兼容期
+  3. 已发布的 v0.1.0-rc.2 是 eqrcp 名字——改名后等于 product 中途更名，下载链接里的 eqrcp-*.tar.gz 会变
+  eqt-*.tar.gz
+  4. Bundle id io.github.forpersuit.eqrcp-desktop 已在 macOS plist 里——改的话现有 LaunchAgent 用户会找不到旧条目
+  5. 软著申请材料 6 个文档 全是 "eqrcp"
+  命名的——如果已经提交了软著，改名会和受理材料对不上号；如果还没提交，也是几十处中文产品名要核对
+  6. GitHub Repo URL forpersuit/eqrcp 不一起改的话，brand=EQT 但 repo=eqrcp，长期分裂
+  7. 本会话刚创建的 skill 文件名 .claude/skills/eqrcp-ci-release/ 也得改
+
+  roadmap 里早有立场
+
+  docs/product-roadmap.md:3-5：
+
+  ▎ "EQT is the product name for Easy QR Transfer. Keep eqrcp as the CLI, binary, and transfer-core identity
+  ▎ until packaging, migration, and user-facing documentation are ready for a larger rename."
+
+  项目自己已经写过这个判断——product brand = "EQT"，CLI/binary 暂保留 eqrcp，等真正准备好做大改时再 rename。
+
+  我的建议
+
+  Q2 答案：现在是大活，推荐后续做。具体：
+
+  ┌──────────────────────────────────────────────────────┬────────────────────────────────────┐
+  │                    现在能做（小）                    │       等正式发布前再做（大）       │
+  ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
+  │ 产品文案、Wails 窗口 title、docs/index.md 都用 "EQT" │ Go 模块名 / 二进制名 / config 目录 │
+  ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
+  │ Bundle 产品名改 "EQT Desktop" 但保留 bundle id       │ Cobra command eqrcp → eqt          │
+  ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
+  │ README/docs 顶部介绍写 "EQT (eqrcp)" 双标            │ 软著文档统一改                     │
+  ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
+  │                                                      │ 用户配置迁移逻辑                   │
+  ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
+  │                                                      │ 现有用户的环境变量过渡期处理       │
+  └──────────────────────────────────────────────────────┴────────────────────────────────────┘
+
+  具体的"小动作"我可以现在做，比如改 wails.json 的 productName 从 "eqrcp Desktop" 改为 "EQT - Easy QR
+  Transfer"、改产品介绍页的标题。这样 brand 是 EQT、binary 还是 eqrcp——和 roadmap 一致。
+
+  Q3 决定：按用户原话"大的话就后续再说"——大改 defer，小改（brand only）我现在顺手做。然后推进 B4b（Linux
+  Nautilus 右键）。
+
+  下面执行小改 + B4b。先做小改。
+
+● Update(desktop/gui/wails.json)
+  ⎿  Added 2 lines, removed 2 lines
+      11      "email": "jinxpeeter@outlook.com"
+      12    },
+      13    "info": {
+      14 -    "productName": "eqrcp Desktop",
+      14 +    "productName": "EQT - Easy QR Transfer",
+      15      "productVersion": "0.1.0",
+      16      "companyName": "forpersuit",
+      17      "copyright": "Copyright © 2026 forpersuit",
+      18 -    "comments": "Easy QR Transfer — share files and chat over QR codes"
+      18 +    "comments": "EQT (eqrcp) — Easy QR Transfer for files and chat"
+      19    }
+      20  }
+
+● 继续 B4b（Linux Nautilus 右键）。先把 Nautilus 集成代码加上。
+
+● Update(cmd/desktop_integration.go)
+  ⎿  Added 2 lines
+      80    switch runtime.GOOS {
+      81    case "windows":
+      82      return windowsDesktopIntegrationStatus()
+      83 +  case "linux":
+      84 +    return linuxDesktopIntegrationStatus()
+      85    default:
+      86      return fmt.Sprintf("Desktop integration status is not implemented for %s yet.\n", runtime.G
+          OOS), nil
+      87    }
+
+● Update(cmd/desktop_integration.go)
+  ⎿  Added 4 lines
+      23    switch runtime.GOOS {
+      24    case "windows":
+      25      return installWindowsDesktopIntegration()
+      26 +  case "linux":
+      27 +    return installLinuxDesktopIntegration()
+      28    default:
+      29      return fmt.Errorf("desktop install is not implemented for %s yet", runtime.GOOS)
+      30    }
+     ...
+      34    switch runtime.GOOS {
+      35    case "windows":
+      36      return uninstallWindowsDesktopIntegration()
+      26 +  case "linux":
+      27 +    return installLinuxDesktopIntegration()
+      28    default:
+      29      return fmt.Errorf("desktop install is not implemented for %s yet", runtime.GOOS)
+      30    }
+     ...
+      34    switch runtime.GOOS {
+      35    case "windows":
+      36      return uninstallWindowsDesktopIntegration()
+      37 +  case "linux":
+      38 +    return uninstallLinuxDesktopIntegration()
+      39    default:
+      40      return fmt.Errorf("desktop uninstall is not implemented for %s yet", runtime.GOOS)
+      41    }
+  ⎿  API Error: 503 所有上游账号该模型族配额耗尽,请稍后重试 (request id:
+     202605181635242038484988268d9d63objzojh). This is a server-side issue, usually temporary — try again in a
+     moment. If it persists, check your inference gateway (9w7.cn).
+
+✻ Brewed for 7m 1s
+
+● Agent "付费机制+防破解调研" completed
+  ⎿  API Error: 503 所有上游账号该模型族配额耗尽,请稍后重试 (request id:
+     202605181640547853493048268d9d6eC0FGpFr). This is a server-side issue, usually temporary — try again in a
+     moment. If it persists, check your inference gateway (9w7.cn).
+
+✻ Baked for 3m 41s
+
+※ recap: We're推进 eqrcp's商业化 + 跨平台 + release pipeline; B4a 自启动已合并推送，Q1/Q2/Q3
+  完成。下一步：等付费机制调研 agent 返回后写 docs/business-plan.md，再据其定价段改造 docs/index.md 产品介绍页。
+   (disable recaps in /config)

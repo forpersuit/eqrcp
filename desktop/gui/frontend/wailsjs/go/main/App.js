@@ -58,6 +58,10 @@ export function RestartAgent() {
   return window['go']['main']['App']['RestartAgent']();
 }
 
+export function RightClickIntegrationStatus() {
+  return window['go']['main']['App']['RightClickIntegrationStatus']();
+}
+
 export function SaveChatAttachmentAs(arg1, arg2) {
   return window['go']['main']['App']['SaveChatAttachmentAs'](arg1, arg2);
 }
@@ -78,8 +82,20 @@ export function SelectShareDirectory() {
   return window['go']['main']['App']['SelectShareDirectory']();
 }
 
+export function SetRightClickIntegrationEnabled(arg1) {
+  return window['go']['main']['App']['SetRightClickIntegrationEnabled'](arg1);
+}
+
+export function SetStartupEnabled(arg1) {
+  return window['go']['main']['App']['SetStartupEnabled'](arg1);
+}
+
 export function Share(arg1) {
   return window['go']['main']['App']['Share'](arg1);
+}
+
+export function StartupStatus() {
+  return window['go']['main']['App']['StartupStatus']();
 }
 
 export function StopCurrent() {

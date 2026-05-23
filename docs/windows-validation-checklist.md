@@ -96,6 +96,24 @@ Evidence to capture:
 - Agent page screenshot with history rows.
 - Output of `desktop agent-status`.
 
+## Deferred Batch 2.5: GUI Settings Toggles
+
+- [ ] Open the Wails GUI settings panel.
+- [ ] Enable `Windows right-click share and receive`.
+- [ ] Confirm Explorer entries and `Send to > Share with eqrcp` are installed.
+- [ ] Disable `Windows right-click share and receive`.
+- [ ] Confirm Explorer entries and Send To script are removed.
+- [ ] Enable `Start EQT at login`.
+- [ ] Confirm `desktop startup-status` reports enabled.
+- [ ] Disable `Start EQT at login`.
+- [ ] Confirm `desktop startup-status` reports disabled.
+
+Evidence to capture:
+
+- Settings panel screenshot with each toggle state.
+- `desktop status` output after enable and disable.
+- `desktop startup-status` output after enable and disable.
+
 ## Deferred Batch 3: Background Lifecycle And Runtime Diagnostics
 
 - [ ] Validate background start/stop path:
@@ -184,6 +202,7 @@ Fill this table after execution:
 | Install and Explorer verbs | PASS/FAIL |  |  |
 | Deferred batch 1 | PASS/FAIL |  |  |
 | Deferred batch 2 | PASS/FAIL |  |  |
+| Deferred batch 2.5 | PASS/FAIL |  |  |
 | Deferred batch 3 | PASS/FAIL |  |  |
 | Deferred batch 4 | PASS/FAIL |  |  |
 | Deferred batch 5 | PASS/FAIL |  |  |

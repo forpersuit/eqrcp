@@ -51,6 +51,13 @@ State behavior:
 - Transferring: active tray icon and tooltip with progress when available.
 - Completed: short notification, then return to idle after history is updated.
 - Failed/stopped: warning notification with an action to open details.
+- `Quit EQT` must be explicit about whether it only closes the GUI shell or also
+  stops the background agent. Product-facing wording should not expose the agent
+  implementation unless the action is specifically about background service
+  control.
+- Current-task tray actions should apply to share, receive, and chat sessions;
+  prefer `Open Current Task` over QR-only wording unless the active task is known
+  to be a file transfer QR page.
 
 Workflow target:
 

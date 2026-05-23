@@ -30,6 +30,8 @@ export function RepeatTask(arg1:number):Promise<main.AgentStatus>;
 
 export function RestartAgent():Promise<void>;
 
+export function RightClickIntegrationStatus():Promise<main.DesktopIntegrationStatus>;
+
 export function SaveChatAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
 export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSettings>;
@@ -40,6 +42,12 @@ export function SelectReceiveDirectory():Promise<string>;
 
 export function SelectShareDirectory():Promise<string>;
 
+export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
+
+export function SetStartupEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
+
 export function Share(arg1:Array<string>):Promise<main.AgentStatus>;
+
+export function StartupStatus():Promise<main.DesktopIntegrationStatus>;
 
 export function StopCurrent():Promise<void>;

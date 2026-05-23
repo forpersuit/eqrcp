@@ -62,3 +62,8 @@ currentStatus
 
 .gitignore
 .kiro
+
+node_modules
+.codegraph
+.commandcode
+
