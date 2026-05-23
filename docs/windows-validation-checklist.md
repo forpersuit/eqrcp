@@ -99,6 +99,7 @@ Evidence to capture:
 ## Deferred Batch 2.5: GUI Settings Toggles
 
 - [ ] Open the Wails GUI settings panel.
+- [ ] Confirm the settings panel is grouped into Network, System Integration, Chat, and Window without clipped text at the default window size.
 - [ ] Enable `Windows right-click share and receive`.
 - [ ] Confirm Explorer entries and `Send to > Share with eqrcp` are installed.
 - [ ] Disable `Windows right-click share and receive`.
@@ -159,6 +160,11 @@ E:\developer\results\eqrcp.exe desktop agent-stop-current
 - [ ] Validate multi-browser behavior on same task URL (no invalid state reset).
 - [ ] Validate persisted history survives agent restart.
 - [ ] Validate process count stays bounded around one long-lived agent plus short-lived launcher processes.
+- [ ] Validate tray menu wording and behavior:
+- [ ] `Open Current Task` works for active transfer or chat tasks.
+- [ ] `Stop Current Task` stops the active transfer or chat task.
+- [ ] `Stop Background Service` stops the agent without pretending it is a GUI-only quit.
+- [ ] `Quit EQT App` exits the Wails app and tray shell.
 
 Evidence to capture:
 

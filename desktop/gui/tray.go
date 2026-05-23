@@ -52,14 +52,15 @@ func (t *trayController) onReady() {
 	share := systray.AddMenuItem("Share...", "Open the share workflow")
 	receive := systray.AddMenuItem("Receive...", "Open the receive workflow")
 	systray.AddSeparator()
-	openCurrent := systray.AddMenuItem("Open Current QR", "Open the active transfer QR page")
-	stopCurrent := systray.AddMenuItem("Stop Current Transfer", "Stop the active transfer")
+	openCurrent := systray.AddMenuItem("Open Current Task", "Open the active transfer or chat page")
+	stopCurrent := systray.AddMenuItem("Stop Current Task", "Stop the active transfer or chat session")
 	systray.AddSeparator()
 	settings := systray.AddMenuItem("Settings", "Open EQT settings")
 	about := systray.AddMenuItem("About EQT", "Show product information")
 	feedback := systray.AddMenuItem("Send Feedback", "Open the feedback form")
 	systray.AddSeparator()
-	quit := systray.AddMenuItem("Quit", "Quit EQT")
+	stopAgent := systray.AddMenuItem("Stop Background Service", "Stop the EQT background transfer service")
+	quit := systray.AddMenuItem("Quit EQT App", "Quit the EQT window and tray app")
 
 	systray.SetOnTapped(func() {
 		t.showAndEmit("")
@@ -72,6 +73,7 @@ func (t *trayController) onReady() {
 	go t.handle(settings, func() { t.showAndEmit("settings") })
 	go t.handle(about, func() { t.showAndEmit("about") })
 	go t.handle(feedback, func() { t.showAndEmit("feedback") })
+	go t.handle(stopAgent, t.stopAgent)
 	go t.handle(quit, t.quit)
 }
 
@@ -109,6 +111,14 @@ func (t *trayController) openCurrentQR() {
 func (t *trayController) stopCurrent() {
 	t.app.showWindow()
 	if err := t.app.StopCurrent(); err != nil {
+		t.app.emitTrayCommand("refresh")
+		return
+	}
+	t.app.emitTrayCommand("refresh")
+}
+
+func (t *trayController) stopAgent() {
+	if err := t.app.ShutdownAgent(); err != nil {
 		t.app.emitTrayCommand("refresh")
 		return
 	}

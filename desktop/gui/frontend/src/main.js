@@ -512,54 +512,139 @@ function renderSettingsPanel() {
     const chatAvatarPreview = cleanChatAvatar(chatAvatar) || (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase();
     return `
         <div class="settings-panel">
-            <label>Network interface</label>
-            <select id="settings-interface">${options}</select>
-            <label class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></label>
-            <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
-            <label class="check">
-                <input id="settings-browser" type="checkbox" ${state.browserFallback ? 'checked' : ''} />
-                Browser fallback
-            </label>
-            <div class="settings-note profile-note">
-                <label>Chat username</label>
-                <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
-                <label>Chat avatar badge</label>
-                <div class="avatar-setting-row">
-                    <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
-                    <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="Emoji or initials" />
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>Network</h3>
+                    <span>How QR transfer links are created.</span>
                 </div>
-                <span>Use an emoji or 1-4 initials. New desktop chat sessions sync this badge to other devices; existing chat pages keep the profile they joined with.</span>
-            </div>
-            <label>Window close action</label>
-            <select id="settings-close-behavior">
-                <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>Keep EQT in taskbar tray</option>
-                <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>Quit EQT completely</option>
-            </select>
-            <div class="settings-note">
-                <label class="check">
-                    <input id="settings-right-click" type="checkbox" ${state.rightClickIntegration?.enabled ? 'checked' : ''} ${state.rightClickIntegration?.supported === false ? 'disabled' : ''} />
-                    <strong>Windows right-click share and receive</strong>
-                </label>
-                <span>${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
-            </div>
-            <div class="settings-note">
-                <label class="check">
-                    <input id="settings-startup" type="checkbox" ${state.startupIntegration?.enabled ? 'checked' : ''} ${state.startupIntegration?.supported === false ? 'disabled' : ''} />
-                    <strong>Start EQT at login</strong>
-                </label>
-                <span>${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
-            </div>
-            <div class="settings-note">
-                <label class="check">
-                    <input id="settings-chat-autosave" type="checkbox" ${state.chatAutoSave ? 'checked' : ''} />
-                    <strong>Auto-save chat attachments</strong>
-                </label>
-                <span>When enabled, attachments received in the desktop chat are saved automatically by day. Folders older than 7 days are cleaned automatically.</span>
-                <button type="button" class="ghost inline" id="open-chat-save">Open chat save folder</button>
-            </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Network interface</strong>
+                        <span>Use the adapter your phone can reach on the local network.</span>
+                    </div>
+                    <select id="settings-interface">${options}</select>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></strong>
+                        <span>Keep 0 unless you need a fixed local port.</span>
+                    </div>
+                    <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Browser fallback</strong>
+                        <span>Open browser control pages for QR tasks when useful.</span>
+                    </div>
+                    ${renderSwitch('settings-browser', state.browserFallback)}
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>System Integration</h3>
+                    <span>Native entry points for daily desktop use.</span>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Windows right-click share and receive</strong>
+                        <span>${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderStatusBadge(state.rightClickIntegration)}
+                        ${renderSwitch('settings-right-click', state.rightClickIntegration?.enabled, state.rightClickIntegration?.supported === false)}
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Start EQT at login</strong>
+                        <span>${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderStatusBadge(state.startupIntegration)}
+                        ${renderSwitch('settings-startup', state.startupIntegration?.enabled, state.startupIntegration?.supported === false)}
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>Chat</h3>
+                    <span>Identity and attachment handling for desktop chat sessions.</span>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Chat username</strong>
+                        <span>Shown to devices that join new chat sessions.</span>
+                    </div>
+                    <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Chat avatar badge</strong>
+                        <span>Use an emoji or 1-4 initials.</span>
+                    </div>
+                    <div class="avatar-setting-row">
+                        <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
+                        <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="Emoji or initials" />
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Auto-save chat attachments</strong>
+                        <span>Save received attachments by day and clean folders older than 7 days.</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-chat-autosave', state.chatAutoSave)}
+                        <button type="button" class="ghost inline" id="open-chat-save">Open folder</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>Window</h3>
+                    <span>What happens when the EQT window is closed.</span>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Close action</strong>
+                        <span>Keeping EQT in the tray leaves the app ready for fast access.</span>
+                    </div>
+                    <select id="settings-close-behavior">
+                        <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>Keep EQT in taskbar tray</option>
+                        <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>Quit EQT app</option>
+                    </select>
+                </div>
+            </section>
             <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
     `;
+}
+
+function renderSwitch(id, checked, disabled = false) {
+    return `
+        <label class="switch" title="${disabled ? 'Not available on this platform' : ''}">
+            <input id="${id}" type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
+            <span></span>
+        </label>
+    `;
+}
+
+function renderStatusBadge(status) {
+    if (!status) {
+        return '<span class="setting-status muted">checking</span>';
+    }
+    if (status.supported === false) {
+        return '<span class="setting-status muted">unsupported</span>';
+    }
+    if (status.needsRepair) {
+        return '<span class="setting-status warning">repair</span>';
+    }
+    if (status.enabled) {
+        return '<span class="setting-status ok">enabled</span>';
+    }
+    return '<span class="setting-status muted">off</span>';
 }
 
 function integrationStatusText(status, fallback) {

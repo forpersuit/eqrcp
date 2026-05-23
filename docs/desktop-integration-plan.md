@@ -305,12 +305,15 @@ Initial GUI scope:
 - Recent task history display.
 - Stop-current action.
 - Settings save for output directory and browser fallback.
+- Settings are organized into product-facing sections for Network, System
+  Integration, Chat, and Window. Integration controls use switch-style controls
+  and status badges instead of exposing command-line terminology.
 - Title-bar actions for settings, About, and feedback. The main workspace keeps
   settings out of the repeated transfer flow except for the receive directory.
 - Native tray menu through `fyne.io/systray`. The first implementation keeps the
   tray as a control surface over the same Wails GUI and desktop agent actions:
-  open app, share, receive, open current QR, stop current, settings, About,
-  feedback, and quit.
+  open app, share, receive, open current task, stop current task, settings,
+  About, feedback, stop background service, and quit the GUI app.
 - Chat mode through the desktop agent. The Wails app embeds the existing browser
   chat page in an iframe rather than maintaining a separate native chat
   implementation, so browser and GUI chat behavior stay identical.
@@ -327,8 +330,8 @@ Commercial boundary:
 
 Next priorities:
 
-1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository.
-2. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current QR action, stop-current action, and real quit.
+1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository. Include the settings panel layout and the right-click/startup toggles.
+2. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current task action, stop-current action, stop background service, and GUI-only quit.
 3. Refine tray state: disable unavailable actions, update tooltip text, and provide icon variants for idle, active, completed, and failed states.
 4. Validate Wails chat on Windows with the shared browser UI: start chat,
    mobile scan, post-join synchronization, attachment upload, native save, and

@@ -353,6 +353,13 @@ func (a *App) RestartAgent() error {
 	return a.postNoBody("/restart")
 }
 
+func (a *App) ShutdownAgent() error {
+	if err := a.health(); err != nil {
+		return nil
+	}
+	return a.postNoBody("/shutdown")
+}
+
 func (a *App) OpenURL(rawURL string) error {
 	return a.openExternal(rawURL, map[string]bool{"http": true, "https": true})
 }

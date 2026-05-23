@@ -58,6 +58,9 @@ State behavior:
 - Current-task tray actions should apply to share, receive, and chat sessions;
   prefer `Open Current Task` over QR-only wording unless the active task is known
   to be a file transfer QR page.
+- The current Wails tray menu now uses `Open Current Task`, `Stop Current Task`,
+  `Stop Background Service`, and `Quit EQT App` to avoid conflating the GUI
+  shell with the long-running background transfer service.
 
 Workflow target:
 

@@ -94,6 +94,10 @@ export function Share(arg1) {
   return window['go']['main']['App']['Share'](arg1);
 }
 
+export function ShutdownAgent() {
+  return window['go']['main']['App']['ShutdownAgent']();
+}
+
 export function StartupStatus() {
   return window['go']['main']['App']['StartupStatus']();
 }

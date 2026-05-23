@@ -48,6 +48,8 @@ export function SetStartupEnabled(arg1:boolean):Promise<main.DesktopIntegrationS
 
 export function Share(arg1:Array<string>):Promise<main.AgentStatus>;
 
+export function ShutdownAgent():Promise<void>;
+
 export function StartupStatus():Promise<main.DesktopIntegrationStatus>;
 
 export function StopCurrent():Promise<void>;
