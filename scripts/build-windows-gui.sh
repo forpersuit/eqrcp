@@ -77,7 +77,7 @@ if [[ -z "$wails_cmd" ]]; then
 fi
 
 echo "Building Windows GUI executable..."
-(cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64)
+(cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
 cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$build_root/eqrcp-desktop.exe"
 
 echo "Windows GUI artifacts written to: $build_root"

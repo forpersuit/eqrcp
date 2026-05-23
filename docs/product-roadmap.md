@@ -51,6 +51,10 @@ State behavior:
 - Transferring: active tray icon and tooltip with progress when available.
 - Completed: short notification, then return to idle after history is updated.
 - Failed/stopped: warning notification with an action to open details.
+- Notification transport should use the native OS channel when available:
+  Windows Toast first with a hidden balloon fallback, Linux `notify-send`, and
+  macOS system notification through AppleScript. Notification failures must not
+  fail or block transfers.
 - `Quit EQT` must be explicit about whether it only closes the GUI shell or also
   stops the background agent. Product-facing wording should not expose the agent
   implementation unless the action is specifically about background service
@@ -120,6 +124,31 @@ Feedback should be explicit and privacy-preserving:
 The first implementation can open a web feedback form or mail link. A later paid
 product implementation should submit through a signed HTTPS endpoint with abuse
 protection and support ticket IDs.
+
+## Plus Trial Model
+
+Working proposal:
+
+- Chat mode has a daily free usage allowance of 5 minutes.
+- The timer starts when the user opens or starts chat mode, not when the app
+  launches.
+- Closing the app or leaving chat mode stops the active timer.
+- Returning later on the same local calendar day continues using the remaining
+  allowance until the 5 minutes are exhausted.
+- After the allowance is exhausted, chat is disabled for that day and the user
+  sees a paid upgrade prompt.
+
+Product judgment:
+
+- This is a reasonable trial gate because it lets users feel the feature without
+  forcing account creation before value is obvious.
+- The wording should be "daily free chat time" rather than "trial" if the free
+  allowance resets every day.
+- The gate should live in the desktop GUI/agent layer. Do not restrict the
+  open-source CLI transfer primitives with a brittle paywall.
+- Local-only metering is acceptable for early validation but is not enough for
+  serious paid enforcement; a later license/account path should reconcile usage
+  across reinstalls and multiple machines.
 
 ## Paid Product Gaps
 

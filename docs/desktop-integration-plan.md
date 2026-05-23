@@ -71,7 +71,9 @@ Status:
 - `eqrcp desktop install` is implemented for Windows.
 - `eqrcp desktop uninstall` is implemented for Windows.
 - `eqrcp desktop status` is implemented for Windows and returns a platform note elsewhere.
-- Non-Windows install and uninstall paths currently return a not implemented error.
+- Linux and macOS startup install/status/uninstall are implemented.
+- Linux and macOS right-click install/status/uninstall remain platform-specific
+  work and currently return a not implemented note outside Windows.
 
 Expected behavior:
 
@@ -124,6 +126,18 @@ Exit criteria:
 - macOS Finder has Quick Actions or Services. Not implemented.
 - Linux has at least Nautilus support, with KDE documented. Documented, not implemented.
 - Uninstall removes entries created by install. Implemented for Windows, pending manual Windows validation.
+
+Cross-platform boundary:
+
+- Startup integration can be mostly unified because each platform has a single
+  common per-user mechanism: Windows Run key, freedesktop autostart, and macOS
+  LaunchAgent.
+- File-manager context menus are not "write once, adapt everywhere". Windows
+  Explorer, GNOME Files/Nautilus, KDE Dolphin, and macOS Finder expose different
+  extension points and packaging expectations.
+- The portable layer should stay at `eqrcp desktop share/receive/status`; each
+  OS adapter should only install or remove native entry points that call that
+  stable command surface.
 
 ### Phase 2.1: Windows Daily-Use Polish
 
@@ -330,16 +344,17 @@ Commercial boundary:
 
 Next priorities:
 
-1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository. Include the settings panel layout and the right-click/startup toggles.
-2. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current task action, stop-current action, stop background service, and GUI-only quit.
-3. Refine tray state: disable unavailable actions, update tooltip text, and provide icon variants for idle, active, completed, and failed states.
-4. Validate Wails chat on Windows with the shared browser UI: start chat,
+1. Finish native GUI validation on Windows first, because Windows right-click and Send To are the most mature desktop integration points in this repository. Include black-window regression checks for app launch, agent startup, settings toggles, and open-folder/open-file actions.
+2. Validate OS notifications: Windows Toast with hidden fallback, Linux `notify-send`, and macOS system notification. Notification failures must stay non-fatal.
+3. Validate tray behavior on Windows: startup, close-to-tray, right-click menu, current task action, stop-current action, stop background service, and GUI-only quit.
+4. Refine tray state: disable unavailable actions, update tooltip text, and provide icon variants for idle, active, completed, and failed states.
+5. Validate Wails chat on Windows with the shared browser UI: start chat,
    mobile scan, post-join synchronization, attachment upload, native save, and
    reconnect after background/foreground switching.
-5. Render transfer QR/status natively inside the Wails window where it reduces
+6. Render transfer QR/status natively inside the Wails window where it reduces
    dependency on browser control pages without duplicating chat UI.
-6. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
-7. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
+7. Add packaging notes for Windows, Linux, and macOS, including required Wails platform dependencies and signing expectations.
+8. Design paid-feature gates after the GUI workflow is stable enough that users can feel the value before encountering a paywall.
 
 System tray note:
 

@@ -1558,13 +1558,15 @@ func notifyDesktop(title string, message string) error {
 	}
 }
 
-func notifyDesktopWindows(title string, message string) error {
+func notifyDesktopWindowsBalloon(title string, message string) error {
 	script := fmt.Sprintf(
 		`Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.BalloonTipTitle = %s; $n.BalloonTipText = %s; $n.Visible = $true; $n.ShowBalloonTip(5000); Start-Sleep -Seconds 6; $n.Dispose()`,
 		powershellString(title),
 		powershellString(message),
 	)
-	return exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", script).Start()
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", script)
+	configureDesktopAgentBackgroundCommand(cmd)
+	return cmd.Start()
 }
 
 func powershellString(value string) string {

@@ -548,6 +548,7 @@ func (a *App) ensureAgent() error {
 	if launcher, ok := findEqrcpLauncher(cli); ok {
 		cmd = exec.Command(launcher, "--eqrcp-exe", cli, "agent-start", "-B")
 	}
+	configureHiddenCommand(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -677,6 +678,7 @@ func findEqrcpLauncher(cli string) (string, bool) {
 
 func runDesktopCommand(ctx context.Context, cli string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, cli, args...)
+	configureHiddenCommand(cmd)
 	output, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(output))
 	if err != nil {
@@ -744,7 +746,9 @@ func parseDesktopSummary(output string) (installed int, needsRepair int, notInst
 func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("explorer.exe", path), nil
+		cmd := exec.Command("explorer.exe", path)
+		configureHiddenCommand(cmd)
+		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
 	case "linux":
@@ -757,7 +761,9 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path), nil
+		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)
+		configureHiddenCommand(cmd)
+		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
 	case "linux":

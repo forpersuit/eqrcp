@@ -107,7 +107,7 @@ echo "Building Windows CLI artifacts..."
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then
     echo "Building Windows Wails GUI..."
-    (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop.exe -platform windows/amd64)
+    (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
     cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$results_dir/eqrcp-desktop.exe"
   else
     echo "Skipping Windows Wails GUI build: wails CLI not found." >&2
