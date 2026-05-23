@@ -57,11 +57,21 @@ const state = {
     chatUsageMs: 0,
     chatUsageStartedAt: 0,
     chatQuotaNoticeShown: false,
+    license: null,
+    redeemMessage: '',
+    redeemError: '',
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 const chatDailyFreeMs = 5 * 60 * 1000;
 const chatUsageStorageKey = 'eqt.chat.dailyFreeUsage';
+const licenseStorageKey = 'eqt.license.activation';
+const redeemSecret = 'EQT-LOCAL-2026-V1';
+const licenseTiers = {
+    PLUS: 'EQT Plus',
+    PRO: 'EQT Pro',
+    TEAM: 'EQT Team',
+};
 let agentEvents = null;
 let agentEventsRetry = null;
 let chatQRPulseTimer = null;
@@ -201,6 +211,7 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
+                    <span class="chat-quota-pill" id="top-chat-quota" title="Daily free chat time">${escapeHTML(chatQuotaTopText())}</span>
                     <button class="menu-button" id="open-settings" title="Settings" aria-label="Settings">
                         <span class="menu-icon">${settingsIcon()}</span>
                         <span class="menu-label">Settings</span>
@@ -365,7 +376,7 @@ function renderReceive() {
 function renderChat() {
     const task = activeChatTask();
     const remaining = chatRemainingMs();
-    const exhausted = remaining <= 0;
+    const exhausted = !hasPaidLicense() && remaining <= 0;
     if (!task) {
         return `
             <div class="chat-start">
@@ -491,6 +502,7 @@ function renderPanel() {
     }
     const title = {
         settings: 'Settings',
+        redeem: 'Redeem code',
         about: 'About EQT',
         feedback: 'Send feedback',
     }[state.activePanel] || '';
@@ -499,9 +511,13 @@ function renderPanel() {
             <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
                 <div class="modal-head">
                     <h2>${escapeHTML(title)}</h2>
-                    <button class="tool-button" id="close-panel" title="Close" aria-label="Close">x</button>
+                    <div class="modal-actions">
+                        ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="Redeem code" aria-label="Redeem code">${giftIcon()}</button>` : ''}
+                        <button class="tool-button" id="close-panel" title="Close" aria-label="Close">x</button>
+                    </div>
                 </div>
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
+                ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
             </section>
@@ -557,9 +573,9 @@ function renderSettingsPanel() {
                 <div class="setting-row">
                     <div class="setting-copy">
                         <strong>Windows right-click share and receive</strong>
-                        <span>${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
+                        <span id="right-click-status-text">${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
                     </div>
-                    <div class="setting-control-stack">
+                    <div class="setting-control-stack" id="right-click-control">
                         ${renderStatusBadge(state.rightClickIntegration)}
                         ${renderSwitch('settings-right-click', state.rightClickIntegration?.enabled, state.rightClickIntegration?.supported === false)}
                     </div>
@@ -567,9 +583,9 @@ function renderSettingsPanel() {
                 <div class="setting-row">
                     <div class="setting-copy">
                         <strong>Start EQT at login</strong>
-                        <span>${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
+                        <span id="startup-status-text">${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
                     </div>
-                    <div class="setting-control-stack">
+                    <div class="setting-control-stack" id="startup-control">
                         ${renderStatusBadge(state.startupIntegration)}
                         ${renderSwitch('settings-startup', state.startupIntegration?.enabled, state.startupIntegration?.supported === false)}
                     </div>
@@ -650,9 +666,6 @@ function renderStatusBadge(status) {
     if (status.needsRepair) {
         return '<span class="setting-status warning">repair</span>';
     }
-    if (status.enabled) {
-        return '<span class="setting-status ok">enabled</span>';
-    }
     return '';
 }
 
@@ -686,6 +699,29 @@ function renderAboutPanel() {
                 <dt>License</dt><dd>MIT, forked from qrcp</dd>
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqrcp">Project page</button>
+        </div>
+    `;
+}
+
+function renderRedeemPanel() {
+    const license = state.license || loadLicense();
+    const active = license?.tier ? `${licenseTiers[license.tier] || license.tier} active` : 'No paid plan active';
+    return `
+        <div class="redeem-panel">
+            <div class="license-card">
+                <strong>${escapeHTML(active)}</strong>
+                <span>${license?.redeemedAt ? `Redeemed ${escapeHTML(new Date(license.redeemedAt).toLocaleString())}` : 'Enter a valid EQT code to unlock a paid tier on this device.'}</span>
+            </div>
+            <label>
+                Redeem code
+                <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" />
+            </label>
+            <div class="redeem-actions">
+                <button class="primary" id="confirm-redeem">Confirm</button>
+                <button class="ghost" id="reset-license">Reset</button>
+            </div>
+            ${state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
+            ${state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
         </div>
     `;
 }
@@ -803,6 +839,7 @@ function bindEvents() {
         button.addEventListener('click', refreshStatus);
     });
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
+    document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
     document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
     document.querySelector('#close-panel')?.addEventListener('click', closePanel);
@@ -826,10 +863,7 @@ function bindEvents() {
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
-    document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
-    document.querySelector('#settings-right-click')?.addEventListener('change', toggleRightClickIntegration);
-    document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
-    document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
+    bindSettingsControls();
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
     });
@@ -850,7 +884,6 @@ function bindEvents() {
         element.addEventListener('contextmenu', openChatContextMenu);
         element.addEventListener('click', saveAttachmentAsFromButton);
     });
-    document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
     document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
     document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
         button.addEventListener('click', copyChatURL);
@@ -865,6 +898,8 @@ function bindEvents() {
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
+    document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
+    document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
 }
 
 function bindChatQRPanelEvents() {
@@ -887,6 +922,10 @@ function bindChatQRPanelEvents() {
 
 function openPanel(panel) {
     state.activePanel = panel;
+    if (panel === 'redeem') {
+        state.redeemMessage = '';
+        state.redeemError = '';
+    }
     clearMessages();
     render();
 }
@@ -940,7 +979,7 @@ async function startReceive() {
 }
 
 async function startChat() {
-    if (chatRemainingMs() <= 0) {
+    if (!hasPaidLicense() && chatRemainingMs() <= 0) {
         state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
         render();
         return;
@@ -1059,20 +1098,67 @@ async function saveSettingsData() {
 
 async function toggleRightClickIntegration(event) {
     const enabled = Boolean(event.currentTarget?.checked);
-    await run(async () => {
+    event.currentTarget.disabled = true;
+    try {
         state.rightClickIntegration = await SetRightClickIntegrationEnabled(enabled);
-        state.notice = enabled ? 'Right-click sharing enabled.' : 'Right-click sharing disabled.';
+        updateIntegrationRow('right-click');
+    } catch (error) {
+        state.error = error?.message || String(error);
+        event.currentTarget.checked = !enabled;
+        event.currentTarget.disabled = false;
         render();
-    });
+    }
 }
 
 async function toggleStartupIntegration(event) {
     const enabled = Boolean(event.currentTarget?.checked);
-    await run(async () => {
+    event.currentTarget.disabled = true;
+    try {
         state.startupIntegration = await SetStartupEnabled(enabled);
-        state.notice = enabled ? 'EQT will start at login.' : 'EQT will not start at login.';
+        updateIntegrationRow('startup');
+    } catch (error) {
+        state.error = error?.message || String(error);
+        event.currentTarget.checked = !enabled;
+        event.currentTarget.disabled = false;
         render();
-    });
+    }
+}
+
+function bindSettingsControls() {
+    document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
+    document.querySelector('#settings-right-click')?.addEventListener('change', toggleRightClickIntegration);
+    document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
+    document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
+    document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
+}
+
+function updateIntegrationRow(kind) {
+    const config = kind === 'startup'
+        ? {
+            status: state.startupIntegration,
+            text: '#startup-status-text',
+            control: '#startup-control',
+            switchId: 'settings-startup',
+            fallback: 'Starts the background transfer service when you sign in.',
+            handler: toggleStartupIntegration,
+        }
+        : {
+            status: state.rightClickIntegration,
+            text: '#right-click-status-text',
+            control: '#right-click-control',
+            switchId: 'settings-right-click',
+            fallback: 'Adds Explorer actions for sharing selected files and receiving into a folder.',
+            handler: toggleRightClickIntegration,
+        };
+    const text = document.querySelector(config.text);
+    if (text) {
+        text.textContent = integrationStatusText(config.status, config.fallback);
+    }
+    const control = document.querySelector(config.control);
+    if (control) {
+        control.innerHTML = `${renderStatusBadge(config.status)}${renderSwitch(config.switchId, config.status?.enabled, config.status?.supported === false)}`;
+        document.querySelector(`#${config.switchId}`)?.addEventListener('change', config.handler);
+    }
 }
 
 async function stopCurrent() {
@@ -1315,6 +1401,7 @@ async function refreshStatus(shouldRender = true) {
 async function loadSettings() {
     await run(async () => {
         loadChatUsage();
+        state.license = loadLicense();
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
@@ -1497,7 +1584,7 @@ function saveChatUsage() {
 
 function startChatUsage() {
     rollChatUsageDay();
-    if (state.chatUsageStartedAt || chatRemainingMs() <= 0) {
+    if (hasPaidLicense() || state.chatUsageStartedAt || chatRemainingMs() <= 0) {
         return;
     }
     state.chatUsageStartedAt = Date.now();
@@ -1518,6 +1605,11 @@ function scheduleChatUsageTimer() {
     clearChatUsageTimer();
     chatUsageTimer = window.setInterval(async () => {
         saveChatUsageSnapshot();
+        if (hasPaidLicense()) {
+            clearChatUsageTimer();
+            updateChatQuotaSurface();
+            return;
+        }
         if (state.mode === 'chat' && chatRemainingMs() <= 0) {
             clearChatUsageTimer();
             if (!state.chatQuotaNoticeShown) {
@@ -1539,13 +1631,17 @@ function scheduleChatUsageTimer() {
 }
 
 function updateChatQuotaSurface() {
+    const top = document.querySelector('#top-chat-quota');
+    if (top) {
+        top.textContent = chatQuotaTopText();
+    }
     const text = document.querySelector('#chat-quota-text');
     if (text) {
         text.textContent = chatQuotaText();
     }
     const button = document.querySelector('#start-chat');
     if (button) {
-        const exhausted = chatRemainingMs() <= 0;
+        const exhausted = !hasPaidLicense() && chatRemainingMs() <= 0;
         button.disabled = state.busy || exhausted;
         button.textContent = chatStartButtonText();
     }
@@ -1604,6 +1700,9 @@ function formatDuration(ms) {
 }
 
 function chatQuotaText() {
+    if (hasPaidLicense()) {
+        return `${licenseTiers[state.license.tier] || state.license.tier} active. Chat is unlocked.`;
+    }
     const remaining = chatRemainingMs();
     if (remaining <= 0) {
         return 'Daily free chat time is used up. Upgrade to keep using chat today.';
@@ -1611,14 +1710,111 @@ function chatQuotaText() {
     return `Daily free chat time left: ${formatDuration(remaining)}.`;
 }
 
+function chatQuotaTopText() {
+    if (hasPaidLicense()) {
+        return `${licenseTiers[state.license.tier] || state.license.tier}`;
+    }
+    const remaining = chatRemainingMs();
+    if (remaining <= 0) {
+        return 'Chat 0:00';
+    }
+    return `Chat ${formatDuration(remaining)}`;
+}
+
 function chatStartButtonText() {
     if (state.busy) {
         return 'Working...';
     }
-    if (chatRemainingMs() <= 0) {
+    if (!hasPaidLicense() && chatRemainingMs() <= 0) {
         return 'Upgrade required';
     }
     return 'Start chat';
+}
+
+function hasPaidLicense() {
+    return Boolean(state.license?.tier && licenseTiers[state.license.tier]);
+}
+
+function loadLicense() {
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(licenseStorageKey) || '{}');
+        if (saved && saved.tier && licenseTiers[saved.tier]) {
+            state.license = saved;
+            return saved;
+        }
+    } catch {
+        // Ignore malformed local activation state.
+    }
+    state.license = null;
+    return null;
+}
+
+function saveLicense(license) {
+    state.license = license;
+    window.localStorage.setItem(licenseStorageKey, JSON.stringify(license));
+}
+
+function confirmRedeem() {
+    const input = document.querySelector('#redeem-code');
+    const code = String(input?.value || '').trim().toUpperCase();
+    const result = validateRedeemCode(code);
+    state.redeemMessage = '';
+    state.redeemError = '';
+    if (!result.ok) {
+        state.redeemError = result.error;
+        render();
+        return;
+    }
+    saveLicense({
+        tier: result.tier,
+        codeHash: checksum(`${code}:stored`, 10),
+        redeemedAt: new Date().toISOString(),
+    });
+    state.redeemMessage = `${licenseTiers[result.tier]} activated.`;
+    stopChatUsage();
+    render();
+}
+
+function resetLicense() {
+    window.localStorage.removeItem(licenseStorageKey);
+    state.license = null;
+    state.redeemMessage = 'Activation reset on this device.';
+    state.redeemError = '';
+    if (state.mode === 'chat') {
+        startChatUsage();
+    }
+    render();
+}
+
+function validateRedeemCode(code) {
+    const parts = code.split('-');
+    if (parts.length !== 5 || parts[0] !== 'EQT') {
+        return {ok: false, error: 'Invalid code format.'};
+    }
+    const [, tier, date, serial, check] = parts;
+    if (!licenseTiers[tier]) {
+        return {ok: false, error: 'Unknown paid tier.'};
+    }
+    if (!/^\d{8}$/.test(date) && date !== 'LIFETIME') {
+        return {ok: false, error: 'Invalid issue date.'};
+    }
+    if (!/^[A-Z0-9]{4,16}$/.test(serial)) {
+        return {ok: false, error: 'Invalid serial.'};
+    }
+    const expected = checksum(`EQT-${tier}-${date}-${serial}-${redeemSecret}`, 6);
+    if (check !== expected) {
+        return {ok: false, error: 'Code check failed.'};
+    }
+    return {ok: true, tier};
+}
+
+function checksum(value, length) {
+    let hash = 2166136261;
+    for (const char of value) {
+        hash ^= char.charCodeAt(0);
+        hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    return hash.toString(36).toUpperCase().padStart(length, '0').slice(-length);
 }
 
 function clearMessages() {
@@ -1763,6 +1959,10 @@ function aboutIcon() {
 
 function feedbackIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>';
+}
+
+function giftIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8H4v-8"></path><path d="M2 7h20v5H2z"></path><path d="M12 7v13"></path><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5c0 1.4 1 2.5 1 2.5z"></path><path d="M12 7h3.5A2.5 2.5 0 1 0 13 4.5c0 1.4-1 2.5-1 2.5z"></path></svg>';
 }
 
 function computerIcon() {
