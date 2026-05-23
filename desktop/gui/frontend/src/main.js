@@ -372,9 +372,9 @@ function renderChat() {
                 <div>
                     <div class="eyebrow">Session mode</div>
                     <h2>Local chat with phones and nearby devices</h2>
-                    <p>${exhausted ? 'Daily free chat time is used up. Upgrade to keep using chat today.' : `Daily free chat time left: ${formatDuration(remaining)}.`}</p>
+                    <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
-                <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${state.busy ? 'Working...' : exhausted ? 'Upgrade required' : 'Start chat'}</button>
+                <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${chatStartButtonText()}</button>
             </div>
         `;
     }
@@ -959,7 +959,6 @@ async function startChat() {
         if (state.chatAutoSave) {
             state.chatSaveDir = await ChatSaveDirectory();
         }
-        render();
     });
 }
 
@@ -1350,7 +1349,6 @@ async function loadIntegrationStatusData() {
 async function loadStatusData() {
     state.status = await AgentStatus();
     reconcileChatQRState(state.status);
-    render();
 }
 
 async function run(fn, options = {}) {
@@ -1535,9 +1533,22 @@ function scheduleChatUsageTimer() {
             }
             render();
         } else if (state.mode === 'chat') {
-            render();
+            updateChatQuotaSurface();
         }
     }, 1000);
+}
+
+function updateChatQuotaSurface() {
+    const text = document.querySelector('#chat-quota-text');
+    if (text) {
+        text.textContent = chatQuotaText();
+    }
+    const button = document.querySelector('#start-chat');
+    if (button) {
+        const exhausted = chatRemainingMs() <= 0;
+        button.disabled = state.busy || exhausted;
+        button.textContent = chatStartButtonText();
+    }
 }
 
 function clearChatUsageTimer() {
@@ -1590,6 +1601,24 @@ function formatDuration(ms) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = String(totalSeconds % 60).padStart(2, '0');
     return `${minutes}:${seconds}`;
+}
+
+function chatQuotaText() {
+    const remaining = chatRemainingMs();
+    if (remaining <= 0) {
+        return 'Daily free chat time is used up. Upgrade to keep using chat today.';
+    }
+    return `Daily free chat time left: ${formatDuration(remaining)}.`;
+}
+
+function chatStartButtonText() {
+    if (state.busy) {
+        return 'Working...';
+    }
+    if (chatRemainingMs() <= 0) {
+        return 'Upgrade required';
+    }
+    return 'Start chat';
 }
 
 function clearMessages() {
