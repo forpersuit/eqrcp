@@ -373,8 +373,11 @@ func TestChatPageOutsideActionsStayVisible(t *testing.T) {
 	if !strings.Contains(pages.Chat, "--device-text:' + color.text") || !strings.Contains(pages.Chat, "color: var(--device-text") {
 		t.Fatal("device roster text should use each device's assigned theme color")
 	}
-	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
-		t.Fatal("only text messages should expose copy actions")
+	if !strings.Contains(pages.Chat, "function messageCopyText(message)") || !strings.Contains(pages.Chat, "message.type === 'image' && message.url && message.sender !== state.sender") || strings.Contains(pages.Chat, "return downloadURL(message.url)") {
+		t.Fatal("text messages and received image attachments should expose copy actions without copying download URLs")
+	}
+	if !strings.Contains(pages.Chat, "function copyImageToClipboard(url, button)") || !strings.Contains(pages.Chat, "new ClipboardItem") || !strings.Contains(pages.Chat, "id=\"preview-copy\"") {
+		t.Fatal("received image previews should support copying the image to the clipboard")
 	}
 	if !strings.Contains(pages.Chat, "function renderDownloadAction(message)") || !strings.Contains(pages.Chat, "message.type === 'text'") || !strings.Contains(pages.Chat, "download.setAttribute('aria-label', 'Download')") {
 		t.Fatal("non-text messages should expose the shared download action")

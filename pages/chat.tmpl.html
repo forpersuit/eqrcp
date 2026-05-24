@@ -1343,6 +1343,7 @@
                 <div class="preview-toolbar">
                     <button type="button" id="preview-zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
                     <button type="button" id="preview-zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+                    <button type="button" id="preview-copy" title="Copy image" aria-label="Copy image"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
                     <button type="button" id="preview-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
                 </div>
             </div>
@@ -1391,6 +1392,7 @@
         var previewPinchScale = 1;
         var previewPinchCenter = null;
         var previewPanStart = null;
+        var previewCurrentURL = '';
         var autoSaveNotified = {};
         var chatCacheKey = 'eqrcp-chat-cache:' + window.location.pathname + ':' + state.token;
         var reconnectDelay = 1000;
@@ -2153,6 +2155,19 @@
                 });
                 wrap.appendChild(copy);
             }
+            if (message.type === 'image' && message.url && message.sender !== state.sender) {
+                var copyImage = document.createElement('button');
+                copyImage.type = 'button';
+                copyImage.className = 'bubble-action';
+                copyImage.setAttribute('aria-label', 'Copy image');
+                copyImage.title = 'Copy image';
+                copyImage.innerHTML = copyIcon();
+                keepActionFocus(copyImage);
+                copyImage.addEventListener('click', function() {
+                    copyImageToClipboard(attachmentURL(message.url), copyImage);
+                });
+                wrap.appendChild(copyImage);
+            }
             var download = renderDownloadAction(message);
             if (download) {
                 wrap.appendChild(download);
@@ -2380,6 +2395,7 @@
             previewScale = 1;
             previewX = 0;
             previewY = 0;
+            previewCurrentURL = url;
             previewImage.src = url;
             previewImage.alt = label || 'Image';
             applyPreviewTransform();
@@ -2388,6 +2404,7 @@
         function closeImagePreview() {
             previewBackdrop.classList.remove('open');
             previewImage.removeAttribute('src');
+            previewCurrentURL = '';
             previewPointers = {};
             previewPinchDistance = 0;
             previewPinchCenter = null;
@@ -2809,6 +2826,53 @@
             }
             restoreFocusAfterCopy(active);
         }
+        function copyImageToClipboard(url, button) {
+            if (!url || !navigator.clipboard || !window.ClipboardItem) {
+                showSystemNotice('Image copy is not available in this environment.');
+                return;
+            }
+            var active = document.activeElement;
+            fetch(url, {cache: 'no-store'}).then(function(response) {
+                if (!response.ok) { throw new Error('image fetch failed'); }
+                return response.blob();
+            }).then(function(blob) {
+                return imageBlobForClipboard(blob);
+            }).then(function(blob) {
+                return navigator.clipboard.write([new ClipboardItem({[blob.type || 'image/png']: blob})]);
+            }).then(function() {
+                showCopySuccess(button);
+                restoreFocusAfterCopy(active);
+            }).catch(function() {
+                showSystemNotice('Image copy failed.');
+                restoreFocusAfterCopy(active);
+            });
+        }
+        function imageBlobForClipboard(blob) {
+            if (blob && blob.type === 'image/png') {
+                return Promise.resolve(blob);
+            }
+            return new Promise(function(resolve, reject) {
+                var image = new Image();
+                image.onload = function() {
+                    try {
+                        var canvas = document.createElement('canvas');
+                        canvas.width = image.naturalWidth || image.width;
+                        canvas.height = image.naturalHeight || image.height;
+                        canvas.getContext('2d').drawImage(image, 0, 0);
+                        canvas.toBlob(function(png) {
+                            if (!png) { reject(new Error('image conversion failed')); return; }
+                            resolve(png);
+                        }, 'image/png');
+                    } catch (error) {
+                        reject(error);
+                    } finally {
+                        URL.revokeObjectURL(image.src);
+                    }
+                };
+                image.onerror = reject;
+                image.src = URL.createObjectURL(blob);
+            });
+        }
         function showCopySuccess(button) {
             if (!button || !button.isConnected) { return; }
             button.classList.add('copy-success');
@@ -3085,6 +3149,9 @@
         document.getElementById('preview-close').addEventListener('click', closeImagePreview);
         document.getElementById('preview-zoom-in').addEventListener('click', function() { zoomPreview(0.25); });
         document.getElementById('preview-zoom-out').addEventListener('click', function() { zoomPreview(-0.25); });
+        document.getElementById('preview-copy').addEventListener('click', function(event) {
+            copyImageToClipboard(previewCurrentURL, event.currentTarget);
+        });
         previewBackdrop.addEventListener('wheel', function(event) {
             if (!previewBackdrop.classList.contains('open')) { return; }
             event.preventDefault();

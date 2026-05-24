@@ -211,7 +211,7 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    <span class="chat-quota-pill" id="top-chat-quota" title="Daily free chat time">${escapeHTML(chatQuotaTopText())}</span>
+                    ${renderChatQuotaPill()}
                     <button class="menu-button" id="open-settings" title="Settings" aria-label="Settings">
                         <span class="menu-icon">${settingsIcon()}</span>
                         <span class="menu-label">Settings</span>
@@ -656,6 +656,13 @@ function renderSwitch(id, checked, disabled = false) {
     `;
 }
 
+function renderChatQuotaPill() {
+    if (hasPaidLicense()) {
+        return '';
+    }
+    return `<span class="chat-quota-pill" id="top-chat-quota" title="Daily free chat time">${escapeHTML(chatQuotaTopText())}</span>`;
+}
+
 function renderStatusBadge(status) {
     if (!status) {
         return '<span class="setting-status muted">checking</span>';
@@ -687,12 +694,16 @@ function integrationStatusText(status, fallback) {
 
 function renderAboutPanel() {
     const info = state.appInfo || {};
+    const license = state.license || loadLicense();
+    const plan = license?.tier && licenseTiers[license.tier] ? `${licenseTiers[license.tier]} active` : 'Free daily quota';
+    const planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
     return `
         <div class="about-panel">
             <div class="brand-mark">EQT</div>
             <p>${escapeHTML(info.description || 'Local QR-code file transfer for desktop and mobile devices.')}</p>
             <dl>
                 <dt>Product</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
+                <dt>Plan</dt><dd>${escapeHTML(plan)}<br><span class="about-detail">${escapeHTML(planDetail)}</span></dd>
                 <dt>Agent</dt><dd>${escapeHTML(info.agentUrl || agentEventsURL.replace('/events', ''))}</dd>
                 <dt>Platform</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
                 <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
@@ -1633,7 +1644,11 @@ function scheduleChatUsageTimer() {
 function updateChatQuotaSurface() {
     const top = document.querySelector('#top-chat-quota');
     if (top) {
-        top.textContent = chatQuotaTopText();
+        if (hasPaidLicense()) {
+            top.remove();
+        } else {
+            top.textContent = chatQuotaTopText();
+        }
     }
     const text = document.querySelector('#chat-quota-text');
     if (text) {
