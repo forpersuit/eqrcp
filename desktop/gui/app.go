@@ -203,6 +203,18 @@ func (a *App) Receive(output string) (AgentStatus, error) {
 }
 
 func (a *App) Chat() (AgentStatus, error) {
+	status, err := a.postTask(AgentTask{Action: "chat"})
+	if err == nil {
+		return status, nil
+	}
+	if !isRecoverableChatAgentError(err) {
+		return AgentStatus{}, err
+	}
+	_ = a.shutdownAgent()
+	waitForAgentExit(a)
+	if ensureErr := a.ensureAgent(); ensureErr != nil {
+		return AgentStatus{}, ensureErr
+	}
 	return a.postTask(AgentTask{Action: "chat"})
 }
 
@@ -567,6 +579,32 @@ func (a *App) ensureAgent() error {
 	return fmt.Errorf("desktop agent did not become ready")
 }
 
+func (a *App) shutdownAgent() error {
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+"/shutdown", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return newDesktopAgentHTTPError(resp)
+	}
+	return nil
+}
+
+func waitForAgentExit(a *App) {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if a.health() != nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func (a *App) health() error {
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+"/health", nil)
 	if err != nil {
@@ -594,7 +632,7 @@ func (a *App) getJSON(path string, out interface{}) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("desktop agent returned %s", resp.Status)
+		return newDesktopAgentHTTPError(resp)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
@@ -621,7 +659,7 @@ func (a *App) postJSON(path string, in interface{}, out interface{}) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("desktop agent returned %s", resp.Status)
+		return newDesktopAgentHTTPError(resp)
 	}
 	if out == nil {
 		return nil
@@ -640,9 +678,40 @@ func (a *App) postNoBody(path string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("desktop agent returned %s", resp.Status)
+		return newDesktopAgentHTTPError(resp)
 	}
 	return nil
+}
+
+type desktopAgentHTTPError struct {
+	statusCode int
+	status     string
+	body       string
+}
+
+func newDesktopAgentHTTPError(resp *http.Response) error {
+	message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return desktopAgentHTTPError{
+		statusCode: resp.StatusCode,
+		status:     resp.Status,
+		body:       strings.TrimSpace(string(message)),
+	}
+}
+
+func (err desktopAgentHTTPError) Error() string {
+	if err.body == "" {
+		return fmt.Sprintf("desktop agent returned %s", err.status)
+	}
+	return fmt.Sprintf("desktop agent returned %s: %s", err.status, err.body)
+}
+
+func isRecoverableChatAgentError(err error) bool {
+	httpErr, ok := err.(desktopAgentHTTPError)
+	if !ok || httpErr.statusCode != http.StatusBadRequest {
+		return false
+	}
+	body := strings.ToLower(httpErr.body)
+	return strings.Contains(body, "unsupported desktop action") || strings.Contains(body, "chat")
 }
 
 func findEqrcpCLI() (string, error) {

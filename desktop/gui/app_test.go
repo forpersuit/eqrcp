@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -84,5 +86,30 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("calls = %q, want to contain %q", got, want)
 		}
+	}
+}
+
+func TestRecoverableChatAgentErrorMatchesOldAgentRejection(t *testing.T) {
+	err := newDesktopAgentHTTPError(&http.Response{
+		StatusCode: http.StatusBadRequest,
+		Status:     "400 Bad Request",
+		Body:       io.NopCloser(strings.NewReader("unsupported desktop action \"chat\"\n")),
+	})
+	if !isRecoverableChatAgentError(err) {
+		t.Fatalf("isRecoverableChatAgentError() = false, want true for old agent chat rejection")
+	}
+	if !strings.Contains(err.Error(), "unsupported desktop action") {
+		t.Fatalf("Error() = %q, want agent response body", err.Error())
+	}
+}
+
+func TestRecoverableChatAgentErrorIgnoresUnrelatedBadRequest(t *testing.T) {
+	err := newDesktopAgentHTTPError(&http.Response{
+		StatusCode: http.StatusBadRequest,
+		Status:     "400 Bad Request",
+		Body:       io.NopCloser(strings.NewReader("invalid path\n")),
+	})
+	if isRecoverableChatAgentError(err) {
+		t.Fatal("isRecoverableChatAgentError() = true, want false for unrelated request errors")
 	}
 }
