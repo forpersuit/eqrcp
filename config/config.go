@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,6 +41,9 @@ func New(app application.App) (Config, error) {
 	var err error
 	cfg := Config{}
 
+	if err := migrateDefaultConfigIfNeeded(app, v.ConfigFileUsed()); err != nil {
+		return Config{}, err
+	}
 	_, err = os.Stat(v.ConfigFileUsed())
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(v.ConfigFileUsed()), os.ModeDir|os.ModePerm); err != nil {
@@ -127,15 +131,12 @@ func getViperInstance(app application.App) *viper.Viper {
 	if app.Flags.Config != "" {
 		configFile = app.Flags.Config
 		configType = filepath.Ext(configFile)[1:]
-	} else {
-		oldConfigFile := filepath.Join(xdg.ConfigHome, "eqrcp", "config.json")
-		// Check if old configuration file exists
-		if _, err := os.Stat(oldConfigFile); os.IsNotExist(err) {
+		if configType == "" {
 			configType = "yml"
-		} else {
-			configType = "json"
 		}
-		configFile = filepath.Join(xdg.ConfigHome, app.Name, fmt.Sprintf("config.%s", configType))
+	} else {
+		configType = "yml"
+		configFile = DefaultConfigFile()
 	}
 	v.SetConfigType(configType)
 	v.SetConfigFile(configFile)
@@ -143,6 +144,28 @@ func getViperInstance(app application.App) *viper.Viper {
 	v.SetEnvPrefix(app.Name)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	return v
+}
+
+func migrateDefaultConfigIfNeeded(app application.App, path string) error {
+	if app.Flags.Config != "" {
+		return nil
+	}
+	return copyLegacyConfigIfNeeded(path)
+}
+
+func DefaultConfigDir() string {
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		return filepath.Join(home, ".local", "eqt")
+	}
+	if current, err := user.Current(); err == nil && current.HomeDir != "" {
+		return filepath.Join(current.HomeDir, ".local", "eqt")
+	}
+	return filepath.Join(xdg.ConfigHome, "eqt")
+}
+
+func DefaultConfigFile() string {
+	return filepath.Join(DefaultConfigDir(), "config.yml")
 }
 
 func Wizard(app application.App) error {

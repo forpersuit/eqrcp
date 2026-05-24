@@ -163,6 +163,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		EventsRoute        string
 		MessagesRoute      string
 		AttachmentsRoute   string
+		ClientsRoute       string
 		StopRoute          string
 		HealthRoute        string
 		ViewportDebugRoute string
@@ -175,6 +176,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		EventsRoute:        "/chat/test/events",
 		MessagesRoute:      "/chat/test/messages",
 		AttachmentsRoute:   "/chat/test/attachments",
+		ClientsRoute:       "/chat/test/clients",
 		StopRoute:          "/chat/test/stop",
 		HealthRoute:        "/chat/test/health",
 		ViewportDebugRoute: "/chat/test/viewport-debug",
@@ -238,6 +240,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		EventsRoute        string
 		MessagesRoute      string
 		AttachmentsRoute   string
+		ClientsRoute       string
 		StopRoute          string
 		HealthRoute        string
 		ViewportDebugRoute string
@@ -250,6 +253,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		EventsRoute:        "/chat/test/events",
 		MessagesRoute:      "/chat/test/messages",
 		AttachmentsRoute:   "/chat/test/attachments",
+		ClientsRoute:       "/chat/test/clients",
 		StopRoute:          "/chat/test/stop",
 		HealthRoute:        "/chat/test/health",
 		ViewportDebugRoute: "/chat/test/viewport-debug",

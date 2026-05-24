@@ -23,7 +23,6 @@ import (
 	"eqrcp/config"
 	"eqrcp/server"
 	"eqrcp/version"
-	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 )
 
@@ -123,7 +122,7 @@ func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 }
 
 func defaultDesktopAgentHistoryPath() string {
-	return filepath.Join(xdg.ConfigHome, application.New().Name, desktopAgentHistoryFilename)
+	return filepath.Join(config.DefaultConfigDir(), desktopAgentHistoryFilename)
 }
 
 func (agent *desktopAgent) routes() http.Handler {

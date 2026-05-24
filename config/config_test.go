@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"eqrcp/application"
@@ -133,6 +134,13 @@ func TestNew(t *testing.T) {
 				t.Errorf("New() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDefaultConfigFileUsesLocalEQTDirectory(t *testing.T) {
+	got := filepath.ToSlash(DefaultConfigFile())
+	if !strings.HasSuffix(got, "/.local/eqt/config.yml") {
+		t.Fatalf("DefaultConfigFile() = %q, want ~/.local/eqt/config.yml", got)
 	}
 }
 

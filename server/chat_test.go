@@ -149,6 +149,41 @@ func TestChatAvatarTravelsWithMessagesAndRoster(t *testing.T) {
 	if len(devices) != 1 || devices[0].Avatar != "📱" {
 		t.Fatalf("devices = %#v; want avatar in roster", devices)
 	}
+	if devices[0].ID == "" {
+		t.Fatal("device roster should expose a server-generated device id")
+	}
+}
+
+func TestChatKickRequiresHostAndBlocksClient(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	done := server.chatSession.registerClient("mobile-token", "Phone", "", "", "join-1", "")
+	defer done()
+	devices := server.chatSession.deviceRosterLocked()
+	if len(devices) != 1 || devices[0].ID == "" {
+		t.Fatalf("devices = %#v, want one kickable device id", devices)
+	}
+
+	guest := httptest.NewRecorder()
+	server.mux.ServeHTTP(guest, httptest.NewRequest(http.MethodPost, "/chat/test/clients/"+devices[0].ID+"/kick", nil))
+	if guest.Code != http.StatusForbidden {
+		t.Fatalf("guest kick status = %d, want %d", guest.Code, http.StatusForbidden)
+	}
+
+	host := httptest.NewRecorder()
+	server.mux.ServeHTTP(host, httptest.NewRequest(http.MethodPost, "/chat/test/clients/"+devices[0].ID+"/kick?token="+server.chatSession.hostToken, nil))
+	if host.Code != http.StatusAccepted {
+		t.Fatalf("host kick status = %d, want %d; body = %q", host.Code, http.StatusAccepted, host.Body.String())
+	}
+
+	messageRequest := httptest.NewRequest(http.MethodPost, "/chat/test/messages", strings.NewReader(`{"sender":"Phone","token":"mobile-token","text":"late"}`))
+	messageRequest.Header.Set("Content-Type", "application/json")
+	messageResponse := httptest.NewRecorder()
+	server.mux.ServeHTTP(messageResponse, messageRequest)
+	if messageResponse.Code != http.StatusForbidden {
+		t.Fatalf("kicked message status = %d, want %d", messageResponse.Code, http.StatusForbidden)
+	}
 }
 
 func TestChatThemeFollowsTokenAcrossSenderRename(t *testing.T) {

@@ -1021,6 +1021,8 @@ async function openChatSaveDirectory() {
         const dir = state.chatSaveDir || await ChatSaveDirectory();
         state.chatSaveDir = dir;
         await OpenPath(dir);
+        state.notice = `Opened ${dir}`;
+        render();
     }, {busy: false});
 }
 

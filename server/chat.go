@@ -38,6 +38,8 @@ type chatSession struct {
 	attachments      map[string]chatAttachment
 	subscribers      map[chan struct{}]struct{}
 	clients          map[string]chatClient
+	clientIDs        map[string]string
+	kickedClients    map[string]struct{}
 	clientThemes     map[string]string
 	clientThemeJoins map[string]string
 	nextID           int64
@@ -90,6 +92,7 @@ type chatAttachment struct {
 }
 
 type chatClient struct {
+	ID       string    `json:"id,omitempty"`
 	Label    string    `json:"label"`
 	Avatar   string    `json:"avatar,omitempty"`
 	Count    int       `json:"count"`
@@ -112,6 +115,7 @@ func (s *Server) Chat() error {
 	eventsRoute := route + "/events"
 	messagesRoute := route + "/messages"
 	attachmentsRoute := route + "/attachments"
+	clientsRoute := route + "/clients"
 	stopRoute := route + "/stop"
 	healthRoute := route + "/health"
 	viewportDebugRoute := route + "/viewport-debug"
@@ -120,6 +124,8 @@ func (s *Server) Chat() error {
 		attachments:      map[string]chatAttachment{},
 		subscribers:      map[chan struct{}]struct{}{},
 		clients:          map[string]chatClient{},
+		clientIDs:        map[string]string{},
+		kickedClients:    map[string]struct{}{},
 		clientThemes:     map[string]string{},
 		clientThemeJoins: map[string]string{},
 		dir:              dir,
@@ -180,6 +186,7 @@ func (s *Server) Chat() error {
 			EventsRoute        string
 			MessagesRoute      string
 			AttachmentsRoute   string
+			ClientsRoute       string
 			StopRoute          string
 			HealthRoute        string
 			ViewportDebugRoute string
@@ -192,6 +199,7 @@ func (s *Server) Chat() error {
 			EventsRoute:        eventsRoute,
 			MessagesRoute:      messagesRoute,
 			AttachmentsRoute:   attachmentsRoute,
+			ClientsRoute:       clientsRoute,
 			StopRoute:          stopRoute,
 			HealthRoute:        healthRoute,
 			ViewportDebugRoute: viewportDebugRoute,
@@ -210,6 +218,7 @@ func (s *Server) Chat() error {
 	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
 	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
 	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
+	s.mux.HandleFunc(clientsRoute+"/", session.handleClientAction)
 	s.mux.HandleFunc(viewportDebugRoute, session.handleViewportDebug)
 	s.mux.HandleFunc(stopRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -235,6 +244,9 @@ func (s *Server) Chat() error {
 		}
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if session.rejectKickedClient(w, r.URL.Query().Get("token")) {
 			return
 		}
 		session.mu.Lock()
@@ -285,6 +297,9 @@ func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.R
 	if r.Body != nil {
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&request)
 	}
+	if session.rejectKickedClient(w, request.Token) {
+		return
+	}
 	if session.isTerminal() {
 		writeChatTerminal(w)
 		return
@@ -298,6 +313,35 @@ func (session *chatSession) handleMessageAction(w http.ResponseWriter, r *http.R
 	if err := json.NewEncoder(w).Encode(message); err != nil {
 		log.Println(err)
 	}
+}
+
+func (session *chatSession) handleClientAction(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodPost) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if rejectCrossOriginChat(w, r) {
+		return
+	}
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 3 || parts[len(parts)-1] != "kick" {
+		http.NotFound(w, r)
+		return
+	}
+	id := parts[len(parts)-2]
+	if !session.validHostToken(chatHostTokenFromRequest(r)) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if !session.kickClient(id) {
+		http.Error(w, "device not found or cannot be kicked", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintln(w, "Device forced offline.")
 }
 
 func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.Request) {
@@ -477,6 +521,9 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			http.Error(w, "missing token", http.StatusBadRequest)
 			return
 		}
+		if session.rejectKickedClient(w, request.Token) {
+			return
+		}
 		session.ensureChatTheme(request.Token, request.Sender, "", request.Theme, request.Join)
 		message := session.addTextMessageWithAvatar(sanitizeChatSender(request.Sender), sanitizeChatAvatar(request.Avatar), request.Token, request.Text)
 		if message.ID == "" {
@@ -522,6 +569,9 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	token := strings.TrimSpace(r.FormValue("token"))
 	if token == "" {
 		http.Error(w, "missing token", http.StatusBadRequest)
+		return
+	}
+	if session.rejectKickedClient(w, token) {
 		return
 	}
 	session.ensureChatTheme(token, sender, "", r.FormValue("theme"), r.FormValue("join"))
@@ -606,6 +656,9 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 
 	seenSeq, hasCursor := chatEventCursorFromRequest(r, "afterSeq", "Last-Event-ID")
 	joinSeq, hasJoinSeq := chatEventCursorFromRequest(r, "joinSeq")
+	if session.rejectKickedClient(w, r.URL.Query().Get("token")) {
+		return
+	}
 	if !hasCursor {
 		// New devices join at the current event boundary. They do not receive
 		// earlier session history, but they will receive later changes.
@@ -614,10 +667,14 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	if !hasJoinSeq {
 		joinSeq = seenSeq
 	}
+	clientToken := r.URL.Query().Get("token")
 	unregisterClient := session.registerClientWithAvatar(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("avatar"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"), r.RemoteAddr)
 	defer unregisterClient()
 
 	write := func() bool {
+		if session.clientKicked(clientToken) {
+			return false
+		}
 		toSend, currentSeq := session.snapshotAfterSeq(joinSeq, seenSeq)
 		data, err := json.Marshal(toSend)
 		if err != nil {
@@ -657,6 +714,17 @@ func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func (session *chatSession) clientKicked(token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	_, kicked := session.kickedClients[token]
+	return kicked
+}
+
 func (session *chatSession) registerClient(token string, label string, peer string, preferredTheme string, join string, fallback string) func() {
 	return session.registerClientWithAvatar(token, label, "", peer, preferredTheme, join, fallback)
 }
@@ -673,8 +741,21 @@ func (session *chatSession) registerClientWithAvatar(token string, label string,
 	if session.clients == nil {
 		session.clients = map[string]chatClient{}
 	}
+	if session.clientIDs == nil {
+		session.clientIDs = map[string]string{}
+	}
+	if session.kickedClients == nil {
+		session.kickedClients = map[string]struct{}{}
+	}
+	if _, kicked := session.kickedClients[client]; kicked {
+		session.mu.Unlock()
+		return func() {}
+	}
 	theme := session.chatThemeForClientLocked(client, label, peer, preferredTheme, join)
 	info := session.clients[client]
+	if info.ID == "" {
+		info.ID = session.clientIDLocked(client)
+	}
 	info.Count++
 	info.Label = sanitizeChatSender(label)
 	info.Avatar = sanitizeChatAvatar(avatar)
@@ -693,6 +774,7 @@ func (session *chatSession) registerClientWithAvatar(token string, label string,
 		info := session.clients[client]
 		if info.Count <= 1 {
 			delete(session.clients, client)
+			delete(session.clientIDs, client)
 		} else {
 			info.Count--
 			info.LastSeen = time.Now()
@@ -719,6 +801,63 @@ func (session *chatSession) deviceRosterLocked() []chatClient {
 		return devices[i].Label < devices[j].Label
 	})
 	return devices
+}
+
+func (session *chatSession) clientIDLocked(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+	if session.clientIDs == nil {
+		session.clientIDs = map[string]string{}
+	}
+	if id := session.clientIDs[token]; id != "" {
+		return id
+	}
+	id := "dev-" + randomChatToken()
+	session.clientIDs[token] = id
+	return id
+}
+
+func (session *chatSession) kickClient(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	session.mu.Lock()
+	for token, client := range session.clients {
+		if client.ID != id || session.validHostToken(token) {
+			continue
+		}
+		if session.kickedClients == nil {
+			session.kickedClients = map[string]struct{}{}
+		}
+		session.kickedClients[token] = struct{}{}
+		delete(session.clients, token)
+		delete(session.clientIDs, token)
+		session.addSystemMessageLocked(client.Label + " was forced offline.")
+		hook, snapshot := session.statusSnapshotLocked(session.state)
+		session.notifyLocked()
+		session.mu.Unlock()
+		notifyChatStatusHook(hook, snapshot)
+		return true
+	}
+	session.mu.Unlock()
+	return false
+}
+
+func (session *chatSession) rejectKickedClient(w http.ResponseWriter, token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	session.mu.Lock()
+	_, kicked := session.kickedClients[token]
+	session.mu.Unlock()
+	if kicked {
+		http.Error(w, "device was forced offline", http.StatusForbidden)
+	}
+	return kicked
 }
 
 func (session *chatSession) chatThemeForToken(token string, label string) string {
@@ -864,6 +1003,22 @@ func (session *chatSession) addSystemMessage(text string) chatMessage {
 		Type:   "system",
 		Text:   text,
 	}, "")
+}
+
+func (session *chatSession) addSystemMessageLocked(text string) chatMessage {
+	message := chatMessage{
+		Sender: "system",
+		Type:   "system",
+		Text:   text,
+	}
+	message.ID = session.nextMessageIDLocked()
+	message.CreatedAt = time.Now()
+	message.Seq = session.nextEventSeqLocked()
+	message.createdSeq = message.Seq
+	session.messages = append(session.messages, message)
+	session.trimHistoryLocked()
+	session.lastActivity = time.Now()
+	return message
 }
 
 func (session *chatSession) saveAttachment(sender string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {

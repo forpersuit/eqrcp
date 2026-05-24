@@ -117,7 +117,7 @@ When sharing a directory, the downloaded archive is named `<directory>-directory
 The default configuration file is:
 
 ```text
-$XDG_CONFIG_HOME/eqrcp/config.yml
+~/.local/eqt/config.yml
 ```
 
 Use a custom config file:

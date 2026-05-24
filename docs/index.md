@@ -41,7 +41,7 @@ eqrcp config
 The default configuration file is:
 
 ```text
-$XDG_CONFIG_HOME/eqrcp/config.yml
+~/.local/eqt/config.yml
 ```
 
 Environment variables use the `EQRCP_` prefix.

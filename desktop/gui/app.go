@@ -416,7 +416,10 @@ func (a *App) OpenPath(path string) error {
 	if err != nil {
 		return err
 	}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }
 
 func (a *App) OpenFile(path string) error {
@@ -434,7 +437,10 @@ func (a *App) OpenFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }
 
 func (a *App) ReadSettings() (DesktopSettings, error) {

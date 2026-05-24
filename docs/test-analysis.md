@@ -57,7 +57,7 @@ GOCACHE=/tmp/eqrcp-go-build go run . version
 Expected result:
 
 - The command name is `eqrcp`.
-- The default config path in help is `$XDG_CONFIG_HOME/eqrcp/config.yml`.
+- The default config path is `~/.local/eqt/config.yml`.
 - Desktop helper commands are present.
 - The version command prints `eqrcp dev [date: n/a]` for local development builds.
 
