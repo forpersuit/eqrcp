@@ -26,6 +26,7 @@ import {
     SetRightClickIntegrationEnabled,
     SetStartupEnabled,
     StartupStatus,
+    StopChat,
     StopCurrent,
 } from '../wailsjs/go/main/App';
 
@@ -437,7 +438,7 @@ function renderChatPanel(task) {
                     <div class="side-head-actions">
                         <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
                         <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
-                        <button type="button" class="side-icon-button danger-icon stop-current-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
+                        <button type="button" class="side-icon-button danger-icon stop-chat-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
                     </div>
                 </div>
                 <div class="chat-count">${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</div>
@@ -878,6 +879,9 @@ function bindEvents() {
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
     });
+    document.querySelectorAll('.stop-chat-action').forEach((button) => {
+        button.addEventListener('click', stopChat);
+    });
     document.querySelectorAll('.open-qr, .preview-button[data-open-url]').forEach((button) => {
         button.addEventListener('click', openQRPage);
     });
@@ -1176,6 +1180,14 @@ async function stopCurrent() {
     await run(async () => {
         await StopCurrent();
         state.notice = 'Current task stopped.';
+        await loadStatusData();
+    });
+}
+
+async function stopChat() {
+    await run(async () => {
+        await StopChat();
+        state.notice = 'Chat stopped.';
         await loadStatusData();
     });
 }
@@ -1629,7 +1641,7 @@ function scheduleChatUsageTimer() {
             }
             if (activeChatTask()) {
                 try {
-                    state.status = await StopCurrent();
+                    await StopChat();
                 } catch {
                     // Quota state is local; a failed stop should not hide the upgrade prompt.
                 }
@@ -1850,7 +1862,7 @@ function activeShareTask() {
 }
 
 function activeChatTask() {
-    const task = state.status?.current;
+    const task = state.status?.chat || state.status?.current;
     if (!task || task.action !== 'chat' || isTerminal(task)) {
         return null;
     }
@@ -1858,7 +1870,7 @@ function activeChatTask() {
 }
 
 function reconcileChatQRState(status) {
-    const task = status?.current;
+    const task = status?.chat || status?.current;
     if (!task || task.action !== 'chat' || isTerminal(task)) {
         state.activeChatTaskId = 0;
         state.activeChatSessionKey = '';

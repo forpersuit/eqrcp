@@ -77,6 +77,7 @@ export namespace main {
 	export class AgentStatus {
 	    state: string;
 	    current?: TaskRecord;
+	    chat?: TaskRecord;
 	    queued: number;
 	    history?: TaskRecord[];
 	    lastError?: string;
@@ -92,6 +93,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.state = source["state"];
 	        this.current = this.convertValues(source["current"], TaskRecord);
+	        this.chat = this.convertValues(source["chat"], TaskRecord);
 	        this.queued = source["queued"];
 	        this.history = this.convertValues(source["history"], TaskRecord);
 	        this.lastError = source["lastError"];

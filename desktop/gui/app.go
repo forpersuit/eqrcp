@@ -63,6 +63,7 @@ type TaskRecord struct {
 type AgentStatus struct {
 	State          string       `json:"state"`
 	Current        *TaskRecord  `json:"current,omitempty"`
+	Chat           *TaskRecord  `json:"chat,omitempty"`
 	Queued         int          `json:"queued"`
 	History        []TaskRecord `json:"history,omitempty"`
 	LastError      string       `json:"lastError,omitempty"`
@@ -323,6 +324,13 @@ func (a *App) StopCurrent() error {
 		return err
 	}
 	return a.postNoBody("/stop-current")
+}
+
+func (a *App) StopChat() error {
+	if err := a.ensureAgent(); err != nil {
+		return err
+	}
+	return a.postNoBody("/stop-chat")
 }
 
 func (a *App) ClearHistory() error {

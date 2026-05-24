@@ -73,6 +73,7 @@ type desktopAgentTaskRecord struct {
 type desktopAgentResponse struct {
 	State          string                   `json:"state"`
 	Current        *desktopAgentTaskRecord  `json:"current,omitempty"`
+	Chat           *desktopAgentTaskRecord  `json:"chat,omitempty"`
 	Queued         int                      `json:"queued"`
 	History        []desktopAgentTaskRecord `json:"history,omitempty"`
 	LastError      string                   `json:"lastError,omitempty"`
@@ -92,10 +93,12 @@ type desktopAgent struct {
 	startedAt   time.Time
 	busy        bool
 	current     *desktopAgentTaskRecord
+	chat        *desktopAgentTaskRecord
 	queue       []desktopAgentTask
 	history     []desktopAgentTaskRecord
 	nextID      int
 	activeStop  func(string)
+	chatStop    func(string)
 	shutdown    func()
 	lastError   string
 	runner      func(desktopAgentTask) error
@@ -135,6 +138,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/tasks/", agent.handleTaskAction)
 	mux.HandleFunc("/history", agent.handleHistory)
 	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
+	mux.HandleFunc("/stop-chat", agent.handleStopChat)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
 	return mux
 }
@@ -310,6 +314,9 @@ func (agent *desktopAgent) handleRestart(w http.ResponseWriter, r *http.Request)
 	if agent.busy {
 		agent.finalizeActiveLocked("replaced")
 	}
+	if agent.chat != nil {
+		agent.finalizeChatLocked("replaced")
+	}
 	shutdown := agent.shutdown
 	agent.touchLocked()
 	agent.mu.Unlock()
@@ -387,17 +394,29 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agent.mu.Lock()
-	if len(agent.queue) >= desktopAgentMaxQueue {
+	if task.Action == "chat" && agent.chat != nil && agent.chat.State == "running" {
+		agent.lastError = ""
+		agent.touchLocked()
 		agent.mu.Unlock()
-		http.Error(w, "desktop agent queue is full", http.StatusTooManyRequests)
+		w.WriteHeader(http.StatusAccepted)
+		agent.writeStatus(w)
 		return
 	}
-	agent.queue = append(agent.queue, task)
 	agent.lastError = ""
-	if agent.busy {
-		agent.replaceActiveLocked("replaced")
+	if task.Action == "chat" {
+		agent.startChatLocked(task)
+	} else {
+		if len(agent.queue) >= desktopAgentMaxQueue {
+			agent.mu.Unlock()
+			http.Error(w, "desktop agent queue is full", http.StatusTooManyRequests)
+			return
+		}
+		agent.queue = append(agent.queue, task)
+		if agent.busy {
+			agent.replaceActiveLocked("replaced")
+		}
+		agent.startNextLocked()
 	}
-	agent.startNextLocked()
 	agent.touchLocked()
 	agent.mu.Unlock()
 
@@ -532,6 +551,22 @@ func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Requ
 	fmt.Fprintln(w, "Current desktop agent task stopped.")
 }
 
+func (agent *desktopAgent) handleStopChat(w http.ResponseWriter, r *http.Request) {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !agent.stopChat("stopped") {
+		http.Error(w, "desktop agent has no active chat", http.StatusConflict)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintln(w, "Current desktop chat stopped.")
+}
+
 func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
@@ -585,13 +620,54 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 	}
 }
 
+func (agent *desktopAgent) executeChat(task desktopAgentTask, id int) {
+	err := agent.runner(task)
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.chat != nil && agent.chat.ID == id {
+		finishedAt := time.Now()
+		agent.chat.FinishedAt = &finishedAt
+		if agent.chat.State == "running" {
+			if err != nil {
+				agent.chat.State = "failed"
+				agent.chat.Error = err.Error()
+				agent.lastError = err.Error()
+			} else {
+				agent.chat.State = "completed"
+			}
+		}
+		agent.addHistoryLocked(*agent.chat)
+		agent.notifyRecordLocked(*agent.chat)
+		delete(agent.notified, agent.chat.ID)
+		agent.chat = nil
+		agent.chatStop = nil
+		agent.touchLocked()
+	}
+}
+
 func (agent *desktopAgent) stopCurrent(state string) bool {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
-	if !agent.busy {
+	if agent.busy {
+		agent.replaceActiveLocked(state)
+		agent.touchLocked()
+		return true
+	}
+	if agent.chat == nil {
 		return false
 	}
-	agent.replaceActiveLocked(state)
+	agent.replaceChatLocked(state)
+	agent.touchLocked()
+	return true
+}
+
+func (agent *desktopAgent) stopChat(state string) bool {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.chat == nil {
+		return false
+	}
+	agent.replaceChatLocked(state)
 	agent.touchLocked()
 	return true
 }
@@ -605,6 +681,10 @@ func (agent *desktopAgent) repeatTask(id int) error {
 	var repeated *desktopAgentTask
 	if agent.current != nil && agent.current.ID == id {
 		task := desktopAgentTask{Action: agent.current.Action, Paths: append([]string(nil), agent.current.Paths...)}
+		repeated = &task
+	}
+	if repeated == nil && agent.chat != nil && agent.chat.ID == id {
+		task := desktopAgentTask{Action: agent.chat.Action, Paths: append([]string(nil), agent.chat.Paths...)}
 		repeated = &task
 	}
 	if repeated == nil {
@@ -622,12 +702,19 @@ func (agent *desktopAgent) repeatTask(id int) error {
 	if err := validateDesktopAgentTask(*repeated); err != nil {
 		return err
 	}
-	agent.queue = append(agent.queue, *repeated)
 	agent.lastError = ""
-	if agent.busy {
-		agent.replaceActiveLocked("replaced")
+	if repeated.Action == "chat" {
+		if agent.chat != nil {
+			agent.replaceChatLocked("replaced")
+		}
+		agent.startChatLocked(*repeated)
+	} else {
+		agent.queue = append(agent.queue, *repeated)
+		if agent.busy {
+			agent.replaceActiveLocked("replaced")
+		}
+		agent.startNextLocked()
 	}
-	agent.startNextLocked()
 	agent.touchLocked()
 	return nil
 }
@@ -664,6 +751,19 @@ func (agent *desktopAgent) replaceActiveLocked(state string) {
 	go stop(state)
 }
 
+func (agent *desktopAgent) replaceChatLocked(state string) {
+	if agent.chat != nil && agent.chat.State == "running" {
+		agent.chat.State = state
+		finishedAt := time.Now()
+		agent.chat.FinishedAt = &finishedAt
+	}
+	if agent.chatStop == nil {
+		return
+	}
+	stop := agent.chatStop
+	go stop(state)
+}
+
 func (agent *desktopAgent) finalizeActiveLocked(state string) {
 	agent.replaceActiveLocked(state)
 	if agent.current == nil {
@@ -676,6 +776,19 @@ func (agent *desktopAgent) finalizeActiveLocked(state string) {
 	agent.busy = false
 	agent.current = nil
 	agent.activeStop = nil
+}
+
+func (agent *desktopAgent) finalizeChatLocked(state string) {
+	agent.replaceChatLocked(state)
+	if agent.chat == nil {
+		return
+	}
+	record := *agent.chat
+	agent.addHistoryLocked(record)
+	agent.notifyRecordLocked(record)
+	delete(agent.notified, record.ID)
+	agent.chat = nil
+	agent.chatStop = nil
 }
 
 func (agent *desktopAgent) startNextLocked() {
@@ -698,9 +811,29 @@ func (agent *desktopAgent) startNextLocked() {
 	go agent.execute(task, record.ID)
 }
 
-func (agent *desktopAgent) currentTaskID() int {
+func (agent *desktopAgent) startChatLocked(task desktopAgentTask) {
+	agent.nextID++
+	record := desktopAgentTaskRecord{
+		ID:        agent.nextID,
+		Action:    task.Action,
+		Paths:     append([]string(nil), task.Paths...),
+		State:     "running",
+		StartedAt: time.Now(),
+	}
+	agent.chat = &record
+	agent.notifyRecordLocked(record)
+	go agent.executeChat(task, record.ID)
+}
+
+func (agent *desktopAgent) taskIDForAction(action string) int {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if action == "chat" {
+		if agent.chat == nil {
+			return 0
+		}
+		return agent.chat.ID
+	}
 	if agent.current == nil {
 		return 0
 	}
@@ -749,27 +882,25 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatusSnapshot) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
-	if agent.current == nil || agent.current.ID != taskID {
+	if agent.chat == nil || agent.chat.ID != taskID {
 		return
 	}
-	agent.current.ChatState = status.State
-	agent.current.ChatMessageCount = status.MessageCount
-	agent.current.ChatDeviceCount = status.DeviceCount
+	agent.chat.ChatState = status.State
+	agent.chat.ChatMessageCount = status.MessageCount
+	agent.chat.ChatDeviceCount = status.DeviceCount
 	if !status.LastActivity.IsZero() {
-		agent.current.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
+		agent.chat.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
 	}
-	if isTerminalDesktopChatState(status.State) && agent.current.State == "running" {
-		agent.current.State = desktopTaskStateForChatState(status.State)
+	if isTerminalDesktopChatState(status.State) && agent.chat.State == "running" {
+		agent.chat.State = desktopTaskStateForChatState(status.State)
 		finishedAt := time.Now()
-		agent.current.FinishedAt = &finishedAt
-		record := *agent.current
+		agent.chat.FinishedAt = &finishedAt
+		record := *agent.chat
 		agent.addHistoryLocked(record)
 		agent.notifyRecordLocked(record)
 		delete(agent.notified, record.ID)
-		agent.busy = false
-		agent.current = nil
-		agent.activeStop = nil
-		agent.startNextLocked()
+		agent.chat = nil
+		agent.chatStop = nil
 		agent.touchLocked()
 		return
 	}
@@ -977,19 +1108,38 @@ func desktopAgentPathKind(action string, archive bool, paths []string) string {
 	return "file"
 }
 
-func (agent *desktopAgent) setActiveStop(stop func(string)) {
+func (agent *desktopAgent) setTaskStop(action string, stop func(string)) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if action == "chat" {
+		agent.chatStop = stop
+		return
+	}
 	agent.activeStop = stop
 }
 
-func (agent *desktopAgent) setCurrentPageURL(url string) {
+func (agent *desktopAgent) setActiveStop(stop func(string)) {
+	agent.setTaskStop("share", stop)
+}
+
+func (agent *desktopAgent) setTaskPageURL(action string, url string) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if action == "chat" {
+		if agent.chat != nil && agent.chat.State == "running" {
+			agent.chat.PageURL = url
+			agent.touchLocked()
+		}
+		return
+	}
 	if agent.current != nil && agent.current.State == "running" {
 		agent.current.PageURL = url
 		agent.touchLocked()
 	}
+}
+
+func (agent *desktopAgent) setCurrentPageURL(url string) {
+	agent.setTaskPageURL("share", url)
 }
 
 func (agent *desktopAgent) writeStatus(w http.ResponseWriter) {
@@ -1017,9 +1167,15 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 	if agent.busy {
 		response.State = "busy"
 		if agent.current != nil {
-			current := *agent.current
-			current.Paths = append([]string(nil), agent.current.Paths...)
+			current := cloneDesktopAgentRecord(*agent.current)
 			response.Current = &current
+		}
+	}
+	if agent.chat != nil {
+		chat := cloneDesktopAgentRecord(*agent.chat)
+		response.Chat = &chat
+		if response.State == "idle" {
+			response.State = "chat"
 		}
 	}
 	return response, agent.revision
@@ -1119,7 +1275,7 @@ func cloneDesktopAgentRecord(record desktopAgentTaskRecord) desktopAgentTaskReco
 }
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
-	taskID := agent.currentTaskID()
+	taskID := agent.taskIDForAction(task.Action)
 	agentApp := application.New()
 	agentApp.Flags = agent.baseFlags
 	agentApp.Flags.Browser = desktopBrowserPreference(agent.baseFlags, true)
@@ -1142,7 +1298,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.observeTransferStatus(taskID, status)
 	})
 	srv.SetRepeatRoute(desktopAgentBaseURL + "/tasks/" + strconv.Itoa(taskID) + "/repeat")
-	agent.setActiveStop(func(state string) {
+	agent.setTaskStop(task.Action, func(state string) {
 		if task.Action == "chat" {
 			srv.ShutdownChat(state)
 			return
@@ -1151,7 +1307,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	})
 	switch task.Action {
 	case "share":
-		agent.setCurrentPageURL(srv.BaseURL + "/qr")
+		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
 		if err != nil {
 			srv.Shutdown()
@@ -1163,7 +1319,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			return err
 		}
 	case "receive":
-		agent.setCurrentPageURL(srv.BaseURL + "/qr")
+		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		if err := srv.ReceiveTo(cfg.Output); err != nil {
 			srv.Shutdown()
 			return err
@@ -1188,7 +1344,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 			}
 		}
 		chatPageURL := chatPageURLBuilder()
-		agent.setCurrentPageURL(chatPageURL)
+		agent.setTaskPageURL(task.Action, chatPageURL)
 		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
 			agent.observeChatStatus(taskID, status)
 		})

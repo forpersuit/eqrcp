@@ -102,6 +102,10 @@ export function StartupStatus() {
   return window['go']['main']['App']['StartupStatus']();
 }
 
+export function StopChat() {
+  return window['go']['main']['App']['StopChat']();
+}
+
 export function StopCurrent() {
   return window['go']['main']['App']['StopCurrent']();
 }

@@ -52,4 +52,6 @@ export function ShutdownAgent():Promise<void>;
 
 export function StartupStatus():Promise<main.DesktopIntegrationStatus>;
 
+export function StopChat():Promise<void>;
+
 export function StopCurrent():Promise<void>;

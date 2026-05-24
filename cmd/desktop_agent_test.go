@@ -914,8 +914,7 @@ func TestValidateDesktopAgentChatTask(t *testing.T) {
 
 func TestDesktopAgentObservesChatStatus(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
-	agent.busy = true
-	agent.current = &desktopAgentTaskRecord{
+	agent.chat = &desktopAgentTaskRecord{
 		ID:        5,
 		Action:    "chat",
 		State:     "running",
@@ -931,27 +930,26 @@ func TestDesktopAgentObservesChatStatus(t *testing.T) {
 	})
 
 	status := agent.snapshot()
-	if status.Current == nil {
-		t.Fatal("Current is nil, want active chat task")
+	if status.Chat == nil {
+		t.Fatal("Chat is nil, want active chat task")
 	}
-	if status.Current.ChatState != "active" {
-		t.Fatalf("ChatState = %q, want active", status.Current.ChatState)
+	if status.Chat.ChatState != "active" {
+		t.Fatalf("ChatState = %q, want active", status.Chat.ChatState)
 	}
-	if status.Current.ChatMessageCount != 12 {
-		t.Fatalf("ChatMessageCount = %d, want 12", status.Current.ChatMessageCount)
+	if status.Chat.ChatMessageCount != 12 {
+		t.Fatalf("ChatMessageCount = %d, want 12", status.Chat.ChatMessageCount)
 	}
-	if status.Current.ChatDeviceCount != 2 {
-		t.Fatalf("ChatDeviceCount = %d, want 2", status.Current.ChatDeviceCount)
+	if status.Chat.ChatDeviceCount != 2 {
+		t.Fatalf("ChatDeviceCount = %d, want 2", status.Chat.ChatDeviceCount)
 	}
-	if status.Current.ChatLastActivity == "" {
+	if status.Chat.ChatLastActivity == "" {
 		t.Fatal("ChatLastActivity is empty, want timestamp")
 	}
 }
 
 func TestDesktopAgentChatEndedMovesToHistory(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
-	agent.busy = true
-	agent.current = &desktopAgentTaskRecord{
+	agent.chat = &desktopAgentTaskRecord{
 		ID:        6,
 		Action:    "chat",
 		State:     "running",
@@ -968,6 +966,9 @@ func TestDesktopAgentChatEndedMovesToHistory(t *testing.T) {
 	status := agent.snapshot()
 	if status.Current != nil {
 		t.Fatalf("Current = %#v, want ended chat moved to history", status.Current)
+	}
+	if status.Chat != nil {
+		t.Fatalf("Chat = %#v, want ended chat moved to history", status.Chat)
 	}
 	if len(status.History) != 1 {
 		t.Fatalf("History length = %d, want 1", len(status.History))
@@ -989,8 +990,7 @@ func TestDesktopAgentChatEndedMovesToHistory(t *testing.T) {
 
 func TestDesktopAgentChatStoppedMovesToStoppedHistory(t *testing.T) {
 	agent := newDesktopAgent(application.Flags{})
-	agent.busy = true
-	agent.current = &desktopAgentTaskRecord{
+	agent.chat = &desktopAgentTaskRecord{
 		ID:        7,
 		Action:    "chat",
 		State:     "running",
@@ -1007,6 +1007,9 @@ func TestDesktopAgentChatStoppedMovesToStoppedHistory(t *testing.T) {
 	if status.Current != nil {
 		t.Fatalf("Current = %#v, want stopped chat moved to history", status.Current)
 	}
+	if status.Chat != nil {
+		t.Fatalf("Chat = %#v, want stopped chat moved to history", status.Chat)
+	}
 	if len(status.History) != 1 {
 		t.Fatalf("History length = %d, want 1", len(status.History))
 	}
@@ -1016,6 +1019,48 @@ func TestDesktopAgentChatStoppedMovesToStoppedHistory(t *testing.T) {
 	}
 	if record.ChatState != "stopped" || record.ChatMessageCount != 3 {
 		t.Fatalf("History[0] = %#v, want stopped chat details", record)
+	}
+}
+
+func TestDesktopAgentKeepsChatWhileStartingTransfer(t *testing.T) {
+	chatBlock := make(chan struct{})
+	shareBlock := make(chan struct{})
+	chatStarted := make(chan struct{}, 1)
+	shareStarted := make(chan struct{}, 1)
+	agent := newDesktopAgent(application.Flags{})
+	agent.runner = func(task desktopAgentTask) error {
+		switch task.Action {
+		case "chat":
+			chatStarted <- struct{}{}
+			<-chatBlock
+		case "share":
+			shareStarted <- struct{}{}
+			<-shareBlock
+		}
+		return nil
+	}
+	server := httptest.NewServer(agent.routes())
+	defer server.Close()
+	defer close(chatBlock)
+	defer close(shareBlock)
+
+	chat := postAgentTask(t, server.URL, desktopAgentTask{Action: "chat"})
+	if chat.StatusCode != http.StatusAccepted {
+		t.Fatalf("chat status = %d, want %d", chat.StatusCode, http.StatusAccepted)
+	}
+	<-chatStarted
+	share := postAgentTask(t, server.URL, desktopAgentTask{Action: "share", Paths: []string{"a.txt"}})
+	if share.StatusCode != http.StatusAccepted {
+		t.Fatalf("share status = %d, want %d", share.StatusCode, http.StatusAccepted)
+	}
+	<-shareStarted
+
+	status := readAgentStatus(t, share)
+	if status.Chat == nil || status.Chat.Action != "chat" || status.Chat.State != "running" {
+		t.Fatalf("Chat = %#v, want running chat alongside transfer", status.Chat)
+	}
+	if status.Current == nil || status.Current.Action != "share" || status.Current.State != "running" {
+		t.Fatalf("Current = %#v, want running share transfer", status.Current)
 	}
 }
 
@@ -1576,6 +1621,15 @@ func postAgentTask(t *testing.T, baseURL string, task desktopAgentTask) *http.Re
 		response.Body.Close()
 	})
 	return response
+}
+
+func readAgentStatus(t *testing.T, response *http.Response) desktopAgentResponse {
+	t.Helper()
+	var status desktopAgentResponse
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	return status
 }
 
 func getAgentStatus(t *testing.T, baseURL string) desktopAgentResponse {
