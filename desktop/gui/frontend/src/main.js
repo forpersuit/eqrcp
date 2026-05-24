@@ -1,5 +1,8 @@
 import './style.css';
 import './app.css';
+import faviconURL from './assets/images/favicon.png';
+import horizontalLogoURL from './assets/images/logo-horizontal.png';
+import logoMarkURL from './assets/images/logo-mark.png';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
 import {
@@ -203,9 +206,14 @@ function isTrustedChatURL(rawURL, origin) {
 }
 
 function render() {
+    ensureFavicon();
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
+                <div class="app-brand" aria-label="EQT Easy QR Transfer">
+                    <img src="${logoMarkURL}" alt="" aria-hidden="true">
+                    <span>EQT</span>
+                </div>
                 <nav class="mode-switch" aria-label="Transfer modes">
                     <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
                     <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
@@ -700,19 +708,35 @@ function renderAboutPanel() {
     const planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
     return `
         <div class="about-panel">
-            <div class="brand-mark">EQT</div>
-            <p>${escapeHTML(info.description || 'Local QR-code file transfer for desktop and mobile devices.')}</p>
+            <div class="about-hero">
+                <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer">
+                <div class="about-plan">
+                    <span>Plan</span>
+                    <strong>${escapeHTML(plan)}</strong>
+                    <small>${escapeHTML(planDetail)}</small>
+                </div>
+            </div>
             <dl>
                 <dt>Product</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
-                <dt>Plan</dt><dd>${escapeHTML(plan)}<br><span class="about-detail">${escapeHTML(planDetail)}</span></dd>
                 <dt>Agent</dt><dd>${escapeHTML(info.agentUrl || agentEventsURL.replace('/events', ''))}</dd>
                 <dt>Platform</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
                 <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
-                <dt>License</dt><dd>MIT, forked from qrcp</dd>
+                <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqrcp">Project page</button>
         </div>
     `;
+}
+
+function ensureFavicon() {
+    let icon = document.querySelector('link[rel="icon"]');
+    if (!icon) {
+        icon = document.createElement('link');
+        icon.rel = 'icon';
+        document.head.appendChild(icon);
+    }
+    icon.type = 'image/png';
+    icon.href = faviconURL;
 }
 
 function renderRedeemPanel() {
@@ -851,15 +875,8 @@ function bindEvents() {
         button.addEventListener('click', refreshStatus);
     });
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
-    document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
     document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
-    document.querySelector('#close-panel')?.addEventListener('click', closePanel);
-    document.querySelector('.overlay')?.addEventListener('click', (event) => {
-        if (event.target.classList.contains('overlay')) {
-            closePanel();
-        }
-    });
     document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);
     document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
     document.querySelector('#clear-share')?.addEventListener('click', () => {
@@ -875,7 +892,7 @@ function bindEvents() {
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
-    bindSettingsControls();
+    bindPanelEvents();
     document.querySelectorAll('.stop-current-action').forEach((button) => {
         button.addEventListener('click', stopCurrent);
     });
@@ -910,6 +927,17 @@ function bindEvents() {
     if (state.chatQROpen) {
         document.addEventListener('pointerdown', closeChatQROnOutside);
     }
+}
+
+function bindPanelEvents() {
+    document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
+    document.querySelector('#close-panel')?.addEventListener('click', closePanel);
+    document.querySelector('.overlay')?.addEventListener('click', (event) => {
+        if (event.target.classList.contains('overlay')) {
+            closePanel();
+        }
+    });
+    bindSettingsControls();
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
@@ -942,12 +970,33 @@ function openPanel(panel) {
         state.redeemError = '';
     }
     clearMessages();
-    render();
+    updateMessagesSurface();
+    syncPanelSurface();
 }
 
 function closePanel() {
     state.activePanel = '';
-    render();
+    syncPanelSurface();
+}
+
+function syncPanelSurface() {
+    const existing = document.querySelector('.overlay');
+    if (!state.activePanel) {
+        existing?.remove();
+        return;
+    }
+    const next = document.createElement('template');
+    next.innerHTML = renderPanel().trim();
+    const overlay = next.content.firstElementChild;
+    if (!overlay) {
+        return;
+    }
+    if (existing) {
+        existing.replaceWith(overlay);
+    } else {
+        document.querySelector('.shell')?.appendChild(overlay);
+    }
+    bindPanelEvents();
 }
 
 async function chooseFiles() {
@@ -1459,7 +1508,11 @@ async function loadIntegrationStatusData() {
 }
 
 async function loadStatusData() {
-    state.status = await AgentStatus();
+    applyStatusData(await AgentStatus());
+}
+
+function applyStatusData(nextStatus) {
+    state.status = nextStatus;
     reconcileChatQRState(state.status);
 }
 
@@ -1512,8 +1565,14 @@ function connectAgentEvents() {
     agentEvents = new EventSource(agentEventsURL);
     agentEvents.onmessage = (event) => {
         try {
-            state.status = JSON.parse(event.data);
-            reconcileChatQRState(state.status);
+            const previousChatURL = activeChatPageURL();
+            const nextStatus = JSON.parse(event.data);
+            applyStatusData(nextStatus);
+            if (canKeepChatFrame(previousChatURL)) {
+                updateChatQuotaSurface();
+                updateChatQRPulseButton();
+                return;
+            }
             render();
         } catch {
             refreshStatus(false);
@@ -1673,6 +1732,20 @@ function updateChatQuotaSurface() {
         const exhausted = !hasPaidLicense() && chatRemainingMs() <= 0;
         button.disabled = state.busy || exhausted;
         button.textContent = chatStartButtonText();
+    }
+}
+
+function updateMessagesSurface() {
+    const workspace = document.querySelector('.workspace');
+    if (!workspace) {
+        return;
+    }
+    workspace.querySelectorAll(':scope > .notice.success, :scope > .notice.error').forEach((node) => node.remove());
+    if (state.notice) {
+        workspace.insertAdjacentHTML('beforeend', `<div class="notice success">${escapeHTML(state.notice)}</div>`);
+    }
+    if (state.error) {
+        workspace.insertAdjacentHTML('beforeend', `<div class="notice error">${escapeHTML(state.error)}</div>`);
     }
 }
 
@@ -1869,6 +1942,21 @@ function activeChatTask() {
         return null;
     }
     return task;
+}
+
+function activeChatPageURL() {
+    return String(activeChatTask()?.pageUrl || '');
+}
+
+function canKeepChatFrame(previousChatURL) {
+    const currentChatURL = activeChatPageURL();
+    return Boolean(
+        state.mode === 'chat'
+        && previousChatURL
+        && currentChatURL
+        && previousChatURL === currentChatURL
+        && document.querySelector('#chat-iframe')
+    );
 }
 
 function reconcileChatQRState(status) {

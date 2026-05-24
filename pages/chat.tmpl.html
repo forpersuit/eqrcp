@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <title>EQT Chat</title>
     <script>
         if (window.parent !== window) { document.documentElement.classList.add('embedded-chat'); }
@@ -110,6 +111,11 @@
             flex-shrink: 0;
             height: 9px;
             width: 9px;
+        }
+        .chat-logo {
+            flex-shrink: 0;
+            height: 34px;
+            width: 34px;
         }
         .online-dot.offline {
             background: var(--muted);
@@ -1310,6 +1316,7 @@
             <section class="chat-shell">
             <header class="chat-head offline" id="chat-head">
                 <div class="chat-head-title">
+                    <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
                     <div class="online-dot" id="online-dot"></div>
                     <div>
                         <h1>EQT Chat</h1>

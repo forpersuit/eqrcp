@@ -12,8 +12,10 @@ This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp). The
 - Receive pasted text as a `.txt` file.
 - Receive pasted clipboard files and images from supported mobile browsers.
 - Start a local LAN chat session with text and attachments.
+- Manage active chat devices from the desktop host, including forcing a remote device offline.
 - Choose a network interface, bind address, port, URL path, or FQDN.
 - Use HTTPS with a supplied certificate and key.
+- Use the EQT desktop app, tray menu, and Windows Explorer entries with a shared product icon.
 - Generate shell completion for Bash, Zsh, Fish, and PowerShell.
 
 ## Build
@@ -98,6 +100,13 @@ EQRCP_CLI=/path/to/eqrcp wails dev
 The Wails chat view embeds the same browser chat UI used by `eqrcp chat`, so
 desktop GUI and browser behavior stay aligned.
 
+Desktop chat host controls:
+
+- The device list shows online devices and connection status.
+- The desktop host page can force a remote device offline from the expanded device details.
+- Remote/mobile browser pages can inspect devices but cannot force another device offline.
+- Image-copy actions are shown only when the current browser supports image clipboard writes; otherwise users should download or save the attachment.
+
 On Windows, install user-level Explorer context menu entries:
 
 ```powershell
@@ -119,6 +128,9 @@ The default configuration file is:
 ```text
 ~/.local/eqt/config.yml
 ```
+
+On first use, EQT copies an existing legacy config from `$XDG_CONFIG_HOME/eqrcp/config.yml`,
+`$XDG_CONFIG_HOME/eqrcp/config.yaml`, or `$XDG_CONFIG_HOME/eqrcp/config.json` into the new YAML path when possible.
 
 Use a custom config file:
 
@@ -168,6 +180,14 @@ For a one-step build of the current test artifacts, use:
 ```sh
 scripts/build-artifacts.sh
 ```
+
+Regenerate icon assets from the transparent square source:
+
+```sh
+go run ./scripts/icon-assets docs/img/transparent.png
+```
+
+The generator writes Wails app icons, Windows `.ico`, tray/frontend logo marks, and browser-page favicon/logo assets. The horizontal About logo is tracked separately as `logo-design-horizontal.png`.
 
 Planning documents:
 

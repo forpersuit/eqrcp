@@ -63,6 +63,23 @@ Pull requests should include a concise behavior summary, test commands run, and 
 
 Do not commit local config, generated binaries, logs, or received files. Keep network-facing changes scoped and document any new routes in `docs/test-analysis.md` or the desktop integration plan when relevant.
 
+## Project Skill Notes
+
+When changing product branding, logo, or desktop icons, check every visible and build-time surface:
+
+- `docs/img/transparent.png` is the source image for square icons, tray icons, favicons, and app icons.
+- `docs/img/logo-design-horizontal.png` is the source image for horizontal brand surfaces such as About.
+- Regenerate derived assets with `go run ./scripts/icon-assets docs/img/transparent.png`, then copy the horizontal logo to `desktop/gui/frontend/src/assets/images/logo-horizontal.png` when that source changes.
+- `docs/img/logo.png` is a retained product mark source image from the logo set.
+- `desktop/gui/build/appicon.png` feeds Wails app icon generation.
+- `desktop/gui/build/windows/icon.ico` feeds Windows executable and installer icons.
+- `desktop/gui/frontend/src/assets/images/logo-universal.png` feeds the tray icon and visible desktop GUI logo surfaces.
+- `pages/assets/favicon.png` and `pages/assets/eqt-logo-mark.png` feed browser templates through server routes; do not inline large PNGs into templates.
+- `desktop/gui/frontend/src/main.js` and `desktop/gui/frontend/src/app.css` control visible in-app logo usage such as the top bar, About panel, and favicon.
+- `desktop/gui/tray.go` embeds `logo-universal.png`; rebuild after replacing that file.
+
+After branding, desktop integration, chat-device, or Windows-facing changes, use `scripts/deploy-windows-results.sh` as the validation and artifact refresh path. It closes existing EQT desktop processes, runs tests, builds the frontend, builds Windows CLI/launcher/desktop artifacts, and writes fresh results to `E:\developer\results` or `/mnt/e/developer/results`.
+
 
 # 12-rule template
 

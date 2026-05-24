@@ -34,6 +34,22 @@
     margin-bottom: 14px;
 }
 
+.app-brand {
+    align-items: center;
+    color: var(--accent-strong);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 18px;
+    font-weight: 900;
+    gap: 8px;
+}
+
+.app-brand img {
+    display: block;
+    height: 34px;
+    width: 34px;
+}
+
 .top-actions {
     align-items: center;
     display: flex;
@@ -1259,11 +1275,6 @@ dd {
     line-height: 1.35;
 }
 
-.about-detail {
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .redeem-actions {
     display: flex;
     gap: 8px;
@@ -1289,23 +1300,48 @@ dd {
     width: 100%;
 }
 
-.brand-mark {
+.about-hero {
     align-items: center;
-    background: #e8f3ee;
-    border: 1px solid #bed8ce;
-    border-radius: 8px;
-    color: var(--accent-strong);
-    display: inline-flex;
-    font-size: 24px;
-    font-weight: 900;
-    height: 72px;
-    justify-content: center;
-    width: 72px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
 }
 
-.about-panel p {
+.about-logo {
+    display: block;
+    max-height: 84px;
+    max-width: 260px;
+    object-fit: contain;
+    width: 100%;
+}
+
+.about-plan {
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    padding: 12px;
+}
+
+.about-plan span {
     color: var(--muted);
-    margin: 0;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.about-plan strong {
+    color: var(--ink);
+    font-size: 15px;
+}
+
+.about-plan small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
 }
 
 
@@ -1366,6 +1402,23 @@ dd {
 
     .topbar {
         gap: 10px;
+    }
+
+    .app-brand span {
+        display: none;
+    }
+
+    .app-brand img {
+        height: 32px;
+        width: 32px;
+    }
+
+    .about-hero {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .about-logo {
+        max-width: 220px;
     }
 
     .top-actions {

@@ -648,6 +648,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create a server
 	mux := http.NewServeMux()
 	app.mux = mux
+	registerBrandAssets(mux)
 	httpserver := &http.Server{
 		Addr:              host,
 		Handler:           mux,
@@ -972,6 +973,19 @@ func New(cfg *config.Config) (*Server, error) {
 	}()
 	app.instance = httpserver
 	return app, nil
+}
+
+func registerBrandAssets(mux *http.ServeMux) {
+	mux.HandleFunc("/assets/eqt-logo-mark.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.LogoMark)
+	})
+	mux.HandleFunc("/favicon.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.Favicon)
+	})
 }
 
 // openBrowser navigates to a url using the default system browser

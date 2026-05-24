@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <title>eqrcp</title>
     <style>
         :root {
@@ -36,6 +37,12 @@
             color: #0f6b55;
             font-size: 15px;
             font-weight: 700;
+        }
+        .brand-logo {
+            display: block;
+            height: 56px;
+            margin-bottom: 14px;
+            width: 56px;
         }
 
         .status-mark {
@@ -116,6 +123,7 @@
 </head>
 <body>
     <main>
+        <img class="brand-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
         <div class="status"><span class="status-mark">OK</span> Transfer complete</div>
         <h1>Upload complete</h1>
         {{if eq .Count 1}}

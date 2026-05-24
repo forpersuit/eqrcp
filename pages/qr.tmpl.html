@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <title>eqrcp</title>
     <style>
         :root {
@@ -35,8 +36,19 @@
             padding: 36px 20px 44px;
         }
         .page-header {
+            align-items: center;
+            display: grid;
+            gap: 12px;
+            grid-template-columns: 52px minmax(0, 1fr);
             max-width: 760px;
             margin-bottom: 22px;
+        }
+        .brand-logo {
+            height: 52px;
+            width: 52px;
+        }
+        .page-header-copy {
+            min-width: 0;
         }
         h1 {
             font-size: clamp(28px, 4vw, 42px);
@@ -307,8 +319,11 @@
     {{end}}
     <main>
         <header class="page-header">
-            <h1 id="transfer-title">eqrcp transfer ready</h1>
-            <p id="transfer-target">Scan the QR code or open the address on another device.</p>
+            <img class="brand-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
+            <div class="page-header-copy">
+                <h1 id="transfer-title">eqrcp transfer ready</h1>
+                <p id="transfer-target">Scan the QR code or open the address on another device.</p>
+            </div>
         </header>
         <div class="layout">
             <section class="card status-card" aria-live="polite">

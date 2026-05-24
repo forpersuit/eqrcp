@@ -155,6 +155,25 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 	}
 }
 
+func TestBrowserPagesUseBrandAssets(t *testing.T) {
+	for name, html := range map[string]string{
+		"qr":     pages.QR,
+		"chat":   pages.Chat,
+		"upload": pages.Upload,
+		"done":   pages.Done,
+	} {
+		if !strings.Contains(html, `href="/favicon.png"`) {
+			t.Fatalf("%s page should reference shared favicon route", name)
+		}
+		if !strings.Contains(html, `/assets/eqt-logo-mark.png`) {
+			t.Fatalf("%s page should reference shared logo route", name)
+		}
+	}
+	if strings.Contains(pages.Upload, `id="Layer_1"`) {
+		t.Fatal("upload page should not keep the old inline SVG logo")
+	}
+}
+
 func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {

@@ -21,3 +21,13 @@ var Upload string
 //
 //go:embed done.tmpl.html
 var Done string
+
+// LogoMark is the browser-page product mark.
+//
+//go:embed assets/eqt-logo-mark.png
+var LogoMark []byte
+
+// Favicon is the browser-page favicon.
+//
+//go:embed assets/favicon.png
+var Favicon []byte
