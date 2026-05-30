@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	softwareName   = "EQT Easy QR Transfer V1.0"
+	softwareName   = "EQT Easy QR Transfer 局域网文件传输系统 V1.0"
 	linesPerPage   = 50
 	targetLines    = linesPerPage * 30 // 1500 lines for 30 pages
 	outputPath     = "软著申请材料/EQT-source-code-V1.0.pdf"

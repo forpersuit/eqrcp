@@ -266,6 +266,27 @@ func processInline(text string) string {
 		text = text[:start] + "<code>" + inner + "</code>" + text[end+1:]
 	}
 
+	// Images ![text](url)
+	for strings.Contains(text, "![") && strings.Contains(text, "](") {
+		startBang := strings.Index(text, "![")
+		if startBang < 0 {
+			break
+		}
+		endParen := strings.Index(text[startBang:], "](")
+		if endParen < 0 {
+			break
+		}
+		endParen += startBang
+		closeParen := strings.Index(text[endParen+2:], ")")
+		if closeParen < 0 {
+			break
+		}
+		closeParen += endParen + 2
+		altText := text[startBang+2 : endParen]
+		imgURL := text[endParen+2 : closeParen]
+		text = text[:startBang] + `<img src="` + imgURL + `" alt="` + altText + `" style="display:block; max-width:85%; margin:15px auto; border:1px solid #ccc; box-shadow:0 2px 6px rgba(0,0,0,0.15);"><p style="text-align:center; font-size:10pt; color:#666; margin-bottom:15px; font-weight:bold;">` + altText + "</p>" + text[closeParen+1:]
+	}
+
 	// Links [text](url)
 	for strings.Contains(text, "](") {
 		endParen := strings.Index(text, "](")
