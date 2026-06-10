@@ -26,11 +26,8 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 	if err := qr.RenderString(srv.ChatJoinURL(), cfg.Reversed); err != nil {
 		return err
 	}
-	if app.Flags.Browser {
-		if err := srv.DisplayChat(); err != nil {
-			return err
-		}
-	} else {
+	// Default to displaying chat in browser, fallback to command line mode if browser opening fails (e.g. headless environment)
+	if err := srv.DisplayChat(); err != nil {
 		if err := srv.Chat(); err != nil {
 			return err
 		}
