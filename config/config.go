@@ -107,6 +107,23 @@ func New(app application.App) (Config, error) {
 		cfg.Reversed = true
 	}
 
+	// Validate if configured interface exists on this host (only if not overridden by command line flag)
+	if app.Flags.Interface == "" && cfg.Interface != "" && cfg.Interface != "any" {
+		ifaces, err := util.Interfaces(true)
+		if err == nil {
+			exists := false
+			for name := range ifaces {
+				if name == cfg.Interface {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				cfg.Interface = ""
+			}
+		}
+	}
+
 	// Discover interface if it's not been set yet
 	if !interactive {
 		if cfg.Interface == "" {
