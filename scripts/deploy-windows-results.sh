@@ -58,7 +58,9 @@ resolve_results_dir() {
 }
 
 close_eqrcp_processes() {
-  if command -v taskkill.exe >/dev/null 2>&1; then
+  if [[ -f "/mnt/c/Windows/System32/taskkill.exe" ]]; then
+    /mnt/c/Windows/System32/taskkill.exe /F /IM "eqrcp*" >/dev/null 2>&1 || true
+  elif command -v taskkill.exe >/dev/null 2>&1; then
     taskkill.exe /F /IM "eqrcp*" >/dev/null 2>&1 || true
   elif command -v taskkill >/dev/null 2>&1; then
     taskkill /F /IM "eqrcp*" >/dev/null 2>&1 || true
@@ -107,9 +109,11 @@ if [[ "$build_gui" -eq 1 ]]; then
     echo "Building Windows Wails GUI..."
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
     cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$results_dir/eqrcp-desktop.exe"
-  else
-    echo "Skipping Windows Wails GUI build: wails CLI not found." >&2
   fi
 fi
+
+# Close any lingering test agent processes that may have spawned during tests
+echo "Ensuring all lingering processes are closed..."
+close_eqrcp_processes
 
 echo "Acceptance artifacts written to: $results_dir"
