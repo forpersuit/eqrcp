@@ -126,8 +126,18 @@ func New(app application.App) (Config, error) {
 
 	// Discover interface if it's not been set yet
 	if !interactive {
-		// Only run discovery and confirmation if not overridden by command line flag
-		if app.Flags.Interface == "" {
+		// Detect if we are running a desktop agent/status subcommand to avoid blockages
+		isDesktopCmd := false
+		for _, arg := range os.Args {
+			if arg == "desktop" {
+				isDesktopCmd = true
+				break
+			}
+		}
+
+		// Only run discovery and confirmation if not overridden by command line flag,
+		// and NOT running a desktop-related control command.
+		if app.Flags.Interface == "" && !isDesktopCmd {
 			cfg.Interface, err = chooseInterface(app.Flags)
 			if err != nil {
 				return Config{}, err
