@@ -100,12 +100,15 @@ func chooseInterface(flags application.Flags) (string, error) {
 			defer keyboard.Close()
 
 			fmt.Printf("EQT 默认使用智能适配网卡: %s (%s)\n", defaultIface, sorted[0].IP)
-			fmt.Print("按 [空格键] 切换网卡，或等待 3 秒自动启动...")
+			fmt.Print("按 [空格] 切换网卡，按 [回车] 立即启动，或等待 3 秒 ")
 
 			keysEvents, err := keyboard.GetKeys(10)
 			if err == nil {
 				timer := time.NewTimer(3 * time.Second)
 				defer timer.Stop()
+
+				ticker := time.NewTicker(1 * time.Second)
+				defer ticker.Stop()
 
 				hasSpace := false
 			loop:
@@ -113,6 +116,8 @@ func chooseInterface(flags application.Flags) (string, error) {
 					select {
 					case <-timer.C:
 						break loop
+					case <-ticker.C:
+						fmt.Print(".")
 					case ev := <-keysEvents:
 						if ev.Err != nil {
 							break loop
