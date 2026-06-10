@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"eqrcp/application"
 	"eqrcp/util"
-	"github.com/eiannone/keyboard"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/viper"
 )
@@ -95,58 +93,14 @@ func chooseInterface(flags application.Flags) (string, error) {
 	}
 
 	if !interactive {
-		// Non-interactive path, check if TTY and keyboard is available
-		if err := keyboard.Open(); err == nil {
-			defer keyboard.Close()
-
-			fmt.Printf("EQT 默认使用智能适配网卡: %s (%s)\n", defaultIface, sorted[0].IP)
-			fmt.Print("按 [空格] 切换网卡，按 [回车] 立即启动，或等待 3 秒 ")
-
-			keysEvents, err := keyboard.GetKeys(10)
-			if err == nil {
-				timer := time.NewTimer(3 * time.Second)
-				defer timer.Stop()
-
-				ticker := time.NewTicker(1 * time.Second)
-				defer ticker.Stop()
-
-				hasSpace := false
-			loop:
-				for {
-					select {
-					case <-timer.C:
-						break loop
-					case <-ticker.C:
-						fmt.Print(".")
-					case ev := <-keysEvents:
-						if ev.Err != nil {
-							break loop
-						}
-						if ev.Key == keyboard.KeySpace || ev.Rune == ' ' {
-							hasSpace = true
-							break loop
-						}
-						if ev.Key == keyboard.KeyEnter {
-							break loop
-						}
-						if ev.Key == keyboard.KeyCtrlC {
-							return "", errors.New("aborted by user")
-						}
-					}
-				}
-				fmt.Println()
-				if hasSpace {
-					goto selectMenu
-				}
-			}
-			return defaultIface, nil
+		// Non-interactive path: print the selected interface and run immediately with 0 delay.
+		if len(sorted) > 1 {
+			fmt.Printf("EQT 绑定网卡: %s (%s) [多网卡已智能优选]\n", defaultIface, sorted[0].IP)
 		} else {
-			// Non-interactive terminal (e.g. background daemon)
-			return defaultIface, nil
+			fmt.Printf("EQT 绑定网卡: %s (%s)\n", defaultIface, sorted[0].IP)
 		}
+		return defaultIface, nil
 	}
-
-selectMenu:
 	// Map for pretty printing
 	m := make(map[string]string)
 	var items []string
