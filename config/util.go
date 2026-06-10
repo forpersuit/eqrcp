@@ -114,8 +114,7 @@ func chooseInterface(flags application.Flags) (string, error) {
 				for {
 					select {
 					case <-timer.C:
-						// Timeout expired, inject Virtual Enter key to unblock reader
-						wakeUpReaderOnWindows()
+						break loop
 					case <-ticker.C:
 						fmt.Print(".")
 					case ev := <-keysEvents:
@@ -130,20 +129,20 @@ func chooseInterface(flags application.Flags) (string, error) {
 							break loop
 						}
 						if ev.Key == keyboard.KeyCtrlC {
-							keyboard.Close()
+							SafeCloseKeyboard()
 							return "", errors.New("aborted by user")
 						}
 					}
 				}
 				fmt.Println()
-				keyboard.Close()
+				SafeCloseKeyboard()
 				time.Sleep(100 * time.Millisecond) // Settle window for Windows console driver
 
 				if hasSpace {
 					goto selectMenu
 				}
 			} else {
-				keyboard.Close()
+				SafeCloseKeyboard()
 			}
 			return defaultIface, nil
 		} else {

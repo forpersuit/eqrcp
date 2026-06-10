@@ -3,7 +3,10 @@ package config
 
 import (
 	"syscall"
+	"time"
 	"unsafe"
+
+	"github.com/eiannone/keyboard"
 )
 
 func wakeUpReaderOnWindows() {
@@ -46,4 +49,35 @@ func wakeUpReaderOnWindows() {
 		1,
 		uintptr(unsafe.Pointer(&written)),
 	)
+}
+
+func flushConsoleInputBuffer() {
+	kernel32 := syscall.NewLazyDLL("kernel32.dll")
+	procFlushConsoleInputBuffer := kernel32.NewProc("FlushConsoleInputBuffer")
+	hStdin, err := syscall.GetStdHandle(syscall.STD_INPUT_HANDLE)
+	if err == nil {
+		procFlushConsoleInputBuffer.Call(uintptr(hStdin))
+	}
+}
+
+func SafeCloseKeyboard() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				wakeUpReaderOnWindows()
+			}
+		}
+	}()
+
+	keyboard.Close()
+	close(done)
+
+	// Flush any leftover inputs (like the injected Enter key or extra keystrokes)
+	flushConsoleInputBuffer()
 }
