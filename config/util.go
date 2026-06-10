@@ -17,9 +17,13 @@ func chooseInterface(flags application.Flags) (string, error) {
 	if len(interfaces) == 0 {
 		return "", errors.New("no interfaces found")
 	}
-	if len(interfaces) == 1 && !interactive {
+	if !interactive {
 		for name := range interfaces {
-			fmt.Printf("only one interface found: %s, using this one\n", name)
+			if len(interfaces) > 1 {
+				fmt.Printf("multiple interfaces found, non-interactive mode using: %s\n", name)
+			} else {
+				fmt.Printf("only one interface found: %s, using this one\n", name)
+			}
 			return name, nil
 		}
 	}
