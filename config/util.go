@@ -11,11 +11,17 @@ import (
 	"eqrcp/util"
 	"github.com/eiannone/keyboard"
 	"github.com/manifoldco/promptui"
+	"github.com/spf13/viper"
 )
 
 func scoreInterface(name, ip string) int {
 	score := 0
 	lowerName := strings.ToLower(name)
+
+	// 0. Prefer the saved interface configuration if it matches
+	if viper.GetString("interface") == name {
+		score += 1000
+	}
 
 	// 1. Name matches (wireless/physical priority)
 	if strings.Contains(lowerName, "wlan") || strings.Contains(lowerName, "wi-fi") || strings.Contains(lowerName, "wireless") || strings.Contains(lowerName, "无线") {
