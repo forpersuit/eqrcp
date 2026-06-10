@@ -98,8 +98,6 @@ func chooseInterface(flags application.Flags) (string, error) {
 	if !interactive {
 		// Non-interactive path, check if TTY and keyboard is available
 		if err := keyboard.Open(); err == nil {
-			defer keyboard.Close()
-
 			fmt.Printf("EQT 默认使用智能适配网卡: %s (%s)\n", defaultIface, sorted[0].IP)
 			fmt.Print("按 [空格] 切换网卡，按 [回车] 立即启动，或等待 3 秒 ")
 
@@ -132,14 +130,20 @@ func chooseInterface(flags application.Flags) (string, error) {
 							break loop
 						}
 						if ev.Key == keyboard.KeyCtrlC {
+							keyboard.Close()
 							return "", errors.New("aborted by user")
 						}
 					}
 				}
 				fmt.Println()
+				keyboard.Close()
+				time.Sleep(100 * time.Millisecond) // Settle window for Windows console driver
+
 				if hasSpace {
 					goto selectMenu
 				}
+			} else {
+				keyboard.Close()
 			}
 			return defaultIface, nil
 		} else {
