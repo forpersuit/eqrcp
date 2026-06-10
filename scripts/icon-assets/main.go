@@ -20,14 +20,21 @@ func main() {
 	if len(os.Args) > 1 {
 		source = os.Args[1]
 	}
+	horizontalSource := "docs/img/logo-design-horizontal.png"
+	if len(os.Args) > 2 {
+		horizontalSource = os.Args[2]
+	}
 	img := readPNG(source)
 	writePNG("desktop/gui/build/appicon.png", resize(img, 1024))
-	writePNG("desktop/gui/frontend/src/assets/images/logo-universal.png", resize(img, 256))
+	writePNG("desktop/gui/frontend/src/assets/images/logo-universal.png", resize(img, 32))
 	writePNG("desktop/gui/frontend/src/assets/images/logo-mark.png", resize(img, 96))
 	writePNG("desktop/gui/frontend/src/assets/images/favicon.png", resize(img, 32))
 	writePNG("pages/assets/eqt-logo-mark.png", resize(img, 96))
 	writePNG("pages/assets/favicon.png", resize(img, 32))
 	writeICO("desktop/gui/build/windows/icon.ico", img, []int{256, 128, 64, 48, 32, 16})
+
+	horizontal := readPNG(horizontalSource)
+	writePNG("desktop/gui/frontend/src/assets/images/logo-horizontal.png", resizeToWidth(cropBrandLockup(horizontal), 512))
 }
 
 func readPNG(path string) image.Image {
@@ -51,6 +58,53 @@ func resize(src image.Image, size int) image.Image {
 			sx := bounds.Min.X + x*bounds.Dx()/size
 			sy := bounds.Min.Y + y*bounds.Dy()/size
 			dst.Set(x, y, src.At(sx, sy))
+		}
+	}
+	return dst
+}
+
+func resizeToWidth(src image.Image, width int) image.Image {
+	bounds := src.Bounds()
+	if width <= 0 || bounds.Dx() <= 0 || bounds.Dy() <= 0 {
+		return src
+	}
+	height := bounds.Dy() * width / bounds.Dx()
+	if height < 1 {
+		height = 1
+	}
+	return resizeTo(src, width, height)
+}
+
+func resizeTo(src image.Image, width, height int) image.Image {
+	dst := image.NewNRGBA(image.Rect(0, 0, width, height))
+	bounds := src.Bounds()
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			sx := bounds.Min.X + x*bounds.Dx()/width
+			sy := bounds.Min.Y + y*bounds.Dy()/height
+			dst.Set(x, y, src.At(sx, sy))
+		}
+	}
+	return dst
+}
+
+func cropBrandLockup(src image.Image) image.Image {
+	bounds := src.Bounds()
+	// The horizontal design source has presentation padding; the About UI needs the brand lockup.
+	return crop(src, image.Rect(
+		bounds.Min.X+bounds.Dx()*8/100,
+		bounds.Min.Y+bounds.Dy()*30/100,
+		bounds.Min.X+bounds.Dx()*92/100,
+		bounds.Min.Y+bounds.Dy()*72/100,
+	))
+}
+
+func crop(src image.Image, rect image.Rectangle) image.Image {
+	rect = rect.Intersect(src.Bounds())
+	dst := image.NewNRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
+	for y := 0; y < rect.Dy(); y++ {
+		for x := 0; x < rect.Dx(); x++ {
+			dst.Set(x, y, src.At(rect.Min.X+x, rect.Min.Y+y))
 		}
 	}
 	return dst

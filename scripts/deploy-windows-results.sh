@@ -58,12 +58,10 @@ resolve_results_dir() {
 }
 
 close_eqrcp_processes() {
-  if command -v powershell.exe >/dev/null 2>&1; then
-    powershell.exe -NoProfile -Command \
-      "Get-Process -Name eqrcp,eqrcp-launcher,eqrcp-desktop -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1 || true
-  elif command -v powershell >/dev/null 2>&1; then
-    powershell -NoProfile -Command \
-      "Get-Process -Name eqrcp,eqrcp-launcher,eqrcp-desktop -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1 || true
+  if command -v taskkill.exe >/dev/null 2>&1; then
+    taskkill.exe /F /IM "eqrcp*" >/dev/null 2>&1 || true
+  elif command -v taskkill >/dev/null 2>&1; then
+    taskkill /F /IM "eqrcp*" >/dev/null 2>&1 || true
   fi
 
   pkill -f 'eqrcp(\.exe)?$' >/dev/null 2>&1 || true
