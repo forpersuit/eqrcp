@@ -1085,8 +1085,8 @@ func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 		return nil
 	}
 	desktopAgentReadyWaiter = func(timeout time.Duration) error {
-		if timeout != 3*time.Second {
-			t.Fatalf("timeout = %s, want 3s", timeout)
+		if timeout != 10*time.Second {
+			t.Fatalf("timeout = %s, want 10s", timeout)
 		}
 		return nil
 	}

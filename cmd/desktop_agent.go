@@ -21,6 +21,7 @@ import (
 	"eqrcp/application"
 	"eqrcp/body"
 	"eqrcp/config"
+	"eqrcp/logger"
 	"eqrcp/server"
 	"eqrcp/version"
 	"github.com/spf13/cobra"
@@ -1444,29 +1445,52 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 	if background {
 		return runDesktopAgentBackground(command)
 	}
+
+	log := logger.New(app.Flags.Quiet)
+	log.Infof("Starting desktop agent...")
+
+	log.Infof("Creating new desktop agent instance")
 	agent := newDesktopAgent(app.Flags)
+
+	log.Infof("Loading desktop agent history from path: %s", agent.historyPath)
 	if err := agent.loadHistory(); err != nil {
+		log.Errorf("Failed to load desktop agent history: %v", err)
 		agent.lastError = fmt.Sprintf("unable to load desktop agent history: %v", err)
+	} else {
+		log.Infof("Successfully loaded %d history records", len(agent.history))
 	}
+
+	log.Infof("Setting up HTTP server on address: %s", desktopAgentAddress)
 	server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
 	agent.shutdown = func() {
+		log.Infof("Shutting down HTTP server")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		_ = server.Shutdown(ctx)
 	}
+
+	log.Infof("Desktop agent listening on http://%s", desktopAgentAddress)
 	command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
+
+	log.Infof("HTTP server ListenAndServe starts")
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Errorf("HTTP server ListenAndServe exited with error: %v", err)
 		if desktopAgentAddressInUse(err) {
+			log.Errorf("Address %s is in use, checking if another instance is already running", desktopAgentAddress)
 			response, healthErr := http.Get(desktopAgentBaseURL + "/health")
 			if healthErr == nil {
 				defer response.Body.Close()
 				if response.StatusCode == http.StatusNoContent {
+					log.Infof("Another running desktop agent instance detected at %s", desktopAgentBaseURL)
 					return fmt.Errorf("desktop agent is already running at %s; use `eqrcp desktop agent-open`, `eqrcp desktop agent-status`, or `eqrcp desktop status`", desktopAgentBaseURL)
 				}
+			} else {
+				log.Errorf("Failed to fetch health check from already-in-use address: %v", healthErr)
 			}
 		}
 		return err
 	}
+	log.Infof("HTTP server ListenAndServe exited cleanly")
 	return nil
 }
 
@@ -1497,7 +1521,20 @@ func runDesktopAgentBackground(command *cobra.Command) error {
 	if err := desktopAgentBackgroundStarter(exe, logFile); err != nil {
 		return err
 	}
-	if err := desktopAgentReadyWaiter(3 * time.Second); err != nil {
+	if err := desktopAgentReadyWaiter(10 * time.Second); err != nil {
+		if detail := readDesktopAgentLogPortConflict(logPath); detail != "" {
+			return fmt.Errorf("desktop agent background start failed: port %s is already in use by another process that is not responding; stop that process and try again; log: %s", desktopAgentAddress, logPath)
+		}
+		var logTail string
+		if data, tailErr := os.ReadFile(logPath); tailErr == nil {
+			logTail = string(data)
+			if len(logTail) > 1000 {
+				logTail = logTail[len(logTail)-1000:]
+			}
+		}
+		if logTail != "" {
+			return fmt.Errorf("desktop agent background start failed: %w;\nLog path: %s\nLog content:\n%s", err, logPath, logTail)
+		}
 		return fmt.Errorf("desktop agent background start failed: %w; log: %s", err, logPath)
 	}
 	fmt.Fprintf(command.OutOrStdout(), "Desktop agent started in background.\nStatus: %s/\nLog: %s\n", desktopAgentBaseURL, logPath)
@@ -1558,6 +1595,18 @@ func waitForDesktopAgentReady(timeout time.Duration) error {
 func desktopAgentAddressInUse(err error) bool {
 	message := err.Error()
 	return strings.Contains(message, "address already in use") || strings.Contains(message, "Only one usage of each socket address")
+}
+
+func readDesktopAgentLogPortConflict(logPath string) string {
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	content := string(data)
+	if strings.Contains(content, "address already in use") || strings.Contains(content, "Only one usage of each socket address") {
+		return content
+	}
+	return ""
 }
 
 var desktopAgentHistoryClearCmd = &cobra.Command{
