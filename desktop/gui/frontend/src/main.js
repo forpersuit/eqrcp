@@ -1562,7 +1562,11 @@ function connectAgentEvents() {
     if (!window.EventSource || agentEvents) {
         return;
     }
-    agentEvents = new EventSource(agentEventsURL);
+    let url = agentEventsURL;
+    if (state.appInfo && state.appInfo.agentUrl) {
+        url = state.appInfo.agentUrl + '/events';
+    }
+    agentEvents = new EventSource(url);
     agentEvents.onmessage = (event) => {
         try {
             const previousChatURL = activeChatPageURL();

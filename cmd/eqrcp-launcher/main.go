@@ -14,8 +14,15 @@ import (
 	"time"
 )
 
-var desktopAgentURL = "http://127.0.0.1:48176"
+var desktopAgentURL = getDesktopAgentURL()
 var agentHTTPClient = &http.Client{Timeout: time.Second}
+
+func getDesktopAgentURL() string {
+	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+		return "http://127.0.0.1:" + port
+	}
+	return "http://127.0.0.1:48176"
+}
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`

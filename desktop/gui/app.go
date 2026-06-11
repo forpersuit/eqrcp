@@ -19,7 +19,14 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const agentBaseURL = "http://127.0.0.1:48176"
+var agentBaseURL = getAgentBaseURL()
+
+func getAgentBaseURL() string {
+	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+		return "http://127.0.0.1:" + port
+	}
+	return "http://127.0.0.1:48176"
+}
 const chatSaveRetentionDays = 7
 
 type App struct {

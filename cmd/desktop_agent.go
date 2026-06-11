@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const desktopAgentAddress = "127.0.0.1:48176"
+var desktopAgentAddress = getDesktopAgentAddress()
 const desktopAgentMaxQueue = 16
 const desktopAgentMaxHistory = 20
 const desktopAgentHistoryFilename = "desktop-agent-history.json"
@@ -37,6 +37,13 @@ var desktopAgentBaseURL = "http://" + desktopAgentAddress
 var desktopAgentExecutable = os.Executable
 var desktopAgentBackgroundStarter = startDesktopAgentBackgroundProcess
 var desktopAgentReadyWaiter = waitForDesktopAgentReady
+
+func getDesktopAgentAddress() string {
+	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+		return "127.0.0.1:" + port
+	}
+	return "127.0.0.1:48176"
+}
 
 type desktopAgentTask struct {
 	Action string   `json:"action"`
