@@ -43,6 +43,7 @@ func (l *FileLogger) log(level string, message string) {
 	fmt.Print(line)
 	if l.file != nil {
 		_, _ = l.file.WriteString(line)
+		_ = l.file.Sync()
 	}
 }
 
