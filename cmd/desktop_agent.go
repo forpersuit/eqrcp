@@ -1467,10 +1467,57 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 		log.Infof("Successfully loaded %d history records", len(agent.history))
 	}
 
+	basePort := 48176
+	if portStr := os.Getenv("EQRCP_AGENT_PORT"); portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			basePort = p
+		}
+	}
+
+	var listener net.Listener
+	actualPort := basePort
+
+	for i := 0; i < 20; i++ {
+		currPort := basePort + i
+		addr := fmt.Sprintf("127.0.0.1:%d", currPort)
+		healthURL := fmt.Sprintf("http://%s/health", addr)
+		response, healthErr := http.Get(healthURL)
+		if healthErr == nil {
+			response.Body.Close()
+			if response.StatusCode == http.StatusNoContent {
+				log.Infof("Another running desktop agent instance detected at %s", addr)
+				return fmt.Errorf("desktop agent is already running at http://%s; use `eqrcp desktop agent-open`, `eqrcp desktop agent-status`, or `eqrcp desktop status`", addr)
+			}
+		}
+
+		l, listenErr := net.Listen("tcp", addr)
+		if listenErr == nil {
+			listener = l
+			actualPort = currPort
+			break
+		}
+		log.Errorf("Port %d is in use or reserved: %v, trying next...", currPort, listenErr)
+	}
+
+	if listener == nil {
+		return fmt.Errorf("unable to find any available port for desktop agent starting from %d", basePort)
+	}
+
+	desktopAgentAddress = fmt.Sprintf("127.0.0.1:%d", actualPort)
+	desktopAgentBaseURL = "http://" + desktopAgentAddress
+
+	portFilePath := desktopAgentPortFilePath()
+	if err := os.WriteFile(portFilePath, []byte(strconv.Itoa(actualPort)), 0644); err != nil {
+		log.Errorf("Failed to write runtime agent.port file: %v", err)
+	} else {
+		log.Infof("Successfully recorded active port %d to runtime file: %s", actualPort, portFilePath)
+	}
+
 	log.Infof("Setting up HTTP server on address: %s", desktopAgentAddress)
 	server := &http.Server{Addr: desktopAgentAddress, Handler: agent.routes()}
 	agent.shutdown = func() {
 		log.Infof("Shutting down HTTP server")
+		_ = os.Remove(portFilePath)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		_ = server.Shutdown(ctx)
@@ -1479,25 +1526,12 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 	log.Infof("Desktop agent listening on http://%s", desktopAgentAddress)
 	command.Printf("Desktop agent listening on http://%s\n", desktopAgentAddress)
 
-	log.Infof("HTTP server ListenAndServe starts")
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Errorf("HTTP server ListenAndServe exited with error: %v", err)
-		if desktopAgentAddressInUse(err) {
-			log.Errorf("Address %s is in use, checking if another instance is already running", desktopAgentAddress)
-			response, healthErr := http.Get(desktopAgentBaseURL + "/health")
-			if healthErr == nil {
-				defer response.Body.Close()
-				if response.StatusCode == http.StatusNoContent {
-					log.Infof("Another running desktop agent instance detected at %s", desktopAgentBaseURL)
-					return fmt.Errorf("desktop agent is already running at %s; use `eqrcp desktop agent-open`, `eqrcp desktop agent-status`, or `eqrcp desktop status`", desktopAgentBaseURL)
-				}
-			} else {
-				log.Errorf("Failed to fetch health check from already-in-use address: %v", healthErr)
-			}
-		}
-		return err
+	log.Infof("HTTP server Serve starts")
+	if serveErr := server.Serve(listener); serveErr != nil && serveErr != http.ErrServerClosed {
+		log.Errorf("HTTP server Serve exited with error: %v", serveErr)
+		return serveErr
 	}
-	log.Infof("HTTP server ListenAndServe exited cleanly")
+	log.Infof("HTTP server exited cleanly")
 	return nil
 }
 
@@ -1581,7 +1615,15 @@ func startDesktopAgentBackgroundProcess(exe string, logFile *os.File) error {
 func waitForDesktopAgentReady(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var lastErr error
+	portFilePath := desktopAgentPortFilePath()
 	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(portFilePath); err == nil {
+			if portVal := strings.TrimSpace(string(data)); portVal != "" {
+				desktopAgentAddress = "127.0.0.1:" + portVal
+				desktopAgentBaseURL = "http://" + desktopAgentAddress
+			}
+		}
+
 		response, err := http.Get(desktopAgentBaseURL + "/health")
 		if err == nil {
 			response.Body.Close()
@@ -1598,6 +1640,14 @@ func waitForDesktopAgentReady(timeout time.Duration) error {
 		lastErr = fmt.Errorf("desktop agent did not become ready")
 	}
 	return lastErr
+}
+
+func desktopAgentPortFilePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "eqrcp", "agent.port")
 }
 
 func desktopAgentAddressInUse(err error) bool {

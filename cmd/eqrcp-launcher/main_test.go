@@ -180,7 +180,12 @@ func withDesktopAgentURL(t *testing.T, url string) {
 	t.Helper()
 	old := desktopAgentURL
 	desktopAgentURL = url
+	oldPortPath := desktopAgentPortFilePath
+	desktopAgentPortFilePath = func() string {
+		return filepath.Join(t.TempDir(), "nonexistent.port")
+	}
 	t.Cleanup(func() {
 		desktopAgentURL = old
+		desktopAgentPortFilePath = oldPortPath
 	})
 }

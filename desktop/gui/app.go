@@ -627,6 +627,12 @@ func waitForAgentExit(a *App) {
 }
 
 func (a *App) health() error {
+	portFilePath := desktopAgentPortFilePath()
+	if data, err := os.ReadFile(portFilePath); err == nil {
+		if portVal := strings.TrimSpace(string(data)); portVal != "" {
+			agentBaseURL = "http://127.0.0.1:" + portVal
+		}
+	}
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+"/health", nil)
 	if err != nil {
 		return err
@@ -940,4 +946,12 @@ func uniquePath(dir string, name string) (string, error) {
 			return "", err
 		}
 	}
+}
+
+func desktopAgentPortFilePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "eqrcp", "agent.port")
 }

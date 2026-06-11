@@ -97,6 +97,9 @@ func agentTaskFromArgs(args []string) (desktopAgentTask, bool) {
 }
 
 func submitTaskToAgent(eqrcp string, task desktopAgentTask, logFile *os.File) error {
+	if actualURL := readPortFileAndGetURL(); actualURL != "" {
+		desktopAgentURL = actualURL
+	}
 	if err := postAgentTask(task); err == nil {
 		return nil
 	} else {
@@ -148,7 +151,13 @@ func startAgent(eqrcp string, logFile *os.File) error {
 func waitForAgent(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var lastErr error
+	portFilePath := desktopAgentPortFilePath()
 	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(portFilePath); err == nil {
+			if portVal := strings.TrimSpace(string(data)); portVal != "" {
+				desktopAgentURL = "http://127.0.0.1:" + portVal
+			}
+		}
 		response, err := agentHTTPClient.Get(desktopAgentURL + "/health")
 		if err == nil {
 			response.Body.Close()
@@ -259,4 +268,24 @@ func readTail(path string, limit int64) string {
 		return ""
 	}
 	return string(data)
+}
+
+var desktopAgentPortFilePath = defaultDesktopAgentPortFilePath
+
+func defaultDesktopAgentPortFilePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "eqrcp", "agent.port")
+}
+
+func readPortFileAndGetURL() string {
+	portFilePath := desktopAgentPortFilePath()
+	if data, err := os.ReadFile(portFilePath); err == nil {
+		if portVal := strings.TrimSpace(string(data)); portVal != "" {
+			return "http://127.0.0.1:" + portVal
+		}
+	}
+	return ""
 }
