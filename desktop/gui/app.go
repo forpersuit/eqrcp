@@ -211,20 +211,36 @@ func (a *App) Receive(output string) (AgentStatus, error) {
 }
 
 func (a *App) Chat() (AgentStatus, error) {
+	wailsruntime.LogInfo(a.ctx, "[GUI] Chat() called. Submitting chat task to agent.")
 	status, err := a.postTask(AgentTask{Action: "chat"})
 	if err == nil {
+		wailsruntime.LogInfo(a.ctx, "[GUI] Chat task started successfully.")
 		return status, nil
 	}
+	wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Chat task failed initially: %v", err))
 	if !isRecoverableChatAgentError(err) {
+		wailsruntime.LogError(a.ctx, "[GUI] Error is not recoverable. Aborting chat start.")
 		return AgentStatus{}, err
 	}
+	wailsruntime.LogInfo(a.ctx, "[GUI] Recoverable chat agent error detected. Attempting agent self-healing...")
 	_ = a.shutdownAgent()
+	wailsruntime.LogInfo(a.ctx, "[GUI] Waiting for old agent process to exit...")
 	waitForAgentExit(a)
+	wailsruntime.LogInfo(a.ctx, "[GUI] Restarting agent...")
 	if ensureErr := a.ensureAgent(); ensureErr != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Restarting agent failed during self-healing: %v", ensureErr))
 		return AgentStatus{}, ensureErr
 	}
-	return a.postTask(AgentTask{Action: "chat"})
+	wailsruntime.LogInfo(a.ctx, "[GUI] Resubmitting chat task to newly started agent...")
+	status, err = a.postTask(AgentTask{Action: "chat"})
+	if err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Chat task failed to start after agent restart: %v", err))
+		return AgentStatus{}, err
+	}
+	wailsruntime.LogInfo(a.ctx, "[GUI] Chat task started successfully after self-healing.")
+	return status, nil
 }
+
 
 func (a *App) ChatSaveDirectory() (string, error) {
 	dir, err := currentChatSaveDirectory()
@@ -570,49 +586,71 @@ func (a *App) postTask(task AgentTask) (AgentStatus, error) {
 }
 
 func (a *App) ensureAgent() error {
-	if a.health() == nil {
+	if err := a.health(); err == nil {
+		wailsruntime.LogDebug(a.ctx, "[GUI] ensureAgent: Agent is already running and healthy.")
 		return nil
+	} else {
+		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: Agent health check failed (%v). Attempting to start agent...", err))
 	}
 	cli, err := findEqrcpCLI()
 	if err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to find eqrcp CLI binary: %v", err))
 		return err
 	}
 	cmd := exec.Command(cli, "desktop", "agent-start", "-B")
 	if launcher, ok := findEqrcpLauncher(cli); ok {
+		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using launcher %s for CLI %s", launcher, cli))
 		cmd = exec.Command(launcher, "--eqrcp-exe", cli, "agent-start", "-B")
+	} else {
+		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using direct command %s", cli))
 	}
 	configureHiddenCommand(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	wailsruntime.LogInfo(a.ctx, "[GUI] ensureAgent: launching background agent command...")
 	if err := cmd.Start(); err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to start agent command process: %v", err))
 		return fmt.Errorf("start desktop agent: %w", err)
 	}
+	wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: agent process started (PID: %d). Waiting for command to write configs and exit...", cmd.Process.Pid))
 	if err := cmd.Wait(); err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: agent start process returned error: %v", err))
 		return fmt.Errorf("start desktop agent: %w", err)
 	}
+	wailsruntime.LogInfo(a.ctx, "[GUI] ensureAgent: start command exited successfully. Starting health check loop (up to 5s)...")
 	deadline := time.Now().Add(5 * time.Second)
+	attempt := 0
 	for time.Now().Before(deadline) {
-		if a.health() == nil {
+		attempt++
+		if err := a.health(); err == nil {
+			wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: Agent became healthy and ready on attempt %d.", attempt))
 			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
+	wailsruntime.LogError(a.ctx, "[GUI] ensureAgent: desktop agent failed to respond to health checks within 5 seconds.")
 	return fmt.Errorf("desktop agent did not become ready")
 }
 
 func (a *App) shutdownAgent() error {
+	wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: Sending HTTP POST to %s/shutdown", agentBaseURL))
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+"/shutdown", nil)
 	if err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: failed to build request: %v", err))
 		return err
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: failed to execute request: %v", err))
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newDesktopAgentHTTPError(resp)
+		errObj := newDesktopAgentHTTPError(resp)
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: agent returned error status: %v", errObj))
+		return errObj
 	}
+	wailsruntime.LogInfo(a.ctx, "[GUI] shutdownAgent: agent successfully acknowledged shutdown.")
 	return nil
 }
 

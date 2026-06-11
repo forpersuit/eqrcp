@@ -1044,15 +1044,18 @@ async function startReceive() {
 
 async function startChat() {
     if (!hasPaidLicense() && chatRemainingMs() <= 0) {
+        console.warn('[Frontend] startChat: Daily free chat limit reached.');
         state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
         render();
         return;
     }
+    console.log('[Frontend] startChat: Requesting chat task start from Wails App.Chat()...');
     await run(async () => {
         await saveSettingsData();
         state.chatQRPulseArmed = true;
         state.chatQRPromptDismissed = false;
         state.status = await Chat();
+        console.log('[Frontend] startChat: Chat task started. Status response:', state.status);
         setMode('chat');
         state.notice = '';
         reconcileChatQRState(state.status);
@@ -1061,6 +1064,7 @@ async function startChat() {
         }
         if (state.chatAutoSave) {
             state.chatSaveDir = await ChatSaveDirectory();
+            console.log('[Frontend] startChat: Chat autosave path set to:', state.chatSaveDir);
         }
     });
 }
@@ -1526,6 +1530,7 @@ async function run(fn, options = {}) {
     try {
         await fn();
     } catch (error) {
+        console.error('[Frontend] run: execution failed:', error);
         state.error = error?.message || String(error);
         render();
     } finally {

@@ -97,6 +97,7 @@ type desktopAgentNotifier func(title string, message string) error
 type desktopAgent struct {
 	mu          sync.Mutex
 	baseFlags   application.Flags
+	log         logger.Logger
 	startedAt   time.Time
 	busy        bool
 	current     *desktopAgentTaskRecord
@@ -119,6 +120,7 @@ type desktopAgent struct {
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 	agent := &desktopAgent{
 		baseFlags:   baseFlags,
+		log:         logger.New(baseFlags.Quiet),
 		startedAt:   time.Now(),
 		notifier:    notifyDesktop,
 		historyPath: defaultDesktopAgentHistoryPath(),
@@ -385,6 +387,7 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 
 func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if rejectCrossOriginDesktopAgent(w, r) {
+		agent.log.Errorf("handleTasks: cross origin request rejected")
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -393,15 +396,19 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	var task desktopAgentTask
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		agent.log.Errorf("handleTasks: failed to decode JSON task: %v", err)
 		http.Error(w, fmt.Sprintf("invalid task: %v", err), http.StatusBadRequest)
 		return
 	}
+	agent.log.Infof("handleTasks: received task request: Action=%q, Paths=%v", task.Action, task.Paths)
 	if err := validateDesktopAgentTask(task); err != nil {
+		agent.log.Errorf("handleTasks: validation failed for action %q: %v", task.Action, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	agent.mu.Lock()
 	if task.Action == "chat" && agent.chat != nil && agent.chat.State == "running" {
+		agent.log.Infof("handleTasks: chat is already running (ID: %d). Returning Accepted.", agent.chat.ID)
 		agent.lastError = ""
 		agent.touchLocked()
 		agent.mu.Unlock()
@@ -411,15 +418,19 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	agent.lastError = ""
 	if task.Action == "chat" {
+		agent.log.Infof("handleTasks: starting new chat session...")
 		agent.startChatLocked(task)
 	} else {
 		if len(agent.queue) >= desktopAgentMaxQueue {
+			agent.log.Errorf("handleTasks: queue is full (%d tasks), rejecting request", len(agent.queue))
 			agent.mu.Unlock()
 			http.Error(w, "desktop agent queue is full", http.StatusTooManyRequests)
 			return
 		}
 		agent.queue = append(agent.queue, task)
+		agent.log.Infof("handleTasks: task enqueued (queue size: %d)", len(agent.queue))
 		if agent.busy {
+			agent.log.Infof("handleTasks: agent is busy. Replacing active task with status: replaced")
 			agent.replaceActiveLocked("replaced")
 		}
 		agent.startNextLocked()
@@ -628,6 +639,7 @@ func (agent *desktopAgent) execute(task desktopAgentTask, id int) {
 }
 
 func (agent *desktopAgent) executeChat(task desktopAgentTask, id int) {
+	agent.log.Infof("executeChat: running task runner (taskID: %d)", id)
 	err := agent.runner(task)
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
@@ -636,10 +648,12 @@ func (agent *desktopAgent) executeChat(task desktopAgentTask, id int) {
 		agent.chat.FinishedAt = &finishedAt
 		if agent.chat.State == "running" {
 			if err != nil {
+				agent.log.Errorf("executeChat: task runner failed for taskID: %d: %v", id, err)
 				agent.chat.State = "failed"
 				agent.chat.Error = err.Error()
 				agent.lastError = err.Error()
 			} else {
+				agent.log.Infof("executeChat: task runner completed successfully for taskID: %d", id)
 				agent.chat.State = "completed"
 			}
 		}
@@ -820,6 +834,7 @@ func (agent *desktopAgent) startNextLocked() {
 
 func (agent *desktopAgent) startChatLocked(task desktopAgentTask) {
 	agent.nextID++
+	agent.log.Infof("startChatLocked: initiating chat session with taskID=%d", agent.nextID)
 	record := desktopAgentTaskRecord{
 		ID:        agent.nextID,
 		Action:    task.Action,
@@ -1283,6 +1298,7 @@ func cloneDesktopAgentRecord(record desktopAgentTaskRecord) desktopAgentTaskReco
 
 func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	taskID := agent.taskIDForAction(task.Action)
+	agent.log.Infof("runTask: preparing to execute task %d (action: %q)", taskID, task.Action)
 	agentApp := application.New()
 	agentApp.Flags = agent.baseFlags
 	agentApp.Flags.Browser = desktopBrowserPreference(agent.baseFlags, true)
@@ -1291,21 +1307,28 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	}
 	desktopSettings, err := agent.readSettings()
 	if err != nil {
+		agent.log.Errorf("runTask: failed to read desktop settings (using defaults): %v", err)
 		desktopSettings = config.DesktopSettings{}
 	}
+	agent.log.Infof("runTask: creating new qrcp configuration...")
 	cfg, err := config.New(agentApp)
 	if err != nil {
+		agent.log.Errorf("runTask: failed to create qrcp config: %v", err)
 		return err
 	}
+	agent.log.Infof("runTask: instantiating qrcp server...")
 	srv, err := server.New(&cfg)
 	if err != nil {
+		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
 		return err
 	}
+	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)
 	})
 	srv.SetRepeatRoute(desktopAgentBaseURL + "/tasks/" + strconv.Itoa(taskID) + "/repeat")
 	agent.setTaskStop(task.Action, func(state string) {
+		agent.log.Infof("runTask: stop callback triggered for action %q (target state: %s)", task.Action, state)
 		if task.Action == "chat" {
 			srv.ShutdownChat(state)
 			return
@@ -1317,21 +1340,25 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
 		if err != nil {
+			agent.log.Errorf("runTask (share): failed to create payload from args: %v", err)
 			srv.Shutdown()
 			return err
 		}
 		srv.Send(payload)
 		if err := serveDesktopTaskQR(srv, srv.SendURL, agentApp.Flags.Browser); err != nil {
+			agent.log.Errorf("runTask (share): failed to serve QR: %v", err)
 			srv.Shutdown()
 			return err
 		}
 	case "receive":
 		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		if err := srv.ReceiveTo(cfg.Output); err != nil {
+			agent.log.Errorf("runTask (receive): failed to prepare receive path: %v", err)
 			srv.Shutdown()
 			return err
 		}
 		if err := serveDesktopTaskQR(srv, srv.ReceiveURL, agentApp.Flags.Browser); err != nil {
+			agent.log.Errorf("runTask (receive): failed to serve QR: %v", err)
 			srv.Shutdown()
 			return err
 		}
@@ -1339,27 +1366,41 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		chatPageURLBuilder := func() string {
 			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar)
 		}
+		agent.log.Infof("runTask (chat): chat join URL = %s", srv.ChatJoinURL())
 		if agentApp.Flags.Browser {
+			agent.log.Infof("runTask (chat): launching chat in browser...")
 			if err := srv.DisplayChatWithURL(chatPageURLBuilder); err != nil {
+				agent.log.Errorf("runTask (chat): DisplayChatWithURL failed: %v", err)
 				srv.Shutdown()
 				return err
 			}
 		} else {
+			agent.log.Infof("runTask (chat): starting chat server listener...")
 			if err := srv.Chat(); err != nil {
+				agent.log.Errorf("runTask (chat): Chat server failed to start: %v", err)
 				srv.Shutdown()
 				return err
 			}
 		}
 		chatPageURL := chatPageURLBuilder()
+		agent.log.Infof("runTask (chat): chat server active. chatPageURL = %s", chatPageURL)
 		agent.setTaskPageURL(task.Action, chatPageURL)
 		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
 			agent.observeChatStatus(taskID, status)
 		})
 	default:
 		srv.Shutdown()
+		agent.log.Errorf("runTask: unsupported action %q", task.Action)
 		return fmt.Errorf("unsupported desktop action %q", task.Action)
 	}
-	return srv.Wait()
+	agent.log.Infof("runTask: server Wait loop entered...")
+	waitErr := srv.Wait()
+	if waitErr != nil {
+		agent.log.Errorf("runTask: server Wait exited with error: %v", waitErr)
+	} else {
+		agent.log.Infof("runTask: server Wait exited normally")
+	}
+	return waitErr
 }
 
 func serveDesktopTaskQR(srv *server.Server, url string, openBrowser bool) error {
