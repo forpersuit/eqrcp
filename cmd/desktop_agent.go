@@ -1517,8 +1517,9 @@ func runDesktopAgentBackground(command *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	defer logFile.Close()
-	if err := desktopAgentBackgroundStarter(exe, logFile); err != nil {
+	err = desktopAgentBackgroundStarter(exe, logFile)
+	logFile.Close()
+	if err != nil {
 		return err
 	}
 	if err := desktopAgentReadyWaiter(10 * time.Second); err != nil {
