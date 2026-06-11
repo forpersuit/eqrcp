@@ -1069,6 +1069,12 @@ func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 	previousExecutable := desktopAgentExecutable
 	previousStarter := desktopAgentBackgroundStarter
 	previousWaiter := desktopAgentReadyWaiter
+	oldPortPath := desktopAgentPortFilePath
+	desktopAgentPortFilePath = func() string {
+		return filepath.Join(t.TempDir(), "nonexistent.port")
+	}
+	oldEnv := os.Getenv("EQRCP_AGENT_PORT")
+	os.Setenv("EQRCP_AGENT_PORT", "1")
 	desktopAgentBaseURL = "http://127.0.0.1:1"
 	desktopAgentExecutable = func() (string, error) {
 		return "/tmp/eqrcp", nil
@@ -1095,6 +1101,12 @@ func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 		desktopAgentExecutable = previousExecutable
 		desktopAgentBackgroundStarter = previousStarter
 		desktopAgentReadyWaiter = previousWaiter
+		desktopAgentPortFilePath = oldPortPath
+		if oldEnv == "" {
+			os.Unsetenv("EQRCP_AGENT_PORT")
+		} else {
+			os.Setenv("EQRCP_AGENT_PORT", oldEnv)
+		}
 	})
 
 	command := &cobra.Command{}

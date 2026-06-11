@@ -1546,10 +1546,56 @@ var desktopAgentRestartHelperCmd = &cobra.Command{
 }
 
 func runDesktopAgentBackground(command *cobra.Command) error {
-	if _, err := fetchDesktopAgentStatus(); err == nil {
-		fmt.Fprintf(command.OutOrStdout(), "Desktop agent is already running at %s.\n", desktopAgentBaseURL)
-		return nil
+	portFilePath := desktopAgentPortFilePath()
+	activePort := 0
+	if data, err := os.ReadFile(portFilePath); err == nil {
+		if portVal := strings.TrimSpace(string(data)); portVal != "" {
+			if p, err := strconv.Atoi(portVal); err == nil {
+				activePort = p
+			}
+		}
 	}
+
+	basePort := 48176
+	if portStr := os.Getenv("EQRCP_AGENT_PORT"); portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			basePort = p
+		}
+	}
+
+	if activePort != 0 {
+		desktopAgentAddress = fmt.Sprintf("127.0.0.1:%d", activePort)
+		desktopAgentBaseURL = "http://" + desktopAgentAddress
+		if _, err := fetchDesktopAgentStatus(); err != nil {
+			activePort = 0
+		}
+	}
+
+	if activePort == 0 {
+		for i := 0; i < 20; i++ {
+			currPort := basePort + i
+			addr := fmt.Sprintf("127.0.0.1:%d", currPort)
+			response, healthErr := http.Get(fmt.Sprintf("http://%s/health", addr))
+			if healthErr == nil {
+				response.Body.Close()
+				if response.StatusCode == http.StatusNoContent {
+					activePort = currPort
+					_ = os.WriteFile(portFilePath, []byte(strconv.Itoa(activePort)), 0644)
+					break
+				}
+			}
+		}
+	}
+
+	if activePort != 0 {
+		desktopAgentAddress = fmt.Sprintf("127.0.0.1:%d", activePort)
+		desktopAgentBaseURL = "http://" + desktopAgentAddress
+		if _, err := fetchDesktopAgentStatus(); err == nil {
+			fmt.Fprintf(command.OutOrStdout(), "Desktop agent is already running at %s.\n", desktopAgentBaseURL)
+			return nil
+		}
+	}
+
 	exe, err := desktopAgentExecutable()
 	if err != nil {
 		return err
@@ -1642,7 +1688,9 @@ func waitForDesktopAgentReady(timeout time.Duration) error {
 	return lastErr
 }
 
-func desktopAgentPortFilePath() string {
+var desktopAgentPortFilePath = defaultDesktopAgentPortFilePath
+
+func defaultDesktopAgentPortFilePath() string {
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		dir = os.TempDir()
