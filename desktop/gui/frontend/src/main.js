@@ -33,6 +33,22 @@ import {
     StopCurrent,
 } from '../wailsjs/go/main/App';
 
+window.onerror = function(message, source, lineno, colno, error) {
+    const errText = `[JS Error] ${message} at ${source}:${lineno}:${colno}`;
+    console.error(errText, error);
+    if (window.runtime && window.runtime.LogError) {
+        window.runtime.LogError(errText);
+    }
+};
+
+window.onunhandledrejection = function(event) {
+    const errText = `[JS Promise Error] ${event.reason}`;
+    console.error(errText);
+    if (window.runtime && window.runtime.LogError) {
+        window.runtime.LogError(errText);
+    }
+};
+
 const state = {
     mode: 'share',
     sharePaths: [],
