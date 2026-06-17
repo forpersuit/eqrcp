@@ -15,7 +15,7 @@ import (
 
 func TestWindowsExpectedLauncherPath(t *testing.T) {
 	got := windowsExpectedLauncherPath(filepath.Join("root", "tools", "eqrcp.exe"))
-	want := filepath.Join("root", "tools", "eqrcp-launcher.exe")
+	want := filepath.Join("root", "tools", "eqrcp.exe")
 	if got != want {
 		t.Fatalf("windowsExpectedLauncherPath() = %q, want %q", got, want)
 	}
@@ -69,8 +69,8 @@ func TestRegDeleteQueryArgs(t *testing.T) {
 }
 
 func TestWindowsShellCommandUsesLauncherWhenAvailable(t *testing.T) {
-	got := windowsShellCommand(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`, "share", "%1")
-	want := `"C:\tools\eqrcp-launcher.exe" "--eqrcp-exe" "C:\tools\eqrcp.exe" "share" "%1"`
+	got := windowsShellCommand(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`, "share", "%1")
+	want := `"C:\tools\eqrcp.exe" "share" "%1"`
 	if got != want {
 		t.Fatalf("windowsShellCommand() = %q, want %q", got, want)
 	}
@@ -78,9 +78,9 @@ func TestWindowsShellCommandUsesLauncherWhenAvailable(t *testing.T) {
 
 func TestParseRegDefaultValueEnglishOutput(t *testing.T) {
 	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
-    (Default)    REG_SZ    "E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"
+    (Default)    REG_SZ    "E:\developer\results\eqrcp.exe" "share" "%1"
 `
-	want := `"E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"`
+	want := `"E:\developer\results\eqrcp.exe" "share" "%1"`
 	if got := parseRegDefaultValue(output); got != want {
 		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
 	}
@@ -88,16 +88,16 @@ func TestParseRegDefaultValueEnglishOutput(t *testing.T) {
 
 func TestParseRegDefaultValueLocalizedOutput(t *testing.T) {
 	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
-    (默认)    REG_SZ    "E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"
+    (默认)    REG_SZ    "E:\developer\results\eqrcp.exe" "share" "%1"
 `
-	want := `"E:\developer\results\eqrcp-launcher.exe" "--eqrcp-exe" "E:\developer\results\eqrcp.exe" "share" "%1"`
+	want := `"E:\developer\results\eqrcp.exe" "share" "%1"`
 	if got := parseRegDefaultValue(output); got != want {
 		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
 	}
 }
 
 func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
 	got, err := formatWindowsDesktopIntegrationStatus(env)
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
 		"- eqrcp launcher: installed",
 		"- Desktop agent runtime: not running",
 		"eqrcp desktop agent-start",
-		`path: C:\tools\eqrcp-launcher.exe`,
+		`path: C:\tools\eqrcp.exe`,
 		"- summary: 6 installed, 0 needs repair, 0 not installed",
 	} {
 		if !strings.Contains(got, want) {
@@ -156,10 +156,9 @@ func TestFormatWindowsDesktopIntegrationStatusMissingLauncher(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"- eqrcp launcher: not installed",
-		"expected path: " + filepath.Join("tools", "eqrcp-launcher.exe"),
-		"place eqrcp-launcher.exe next to eqrcp.exe",
-		"- summary: 5 installed, 0 needs repair, 1 not installed",
+		"- eqrcp launcher: installed",
+		"path: " + exe,
+		"- summary: 6 installed, 0 needs repair, 0 not installed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status = %q, want to contain %q", got, want)
@@ -168,13 +167,13 @@ func TestFormatWindowsDesktopIntegrationStatusMissingLauncher(t *testing.T) {
 }
 
 func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
-	staleCommand := windowsShellCommand(`C:\old\eqrcp.exe`, `C:\old\eqrcp-launcher.exe`, "share", "%1")
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
+	staleCommand := windowsShellCommand(`C:\old\eqrcp.exe`, `C:\old\eqrcp.exe`, "share", "%1")
 	env.queryRegDefault = func(key string) (string, error) {
 		if strings.Contains(key, `*\shell\eqrcp-share\command`) {
 			return staleCommand, nil
 		}
-		return fakeWindowsRegCommands(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)[key], nil
+		return fakeWindowsRegCommands(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)[key], nil
 	}
 
 	got, err := formatWindowsDesktopIntegrationStatus(env)
@@ -183,7 +182,7 @@ func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
 	}
 	for _, want := range []string{
 		"- Share with eqrcp (file): needs repair",
-		`expected: "C:\tools\eqrcp-launcher.exe" "--eqrcp-exe" "C:\tools\eqrcp.exe" "share" "%1"`,
+		`expected: "C:\tools\eqrcp.exe" "share" "%1"`,
 		"repair: run `eqrcp desktop install`",
 		"- summary: 5 installed, 1 needs repair, 0 not installed",
 	} {
@@ -237,7 +236,7 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 }
 
 func TestFormatWindowsDesktopIntegrationStatusRunningAgent(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
 	started := time.Date(2026, 4, 24, 9, 30, 0, 0, time.UTC)
 	env.agentStatus = func() (desktopAgentResponse, error) {
 		return desktopAgentResponse{
@@ -272,7 +271,7 @@ func TestFormatWindowsDesktopIntegrationStatusRunningAgent(t *testing.T) {
 }
 
 func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp-launcher.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
 	env.agentStatus = func() (desktopAgentResponse, error) {
 		return desktopAgentResponse{
 			State:   "idle",

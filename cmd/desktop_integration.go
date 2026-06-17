@@ -223,18 +223,9 @@ func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string,
 		}
 	}
 	if exeErr == nil {
-		expectedLauncher := windowsExpectedLauncherPath(exe)
-		if launcher == "" {
-			summary.notInstalled++
-			builder.WriteString("- eqrcp launcher: not installed\n")
-			builder.WriteString(fmt.Sprintf("  expected path: %s\n", expectedLauncher))
-			builder.WriteString("  impact: Explorer can still use the hidden PowerShell fallback, but native launcher error dialogs are unavailable.\n")
-			builder.WriteString("  repair: place eqrcp-launcher.exe next to eqrcp.exe and run `eqrcp desktop install` again.\n")
-		} else {
-			summary.installed++
-			builder.WriteString("- eqrcp launcher: installed\n")
-			builder.WriteString(fmt.Sprintf("  path: %s\n", launcher))
-		}
+		summary.installed++
+		builder.WriteString("- eqrcp launcher: installed\n")
+		builder.WriteString(fmt.Sprintf("  path: %s\n", exe))
 	}
 	builder.WriteString(formatWindowsDesktopStartupStatusSection(windowsDesktopStartupStatusEnv{
 		executable: func() (string, error) {
@@ -381,6 +372,19 @@ func windowsSendToSharePath() (string, error) {
 
 func windowsSendToShareScript(exe string, launcher string) string {
 	if launcher != "" {
+		if launcher == exe {
+			return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
+cmd = Quote(%s) & " share"
+For Each arg In WScript.Arguments
+    cmd = cmd & " " & Quote(arg)
+Next
+shell.Run cmd, 0, False
+
+Function Quote(value)
+    Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
+End Function
+`, windowsVBString(exe))
+		}
 		return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
 cmd = Quote(%s) & " --eqrcp-exe " & Quote(%s) & " share"
 For Each arg In WScript.Arguments
@@ -532,21 +536,12 @@ func parseRegDefaultValue(output string) string {
 }
 
 func windowsLauncherPath(exe string) string {
-	candidate := windowsExpectedLauncherPath(exe)
-	if candidate == "" {
-		return ""
-	}
-	if _, err := os.Stat(candidate); err != nil {
-		return ""
-	}
-	return candidate
+	// 合并为单二进制后，exe 自身就兼任了 launcher 的静默启动与转发功能
+	return exe
 }
 
 func windowsExpectedLauncherPath(exe string) string {
-	if exe == "" {
-		return ""
-	}
-	return filepath.Join(filepath.Dir(exe), "eqrcp-launcher.exe")
+	return exe
 }
 
 func windowsCommandMatches(actual string, expected string) bool {
@@ -555,6 +550,14 @@ func windowsCommandMatches(actual string, expected string) bool {
 
 func windowsShellCommand(exe string, launcher string, args ...string) string {
 	if launcher != "" {
+		if launcher == exe {
+			// 单个可执行文件模式：直接调用自身
+			quotedArgs := make([]string, 0, len(args))
+			for _, arg := range args {
+				quotedArgs = append(quotedArgs, `"`+arg+`"`)
+			}
+			return fmt.Sprintf(`"%s" %s`, exe, strings.Join(quotedArgs, " "))
+		}
 		launcherArgs := append([]string{"--eqrcp-exe", exe}, args...)
 		quotedArgs := make([]string, 0, len(launcherArgs))
 		for _, arg := range launcherArgs {

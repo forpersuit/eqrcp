@@ -13,6 +13,9 @@ import (
 	wailslogger "github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"golang.org/x/term"
+
+	"eqrcp/cmd"
 )
 
 //go:embed all:frontend/dist
@@ -64,6 +67,68 @@ func desktopLogFilePath() string {
 }
 
 func main() {
+	args := os.Args[1:]
+
+	// 1. 如果有显式的命令行子命令（如 send, receive 等），强制走 CLI 模式
+	if len(args) > 0 && isCLICommand(args[0]) {
+		runCLIMode()
+		return
+	}
+
+	// 2. 如果没有任何参数，进行自动路由探测
+	if len(args) == 0 {
+		if runGUIOrCLI() {
+			startWailsGUI()
+			return
+		}
+		runCLIMode()
+		return
+	}
+
+	// 3. 右键静默转发逻辑 (原来 launcher.exe 的角色)
+	if isRightClickAction(args) {
+		runSilentLauncher(args)
+		return
+	}
+
+	// 默认回退到命令行执行
+	runCLIMode()
+}
+
+func isCLICommand(name string) bool {
+	switch name {
+	case "send", "receive", "config", "desktop", "completion", "chat", "version", "help":
+		return true
+	default:
+		return false
+	}
+}
+
+func runCLIMode() {
+	_ = attachWindowsConsole()
+	defer detachWindowsConsole()
+
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runGUIOrCLI() bool {
+	if isWindows() {
+		hasParentConsole := attachWindowsConsole()
+		if hasParentConsole {
+			detachWindowsConsole()
+			return false // 走 CLI
+		}
+		return true // 双击启动，走 GUI
+	}
+
+	hasDisplay := os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
+	isTerminal := term.IsTerminal(int(os.Stdout.Fd()))
+	return hasDisplay && !isTerminal
+}
+
+func startWailsGUI() {
 	logPath := desktopLogFilePath()
 	fileLogger := NewFileLogger(logPath)
 	defer fileLogger.Close()

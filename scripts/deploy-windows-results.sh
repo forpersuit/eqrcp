@@ -102,13 +102,13 @@ fi
 
 echo "Building Windows CLI artifacts..."
 (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqrcp.exe" .)
-(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$results_dir/eqrcp-launcher.exe" ./cmd/eqrcp-launcher)
 
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then
-    echo "Building Windows Wails GUI..."
+    echo "Building Windows Wails GUI (consolidated)..."
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
-    cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$results_dir/eqrcp-desktop.exe"
+    # The Wails GUI binary is the consolidated 3-in-1 tool. Overwrite eqrcp.exe.
+    cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$results_dir/eqrcp.exe"
   fi
 fi
 
