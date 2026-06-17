@@ -1402,6 +1402,31 @@
     </div>
     <pre class="viewport-debug" id="viewport-debug" aria-hidden="true"></pre>
     <script>
+        var safeStorage = (function() {
+            try {
+                var testKey = '__storage_test__';
+                window.localStorage.setItem(testKey, testKey);
+                window.localStorage.removeItem(testKey);
+                return {
+                    getItem: function(key) {
+                        try { return window.localStorage.getItem(key); } catch (e) { return null; }
+                    },
+                    setItem: function(key, val) {
+                        try { window.localStorage.setItem(key, val); } catch (e) {}
+                    },
+                    removeItem: function(key) {
+                        try { window.localStorage.removeItem(key); } catch (e) {}
+                    }
+                };
+            } catch (e) {
+                var mem = {};
+                return {
+                    getItem: function(key) { return mem[key] || null; },
+                    setItem: function(key, val) { mem[key] = String(val); },
+                    removeItem: function(key) { delete mem[key]; }
+                };
+            }
+        })();
         var clientToken = currentClientToken();
         var joinToken = currentJoinToken();
         var state = {
@@ -1727,10 +1752,10 @@
             if (fromURL === 'desktop') { return 'Desktop'; }
             if (fromURL) { return cleanSenderName(fromURL); }
             var key = 'eqrcp-chat-sender:' + window.location.pathname;
-            var saved = window.localStorage.getItem(key);
+            var saved = safeStorage.getItem(key);
             if (saved) { return cleanSenderName(saved); }
             var generated = 'Device ' + Math.floor(1000 + Math.random() * 9000);
-            window.localStorage.setItem(key, generated);
+            safeStorage.setItem(key, generated);
             return generated;
         }
         function currentAvatar() {
@@ -1741,14 +1766,14 @@
             if (fromURL) {
                 var cleaned = cleanAvatarLabel(fromURL);
                 if (cleaned) {
-                    window.localStorage.setItem(key, cleaned);
+                    safeStorage.setItem(key, cleaned);
                     return cleaned;
                 }
             }
             if (peer === 'desktop') {
                 return '';
             }
-            var saved = window.localStorage.getItem(key);
+            var saved = safeStorage.getItem(key);
             if (saved) {
                 return cleanAvatarLabel(saved);
             }
@@ -1773,7 +1798,7 @@
                 return params.get('hostToken');
             }
             var key = 'eqrcp-chat-token:' + window.location.pathname;
-            var saved = window.localStorage.getItem(key);
+            var saved = safeStorage.getItem(key);
             if (saved) { return saved; }
             var token = '';
             if (window.crypto && window.crypto.getRandomValues) {
@@ -1783,7 +1808,7 @@
             } else {
                 token = String(Date.now()) + '-' + String(Math.random()).slice(2);
             }
-            window.localStorage.setItem(key, token);
+            safeStorage.setItem(key, token);
             return token;
         }
         function currentJoinToken() {
