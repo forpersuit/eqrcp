@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -169,6 +170,11 @@ func DefaultDesktopOutputDirectory() string {
 func validateDesktopOutput(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			if mkdirErr := os.MkdirAll(path, 0755); mkdirErr == nil {
+				return nil
+			}
+		}
 		return err
 	}
 	if !info.IsDir() {
@@ -207,16 +213,51 @@ func desktopInterfaceOptions(listAll bool) ([]DesktopInterfaceOption, error) {
 	for name := range interfaces {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		leftScore := desktopInterfaceScore(names[i], interfaces[names[i]])
+		rightScore := desktopInterfaceScore(names[j], interfaces[names[j]])
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		return names[i] < names[j]
+	})
 	for _, name := range names {
 		ip := interfaces[name]
+		label := fmt.Sprintf("%s (%s)", name, ip)
+		if desktopInterfaceScore(name, ip) > 0 {
+			label += " - likely phone LAN"
+		}
 		options = append(options, DesktopInterfaceOption{
 			Name:  name,
 			IP:    ip,
-			Label: fmt.Sprintf("%s (%s)", name, ip),
+			Label: label,
 		})
 	}
 	return options, nil
+}
+
+func desktopInterfaceScore(name string, ip string) int {
+	normalized := strings.ToLower(name)
+	if strings.Contains(normalized, "docker") ||
+		strings.Contains(normalized, "veth") ||
+		strings.Contains(normalized, "bridge") ||
+		strings.Contains(normalized, "wsl") ||
+		strings.Contains(normalized, "vpn") ||
+		strings.Contains(normalized, "tun") ||
+		strings.Contains(normalized, "tap") {
+		return -1
+	}
+	parsed := net.ParseIP(strings.Trim(ip, "[]"))
+	if parsed == nil {
+		return 0
+	}
+	if parsed.IsPrivate() {
+		return 2
+	}
+	if parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+		return -1
+	}
+	return 0
 }
 
 func defaultDesktopInterface(options []DesktopInterfaceOption) string {

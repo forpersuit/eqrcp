@@ -65,3 +65,44 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopInterfaceScorePrefersPrivatePhysicalAdapters(t *testing.T) {
+	if got := desktopInterfaceScore("Wi-Fi", "192.168.1.20"); got <= 0 {
+		t.Fatalf("desktopInterfaceScore(Wi-Fi private) = %d, want positive", got)
+	}
+	if got := desktopInterfaceScore("docker0", "172.17.0.1"); got >= 0 {
+		t.Fatalf("desktopInterfaceScore(docker0) = %d, want negative", got)
+	}
+}
+
+func TestDesktopSettingsWriteCreatesOutputDirIfMissing(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	app := application.New()
+	app.Flags.Config = configPath
+
+	missingDir := filepath.Join(t.TempDir(), "nonexistent-subdir-to-create")
+	updated := DesktopSettings{
+		Interface:     "any",
+		Port:          19001,
+		Output:        missingDir,
+		Browser:       true,
+		ChatAutoSave:  false,
+		CloseBehavior: DesktopCloseBehaviorQuit,
+	}
+
+	saved, err := WriteDesktopSettings(app, updated)
+	if err != nil {
+		t.Fatalf("expected WriteDesktopSettings to succeed and create directory, got err: %v", err)
+	}
+
+	info, statErr := os.Stat(missingDir)
+	if statErr != nil {
+		t.Fatalf("expected directory %q to be created, got error: %v", missingDir, statErr)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected path %q to be a directory", missingDir)
+	}
+	if saved.Output != missingDir {
+		t.Fatalf("saved.Output = %q, want %q", saved.Output, missingDir)
+	}
+}
