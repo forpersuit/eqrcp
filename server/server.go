@@ -59,6 +59,7 @@ type Server struct {
 	statusGrace    time.Duration
 	statusHook     func(TransferStatusSnapshot)
 	chatStatusHook func(ChatStatusSnapshot)
+	chatHostRenameHook func(string)
 	repeatRoute    string
 	statusSeq      int64
 	statusSubs     map[chan struct{}]struct{}
@@ -302,6 +303,25 @@ func (s *Server) SetChatStatusHook(hook func(ChatStatusSnapshot)) {
 	s.statusMu.Lock()
 	s.chatStatusHook = hook
 	s.statusMu.Unlock()
+}
+
+func (s *Server) SetChatHostRenameHook(hook func(string)) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	s.chatHostRenameHook = hook
+	if s.chatSession != nil {
+		s.chatSession.hostRenameHook = hook
+	}
+}
+
+func (s *Server) UpdateChatHostAvatar(avatar string) {
+	s.statusMu.Lock()
+	session := s.chatSession
+	s.statusMu.Unlock()
+
+	if session != nil {
+		session.updateHostAvatar(session.hostToken, avatar)
+	}
 }
 
 func (s *Server) SetRepeatRoute(route string) {

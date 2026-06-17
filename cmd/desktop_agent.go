@@ -111,10 +111,11 @@ type desktopAgent struct {
 	lastError   string
 	runner      func(desktopAgentTask) error
 	notifier    desktopAgentNotifier
-	historyPath string
-	notified    map[int]map[string]bool
-	revision    int64
-	subscribers map[chan struct{}]struct{}
+	historyPath  string
+	notified     map[int]map[string]bool
+	revision     int64
+	subscribers  map[chan struct{}]struct{}
+	activeServer *server.Server
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
@@ -382,7 +383,34 @@ func (agent *desktopAgent) readSettings() (config.DesktopSettings, error) {
 }
 
 func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (config.DesktopSettings, error) {
-	return config.WriteDesktopSettings(agent.settingsApp(), settings)
+	saved, err := config.WriteDesktopSettings(agent.settingsApp(), settings)
+	if err != nil {
+		return saved, err
+	}
+	agent.mu.Lock()
+	srv := agent.activeServer
+	chatTaskRunning := agent.chat != nil && agent.chat.State == "running"
+	agent.mu.Unlock()
+
+	if chatTaskRunning && srv != nil {
+		srv.UpdateChatHostAvatar(settings.ChatAvatar)
+	}
+	return saved, nil
+}
+
+func (agent *desktopAgent) handleChatHostRename(newName string) {
+	agent.log.Infof("handleChatHostRename: updating persistent chatSender to %q", newName)
+	settings, err := agent.readSettings()
+	if err != nil {
+		agent.log.Errorf("handleChatHostRename: failed to read settings: %v", err)
+		return
+	}
+	settings.ChatSender = newName
+	if _, err := agent.writeSettings(settings); err != nil {
+		agent.log.Errorf("handleChatHostRename: failed to write settings: %v", err)
+	} else {
+		agent.log.Infof("handleChatHostRename: settings updated successfully with new chatSender")
+	}
 }
 
 func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
@@ -1322,6 +1350,16 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
 		return err
 	}
+	agent.mu.Lock()
+	agent.activeServer = srv
+	agent.mu.Unlock()
+	defer func() {
+		agent.mu.Lock()
+		if agent.activeServer == srv {
+			agent.activeServer = nil
+		}
+		agent.mu.Unlock()
+	}()
 	srv.ChatDebug = desktopSettings.DebugLog
 	srv.ViewportDebug = desktopSettings.ViewportDebug
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
@@ -1387,6 +1425,9 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		chatPageURL := chatPageURLBuilder()
 		agent.log.Infof("runTask (chat): chat server active. chatPageURL = %s", chatPageURL)
 		agent.setTaskPageURL(task.Action, chatPageURL)
+		srv.SetChatHostRenameHook(func(newName string) {
+			agent.handleChatHostRename(newName)
+		})
 		srv.SetChatStatusHook(func(status server.ChatStatusSnapshot) {
 			agent.observeChatStatus(taskID, status)
 		})

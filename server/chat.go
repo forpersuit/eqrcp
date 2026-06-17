@@ -53,6 +53,7 @@ type chatSession struct {
 	statusSeq        int64
 	hostToken        string
 	statusHook       func(ChatStatusSnapshot)
+	hostRenameHook   func(string)
 }
 
 // ChatStatusSnapshot represents the current state of a chat session.
@@ -136,6 +137,7 @@ func (s *Server) Chat() error {
 		state:            "waiting",
 		hostToken:        randomChatToken(),
 		statusHook:       s.chatStatusHook,
+		hostRenameHook:   s.chatHostRenameHook,
 	}
 	session.notifyStatus("waiting")
 	qrImg, err := qr.RenderImage(s.ChatJoinURL())
@@ -364,6 +366,9 @@ func (session *chatSession) handleClientAction(w http.ResponseWriter, r *http.Re
 		}
 		request.Label = sanitizeChatSender(request.Label)
 
+		var shouldTriggerHostRename bool
+		var newHostName string
+
 		session.mu.Lock()
 		client, exists := session.clients[request.Token]
 		if !exists || client.ID != id {
@@ -378,11 +383,21 @@ func (session *chatSession) handleClientAction(w http.ResponseWriter, r *http.Re
 			session.clients[request.Token] = client
 			session.addSystemMessageLocked(oldLabel + " has been renamed to " + request.Label)
 			session.notifyLocked()
+
+			if session.validHostToken(request.Token) {
+				shouldTriggerHostRename = true
+				newHostName = request.Label
+			}
 		}
 		hook, snapshot := session.statusSnapshotLocked(session.state)
 		session.mu.Unlock()
 
 		notifyChatStatusHook(hook, snapshot)
+
+		if shouldTriggerHostRename && session.hostRenameHook != nil {
+			session.hostRenameHook(newHostName)
+		}
+
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Rename success")
 		return
@@ -1120,6 +1135,12 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 		ownerToken: ownerToken,
 	}
 	session.mu.Lock()
+	if client, ok := session.clients[ownerToken]; ok {
+		message.Sender = client.Label
+		if client.Avatar != "" {
+			message.Avatar = client.Avatar
+		}
+	}
 	message.Seq = session.nextEventSeqLocked()
 	message.createdSeq = message.Seq
 	session.attachments[id] = chatAttachment{
@@ -1141,6 +1162,12 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 
 func (session *chatSession) addMessageWithStatus(message chatMessage, statusState string) chatMessage {
 	session.mu.Lock()
+	if client, ok := session.clients[message.ownerToken]; ok {
+		message.Sender = client.Label
+		if client.Avatar != "" {
+			message.Avatar = client.Avatar
+		}
+	}
 	message.ID = session.nextMessageIDLocked()
 	message.CreatedAt = time.Now()
 	message.Seq = session.nextEventSeqLocked()
@@ -1264,6 +1291,21 @@ func writeChatTerminal(w http.ResponseWriter) {
 
 func (session *chatSession) validHostToken(token string) bool {
 	return session.hostToken != "" && token == session.hostToken
+}
+
+func (session *chatSession) updateHostAvatar(token string, newAvatar string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	client, exists := session.clients[token]
+	if exists {
+		oldAvatar := client.Avatar
+		if oldAvatar != newAvatar {
+			client.Avatar = newAvatar
+			session.clients[token] = client
+			session.notifyLocked()
+		}
+	}
 }
 
 func (session *chatSession) subscribe() (<-chan struct{}, func()) {

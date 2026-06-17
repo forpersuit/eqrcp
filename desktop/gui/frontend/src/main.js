@@ -633,13 +633,6 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Chat username</strong>
-                        <span>Shown to devices that join new chat sessions.</span>
-                    </div>
-                    <input id="settings-chat-sender" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
-                </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
                         <strong>Chat avatar badge</strong>
                         <span>Use an emoji or 1-4 initials.</span>
                     </div>

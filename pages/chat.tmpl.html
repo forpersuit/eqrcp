@@ -1954,6 +1954,15 @@
                 }
             }
             var devices = (data && data.devices) || [];
+            devices.forEach(function(device) {
+                var label = cleanSenderName(device.label || 'Guest');
+                var isSelf = label === state.sender;
+                if (isSelf) {
+                    if (device.avatar !== undefined && device.avatar !== state.avatar) {
+                        state.avatar = device.avatar;
+                    }
+                }
+            });
             var count = Math.max(onlineDot.classList.contains('offline') ? 0 : 1, Number(data && data.deviceCount || devices.length || 0));
             deviceCountEl.textContent = String(count);
             if (!devices.length && !onlineDot.classList.contains('offline')) {
