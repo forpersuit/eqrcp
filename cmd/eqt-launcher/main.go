@@ -18,7 +18,7 @@ var desktopAgentURL = getDesktopAgentURL()
 var agentHTTPClient = &http.Client{Timeout: time.Second}
 
 func getDesktopAgentURL() string {
-	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {
 		return "http://127.0.0.1:" + port
 	}
 	return "http://127.0.0.1:48176"
@@ -52,14 +52,14 @@ func runLauncher(rawArgs []string) string {
 	if err != nil {
 		return formatError(err, "", "", nil)
 	}
-	eqrcp, args, err := parseArgs(rawArgs)
+	eqt, args, err := parseArgs(rawArgs)
 	if err != nil {
 		return formatError(err, "", "", nil)
 	}
-	if eqrcp == "" {
-		eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp.exe")
-		if _, err := os.Stat(eqrcp); err != nil {
-			eqrcp = filepath.Join(filepath.Dir(exe), "eqrcp")
+	if eqt == "" {
+		eqt = filepath.Join(filepath.Dir(exe), "eqt.exe")
+		if _, err := os.Stat(eqt); err != nil {
+			eqt = filepath.Join(filepath.Dir(exe), "eqt")
 		}
 	}
 	logFile, logPath, err := createLog()
@@ -67,19 +67,19 @@ func runLauncher(rawArgs []string) string {
 		defer logFile.Close()
 	}
 	if task, ok := agentTaskFromArgs(args); ok {
-		if err := submitTaskToAgent(eqrcp, task, logFile); err != nil {
+		if err := submitTaskToAgent(eqt, task, logFile); err != nil {
 			var rejection agentRejectionError
 			if errors.As(err, &rejection) {
-				return formatError(err, logPath, eqrcp, append([]string{"desktop"}, args...))
+				return formatError(err, logPath, eqt, append([]string{"desktop"}, args...))
 			}
-			if directErr := runDirect(eqrcp, args, logFile); directErr != nil {
-				return formatError(fmt.Errorf("agent unavailable: %v; direct launch failed: %w", err, directErr), logPath, eqrcp, append([]string{"desktop"}, args...))
+			if directErr := runDirect(eqt, args, logFile); directErr != nil {
+				return formatError(fmt.Errorf("agent unavailable: %v; direct launch failed: %w", err, directErr), logPath, eqt, append([]string{"desktop"}, args...))
 			}
 		}
 		return ""
 	}
-	if err := runDirect(eqrcp, args, logFile); err != nil {
-		return formatError(err, logPath, eqrcp, append([]string{"desktop"}, args...))
+	if err := runDirect(eqt, args, logFile); err != nil {
+		return formatError(err, logPath, eqt, append([]string{"desktop"}, args...))
 	}
 	return ""
 }
@@ -96,7 +96,7 @@ func agentTaskFromArgs(args []string) (desktopAgentTask, bool) {
 	}
 }
 
-func submitTaskToAgent(eqrcp string, task desktopAgentTask, logFile *os.File) error {
+func submitTaskToAgent(eqt string, task desktopAgentTask, logFile *os.File) error {
 	if actualURL := readPortFileAndGetURL(); actualURL != "" {
 		desktopAgentURL = actualURL
 	}
@@ -108,7 +108,7 @@ func submitTaskToAgent(eqrcp string, task desktopAgentTask, logFile *os.File) er
 			return err
 		}
 	}
-	if err := startAgent(eqrcp, logFile); err != nil {
+	if err := startAgent(eqt, logFile); err != nil {
 		return err
 	}
 	if err := waitForAgent(3 * time.Second); err != nil {
@@ -138,8 +138,8 @@ func postAgentTask(task desktopAgentTask) error {
 	return nil
 }
 
-func startAgent(eqrcp string, logFile *os.File) error {
-	cmd := exec.Command(eqrcp, "desktop", "agent")
+func startAgent(eqt string, logFile *os.File) error {
+	cmd := exec.Command(eqt, "desktop", "agent")
 	configureCommand(cmd)
 	if logFile != nil {
 		cmd.Stdout = logFile
@@ -176,9 +176,9 @@ func waitForAgent(timeout time.Duration) error {
 	return lastErr
 }
 
-func runDirect(eqrcp string, args []string, logFile *os.File) error {
+func runDirect(eqt string, args []string, logFile *os.File) error {
 	desktopArgs := append([]string{"desktop"}, args...)
-	cmd := exec.Command(eqrcp, desktopArgs...)
+	cmd := exec.Command(eqt, desktopArgs...)
 	configureCommand(cmd)
 	if logFile != nil {
 		cmd.Stdout = logFile
@@ -188,9 +188,9 @@ func runDirect(eqrcp string, args []string, logFile *os.File) error {
 }
 
 func parseArgs(args []string) (string, []string, error) {
-	if len(args) > 0 && args[0] == "--eqrcp-exe" {
+	if len(args) > 0 && args[0] == "--eqt-exe" {
 		if len(args) < 2 || args[1] == "" {
-			return "", nil, errors.New("missing value for --eqrcp-exe")
+			return "", nil, errors.New("missing value for --eqt-exe")
 		}
 		return args[1], args[2:], nil
 	}
@@ -202,7 +202,7 @@ func createLog() (*os.File, string, error) {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	dir = filepath.Join(dir, "eqrcp")
+	dir = filepath.Join(dir, "eqt")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, "", err
 	}
@@ -214,7 +214,7 @@ func createLog() (*os.File, string, error) {
 }
 
 func formatError(err error, logPath string, exe string, args []string) string {
-	message := fmt.Sprintf("eqrcp failed: %v", err)
+	message := fmt.Sprintf("eqt failed: %v", err)
 	if exe != "" {
 		message += fmt.Sprintf("\n\nCommand: %s", commandLine(exe, args))
 	}
@@ -277,7 +277,7 @@ func defaultDesktopAgentPortFilePath() string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "eqrcp", "agent.port")
+	return filepath.Join(dir, "eqt", "agent.port")
 }
 
 func readPortFileAndGetURL() string {

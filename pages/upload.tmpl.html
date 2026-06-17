@@ -254,7 +254,7 @@
     <script>
         var uploadForm = document.getElementById('upload-form');
         var pastedFiles = [];
-        var draftKey = 'eqrcp-upload-draft:' + window.location.pathname;
+        var draftKey = 'eqt-upload-draft:' + window.location.pathname;
         var submitButton = document.getElementById('submit');
         var titleInput = document.getElementById('plaintext-title');
         var textArea = document.getElementById('plaintext-text');
@@ -423,7 +423,7 @@
 
             if (titleInput.value || textInput.value) {
                 var currentDate = new Date().toJSON().slice(0, 19).replace(/[-T:]/g, '_');
-                var filename = titleInput.value || ('eqrcp-text-file-' + currentDate);
+                var filename = titleInput.value || ('eqt-text-file-' + currentDate);
                 var blob = new Blob([textInput.value + '\n'], { type: 'text/plain' });
                 formData.append('textFile', blob, filename + '.txt');
             }

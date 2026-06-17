@@ -33,7 +33,7 @@ func Expand(input string) string {
 // ZipFiles and return the resulting zip's filename
 func ZipFiles(files []string) (string, error) {
 	zip := new(archivex.ZipFile)
-	tmpfile, err := os.CreateTemp("", "eqrcp")
+	tmpfile, err := os.CreateTemp("", "eqt")
 	if err != nil {
 		return "", err
 	}

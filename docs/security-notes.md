@@ -1,6 +1,6 @@
 # Security Notes
 
-`eqrcp` is designed for short-lived local-network file transfer. It should not be exposed directly to the public internet.
+`eqt` is designed for short-lived local-network file transfer. It should not be exposed directly to the public internet.
 
 ## Current Security Model
 
@@ -59,7 +59,7 @@ Desktop mode should:
 HTTPS currently requires a certificate and key:
 
 ```sh
-eqrcp --secure --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem file.txt
+eqt --secure --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem file.txt
 ```
 
 For local phone transfers, self-signed or private CA certificates may trigger browser warnings unless the device trusts the CA.

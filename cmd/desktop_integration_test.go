@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"eqrcp/version"
+	"eqt/version"
 )
 
 func TestWindowsExpectedLauncherPath(t *testing.T) {
-	got := windowsExpectedLauncherPath(filepath.Join("root", "tools", "eqrcp.exe"))
-	want := filepath.Join("root", "tools", "eqrcp.exe")
+	got := windowsExpectedLauncherPath(filepath.Join("root", "tools", "eqt.exe"))
+	want := filepath.Join("root", "tools", "eqt.exe")
 	if got != want {
 		t.Fatalf("windowsExpectedLauncherPath() = %q, want %q", got, want)
 	}
@@ -39,19 +39,19 @@ func TestRegDeleteQueryArgs(t *testing.T) {
 	}{
 		{
 			name: "key",
-			args: []string{"delete", `HKCU\Software\Classes\*\shell\eqrcp-share`, "/f"},
-			want: []string{"query", `HKCU\Software\Classes\*\shell\eqrcp-share`},
+			args: []string{"delete", `HKCU\Software\Classes\*\shell\eqt-share`, "/f"},
+			want: []string{"query", `HKCU\Software\Classes\*\shell\eqt-share`},
 			ok:   true,
 		},
 		{
 			name: "value",
-			args: []string{"delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqrcp-agent", "/f"},
-			want: []string{"query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqrcp-agent"},
+			args: []string{"delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqt-agent", "/f"},
+			want: []string{"query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "eqt-agent"},
 			ok:   true,
 		},
 		{
 			name: "not delete",
-			args: []string{"add", `HKCU\Software\Classes\*\shell\eqrcp-share`, "/f"},
+			args: []string{"add", `HKCU\Software\Classes\*\shell\eqt-share`, "/f"},
 			ok:   false,
 		},
 	}
@@ -69,48 +69,48 @@ func TestRegDeleteQueryArgs(t *testing.T) {
 }
 
 func TestWindowsShellCommandUsesLauncherWhenAvailable(t *testing.T) {
-	got := windowsShellCommand(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`, "share", "%1")
-	want := `"C:\tools\eqrcp.exe" "share" "%1"`
+	got := windowsShellCommand(`C:\tools\eqt.exe`, `C:\tools\eqt.exe`, "share", "%1")
+	want := `"C:\tools\eqt.exe" "share" "%1"`
 	if got != want {
 		t.Fatalf("windowsShellCommand() = %q, want %q", got, want)
 	}
 }
 
 func TestParseRegDefaultValueEnglishOutput(t *testing.T) {
-	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
-    (Default)    REG_SZ    "E:\developer\results\eqrcp.exe" "share" "%1"
+	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqt-share\command
+    (Default)    REG_SZ    "E:\developer\results\eqt.exe" "share" "%1"
 `
-	want := `"E:\developer\results\eqrcp.exe" "share" "%1"`
+	want := `"E:\developer\results\eqt.exe" "share" "%1"`
 	if got := parseRegDefaultValue(output); got != want {
 		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
 	}
 }
 
 func TestParseRegDefaultValueLocalizedOutput(t *testing.T) {
-	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqrcp-share\command
-    (默认)    REG_SZ    "E:\developer\results\eqrcp.exe" "share" "%1"
+	output := `HKEY_CURRENT_USER\Software\Classes\*\shell\eqt-share\command
+    (默认)    REG_SZ    "E:\developer\results\eqt.exe" "share" "%1"
 `
-	want := `"E:\developer\results\eqrcp.exe" "share" "%1"`
+	want := `"E:\developer\results\eqt.exe" "share" "%1"`
 	if got := parseRegDefaultValue(output); got != want {
 		t.Fatalf("parseRegDefaultValue() = %q, want %q", got, want)
 	}
 }
 
 func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqt.exe`, `C:\tools\eqt.exe`)
 	got, err := formatWindowsDesktopIntegrationStatus(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
 		"Windows desktop integration status",
-		`- current executable: C:\tools\eqrcp.exe`,
-		"- Share with eqrcp (file): installed",
-		"- Send to > Share with eqrcp: installed",
-		"- eqrcp launcher: installed",
+		`- current executable: C:\tools\eqt.exe`,
+		"- Share with eqt (file): installed",
+		"- Send to > Share with eqt: installed",
+		"- eqt launcher: installed",
 		"- Desktop agent runtime: not running",
-		"eqrcp desktop agent-start",
-		`path: C:\tools\eqrcp.exe`,
+		"eqt desktop agent-start",
+		`path: C:\tools\eqt.exe`,
 		"- summary: 6 installed, 0 needs repair, 0 not installed",
 	} {
 		if !strings.Contains(got, want) {
@@ -130,7 +130,7 @@ func TestDesktopStatusCommandIncludesVersion(t *testing.T) {
 	if err := desktopStatusCmd.RunE(desktopStatusCmd, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "eqrcp ") {
+	if !strings.Contains(out.String(), "eqt ") {
 		t.Fatalf("desktop status output = %q, want version header", out.String())
 	}
 }
@@ -143,20 +143,20 @@ func TestDesktopStartupStatusCommandIncludesVersion(t *testing.T) {
 	if err := desktopStartupStatusCmd.RunE(desktopStartupStatusCmd, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "eqrcp ") {
+	if !strings.Contains(out.String(), "eqt ") {
 		t.Fatalf("desktop startup-status output = %q, want version header", out.String())
 	}
 }
 
 func TestFormatWindowsDesktopIntegrationStatusMissingLauncher(t *testing.T) {
-	exe := filepath.Join("tools", "eqrcp.exe")
+	exe := filepath.Join("tools", "eqt.exe")
 	env := fakeWindowsDesktopStatusEnv(t, exe, "")
 	got, err := formatWindowsDesktopIntegrationStatus(env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"- eqrcp launcher: installed",
+		"- eqt launcher: installed",
 		"path: " + exe,
 		"- summary: 6 installed, 0 needs repair, 0 not installed",
 	} {
@@ -167,13 +167,13 @@ func TestFormatWindowsDesktopIntegrationStatusMissingLauncher(t *testing.T) {
 }
 
 func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
-	staleCommand := windowsShellCommand(`C:\old\eqrcp.exe`, `C:\old\eqrcp.exe`, "share", "%1")
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqt.exe`, `C:\tools\eqt.exe`)
+	staleCommand := windowsShellCommand(`C:\old\eqt.exe`, `C:\old\eqt.exe`, "share", "%1")
 	env.queryRegDefault = func(key string) (string, error) {
-		if strings.Contains(key, `*\shell\eqrcp-share\command`) {
+		if strings.Contains(key, `*\shell\eqt-share\command`) {
 			return staleCommand, nil
 		}
-		return fakeWindowsRegCommands(`C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)[key], nil
+		return fakeWindowsRegCommands(`C:\tools\eqt.exe`, `C:\tools\eqt.exe`)[key], nil
 	}
 
 	got, err := formatWindowsDesktopIntegrationStatus(env)
@@ -181,9 +181,9 @@ func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"- Share with eqrcp (file): needs repair",
-		`expected: "C:\tools\eqrcp.exe" "share" "%1"`,
-		"repair: run `eqrcp desktop install`",
+		"- Share with eqt (file): needs repair",
+		`expected: "C:\tools\eqt.exe" "share" "%1"`,
+		"repair: run `eqt desktop install`",
 		"- summary: 5 installed, 1 needs repair, 0 not installed",
 	} {
 		if !strings.Contains(got, want) {
@@ -195,7 +195,7 @@ func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
 func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) windowsDesktopStatusEnv {
 	t.Helper()
 	registry := fakeWindowsRegCommands(exe, launcher)
-	sendTo := filepath.Join(t.TempDir(), "Share with eqrcp.vbs")
+	sendTo := filepath.Join(t.TempDir(), "Share with eqt.vbs")
 	launcherPath := launcher
 	return windowsDesktopStatusEnv{
 		executable: func() (string, error) {
@@ -236,7 +236,7 @@ func fakeWindowsDesktopStatusEnv(t *testing.T, exe string, launcher string) wind
 }
 
 func TestFormatWindowsDesktopIntegrationStatusRunningAgent(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqt.exe`, `C:\tools\eqt.exe`)
 	started := time.Date(2026, 4, 24, 9, 30, 0, 0, time.UTC)
 	env.agentStatus = func() (desktopAgentResponse, error) {
 		return desktopAgentResponse{
@@ -271,11 +271,11 @@ func TestFormatWindowsDesktopIntegrationStatusRunningAgent(t *testing.T) {
 }
 
 func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
-	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqrcp.exe`, `C:\tools\eqrcp.exe`)
+	env := fakeWindowsDesktopStatusEnv(t, `C:\tools\eqt.exe`, `C:\tools\eqt.exe`)
 	env.agentStatus = func() (desktopAgentResponse, error) {
 		return desktopAgentResponse{
 			State:   "idle",
-			Version: "eqrcp old-build [date: 2026-04-20T00:00:00Z]",
+			Version: "eqt old-build [date: 2026-04-20T00:00:00Z]",
 		}, nil
 	}
 
@@ -287,8 +287,8 @@ func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
 		"- Desktop agent runtime: running",
 		"  status: needs restart",
 		"  current executable version: " + version.String(),
-		"eqrcp desktop agent-stop",
-		"eqrcp desktop agent-start",
+		"eqt desktop agent-stop",
+		"eqt desktop agent-start",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("status = %q, want to contain %q", got, want)
@@ -297,12 +297,12 @@ func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
 }
 
 func TestWindowsAgentStartupCommand(t *testing.T) {
-	got := windowsAgentStartupCommand(`C:\tools\eqrcp.exe`)
+	got := windowsAgentStartupCommand(`C:\tools\eqt.exe`)
 	for _, want := range []string{
 		"powershell.exe",
 		"Start-Process",
 		"-WindowStyle Hidden",
-		`C:\tools\eqrcp.exe`,
+		`C:\tools\eqt.exe`,
 		"'desktop'",
 		"'agent'",
 	} {
@@ -315,7 +315,7 @@ func TestWindowsAgentStartupCommand(t *testing.T) {
 func TestFormatWindowsDesktopStartupStatusDisabled(t *testing.T) {
 	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
 		executable: func() (string, error) {
-			return `C:\tools\eqrcp.exe`, nil
+			return `C:\tools\eqt.exe`, nil
 		},
 		queryRegValue: func(key string, name string) (string, error) {
 			return "", errors.New("missing registry value")
@@ -329,7 +329,7 @@ func TestFormatWindowsDesktopStartupStatusDisabled(t *testing.T) {
 		"- Agent startup: disabled",
 		windowsStartupRunKey,
 		windowsStartupValueName,
-		"eqrcp desktop startup-enable",
+		"eqt desktop startup-enable",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("startup status = %q, want to contain %q", got, want)
@@ -338,7 +338,7 @@ func TestFormatWindowsDesktopStartupStatusDisabled(t *testing.T) {
 }
 
 func TestFormatWindowsDesktopStartupStatusEnabled(t *testing.T) {
-	exe := `C:\tools\eqrcp.exe`
+	exe := `C:\tools\eqt.exe`
 	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
 		executable: func() (string, error) {
 			return exe, nil
@@ -369,10 +369,10 @@ func TestFormatWindowsDesktopStartupStatusEnabled(t *testing.T) {
 func TestFormatWindowsDesktopStartupStatusNeedsRepair(t *testing.T) {
 	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
 		executable: func() (string, error) {
-			return `C:\tools\eqrcp.exe`, nil
+			return `C:\tools\eqt.exe`, nil
 		},
 		queryRegValue: func(key string, name string) (string, error) {
-			return windowsAgentStartupCommand(`C:\old\eqrcp.exe`), nil
+			return windowsAgentStartupCommand(`C:\old\eqt.exe`), nil
 		},
 	})
 	if err != nil {
@@ -380,8 +380,8 @@ func TestFormatWindowsDesktopStartupStatusNeedsRepair(t *testing.T) {
 	}
 	for _, want := range []string{
 		"- Agent startup: needs repair",
-		`expected: ` + windowsAgentStartupCommand(`C:\tools\eqrcp.exe`),
-		"repair: run `eqrcp desktop startup-enable`",
+		`expected: ` + windowsAgentStartupCommand(`C:\tools\eqt.exe`),
+		"repair: run `eqt desktop startup-enable`",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("startup status = %q, want to contain %q", got, want)
@@ -399,7 +399,7 @@ func fakeWindowsRegCommands(exe string, launcher string) map[string]string {
 
 type fakeFileInfo struct{}
 
-func (fakeFileInfo) Name() string       { return "Share with eqrcp.vbs" }
+func (fakeFileInfo) Name() string       { return "Share with eqt.vbs" }
 func (fakeFileInfo) Size() int64        { return 1 }
 func (fakeFileInfo) Mode() os.FileMode  { return 0644 }
 func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
@@ -409,7 +409,7 @@ func (fakeFileInfo) Sys() any           { return nil }
 // --- B4a: Linux + macOS autostart ---
 
 func TestLinuxAutostartContentRoundTrip(t *testing.T) {
-	exe := "/opt/eqrcp/eqrcp"
+	exe := "/opt/eqt/eqt"
 	content := linuxAutostartContent(exe)
 	if !strings.Contains(content, "[Desktop Entry]") {
 		t.Fatalf("missing [Desktop Entry] header: %s", content)
@@ -468,7 +468,7 @@ func TestInstallUninstallLinuxDesktopStartupRoundTrip(t *testing.T) {
 }
 
 func TestFormatLinuxDesktopStartupStatusStates(t *testing.T) {
-	exe := "/bin/eqrcp"
+	exe := "/bin/eqt"
 	expectedExec := exe + " desktop agent"
 
 	cases := []struct {
@@ -479,13 +479,13 @@ func TestFormatLinuxDesktopStartupStatusStates(t *testing.T) {
 	}{
 		{name: "not installed", readErr: os.ErrNotExist, wantSub: "state: not installed"},
 		{name: "installed", fileBody: "[Desktop Entry]\nExec=" + expectedExec + "\n", wantSub: "state: installed"},
-		{name: "needs repair", fileBody: "[Desktop Entry]\nExec=/other/eqrcp desktop agent\n", wantSub: "state: needs repair"},
+		{name: "needs repair", fileBody: "[Desktop Entry]\nExec=/other/eqt desktop agent\n", wantSub: "state: needs repair"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			env := linuxStartupStatusEnv{
 				executable: func() (string, error) { return exe, nil },
-				pathFn:     func() (string, error) { return "/tmp/eqrcp.desktop", nil },
+				pathFn:     func() (string, error) { return "/tmp/eqt.desktop", nil },
 				readFile: func(string) ([]byte, error) {
 					if tc.readErr != nil {
 						return nil, tc.readErr
@@ -505,7 +505,7 @@ func TestFormatLinuxDesktopStartupStatusStates(t *testing.T) {
 }
 
 func TestDarwinAutostartContentRoundTrip(t *testing.T) {
-	exe := "/Applications/eqrcp.app/Contents/MacOS/eqrcp"
+	exe := "/Applications/eqt.app/Contents/MacOS/eqt"
 	content := darwinAutostartContent(exe)
 	if !strings.Contains(content, "<key>Label</key>") {
 		t.Fatalf("missing Label key: %s", content)
@@ -519,8 +519,8 @@ func TestDarwinAutostartContentRoundTrip(t *testing.T) {
 }
 
 func TestParseLaunchAgentFirstProgramXMLEscapes(t *testing.T) {
-	content := darwinAutostartContent("/path/A & B/eqrcp")
-	if got := parseLaunchAgentFirstProgram(content); got != "/path/A & B/eqrcp" {
+	content := darwinAutostartContent("/path/A & B/eqt")
+	if got := parseLaunchAgentFirstProgram(content); got != "/path/A & B/eqt" {
 		t.Fatalf("round-trip mismatch: got %q", got)
 	}
 }
@@ -563,9 +563,9 @@ func TestInstallUninstallDarwinDesktopStartupRoundTrip(t *testing.T) {
 }
 
 func TestFormatDarwinDesktopStartupStatusStates(t *testing.T) {
-	exe := "/Applications/eqrcp.app/Contents/MacOS/eqrcp"
+	exe := "/Applications/eqt.app/Contents/MacOS/eqt"
 	installed := darwinAutostartContent(exe)
-	stale := darwinAutostartContent("/old/eqrcp")
+	stale := darwinAutostartContent("/old/eqt")
 
 	cases := []struct {
 		name     string
@@ -581,7 +581,7 @@ func TestFormatDarwinDesktopStartupStatusStates(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := darwinStartupStatusEnv{
 				executable: func() (string, error) { return exe, nil },
-				pathFn:     func() (string, error) { return "/tmp/eqrcp.plist", nil },
+				pathFn:     func() (string, error) { return "/tmp/eqt.plist", nil },
 				readFile: func(string) ([]byte, error) {
 					if tc.readErr != nil {
 						return nil, tc.readErr

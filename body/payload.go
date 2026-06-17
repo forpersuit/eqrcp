@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"eqrcp/util"
+	"eqt/util"
 )
 
 // Body to transfer
@@ -73,7 +73,7 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
 	timestamp := zipTimestamp().Format("20060102-150405")
 	if len(args) > 1 {
-		return "eqrcp-multiple-files-" + timestamp + ".zip"
+		return "eqt-multiple-files-" + timestamp + ".zip"
 	}
 	base := filepath.Base(args[0])
 	if hasDir {
@@ -83,11 +83,11 @@ func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
 		ext := filepath.Ext(base)
 		name := strings.TrimSuffix(base, ext)
 		if name == "" {
-			name = "eqrcp"
+			name = "eqt"
 		}
 		return name + "-zipped-" + timestamp + ".zip"
 	}
-	return "eqrcp-files-" + timestamp + ".zip"
+	return "eqt-files-" + timestamp + ".zip"
 }
 
 func displayItems(args []string) []string {

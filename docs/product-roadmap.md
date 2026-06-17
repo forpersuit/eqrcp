@@ -1,6 +1,6 @@
 # EQT Product Roadmap
 
-`EQT` is the product name for Easy QR Transfer. Keep `eqrcp` as the CLI,
+`EQT` is the product name for Easy QR Transfer. Keep `eqt` as the CLI,
 binary, and transfer-core identity until packaging, migration, and user-facing
 documentation are ready for a larger rename.
 
@@ -194,7 +194,7 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
       落地：4 个 job（go-test 1.25/1.26、desktop GUI module、frontend
       build、golangci-lint）。lint 已经过 errcheck/unused 基线清理
       (commit `d889987`)，现在是强制 gate。
-- [x] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqrcp`、
+- [x] A3 修正 `.goreleaser.yml`：homepage 改为 `forpersuit/eqt`、
       加 `release.prerelease: auto`、加 changelog groups (符合规范第六节)。
 - [x] A4 补全 `desktop/gui/wails.json` 元数据：`productName/productVersion/
       companyName/copyright/comments`，让 NSIS 安装器版本字段正确。
@@ -205,7 +205,7 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
       产物落入 `dist/{platform}-{arch}/`，与 Windows 路径对齐。新增
       `--cli-linux / --cli-macos / --cli-all` 选项交叉编译 CLI，host 为
       darwin 时 `build_gui_current` 会复制 `.app` 到 `dist/darwin-<arch>/`。
-- [x] B2 macOS Wails：bundle id 改为 `io.github.forpersuit.eqrcp-desktop`
+- [x] B2 macOS Wails：bundle id 改为 `io.github.forpersuit.eqt-desktop`
       (`build/darwin/Info.plist` + `Info.dev.plist`)，icns 由 Wails 从
       `build/appicon.png` 自动生成。codesign + notarize 流程文档化在
       `docs/wails-build-issue.md`，实际签名延后到 C3。
@@ -215,8 +215,8 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 - [~] B4 `cmd/desktop_integration.go` 的 install/uninstall/startup/status：
       Linux 用 `.desktop` 文件 + `~/.config/autostart`，
       macOS 用 `LaunchAgents plist` + Finder Services。
-  - [x] B4a 自启动跨平台：Linux `~/.config/autostart/eqrcp-agent.desktop`
-        + macOS `~/Library/LaunchAgents/io.github.forpersuit.eqrcp-agent.plist`
+  - [x] B4a 自启动跨平台：Linux `~/.config/autostart/eqt-agent.desktop`
+        + macOS `~/Library/LaunchAgents/io.github.forpersuit.eqt-agent.plist`
         实现完成（install / uninstall / status 三个分支），含 round-trip 测试。
   - [ ] B4b Linux 文件管理器集成 (Nautilus 优先，KDE/Thunar 后续)
   - [ ] B4c macOS Finder Quick Actions / Services（需 C3 签名先到位）
@@ -227,7 +227,7 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
       `release-cli` (goreleaser ubuntu)、`release-wails-windows`、
       `release-wails-macos`、`release-wails-linux`。各 Wails job 用
       `softprops/action-gh-release@v2` 把 `.tar.gz`（macOS 是
-      `eqrcp-desktop.app` 压成 tar.gz）追加到同一 tag。NSIS / AppImage /
+      `eqt-desktop.app` 压成 tar.gz）追加到同一 tag。NSIS / AppImage /
       dmg 留到下一轮。
 - [-] C2 release-drafter 暂不引入。当前流程「直接 commit 到 master + tag」
       不经过 PR，release-drafter 的 PR-based 草稿没数据可用。
@@ -245,7 +245,7 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 - [ ] D3 集成 `github.com/pion/webrtc/v4`：PeerConnection + 两条
       DataChannel (`ctrl` JSON / `data` 二进制)。STUN 用
       `stun:stun.l.google.com:19302` 起步。
-- [ ] D4 QR 内容升级为 `https://signal.eqrcp.io/j/<code>#k=<key>`，
+- [ ] D4 QR 内容升级为 `https://signal.eqt.io/j/<code>#k=<key>`，
       CLI 加 `--lan` / `--p2p` flag，握手失败时降级提示。
 - [-] D5 TURN fallback：监控 ICE 失败率，超阈值再上 `coturn`。
 
@@ -267,9 +267,9 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 `v0.1.0-rc.2` (commit `d26b9c4`) 是第一次成功跑通发布流水线的 tag，产物：
 - CLI: linux/darwin/windows × 386/amd64/arm/arm64 (tar.gz + zip)
 - Linux: `.deb` + `.rpm` × 4 arch
-- Wails GUI: `eqrcp-desktop-windows-amd64.exe`、
-  `eqrcp-desktop-darwin-universal.tar.gz`、
-  `eqrcp-desktop-linux-amd64.tar.gz`
+- Wails GUI: `eqt-desktop-windows-amd64.exe`、
+  `eqt-desktop-darwin-universal.tar.gz`、
+  `eqt-desktop-linux-amd64.tar.gz`
 - `checksums.txt`
 
 首跑 CI/Release 红的根因 (commit `d26b9c4`):

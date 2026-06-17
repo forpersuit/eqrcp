@@ -75,7 +75,7 @@ func contentDispositionFor(disposition string, filename string) string {
 
 func sendTitle(filename string) string {
 	switch {
-	case strings.HasPrefix(filename, "eqrcp-multiple-files-") && strings.HasSuffix(filename, ".zip"):
+	case strings.HasPrefix(filename, "eqt-multiple-files-") && strings.HasSuffix(filename, ".zip"):
 		return "Share multiple files"
 	case strings.Contains(filename, "-directory-") && strings.HasSuffix(filename, ".zip"):
 		return "Share directory"

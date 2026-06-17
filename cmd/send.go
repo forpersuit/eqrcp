@@ -3,13 +3,13 @@ package cmd
 import (
 	"fmt"
 
-	"eqrcp/body"
-	"eqrcp/config"
-	"eqrcp/logger"
-	"eqrcp/qr"
+	"eqt/body"
+	"eqt/config"
+	"eqt/logger"
+	"eqt/qr"
 	"github.com/eiannone/keyboard"
 
-	"eqrcp/server"
+	"eqt/server"
 	"github.com/spf13/cobra"
 )
 
@@ -66,15 +66,15 @@ var sendCmd = &cobra.Command{
 	Long:    "Send a file(s) or directories from this host",
 	Aliases: []string{"s"},
 	Example: `# Send /path/file.gif. Webserver listens on a random port
-eqrcp send /path/file.gif
+eqt send /path/file.gif
 # Shorter version:
-eqrcp /path/file.gif
+eqt /path/file.gif
 # Zip file1.gif and file2.gif, then send the zip package
-eqrcp /path/file1.gif /path/file2.gif
+eqt /path/file1.gif /path/file2.gif
 # Zip the content of directory, then send the zip package
-eqrcp /path/directory
+eqt /path/directory
 # Send file.gif by creating a webserver on port 8080
-eqrcp --port 8080 /path/file.gif
+eqt --port 8080 /path/file.gif
 `,
 	Args: cobra.MinimumNArgs(1),
 	RunE: sendCmdFunc,

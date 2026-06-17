@@ -9,9 +9,9 @@ Usage: scripts/build-windows-gui.sh [--out DIR]
 Build Windows executables for manual GUI testing.
 
 Output:
-- eqrcp.exe
-- eqrcp-launcher.exe
-- eqrcp-desktop.exe
+- eqt.exe
+- eqt-launcher.exe
+- eqt-desktop.exe
 
 Options:
 - --out DIR    Output directory. Default: dist/manual/windows-gui
@@ -64,11 +64,11 @@ find_wails() {
   printf '%s\n' "$wails_cmd"
 }
 
-env_cache="${GOCACHE:-/tmp/eqrcp-go-build}"
+env_cache="${GOCACHE:-/tmp/eqt-go-build}"
 
 echo "Building Windows CLI executables..."
-(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$build_root/eqrcp.exe" .)
-(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$build_root/eqrcp-launcher.exe" ./cmd/eqrcp-launcher)
+(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$build_root/eqt.exe" .)
+(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$build_root/eqt-launcher.exe" ./cmd/eqt-launcher)
 
 wails_cmd="$(find_wails)"
 if [[ -z "$wails_cmd" ]]; then
@@ -77,7 +77,7 @@ if [[ -z "$wails_cmd" ]]; then
 fi
 
 echo "Building Windows GUI executable..."
-(cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
-cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$build_root/eqrcp-desktop.exe"
+(cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
+cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$build_root/eqt-desktop.exe"
 
 echo "Windows GUI artifacts written to: $build_root"

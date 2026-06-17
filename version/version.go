@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	app     = "eqrcp"
+	app     = "eqt"
 	version = "dev"
 	date    = "n/a"
 )

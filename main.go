@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"eqrcp/cmd"
+	"eqt/cmd"
 )
 
 func main() {

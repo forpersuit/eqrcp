@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"eqrcp/config"
-	"eqrcp/logger"
-	"eqrcp/qr"
-	"eqrcp/server"
+	"eqt/config"
+	"eqt/logger"
+	"eqt/qr"
+	"eqt/server"
 	"github.com/eiannone/keyboard"
 	"github.com/spf13/cobra"
 )
@@ -56,9 +56,9 @@ var chatCmd = &cobra.Command{
 	Long:    "Start a browser chat session where this host and a scanned mobile device can exchange text and attachments.",
 	Aliases: []string{"c"},
 	Example: `# Start a chat session and print a QR code
-eqrcp chat
+eqt chat
 # Start a chat session and open the desktop browser interface
-eqrcp chat --browser`,
+eqt chat --browser`,
 	Args: cobra.NoArgs,
 	RunE: chatCmdFunc,
 }

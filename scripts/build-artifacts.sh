@@ -7,7 +7,7 @@ usage() {
 Usage: scripts/build-artifacts.sh [--out DIR] [--windows] [--gui] [--no-tests]
                                   [--cli-linux] [--cli-macos] [--cli-all]
 
-Build the executables needed for current eqrcp development and testing.
+Build the executables needed for current eqt development and testing.
 
 Default behavior:
 - build and test the current-platform CLI
@@ -85,21 +85,21 @@ mkdir -p "$build_root"
 build_current_cli() {
   local target_dir="$build_root/current"
   mkdir -p "$target_dir"
-  (cd "$root_dir" && GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" go build -o "$target_dir/eqrcp" .)
+  (cd "$root_dir" && GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go build -o "$target_dir/eqt" .)
 }
 
 build_windows_cli() {
   local target_dir="$build_root/windows-amd64"
   mkdir -p "$target_dir"
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$target_dir/eqrcp.exe" .)
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$target_dir/eqrcp-launcher.exe" ./cmd/eqrcp-launcher)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$target_dir/eqt.exe" .)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$target_dir/eqt-launcher.exe" ./cmd/eqt-launcher)
 }
 
 build_linux_cli() {
   for arch in amd64 arm64; do
     local target_dir="$build_root/linux-$arch"
     mkdir -p "$target_dir"
-    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqrcp" .)
+    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" .)
   done
 }
 
@@ -107,7 +107,7 @@ build_macos_cli() {
   for arch in amd64 arm64; do
     local target_dir="$build_root/darwin-$arch"
     mkdir -p "$target_dir"
-    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqrcp" .)
+    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" .)
   done
 }
 
@@ -143,11 +143,11 @@ build_gui_current() {
       mkdir -p "$target_dir"
       tags="$(linux_wails_tags)"
       if [[ -n "$tags" ]]; then
-        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -tags "$tags" -o eqrcp-desktop)
+        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -tags "$tags" -o eqt-desktop)
       else
-        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop)
+        (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -o eqt-desktop)
       fi
-      cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop" "$target_dir/eqrcp-desktop"
+      cp "$root_dir/desktop/gui/build/bin/eqt-desktop" "$target_dir/eqt-desktop"
       ;;
     Darwin*)
       local arch_suffix
@@ -158,11 +158,11 @@ build_gui_current() {
       esac
       local target_dir="$build_root/darwin-$arch_suffix"
       mkdir -p "$target_dir"
-      (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -o eqrcp-desktop)
-      if [[ -d "$root_dir/desktop/gui/build/bin/eqrcp-desktop.app" ]]; then
-        cp -R "$root_dir/desktop/gui/build/bin/eqrcp-desktop.app" "$target_dir/"
+      (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -o eqt-desktop)
+      if [[ -d "$root_dir/desktop/gui/build/bin/eqt-desktop.app" ]]; then
+        cp -R "$root_dir/desktop/gui/build/bin/eqt-desktop.app" "$target_dir/"
       else
-        cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop" "$target_dir/eqrcp-desktop"
+        cp "$root_dir/desktop/gui/build/bin/eqt-desktop" "$target_dir/eqt-desktop"
       fi
       ;;
   esac
@@ -175,14 +175,14 @@ build_gui_windows() {
     echo "Skipping Windows GUI build: wails CLI not found in PATH." >&2
     return 0
   fi
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
-  cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$target_dir/eqrcp-desktop.exe"
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
+  cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$target_dir/eqt-desktop.exe"
 }
 
 run_checks() {
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" go test ./...)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" go test ./...)
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
 }
 
 if [[ "$do_checks" -eq 1 ]]; then

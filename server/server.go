@@ -21,13 +21,13 @@ import (
 	"sync"
 	"time"
 
-	"eqrcp/qr"
+	"eqt/qr"
 
-	"eqrcp/body"
-	"eqrcp/config"
-	"eqrcp/pages"
-	"eqrcp/util"
-	"eqrcp/version"
+	"eqt/body"
+	"eqt/config"
+	"eqt/pages"
+	"eqt/util"
+	"eqt/version"
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
@@ -63,7 +63,7 @@ type Server struct {
 	repeatRoute    string
 	statusSeq      int64
 	statusSubs     map[chan struct{}]struct{}
-	// expectParallelRequests is set to true when eqrcp sends files, in order
+	// expectParallelRequests is set to true when eqt sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
 }
@@ -372,11 +372,11 @@ func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
 	w.WriteHeader(http.StatusGone)
 	switch status.State {
 	case "stopped":
-		fmt.Fprintln(w, "This transfer was stopped. Start a new eqrcp transfer to continue.")
+		fmt.Fprintln(w, "This transfer was stopped. Start a new eqt transfer to continue.")
 	case "failed":
-		fmt.Fprintln(w, "This transfer failed. Start a new eqrcp transfer to continue.")
+		fmt.Fprintln(w, "This transfer failed. Start a new eqt transfer to continue.")
 	default:
-		fmt.Fprintln(w, "This one-time transfer has already completed. Start a new eqrcp transfer to continue.")
+		fmt.Fprintln(w, "This one-time transfer has already completed. Start a new eqt transfer to continue.")
 	}
 }
 
@@ -695,7 +695,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.stopChannel = make(chan bool, 1)
 	app.setStatus("waiting", "Waiting for a device to connect.")
 	// Create cookie used to verify request is coming from first client to connect
-	cookie := http.Cookie{Name: "eqrcp", Value: ""}
+	cookie := http.Cookie{Name: "eqt", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)

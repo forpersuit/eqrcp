@@ -2,14 +2,14 @@
 
 ## Goal
 
-Make `eqrcp` usable without typing commands in a terminal.
+Make `eqt` usable without typing commands in a terminal.
 
 The desired workflows are:
 
-- Right click a file and choose `Share with eqrcp`.
+- Right click a file and choose `Share with eqt`.
 - Right click multiple files and share them as one transfer.
 - Right click a folder and share that folder.
-- Right click inside a folder and choose `Receive here with eqrcp`.
+- Right click inside a folder and choose `Receive here with eqt`.
 - Show the QR code automatically so a phone can scan it.
 
 The current CLI already provides the transfer engine. Desktop integration should wrap that engine instead of replacing it.
@@ -19,10 +19,10 @@ The current CLI already provides the transfer engine. Desktop integration should
 Existing commands already cover the core behavior:
 
 ```sh
-eqrcp <file>
-eqrcp <file1> <file2>
-eqrcp <directory>
-eqrcp receive --output <directory>
+eqt <file>
+eqt <file1> <file2>
+eqt <directory>
+eqt receive --output <directory>
 ```
 
 Useful flags for desktop mode:
@@ -58,19 +58,19 @@ Exit criteria:
 Add commands that are safe to launch from file managers:
 
 ```sh
-eqrcp desktop share <paths...>
-eqrcp desktop receive <directory>
-eqrcp desktop install
-eqrcp desktop uninstall
+eqt desktop share <paths...>
+eqt desktop receive <directory>
+eqt desktop install
+eqt desktop uninstall
 ```
 
 Status:
 
-- `eqrcp desktop share <paths...>` is implemented.
-- `eqrcp desktop receive <directory>` is implemented.
-- `eqrcp desktop install` is implemented for Windows.
-- `eqrcp desktop uninstall` is implemented for Windows.
-- `eqrcp desktop status` is implemented for Windows and returns a platform note elsewhere.
+- `eqt desktop share <paths...>` is implemented.
+- `eqt desktop receive <directory>` is implemented.
+- `eqt desktop install` is implemented for Windows.
+- `eqt desktop uninstall` is implemented for Windows.
+- `eqt desktop status` is implemented for Windows and returns a platform note elsewhere.
 - Linux and macOS startup install/status/uninstall are implemented.
 - Linux and macOS right-click install/status/uninstall remain platform-specific
   work and currently return a not implemented note outside Windows.
@@ -92,9 +92,9 @@ Implementation notes:
 
 Exit criteria:
 
-- `eqrcp desktop share file.txt` shares a file.
-- `eqrcp desktop share dir/` shares a directory.
-- `eqrcp desktop receive /tmp` receives into `/tmp`.
+- `eqt desktop share file.txt` shares a file.
+- `eqt desktop share dir/` shares a directory.
+- `eqt desktop receive /tmp` receives into `/tmp`.
 - The commands work without terminal input.
 
 ### Phase 2: Install And Uninstall Context Menus
@@ -102,8 +102,8 @@ Exit criteria:
 Add platform-specific installers behind:
 
 ```sh
-eqrcp desktop install
-eqrcp desktop uninstall
+eqt desktop install
+eqt desktop uninstall
 ```
 
 Status:
@@ -135,7 +135,7 @@ Cross-platform boundary:
 - File-manager context menus are not "write once, adapt everywhere". Windows
   Explorer, GNOME Files/Nautilus, KDE Dolphin, and macOS Finder expose different
   extension points and packaging expectations.
-- The portable layer should stay at `eqrcp desktop share/receive/status`; each
+- The portable layer should stay at `eqt desktop share/receive/status`; each
   OS adapter should only install or remove native entry points that call that
   stable command surface.
 
@@ -146,11 +146,11 @@ Status: in progress.
 Focus:
 
 - Validate Windows Explorer behavior after real right-click usage.
-- Add `eqrcp desktop status` so users can inspect installed registry commands.
+- Add `eqt desktop status` so users can inspect installed registry commands.
 - Investigate practical multi-select support for Windows Explorer.
 - Add a Windows Send To entry for multi-select sharing.
 - Decide whether a separate no-console launcher is needed.
-- Add `eqrcp-launcher.exe` as an optional no-console launcher for context menu entries.
+- Add `eqt-launcher.exe` as an optional no-console launcher for context menu entries.
 - Improve visible error reporting for no-terminal launches.
 
 Priority:
@@ -162,11 +162,11 @@ Priority:
 
 Exit criteria:
 
-- `eqrcp desktop status` reports all installed Windows entries and their command strings.
+- `eqt desktop status` reports all installed Windows entries and their command strings.
 - Single file share, folder share, folder receive, and folder-background receive are manually validated.
-- Multi-select support is available through `Send to > Share with eqrcp`, or a limitation is documented.
-- `eqrcp-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqrcp.exe`.
-- `eqrcp-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqrcp` exits with an error.
+- Multi-select support is available through `Send to > Share with eqt`, or a limitation is documented.
+- `eqt-launcher.exe` is available for Windows builds and is used by `desktop install` when it sits next to `eqt.exe`.
+- `eqt-launcher.exe` writes child process output to a cache log and shows a Windows message box if `eqt` exits with an error.
 - Launcher error formatting has automated tests for argument errors, command display, log path display, and log tail display.
 - Native Windows launcher error dialogs were manually validated and now use `MessageBoxW` directly instead of PowerShell.
 - `desktop status` now reports stale registry commands, stale Send To scripts, the current executable path, the expected launcher path, and repair guidance.
@@ -195,7 +195,7 @@ After the right-click workflow is functional, improve visibility:
 - Basic transfer progress. Implemented: `/qr/status` exposes byte counters and percent for browser display.
 - Receive completion details. Implemented: `/qr/status` records the files saved during receive and the QR page displays them after upload.
 - Mobile upload completion page. Implemented: after phone upload, the success page lists each saved file and uses a small mobile-friendly layout.
-- Last used output directory. Partially implemented: `eqrcp desktop receive` can now run without a directory and uses the configured output directory or current working directory, while right-click receive still passes the clicked directory explicitly.
+- Last used output directory. Partially implemented: `eqt desktop receive` can now run without a directory and uses the configured output directory or current working directory, while right-click receive still passes the clicked directory explicitly.
 - System tray entry.
 
 The first implementation stays browser-based to avoid adding GUI dependencies. `/qr` now opens an HTML control page, `/qr/image` serves the QR image, `/qr/events` pushes current transfer state changes, `/qr/status` returns the current transfer state for fallback polling, and `/qr/stop` stops the current transfer.
@@ -211,19 +211,19 @@ Current progress model:
 Next priorities:
 
 1. Validate progress, QR completion cleanup, timestamped archive names, and mobile upload completion pages in Windows right-click share and receive flows.
-2. Validate `eqrcp desktop receive` without a directory, using the configured output directory or current working directory.
+2. Validate `eqt desktop receive` without a directory, using the configured output directory or current working directory.
 3. Validate setup repair checks for stale Windows registry paths, missing launcher placement, and the `desktop status` summary on Windows.
 
 ### Phase 4: Desktop Agent And Single Instance
 
 Status: in progress.
 
-The current Windows desktop flow starts one `eqrcp-launcher.exe` and one `eqrcp.exe` process per right-click action. This is acceptable while validating single-transfer behavior, but it can leave many waiting processes when users start several shares or receives.
+The current Windows desktop flow starts one `eqt-launcher.exe` and one `eqt.exe` process per right-click action. This is acceptable while validating single-transfer behavior, but it can leave many waiting processes when users start several shares or receives.
 
 The planned fix is a desktop agent:
 
-- `eqrcp desktop agent` runs as the single long-lived process. Initial command and local API are implemented and manually validated on Windows.
-- `eqrcp-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly. Manually validated on Windows.
+- `eqt desktop agent` runs as the single long-lived process. Initial command and local API are implemented and manually validated on Windows.
+- `eqt-launcher.exe` forwards right-click requests to the agent instead of starting a full transfer process directly. Manually validated on Windows.
 - The agent owns transfer lifecycle, status pages, stop actions, and cleanup. It runs one active task at a time; when a new right-click task arrives, it stops the current task and starts the next one instead of launching extra transfer processes. Manually validated on Windows.
 - The agent can later expose a tray icon and current-task list.
 - The agent should prevent stale orphaned transfers from accumulating.
@@ -238,32 +238,32 @@ Initial local API:
 - Active agent tasks now also receive real server transfer state from the transfer service: `waiting`, `transferring`, `completed`, or `stopped`, including progress percentage, current file, and saved files.
 - The agent browser page and `desktop agent-status` output now render `current file` and `saved files` explicitly for both the active task and history records, so Windows validation can confirm multi-file receive and large-transfer field updates without opening raw JSON.
 - Send-side completion is based on response write progress: a transfer is completed only when the expected bytes are written without a write error. If the downloading client cancels before completion, the transfer is recorded as stopped instead of completed.
-- Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqrcp desktop agent-history-clear`.
+- Recent agent task history is persisted locally across agent restarts, capped at 20 records, and can be cleared from the agent status page or with `eqt desktop agent-history-clear`.
 - `POST /tasks` accepts JSON such as `{"action":"share","paths":["C:\\path\\file.txt"]}` or `{"action":"receive","paths":["C:\\path\\folder"]}`.
 - `DELETE /history` clears the in-memory and persisted recent task history.
 - `POST /stop-current` stops the active transfer task without exiting the long-lived agent.
 - `POST /shutdown` stops the active task and cleanly exits the agent.
-- `eqrcp desktop agent-start` now exists as an explicit alias for `eqrcp desktop agent`, so users can start the long-lived agent with a clearer command name.
-- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground commands by default: they keep the shell occupied while the agent is running.
-- `eqrcp desktop agent -B` and `eqrcp desktop agent-start -B` start the same agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell. The uppercase shorthand avoids conflicting with the existing global `-b` / `--browser` flag.
-- `eqrcp desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
-- `eqrcp desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
-- `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
+- `eqt desktop agent-start` now exists as an explicit alias for `eqt desktop agent`, so users can start the long-lived agent with a clearer command name.
+- `eqt desktop agent` and `eqt desktop agent-start` are foreground commands by default: they keep the shell occupied while the agent is running.
+- `eqt desktop agent -B` and `eqt desktop agent-start -B` start the same agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell. The uppercase shorthand avoids conflicting with the existing global `-b` / `--browser` flag.
+- `eqt desktop agent-stop` calls `/shutdown` so users can stop the long-lived agent without Task Manager.
+- `eqt desktop agent-stop-current` calls `/stop-current` so users can cancel the active task from a shell without stopping the agent.
+- `eqt desktop agent-status` fetches `/status` and prints a readable current task and recent history summary.
 - The browser agent page now explains the task lifecycle directly: `Current` keeps the active task visible while its QR service still exists, and the task moves to `History` only after that service exits and the task is fully finalized.
-- `eqrcp desktop agent-history-clear` clears recent desktop agent task history.
-- `eqrcp desktop agent-open` opens the browser-based agent status page when the agent is running.
-- `eqrcp desktop agent-open-current` opens the current task QR page when one is active.
-- `eqrcp-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
-- If the agent is not reachable, `eqrcp-launcher.exe` starts `eqrcp desktop agent`, waits for `/health`, then submits the task.
+- `eqt desktop agent-history-clear` clears recent desktop agent task history.
+- `eqt desktop agent-open` opens the browser-based agent status page when the agent is running.
+- `eqt desktop agent-open-current` opens the current task QR page when one is active.
+- `eqt-launcher.exe` now tries to submit right-click `share` and `receive` tasks to the agent first.
+- If the agent is not reachable, `eqt-launcher.exe` starts `eqt desktop agent`, waits for `/health`, then submits the task.
 - If the agent is online and already waiting on a previous transfer, the new task is accepted and the agent stops the current server so the new QR page can open.
 - If the agent cannot be started, the launcher falls back to the previous direct desktop command path.
 
 Deferred Windows validation batch:
 
 1. Validate QR completion cleanup, timestamped archive names, original item lists, large-send fields, and multi-file receive fields in Windows right-click flows.
-2. Validate the browser-based agent status page on Windows, including automatic status refresh, `eqrcp desktop agent-open`, `eqrcp desktop agent-open-current`, and the current task QR page link.
-3. Validate `eqrcp desktop agent-start -B`, `eqrcp desktop agent-stop`, and `eqrcp desktop status` runtime diagnostics on Windows, including the version mismatch `needs restart` case.
-4. Validate `eqrcp desktop agent-stop-current`, repeat QR scan, multi-browser behavior, persisted history, and process count bounded around one long-lived agent plus short-lived launcher invocations.
+2. Validate the browser-based agent status page on Windows, including automatic status refresh, `eqt desktop agent-open`, `eqt desktop agent-open-current`, and the current task QR page link.
+3. Validate `eqt desktop agent-start -B`, `eqt desktop agent-stop`, and `eqt desktop status` runtime diagnostics on Windows, including the version mismatch `needs restart` case.
+4. Validate `eqt desktop agent-stop-current`, repeat QR scan, multi-browser behavior, persisted history, and process count bounded around one long-lived agent plus short-lived launcher invocations.
 5. Validate Windows startup registration, login autostart, startup repair detection, and lightweight notifications after the next Windows-focused development pass.
 
 ### Phase 5: Desktop Enhancements
@@ -273,7 +273,7 @@ Status: in progress.
 These features should start after Phase 3 and Phase 4 validation are stable:
 
 - Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
-- Startup registration: initial Windows current-user login startup is implemented with `eqrcp desktop startup-enable`, `eqrcp desktop startup-disable`, and `eqrcp desktop startup-status`. `eqrcp desktop status` also reports whether startup is disabled, enabled, or needs repair.
+- Startup registration: initial Windows current-user login startup is implemented with `eqt desktop startup-enable`, `eqt desktop startup-disable`, and `eqt desktop startup-status`. `eqt desktop status` also reports whether startup is disabled, enabled, or needs repair.
 - Notifications: initial lightweight notifications are implemented for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Real started/completed/stopped notifications are driven by server transfer state rather than only by agent task lifecycle. Windows uses built-in PowerShell/.NET balloon notifications without adding a GUI dependency.
 - Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
 - Settings surface: initial browser-based settings surface is implemented on the local agent page. It can read and update output directory, interface, port, and browser-open preference through `/settings`, backed by the existing per-user config file. The browser-open preference is now used by desktop share/receive flows and desktop agent tasks.
@@ -282,7 +282,7 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 - Port `0` remains the recommended default because it lets the OS choose an available port. Fixed ports are supported for predictable URLs, but transfers fail visibly if the chosen port is already occupied.
 - When no output directory is configured, desktop settings resolve to the current user's `Downloads` directory if it exists, otherwise the user's home directory. Saving an empty output value writes that resolved user-directory default instead of leaving receive behavior dependent on the process working directory.
 - The config file stays in the current user's config directory. This remains the right default for installer builds because installation directories are often read-only, shared by multiple users, and unsuitable for mutable per-user preferences.
-- The Wails GUI settings surface now exposes `Windows right-click share and receive` and `Start EQT at login` toggles. These wrap the existing `eqrcp desktop install/uninstall/status` and `startup-enable/startup-disable/startup-status` command paths instead of duplicating platform registry or autostart logic inside the GUI.
+- The Wails GUI settings surface now exposes `Windows right-click share and receive` and `Start EQT at login` toggles. These wrap the existing `eqt desktop install/uninstall/status` and `startup-enable/startup-disable/startup-status` command paths instead of duplicating platform registry or autostart logic inside the GUI.
 - Agent restart: the browser status page includes `Restart Agent`, which asks the current process to stop and launch a fresh background agent from the same executable.
 - Transfer pages opened by the desktop agent now show a compact agent status pill in the top-right corner. It uses green, red, or gray state coloring for reachable, offline, and idle/restarting states. If the per-task QR service disappears after agent restart or replacement, the page falls back to the agent `/status` endpoint, shows whether the agent is reachable, and renders the task's final agent state when it can still find the task in current or history.
 - Agent restart now synchronously finalizes the active task into persisted history before the old agent exits, so an already-open task page can still use `Transfer again` after the new agent starts.
@@ -298,13 +298,13 @@ Next priorities:
 
 Status: started.
 
-Use Wails v2 to provide a native desktop application on Windows, Linux, and macOS while keeping the existing Go transfer engine and desktop agent as the source of truth. The user-facing product name is `EQT`, short for Easy QR Transfer; keep `eqrcp` as the CLI and core-transfer identity until a packaging and migration plan is ready.
+Use Wails v2 to provide a native desktop application on Windows, Linux, and macOS while keeping the existing Go transfer engine and desktop agent as the source of truth. The user-facing product name is `EQT`, short for Easy QR Transfer; keep `eqt` as the CLI and core-transfer identity until a packaging and migration plan is ready.
 
 Architecture:
 
 - `desktop/gui` contains the Wails v2 app as a separate module.
 - The GUI talks to the long-running desktop agent at `127.0.0.1:48176`.
-- The GUI starts `eqrcp desktop agent-start -B` when the agent is offline, using `EQRCP_CLI`, a sibling `eqrcp` binary, or `eqrcp` on `PATH`.
+- The GUI starts `eqt desktop agent-start -B` when the agent is offline, using `EQT_CLI`, a sibling `eqt` binary, or `eqt` on `PATH`.
 - Transfer task creation stays behind the existing `/tasks` agent API.
 - Settings stay behind the existing `/settings` agent API.
 - The Wails app should not duplicate send, receive, status, history, or cleanup logic.
@@ -373,8 +373,8 @@ System tray note:
 The first desktop implementation is available:
 
 ```sh
-eqrcp desktop share <paths...>
-eqrcp desktop receive [directory]
+eqt desktop share <paths...>
+eqt desktop receive [directory]
 ```
 
 Use the browser QR page initially. It is already implemented and avoids introducing GUI dependencies. When `desktop receive` is launched from a right-click directory action, the clicked directory is passed explicitly. When it is launched manually without a directory, it falls back to the configured output directory or current working directory.

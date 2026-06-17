@@ -43,7 +43,7 @@ func TestParseDesktopStartupStatus(t *testing.T) {
 }
 
 func TestDesktopIntegrationCommands(t *testing.T) {
-	t.Setenv("EQRCP_CLI", "/tmp/eqrcp")
+	t.Setenv("EQT_CLI", "/tmp/eqt")
 	oldRunner := desktopCommandRunner
 	defer func() { desktopCommandRunner = oldRunner }()
 
@@ -76,12 +76,12 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 
 	got := strings.Join(calls, "\n")
 	for _, want := range []string{
-		"/tmp/eqrcp desktop install",
-		"/tmp/eqrcp desktop status",
-		"/tmp/eqrcp desktop uninstall",
-		"/tmp/eqrcp desktop startup-enable",
-		"/tmp/eqrcp desktop startup-status",
-		"/tmp/eqrcp desktop startup-disable",
+		"/tmp/eqt desktop install",
+		"/tmp/eqt desktop status",
+		"/tmp/eqt desktop uninstall",
+		"/tmp/eqt desktop startup-enable",
+		"/tmp/eqt desktop startup-status",
+		"/tmp/eqt desktop startup-disable",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("calls = %q, want to contain %q", got, want)

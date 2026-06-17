@@ -2,7 +2,7 @@
 
   - Scope analyzed: repo 自有 Go 代码、嵌入式 HTML/JS、Wails 前端入口；排除了未跟踪的 node_modules/ 第三方依赖。
   - Stack detected: Go CLI + net/http server + Cobra + Wails desktop frontend.
-  - Test/build commands detected: go test ./...、go test ./server ./cmd、go build -o eqrcp .、Windows artifact
+  - Test/build commands detected: go test ./...、go test ./server ./cmd、go build -o eqt .、Windows artifact
     build scripts。
   - Highest-impact hotspot: chat page message merge uses repeated linear scans, bounded by history but still on
     an interactive hot path.

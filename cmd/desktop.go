@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"eqrcp/application"
-	"eqrcp/config"
-	"eqrcp/version"
+	"eqt/application"
+	"eqt/config"
+	"eqt/version"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +20,11 @@ var desktopShareCmd = &cobra.Command{
 	Short: "Share selected files or directories from a desktop launcher",
 	Long:  "Share selected files or directories from a desktop launcher. This command opens the QR code in a browser by default.",
 	Example: `# Share one file from a desktop launcher
-eqrcp desktop share /path/file.txt
+eqt desktop share /path/file.txt
 # Share multiple selected paths
-eqrcp desktop share /path/file.txt /path/photo.jpg
+eqt desktop share /path/file.txt /path/photo.jpg
 # Share a directory
-eqrcp desktop share /path/directory`,
+eqt desktop share /path/directory`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(command *cobra.Command, args []string) error {
 		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
@@ -37,9 +37,9 @@ var desktopReceiveCmd = &cobra.Command{
 	Short: "Receive files into a directory from a desktop launcher",
 	Long:  "Receive files into a directory from a desktop launcher. This command opens the QR code in a browser by default. When no directory is passed, the configured output directory or current working directory is used.",
 	Example: `# Receive files into a selected directory
-eqrcp desktop receive /path/directory
+eqt desktop receive /path/directory
 # Receive files into the configured output directory or current directory
-eqrcp desktop receive`,
+eqt desktop receive`,
 	Args: cobra.RangeArgs(0, 1),
 	RunE: func(command *cobra.Command, args []string) error {
 		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
@@ -57,7 +57,7 @@ var desktopChatCmd = &cobra.Command{
 	Short: "Start a chat session from a desktop launcher",
 	Long:  "Start a browser-based chat session from a desktop launcher. This command opens the chat interface in a browser by default.",
 	Example: `# Start a chat session
-eqrcp desktop chat`,
+eqt desktop chat`,
 	Args: cobra.NoArgs,
 	RunE: func(command *cobra.Command, args []string) error {
 		app.Flags.Browser = desktopBrowserPreference(app.Flags, true)
@@ -162,7 +162,7 @@ var desktopStartupStatusCmd = &cobra.Command{
 var desktopUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall desktop context menu entries",
-	Long:  "Uninstall desktop context menu entries created by eqrcp.",
+	Long:  "Uninstall desktop context menu entries created by eqt.",
 	RunE: func(command *cobra.Command, args []string) error {
 		if err := uninstallDesktopIntegration(); err != nil {
 			return err

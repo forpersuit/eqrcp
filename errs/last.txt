@@ -66,11 +66,11 @@
   - 需要 Apple ID + App-Specific Password（在 appleid.apple.com 生成，免费）
 
   流程（已经文档化在 docs/wails-build-issue.md 里）：
-  codesign --deep --force --options runtime --sign "Developer ID Application: <Your Name>" eqrcp-desktop.app
-  create-dmg eqrcp-desktop.app
-  xcrun notarytool submit eqrcp-desktop.dmg --apple-id $APPLE_ID --team-id $TEAM_ID --password $APP_PASSWORD
+  codesign --deep --force --options runtime --sign "Developer ID Application: <Your Name>" eqt-desktop.app
+  create-dmg eqt-desktop.app
+  xcrun notarytool submit eqt-desktop.dmg --apple-id $APPLE_ID --team-id $TEAM_ID --password $APP_PASSWORD
   --wait
-  xcrun stapler staple eqrcp-desktop.dmg
+  xcrun stapler staple eqt-desktop.dmg
 
   CI Secrets 要存：
   - APPLE_DEVELOPER_CERT_P12_BASE64（证书导出为 .p12 后 base64）
@@ -96,7 +96,7 @@
 
   流程（OV/EV cert）：
   signtool sign /f cert.pfx /p $PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256
-  eqrcp-desktop.exe
+  eqt-desktop.exe
   # 需要先签 .exe，NSIS 打包后再签 installer
 
   建议你怎么做（最低成本路径）
@@ -156,7 +156,7 @@
 
   要不要现在把 skill 文件 + 这一处小补丁一起 commit？以下是我要 commit 的清单：
 
-  1. .claude/skills/eqrcp-ci-release/SKILL.md (新增)
+  1. .claude/skills/eqt-ci-release/SKILL.md (新增)
   2. 可选：roadmap 加一句 609d80f 让流水线追溯更完整
 
   确认下要不要 commit、要不要顺便补 roadmap？
@@ -179,15 +179,15 @@
       237  4. 6 条 errcheck/unused 基线清理 (commit `d889987`)。
       238 +5. lint 转为强制 gate (commit `609d80f`)。
 
-● Bash(git add .claude/skills/eqrcp-ci-release/SKILL.md docs/product-roadmap.md && git commit -m "docs: capture
+● Bash(git add .claude/skills/eqt-ci-release/SKILL.md docs/product-roadmap.md && git commit -m "docs: capture
       release pipeline gotchas as Claude skill")
-  ⎿  === eqrcp pre-commit: deploy Windows acceptance artifacts ===
-     Closing running eqrcp desktop processes...
+  ⎿  === eqt pre-commit: deploy Windows acceptance artifacts ===
+     Closing running eqt desktop processes...
      Running Go tests...
      … +37 lines (ctrl+o to expand)
 
 ● Bash(git push origin master 2>&1 | tail -3)
-  ⎿  To github.com:forpersuit/eqrcp.git
+  ⎿  To github.com:forpersuit/eqt.git
         609d80f..f2e1bec  master -> master
 
 ● Q1 已提交推送。Q3 我直接回，Q5 我派 agent 调研，期间我看下 Q4 的现有文档结构和 B4a 的代码位置。
@@ -201,27 +201,27 @@
   ~/Library/LaunchAgents/*.plist。先看现有 switch 入口然后改造。
 
 
-● Bash(go vet ./cmd/... 2>&1 | tail -10 && go build -o /tmp/eqrcp-test . 2>&1 | tail -5 && rm -f /tmp/eqrcp-test
+● Bash(go vet ./cmd/... 2>&1 | tail -10 && go build -o /tmp/eqt-test . 2>&1 | tail -5 && rm -f /tmp/eqt-test
        && echo BUILD_OK)
   ⎿  BUILD_OK
 
 ● 代码编译通过。加测试。
 
 ● Bash(go test ./cmd/... 2>&1 | tail -10)
-  ⎿  ok         eqrcp/cmd       0.954s
-     ok         eqrcp/cmd/eqrcp-launcher        (cached)
+  ⎿  ok         eqt/cmd       0.954s
+     ok         eqt/cmd/eqt-launcher        (cached)
 
 ● 测试全绿。提交 B4a，等 Q5 调研 agent，下一步直接答 Q3。
 
 ● Bash(git add cmd/desktop_integration.go cmd/desktop_integration_test.go docs/product-roadmap.md && git commit
       -m "feat(desktop): cross-platform autostart for Linux a…)
-  ⎿  === eqrcp pre-commit: deploy Windows acceptance artifacts ===
-     Closing running eqrcp desktop processes...
+  ⎿  === eqt pre-commit: deploy Windows acceptance artifacts ===
+     Closing running eqt desktop processes...
      Running Go tests...
      … +37 lines (ctrl+o to expand)
 
 ● Bash(git push origin master 2>&1 | tail -3)
-  ⎿  To github.com:forpersuit/eqrcp.git
+  ⎿  To github.com:forpersuit/eqt.git
         f2e1bec..c9db06e  master -> master
 
 ● B4a 已推送。回答 Q3，等 Q5 调研。
@@ -273,7 +273,7 @@
 
   同类工具对比
 
-  eqrcp 真正的竞品/参考——以下都是 GitHub 上不签名的 Go/Rust/Wails/Electron 桌面工具：
+  eqt 真正的竞品/参考——以下都是 GitHub 上不签名的 Go/Rust/Wails/Electron 桌面工具：
 
   - LocalSend（Flutter, 60k stars）—— Linux/macOS 版直到 1.13+ 才有 codesign，Windows 至今 unsigned
   - Snapdrop / PairDrop（Web-based, 7k+ stars）—— 没有 desktop 版，但理念相同
@@ -283,7 +283,7 @@
 
   结论：在 "indie 开源工具" 这个赛道，不签是常态。用户群也已经习惯了点 More info。
 
-  我对 eqrcp 的建议
+  我对 eqt 的建议
 
   Phase 1（现在到首批真实用户）：不签。在 release notes / 产品介绍页加一句话：
 
@@ -308,7 +308,7 @@
   ┌─────────────────┬───────────────────┬──────────────────────────────────────────┐
   │        Q        │       状态        │                   产出                   │
   ├─────────────────┼───────────────────┼──────────────────────────────────────────┤
-  │ Q1 skill        │ ✅ commit f2e1bec │ .claude/skills/eqrcp-ci-release/SKILL.md │
+  │ Q1 skill        │ ✅ commit f2e1bec │ .claude/skills/eqt-ci-release/SKILL.md │
   ├─────────────────┼───────────────────┼──────────────────────────────────────────┤
   │ Q2 B4a 自启动   │ ✅ commit c9db06e │ Linux .desktop + macOS plist + 全套测试  │
   ├─────────────────┼───────────────────┼──────────────────────────────────────────┤
@@ -324,7 +324,7 @@
 ✻ Churned for 9m 46s
 
 ❯ 1. 使用公共stun还是自己搭建? 自己搭建有什么要求,难点
-  2. 我想将eqrcp全部改为eqt,这是我们这个软件的简写
+  2. 我想将eqt全部改为eqt,这是我们这个软件的简写
   3. 边等agent, 边推进B4, 但是 #2 这个改名,难度大吗? 不大的话,推进, 大的话就后续再说;
   ⎿  Context limit reached · /compact or /clear to continue
 
@@ -333,7 +333,7 @@
      202605191409165309821828268d9d6jUYgkluz). This is a server-side issue, usually temporary — try again in a
      moment. If it persists, check your inference gateway (9w7.cn).
 
-※ recap: 目标是推进 eqrcp
+※ recap: 目标是推进 eqt
   跨平台和商业化路线图；当前任务是修复上次会话留下的破损状态——`cmd/desktop_integration.go` 加了 linux
   分支但函数没实现，代码编译不过。下一步：回滚那 3 处 case，并单独提交 `wails.json` 的 brand 小改。 (disable
   recaps in /config)

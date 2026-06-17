@@ -11,75 +11,75 @@ Status: implemented for user-level registry entries, pending manual validation i
 File share entry:
 
 ```text
-HKCU\Software\Classes\*\shell\eqrcp-share
-HKCU\Software\Classes\*\shell\eqrcp-share\command
+HKCU\Software\Classes\*\shell\eqt-share
+HKCU\Software\Classes\*\shell\eqt-share\command
 ```
 
 Command shape:
 
 ```text
-"C:\Path\To\eqrcp.exe" desktop share "%1"
+"C:\Path\To\eqt.exe" desktop share "%1"
 ```
 
 Directory share entry:
 
 ```text
-HKCU\Software\Classes\Directory\shell\eqrcp-share
-HKCU\Software\Classes\Directory\shell\eqrcp-share\command
+HKCU\Software\Classes\Directory\shell\eqt-share
+HKCU\Software\Classes\Directory\shell\eqt-share\command
 ```
 
 Command shape:
 
 ```text
-"C:\Path\To\eqrcp.exe" desktop share "%1"
+"C:\Path\To\eqt.exe" desktop share "%1"
 ```
 
 Receive here entry for folder background:
 
 ```text
-HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive
-HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive\command
+HKCU\Software\Classes\Directory\Background\shell\eqt-receive
+HKCU\Software\Classes\Directory\Background\shell\eqt-receive\command
 ```
 
 Command shape:
 
 ```text
-"C:\Path\To\eqrcp.exe" desktop receive "%V"
+"C:\Path\To\eqt.exe" desktop receive "%V"
 ```
 
 Implemented entries:
 
-- `HKCU\Software\Classes\*\shell\eqrcp-share`
-- `HKCU\Software\Classes\Directory\shell\eqrcp-share`
-- `HKCU\Software\Classes\Directory\shell\eqrcp-receive`
-- `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`
-- `%APPDATA%\Microsoft\Windows\SendTo\Share with eqrcp.vbs`
+- `HKCU\Software\Classes\*\shell\eqt-share`
+- `HKCU\Software\Classes\Directory\shell\eqt-share`
+- `HKCU\Software\Classes\Directory\shell\eqt-receive`
+- `HKCU\Software\Classes\Directory\Background\shell\eqt-receive`
+- `%APPDATA%\Microsoft\Windows\SendTo\Share with eqt.vbs`
 
 Install:
 
 ```powershell
-eqrcp.exe desktop install
+eqt.exe desktop install
 ```
 
 Status:
 
 ```powershell
-eqrcp.exe desktop status
+eqt.exe desktop status
 ```
 
 Uninstall:
 
 ```powershell
-eqrcp.exe desktop uninstall
+eqt.exe desktop uninstall
 ```
 
-The installer uses the current `eqrcp.exe` path returned by the operating system, so install from the final binary location rather than from a temporary download path.
+The installer uses the current `eqt.exe` path returned by the operating system, so install from the final binary location rather than from a temporary download path.
 
-If `eqrcp-launcher.exe` is present next to `eqrcp.exe`, the installer registers context menu entries through the launcher. The launcher is a Windows GUI-subsystem binary, so it avoids the console window and then starts `eqrcp.exe desktop ...` in the background.
+If `eqt-launcher.exe` is present next to `eqt.exe`, the installer registers context menu entries through the launcher. The launcher is a Windows GUI-subsystem binary, so it avoids the console window and then starts `eqt.exe desktop ...` in the background.
 
-The launcher waits for the hidden `eqrcp.exe` process to finish. It writes output to a log under the user cache directory and shows a Windows message box only when `eqrcp.exe` exits with an error. Successful transfers should not show a completion dialog.
+The launcher waits for the hidden `eqt.exe` process to finish. It writes output to a log under the user cache directory and shows a Windows message box only when `eqt.exe` exits with an error. Successful transfers should not show a completion dialog.
 
-The installer passes the current main executable path to `eqrcp-launcher.exe`. This means the launcher can still find the main executable when the main file is not literally named `eqrcp.exe`, as long as `desktop install` was run from that renamed executable.
+The installer passes the current main executable path to `eqt-launcher.exe`. This means the launcher can still find the main executable when the main file is not literally named `eqt.exe`, as long as `desktop install` was run from that renamed executable.
 
 The Explorer command is launched through hidden PowerShell:
 
@@ -87,16 +87,16 @@ The Explorer command is launched through hidden PowerShell:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process ..."
 ```
 
-This is the fallback when `eqrcp-launcher.exe` is not present. It avoids Explorer showing the console-program prompt when a context menu entry starts `eqrcp.exe`.
+This is the fallback when `eqt-launcher.exe` is not present. It avoids Explorer showing the console-program prompt when a context menu entry starts `eqt.exe`.
 
-After replacing `eqrcp.exe` or adding/removing `eqrcp-launcher.exe`, run `eqrcp.exe desktop install` again to refresh the registered command path and launch command.
+After replacing `eqt.exe` or adding/removing `eqt-launcher.exe`, run `eqt.exe desktop install` again to refresh the registered command path and launch command.
 
 Multi-select support:
 
 - The top-level Explorer verbs are intended for single selected files and folders.
-- The installer also creates `Send to > Share with eqrcp`.
+- The installer also creates `Send to > Share with eqt`.
 - Use the Send To entry when sharing multiple selected files.
-- The Send To script receives all selected paths and starts `eqrcp desktop share` hidden through Windows Script Host.
+- The Send To script receives all selected paths and starts `eqt desktop share` hidden through Windows Script Host.
 
 Pros:
 
@@ -121,14 +121,14 @@ Status: documented, not implemented.
 Recommended first approach:
 
 - Finder Quick Action or Services workflow.
-- The workflow receives selected files or folders and invokes `eqrcp desktop share`.
+- The workflow receives selected files or folders and invokes `eqt desktop share`.
 - A separate workflow can receive into a selected folder.
 
 Command shape:
 
 ```sh
-/usr/local/bin/eqrcp desktop share "$@"
-/usr/local/bin/eqrcp desktop receive "$1"
+/usr/local/bin/eqt desktop share "$@"
+/usr/local/bin/eqt desktop receive "$1"
 ```
 
 Pros:
@@ -170,13 +170,13 @@ NAUTILUS_SCRIPT_CURRENT_URI
 Share script command shape:
 
 ```sh
-eqrcp desktop share "$@"
+eqt desktop share "$@"
 ```
 
 Receive script command shape:
 
 ```sh
-eqrcp desktop receive "$PWD"
+eqt desktop receive "$PWD"
 ```
 
 ### KDE Dolphin
@@ -190,8 +190,8 @@ Service menus live in:
 Use a `.desktop` service menu that calls:
 
 ```sh
-eqrcp desktop share %F
-eqrcp desktop receive %f
+eqt desktop share %F
+eqt desktop receive %f
 ```
 
 ### Thunar
@@ -209,8 +209,8 @@ Recommendation:
 Future command:
 
 ```sh
-eqrcp desktop install
-eqrcp desktop uninstall
+eqt desktop install
+eqt desktop uninstall
 ```
 
 Expected behavior:
@@ -218,7 +218,7 @@ Expected behavior:
 - Install only for the current user by default.
 - Print installed file or registry locations.
 - Do not overwrite unrelated user customizations.
-- Uninstall only entries created by `eqrcp`.
+- Uninstall only entries created by `eqt`.
 
 ## Cross-Platform Launch Concerns
 

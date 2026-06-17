@@ -1,9 +1,9 @@
-module eqrcp-desktop
+module eqt-desktop
 
 go 1.25.0
 
 require (
-	eqrcp v0.0.0
+	eqt v0.0.0
 	fyne.io/systray v1.12.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/term v0.44.0
@@ -66,4 +66,4 @@ require (
 
 // replace github.com/wailsapp/wails/v2 v2.12.0 => /home/yelon/develop/go/pkg/mod
 
-replace eqrcp => ../../
+replace eqt => ../../

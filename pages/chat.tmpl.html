@@ -1475,7 +1475,7 @@
             theme: currentClientTheme(clientToken),
             isEditingName: false
         };
-        var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
+        var draftKey = 'eqt-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
         var composerEl = document.getElementById('composer');
         var historyProgressEl = document.getElementById('history-progress');
@@ -1508,7 +1508,7 @@
         var previewPanStart = null;
         var previewCurrentURL = '';
         var autoSaveNotified = {};
-        var chatCacheKey = 'eqrcp-chat-cache:' + window.location.pathname + ':' + state.token;
+        var chatCacheKey = 'eqt-chat-cache:' + window.location.pathname + ':' + state.token;
         var reconnectDelay = 1000;
         var maxReconnectDelay = 30000;
         var events = null;
@@ -1790,7 +1790,7 @@
             var fromURL = params.get('sender') || params.get('peer');
             if (fromURL === 'desktop') { return 'Desktop'; }
             if (fromURL) { return cleanSenderName(fromURL); }
-            var key = 'eqrcp-chat-sender:' + window.location.pathname;
+            var key = 'eqt-chat-sender:' + window.location.pathname;
             var saved = safeStorage.getItem(key);
             if (saved) { return cleanSenderName(saved); }
             var generated = 'Device ' + Math.floor(1000 + Math.random() * 9000);
@@ -1801,7 +1801,7 @@
             var params = new URLSearchParams(window.location.search);
             var fromURL = params.get('avatar');
             var peer = params.get('peer');
-            var key = 'eqrcp-chat-avatar:' + window.location.pathname;
+            var key = 'eqt-chat-avatar:' + window.location.pathname;
             if (fromURL) {
                 var cleaned = cleanAvatarLabel(fromURL);
                 if (cleaned) {
@@ -1836,7 +1836,7 @@
             if (params.get('peer') === 'desktop' && params.get('hostToken')) {
                 return params.get('hostToken');
             }
-            var key = 'eqrcp-chat-token:' + window.location.pathname;
+            var key = 'eqt-chat-token:' + window.location.pathname;
             var saved = safeStorage.getItem(key);
             if (saved) { return saved; }
             var token = '';
@@ -2158,7 +2158,7 @@
                 state.sender = newName;
                 state.isEditingName = false;
                 if (devicePanel) { devicePanel.classList.remove('editing'); }
-                safeStorage.setItem('eqrcp-chat-sender:' + window.location.pathname, newName);
+                safeStorage.setItem('eqt-chat-sender:' + window.location.pathname, newName);
                 showSystemNotice('Device renamed successfully.');
                 return refreshChatStatus();
             })

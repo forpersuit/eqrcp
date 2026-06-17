@@ -3,8 +3,8 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-identity_file="${EQRCP_GIT_SSH_KEY:-$HOME/.ssh/wsl-github}"
-ssh_timeout="${EQRCP_GIT_SSH_PROBE_TIMEOUT:-8}"
+identity_file="${EQT_GIT_SSH_KEY:-$HOME/.ssh/wsl-github}"
+ssh_timeout="${EQT_GIT_SSH_PROBE_TIMEOUT:-8}"
 
 proxy_host() {
   ip route | awk '/default/ {print $3; exit}'

@@ -50,7 +50,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          cp desktop/gui/build/bin/eqrcp-desktop.exe out/eqrcp-desktop-windows-amd64.exe
+          cp desktop/gui/build/bin/eqt-desktop.exe out/eqt-desktop-windows-amd64.exe
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -79,7 +79,7 @@ jobs:
         run: |
           mkdir -p out
           cd desktop/gui/build/bin
-          tar -czf "$GITHUB_WORKSPACE/out/eqrcp-desktop-darwin-universal.tar.gz" eqrcp-desktop.app
+          tar -czf "$GITHUB_WORKSPACE/out/eqt-desktop-darwin-universal.tar.gz" eqt-desktop.app
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -112,7 +112,7 @@ jobs:
         run: |
           mkdir -p out
           cd desktop/gui/build/bin
-          tar -czf "$GITHUB_WORKSPACE/out/eqrcp-desktop-linux-amd64.tar.gz" eqrcp-desktop
+          tar -czf "$GITHUB_WORKSPACE/out/eqt-desktop-linux-amd64.tar.gz" eqt-desktop
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}

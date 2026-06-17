@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"eqrcp/application"
+	"eqt/application"
 )
 
 func TestNew(t *testing.T) {
@@ -19,12 +19,12 @@ func TestNew(t *testing.T) {
 		panic(err)
 	}
 	testdir := filepath.Join(filepath.Dir(f), "testdata")
-	tempfile, err := os.CreateTemp("", "eqrcp*tmp.yml")
+	tempfile, err := os.CreateTemp("", "eqt*tmp.yml")
 	if err != nil {
 		t.Skip()
 	}
 	defer os.Remove(tempfile.Name())
-	partialconfig, err := os.CreateTemp("", "eqrcp*partial.yml")
+	partialconfig, err := os.CreateTemp("", "eqt*partial.yml")
 	if err != nil {
 		panic(err)
 	}
@@ -69,7 +69,7 @@ func TestNew(t *testing.T) {
 			"#2", args{
 				app: application.App{
 					Flags: application.Flags{
-						Config: filepath.Join(testdir, "eqrcp.yml"),
+						Config: filepath.Join(testdir, "eqt.yml"),
 					},
 				},
 			},
@@ -145,7 +145,7 @@ func TestDefaultConfigFileUsesLocalEQTDirectory(t *testing.T) {
 }
 
 func TestNewReadsMode(t *testing.T) {
-	configFile, err := os.CreateTemp("", "eqrcp*mode.yml")
+	configFile, err := os.CreateTemp("", "eqt*mode.yml")
 	if err != nil {
 		t.Skip()
 	}

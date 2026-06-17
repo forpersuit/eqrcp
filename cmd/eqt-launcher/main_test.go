@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-func TestParseArgsWithExplicitEqrcpExe(t *testing.T) {
-	exe, args, err := parseArgs([]string{"--eqrcp-exe", `C:\Tools\renamed.exe`, "share", `C:\tmp\a.txt`})
+func TestParseArgsWithExplicitEqtExe(t *testing.T) {
+	exe, args, err := parseArgs([]string{"--eqt-exe", `C:\Tools\renamed.exe`, "share", `C:\tmp\a.txt`})
 	if err != nil {
 		t.Fatalf("parseArgs() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestParseArgsWithExplicitEqrcpExe(t *testing.T) {
 	}
 }
 
-func TestParseArgsWithoutExplicitEqrcpExe(t *testing.T) {
+func TestParseArgsWithoutExplicitEqtExe(t *testing.T) {
 	exe, args, err := parseArgs([]string{"receive", `C:\tmp`})
 	if err != nil {
 		t.Fatalf("parseArgs() error = %v", err)
@@ -38,10 +38,10 @@ func TestParseArgsWithoutExplicitEqrcpExe(t *testing.T) {
 	}
 }
 
-func TestParseArgsMissingExplicitEqrcpExe(t *testing.T) {
-	_, _, err := parseArgs([]string{"--eqrcp-exe"})
-	if err == nil || !strings.Contains(err.Error(), "missing value for --eqrcp-exe") {
-		t.Fatalf("parseArgs() error = %v, want missing --eqrcp-exe error", err)
+func TestParseArgsMissingExplicitEqtExe(t *testing.T) {
+	_, _, err := parseArgs([]string{"--eqt-exe"})
+	if err == nil || !strings.Contains(err.Error(), "missing value for --eqt-exe") {
+		t.Fatalf("parseArgs() error = %v, want missing --eqt-exe error", err)
 	}
 }
 
@@ -106,7 +106,7 @@ func TestSubmitTaskToAgentDoesNotStartAgentAfterRejection(t *testing.T) {
 	defer server.Close()
 	withDesktopAgentURL(t, server.URL)
 
-	err := submitTaskToAgent("/path/to/missing-eqrcp", desktopAgentTask{Action: "share", Paths: []string{"a.txt"}}, nil)
+	err := submitTaskToAgent("/path/to/missing-eqt", desktopAgentTask{Action: "share", Paths: []string{"a.txt"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "desktop agent is busy") {
 		t.Fatalf("submitTaskToAgent() error = %v, want busy rejection", err)
 	}
@@ -141,13 +141,13 @@ func TestFormatErrorIncludesCommandLogAndDetails(t *testing.T) {
 	got := formatError(
 		errors.New("exit status 1"),
 		logPath,
-		`C:\Tools\renamed eqrcp.exe`,
+		`C:\Tools\renamed eqt.exe`,
 		[]string{"desktop", "share", `C:\tmp\my file.txt`},
 	)
 
 	for _, want := range []string{
-		"eqrcp failed: exit status 1",
-		`Command: "C:\Tools\renamed eqrcp.exe" desktop share "C:\tmp\my file.txt"`,
+		"eqt failed: exit status 1",
+		`Command: "C:\Tools\renamed eqt.exe" desktop share "C:\tmp\my file.txt"`,
 		"Log: " + logPath,
 		"Details:\nfirst line\nlast line\n",
 	} {
@@ -170,9 +170,9 @@ func TestReadTailLimitsOutput(t *testing.T) {
 }
 
 func TestRunLauncherReportsArgumentError(t *testing.T) {
-	got := runLauncher([]string{"--eqrcp-exe"})
-	if !strings.Contains(got, "missing value for --eqrcp-exe") {
-		t.Fatalf("runLauncher() = %q, want missing --eqrcp-exe error", got)
+	got := runLauncher([]string{"--eqt-exe"})
+	if !strings.Contains(got, "missing value for --eqt-exe") {
+		t.Fatalf("runLauncher() = %q, want missing --eqt-exe error", got)
 	}
 }
 

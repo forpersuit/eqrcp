@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"eqrcp/version"
+	"eqt/version"
 )
 
 const windowsStartupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
-const windowsStartupValueName = "eqrcp-agent"
+const windowsStartupValueName = "eqt-agent"
 
-const linuxAutostartFile = "eqrcp-agent.desktop"
-const darwinLaunchAgentLabel = "io.github.forpersuit.eqrcp-agent"
+const linuxAutostartFile = "eqt-agent.desktop"
+const darwinLaunchAgentLabel = "io.github.forpersuit.eqt-agent"
 
 func installDesktopIntegration() error {
 	switch runtime.GOOS {
@@ -193,17 +193,17 @@ func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string,
 		builder.WriteString(fmt.Sprintf("  command: %s\n", command))
 		if state == "needs repair" {
 			builder.WriteString(fmt.Sprintf("  expected: %s\n", expectedEntries[index].command))
-			builder.WriteString("  repair: run `eqrcp desktop install` from the executable you want Explorer to use.\n")
+			builder.WriteString("  repair: run `eqt desktop install` from the executable you want Explorer to use.\n")
 		}
 	}
 	sendTo, err := env.sendToPath()
 	if err != nil {
-		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: unavailable (%v)\n", err))
+		builder.WriteString(fmt.Sprintf("- Send to > Share with eqt: unavailable (%v)\n", err))
 		return builder.String(), nil
 	}
 	if _, err := env.stat(sendTo); err != nil {
 		summary.notInstalled++
-		builder.WriteString("- Send to > Share with eqrcp: not installed\n")
+		builder.WriteString("- Send to > Share with eqt: not installed\n")
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 	} else {
 		state := "installed"
@@ -216,15 +216,15 @@ func formatWindowsDesktopIntegrationStatus(env windowsDesktopStatusEnv) (string,
 			}
 		}
 		summary.add(state)
-		builder.WriteString(fmt.Sprintf("- Send to > Share with eqrcp: %s\n", state))
+		builder.WriteString(fmt.Sprintf("- Send to > Share with eqt: %s\n", state))
 		builder.WriteString(fmt.Sprintf("  path: %s\n", sendTo))
 		if state == "needs repair" {
-			builder.WriteString("  repair: run `eqrcp desktop install` from the executable you want Explorer to use.\n")
+			builder.WriteString("  repair: run `eqt desktop install` from the executable you want Explorer to use.\n")
 		}
 	}
 	if exeErr == nil {
 		summary.installed++
-		builder.WriteString("- eqrcp launcher: installed\n")
+		builder.WriteString("- eqt launcher: installed\n")
 		builder.WriteString(fmt.Sprintf("  path: %s\n", exe))
 	}
 	builder.WriteString(formatWindowsDesktopStartupStatusSection(windowsDesktopStartupStatusEnv{
@@ -249,7 +249,7 @@ func formatWindowsDesktopAgentRuntimeStatus(env windowsDesktopStatusEnv) string 
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || strings.Contains(err.Error(), "desktop agent is not running") {
 			builder.WriteString("not running\n")
-			builder.WriteString("  start: run `eqrcp desktop agent-start` or trigger a right-click share/receive action.\n")
+			builder.WriteString("  start: run `eqt desktop agent-start` or trigger a right-click share/receive action.\n")
 			return builder.String()
 		}
 		builder.WriteString(fmt.Sprintf("unavailable (%v)\n", err))
@@ -266,7 +266,7 @@ func formatWindowsDesktopAgentRuntimeStatus(env windowsDesktopStatusEnv) string 
 	if status.Version != "" && currentVersion != "" && status.Version != currentVersion {
 		builder.WriteString("  status: needs restart\n")
 		builder.WriteString(fmt.Sprintf("  current executable version: %s\n", currentVersion))
-		builder.WriteString("  repair: run `eqrcp desktop agent-stop`, then `eqrcp desktop agent-start`, or trigger a fresh right-click action.\n")
+		builder.WriteString("  repair: run `eqt desktop agent-stop`, then `eqt desktop agent-start`, or trigger a fresh right-click action.\n")
 	}
 	if status.Current != nil {
 		builder.WriteString(fmt.Sprintf("  current task: #%d %s %s\n", status.Current.ID, status.Current.Action, status.Current.State))
@@ -315,7 +315,7 @@ func formatWindowsDesktopStartupStatusSection(env windowsDesktopStartupStatusEnv
 		builder.WriteString("disabled\n")
 		builder.WriteString(fmt.Sprintf("  key: %s\n", windowsStartupRunKey))
 		builder.WriteString(fmt.Sprintf("  value: %s\n", windowsStartupValueName))
-		builder.WriteString("  enable: run `eqrcp desktop startup-enable` from the executable you want Windows to start.\n")
+		builder.WriteString("  enable: run `eqt desktop startup-enable` from the executable you want Windows to start.\n")
 		return builder.String()
 	}
 	expected := ""
@@ -335,7 +335,7 @@ func formatWindowsDesktopStartupStatusSection(env windowsDesktopStartupStatusEnv
 	}
 	if state == "needs repair" {
 		builder.WriteString(fmt.Sprintf("  expected: %s\n", expected))
-		builder.WriteString("  repair: run `eqrcp desktop startup-enable` from the executable you want Windows to start.\n")
+		builder.WriteString("  repair: run `eqt desktop startup-enable` from the executable you want Windows to start.\n")
 	}
 	return builder.String()
 }
@@ -367,7 +367,7 @@ func windowsSendToSharePath() (string, error) {
 	if appData == "" {
 		return "", fmt.Errorf("APPDATA is not set")
 	}
-	return filepath.Join(appData, "Microsoft", "Windows", "SendTo", "Share with eqrcp.vbs"), nil
+	return filepath.Join(appData, "Microsoft", "Windows", "SendTo", "Share with eqt.vbs"), nil
 }
 
 func windowsSendToShareScript(exe string, launcher string) string {
@@ -386,7 +386,7 @@ End Function
 `, windowsVBString(exe))
 		}
 		return fmt.Sprintf(`Set shell = CreateObject("WScript.Shell")
-cmd = Quote(%s) & " --eqrcp-exe " & Quote(%s) & " share"
+cmd = Quote(%s) & " --eqt-exe " & Quote(%s) & " share"
 For Each arg In WScript.Arguments
     cmd = cmd & " " & Quote(arg)
 Next
@@ -419,23 +419,23 @@ type windowsContextEntry struct {
 func windowsContextEntries(exe string, launcher string) []windowsContextEntry {
 	return []windowsContextEntry{
 		{
-			key:     `HKCU\Software\Classes\*\shell\eqrcp-share`,
-			label:   "Share with eqrcp (file)",
+			key:     `HKCU\Software\Classes\*\shell\eqt-share`,
+			label:   "Share with eqt (file)",
 			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
-			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-share`,
-			label:   "Share with eqrcp (directory)",
+			key:     `HKCU\Software\Classes\Directory\shell\eqt-share`,
+			label:   "Share with eqt (directory)",
 			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
-			key:     `HKCU\Software\Classes\Directory\shell\eqrcp-receive`,
-			label:   "Receive here with eqrcp (directory)",
+			key:     `HKCU\Software\Classes\Directory\shell\eqt-receive`,
+			label:   "Receive here with eqt (directory)",
 			command: windowsShellCommand(exe, launcher, "receive", "%1"),
 		},
 		{
-			key:     `HKCU\Software\Classes\Directory\Background\shell\eqrcp-receive`,
-			label:   "Receive here with eqrcp (directory background)",
+			key:     `HKCU\Software\Classes\Directory\Background\shell\eqt-receive`,
+			label:   "Receive here with eqt (directory background)",
 			command: windowsShellCommand(exe, launcher, "receive", "%V"),
 		},
 	}
@@ -558,7 +558,7 @@ func windowsShellCommand(exe string, launcher string, args ...string) string {
 			}
 			return fmt.Sprintf(`"%s" %s`, exe, strings.Join(quotedArgs, " "))
 		}
-		launcherArgs := append([]string{"--eqrcp-exe", exe}, args...)
+		launcherArgs := append([]string{"--eqt-exe", exe}, args...)
 		quotedArgs := make([]string, 0, len(launcherArgs))
 		for _, arg := range launcherArgs {
 			quotedArgs = append(quotedArgs, `"`+arg+`"`)
@@ -594,7 +594,7 @@ func windowsVBString(value string) string {
 }
 
 // Linux autostart support: writes a freedesktop ~/.config/autostart/*.desktop
-// file that re-launches `eqrcp desktop agent` on session start. Honours
+// file that re-launches `eqt desktop agent` on session start. Honours
 // $XDG_CONFIG_HOME via os.UserConfigDir.
 
 func linuxAutostartPath() (string, error) {
@@ -608,8 +608,8 @@ func linuxAutostartPath() (string, error) {
 func linuxAutostartContent(exe string) string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
-Name=eqrcp Desktop Agent
-Comment=Background agent for eqrcp QR transfer and chat
+Name=eqt Desktop Agent
+Comment=Background agent for eqt QR transfer and chat
 Exec=%s desktop agent
 NoDisplay=true
 Terminal=false

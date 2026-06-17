@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"eqrcp/config"
+	"eqt/config"
 	"github.com/spf13/cobra"
 )
 
@@ -13,8 +13,8 @@ func configCmdFunc(command *cobra.Command, args []string) error {
 
 var configCmd = &cobra.Command{
 	Use:     "config",
-	Short:   "Configure eqrcp",
-	Long:    "Run an interactive configuration wizard for eqrcp. With this command you can configure which network interface and port should be used to create the file server.",
+	Short:   "Configure eqt",
+	Long:    "Run an interactive configuration wizard for eqt. With this command you can configure which network interface and port should be used to create the file server.",
 	Aliases: []string{"c", "cfg"},
 	RunE:    configCmdFunc,
 }

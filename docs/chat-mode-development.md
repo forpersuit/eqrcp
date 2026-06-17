@@ -8,7 +8,7 @@ mobile browsers can exchange text and attachments until the user ends it.
 
 Initial scope:
 
-- Add `eqrcp chat`.
+- Add `eqt chat`.
 - Open a browser chat surface with `--browser`.
 - Let a scanned mobile browser join the same session.
 - Support text messages.
@@ -34,12 +34,12 @@ Status: browser MVP implemented.
 - [x] Add POST route for text messages.
 - [x] Add multipart upload route for attachments.
 - [x] Add embedded chat page template.
-- [x] Add `eqrcp chat` command.
+- [x] Add `eqt chat` command.
 - [x] Add focused server tests.
 
 Acceptance criteria:
 
-- Running `eqrcp chat --browser` opens the desktop chat page.
+- Running `eqt chat --browser` opens the desktop chat page.
 - The terminal prints a QR URL for mobile devices.
 - Devices receive messages from their own join point onward.
 - Sending text from either browser appears on the other side without refresh.
@@ -60,7 +60,7 @@ Status: **completed**.
 
 Acceptance criteria:
 
-- [x] `eqrcp desktop chat` starts through the agent.
+- [x] `eqt desktop chat` starts through the agent.
 - [x] Agent status shows active chat session URL and message count.
 - [x] Existing share/receive tasks remain unchanged.
 - [x] Chat sessions properly finalize when stopped.
@@ -159,7 +159,7 @@ Chat sessions are now fully integrated with the desktop agent:
    - History records preserve chat session information
 
 4. **Task Lifecycle**
-   - `eqrcp desktop chat` starts chat via agent
+   - `eqt desktop chat` starts chat via agent
    - Stop current works for active chat sessions
    - Repeat works for chat history items
    - Chat sessions properly finalize on stop
@@ -168,19 +168,19 @@ Chat sessions are now fully integrated with the desktop agent:
 
 ```bash
 # Start desktop agent
-eqrcp desktop agent-start -B
+eqt desktop agent-start -B
 
 # Start chat session (via agent)
-eqrcp desktop chat
+eqt desktop chat
 
 # Check agent status
-eqrcp desktop agent-status
+eqt desktop agent-status
 
 # Open agent status page
-eqrcp desktop agent-open
+eqt desktop agent-open
 
 # Stop current chat
-eqrcp desktop agent-stop-current
+eqt desktop agent-stop-current
 ```
 
 ### Testing
@@ -255,7 +255,7 @@ Manual testing required:
 
 1. Start chat session:
    ```bash
-   eqrcp chat --browser
+   eqt chat --browser
    ```
 
 2. Open mobile browser and scan QR code

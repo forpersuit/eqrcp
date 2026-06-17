@@ -18,9 +18,9 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-echo "=== eqrcp pre-commit: deploy Windows acceptance artifacts ==="
+echo "=== eqt pre-commit: deploy Windows acceptance artifacts ==="
 "$root_dir/scripts/deploy-windows-results.sh"
-echo "=== eqrcp pre-commit completed ==="
+echo "=== eqt pre-commit completed ==="
 EOF
 
 chmod +x "$hooks_dir/pre-commit" 2>/dev/null || true
@@ -30,4 +30,4 @@ echo "The hook runs scripts/deploy-windows-results.sh before each commit."
 echo "Default acceptance output:"
 echo "  Windows/MSYS: E:/developer/results"
 echo "  WSL/Linux:   /mnt/e/developer/results"
-echo "Override with EQRCP_RESULTS_DIR when needed."
+echo "Override with EQT_RESULTS_DIR when needed."

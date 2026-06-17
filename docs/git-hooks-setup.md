@@ -36,10 +36,10 @@ bash scripts/install-hooks.sh
 
 Pre-commit hook会在每次提交前自动：
 
-1. **关闭所有eqrcp进程**
-   - eqrcp.exe
-   - eqrcp-launcher.exe
-   - eqrcp-desktop.exe
+1. **关闭所有eqt进程**
+   - eqt.exe
+   - eqt-launcher.exe
+   - eqt-desktop.exe
 
 2. **运行测试**
    - Go tests: `go test ./...`
@@ -48,7 +48,7 @@ Pre-commit hook会在每次提交前自动：
 
 3. **重新构建项目**
    - 构建当前平台CLI
-   - 构建Windows CLI (eqrcp.exe, eqrcp-launcher.exe)
+   - 构建Windows CLI (eqt.exe, eqt-launcher.exe)
    - 构建Wails GUI (如果wails可用)
 
 4. **保存到指定目录**

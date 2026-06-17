@@ -15,7 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"golang.org/x/term"
 
-	"eqrcp/cmd"
+	"eqt/cmd"
 )
 
 //go:embed all:frontend/dist
@@ -63,7 +63,7 @@ func desktopLogFilePath() string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "eqrcp", "desktop.log")
+	return filepath.Join(dir, "eqt", "desktop.log")
 }
 
 func main() {
@@ -164,7 +164,7 @@ func startWailsGUI() {
 		},
 		BackgroundColour: &options.RGBA{R: 245, G: 247, B: 244, A: 1},
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: "eqrcp-desktop",
+			UniqueId: "eqt-desktop",
 			OnSecondInstanceLaunch: func(data options.SecondInstanceData) {
 				app.showWindow()
 			},

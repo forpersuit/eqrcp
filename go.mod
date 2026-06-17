@@ -1,4 +1,4 @@
-module eqrcp
+module eqt
 
 go 1.25.0
 

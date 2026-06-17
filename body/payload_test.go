@@ -89,8 +89,8 @@ func TestFromArgsMultipleFilesZipName(t *testing.T) {
 		_ = got.Delete()
 	}()
 
-	if got.Filename != "eqrcp-multiple-files-20260422-010203.zip" {
-		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqrcp-multiple-files-20260422-010203.zip")
+	if got.Filename != "eqt-multiple-files-20260422-010203.zip" {
+		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqt-multiple-files-20260422-010203.zip")
 	}
 	if !got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = false, want true")

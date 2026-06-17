@@ -19,7 +19,7 @@ and join-bound synchronization behavior.
 
 ## Prerequisites
 
-- Built `eqrcp.exe` binary
+- Built `eqt.exe` binary
 - Desktop browser (Chrome, Firefox, or Edge)
 - Mobile device with browser (iOS Safari or Android Chrome)
 - Both devices on the same local network
@@ -30,10 +30,10 @@ and join-bound synchronization behavior.
 
 ```bash
 # Start chat with browser auto-open
-eqrcp chat --browser
+eqt chat --browser
 
 # Or start without browser (scan QR manually)
-eqrcp chat
+eqt chat
 ```
 
 ### 2. Connect Mobile Device

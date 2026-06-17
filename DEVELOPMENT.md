@@ -2,13 +2,13 @@
 
 ## Versioning
 
-`eqrcp` uses [semver](https://semver.org) for releases.
+`eqt` uses [semver](https://semver.org) for releases.
 
 Version number is defined in `cmd/version.go`.
 
 ## Releases
 
-We are using [goreleases](https://goreleaser.com/), [nfpm](https://nfpm.goreleaser.com/) and [Github Actions](https://github.com/features/actions) to build, package and release `eqrcp`.
+We are using [goreleases](https://goreleaser.com/), [nfpm](https://nfpm.goreleaser.com/) and [Github Actions](https://github.com/features/actions) to build, package and release `eqt`.
 
 The relevant files are:
 

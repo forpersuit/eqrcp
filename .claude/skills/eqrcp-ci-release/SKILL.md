@@ -1,9 +1,9 @@
 ---
-name: eqrcp-ci-release
-description: Hard-won gotchas for eqrcp CI/Release pipeline — load when working on .github/workflows/*.yml, .goreleaser.yml, wails.json, desktop/gui/build/*, scripts/build-artifacts.sh, or diagnosing failing GitHub Actions runs in this repo.
+name: eqt-ci-release
+description: Hard-won gotchas for eqt CI/Release pipeline — load when working on .github/workflows/*.yml, .goreleaser.yml, wails.json, desktop/gui/build/*, scripts/build-artifacts.sh, or diagnosing failing GitHub Actions runs in this repo.
 ---
 
-# eqrcp CI / Release pipeline — gotchas that aren't in any doc
+# eqt CI / Release pipeline — gotchas that aren't in any doc
 
 These are practice-only lessons from setting up the multi-platform release
 pipeline. Each entry is something that cost time to discover but is invisible
@@ -46,7 +46,7 @@ Fix in `ci.yml`:
 
 ## 3. goreleaser CLI + launcher → "different binary count" error
 
-`.goreleaser.yml` has two builds (`eqrcp` cross-platform + `eqrcp-launcher`
+`.goreleaser.yml` has two builds (`eqt` cross-platform + `eqt-launcher`
 windows-only). Default archive layout produces inconsistent binary counts
 per platform and goreleaser v2 rejects it:
 
@@ -64,8 +64,8 @@ archives:
     allow_different_binary_count: true
 ```
 
-Result: Windows archives are "fat" (contain both `eqrcp.exe` and
-`eqrcp-launcher.exe`); Linux/macOS contain only `eqrcp`.
+Result: Windows archives are "fat" (contain both `eqt.exe` and
+`eqt-launcher.exe`); Linux/macOS contain only `eqt`.
 
 ## 4. Root .gitignore swallowed desktop/gui/build scaffold
 

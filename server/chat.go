@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"eqrcp/pages"
-	"eqrcp/qr"
-	"eqrcp/version"
+	"eqt/pages"
+	"eqt/qr"
+	"eqt/version"
 )
 
 const (
@@ -104,7 +104,7 @@ type chatClient struct {
 
 // Chat adds handlers for a browser-based chat session.
 func (s *Server) Chat() error {
-	dir, err := os.MkdirTemp("", "eqrcp-chat-*")
+	dir, err := os.MkdirTemp("", "eqt-chat-*")
 	if err != nil {
 		return err
 	}
@@ -457,7 +457,7 @@ func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.R
 
 func chatViewportDebugLogPath() string {
 	name := "viewport-debug-" + time.Now().Format("20060102-150405.000000000") + "-" + randomChatToken()[:8] + ".ndjson"
-	return filepath.Join(os.TempDir(), "eqrcp-viewport-debug", name)
+	return filepath.Join(os.TempDir(), "eqt-viewport-debug", name)
 }
 
 func appendChatViewportDebugLine(path string, line []byte) error {
@@ -559,7 +559,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		w.Header().Set("Content-Type", "application/json")
 		if hasAfterSeq {
 			messages, currentSeq := session.snapshotAfterSeq(joinSeq, afterSeq)
-			w.Header().Set("X-Eqrcp-Chat-Seq", strconv.FormatInt(currentSeq, 10))
+			w.Header().Set("X-Eqt-Chat-Seq", strconv.FormatInt(currentSeq, 10))
 			if err := json.NewEncoder(w).Encode(messages); err != nil {
 				log.Println(err)
 			}
@@ -1299,7 +1299,7 @@ func (session *chatSession) isTerminal() bool {
 func writeChatTerminal(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusGone)
-	fmt.Fprintln(w, "This chat session has ended. Start a new eqrcp chat session to continue.")
+	fmt.Fprintln(w, "This chat session has ended. Start a new eqt chat session to continue.")
 }
 
 func (session *chatSession) validHostToken(token string) bool {
@@ -1484,7 +1484,7 @@ func safeChatFilename(name string) string {
 }
 
 func chatHostTokenFromRequest(r *http.Request) string {
-	if token := r.Header.Get("X-Eqrcp-Chat-Host-Token"); token != "" {
+	if token := r.Header.Get("X-Eqt-Chat-Host-Token"); token != "" {
 		return token
 	}
 	if token := r.URL.Query().Get("token"); token != "" {

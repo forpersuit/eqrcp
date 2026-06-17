@@ -1,14 +1,14 @@
 # Test Analysis
 
-This document records the current validation baseline for `eqrcp`. Keep it updated when desktop integration changes the way commands are launched.
+This document records the current validation baseline for `eqt`. Keep it updated when desktop integration changes the way commands are launched.
 
 ## Baseline
 
 The project currently builds and tests with Go 1.26.
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./...
-GOCACHE=/tmp/eqrcp-go-build go build ./...
+GOCACHE=/tmp/eqt-go-build go test ./...
+GOCACHE=/tmp/eqt-go-build go build ./...
 ```
 
 Expected result:
@@ -46,20 +46,20 @@ remaining high-risk areas are validation gaps rather than known broken behavior:
 ## CLI Checks
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go run . --help
-GOCACHE=/tmp/eqrcp-go-build go run . receive --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop share --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop receive --help
-GOCACHE=/tmp/eqrcp-go-build go run . version
+GOCACHE=/tmp/eqt-go-build go run . --help
+GOCACHE=/tmp/eqt-go-build go run . receive --help
+GOCACHE=/tmp/eqt-go-build go run . desktop --help
+GOCACHE=/tmp/eqt-go-build go run . desktop share --help
+GOCACHE=/tmp/eqt-go-build go run . desktop receive --help
+GOCACHE=/tmp/eqt-go-build go run . version
 ```
 
 Expected result:
 
-- The command name is `eqrcp`.
+- The command name is `eqt`.
 - The default config path is `~/.local/eqt/config.yml`.
 - Desktop helper commands are present.
-- The version command prints `eqrcp dev [date: n/a]` for local development builds.
+- The version command prints `eqt dev [date: n/a]` for local development builds.
 
 ## Receive Flow
 
@@ -68,26 +68,26 @@ The receive flow was validated with a local loopback server and a multipart uplo
 Server:
 
 ```sh
-mkdir -p /tmp/eqrcp-recv-test
-XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp receive \
+mkdir -p /tmp/eqt-recv-test
+XDG_CONFIG_HOME=/tmp/eqt-config /tmp/eqt receive \
   -i any \
   --bind 127.0.0.1 \
   -p 19080 \
   --path recvtest \
-  -o /tmp/eqrcp-recv-test
+  -o /tmp/eqt-recv-test
 ```
 
 Client:
 
 ```sh
-printf 'hello from upload test\n' > /tmp/eqrcp-upload.txt
-curl -s -F 'files=@/tmp/eqrcp-upload.txt' \
+printf 'hello from upload test\n' > /tmp/eqt-upload.txt
+curl -s -F 'files=@/tmp/eqt-upload.txt' \
   http://127.0.0.1:19080/receive/recvtest
 ```
 
 Expected result:
 
-- `/tmp/eqrcp-recv-test/eqrcp-upload.txt` exists.
+- `/tmp/eqt-recv-test/eqt-upload.txt` exists.
 - Its content matches the uploaded file.
 - The server exits after the upload unless `--keep-alive` is set.
 
@@ -103,27 +103,27 @@ The send flow was validated with a local loopback server and a browser-like user
 Server:
 
 ```sh
-printf 'hello from send test\n' > /tmp/eqrcp-send.txt
-XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+printf 'hello from send test\n' > /tmp/eqt-send.txt
+XDG_CONFIG_HOME=/tmp/eqt-config /tmp/eqt \
   -i any \
   --bind 127.0.0.1 \
   -p 19081 \
   --path sendtest \
-  /tmp/eqrcp-send.txt
+  /tmp/eqt-send.txt
 ```
 
 Client:
 
 ```sh
 curl -s -A 'Mozilla/5.0' \
-  -D /tmp/eqrcp-send.headers \
-  -o /tmp/eqrcp-downloaded.txt \
+  -D /tmp/eqt-send.headers \
+  -o /tmp/eqt-downloaded.txt \
   http://127.0.0.1:19081/send/sendtest
 ```
 
 Expected result:
 
-- `/tmp/eqrcp-downloaded.txt` matches `/tmp/eqrcp-send.txt`.
+- `/tmp/eqt-downloaded.txt` matches `/tmp/eqt-send.txt`.
 - Response headers include a `Content-Disposition` attachment filename.
 - The server exits after transfer unless `--keep-alive` is set.
 
@@ -139,7 +139,7 @@ Single file with spaces:
 
 ```sh
 printf 'space filename test\n' > '/tmp/my file final.txt'
-XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+XDG_CONFIG_HOME=/tmp/eqt-config /tmp/eqt \
   -i any \
   --bind 127.0.0.1 \
   -p 19281 \
@@ -156,36 +156,36 @@ Content-Disposition: attachment; filename="my file final.txt"; filename*=UTF-8''
 Directory transfer:
 
 ```sh
-XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+XDG_CONFIG_HOME=/tmp/eqt-config /tmp/eqt \
   -i any \
   --bind 127.0.0.1 \
   -p 19282 \
   --path dirzip \
-  '/tmp/eqrcp test dir'
+  '/tmp/eqt test dir'
 ```
 
 Expected response header:
 
 ```text
-Content-Disposition: attachment; filename="eqrcp test dir-directory.zip"; filename*=UTF-8''eqrcp%20test%20dir-directory.zip
+Content-Disposition: attachment; filename="eqt test dir-directory.zip"; filename*=UTF-8''eqt%20test%20dir-directory.zip
 ```
 
 Multiple file transfer:
 
 ```sh
-XDG_CONFIG_HOME=/tmp/eqrcp-config /tmp/eqrcp \
+XDG_CONFIG_HOME=/tmp/eqt-config /tmp/eqt \
   -i any \
   --bind 127.0.0.1 \
   -p 19283 \
   --path multizip \
-  '/tmp/eqrcp one.txt' \
-  '/tmp/eqrcp two.txt'
+  '/tmp/eqt one.txt' \
+  '/tmp/eqt two.txt'
 ```
 
 Expected response header:
 
 ```text
-Content-Disposition: attachment; filename="eqrcp-multiple-files.zip"; filename*=UTF-8''eqrcp-multiple-files.zip
+Content-Disposition: attachment; filename="eqt-multiple-files.zip"; filename*=UTF-8''eqt-multiple-files.zip
 ```
 
 ## Desktop Integration Test Requirements
@@ -206,14 +206,14 @@ Desktop integration should preserve the baseline above and add platform-specific
 The desktop command surface was validated with:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go run . desktop --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop share --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop receive --help
-GOCACHE=/tmp/eqrcp-go-build go run . desktop share
-GOCACHE=/tmp/eqrcp-go-build go run . desktop receive
-GOCACHE=/tmp/eqrcp-go-build go run . desktop install
-GOCACHE=/tmp/eqrcp-go-build go run . desktop status
-GOCACHE=/tmp/eqrcp-go-build go run . desktop uninstall
+GOCACHE=/tmp/eqt-go-build go run . desktop --help
+GOCACHE=/tmp/eqt-go-build go run . desktop share --help
+GOCACHE=/tmp/eqt-go-build go run . desktop receive --help
+GOCACHE=/tmp/eqt-go-build go run . desktop share
+GOCACHE=/tmp/eqt-go-build go run . desktop receive
+GOCACHE=/tmp/eqt-go-build go run . desktop install
+GOCACHE=/tmp/eqt-go-build go run . desktop status
+GOCACHE=/tmp/eqt-go-build go run . desktop uninstall
 ```
 
 Expected result:
@@ -226,8 +226,8 @@ Expected result:
 - On Windows, `desktop install` should create Explorer context menu entries under `HKCU\Software\Classes`.
 - On Windows, `desktop status` should report each expected registry entry and command.
 - On Windows, `desktop status` should mark entries as `needs repair` when they point at an older executable path or when the Send To script differs from the current executable.
-- On Windows, `desktop status` should show the expected `eqrcp-launcher.exe` path and explain the impact when the launcher is missing.
-- On Windows, `desktop startup-enable` should register `eqrcp desktop agent` under the current-user Run key.
+- On Windows, `desktop status` should show the expected `eqt-launcher.exe` path and explain the impact when the launcher is missing.
+- On Windows, `desktop startup-enable` should register `eqt desktop agent` under the current-user Run key.
 - On Windows, `desktop startup-disable` should remove that startup registration.
 - On Windows, `desktop startup-status` should report disabled, enabled, or needs-repair startup state.
 - On Windows, `desktop status` should include desktop agent startup state without treating disabled startup as a broken context-menu installation.
@@ -239,31 +239,31 @@ Expected result:
 Build a Windows binary:
 
 ```sh
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqrcp.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqt.exe .
 ```
 
 From Windows, run:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop install
+E:\developer\results\eqt.exe desktop install
 ```
 
 Expected result:
 
-- File right click includes `Share with eqrcp`.
-- Folder right click includes `Share with eqrcp`.
-- Folder right click includes `Receive here with eqrcp`.
-- Folder background right click includes `Receive here with eqrcp`.
-- `Send to > Share with eqrcp` exists for multi-select sharing.
+- File right click includes `Share with eqt`.
+- Folder right click includes `Share with eqt`.
+- Folder right click includes `Receive here with eqt`.
+- Folder background right click includes `Receive here with eqt`.
+- `Send to > Share with eqt` exists for multi-select sharing.
 - Clicking a context menu entry does not show the Windows console-program prompt.
 - Clicking a context menu entry opens the QR code page in the default browser.
-- If `eqrcp-launcher.exe` is next to `eqrcp.exe`, `desktop status` reports it and installed commands use it.
-- If `eqrcp.exe` exits with an error when started by `eqrcp-launcher.exe`, a Windows message box shows the failure and log path.
+- If `eqt-launcher.exe` is next to `eqt.exe`, `desktop status` reports it and installed commands use it.
+- If `eqt.exe` exits with an error when started by `eqt-launcher.exe`, a Windows message box shows the failure and log path.
 
 Then run:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop uninstall
+E:\developer\results\eqt.exe desktop uninstall
 ```
 
 Expected result:
@@ -277,12 +277,12 @@ The no-console launcher should make failures visible even when Explorer starts i
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./cmd/eqrcp-launcher
+GOCACHE=/tmp/eqt-go-build go test ./cmd/eqt-launcher
 ```
 
 Expected result:
 
-- Missing `--eqrcp-exe` values return a clear launcher error.
+- Missing `--eqt-exe` values return a clear launcher error.
 - Formatted errors include the failed command.
 - Formatted errors include the launcher log path.
 - Formatted errors include the tail of the launcher log.
@@ -290,22 +290,22 @@ Expected result:
 Manual Windows check:
 
 ```powershell
-E:\developer\results\eqrcp-launcher.exe --eqrcp-exe E:\developer\results\eqrcp.exe share Z:\eqrcp-missing-file.txt
+E:\developer\results\eqt-launcher.exe --eqt-exe E:\developer\results\eqt.exe share Z:\eqt-missing-file.txt
 ```
 
 Expected result:
 
-- A native Windows message box opens with title `eqrcp`.
-- The message starts with `eqrcp failed:`.
+- A native Windows message box opens with title `eqt`.
+- The message starts with `eqt failed:`.
 - The message includes the command that failed.
 - The message includes a `Log:` path under the user cache directory.
-- The message includes the underlying `eqrcp` error in `Details:`.
+- The message includes the underlying `eqt` error in `Details:`.
 - The message box stays visible until the user dismisses it.
 
 Implementation note:
 
 - The Windows launcher calls `user32.dll` `MessageBoxW` directly. It should not start PowerShell or show a transient console window for error display.
-- Context menu tests must use a launcher named `eqrcp-launcher.exe` next to the main executable before running `desktop install`; otherwise the installer cannot register the no-console launcher path.
+- Context menu tests must use a launcher named `eqt-launcher.exe` next to the main executable before running `desktop install`; otherwise the installer cannot register the no-console launcher path.
 
 ## Browser QR Control Page
 
@@ -318,7 +318,7 @@ Expected result:
 - `/qr/status` serves the current transfer state as JSON.
 - `/qr/events` streams the current transfer state with server-sent events so the QR page can update without waiting for a polling interval.
 - `/status` serves service-level JSON with `current` transfer state and transfer `history`.
-- Browser status pages and status JSON include the running eqrcp version so stale desktop agents can be identified during manual testing.
+- Browser status pages and status JSON include the running eqt version so stale desktop agents can be identified during manual testing.
 - Appending `/status` to the active transfer URL, such as `/send/<path>/status` or `/receive/<path>/status`, serves the current transfer state as JSON.
 - Reopening a completed or stopped one-shot transfer URL returns `410 Gone` with a clear completion or stopped message.
 - The page shows the transfer URL in a read-only input.
@@ -336,7 +336,7 @@ Expected result:
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./server
+GOCACHE=/tmp/eqt-go-build go test ./server
 ```
 
 Expected result:
@@ -369,7 +369,7 @@ Expected result:
 - Interrupted transfers are recorded as `stopped`; server-side upload, disk, or rendering errors are recorded as `failed`; both states hide the original QR code.
 - After a successful one-shot download, a later browser request to the same send URL returns `410 Gone` instead of resetting the transfer state.
 - After a completed one-shot receive, a later browser request to the same receive URL returns `410 Gone`.
-- Directory and multi-file downloads use timestamped zip file names, such as `eqrcp-multiple-files-YYYYMMDD-HHMMSS.zip`.
+- Directory and multi-file downloads use timestamped zip file names, such as `eqt-multiple-files-YYYYMMDD-HHMMSS.zip`.
 - During a large transfer, `/qr/status` contains `bytesDone`, `bytesTotal`, and `percent`.
 - After receiving multiple files, `/qr/status` contains all saved file paths in `savedFiles`.
 - Posting to `/qr/stop` stops the server.
@@ -407,7 +407,7 @@ Expected result:
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./server
+GOCACHE=/tmp/eqt-go-build go test ./server
 ```
 
 Expected result:
@@ -435,7 +435,7 @@ Expected result:
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./server
+GOCACHE=/tmp/eqt-go-build go test ./server
 ```
 
 Expected result:
@@ -451,7 +451,7 @@ The desktop agent is the first step toward a single-instance desktop flow.
 Command:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go run . desktop agent
+GOCACHE=/tmp/eqt-go-build go run . desktop agent
 ```
 
 Expected result:
@@ -481,24 +481,24 @@ Expected result:
 - If the queue is full, `POST /tasks` returns `429 Too Many Requests`.
 - `POST /shutdown` stops the active task and exits the agent.
 - `POST /restart` stops the active task, shuts down the current agent, and starts a fresh background agent from the same executable.
-- `eqrcp desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
-- `eqrcp desktop agent-start` is available as an explicit alias for `eqrcp desktop agent`.
-- `eqrcp desktop agent` and `eqrcp desktop agent-start` are foreground long-running commands by default; a normal shell should stay attached until the agent is stopped.
-- `eqrcp desktop agent -B` and `eqrcp desktop agent-start -B` start the agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell.
-- `eqrcp desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
-- `eqrcp desktop agent-status` fetches `/status` and prints a readable current task and history summary.
-- `eqrcp desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
-- `eqrcp desktop status` and `eqrcp desktop startup-status` print the running eqrcp version before the status body.
-- `eqrcp desktop status` also reports desktop agent runtime diagnostics, including whether the local agent is running, the live agent version, the active task, and whether the agent should be restarted because it does not match the current executable.
-- `eqrcp desktop agent-open` opens the browser status page when the agent is running.
-- `eqrcp desktop agent-open-current` opens the active task QR page when one exists.
+- `eqt desktop agent-stop` calls `/shutdown` and prints `Desktop agent stopped.` on success.
+- `eqt desktop agent-start` is available as an explicit alias for `eqt desktop agent`.
+- `eqt desktop agent` and `eqt desktop agent-start` are foreground long-running commands by default; a normal shell should stay attached until the agent is stopped.
+- `eqt desktop agent -B` and `eqt desktop agent-start -B` start the agent in the background, wait for `/health`, print the status page URL and log path, then return control to the shell.
+- `eqt desktop agent-stop-current` calls `/stop-current` and prints `Current desktop agent task stopped.` on success.
+- `eqt desktop agent-status` fetches `/status` and prints a readable current task and history summary.
+- `eqt desktop agent-history-clear` calls `/history` and prints `Desktop agent history cleared.` on success.
+- `eqt desktop status` and `eqt desktop startup-status` print the running eqt version before the status body.
+- `eqt desktop status` also reports desktop agent runtime diagnostics, including whether the local agent is running, the live agent version, the active task, and whether the agent should be restarted because it does not match the current executable.
+- `eqt desktop agent-open` opens the browser status page when the agent is running.
+- `eqt desktop agent-open-current` opens the active task QR page when one exists.
 - The agent keeps running after a task finishes and records the last task error if one occurred.
 - The agent sends lightweight desktop notifications for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Notification backend failures are ignored so transfers remain authoritative.
 
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./cmd
+GOCACHE=/tmp/eqt-go-build go test ./cmd
 ```
 
 Expected result:
@@ -545,9 +545,9 @@ Expected result:
 - The stop-current endpoint records the active task as `stopped`.
 - The stop-current endpoint rejects idle stop requests with `409 Conflict`.
 - The shutdown endpoint stops an active task and calls the configured server shutdown function.
-- The Windows desktop status formatter reports `Desktop agent runtime: not running` when the local agent is offline and recommends `eqrcp desktop agent-start`.
+- The Windows desktop status formatter reports `Desktop agent runtime: not running` when the local agent is offline and recommends `eqt desktop agent-start`.
 - The Windows desktop status formatter reports `status: needs restart` when the running agent version differs from the current executable version.
-- Running `eqrcp desktop agent runtime` should return guidance to use `desktop status` or `desktop agent-status` instead of trying to start a second foreground agent.
+- Running `eqt desktop agent runtime` should return guidance to use `desktop status` or `desktop agent-status` instead of trying to start a second foreground agent.
 - The agent and agent-start commands expose `-B` / `--background`, and background startup uses the current executable, creates an agent log, waits for readiness, and reports the status URL.
 
 ## Launcher Agent Forwarding
@@ -556,18 +556,18 @@ The Windows launcher should prefer the desktop agent for right-click transfer ac
 
 Expected result:
 
-- `eqrcp-launcher.exe --eqrcp-exe <path> share <file>` posts a `share` task to the agent when it is already running.
-- `eqrcp-launcher.exe --eqrcp-exe <path> receive <directory>` posts a `receive` task to the agent when it is already running.
+- `eqt-launcher.exe --eqt-exe <path> share <file>` posts a `share` task to the agent when it is already running.
+- `eqt-launcher.exe --eqt-exe <path> receive <directory>` posts a `receive` task to the agent when it is already running.
 - If the agent is not running, the launcher starts `<path> desktop agent`, waits for `/health`, then posts the task.
 - If the agent is busy, the launcher submits the task to the agent and does not start a second direct transfer.
 - If the agent rejects a task, the launcher reports that rejection and does not start a second direct transfer.
-- If the agent cannot be reached or started, the launcher falls back to the previous direct `eqrcp desktop share/receive` command path.
+- If the agent cannot be reached or started, the launcher falls back to the previous direct `eqt desktop share/receive` command path.
 - Windows manual validation: a second right-click share replaces the first waiting share and opens the new QR flow instead of showing `desktop agent is busy` or doing nothing.
 
 Automated checks:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./cmd/eqrcp-launcher
+GOCACHE=/tmp/eqt-go-build go test ./cmd/eqt-launcher
 ```
 
 Expected result:
@@ -581,17 +581,17 @@ Expected result:
 Manual Windows check:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop install
+E:\developer\results\eqt.exe desktop install
 ```
 
 Expected result:
 
-- `eqrcp.exe desktop status` reports installed entries without false `needs repair` results on localized Windows output.
+- `eqt.exe desktop status` reports installed entries without false `needs repair` results on localized Windows output.
 - First right-click share opens a QR page.
 - A second right-click share replaces the first waiting transfer and opens the new QR page.
 - `http://127.0.0.1:48176/` shows the long-lived agent state, current task, and recent history.
 - The agent status page can stop the active transfer without exiting the agent.
-- Process count should stay bounded around one long-lived `eqrcp.exe desktop agent` plus short-lived launcher invocations.
+- Process count should stay bounded around one long-lived `eqt.exe desktop agent` plus short-lived launcher invocations.
 
 ## Desktop Share Flow
 
@@ -600,41 +600,41 @@ The desktop share flow was validated by intercepting `xdg-open` with a temporary
 Test setup:
 
 ```sh
-mkdir -p /tmp/eqrcp-fake-bin
-cat >/tmp/eqrcp-fake-bin/xdg-open <<'SH'
+mkdir -p /tmp/eqt-fake-bin
+cat >/tmp/eqt-fake-bin/xdg-open <<'SH'
 #!/bin/sh
-printf "%s\n" "$1" >> /tmp/eqrcp-opened-urls
+printf "%s\n" "$1" >> /tmp/eqt-opened-urls
 exit 0
 SH
-chmod +x /tmp/eqrcp-fake-bin/xdg-open
+chmod +x /tmp/eqt-fake-bin/xdg-open
 ```
 
 Server:
 
 ```sh
-printf 'desktop share download\n' > /tmp/eqrcp-desktop-share.txt
-PATH=/tmp/eqrcp-fake-bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin \
-XDG_CONFIG_HOME=/tmp/eqrcp-desktop-config \
-/tmp/eqrcp-desktop-test desktop share \
+printf 'desktop share download\n' > /tmp/eqt-desktop-share.txt
+PATH=/tmp/eqt-fake-bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin \
+XDG_CONFIG_HOME=/tmp/eqt-desktop-config \
+/tmp/eqt-desktop-test desktop share \
   -i any \
   --bind 127.0.0.1 \
   -p 19181 \
   --path desktopshare \
-  /tmp/eqrcp-desktop-share.txt
+  /tmp/eqt-desktop-share.txt
 ```
 
 Client:
 
 ```sh
 curl -s -A 'Mozilla/5.0' \
-  -D /tmp/eqrcp-desktop-share.headers \
-  -o /tmp/eqrcp-desktop-downloaded.txt \
+  -D /tmp/eqt-desktop-share.headers \
+  -o /tmp/eqt-desktop-downloaded.txt \
   http://127.0.0.1:19181/send/desktopshare
 ```
 
 Expected result:
 
-- `/tmp/eqrcp-opened-urls` contains `http://127.0.0.1:19181/qr`.
+- `/tmp/eqt-opened-urls` contains `http://127.0.0.1:19181/qr`.
 - Downloaded content matches the source file.
 - Response headers include an attachment filename.
 - The server exits after the download.
@@ -646,28 +646,28 @@ The desktop receive flow was validated by intercepting `xdg-open` with the same 
 Server:
 
 ```sh
-mkdir -p /tmp/eqrcp-desktop-recv2
-PATH=/tmp/eqrcp-fake-bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin \
-XDG_CONFIG_HOME=/tmp/eqrcp-desktop-config \
-/tmp/eqrcp-desktop-test desktop receive \
+mkdir -p /tmp/eqt-desktop-recv2
+PATH=/tmp/eqt-fake-bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin \
+XDG_CONFIG_HOME=/tmp/eqt-desktop-config \
+/tmp/eqt-desktop-test desktop receive \
   -i any \
   --bind 127.0.0.1 \
   -p 19182 \
   --path desktoprecv2 \
-  /tmp/eqrcp-desktop-recv2
+  /tmp/eqt-desktop-recv2
 ```
 
 Client:
 
 ```sh
-printf 'desktop receive second upload\n' > /tmp/eqrcp-desktop-upload2.txt
-curl -s -F 'files=@/tmp/eqrcp-desktop-upload2.txt' \
+printf 'desktop receive second upload\n' > /tmp/eqt-desktop-upload2.txt
+curl -s -F 'files=@/tmp/eqt-desktop-upload2.txt' \
   http://127.0.0.1:19182/receive/desktoprecv2
 ```
 
 Expected result:
 
-- `/tmp/eqrcp-opened-urls` contains `http://127.0.0.1:19182/qr`.
-- `/tmp/eqrcp-desktop-recv2/eqrcp-desktop-upload2.txt` exists.
+- `/tmp/eqt-opened-urls` contains `http://127.0.0.1:19182/qr`.
+- `/tmp/eqt-desktop-recv2/eqt-desktop-upload2.txt` exists.
 - Its content matches the uploaded file.
 - The server exits after the upload.

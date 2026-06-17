@@ -18,12 +18,12 @@ import (
 	"sync"
 	"time"
 
-	"eqrcp/application"
-	"eqrcp/body"
-	"eqrcp/config"
-	"eqrcp/logger"
-	"eqrcp/server"
-	"eqrcp/version"
+	"eqt/application"
+	"eqt/body"
+	"eqt/config"
+	"eqt/logger"
+	"eqt/server"
+	"eqt/version"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +39,7 @@ var desktopAgentBackgroundStarter = startDesktopAgentBackgroundProcess
 var desktopAgentReadyWaiter = waitForDesktopAgentReady
 
 func getDesktopAgentAddress() string {
-	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {
 		return "127.0.0.1:" + port
 	}
 	return "127.0.0.1:48176"
@@ -1091,27 +1091,27 @@ func desktopAgentNotification(record desktopAgentTaskRecord) (string, string) {
 	target := desktopAgentPathsSummary(record.Paths)
 	switch record.State {
 	case "running":
-		return "eqrcp transfer ready", fmt.Sprintf("%s ready: %s", action, target)
+		return "eqt transfer ready", fmt.Sprintf("%s ready: %s", action, target)
 	case "completed":
 		if record.TransferState == "completed" {
 			return "", ""
 		}
-		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
+		return "eqt transfer completed", fmt.Sprintf("%s completed: %s", action, target)
 	case "failed":
 		if record.TransferState == "failed" {
 			return "", ""
 		}
 		if record.Error != "" {
-			return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, record.Error)
+			return "eqt transfer failed", fmt.Sprintf("%s failed: %s", action, record.Error)
 		}
-		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
+		return "eqt transfer failed", fmt.Sprintf("%s failed: %s", action, target)
 	case "stopped":
 		if record.TransferState == "stopped" {
 			return "", ""
 		}
-		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
+		return "eqt transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
 	case "replaced":
-		return "eqrcp transfer replaced", fmt.Sprintf("%s replaced by a newer task: %s", action, target)
+		return "eqt transfer replaced", fmt.Sprintf("%s replaced by a newer task: %s", action, target)
 	default:
 		return "", ""
 	}
@@ -1125,22 +1125,22 @@ func desktopAgentTransferNotification(record desktopAgentTaskRecord) (string, st
 	}
 	switch record.TransferState {
 	case "transferring":
-		return "eqrcp transfer started", fmt.Sprintf("%s started: %s", action, target)
+		return "eqt transfer started", fmt.Sprintf("%s started: %s", action, target)
 	case "completed":
 		if len(record.SavedFiles) == 1 {
-			return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, record.SavedFiles[0])
+			return "eqt transfer completed", fmt.Sprintf("%s completed: %s", action, record.SavedFiles[0])
 		}
 		if len(record.SavedFiles) > 1 {
-			return "eqrcp transfer completed", fmt.Sprintf("%s completed: %d files", action, len(record.SavedFiles))
+			return "eqt transfer completed", fmt.Sprintf("%s completed: %d files", action, len(record.SavedFiles))
 		}
-		return "eqrcp transfer completed", fmt.Sprintf("%s completed: %s", action, target)
+		return "eqt transfer completed", fmt.Sprintf("%s completed: %s", action, target)
 	case "stopped":
-		return "eqrcp transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
+		return "eqt transfer stopped", fmt.Sprintf("%s stopped: %s", action, target)
 	case "failed":
 		if record.TransferMessage != "" {
-			return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, record.TransferMessage)
+			return "eqt transfer failed", fmt.Sprintf("%s failed: %s", action, record.TransferMessage)
 		}
-		return "eqrcp transfer failed", fmt.Sprintf("%s failed: %s", action, target)
+		return "eqt transfer failed", fmt.Sprintf("%s failed: %s", action, target)
 	default:
 		return "", ""
 	}
@@ -1610,7 +1610,7 @@ func desktopAgentCommandArgs(command *cobra.Command, args []string) error {
 		return nil
 	}
 	if len(args) == 1 && args[0] == "runtime" {
-		return fmt.Errorf("use `eqrcp desktop status` or `eqrcp desktop agent-status` for runtime details; `%s` starts the foreground agent process", command.CommandPath())
+		return fmt.Errorf("use `eqt desktop status` or `eqt desktop agent-status` for runtime details; `%s` starts the foreground agent process", command.CommandPath())
 	}
 	return fmt.Errorf("%s does not take arguments", command.CommandPath())
 }
@@ -1643,7 +1643,7 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 	}
 
 	basePort := 48176
-	if portStr := os.Getenv("EQRCP_AGENT_PORT"); portStr != "" {
+	if portStr := os.Getenv("EQT_AGENT_PORT"); portStr != "" {
 		if p, err := strconv.Atoi(portStr); err == nil {
 			basePort = p
 		}
@@ -1661,7 +1661,7 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 			response.Body.Close()
 			if response.StatusCode == http.StatusNoContent {
 				log.Infof("Another running desktop agent instance detected at %s", addr)
-				return fmt.Errorf("desktop agent is already running at http://%s; use `eqrcp desktop agent-open`, `eqrcp desktop agent-status`, or `eqrcp desktop status`", addr)
+				return fmt.Errorf("desktop agent is already running at http://%s; use `eqt desktop agent-open`, `eqt desktop agent-status`, or `eqt desktop status`", addr)
 			}
 		}
 
@@ -1739,7 +1739,7 @@ func runDesktopAgentBackground(command *cobra.Command) error {
 	}
 
 	basePort := 48176
-	if portStr := os.Getenv("EQRCP_AGENT_PORT"); portStr != "" {
+	if portStr := os.Getenv("EQT_AGENT_PORT"); portStr != "" {
 		if p, err := strconv.Atoi(portStr); err == nil {
 			basePort = p
 		}
@@ -1877,7 +1877,7 @@ func defaultDesktopAgentPortFilePath() string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "eqrcp", "agent.port")
+	return filepath.Join(dir, "eqt", "agent.port")
 }
 
 func desktopAgentAddressInUse(err error) bool {
@@ -2208,7 +2208,7 @@ var desktopAgentPageTemplate = template.Must(template.New("desktop-agent").Funcs
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>eqrcp Agent</title>
+<title>eqt Agent</title>
 <style>
 :root {
   color-scheme: light;
@@ -2464,7 +2464,7 @@ th {
 <body>
 <main>
   <header>
-    <h1>eqrcp Agent</h1>
+    <h1>eqt Agent</h1>
     <div class="actions">
       <button id="restart-agent" type="button">Restart Agent</button>
       <button id="clear-history" type="button">Clear History</button>

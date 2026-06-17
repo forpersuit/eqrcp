@@ -14,17 +14,17 @@ This checklist is for the deferred Windows validation batch in `desktop-integrat
 - [ ] Build binaries from current `master`:
 
 ```sh
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqrcp.exe .
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o /mnt/e/developer/results/eqrcp-launcher.exe ./cmd/eqrcp-launcher
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /mnt/e/developer/results/eqt.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o /mnt/e/developer/results/eqt-launcher.exe ./cmd/eqt-launcher
 ```
 
-- [ ] Place `eqrcp.exe` and `eqrcp-launcher.exe` side by side.
+- [ ] Place `eqt.exe` and `eqt-launcher.exe` side by side.
 - [ ] Confirm CLI baseline:
 
 ```powershell
-E:\developer\results\eqrcp.exe version
-E:\developer\results\eqrcp.exe desktop --help
-E:\developer\results\eqrcp.exe desktop status
+E:\developer\results\eqt.exe version
+E:\developer\results\eqt.exe desktop --help
+E:\developer\results\eqt.exe desktop status
 ```
 
 Evidence to capture:
@@ -37,15 +37,15 @@ Evidence to capture:
 - [ ] Install desktop integration:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop install
+E:\developer\results\eqt.exe desktop install
 ```
 
 - [ ] Validate Explorer entries:
-- [ ] `Share with eqrcp` on file right-click.
-- [ ] `Share with eqrcp` on folder right-click.
-- [ ] `Receive here with eqrcp` on folder right-click.
-- [ ] `Receive here with eqrcp` on folder background right-click.
-- [ ] `Send to > Share with eqrcp` exists.
+- [ ] `Share with eqt` on file right-click.
+- [ ] `Share with eqt` on folder right-click.
+- [ ] `Receive here with eqt` on folder right-click.
+- [ ] `Receive here with eqt` on folder background right-click.
+- [ ] `Send to > Share with eqt` exists.
 - [ ] Validate no console prompt appears on right-click action.
 - [ ] Validate right-click action opens browser QR page.
 - [ ] Validate `desktop status` reports launcher path and no false localized parsing issues.
@@ -74,20 +74,20 @@ Evidence to capture:
 - [ ] Start agent in background:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop agent-start -B
+E:\developer\results\eqt.exe desktop agent-start -B
 ```
 
 - [ ] Open agent page and validate auto refresh and current/history sections:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop agent-open
+E:\developer\results\eqt.exe desktop agent-open
 ```
 
 - [ ] Start a right-click task and validate `Open QR Page` link in agent page.
 - [ ] Validate `agent-open-current` when active and when idle:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop agent-open-current
+E:\developer\results\eqt.exe desktop agent-open-current
 ```
 
 Evidence to capture:
@@ -101,7 +101,7 @@ Evidence to capture:
 - [ ] Open the Wails GUI settings panel.
 - [ ] Confirm the settings panel is grouped into Network, System Integration, Chat, and Window without clipped text at the default window size.
 - [ ] Enable `Windows right-click share and receive`.
-- [ ] Confirm Explorer entries and `Send to > Share with eqrcp` are installed.
+- [ ] Confirm Explorer entries and `Send to > Share with eqt` are installed.
 - [ ] Disable `Windows right-click share and receive`.
 - [ ] Confirm Explorer entries and Send To script are removed.
 - [ ] Enable `Start EQT at login`.
@@ -120,9 +120,9 @@ Evidence to capture:
 - [ ] Validate background start/stop path:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop agent-start -B
-E:\developer\results\eqrcp.exe desktop agent-status
-E:\developer\results\eqrcp.exe desktop agent-stop
+E:\developer\results\eqt.exe desktop agent-start -B
+E:\developer\results\eqt.exe desktop agent-status
+E:\developer\results\eqt.exe desktop agent-stop
 ```
 
 - [ ] Validate runtime diagnostics in `desktop status`:
@@ -133,11 +133,11 @@ E:\developer\results\eqrcp.exe desktop agent-stop
 - [ ] Validate startup commands:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop startup-status
-E:\developer\results\eqrcp.exe desktop startup-enable
-E:\developer\results\eqrcp.exe desktop startup-status
-E:\developer\results\eqrcp.exe desktop startup-disable
-E:\developer\results\eqrcp.exe desktop startup-status
+E:\developer\results\eqt.exe desktop startup-status
+E:\developer\results\eqt.exe desktop startup-enable
+E:\developer\results\eqt.exe desktop startup-status
+E:\developer\results\eqt.exe desktop startup-disable
+E:\developer\results\eqt.exe desktop startup-status
 ```
 
 Evidence to capture:
@@ -150,7 +150,7 @@ Evidence to capture:
 - [ ] Start share task and stop it via CLI:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop agent-stop-current
+E:\developer\results\eqt.exe desktop agent-stop-current
 ```
 
 - [ ] Validate stopped task lands in history with expected state.
@@ -194,7 +194,7 @@ Evidence to capture:
 - [ ] Uninstall desktop integration:
 
 ```powershell
-E:\developer\results\eqrcp.exe desktop uninstall
+E:\developer\results\eqt.exe desktop uninstall
 ```
 
 - [ ] Confirm installed Explorer entries are removed.

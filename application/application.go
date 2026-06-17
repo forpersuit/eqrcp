@@ -26,7 +26,7 @@ type App struct {
 
 func New() App {
 	return App{
-		Name:  "eqrcp",
+		Name:  "eqt",
 		Flags: Flags{},
 	}
 }

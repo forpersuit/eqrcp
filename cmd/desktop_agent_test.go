@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"eqrcp/application"
-	"eqrcp/config"
-	"eqrcp/server"
+	"eqt/application"
+	"eqt/config"
+	"eqt/server"
 	"github.com/spf13/cobra"
 )
 
@@ -88,8 +88,8 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	if len(status.History) != 1 || status.History[0].State != "completed" || status.History[0].Action != "share" {
 		t.Fatalf("History = %#v, want completed share record", status.History)
 	}
-	assertNotificationContains(t, notifications, "eqrcp transfer ready")
-	assertNotificationContains(t, notifications, "eqrcp transfer completed")
+	assertNotificationContains(t, notifications, "eqt transfer ready")
+	assertNotificationContains(t, notifications, "eqt transfer completed")
 }
 
 func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
@@ -99,11 +99,11 @@ func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
 		err   string
 		want  []string
 	}{
-		{name: "running", state: "running", want: []string{"eqrcp transfer ready", "Share ready: a.txt"}},
-		{name: "completed", state: "completed", want: []string{"eqrcp transfer completed", "Share completed: a.txt"}},
-		{name: "failed", state: "failed", err: "network failed", want: []string{"eqrcp transfer failed", "Share failed: network failed"}},
-		{name: "stopped", state: "stopped", want: []string{"eqrcp transfer stopped", "Share stopped: a.txt"}},
-		{name: "replaced", state: "replaced", want: []string{"eqrcp transfer replaced", "Share replaced by a newer task: a.txt"}},
+		{name: "running", state: "running", want: []string{"eqt transfer ready", "Share ready: a.txt"}},
+		{name: "completed", state: "completed", want: []string{"eqt transfer completed", "Share completed: a.txt"}},
+		{name: "failed", state: "failed", err: "network failed", want: []string{"eqt transfer failed", "Share failed: network failed"}},
+		{name: "stopped", state: "stopped", want: []string{"eqt transfer stopped", "Share stopped: a.txt"}},
+		{name: "replaced", state: "replaced", want: []string{"eqt transfer replaced", "Share replaced by a newer task: a.txt"}},
 	}
 
 	for _, test := range tests {
@@ -152,7 +152,7 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 	if status.Current == nil || status.Current.TransferState != "transferring" || status.Current.TransferPercent != 50 || status.Current.TransferCurrent != "report.txt" {
 		t.Fatalf("Current = %#v, want observed transfer status", status.Current)
 	}
-	assertNotificationContains(t, notifications, "eqrcp transfer started")
+	assertNotificationContains(t, notifications, "eqt transfer started")
 
 	agent.observeTransferStatus(3, server.TransferStatusSnapshot{
 		State:      "completed",
@@ -168,7 +168,7 @@ func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 	if len(status.History) != 1 || status.History[0].State != "completed" || len(status.History[0].SavedFiles) != 2 || status.History[0].TransferCurrent != "b.txt" {
 		t.Fatalf("History = %#v, want saved files and completed transfer", status.History)
 	}
-	assertNotificationContains(t, notifications, "eqrcp transfer completed")
+	assertNotificationContains(t, notifications, "eqt transfer completed")
 }
 
 func TestDesktopAgentRecordsStoppedTransferState(t *testing.T) {
@@ -248,7 +248,7 @@ func TestDesktopAgentTransferNotificationsAreDeduped(t *testing.T) {
 	for index := 0; index < 3; index++ {
 		agent.observeTransferStatus(4, server.TransferStatusSnapshot{State: "transferring", Current: "a.txt"})
 	}
-	assertNotificationContains(t, notifications, "eqrcp transfer started")
+	assertNotificationContains(t, notifications, "eqt transfer started")
 	select {
 	case got := <-notifications:
 		t.Fatalf("unexpected duplicate notification %q", got)
@@ -265,7 +265,7 @@ func TestDesktopAgentFailedTransferNotificationUsesTransferMessage(t *testing.T)
 		TransferCurrent: "report.txt",
 	})
 	got := title + ": " + message
-	for _, want := range []string{"eqrcp transfer failed", "Receive failed: Unable to write file to disk."} {
+	for _, want := range []string{"eqt transfer failed", "Receive failed: Unable to write file to disk."} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("notification = %q, want to contain %q", got, want)
 		}
@@ -798,7 +798,7 @@ func TestDesktopAgentPageRendersStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"eqrcp Agent",
+		"eqt Agent",
 		"Stop Current",
 		"Clear History",
 		"Transfer again",
@@ -1073,17 +1073,17 @@ func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 	desktopAgentPortFilePath = func() string {
 		return filepath.Join(t.TempDir(), "nonexistent.port")
 	}
-	oldEnv := os.Getenv("EQRCP_AGENT_PORT")
-	os.Setenv("EQRCP_AGENT_PORT", "1")
+	oldEnv := os.Getenv("EQT_AGENT_PORT")
+	os.Setenv("EQT_AGENT_PORT", "1")
 	desktopAgentBaseURL = "http://127.0.0.1:1"
 	desktopAgentExecutable = func() (string, error) {
-		return "/tmp/eqrcp", nil
+		return "/tmp/eqt", nil
 	}
 	started := false
 	desktopAgentBackgroundStarter = func(exe string, logFile *os.File) error {
 		started = true
-		if exe != "/tmp/eqrcp" {
-			t.Fatalf("exe = %q, want /tmp/eqrcp", exe)
+		if exe != "/tmp/eqt" {
+			t.Fatalf("exe = %q, want /tmp/eqt", exe)
 		}
 		if logFile == nil {
 			t.Fatal("logFile is nil")
@@ -1103,9 +1103,9 @@ func TestRunDesktopAgentBackgroundStartsProcess(t *testing.T) {
 		desktopAgentReadyWaiter = previousWaiter
 		desktopAgentPortFilePath = oldPortPath
 		if oldEnv == "" {
-			os.Unsetenv("EQRCP_AGENT_PORT")
+			os.Unsetenv("EQT_AGENT_PORT")
 		} else {
-			os.Setenv("EQRCP_AGENT_PORT", oldEnv)
+			os.Setenv("EQT_AGENT_PORT", oldEnv)
 		}
 	})
 

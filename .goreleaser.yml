@@ -5,9 +5,9 @@ before:
 builds:
 - env:
   - CGO_ENABLED=0
-  binary: eqrcp
+  binary: eqt
   ldflags:
-  - -s -w -X eqrcp/version.version={{.Version}} -X eqrcp/version.date={{.Date}}
+  - -s -w -X eqt/version.version={{.Version}} -X eqt/version.date={{.Date}}
   goos:
   - linux
   - darwin
@@ -54,9 +54,9 @@ changelog:
 release:
   prerelease: auto
 nfpms:
-  - package_name: eqrcp
-    homepage: https://github.com/forpersuit/eqrcp
-    maintainer: eqrcp maintainers
+  - package_name: eqt
+    homepage: https://github.com/forpersuit/eqt
+    maintainer: eqt maintainers
     description: Transfer files over wifi from your computer to your mobile device by scanning a QR code without leaving the terminal.
     license: MIT
     formats:

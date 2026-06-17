@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"eqrcp/body"
-	"eqrcp/config"
-	"eqrcp/pages"
+	"eqt/body"
+	"eqt/config"
+	"eqt/pages"
 )
 
 func TestGetFileName(t *testing.T) {
@@ -82,7 +82,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		AgentStatusRoute: "http://127.0.0.1:48176/status",
 		AgentTaskID:      "7",
 		HasAgentStatus:   true,
-		Version:          "eqrcp test [date: now]",
+		Version:          "eqt test [date: now]",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -105,7 +105,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`id="saved-files-title"`,
 		`id="saved-files"`,
 		`id="transfer-version"`,
-		`Version: eqrcp test [date: now]`,
+		`Version: eqt test [date: now]`,
 		`Current address`,
 		`127.0.0.1:8080`,
 		`same LAN as the phone`,
@@ -151,7 +151,7 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 		StatusRoute:  "/qr/status",
 		EventsRoute:  "/qr/events",
 		StopRoute:    "/qr/stop",
-		Version:      "eqrcp test [date: now]",
+		Version:      "eqt test [date: now]",
 	}
 
 	if err := serveTemplate("qr", pages.QR, &out, data); err != nil {
@@ -212,7 +212,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		ViewportDebugRoute: "/chat/test/viewport-debug",
 		HostToken:          "host-token",
 		CanStop:            true,
-		Version:            "eqrcp test [date: now]",
+		Version:            "eqt test [date: now]",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
@@ -240,7 +240,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		`id="devices-toggle"`,
 		`id="device-count"`,
 		`embedded-chat`,
-		`eqrcp-chat-draft:`,
+		`eqt-chat-draft:`,
 		`clipboardData.files`,
 		`read-clipboard-text`,
 		`clipboard-text`,
@@ -287,7 +287,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		StopRoute:          "/chat/test/stop",
 		HealthRoute:        "/chat/test/health",
 		ViewportDebugRoute: "/chat/test/viewport-debug",
-		Version:            "eqrcp test [date: now]",
+		Version:            "eqt test [date: now]",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
@@ -569,7 +569,7 @@ func TestDisplayQRTransferURLStatusAlias(t *testing.T) {
 	server.setStatus("completed", "Transfer completed.")
 	server.updateStatus(func(status *transferStatus) {
 		status.Mode = "send"
-		status.Target = "eqrcp-multiple-files.zip"
+		status.Target = "eqt-multiple-files.zip"
 		status.SavedFiles = []string{"one.txt", "two.txt"}
 	})
 
@@ -588,7 +588,7 @@ func TestDisplayQRTransferURLStatusAlias(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
 		t.Fatalf("decode transfer status alias: %v", err)
 	}
-	if status.State != "completed" || status.Target != "eqrcp-multiple-files.zip" {
+	if status.State != "completed" || status.Target != "eqt-multiple-files.zip" {
 		t.Fatalf("transfer status alias = %#v, want completed status for current transfer", status)
 	}
 	if strings.Contains(response.Body.String(), `"history"`) {
@@ -799,14 +799,14 @@ func TestSendSetsStatusMetadata(t *testing.T) {
 }
 
 func TestSendSetsArchiveStatusMetadata(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "eqrcp-multiple-files-20260422-010203.zip")
+	path := filepath.Join(t.TempDir(), "eqt-multiple-files-20260422-010203.zip")
 	if err := os.WriteFile(path, []byte("zip"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	server := &Server{}
 	server.Send(body.Body{
 		Path:     path,
-		Filename: "eqrcp-multiple-files-20260422-010203.zip",
+		Filename: "eqt-multiple-files-20260422-010203.zip",
 		Archive:  true,
 		Items:    []string{"one.txt", "two.txt"},
 	})
@@ -815,7 +815,7 @@ func TestSendSetsArchiveStatusMetadata(t *testing.T) {
 	if got.Mode != "send" || got.Title != "Share multiple files" {
 		t.Fatalf("getStatus() = %#v", got)
 	}
-	if !got.Archive || got.ArchiveName != "eqrcp-multiple-files-20260422-010203.zip" {
+	if !got.Archive || got.ArchiveName != "eqt-multiple-files-20260422-010203.zip" {
 		t.Fatalf("archive metadata = %#v", got)
 	}
 	if strings.Join(got.Items, ",") != "one.txt,two.txt" {
@@ -843,8 +843,8 @@ func TestSendTitle(t *testing.T) {
 	tests := map[string]string{
 		"report.txt":                               "Share file",
 		"photos-directory-20260422-010203.zip":     "Share directory",
-		"eqrcp-multiple-files-20260422-010203.zip": "Share multiple files",
-		"eqrcp-multiple-files.zip":                 "Share file",
+		"eqt-multiple-files-20260422-010203.zip": "Share multiple files",
+		"eqt-multiple-files.zip":                 "Share file",
 	}
 	for filename, want := range tests {
 		if got := sendTitle(filename); got != want {

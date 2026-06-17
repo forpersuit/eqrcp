@@ -6,7 +6,7 @@
 - use `scripts/git-push-smart.sh` for GitHub pushes in WSL: if direct `ping x.com` works it pushes without proxy; otherwise it uses the Windows host proxy from the commented `~/.bashrc` pattern (`ip route` host + port `10808`) through SSH `ProxyCommand`
 - always base on First Principle
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
-- before handing work to manual Windows acceptance, close running eqrcp desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
+- before handing work to manual Windows acceptance, close running eqt desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
 - keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
 - replace grep by rg
 
@@ -23,7 +23,7 @@ Use standard Go tooling from the repository root:
 ```sh
 go test ./...
 go test ./server ./cmd
-go build -o eqrcp .
+go build -o eqt .
 go run . send ./example.txt
 go run . receive ./downloads
 ```
@@ -31,8 +31,8 @@ go run . receive ./downloads
 For Windows binaries:
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o eqrcp.exe .
-GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqrcp-launcher.exe ./cmd/eqrcp-launcher
+GOOS=windows GOARCH=amd64 go build -o eqt.exe .
+GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqt-launcher.exe ./cmd/eqt-launcher
 ```
 
 Manual Windows acceptance deployment:
@@ -42,7 +42,7 @@ scripts/deploy-windows-results.sh
 scripts/install-hooks.sh
 ```
 
-The deployment script closes `eqrcp.exe`, `eqrcp-launcher.exe`, and `eqrcp-desktop.exe`, then writes fresh Windows artifacts to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQRCP_RESULTS_DIR` only when the acceptance directory is intentionally different.
+The deployment script closes `eqt.exe`, `eqt-launcher.exe`, and `eqt-desktop.exe`, then writes fresh Windows artifacts to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQT_RESULTS_DIR` only when the acceptance directory is intentionally different.
 
 ## Coding Style & Naming Conventions
 

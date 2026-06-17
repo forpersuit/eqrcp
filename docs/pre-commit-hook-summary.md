@@ -3,7 +3,7 @@
 ## 问题背景
 
 用户需要在提交前自动：
-1. 关闭正在运行的eqrcp相关exe
+1. 关闭正在运行的eqt相关exe
 2. 运行测试（包括GUI相关测试）
 3. 重新构建exe并保存到 `E:\developer\results`
 
@@ -58,10 +58,10 @@ git commit
     ↓
 pre-commit hook触发
     ↓
-Step 1: 关闭eqrcp进程
-    ├── eqrcp.exe
-    ├── eqrcp-launcher.exe
-    └── eqrcp-desktop.exe
+Step 1: 关闭eqt进程
+    ├── eqt.exe
+    ├── eqt-launcher.exe
+    └── eqt-desktop.exe
     ↓
 Step 2: 运行测试
     ├── Go tests: go test ./...
@@ -70,8 +70,8 @@ Step 2: 运行测试
     ↓
 Step 3: 重新构建项目
     ├── 当前平台CLI
-    ├── Windows CLI (eqrcp.exe, eqrcp-launcher.exe)
-    └── Wails GUI (eqrcp-desktop.exe)
+    ├── Windows CLI (eqt.exe, eqt-launcher.exe)
+    └── Wails GUI (eqt-desktop.exe)
     ↓
 保存到 E:\developer\results
     ↓
@@ -84,12 +84,12 @@ Step 3: 重新构建项目
 
 **Windows**:
 ```powershell
-Get-Process -Name eqrcp -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name eqt -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
 **Linux/Mac**:
 ```bash
-pkill -f "eqrcp$"
+pkill -f "eqt$"
 ```
 
 ### 2. 运行测试
@@ -115,19 +115,19 @@ go test ./...
 
 **当前平台CLI**:
 ```bash
-go build -o E:/developer/results/eqrcp .
+go build -o E:/developer/results/eqt .
 ```
 
 **Windows CLI**:
 ```bash
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o E:/developer/results/eqrcp.exe .
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o E:/developer/results/eqrcp-launcher.exe ./cmd/eqrcp-launcher
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o E:/developer/results/eqt.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o E:/developer/results/eqt-launcher.exe ./cmd/eqt-launcher
 ```
 
 **Wails GUI**:
 ```bash
 cd desktop/gui
-wails build -clean -o E:/developer/results/eqrcp-desktop.exe -platform windows/amd64
+wails build -clean -o E:/developer/results/eqt-desktop.exe -platform windows/amd64
 ```
 
 ## 使用技巧
@@ -184,12 +184,12 @@ rm .git/hooks/pre-commit
 
 - `b0004a2` - Add tests and GUI frontend build to pre-commit hook
 - `d3c48f7` - Add git hooks installation scripts and documentation
-- `721e876` - Add pre-commit hook to close eqrcp processes and rebuild
+- `721e876` - Add pre-commit hook to close eqt processes and rebuild
 
 ## 总结
 
 通过标准的Git Hook安装脚本方案，我们实现了：
-1. ✅ 自动关闭eqrcp进程
+1. ✅ 自动关闭eqt进程
 2. ✅ 自动运行Go测试
 3. ✅ 自动构建GUI前端
 4. ✅ 自动运行GUI测试

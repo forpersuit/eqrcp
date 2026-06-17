@@ -1,5 +1,5 @@
 # Binaries for programs and plugins
-eqrcp
+eqt
 *.exe
 *.exe~
 *.dll
@@ -23,7 +23,7 @@ bin/
 dist/
 /build/
 desktop/gui/build/bin/
-desktop/gui/eqrcp-desktop
+desktop/gui/eqt-desktop
 docs/img/venv/
 *:Zone.Identifier
 

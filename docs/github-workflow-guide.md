@@ -2,7 +2,7 @@
 
 ## 一、项目现状
 
-- **仓库地址**: `git@github.com:forpersuit/eqrcp.git`
+- **仓库地址**: `git@github.com:forpersuit/eqt.git`
 - **已有配置**: `.goreleaser.yml`（GoReleaser 配置，支持 Linux/macOS/Windows 多平台构建）
 - **缺失部分**: GitHub Actions CI/CD 工作流、自动化发布流程、标签规范
 
@@ -112,7 +112,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - run: go mod download
       - run: go test ./...
-      - run: go build -o eqrcp .
+      - run: go build -o eqt .
 
   lint:
     runs-on: ubuntu-latest
@@ -205,7 +205,7 @@ git push origin v0.2.0
 #    - 生成 checksums.txt 校验文件
 
 # 5. 用户可以在 GitHub Release 页面下载对应平台的可执行文件：
-#    https://github.com/forpersuit/eqrcp/releases
+#    https://github.com/forpersuit/eqt/releases
 ```
 
 ### 5.3 预发布（Pre-release）
@@ -227,8 +227,8 @@ git push origin v0.2.0-rc.1
 
 | 配置项 | 说明 |
 |--------|------|
-| `builds[0]` | 主程序 `eqrcp`，支持 Linux/macOS/Windows，架构 386/amd64/arm/arm64 |
-| `builds[1]` | Windows 启动器 `eqrcp-launcher`，使用 `-H=windowsgui` 隐藏控制台窗口 |
+| `builds[0]` | 主程序 `eqt`，支持 Linux/macOS/Windows，架构 386/amd64/arm/arm64 |
+| `builds[1]` | Windows 启动器 `eqt-launcher`，使用 `-H=windowsgui` 隐藏控制台窗口 |
 | `archives` | Windows 平台同时生成 `.zip` 和 `.tar.gz` |
 | `checksums` | 生成 `checksums.txt` 用于验证下载完整性 |
 | `nfpms` | 生成 Linux `.deb` 和 `.rpm` 安装包 |
@@ -350,7 +350,7 @@ git push origin v0.2.0-rc.1
 
 - [ ] `gofmt` 格式化修改的 Go 文件
 - [ ] `go test ./...` 全部通过
-- [ ] `go build -o eqrcp .` 构建成功
+- [ ] `go build -o eqt .` 构建成功
 - [ ] 提交信息符合 Conventional Commits 规范
 
 ### 发布前

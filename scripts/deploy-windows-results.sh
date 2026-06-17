@@ -6,11 +6,11 @@ usage() {
   cat <<'EOF'
 Usage: scripts/deploy-windows-results.sh [--no-tests] [--skip-gui]
 
-Close running eqrcp desktop processes, build fresh Windows artifacts, and copy
+Close running eqt desktop processes, build fresh Windows artifacts, and copy
 them to the manual acceptance directory.
 
 Environment:
-- EQRCP_RESULTS_DIR overrides the output directory.
+- EQT_RESULTS_DIR overrides the output directory.
 - Default output directory is E:\developer\results on Windows, or
   /mnt/e/developer/results when running under WSL/Linux with the E drive mounted.
 EOF
@@ -43,8 +43,8 @@ done
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 resolve_results_dir() {
-  if [[ -n "${EQRCP_RESULTS_DIR:-}" ]]; then
-    printf '%s\n' "$EQRCP_RESULTS_DIR"
+  if [[ -n "${EQT_RESULTS_DIR:-}" ]]; then
+    printf '%s\n' "$EQT_RESULTS_DIR"
     return
   fi
   case "$(uname -s)" in
@@ -57,18 +57,18 @@ resolve_results_dir() {
   esac
 }
 
-close_eqrcp_processes() {
+close_eqt_processes() {
   if [[ -f "/mnt/c/Windows/System32/taskkill.exe" ]]; then
-    /mnt/c/Windows/System32/taskkill.exe /F /IM "eqrcp*" >/dev/null 2>&1 || true
+    /mnt/c/Windows/System32/taskkill.exe /F /IM "eqt*" >/dev/null 2>&1 || true
   elif command -v taskkill.exe >/dev/null 2>&1; then
-    taskkill.exe /F /IM "eqrcp*" >/dev/null 2>&1 || true
+    taskkill.exe /F /IM "eqt*" >/dev/null 2>&1 || true
   elif command -v taskkill >/dev/null 2>&1; then
-    taskkill /F /IM "eqrcp*" >/dev/null 2>&1 || true
+    taskkill /F /IM "eqt*" >/dev/null 2>&1 || true
   fi
 
-  pkill -f 'eqrcp(\.exe)?$' >/dev/null 2>&1 || true
-  pkill -f 'eqrcp-launcher(\.exe)?$' >/dev/null 2>&1 || true
-  pkill -f 'eqrcp-desktop(\.exe)?$' >/dev/null 2>&1 || true
+  pkill -f 'eqt(\.exe)?$' >/dev/null 2>&1 || true
+  pkill -f 'eqt-launcher(\.exe)?$' >/dev/null 2>&1 || true
+  pkill -f 'eqt-desktop(\.exe)?$' >/dev/null 2>&1 || true
 }
 
 find_wails() {
@@ -88,32 +88,32 @@ find_wails() {
 results_dir="$(resolve_results_dir)"
 mkdir -p "$results_dir"
 
-echo "Closing running eqrcp desktop processes..."
-close_eqrcp_processes
+echo "Closing running eqt desktop processes..."
+close_eqt_processes
 
 if [[ "$run_checks" -eq 1 ]]; then
   echo "Running Go tests..."
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" go test ./...)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
   echo "Building GUI frontend..."
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
   echo "Running GUI Go tests..."
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" go test ./...)
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
 fi
 
 echo "Building Windows CLI artifacts..."
-(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqrcp.exe" .)
+(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqt.exe" .)
 
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then
     echo "Building Windows Wails GUI (consolidated)..."
-    (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqrcp-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqrcp-desktop.exe -platform windows/amd64)
-    # The Wails GUI binary is the consolidated 3-in-1 tool. Overwrite eqrcp.exe.
-    cp "$root_dir/desktop/gui/build/bin/eqrcp-desktop.exe" "$results_dir/eqrcp.exe"
+    (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
+    # The Wails GUI binary is the consolidated 3-in-1 tool. Overwrite eqt.exe.
+    cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
   fi
 fi
 
 # Close any lingering test agent processes that may have spawned during tests
 echo "Ensuring all lingering processes are closed..."
-close_eqrcp_processes
+close_eqt_processes
 
 echo "Acceptance artifacts written to: $results_dir"

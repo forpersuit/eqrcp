@@ -1,5 +1,5 @@
 ❯ 1. 使用公共stun还是自己搭建? 自己搭建有什么要求,难点
-  2. 我想将eqrcp全部改为eqt,这是我们这个软件的简写
+  2. 我想将eqt全部改为eqt,这是我们这个软件的简写
   3. 边等agent, 边推进B4, 但是 #2 这个改名,难度大吗? 不大的话,推进, 大的话就后续再说;
 
 ● 我先 grep 看改名规模，再决定推不推。
@@ -51,7 +51,7 @@
   5. 监控：连接成功率、ICE gathering 耗时、对称 NAT 比例
   6. 运维更新：coturn 偶有 CVE，需要打补丁
 
-  对 eqrcp/EQT 的实际建议：
+  对 eqt/EQT 的实际建议：
 
   阶段        STUN              TURN
   ─────────────────────────────────────────────────
@@ -64,7 +64,7 @@
   endpoint URL。这是天然的服务绑定，技术上无法绕过（防破解的核心见 Q5 文档）。
 
   ---
-  Q2/Q3：改名 eqrcp → eqt 的难度评估
+  Q2/Q3：改名 eqt → eqt 的难度评估
 
   规模实证
 
@@ -75,7 +75,7 @@
   ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
   │ 字符串出现 │ 933                                                                           │
   ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
-  │ Go 模块    │ eqrcp + eqrcp-desktop 两个                                                    │
+  │ Go 模块    │ eqt + eqt-desktop 两个                                                    │
   ├────────────┼───────────────────────────────────────────────────────────────────────────────┤
   │ 跨类型     │ Go / Markdown / YAML / JSON / HTML / Shell / NSIS / Plist / 软著申请材料 6 份 │
   └────────────┴───────────────────────────────────────────────────────────────────────────────┘
@@ -83,32 +83,32 @@
   实际涉及面
 
   机械替换部分（中等工作量）：
-  - module eqrcp → module eqt + module eqrcp-desktop → module eqt-desktop
-  - 所有 import path: eqrcp/server → eqt/server 等
-  - binary: eqrcp 在 goreleaser
-  - outputfilename: "eqrcp-desktop" 在 wails.json
+  - module eqt → module eqt + module eqt-desktop → module eqt-desktop
+  - 所有 import path: eqt/server → eqt/server 等
+  - binary: eqt 在 goreleaser
+  - outputfilename: "eqt-desktop" 在 wails.json
   - 二进制名、cobra command 名、各 template 里的字符串
 
   非机械部分（真正的麻烦）：
-  1. 现有用户配置迁移：~/.config/eqrcp/config.yml →
+  1. 现有用户配置迁移：~/.config/eqt/config.yml →
   ~/.config/eqt/config.yml，要写自动迁移逻辑（首次运行检测旧目录，复制+提示）
-  2. 环境变量前缀：EQRCP_* → EQT_*，旧 env var 失效的兼容期
-  3. 已发布的 v0.1.0-rc.2 是 eqrcp 名字——改名后等于 product 中途更名，下载链接里的 eqrcp-*.tar.gz 会变
+  2. 环境变量前缀：EQT_* → EQT_*，旧 env var 失效的兼容期
+  3. 已发布的 v0.1.0-rc.2 是 eqt 名字——改名后等于 product 中途更名，下载链接里的 eqt-*.tar.gz 会变
   eqt-*.tar.gz
-  4. Bundle id io.github.forpersuit.eqrcp-desktop 已在 macOS plist 里——改的话现有 LaunchAgent 用户会找不到旧条目
-  5. 软著申请材料 6 个文档 全是 "eqrcp"
+  4. Bundle id io.github.forpersuit.eqt-desktop 已在 macOS plist 里——改的话现有 LaunchAgent 用户会找不到旧条目
+  5. 软著申请材料 6 个文档 全是 "eqt"
   命名的——如果已经提交了软著，改名会和受理材料对不上号；如果还没提交，也是几十处中文产品名要核对
-  6. GitHub Repo URL forpersuit/eqrcp 不一起改的话，brand=EQT 但 repo=eqrcp，长期分裂
-  7. 本会话刚创建的 skill 文件名 .claude/skills/eqrcp-ci-release/ 也得改
+  6. GitHub Repo URL forpersuit/eqt 不一起改的话，brand=EQT 但 repo=eqt，长期分裂
+  7. 本会话刚创建的 skill 文件名 .claude/skills/eqt-ci-release/ 也得改
 
   roadmap 里早有立场
 
   docs/product-roadmap.md:3-5：
 
-  ▎ "EQT is the product name for Easy QR Transfer. Keep eqrcp as the CLI, binary, and transfer-core identity
+  ▎ "EQT is the product name for Easy QR Transfer. Keep eqt as the CLI, binary, and transfer-core identity
   ▎ until packaging, migration, and user-facing documentation are ready for a larger rename."
 
-  项目自己已经写过这个判断——product brand = "EQT"，CLI/binary 暂保留 eqrcp，等真正准备好做大改时再 rename。
+  项目自己已经写过这个判断——product brand = "EQT"，CLI/binary 暂保留 eqt，等真正准备好做大改时再 rename。
 
   我的建议
 
@@ -119,17 +119,17 @@
   ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
   │ 产品文案、Wails 窗口 title、docs/index.md 都用 "EQT" │ Go 模块名 / 二进制名 / config 目录 │
   ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
-  │ Bundle 产品名改 "EQT Desktop" 但保留 bundle id       │ Cobra command eqrcp → eqt          │
+  │ Bundle 产品名改 "EQT Desktop" 但保留 bundle id       │ Cobra command eqt → eqt          │
   ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
-  │ README/docs 顶部介绍写 "EQT (eqrcp)" 双标            │ 软著文档统一改                     │
+  │ README/docs 顶部介绍写 "EQT (eqt)" 双标            │ 软著文档统一改                     │
   ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
   │                                                      │ 用户配置迁移逻辑                   │
   ├──────────────────────────────────────────────────────┼────────────────────────────────────┤
   │                                                      │ 现有用户的环境变量过渡期处理       │
   └──────────────────────────────────────────────────────┴────────────────────────────────────┘
 
-  具体的"小动作"我可以现在做，比如改 wails.json 的 productName 从 "eqrcp Desktop" 改为 "EQT - Easy QR
-  Transfer"、改产品介绍页的标题。这样 brand 是 EQT、binary 还是 eqrcp——和 roadmap 一致。
+  具体的"小动作"我可以现在做，比如改 wails.json 的 productName 从 "eqt Desktop" 改为 "EQT - Easy QR
+  Transfer"、改产品介绍页的标题。这样 brand 是 EQT、binary 还是 eqt——和 roadmap 一致。
 
   Q3 决定：按用户原话"大的话就后续再说"——大改 defer，小改（brand only）我现在顺手做。然后推进 B4b（Linux
   Nautilus 右键）。
@@ -141,13 +141,13 @@
       11      "email": "jinxpeeter@outlook.com"
       12    },
       13    "info": {
-      14 -    "productName": "eqrcp Desktop",
+      14 -    "productName": "eqt Desktop",
       14 +    "productName": "EQT - Easy QR Transfer",
       15      "productVersion": "0.1.0",
       16      "companyName": "forpersuit",
       17      "copyright": "Copyright © 2026 forpersuit",
       18 -    "comments": "Easy QR Transfer — share files and chat over QR codes"
-      18 +    "comments": "EQT (eqrcp) — Easy QR Transfer for files and chat"
+      18 +    "comments": "EQT (eqt) — Easy QR Transfer for files and chat"
       19    }
       20  }
 
@@ -206,6 +206,6 @@
 
 ✻ Baked for 3m 41s
 
-※ recap: We're推进 eqrcp's商业化 + 跨平台 + release pipeline; B4a 自启动已合并推送，Q1/Q2/Q3
+※ recap: We're推进 eqt's商业化 + 跨平台 + release pipeline; B4a 自启动已合并推送，Q1/Q2/Q3
   完成。下一步：等付费机制调研 agent 返回后写 docs/business-plan.md，再据其定价段改造 docs/index.md 产品介绍页。
    (disable recaps in /config)

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"eqrcp/application"
-	"eqrcp/logger"
-	"eqrcp/util"
+	"eqt/application"
+	"eqt/logger"
+	"eqt/util"
 	"github.com/adrg/xdg"
 	"github.com/asaskevich/govalidator"
 	"github.com/manifoldco/promptui"

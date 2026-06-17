@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"eqrcp/application"
+	"eqt/application"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +47,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&app.Flags.Bind, "bind", "", "address to bind the web server to")
 	rootCmd.PersistentFlags().StringVarP(&app.Flags.FQDN, "fqdn", "d", "", "fully-qualified domain name to use for the resulting URLs")
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Zip, "zip", "z", false, "zip content before transferring")
-	rootCmd.PersistentFlags().StringVarP(&app.Flags.Config, "config", "c", "", "path to the config file, defaults to $XDG_CONFIG_HOME/eqrcp/config.yml")
+	rootCmd.PersistentFlags().StringVarP(&app.Flags.Config, "config", "c", "", "path to the config file, defaults to $XDG_CONFIG_HOME/eqt/config.yml")
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Browser, "browser", "b", false, "display the QR code in a browser window")
 	rootCmd.PersistentFlags().BoolVarP(&app.Flags.Secure, "secure", "s", false, "use https connection")
 	rootCmd.PersistentFlags().StringVar(&app.Flags.TlsCert, "tls-cert", "", "path to TLS certificate to use with HTTPS")
@@ -57,9 +57,9 @@ func init() {
 	receiveCmd.PersistentFlags().StringVarP(&app.Flags.Output, "output", "o", "", "output directory for receiving files")
 }
 
-// The root command (`eqrcp`) is like a shortcut of the `send` command
+// The root command (`eqt`) is like a shortcut of the `send` command
 var rootCmd = &cobra.Command{
-	Use:           "eqrcp",
+	Use:           "eqt",
 	Args:          cobra.MinimumNArgs(1),
 	RunE:          sendCmdFunc,
 	SilenceErrors: true,
@@ -69,7 +69,7 @@ var rootCmd = &cobra.Command{
 // Execute the root command
 func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
-		rootCmd.PrintErrf("Error: %v\nRun `eqrcp help` for help.\n", err)
+		rootCmd.PrintErrf("Error: %v\nRun `eqt help` for help.\n", err)
 		return err
 	}
 	return nil

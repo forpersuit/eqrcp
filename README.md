@@ -1,6 +1,6 @@
-# eqrcp
+# eqt
 
-`eqrcp` transfers files between a computer and a mobile device on the same local network by printing a QR code in the terminal.
+`eqt` transfers files between a computer and a mobile device on the same local network by printing a QR code in the terminal.
 
 This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp). The fork keeps the original local-transfer model while using its own Go module, command name, configuration directory, and environment variable prefix.
 
@@ -29,7 +29,7 @@ go build ./...
 Build a local binary:
 
 ```sh
-go build -o eqrcp .
+go build -o eqt .
 ```
 
 ## Usage
@@ -37,67 +37,67 @@ go build -o eqrcp .
 Send a file:
 
 ```sh
-eqrcp MyDocument.pdf
+eqt MyDocument.pdf
 ```
 
 Send multiple files:
 
 ```sh
-eqrcp MyDocument.pdf IMG0001.jpg
+eqt MyDocument.pdf IMG0001.jpg
 ```
 
 Send a directory:
 
 ```sh
-eqrcp Documents/
+eqt Documents/
 ```
 
 Force zip mode:
 
 ```sh
-eqrcp --zip LongVideo.avi
+eqt --zip LongVideo.avi
 ```
 
 Receive files into the current directory:
 
 ```sh
-eqrcp receive
+eqt receive
 ```
 
 Receive files into a specific directory:
 
 ```sh
-eqrcp receive --output /tmp/dir
+eqt receive --output /tmp/dir
 ```
 
 Start a local chat session:
 
 ```sh
-eqrcp chat --browser
+eqt chat --browser
 ```
 
 Run the configuration wizard:
 
 ```sh
-eqrcp config
+eqt config
 ```
 
 Desktop launcher helpers:
 
 ```sh
-eqrcp desktop share /path/file.txt
-eqrcp desktop receive /path/directory
-eqrcp desktop chat
+eqt desktop share /path/file.txt
+eqt desktop receive /path/directory
+eqt desktop chat
 ```
 
 Experimental Wails desktop GUI:
 
 ```sh
 cd desktop/gui
-EQRCP_CLI=/path/to/eqrcp wails dev
+EQT_CLI=/path/to/eqt wails dev
 ```
 
-The Wails chat view embeds the same browser chat UI used by `eqrcp chat`, so
+The Wails chat view embeds the same browser chat UI used by `eqt chat`, so
 desktop GUI and browser behavior stay aligned.
 
 Desktop chat host controls:
@@ -110,16 +110,16 @@ Desktop chat host controls:
 On Windows, install user-level Explorer context menu entries:
 
 ```powershell
-eqrcp.exe desktop install
-eqrcp.exe desktop status
-eqrcp.exe desktop uninstall
+eqt.exe desktop install
+eqt.exe desktop status
+eqt.exe desktop uninstall
 ```
 
-For multiple selected files on Windows, use `Send to > Share with eqrcp` after running `desktop install`.
+For multiple selected files on Windows, use `Send to > Share with eqt` after running `desktop install`.
 
-For the smoothest Windows right-click experience, place `eqrcp-launcher.exe` next to `eqrcp.exe` before running `desktop install`.
+For the smoothest Windows right-click experience, place `eqt-launcher.exe` next to `eqt.exe` before running `desktop install`.
 
-When sharing a directory, the downloaded archive is named `<directory>-directory.zip`. When sharing multiple selected files, the downloaded archive is named `eqrcp-multiple-files.zip`.
+When sharing a directory, the downloaded archive is named `<directory>-directory.zip`. When sharing multiple selected files, the downloaded archive is named `eqt-multiple-files.zip`.
 
 ## Configuration
 
@@ -129,13 +129,13 @@ The default configuration file is:
 ~/.local/eqt/config.yml
 ```
 
-On first use, EQT copies an existing legacy config from `$XDG_CONFIG_HOME/eqrcp/config.yml`,
-`$XDG_CONFIG_HOME/eqrcp/config.yaml`, or `$XDG_CONFIG_HOME/eqrcp/config.json` into the new YAML path when possible.
+On first use, EQT copies an existing legacy config from `$XDG_CONFIG_HOME/eqt/config.yml`,
+`$XDG_CONFIG_HOME/eqt/config.yaml`, or `$XDG_CONFIG_HOME/eqt/config.json` into the new YAML path when possible.
 
 Use a custom config file:
 
 ```sh
-eqrcp --config /tmp/eqrcp.yml MyDocument.pdf
+eqt --config /tmp/eqt.yml MyDocument.pdf
 ```
 
 Useful flags:
@@ -153,12 +153,12 @@ Useful flags:
 - `--browser`, `-b`: open the QR code in a browser.
 - `--reversed`, `-r`: reverse terminal QR code colors.
 
-Environment variables use the `EQRCP_` prefix, for example:
+Environment variables use the `EQT_` prefix, for example:
 
 ```sh
-EQRCP_INTERFACE=any
-EQRCP_PORT=8080
-EQRCP_KEEPALIVE=true
+EQT_INTERFACE=any
+EQT_PORT=8080
+EQT_KEEPALIVE=true
 ```
 
 ## Development
@@ -172,7 +172,7 @@ go test ./...
 In restricted environments, set a writable Go build cache:
 
 ```sh
-GOCACHE=/tmp/eqrcp-go-build go test ./...
+GOCACHE=/tmp/eqt-go-build go test ./...
 ```
 
 For a one-step build of the current test artifacts, use:

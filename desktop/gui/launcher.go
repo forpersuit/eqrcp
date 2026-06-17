@@ -18,7 +18,7 @@ var desktopAgentURL = getDesktopAgentURL()
 var agentHTTPClient = &http.Client{Timeout: time.Second}
 
 func getDesktopAgentURL() string {
-	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {
 		return "http://127.0.0.1:" + port
 	}
 	return "http://127.0.0.1:48176"
@@ -58,7 +58,7 @@ func runSilentLauncher(args []string) {
 
 	exe, err := os.Executable()
 	if err != nil {
-		showError(fmt.Sprintf("eqrcp failed: %v", err))
+		showError(fmt.Sprintf("eqt failed: %v", err))
 		return
 	}
 
@@ -183,7 +183,7 @@ func createLauncherLog() (*os.File, string, error) {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	dir = filepath.Join(dir, "eqrcp")
+	dir = filepath.Join(dir, "eqt")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, "", err
 	}
@@ -195,7 +195,7 @@ func createLauncherLog() (*os.File, string, error) {
 }
 
 func formatLauncherError(err error, logPath string, exe string, args []string) string {
-	message := fmt.Sprintf("eqrcp failed: %v", err)
+	message := fmt.Sprintf("eqt failed: %v", err)
 	if exe != "" {
 		message += fmt.Sprintf("\n\nCommand: %s", commandLineString(exe, args))
 	}

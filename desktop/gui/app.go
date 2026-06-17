@@ -22,7 +22,7 @@ import (
 var agentBaseURL = getAgentBaseURL()
 
 func getAgentBaseURL() string {
-	if port := os.Getenv("EQRCP_AGENT_PORT"); port != "" {
+	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {
 		return "http://127.0.0.1:" + port
 	}
 	return "http://127.0.0.1:48176"
@@ -496,7 +496,7 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 }
 
 func (a *App) RightClickIntegrationStatus() (DesktopIntegrationStatus, error) {
-	output, err := a.runEqrcpDesktopCommand("status")
+	output, err := a.runEqtDesktopCommand("status")
 	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
@@ -508,14 +508,14 @@ func (a *App) SetRightClickIntegrationEnabled(enabled bool) (DesktopIntegrationS
 	if enabled {
 		command = "install"
 	}
-	if _, err := a.runEqrcpDesktopCommand(command); err != nil {
+	if _, err := a.runEqtDesktopCommand(command); err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
 	return a.RightClickIntegrationStatus()
 }
 
 func (a *App) StartupStatus() (DesktopIntegrationStatus, error) {
-	output, err := a.runEqrcpDesktopCommand("startup-status")
+	output, err := a.runEqtDesktopCommand("startup-status")
 	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
@@ -527,14 +527,14 @@ func (a *App) SetStartupEnabled(enabled bool) (DesktopIntegrationStatus, error) 
 	if enabled {
 		command = "startup-enable"
 	}
-	if _, err := a.runEqrcpDesktopCommand(command); err != nil {
+	if _, err := a.runEqtDesktopCommand(command); err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
 	return a.StartupStatus()
 }
 
-func (a *App) runEqrcpDesktopCommand(args ...string) (string, error) {
-	cli, err := findEqrcpCLI()
+func (a *App) runEqtDesktopCommand(args ...string) (string, error) {
+	cli, err := findEqtCLI()
 	if err != nil {
 		return "", err
 	}
@@ -574,7 +574,7 @@ func (a *App) AppInfo() AppInfo {
 		Arch:        runtime.GOARCH,
 		LogPath:     desktopLogFilePath(),
 	}
-	if cli, err := findEqrcpCLI(); err == nil {
+	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
 	}
 	return info
@@ -598,15 +598,15 @@ func (a *App) ensureAgent() error {
 	} else {
 		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: Agent health check failed (%v). Attempting to start agent...", err))
 	}
-	cli, err := findEqrcpCLI()
+	cli, err := findEqtCLI()
 	if err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to find eqrcp CLI binary: %v", err))
+		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to find eqt CLI binary: %v", err))
 		return err
 	}
 	cmd := exec.Command(cli, "desktop", "agent-start", "-B")
-	if launcher, ok := findEqrcpLauncher(cli); ok {
+	if launcher, ok := findEqtLauncher(cli); ok {
 		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using launcher %s for CLI %s", launcher, cli))
-		cmd = exec.Command(launcher, "--eqrcp-exe", cli, "agent-start", "-B")
+		cmd = exec.Command(launcher, "--eqt-exe", cli, "agent-start", "-B")
 	} else {
 		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using direct command %s", cli))
 	}
@@ -785,31 +785,31 @@ func isRecoverableChatAgentError(err error) bool {
 	return strings.Contains(body, "unsupported desktop action") || strings.Contains(body, "chat")
 }
 
-func findEqrcpCLI() (string, error) {
-	if configured := os.Getenv("EQRCP_CLI"); configured != "" {
+func findEqtCLI() (string, error) {
+	if configured := os.Getenv("EQT_CLI"); configured != "" {
 		return configured, nil
 	}
 	if exe, err := os.Executable(); err == nil {
-		name := "eqrcp"
+		name := "eqt"
 		if runtime.GOOS == "windows" {
-			name = "eqrcp.exe"
+			name = "eqt.exe"
 		}
 		candidate := filepath.Join(filepath.Dir(exe), name)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
 	}
-	if path, err := exec.LookPath("eqrcp"); err == nil {
+	if path, err := exec.LookPath("eqt"); err == nil {
 		return path, nil
 	}
-	return "", fmt.Errorf("eqrcp CLI was not found; set EQRCP_CLI or place eqrcp next to the desktop app")
+	return "", fmt.Errorf("eqt CLI was not found; set EQT_CLI or place eqt next to the desktop app")
 }
 
-func findEqrcpLauncher(cli string) (string, bool) {
+func findEqtLauncher(cli string) (string, bool) {
 	if runtime.GOOS != "windows" || cli == "" {
 		return "", false
 	}
-	candidate := filepath.Join(filepath.Dir(cli), "eqrcp-launcher.exe")
+	candidate := filepath.Join(filepath.Dir(cli), "eqt-launcher.exe")
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate, true
 	}
@@ -997,7 +997,7 @@ func desktopAgentPortFilePath() string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "eqrcp", "agent.port")
+	return filepath.Join(dir, "eqt", "agent.port")
 }
 
 func (a *App) logInfo(message string) {

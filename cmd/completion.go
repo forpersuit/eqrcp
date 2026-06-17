@@ -14,13 +14,13 @@ var completionCmd = &cobra.Command{
 
 Bash:
 
-$ source <(eqrcp completion bash)
+$ source <(eqt completion bash)
 
 # To load completions for each session, execute once:
 Linux:
-  $ eqrcp completion bash > /etc/bash_completion.d/eqrcp
+  $ eqt completion bash > /etc/bash_completion.d/eqt
 MacOS:
-  $ eqrcp completion bash > /usr/local/etc/bash_completion.d/eqrcp
+  $ eqt completion bash > /usr/local/etc/bash_completion.d/eqt
 
 Zsh:
 
@@ -30,16 +30,16 @@ Zsh:
 $ echo "autoload -U compinit; compinit" >> ~/.zshrc
 
 # To load completions for each session, execute once:
-$ eqrcp completion zsh > "${fpath[1]}/_eqrcp"
+$ eqt completion zsh > "${fpath[1]}/_eqt"
 
 # You will need to start a new shell for this setup to take effect.
 
 Fish:
 
-$ eqrcp completion fish | source
+$ eqt completion fish | source
 
 # To load completions for each session, execute once:
-$ eqrcp completion fish > ~/.config/fish/completions/eqrcp.fish
+$ eqt completion fish > ~/.config/fish/completions/eqt.fish
 `,
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},

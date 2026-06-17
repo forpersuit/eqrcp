@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"eqrcp/application"
-	"eqrcp/util"
+	"eqt/application"
+	"eqt/util"
 	"github.com/eiannone/keyboard"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/viper"

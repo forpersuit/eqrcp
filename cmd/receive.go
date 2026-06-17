@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"eqrcp/config"
-	"eqrcp/logger"
-	"eqrcp/qr"
-	"eqrcp/server"
+	"eqt/config"
+	"eqt/logger"
+	"eqt/qr"
+	"eqt/server"
 	"github.com/eiannone/keyboard"
 	"github.com/spf13/cobra"
 )
@@ -66,9 +66,9 @@ var receiveCmd = &cobra.Command{
 	Short:   "Receive one or more files",
 	Long:    "Receive one or more files. The destination directory can be set with the config wizard, or by passing the --output flag. If none of the above are set, the current working directory will be used as a destination directory.",
 	Example: `# Receive files in the current directory
-eqrcp receive
+eqt receive
 # Receive files in a specific directory
-eqrcp receive --output /tmp
+eqt receive --output /tmp
 `,
 	RunE: receiveCmdFunc,
 }

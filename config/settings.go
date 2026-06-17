@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"eqrcp/application"
-	"eqrcp/util"
+	"eqt/application"
+	"eqt/util"
 )
 
 type DesktopSettings struct {

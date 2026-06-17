@@ -2,7 +2,7 @@
 
 ## 问题
 
-提交时 `eqrcp-desktop.exe` 没有更新，时间戳停留在旧版本。
+提交时 `eqt-desktop.exe` 没有更新，时间戳停留在旧版本。
 
 ## 根本原因
 
@@ -59,7 +59,7 @@ git commit --no-verify -m "message"
 
 ```bash
 cd desktop/gui
-wails build -clean -o E:/developer/results/eqrcp-desktop.exe -platform windows/amd64
+wails build -clean -o E:/developer/results/eqt-desktop.exe -platform windows/amd64
 ```
 
 ## Hook行为说明
@@ -98,9 +98,9 @@ Pre-commit hook现在会：
 ## 当前状态
 
 ```
-eqrcp-desktop.exe: 2026/5/2 23:10:00 (旧版本)
-eqrcp.exe:         2026/5/3 1:04:59  (最新版本)
-eqrcp-launcher.exe: 2026/5/3 1:04:59  (最新版本)
+eqt-desktop.exe: 2026/5/2 23:10:00 (旧版本)
+eqt.exe:         2026/5/3 1:04:59  (最新版本)
+eqt-launcher.exe: 2026/5/3 1:04:59  (最新版本)
 ```
 
 **原因**：wails不在PATH中，hook跳过了GUI构建
@@ -125,7 +125,7 @@ git commit -m "message"
 ```bash
 # 手动构建Wails GUI
 cd desktop/gui
-wails build -clean -o E:/developer/results/eqrcp-desktop.exe -platform windows/amd64
+wails build -clean -o E:/developer/results/eqt-desktop.exe -platform windows/amd64
 
 # 或者不设置SKIP_WAILS_BUILD，让hook自动构建
 unset SKIP_WAILS_BUILD
@@ -142,7 +142,7 @@ git commit -m "Release v1.0.0"
 
 各平台的 Wails GUI 构建必须在对应宿主上执行（macOS 的 `.app` 不能在
 Linux/Windows 上生成，反之亦然）。Bundle id 已统一为
-`io.github.forpersuit.eqrcp-desktop`，定义在
+`io.github.forpersuit.eqt-desktop`，定义在
 `desktop/gui/build/darwin/Info.plist` 与对应 NSIS 模板里。
 
 ### Windows（amd64 / arm64）
@@ -168,7 +168,7 @@ wails build -clean -platform darwin/amd64
 wails build -clean -platform darwin/arm64
 ```
 
-产物 `eqrcp-desktop.app/` 在 `desktop/gui/build/bin/`。Wails 会从
+产物 `eqt-desktop.app/` 在 `desktop/gui/build/bin/`。Wails 会从
 `desktop/gui/build/appicon.png` 自动生成 `.icns`。
 
 **Codesign + Notarize**（需要 Apple Developer ID 证书）：
@@ -176,17 +176,17 @@ wails build -clean -platform darwin/arm64
 ```bash
 codesign --deep --force --verbose --sign "Developer ID Application: <Name>" \
   --options runtime \
-  desktop/gui/build/bin/eqrcp-desktop.app
+  desktop/gui/build/bin/eqt-desktop.app
 
 # 打包成 dmg（需要 create-dmg）
-create-dmg desktop/gui/build/bin/eqrcp-desktop.app
+create-dmg desktop/gui/build/bin/eqt-desktop.app
 
 # 公证
-xcrun notarytool submit eqrcp-desktop.dmg \
+xcrun notarytool submit eqt-desktop.dmg \
   --apple-id "$APPLE_ID" --team-id "$TEAM_ID" \
   --password "$APP_SPECIFIC_PASSWORD" --wait
 
-xcrun stapler staple eqrcp-desktop.dmg
+xcrun stapler staple eqt-desktop.dmg
 ```
 
 签名/公证留到首个 stable release 之前再做（Track C3）。
@@ -199,11 +199,11 @@ cd desktop/gui
 wails build -clean -tags webkit2_41
 ```
 
-产物 `eqrcp-desktop` 二进制在 `desktop/gui/build/bin/`。
+产物 `eqt-desktop` 二进制在 `desktop/gui/build/bin/`。
 
 **打包**：Linux 没有标准格式，常见三种：
 
-- `.tar.gz` —— 最简单，直接 `tar czf eqrcp-desktop-linux-amd64.tar.gz -C build/bin eqrcp-desktop`。
+- `.tar.gz` —— 最简单，直接 `tar czf eqt-desktop-linux-amd64.tar.gz -C build/bin eqt-desktop`。
 - `.AppImage` —— 用 `linuxdeploy` + `appimagetool`，参考 Wails 官方示例。
 - `.deb` —— 用 `nfpms`（goreleaser 已支持 CLI 的 deb，但 GUI 需要单独配置）。
 

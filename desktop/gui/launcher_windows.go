@@ -17,7 +17,7 @@ func showError(message string) {
 	if err != nil {
 		return
 	}
-	titlePtr, err := syscall.UTF16PtrFromString("eqrcp")
+	titlePtr, err := syscall.UTF16PtrFromString("eqt")
 	if err != nil {
 		return
 	}

@@ -780,7 +780,7 @@ function renderAboutPanel() {
                 <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
                 <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
-            <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqrcp">Project page</button>
+            <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqt">Project page</button>
             ${devSection}
         </div>
     `;

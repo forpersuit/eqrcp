@@ -1,6 +1,6 @@
-# eqrcp
+# eqt
 
-`eqrcp` transfers files between a computer and a mobile device on the same local network by printing a QR code in the terminal.
+`eqt` transfers files between a computer and a mobile device on the same local network by printing a QR code in the terminal.
 
 This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp).
 
@@ -9,31 +9,31 @@ This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp).
 Send a file:
 
 ```sh
-eqrcp MyDocument.pdf
+eqt MyDocument.pdf
 ```
 
 Send a directory:
 
 ```sh
-eqrcp Documents/
+eqt Documents/
 ```
 
 Receive files:
 
 ```sh
-eqrcp receive
+eqt receive
 ```
 
 Start a chat session:
 
 ```sh
-eqrcp chat --browser
+eqt chat --browser
 ```
 
 Run the configuration wizard:
 
 ```sh
-eqrcp config
+eqt config
 ```
 
 ## Configuration
@@ -44,7 +44,7 @@ The default configuration file is:
 ~/.local/eqt/config.yml
 ```
 
-Environment variables use the `EQRCP_` prefix.
+Environment variables use the `EQT_` prefix.
 
 ## Planning
 
