@@ -27,6 +27,11 @@ var Done string
 //go:embed assets/eqt-logo-mark.png
 var LogoMark []byte
 
+// LogoHorizontal is the browser-page horizontal brand logo.
+//
+//go:embed assets/eqt-logo-horizontal.png
+var LogoHorizontal []byte
+
 // Favicon is the browser-page favicon.
 //
 //go:embed assets/favicon.png

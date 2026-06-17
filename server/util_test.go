@@ -172,8 +172,12 @@ func TestBrowserPagesUseBrandAssets(t *testing.T) {
 		if !strings.Contains(html, `href="/favicon.png"`) {
 			t.Fatalf("%s page should reference shared favicon route", name)
 		}
-		if !strings.Contains(html, `/assets/eqt-logo-mark.png`) {
-			t.Fatalf("%s page should reference shared logo route", name)
+		expectedLogo := `/assets/eqt-logo-mark.png`
+		if name == "done" {
+			expectedLogo = `/assets/eqt-logo-horizontal.png`
+		}
+		if !strings.Contains(html, expectedLogo) {
+			t.Fatalf("%s page should reference shared logo route %s", name, expectedLogo)
 		}
 	}
 	if strings.Contains(pages.Upload, `id="Layer_1"`) {
@@ -698,8 +702,8 @@ func TestDonePageListsTransferredFiles(t *testing.T) {
 	}
 	html := out.String()
 	for _, want := range []string{
-		"Upload complete",
-		"2 files were sent to this device.",
+		"Transfer Complete",
+		"2 files have been saved successfully.",
 		"Saved files",
 		`C:\Downloads\one.txt`,
 		`C:\Downloads\two file.txt`,

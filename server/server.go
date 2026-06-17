@@ -1005,6 +1005,11 @@ func registerBrandAssets(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(pages.LogoMark)
 	})
+	mux.HandleFunc("/assets/eqt-logo-horizontal.png", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.LogoHorizontal)
+	})
 	mux.HandleFunc("/favicon.png", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
