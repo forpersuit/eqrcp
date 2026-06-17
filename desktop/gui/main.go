@@ -92,7 +92,7 @@ func main() {
 						"default-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
 							"connect-src 'self' http://127.0.0.1:* http://localhost:*; "+
 							"img-src 'self' data: http://127.0.0.1:* http://localhost:* http://*:* https://*:*; "+
-							"frame-src http://*:* https://*:*")
+							"frame-src 'self' http://127.0.0.1:* http://localhost:* http://*:* https://*:*")
 					next.ServeHTTP(w, r)
 				})
 			},

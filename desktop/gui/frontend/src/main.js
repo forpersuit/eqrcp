@@ -415,6 +415,19 @@ function renderChat() {
         `;
     }
     const chatUrl = task.pageUrl || '';
+    if (!chatUrl) {
+        return `
+            <div class="chat-panel">
+                <div class="chat-start">
+                    <div>
+                        <div class="eyebrow">Session mode</div>
+                        <h2>Starting chat session...</h2>
+                        <p>Waiting for agent to prepare the network URL.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
     const src = chatUrl;
     return `
         <div class="chat-panel">
