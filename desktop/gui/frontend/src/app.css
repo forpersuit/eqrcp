@@ -1555,6 +1555,8 @@ dd {
 .history li {
     align-items: center;
     gap: 16px;
+    display: flex;
+    justify-content: space-between;
 }
 
 .history-item-left {
@@ -1562,7 +1564,7 @@ dd {
     flex-direction: column;
     gap: 4px;
     min-width: 0;
-    flex: 1;
+    flex: 0 0 160px;
 }
 
 .history-title-row {
@@ -1574,6 +1576,7 @@ dd {
 .history-title {
     font-size: 14px;
     font-weight: 700;
+    color: var(--ink);
 }
 
 .history-status-icon {
@@ -1582,11 +1585,10 @@ dd {
 }
 
 .history-item-right {
+    flex: 1;
+    min-width: 0;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    max-width: 50%;
+    justify-content: flex-end;
 }
 
 .history-files-list {
@@ -1594,60 +1596,64 @@ dd {
     flex-direction: column;
     gap: 6px;
     width: 100%;
+    max-width: 420px;
 }
 
-.history-file-item {
-    align-items: center;
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    display: inline-flex;
-    gap: 8px;
-    padding: 2px 0;
-    text-align: right;
-    width: 100%;
-    justify-content: flex-end;
-    font: inherit;
-    text-decoration: none;
-    outline: none;
-}
-
-.history-file-item:hover .history-filename {
-    text-decoration: underline;
-    color: var(--accent);
-}
-
-.thumbnail-wrapper {
-    background: #f1f5f9;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    height: 36px;
-    overflow: hidden;
-    width: 36px;
+.history-file-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.history-thumbnail {
-    display: block;
-    height: 100%;
-    object-fit: cover;
+    justify-content: space-between;
+    gap: 12px;
     width: 100%;
+    padding: 2px 0;
 }
 
 .history-filename {
     color: var(--ink);
     font-size: 13px;
     font-weight: 500;
-    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: left;
+    flex: 1;
 }
 
-.file-icon-mini {
-    font-size: 14px;
+.history-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-shrink: 0;
+}
+
+.icon-button-mini {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex;
+    height: 26px;
+    justify-content: center;
+    padding: 0;
+    width: 26px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.icon-button-mini:hover {
+    background: var(--wash);
+    color: var(--accent);
+}
+
+.icon-button-mini svg {
+    height: 14px;
+    width: 14px;
+}
+
+.history-empty-files {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: right;
+    width: 100%;
 }

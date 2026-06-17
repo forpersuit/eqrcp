@@ -904,41 +904,57 @@ function getStatusIcon(task) {
     return 'ℹ️';
 }
 
-function isImageFile(path) {
-    const ext = String(path || '').split('.').pop().toLowerCase();
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff'].includes(ext);
+function getContainingFolder(path) {
+    if (!path) return '';
+    return path.replace(/[\\/][^\\/]*$/, '') || path;
 }
 
-function renderHistoryReceiveFiles(task) {
-    const files = task.savedFiles || [];
-    if (files.length === 0) {
-        const path = task.paths?.[0] || '';
-        if (path) {
-            return `<button class="path-link" data-open-path="${escapeAttr(path)}">${escapeHTML(shortName(path) || path)}</button>`;
+function openFileIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <line x1="10" y1="14" x2="21" y2="3"></line>
+    </svg>`;
+}
+
+function openFolderIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+    </svg>`;
+}
+
+function renderHistoryFiles(task) {
+    let files = [];
+    if (task.action === 'receive') {
+        files = task.savedFiles || [];
+        if (files.length === 0) {
+            files = task.paths || [];
         }
-        return '';
+    } else {
+        files = task.paths || [];
     }
+
+    if (files.length === 0) {
+        return `<div class="history-empty-files">No files</div>`;
+    }
+
     return `<div class="history-files-list">
         ${files.map((file) => {
             const name = shortName(file);
-            if (isImageFile(file)) {
-                const thumbUrl = `http://127.0.0.1:48176/file?path=${encodeURIComponent(file)}`;
-                return `
-                    <button class="history-file-item image-item" data-open-file="${escapeAttr(file)}" title="Click to open image">
-                        <span class="thumbnail-wrapper">
-                            <img class="history-thumbnail" src="${thumbUrl}" alt="${escapeAttr(name)}" onerror="this.parentElement.style.display='none'" />
-                        </span>
-                        <span class="history-filename">${escapeHTML(name)}</span>
-                    </button>
-                `;
-            } else {
-                return `
-                    <button class="history-file-item file-item" data-open-file="${escapeAttr(file)}" title="Click to open file">
-                        <span class="file-icon-mini">📄</span>
-                        <span class="history-filename">${escapeHTML(name)}</span>
-                    </button>
-                `;
-            }
+            const parentDir = getContainingFolder(file);
+            return `
+                <div class="history-file-row">
+                    <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+                    <div class="history-file-actions">
+                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="Open file: ${escapeAttr(file)}">
+                            ${openFileIcon()}
+                        </button>
+                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(parentDir)}" title="Open containing folder: ${escapeAttr(parentDir)}">
+                            ${openFolderIcon()}
+                        </button>
+                    </div>
+                </div>
+            `;
         }).join('')}
     </div>`;
 }
@@ -956,22 +972,12 @@ function renderHistory(history) {
                         ${getStatusIcon(task)}
                     </span>
                 </div>
-                ${task.action !== 'receive' ? `<div class="history-target-desc">${renderHistoryTarget(task)}</div>` : ''}
             </div>
             <div class="history-item-right">
-                ${task.action === 'receive' ? renderHistoryReceiveFiles(task) : ''}
+                ${renderHistoryFiles(task)}
             </div>
         </li>
     `).join('')}</ol>`;
-}
-
-function renderHistoryTarget(task) {
-    const path = task.action === 'receive' ? task.paths?.[0] : '';
-    const label = task.transferTarget || task.paths?.map(shortName).join(', ') || '';
-    if (path) {
-        return `<button class="path-link" data-open-path="${escapeAttr(path)}">${escapeHTML(label || path)}</button>`;
-    }
-    return `<span>${escapeHTML(label)}</span>`;
 }
 
 function bindEvents() {
