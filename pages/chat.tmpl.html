@@ -1276,7 +1276,14 @@
             .history-progress {
                 right: 5px;
             }
-            .device-panel { right: 0; }
+            .device-panel {
+                right: 0;
+                max-height: calc(100dvh - 120px);
+                max-height: calc(100vh - 120px);
+                overflow-y: auto;
+                overflow-x: hidden;
+                z-index: 999;
+            }
             .side { display: none; }
             .mobile-close-action { display: inline-flex; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
@@ -2049,6 +2056,11 @@
                         input.style.display = 'inline-block';
                         input.focus();
                         input.select();
+                        setTimeout(function() {
+                            if (typeof input.scrollIntoView === 'function') {
+                                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }, 250);
                         
                         button.style.display = 'none';
                         head.querySelector('.close-device-detail').style.display = 'none';
