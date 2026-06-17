@@ -26,6 +26,7 @@ type DesktopSettings struct {
 	ChatAvatar       string                   `json:"chatAvatar"`
 	DevMode          bool                     `json:"devMode"`
 	DebugLog         bool                     `json:"debugLog"`
+	ViewportDebug    bool                     `json:"viewportDebug"`
 }
 
 const (
@@ -87,6 +88,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("debugLog") {
 		debugLog = v.GetBool("debugLog")
 	}
+	viewportDebug := false
+	if v.IsSet("viewportDebug") {
+		viewportDebug = v.GetBool("viewportDebug")
+	}
 	return DesktopSettings{
 		ConfigPath:       v.ConfigFileUsed(),
 		Interface:        selectedInterface,
@@ -101,6 +106,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		ChatAvatar:       chatAvatar,
 		DevMode:          devMode,
 		DebugLog:         debugLog,
+		ViewportDebug:    viewportDebug,
 	}, nil
 }
 
@@ -149,6 +155,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
 	v.Set("devMode", settings.DevMode)
 	v.Set("debugLog", settings.DebugLog)
+	v.Set("viewportDebug", settings.ViewportDebug)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}

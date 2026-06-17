@@ -92,6 +92,7 @@ type DesktopSettings struct {
 	ChatAvatar       string            `json:"chatAvatar"`
 	DevMode          bool              `json:"devMode"`
 	DebugLog         bool              `json:"debugLog"`
+	ViewportDebug    bool              `json:"viewportDebug"`
 }
 
 type InterfaceOption struct {

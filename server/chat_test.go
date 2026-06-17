@@ -369,12 +369,12 @@ func TestChatViewportDebugRouteStoresSnapshots(t *testing.T) {
 }
 
 func TestChatJoinURLAddsViewportDebugInDevMode(t *testing.T) {
-	server := &Server{ChatURL: "http://127.0.0.1:8080/chat/test", ChatDebug: true}
+	server := &Server{ChatURL: "http://127.0.0.1:8080/chat/test", ViewportDebug: true}
 	if got := server.ChatJoinURL(); got != "http://127.0.0.1:8080/chat/test?viewportDebug=1" {
 		t.Fatalf("ChatJoinURL() = %q, want viewport debug query", got)
 	}
 
-	server.ChatDebug = false
+	server.ViewportDebug = false
 	if got := server.ChatJoinURL(); got != server.ChatURL {
 		t.Fatalf("ChatJoinURL() = %q, want base chat URL", got)
 	}

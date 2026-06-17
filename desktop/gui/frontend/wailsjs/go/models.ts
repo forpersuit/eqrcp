@@ -192,6 +192,7 @@ export namespace main {
 	    chatAvatar: string;
 	    devMode: boolean;
 	    debugLog: boolean;
+	    viewportDebug: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -211,6 +212,7 @@ export namespace main {
 	        this.chatAvatar = source["chatAvatar"];
 	        this.devMode = source["devMode"];
 	        this.debugLog = source["debugLog"];
+	        this.viewportDebug = source["viewportDebug"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

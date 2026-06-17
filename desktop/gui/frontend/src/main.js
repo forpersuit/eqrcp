@@ -742,6 +742,10 @@ function renderAboutPanel() {
                         <span>Enable Debug Logs</span>
                         <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
                     </label>
+                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                        <span>Enable Viewport Debug Box</span>
+                        <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
+                    </label>
                     <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
                         调试日志会将 Chat Viewport 交互信息和网络日志保存。
                         <br>日志保存在: <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
@@ -1009,6 +1013,7 @@ function bindPanelEvents() {
             state.settings.devMode = !state.settings.devMode;
             if (state.settings.devMode) {
                 state.settings.debugLog = true;
+                state.settings.viewportDebug = true;
             }
             await saveSettingsData();
             state.notice = state.settings.devMode ? 'Developer Mode enabled!' : 'Developer Mode disabled.';
@@ -1028,6 +1033,15 @@ function bindPanelEvents() {
         state.settings.debugLog = Boolean(event.currentTarget.checked);
         await saveSettingsData();
         state.notice = state.settings.debugLog ? 'Debug logs enabled.' : 'Debug logs disabled.';
+        render();
+        openPanel('about');
+    });
+
+    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event) => {
+        if (!state.settings) state.settings = {};
+        state.settings.viewportDebug = Boolean(event.currentTarget.checked);
+        await saveSettingsData();
+        state.notice = state.settings.viewportDebug ? 'Viewport debug box enabled.' : 'Viewport debug box disabled.';
         render();
         openPanel('about');
     });
@@ -1064,6 +1078,7 @@ function bindPanelEvents() {
         if (!state.settings) state.settings = {};
         state.settings.devMode = false;
         state.settings.debugLog = false;
+        state.settings.viewportDebug = false;
         await saveSettingsData();
         state.notice = 'Developer Mode disabled.';
         render();
@@ -1286,6 +1301,7 @@ async function saveSettingsData() {
         chatAvatar: cleanChatAvatar(chatAvatarValue),
         devMode: Boolean(state.settings?.devMode ?? false),
         debugLog: Boolean(state.settings?.debugLog ?? false),
+        viewportDebug: Boolean(state.settings?.viewportDebug ?? false),
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;

@@ -45,6 +45,7 @@ type Server struct {
 	// ChatURL is the URL used for a browser chat session
 	ChatURL        string
 	ChatDebug      bool
+	ViewportDebug  bool
 	instance       *http.Server
 	mux            *http.ServeMux
 	body           body.Body
@@ -239,6 +240,7 @@ func (s *Server) ServeQR(url string) error {
 		agentStatusRoute, agentTaskID, hasAgentStatus := agentStatusFromRepeatRoute(repeatRoute)
 		htmlVariables := struct {
 			URL              string
+			NetworkHost      string
 			QRImageRoute     string
 			StatusRoute      string
 			EventsRoute      string
@@ -250,6 +252,7 @@ func (s *Server) ServeQR(url string) error {
 			Version          string
 		}{
 			URL:              url,
+			NetworkHost:      transferHost(url),
 			QRImageRoute:     imagePath,
 			StatusRoute:      statusPath,
 			EventsRoute:      eventsPath,
@@ -645,6 +648,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.ChatURL = fmt.Sprintf("%s/chat/%s",
 		app.BaseURL, path)
 	app.ChatDebug = strings.EqualFold(cfg.Mode, "dev")
+	app.ViewportDebug = strings.EqualFold(cfg.Mode, "dev")
 	// Create a server
 	mux := http.NewServeMux()
 	app.mux = mux

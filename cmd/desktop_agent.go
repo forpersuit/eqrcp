@@ -1323,6 +1323,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		return err
 	}
 	srv.ChatDebug = desktopSettings.DebugLog
+	srv.ViewportDebug = desktopSettings.ViewportDebug
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)
