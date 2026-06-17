@@ -1283,6 +1283,19 @@
                 overflow-x: hidden;
                 z-index: 999;
             }
+            .device-panel.editing {
+                position: fixed !important;
+                top: calc(var(--chat-viewport-top, 0px) + var(--chat-viewport-height, 100dvh) / 2) !important;
+                left: calc(var(--chat-viewport-left, 0px) + var(--chat-viewport-width, 100vw) / 2) !important;
+                transform: translate(-50%, -50%) !important;
+                right: auto !important;
+                width: 90% !important;
+                max-width: 320px !important;
+                max-height: calc(var(--chat-viewport-height, 100dvh) - 32px) !important;
+                box-shadow: 0 20px 40px rgba(15, 23, 42, 0.24) !important;
+                z-index: 1001 !important;
+                overflow: hidden !important;
+            }
             .side { display: none; }
             .mobile-close-action { display: inline-flex; }
             .bubble { font-size: clamp(14px, 3.7vw, 16px); }
@@ -2048,6 +2061,7 @@
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
                     state.isEditingName = true;
+                    if (devicePanel) { devicePanel.classList.add('editing'); }
                     var head = button.closest('.device-detail-head');
                     if (head) {
                         head.querySelector('.device-detail-name-static').style.display = 'none';
@@ -2072,6 +2086,7 @@
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
                     state.isEditingName = false;
+                    if (devicePanel) { devicePanel.classList.remove('editing'); }
                     var head = button.closest('.device-detail-head');
                     if (head) {
                         var input = head.querySelector('.device-detail-name-input');
@@ -2142,6 +2157,7 @@
                 if (!r.ok) { throw new Error('rename failed'); }
                 state.sender = newName;
                 state.isEditingName = false;
+                if (devicePanel) { devicePanel.classList.remove('editing'); }
                 safeStorage.setItem('eqrcp-chat-sender:' + window.location.pathname, newName);
                 showSystemNotice('Device renamed successfully.');
                 return refreshChatStatus();
