@@ -1527,3 +1527,27 @@ dd {
         padding: 16px;
     }
 }
+
+.toast-notification {
+    background: rgba(23, 33, 30, 0.9);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(47, 158, 115, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    color: #edf7f1;
+    font-size: 13px;
+    font-weight: 500;
+    left: 50%;
+    opacity: 0;
+    padding: 10px 20px;
+    position: fixed;
+    top: 24px;
+    transform: translate(-50%, -20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 9999;
+}
+
+.toast-notification.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}

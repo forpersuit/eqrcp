@@ -1270,11 +1270,30 @@ function updateChatQRPanel() {
     }
 }
 
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 async function saveSettings() {
     await run(async () => {
         await saveSettingsData();
-        state.notice = 'Settings saved.';
-        render();
+        if (state.mode === 'chat') {
+            syncPanelSurface();
+            showToast('Settings saved.');
+        } else {
+            state.notice = 'Settings saved.';
+            render();
+        }
     });
 }
 

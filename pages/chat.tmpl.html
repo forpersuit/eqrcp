@@ -2160,6 +2160,13 @@
             return fetch(withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.HealthRoute}}'))))), {cache: 'no-store'})
                 .then(function(r) { if (!r.ok) { throw new Error('health failed'); } return r.json(); })
                 .then(function(data) {
+                    if (data && data.clientId) {
+                        var oldId = state.clientId;
+                        state.clientId = data.clientId;
+                        if (oldId !== state.clientId) {
+                            renderMessages();
+                        }
+                    }
                     updateChatStatus(data);
                     return data;
                 });
@@ -2173,7 +2180,12 @@
             }
             messagesEl.innerHTML = '';
             state.messages.forEach(function(message) {
-                var mine = message.sender === state.sender;
+                var mine = false;
+                if (message.senderId && state.clientId) {
+                    mine = message.senderId === state.clientId;
+                } else {
+                    mine = message.sender === state.sender;
+                }
                 var isSystem = isSystemMessage(message);
                 var item = document.createElement('div');
                 var cls = 'message';

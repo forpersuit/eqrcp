@@ -82,6 +82,7 @@ type chatMessage struct {
 	Seq        int64     `json:"seq,omitempty"`
 	createdSeq int64
 	ownerToken string
+	SenderID   string    `json:"senderId,omitempty"`
 }
 
 type chatAttachment struct {
@@ -259,7 +260,14 @@ func (s *Server) Chat() error {
 		state := session.state
 		startedAt := session.startedAt
 		lastActivity := session.lastActivity
-		theme := session.chatThemeForClientLocked(r.URL.Query().Get("token"), r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"))
+		token := r.URL.Query().Get("token")
+		var clientID string
+		if client, ok := session.clients[token]; ok {
+			clientID = client.ID
+		} else {
+			clientID = session.clientIDLocked(token)
+		}
+		theme := session.chatThemeForClientLocked(token, r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"))
 		session.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -271,6 +279,7 @@ func (s *Server) Chat() error {
 			"devices":      devices,
 			"state":        state,
 			"theme":        theme,
+			"clientId":     clientID,
 			"startedAt":    startedAt,
 			"lastActivity": lastActivity,
 		}); err != nil {
@@ -1137,6 +1146,7 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 	session.mu.Lock()
 	if client, ok := session.clients[ownerToken]; ok {
 		message.Sender = client.Label
+		message.SenderID = client.ID
 		if client.Avatar != "" {
 			message.Avatar = client.Avatar
 		}
@@ -1164,6 +1174,7 @@ func (session *chatSession) addMessageWithStatus(message chatMessage, statusStat
 	session.mu.Lock()
 	if client, ok := session.clients[message.ownerToken]; ok {
 		message.Sender = client.Label
+		message.SenderID = client.ID
 		if client.Avatar != "" {
 			message.Avatar = client.Avatar
 		}
