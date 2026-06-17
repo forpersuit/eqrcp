@@ -846,3 +846,65 @@ func TestServerShutdownChatUsesRequestedTerminalState(t *testing.T) {
 		t.Fatalf("snapshot state = %q, want replaced", snapshots[0].State)
 	}
 }
+
+func TestChatRenameDevice(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	done := server.chatSession.registerClient("mobile-token", "Phone", "", "", "join-1", "")
+	defer done()
+	devices := server.chatSession.deviceRosterLocked()
+	if len(devices) != 1 || devices[0].ID == "" {
+		t.Fatalf("devices = %#v, want one device id", devices)
+	}
+	deviceID := devices[0].ID
+
+	// 1. Success case
+	reqBody := `{"token":"mobile-token","label":"RenamedPhone"}`
+	req := httptest.NewRequest(http.MethodPost, "/chat/test/clients/"+deviceID+"/rename", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("rename status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	// Verify the roster reflects the change
+	devices = server.chatSession.deviceRosterLocked()
+	if len(devices) != 1 || devices[0].Label != "RenamedPhone" {
+		t.Fatalf("after rename, label = %q, want %q", devices[0].Label, "RenamedPhone")
+	}
+
+	// Verify the system message was sent
+	msgs, _ := server.chatSession.snapshotAfterSeq(0, 0)
+	var hasRenameSysMsg bool
+	for _, m := range msgs {
+		if m.Type == "system" && strings.Contains(m.Text, "Phone has been renamed to RenamedPhone") {
+			hasRenameSysMsg = true
+			break
+		}
+	}
+	if !hasRenameSysMsg {
+		t.Fatalf("rename system message not found in %v", msgs)
+	}
+
+	// 2. Forbidden case (wrong token)
+	reqBodyWrongToken := `{"token":"wrong-token","label":"HackName"}`
+	reqWrong := httptest.NewRequest(http.MethodPost, "/chat/test/clients/"+deviceID+"/rename", strings.NewReader(reqBodyWrongToken))
+	reqWrong.Header.Set("Content-Type", "application/json")
+	wWrong := httptest.NewRecorder()
+	server.mux.ServeHTTP(wWrong, reqWrong)
+	if wWrong.Code != http.StatusForbidden {
+		t.Fatalf("wrong token rename status = %d, want %d", wWrong.Code, http.StatusForbidden)
+	}
+
+	// 3. BadRequest case (empty label)
+	reqBodyEmptyLabel := `{"token":"mobile-token","label":""}`
+	reqEmpty := httptest.NewRequest(http.MethodPost, "/chat/test/clients/"+deviceID+"/rename", strings.NewReader(reqBodyEmptyLabel))
+	reqEmpty.Header.Set("Content-Type", "application/json")
+	wEmpty := httptest.NewRecorder()
+	server.mux.ServeHTTP(wEmpty, reqEmpty)
+	if wEmpty.Code != http.StatusBadRequest {
+		t.Fatalf("empty label rename status = %d, want %d", wEmpty.Code, http.StatusBadRequest)
+	}
+}

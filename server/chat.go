@@ -327,21 +327,68 @@ func (session *chatSession) handleClientAction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 3 || parts[len(parts)-1] != "kick" {
+	if len(parts) < 3 {
 		http.NotFound(w, r)
 		return
 	}
+	action := parts[len(parts)-1]
 	id := parts[len(parts)-2]
-	if !session.validHostToken(chatHostTokenFromRequest(r)) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+
+	if action == "kick" {
+		if !session.validHostToken(chatHostTokenFromRequest(r)) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !session.kickClient(id) {
+			http.Error(w, "device not found or cannot be kicked", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		fmt.Fprintln(w, "Device forced offline.")
 		return
 	}
-	if !session.kickClient(id) {
-		http.Error(w, "device not found or cannot be kicked", http.StatusNotFound)
+
+	if action == "rename" {
+		var request struct {
+			Token string `json:"token"`
+			Label string `json:"label"`
+		}
+		if r.Body != nil {
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&request)
+		}
+		request.Token = strings.TrimSpace(request.Token)
+		trimmedLabel := strings.Join(strings.Fields(request.Label), " ")
+		if request.Token == "" || trimmedLabel == "" {
+			http.Error(w, "invalid token or name", http.StatusBadRequest)
+			return
+		}
+		request.Label = sanitizeChatSender(request.Label)
+
+		session.mu.Lock()
+		client, exists := session.clients[request.Token]
+		if !exists || client.ID != id {
+			session.mu.Unlock()
+			http.Error(w, "forbidden or device not found", http.StatusForbidden)
+			return
+		}
+
+		oldLabel := client.Label
+		if oldLabel != request.Label {
+			client.Label = request.Label
+			session.clients[request.Token] = client
+			session.addSystemMessageLocked(oldLabel + " has been renamed to " + request.Label)
+			session.notifyLocked()
+		}
+		hook, snapshot := session.statusSnapshotLocked(session.state)
+		session.mu.Unlock()
+
+		notifyChatStatusHook(hook, snapshot)
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Rename success")
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
-	fmt.Fprintln(w, "Device forced offline.")
+
+	http.NotFound(w, r)
 }
 
 func (session *chatSession) handleViewportDebug(w http.ResponseWriter, r *http.Request) {
