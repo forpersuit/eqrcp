@@ -895,18 +895,72 @@ function renderSavedFiles(files) {
     `;
 }
 
+function getStatusIcon(task) {
+    const s = (task.transferState || task.state || '').toLowerCase();
+    if (s.includes('fail') || s.includes('error')) return '❌';
+    if (s.includes('stop') || s.includes('cancel')) return '🛑';
+    if (s.includes('replace')) return '🔄';
+    if (s.includes('complete') || s.includes('done') || s === 'idle') return '✅';
+    return 'ℹ️';
+}
+
+function isImageFile(path) {
+    const ext = String(path || '').split('.').pop().toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff'].includes(ext);
+}
+
+function renderHistoryReceiveFiles(task) {
+    const files = task.savedFiles || [];
+    if (files.length === 0) {
+        const path = task.paths?.[0] || '';
+        if (path) {
+            return `<button class="path-link" data-open-path="${escapeAttr(path)}">${escapeHTML(shortName(path) || path)}</button>`;
+        }
+        return '';
+    }
+    return `<div class="history-files-list">
+        ${files.map((file) => {
+            const name = shortName(file);
+            if (isImageFile(file)) {
+                const thumbUrl = `http://127.0.0.1:48176/file?path=${encodeURIComponent(file)}`;
+                return `
+                    <button class="history-file-item image-item" data-open-file="${escapeAttr(file)}" title="Click to open image">
+                        <span class="thumbnail-wrapper">
+                            <img class="history-thumbnail" src="${thumbUrl}" alt="${escapeAttr(name)}" onerror="this.parentElement.style.display='none'" />
+                        </span>
+                        <span class="history-filename">${escapeHTML(name)}</span>
+                    </button>
+                `;
+            } else {
+                return `
+                    <button class="history-file-item file-item" data-open-file="${escapeAttr(file)}" title="Click to open file">
+                        <span class="file-icon-mini">📄</span>
+                        <span class="history-filename">${escapeHTML(name)}</span>
+                    </button>
+                `;
+            }
+        }).join('')}
+    </div>`;
+}
+
 function renderHistory(history) {
     if (!history.length) {
         return `<div class="empty-state">No completed tasks yet.</div>`;
     }
     return `<ol class="history">${history.slice(0, 8).map((task) => `
         <li>
-            <div>
-                <strong>${escapeHTML(titleCase(task.action))} #${task.id}</strong>
-                <span>${escapeHTML(task.state)}${task.transferState ? ` / ${escapeHTML(task.transferState)}` : ''}</span>
-                ${renderHistoryTarget(task)}
+            <div class="history-item-left">
+                <div class="history-title-row">
+                    <strong class="history-title">${escapeHTML(titleCase(task.action))} #${task.id}</strong>
+                    <span class="history-status-icon" title="${escapeAttr(task.state)}${task.transferState ? ` / ${escapeAttr(task.transferState)}` : ''}">
+                        ${getStatusIcon(task)}
+                    </span>
+                </div>
+                ${task.action !== 'receive' ? `<div class="history-target-desc">${renderHistoryTarget(task)}</div>` : ''}
             </div>
-            <button class="ghost repeat-task" data-task-id="${task.id}">Repeat</button>
+            <div class="history-item-right">
+                ${task.action === 'receive' ? renderHistoryReceiveFiles(task) : ''}
+            </div>
         </li>
     `).join('')}</ol>`;
 }

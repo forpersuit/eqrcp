@@ -147,6 +147,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/tasks", agent.handleTasks)
 	mux.HandleFunc("/tasks/", agent.handleTaskAction)
 	mux.HandleFunc("/history", agent.handleHistory)
+	mux.HandleFunc("/file", agent.handleFile)
 	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
 	mux.HandleFunc("/stop-chat", agent.handleStopChat)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
@@ -575,6 +576,96 @@ func (agent *desktopAgent) handleHistory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (agent *desktopAgent) handleFile(w http.ResponseWriter, r *http.Request) {
+	if handleDesktopAgentCORS(w, r, http.MethodGet) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		http.Error(w, "missing path parameter", http.StatusBadRequest)
+		return
+	}
+
+	agent.mu.Lock()
+	valid := false
+	if agent.current != nil {
+		for _, f := range agent.current.SavedFiles {
+			if f == filePath {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			for _, p := range agent.current.Paths {
+				if p == filePath {
+					valid = true
+					break
+				}
+			}
+		}
+	}
+	if !valid && agent.chat != nil {
+		for _, f := range agent.chat.SavedFiles {
+			if f == filePath {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			for _, p := range agent.chat.Paths {
+				if p == filePath {
+					valid = true
+					break
+				}
+			}
+		}
+	}
+	if !valid {
+		for _, record := range agent.history {
+			for _, f := range record.SavedFiles {
+				if f == filePath {
+					valid = true
+					break
+				}
+			}
+			if valid {
+				break
+			}
+			for _, p := range record.Paths {
+				if p == filePath {
+					valid = true
+					break
+				}
+			}
+			if valid {
+				break
+			}
+		}
+	}
+	agent.mu.Unlock()
+
+	if !valid {
+		http.Error(w, "forbidden file path", http.StatusForbidden)
+		return
+	}
+
+	stat, err := os.Stat(filePath)
+	if err != nil || stat.IsDir() {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+
+	http.ServeFile(w, r, filePath)
 }
 
 func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Request) {

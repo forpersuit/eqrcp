@@ -1551,3 +1551,103 @@ dd {
     opacity: 1;
     transform: translate(-50%, 0);
 }
+
+.history li {
+    align-items: center;
+    gap: 16px;
+}
+
+.history-item-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.history-title-row {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+}
+
+.history-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.history-status-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.history-item-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: 50%;
+}
+
+.history-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.history-file-item {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    display: inline-flex;
+    gap: 8px;
+    padding: 2px 0;
+    text-align: right;
+    width: 100%;
+    justify-content: flex-end;
+    font: inherit;
+    text-decoration: none;
+    outline: none;
+}
+
+.history-file-item:hover .history-filename {
+    text-decoration: underline;
+    color: var(--accent);
+}
+
+.thumbnail-wrapper {
+    background: #f1f5f9;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    height: 36px;
+    overflow: hidden;
+    width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.history-thumbnail {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.history-filename {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-icon-mini {
+    font-size: 14px;
+    flex-shrink: 0;
+}
