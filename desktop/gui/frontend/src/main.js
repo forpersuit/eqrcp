@@ -226,10 +226,6 @@ function render() {
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
-                <div class="app-brand" aria-label="EQT Easy QR Transfer">
-                    <img src="${logoMarkURL}" alt="" aria-hidden="true">
-                    <span>EQT</span>
-                </div>
                 <nav class="mode-switch" aria-label="Transfer modes">
                     <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
                     <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
