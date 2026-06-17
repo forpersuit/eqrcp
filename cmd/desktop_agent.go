@@ -1541,7 +1541,14 @@ func runDesktopAgent(command *cobra.Command, args []string) error {
 	}
 
 	if listener == nil {
-		return fmt.Errorf("unable to find any available port for desktop agent starting from %d", basePort)
+		log.Infof("All default ports %d-%d are in use or reserved. Attempting dynamic port allocation (port 0)...", basePort, basePort+19)
+		l, listenErr := net.Listen("tcp", "127.0.0.1:0")
+		if listenErr != nil {
+			return fmt.Errorf("unable to find any available port and dynamic allocation failed: %w", listenErr)
+		}
+		listener = l
+		actualPort = l.Addr().(*net.TCPAddr).Port
+		log.Infof("Successfully allocated dynamic port %d", actualPort)
 	}
 
 	desktopAgentAddress = fmt.Sprintf("127.0.0.1:%d", actualPort)
