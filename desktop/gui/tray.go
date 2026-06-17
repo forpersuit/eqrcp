@@ -8,7 +8,7 @@ import (
 	"fyne.io/systray"
 )
 
-//go:embed frontend/src/assets/images/logo-universal.png
+//go:embed frontend/src/assets/images/logo-mark.png
 var trayAssets embed.FS
 
 type trayController struct {
@@ -39,7 +39,7 @@ func (t *trayController) shutdown() {
 }
 
 func (t *trayController) onReady() {
-	icon, err := trayAssets.ReadFile("frontend/src/assets/images/logo-universal.png")
+	icon, err := trayAssets.ReadFile("frontend/src/assets/images/logo-mark.png")
 	if err == nil {
 		systray.SetIcon(icon)
 	} else {
