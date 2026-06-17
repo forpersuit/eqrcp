@@ -944,7 +944,10 @@ function renderHistoryFiles(task) {
             const parentDir = getContainingFolder(file);
             return `
                 <div class="history-file-row">
-                    <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+                    <div class="history-filename-wrapper">
+                        <span class="file-icon-mini">📄</span>
+                        <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+                    </div>
                     <div class="history-file-actions">
                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="Open file: ${escapeAttr(file)}">
                             ${openFileIcon()}

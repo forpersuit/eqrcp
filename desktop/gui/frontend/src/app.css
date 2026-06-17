@@ -1553,18 +1553,17 @@ dd {
 }
 
 .history li {
-    align-items: center;
-    gap: 16px;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
 }
 
 .history-item-left {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-    flex: 0 0 160px;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
 .history-title-row {
@@ -1585,10 +1584,8 @@ dd {
 }
 
 .history-item-right {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    justify-content: flex-end;
+    width: 100%;
+    margin-top: 4px;
 }
 
 .history-files-list {
@@ -1596,7 +1593,6 @@ dd {
     flex-direction: column;
     gap: 6px;
     width: 100%;
-    max-width: 420px;
 }
 
 .history-file-row {
@@ -1608,6 +1604,14 @@ dd {
     padding: 2px 0;
 }
 
+.history-filename-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
 .history-filename {
     color: var(--ink);
     font-size: 13px;
@@ -1616,7 +1620,12 @@ dd {
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
-    flex: 1;
+}
+
+.file-icon-mini {
+    color: var(--muted);
+    font-size: 14px;
+    flex-shrink: 0;
 }
 
 .history-file-actions {
@@ -1654,6 +1663,6 @@ dd {
 .history-empty-files {
     color: var(--muted);
     font-size: 13px;
-    text-align: right;
+    text-align: left;
     width: 100%;
 }
