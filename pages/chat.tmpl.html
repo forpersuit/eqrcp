@@ -258,6 +258,19 @@
             color: var(--device-text, var(--accent-strong));
             font-size: 13px;
         }
+        .device-detail-name-input {
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            color: var(--device-text, var(--fg));
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            padding: 3px 6px;
+            width: 140px;
+            box-sizing: border-box;
+        }
         .device-detail-actions {
             display: inline-flex;
             gap: 6px;
@@ -1966,14 +1979,32 @@
             var rowStyle = color ? ' style="--device-text:' + color.text + ';--device-muted:' + color.text + 'cc;"' : '';
             var selected = id && id === selectedDeviceID;
             var canKick = canManageDevices && id && !isSelf;
+
+            var detailHead = '';
+            if (isSelf) {
+                detailHead = '<div class="device-detail-head-inner">' +
+                    '<strong class="device-detail-name-static">' + escapeHTML(displayLabel) + '</strong>' +
+                    '<input class="device-detail-name-input" type="text" value="' + escapeHTML(label) + '" style="display:none;" />' +
+                    '</div>' +
+                    '<div class="device-detail-actions">' +
+                    '<button class="icon-button edit-device-name" type="button" data-device-id="' + escapeHTML(id) + '" data-device-label="' + escapeHTML(label) + '" title="Rename device" aria-label="Rename device"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>' +
+                    '<button class="icon-button save-device-name" type="button" data-device-id="' + escapeHTML(id) + '" title="Save name" aria-label="Save name" style="display:none;"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>' +
+                    '<button class="icon-button cancel-device-edit" type="button" title="Cancel edit" aria-label="Cancel edit" style="display:none;"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>' +
+                    '<button class="icon-button close-device-detail" type="button" title="Close device details" aria-label="Close device details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>' +
+                    '</div>';
+            } else {
+                detailHead = '<strong>' + escapeHTML(displayLabel) + '</strong>' +
+                    '<div class="device-detail-actions">' +
+                    (canKick ? '<button class="icon-button danger kick-device" type="button" data-device-id="' + escapeHTML(id) + '" title="Force device offline" aria-label="Force device offline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 12h10"></path><path d="m16 8 4 4-4 4"></path><path d="M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8"></path></svg></button>' : '') +
+                    '<button class="icon-button close-device-detail" type="button" title="Close device details" aria-label="Close device details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>' +
+                    '</div>';
+            }
+
             return '<div class="device-item"' + rowStyle + '>' +
                 '<button class="device-row-lite roster-row" type="button" data-device-id="' + escapeHTML(id) + '" aria-expanded="' + (selected ? 'true' : 'false') + '"><div class="message-avatar"' + avatarStyle + '>' + escapeHTML(avatarLabel) + '</div><div><strong>' + escapeHTML(displayLabel) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></button>' +
                 '<div class="device-detail ' + (selected ? 'open' : '') + '" data-device-detail="' + escapeHTML(id) + '">' +
-                '<div class="device-detail-head"><strong>' + escapeHTML(displayLabel) + '</strong><div class="device-detail-actions">' +
-                (isSelf ? '<button class="icon-button edit-device-name" type="button" data-device-id="' + escapeHTML(id) + '" data-device-label="' + escapeHTML(label) + '" title="Rename device" aria-label="Rename device"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg></button>' : '') +
-                (canKick ? '<button class="icon-button danger kick-device" type="button" data-device-id="' + escapeHTML(id) + '" title="Force device offline" aria-label="Force device offline"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 12h10"></path><path d="m16 8 4 4-4 4"></path><path d="M14 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8"></path></svg></button>' : '') +
-                '<button class="icon-button close-device-detail" type="button" title="Close device details" aria-label="Close device details"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>' +
-                '</div></div><div class="device-detail-meta"><span>Status: online</span><span>Open connections: ' + escapeHTML(String(count)) + '</span><span>Last seen: ' + escapeHTML(formatDeviceTime(device.lastSeen)) + '</span></div></div></div>';
+                '<div class="device-detail-head">' + detailHead + '</div>' +
+                '<div class="device-detail-meta"><span>Status: online</span><span>Open connections: ' + escapeHTML(String(count)) + '</span><span>Last seen: ' + escapeHTML(formatDeviceTime(device.lastSeen)) + '</span></div></div></div>';
         }
         function bindDeviceRoster() {
             deviceRoster.querySelectorAll('.device-row-lite').forEach(function(row) {
@@ -1998,13 +2029,73 @@
             deviceRoster.querySelectorAll('.edit-device-name').forEach(function(button) {
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
-                    var deviceId = button.dataset.deviceId;
-                    var oldName = button.dataset.deviceLabel;
-                    var newName = prompt("Enter new device name:", oldName);
-                    if (newName) {
-                        newName = newName.trim();
+                    var head = button.closest('.device-detail-head');
+                    if (head) {
+                        head.querySelector('.device-detail-name-static').style.display = 'none';
+                        var input = head.querySelector('.device-detail-name-input');
+                        input.style.display = 'inline-block';
+                        input.focus();
+                        input.select();
+                        
+                        button.style.display = 'none';
+                        head.querySelector('.close-device-detail').style.display = 'none';
+                        head.querySelector('.save-device-name').style.display = 'inline-flex';
+                        head.querySelector('.cancel-device-edit').style.display = 'inline-flex';
+                    }
+                });
+            });
+            deviceRoster.querySelectorAll('.cancel-device-edit').forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    var head = button.closest('.device-detail-head');
+                    if (head) {
+                        var input = head.querySelector('.device-detail-name-input');
+                        var staticName = head.querySelector('.device-detail-name-static');
+                        
+                        input.value = head.querySelector('.edit-device-name').dataset.deviceLabel;
+                        input.style.display = 'none';
+                        staticName.style.display = 'inline-block';
+                        
+                        head.querySelector('.edit-device-name').style.display = 'inline-flex';
+                        head.querySelector('.close-device-detail').style.display = 'inline-flex';
+                        button.style.display = 'none';
+                        head.querySelector('.save-device-name').style.display = 'none';
+                    }
+                });
+            });
+            deviceRoster.querySelectorAll('.save-device-name').forEach(function(button) {
+                button.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    var head = button.closest('.device-detail-head');
+                    if (head) {
+                        var deviceId = button.dataset.deviceId;
+                        var input = head.querySelector('.device-detail-name-input');
+                        var newName = input.value.trim();
+                        var oldName = head.querySelector('.edit-device-name').dataset.deviceLabel;
                         if (newName && newName !== oldName) {
                             renameDevice(deviceId, newName);
+                        } else {
+                            head.querySelector('.cancel-device-edit').click();
+                        }
+                    }
+                });
+            });
+            deviceRoster.querySelectorAll('.device-detail-name-input').forEach(function(input) {
+                input.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                });
+                input.addEventListener('keydown', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        var head = input.closest('.device-detail-head');
+                        if (head) {
+                            head.querySelector('.save-device-name').click();
+                        }
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        var head = input.closest('.device-detail-head');
+                        if (head) {
+                            head.querySelector('.cancel-device-edit').click();
                         }
                     }
                 });
