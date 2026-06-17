@@ -3,12 +3,13 @@ package main
 import (
 	"embed"
 	"log"
+	"runtime"
 	"sync"
 
 	"fyne.io/systray"
 )
 
-//go:embed frontend/src/assets/images/logo-mark.png
+//go:embed build/windows/icon.ico frontend/src/assets/images/logo-mark.png
 var trayAssets embed.FS
 
 type trayController struct {
@@ -39,7 +40,13 @@ func (t *trayController) shutdown() {
 }
 
 func (t *trayController) onReady() {
-	icon, err := trayAssets.ReadFile("frontend/src/assets/images/logo-mark.png")
+	var iconPath string
+	if runtime.GOOS == "windows" {
+		iconPath = "build/windows/icon.ico"
+	} else {
+		iconPath = "frontend/src/assets/images/logo-mark.png"
+	}
+	icon, err := trayAssets.ReadFile(iconPath)
 	if err == nil {
 		systray.SetIcon(icon)
 	} else {
