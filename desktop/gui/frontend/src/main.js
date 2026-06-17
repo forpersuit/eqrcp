@@ -1545,8 +1545,22 @@ async function loadStatusData() {
 }
 
 function applyStatusData(nextStatus) {
+    const prevChatUrl = activeChatPageURL();
+    const prevCurrentUrl = String(state.status?.current?.pageUrl || '');
+    const prevBusy = state.busy;
+    const prevMode = state.mode;
+
     state.status = nextStatus;
     reconcileChatQRState(state.status);
+
+    const nextChatUrl = activeChatPageURL();
+    const nextCurrentUrl = String(nextStatus?.current?.pageUrl || '');
+    const nextBusy = state.busy;
+    const nextMode = state.mode;
+
+    if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode) {
+        render();
+    }
 }
 
 async function run(fn, options = {}) {
@@ -1620,8 +1634,13 @@ function connectAgentEvents() {
         agentEvents.close();
         agentEvents = null;
         if (!agentEventsRetry) {
-            agentEventsRetry = window.setTimeout(() => {
+            agentEventsRetry = window.setTimeout(async () => {
                 agentEventsRetry = null;
+                try {
+                    state.appInfo = await AppInfo();
+                } catch (e) {
+                    console.error('[Frontend] Failed to refresh AppInfo for EventSource retry:', e);
+                }
                 connectAgentEvents();
             }, 1500);
         }
