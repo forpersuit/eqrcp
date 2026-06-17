@@ -8,13 +8,14 @@
     <title>eqrcp</title>
     <style>
         :root {
-            --bg: #f4f7fb;
+            --bg: #f5f7f9;
             --surface: #fff;
-            --surface-soft: #f8fafc;
-            --line: #d9e2ec;
-            --text: #17202a;
-            --muted: #5d6978;
-            --accent: #2563eb;
+            --surface-soft: #f7faf9;
+            --line: #d8e0dd;
+            --text: #17211f;
+            --muted: #66736f;
+            --accent: #0f766e;
+            --accent-strong: #115e59;
             --ok: #15803d;
             --warn: #b45309;
             --danger: #b42318;
@@ -44,7 +45,12 @@
             margin-bottom: 22px;
         }
         .brand-logo {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
             height: 52px;
+            padding: 7px;
             width: 52px;
         }
         .page-header-copy {
@@ -193,6 +199,29 @@
             gap: 8px;
             margin: 16px 0 12px;
         }
+        .network-note {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f7faf9;
+            color: var(--muted);
+            display: grid;
+            gap: 4px;
+            font-size: 13px;
+            line-height: 1.45;
+            margin: 0 0 14px;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        .network-note strong {
+            color: var(--text);
+            font-size: 13px;
+            overflow-wrap: anywhere;
+        }
+        .network-note.warning {
+            background: #fff8e6;
+            border-color: #f3d58a;
+            color: #7c5a12;
+        }
         input {
             width: 100%;
             min-width: 0;
@@ -224,6 +253,9 @@
         button:disabled {
             cursor: default;
             opacity: 0.68;
+        }
+        button:hover {
+            background: var(--accent-strong);
         }
         .secondary {
             background: #334155;
@@ -353,6 +385,11 @@
                     <input id="transfer-url" type="text" value="{{.URL}}" readonly>
                     <button class="secondary" type="button" onclick="copyURL()">Copy URL</button>
                 </div>
+                <div id="network-note" class="network-note">
+                    <span>Current address</span>
+                    <strong>{{if .NetworkHost}}{{.NetworkHost}}{{else}}{{.URL}}{{end}}</strong>
+                    <span id="network-hint">Your phone must be on a network that can reach this address.</span>
+                </div>
                 <div class="actions">
                     <form method="post" action="{{.StopRoute}}">
                         <button class="stop" type="submit">Stop transfer</button>
@@ -417,6 +454,16 @@
         }
         {{end}}
         var renderingAgentRecord = false;
+        var waitingHintTimer = window.setTimeout(function() {
+            var note = document.getElementById('network-note');
+            var hint = document.getElementById('network-hint');
+            var state = document.getElementById('transfer-state');
+            if (!note || !hint || !state || !state.classList.contains('state-waiting')) {
+                return;
+            }
+            note.classList.add('warning');
+            hint.textContent = 'Still waiting. If the phone scanned this code but cannot open it, switch to the Wi-Fi or Ethernet interface that is on the same LAN as the phone.';
+        }, 12000);
         function normalizeState(state) {
             return String(state || 'waiting').toLowerCase();
         }
@@ -428,6 +475,10 @@
         }
         function renderStatus(data) {
             var state = normalizeState(data.state || 'waiting');
+            if (state !== 'waiting' && waitingHintTimer) {
+                window.clearTimeout(waitingHintTimer);
+                waitingHintTimer = null;
+            }
             var message = data.message || '';
             var percent = data.percent || 0;
             var title = data.title || 'eqrcp transfer ready';

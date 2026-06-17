@@ -8,7 +8,7 @@
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
 - before handing work to manual Windows acceptance, close running eqrcp desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
 - keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
-- 默认使用rg来替代grep
+- replace grep by rg
 
 ## Project Structure & Module Organization
 

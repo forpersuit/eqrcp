@@ -181,13 +181,21 @@ For a one-step build of the current test artifacts, use:
 scripts/build-artifacts.sh
 ```
 
-Regenerate icon assets from the transparent square source:
+Regenerate icon assets from the transparent square source and About brand source:
 
 ```sh
-go run ./scripts/icon-assets docs/img/transparent.png
+go run ./scripts/icon-assets docs/img/transparent.png docs/img/logo-design-horizontal.png
 ```
 
-The generator writes Wails app icons, Windows `.ico`, tray/frontend logo marks, and browser-page favicon/logo assets. The horizontal About logo is tracked separately as `logo-design-horizontal.png`.
+The generator writes Wails app icons, Windows `.ico`, tray/frontend logo marks, browser-page favicon/logo assets, and the appropriately sized About logo derived from `logo-design-horizontal.png`.
+
+From WSL, push through the environment-aware helper:
+
+```sh
+scripts/git-push-smart.sh
+```
+
+The helper first checks direct `x.com` reachability. If direct access is unavailable, it pushes through the Windows host proxy on port `10808` using SSH `ProxyCommand`.
 
 Planning documents:
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "complexity-optimizer": {
+      "command": "npx",
+      "args": ["codex-complexity-optimizer"]
+    }
+  }
+}

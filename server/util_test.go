@@ -61,6 +61,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
 		URL              string
+		NetworkHost      string
 		QRImageRoute     string
 		StatusRoute      string
 		EventsRoute      string
@@ -72,6 +73,7 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		Version          string
 	}{
 		URL:              `http://127.0.0.1:8080/send/a?name="quoted"`,
+		NetworkHost:      "127.0.0.1:8080",
 		QRImageRoute:     "/qr/image",
 		StatusRoute:      "/qr/status",
 		EventsRoute:      "/qr/events",
@@ -104,6 +106,9 @@ func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 		`id="saved-files"`,
 		`id="transfer-version"`,
 		`Version: eqrcp test [date: now]`,
+		`Current address`,
+		`127.0.0.1:8080`,
+		`same LAN as the phone`,
 		`classList.add('hidden')`,
 		`Download archive: `,
 		`renderList('transfer-items', 'transfer-items-title'`,
@@ -129,6 +134,7 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
 		URL              string
+		NetworkHost      string
 		QRImageRoute     string
 		StatusRoute      string
 		EventsRoute      string
@@ -140,6 +146,7 @@ func TestQRPageOmitsRepeatWithoutRoute(t *testing.T) {
 		Version          string
 	}{
 		URL:          "http://127.0.0.1:8080/send/a",
+		NetworkHost:  "127.0.0.1:8080",
 		QRImageRoute: "/qr/image",
 		StatusRoute:  "/qr/status",
 		EventsRoute:  "/qr/events",

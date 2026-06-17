@@ -113,6 +113,14 @@ func agentStatusFromRepeatRoute(route string) (string, string, bool) {
 	return parsed.Scheme + "://" + parsed.Host + "/status", parts[1], true
 }
 
+func transferHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
+}
+
 type progressResponseWriter struct {
 	http.ResponseWriter
 	err     error

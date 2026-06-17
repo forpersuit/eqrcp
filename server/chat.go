@@ -845,7 +845,9 @@ func (session *chatSession) registerClientWithAvatar(token string, label string,
 		info := session.clients[client]
 		if info.Count <= 1 {
 			delete(session.clients, client)
-			delete(session.clientIDs, client)
+			// Do not remove token-to-clientId mapping during disconnect to allow stable clientId
+			// when a client reconnects (e.g. on mobile network switch or Wails window resizing).
+			// delete(session.clientIDs, client)
 		} else {
 			info.Count--
 			info.LastSeen = time.Now()

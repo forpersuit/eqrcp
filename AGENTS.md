@@ -3,7 +3,7 @@
 ## Need to obey
 
 - use Chinese when we chat
-- git push do not with proxy
+- use `scripts/git-push-smart.sh` for GitHub pushes in WSL: if direct `ping x.com` works it pushes without proxy; otherwise it uses the Windows host proxy from the commented `~/.bashrc` pattern (`ip route` host + port `10808`) through SSH `ProxyCommand`
 - always base on First Principle
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
 - before handing work to manual Windows acceptance, close running eqrcp desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
@@ -69,7 +69,7 @@ When changing product branding, logo, or desktop icons, check every visible and 
 
 - `docs/img/transparent.png` is the source image for square icons, tray icons, favicons, and app icons.
 - `docs/img/logo-design-horizontal.png` is the source image for horizontal brand surfaces such as About.
-- Regenerate derived assets with `go run ./scripts/icon-assets docs/img/transparent.png`, then copy the horizontal logo to `desktop/gui/frontend/src/assets/images/logo-horizontal.png` when that source changes.
+- Regenerate derived assets with `go run ./scripts/icon-assets docs/img/transparent.png docs/img/logo-design-horizontal.png` when either source changes.
 - `docs/img/logo.png` is a retained product mark source image from the logo set.
 - `desktop/gui/build/appicon.png` feeds Wails app icon generation.
 - `desktop/gui/build/windows/icon.ico` feeds Windows executable and installer icons.
@@ -79,6 +79,8 @@ When changing product branding, logo, or desktop icons, check every visible and 
 - `desktop/gui/tray.go` embeds `logo-universal.png`; rebuild after replacing that file.
 
 After branding, desktop integration, chat-device, or Windows-facing changes, use `scripts/deploy-windows-results.sh` as the validation and artifact refresh path. It closes existing EQT desktop processes, runs tests, builds the frontend, builds Windows CLI/launcher/desktop artifacts, and writes fresh results to `E:\developer\results` or `/mnt/e/developer/results`.
+
+For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
 
 
 # 12-rule template
