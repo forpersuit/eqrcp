@@ -1278,8 +1278,7 @@
             }
             .device-panel {
                 right: 0;
-                max-height: calc(100dvh - 120px);
-                max-height: calc(100vh - 120px);
+                max-height: calc(var(--chat-viewport-height, 100dvh) - var(--composer-height, 58px) - 64px);
                 overflow-y: auto;
                 overflow-x: hidden;
                 z-index: 999;
