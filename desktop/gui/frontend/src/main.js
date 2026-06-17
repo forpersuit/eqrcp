@@ -635,6 +635,14 @@ function renderSettingsPanel() {
                     <div class="setting-copy">
                         <strong>Chat avatar badge</strong>
                         <span>Use an emoji or 1-4 initials.</span>
+                        <div class="avatar-presets">
+                            <button type="button" class="avatar-preset-btn" data-avatar="🚀" title="Rocket">🚀</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="😎" title="Cool">😎</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="💻" title="Computer">💻</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="👍" title="Like">👍</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="🌟" title="Star">🌟</button>
+                            <button type="button" class="avatar-preset-btn" data-avatar="🎨" title="Art">🎨</button>
+                        </div>
                     </div>
                     <div class="avatar-setting-row">
                         <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
@@ -1337,6 +1345,30 @@ function bindSettingsControls() {
     document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
+
+    const avatarInput = document.querySelector('#settings-chat-avatar');
+    if (avatarInput) {
+        avatarInput.addEventListener('input', (event) => {
+            const cleaned = cleanChatAvatar(event.target.value);
+            if (event.target.value !== cleaned) {
+                event.target.value = cleaned;
+            }
+            const previewEl = document.querySelector('.avatar-preview');
+            if (previewEl) {
+                previewEl.textContent = cleaned || (cleanChatProfileName(state.settings?.chatSender).charAt(0) || 'D').toUpperCase();
+            }
+        });
+    }
+
+    document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            const presetVal = event.currentTarget.dataset.avatar;
+            if (avatarInput && presetVal) {
+                avatarInput.value = presetVal;
+                avatarInput.dispatchEvent(new Event('input'));
+            }
+        });
+    });
 }
 
 function updateIntegrationRow(kind) {

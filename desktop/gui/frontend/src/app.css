@@ -671,6 +671,37 @@ dd {
     width: 34px;
 }
 
+.avatar-presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.avatar-preset-btn {
+    align-items: center;
+    background: rgba(47, 158, 115, 0.08);
+    border: 1px solid rgba(47, 158, 115, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 14px;
+    height: 28px;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 28px;
+}
+
+.avatar-preset-btn:hover {
+    background: rgba(47, 158, 115, 0.2);
+    border-color: #2f9e73;
+    transform: translateY(-2px) scale(1.08);
+}
+
+.avatar-preset-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
 .help-tooltip {
     background: #17211e;
     border: 1px solid rgba(255, 255, 255, 0.12);
