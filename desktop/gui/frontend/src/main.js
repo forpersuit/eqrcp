@@ -731,10 +731,37 @@ function renderAboutPanel() {
     const license = state.license || loadLicense();
     const plan = license?.tier && licenseTiers[license.tier] ? `${licenseTiers[license.tier]} active` : 'Free daily quota';
     const planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
+    
+    let devSection = '';
+    if (state.settings?.devMode) {
+        devSection = `
+            <div class="dev-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
+                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">Developer Options</h3>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                        <span>Enable Debug Logs</span>
+                        <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
+                    </label>
+                    <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
+                        调试日志会将 Chat Viewport 交互信息和网络日志保存。
+                        <br>日志保存在: <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log File</button>
+                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log Dir</button>
+                    </div>
+                    <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
+                        Exit Developer Mode
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     return `
         <div class="about-panel">
             <div class="about-hero">
-                <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer">
+                <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
                     <span>Plan</span>
                     <strong>${escapeHTML(plan)}</strong>
@@ -749,6 +776,7 @@ function renderAboutPanel() {
                 <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqrcp">Project page</button>
+            ${devSection}
         </div>
     `;
 }
@@ -968,6 +996,79 @@ function bindPanelEvents() {
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
+
+    // About logo click helper for dev mode
+    let clickCount = 0;
+    let clickTimer = null;
+    document.querySelector('.about-logo')?.addEventListener('click', async () => {
+        clickCount++;
+        if (clickCount >= 5) {
+            clickCount = 0;
+            if (clickTimer) clearTimeout(clickTimer);
+            if (!state.settings) state.settings = {};
+            state.settings.devMode = !state.settings.devMode;
+            if (state.settings.devMode) {
+                state.settings.debugLog = true;
+            }
+            await saveSettingsData();
+            state.notice = state.settings.devMode ? 'Developer Mode enabled!' : 'Developer Mode disabled.';
+            render();
+            openPanel('about');
+        } else {
+            if (clickTimer) clearTimeout(clickTimer);
+            clickTimer = setTimeout(() => {
+                clickCount = 0;
+            }, 1500);
+        }
+    });
+
+    // Dev mode controls
+    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event) => {
+        if (!state.settings) state.settings = {};
+        state.settings.debugLog = Boolean(event.currentTarget.checked);
+        await saveSettingsData();
+        state.notice = state.settings.debugLog ? 'Debug logs enabled.' : 'Debug logs disabled.';
+        render();
+        openPanel('about');
+    });
+
+    document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
+        const logPath = state.appInfo?.logPath;
+        if (logPath) {
+            try {
+                await OpenPath(logPath);
+            } catch (error) {
+                state.error = 'Failed to open log: ' + error;
+                render();
+            }
+        }
+    });
+
+    document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {
+        const logPath = state.appInfo?.logPath;
+        if (logPath) {
+            try {
+                const separator = logPath.includes('\\') ? '\\' : '/';
+                const parts = logPath.split(separator);
+                parts.pop();
+                const logDir = parts.join(separator);
+                await OpenPath(logDir);
+            } catch (error) {
+                state.error = 'Failed to open log directory: ' + error;
+                render();
+            }
+        }
+    });
+
+    document.querySelector('#dev-disable-mode')?.addEventListener('click', async () => {
+        if (!state.settings) state.settings = {};
+        state.settings.devMode = false;
+        state.settings.debugLog = false;
+        await saveSettingsData();
+        state.notice = 'Developer Mode disabled.';
+        render();
+        openPanel('about');
+    });
 }
 
 function bindChatQRPanelEvents() {
@@ -1183,6 +1284,8 @@ async function saveSettingsData() {
         port: Number(port?.value ?? state.settings?.port ?? 0),
         chatSender: cleanChatProfileName(chatSenderValue),
         chatAvatar: cleanChatAvatar(chatAvatarValue),
+        devMode: Boolean(state.settings?.devMode ?? false),
+        debugLog: Boolean(state.settings?.debugLog ?? false),
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;

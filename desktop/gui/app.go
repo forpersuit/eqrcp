@@ -35,6 +35,7 @@ type App struct {
 	mu            sync.Mutex
 	closeBehavior string
 	forceQuit     bool
+	logger        *FileLogger
 }
 
 type AgentTask struct {
@@ -89,6 +90,8 @@ type DesktopSettings struct {
 	CloseBehavior    string            `json:"closeBehavior"`
 	ChatSender       string            `json:"chatSender"`
 	ChatAvatar       string            `json:"chatAvatar"`
+	DevMode          bool              `json:"devMode"`
+	DebugLog         bool              `json:"debugLog"`
 }
 
 type InterfaceOption struct {
@@ -105,6 +108,7 @@ type AppInfo struct {
 	OS          string `json:"os"`
 	Arch        string `json:"arch"`
 	CLIPath     string `json:"cliPath,omitempty"`
+	LogPath     string `json:"logPath,omitempty"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -211,33 +215,33 @@ func (a *App) Receive(output string) (AgentStatus, error) {
 }
 
 func (a *App) Chat() (AgentStatus, error) {
-	wailsruntime.LogInfo(a.ctx, "[GUI] Chat() called. Submitting chat task to agent.")
+	a.logInfo("[GUI] Chat() called. Submitting chat task to agent.")
 	status, err := a.postTask(AgentTask{Action: "chat"})
 	if err == nil {
-		wailsruntime.LogInfo(a.ctx, "[GUI] Chat task started successfully.")
+		a.logInfo("[GUI] Chat task started successfully.")
 		return status, nil
 	}
-	wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Chat task failed initially: %v", err))
+	a.logError(fmt.Sprintf("[GUI] Chat task failed initially: %v", err))
 	if !isRecoverableChatAgentError(err) {
-		wailsruntime.LogError(a.ctx, "[GUI] Error is not recoverable. Aborting chat start.")
+		a.logError("[GUI] Error is not recoverable. Aborting chat start.")
 		return AgentStatus{}, err
 	}
-	wailsruntime.LogInfo(a.ctx, "[GUI] Recoverable chat agent error detected. Attempting agent self-healing...")
+	a.logInfo("[GUI] Recoverable chat agent error detected. Attempting agent self-healing...")
 	_ = a.shutdownAgent()
-	wailsruntime.LogInfo(a.ctx, "[GUI] Waiting for old agent process to exit...")
+	a.logInfo("[GUI] Waiting for old agent process to exit...")
 	waitForAgentExit(a)
-	wailsruntime.LogInfo(a.ctx, "[GUI] Restarting agent...")
+	a.logInfo("[GUI] Restarting agent...")
 	if ensureErr := a.ensureAgent(); ensureErr != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Restarting agent failed during self-healing: %v", ensureErr))
+		a.logError(fmt.Sprintf("[GUI] Restarting agent failed during self-healing: %v", ensureErr))
 		return AgentStatus{}, ensureErr
 	}
-	wailsruntime.LogInfo(a.ctx, "[GUI] Resubmitting chat task to newly started agent...")
+	a.logInfo("[GUI] Resubmitting chat task to newly started agent...")
 	status, err = a.postTask(AgentTask{Action: "chat"})
 	if err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] Chat task failed to start after agent restart: %v", err))
+		a.logError(fmt.Sprintf("[GUI] Chat task failed to start after agent restart: %v", err))
 		return AgentStatus{}, err
 	}
-	wailsruntime.LogInfo(a.ctx, "[GUI] Chat task started successfully after self-healing.")
+	a.logInfo("[GUI] Chat task started successfully after self-healing.")
 	return status, nil
 }
 
@@ -567,6 +571,7 @@ func (a *App) AppInfo() AppInfo {
 		AgentURL:    agentBaseURL,
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
+		LogPath:     desktopLogFilePath(),
 	}
 	if cli, err := findEqrcpCLI(); err == nil {
 		info.CLIPath = cli
@@ -992,4 +997,28 @@ func desktopAgentPortFilePath() string {
 		dir = os.TempDir()
 	}
 	return filepath.Join(dir, "eqrcp", "agent.port")
+}
+
+func (a *App) logInfo(message string) {
+	if a.logger != nil {
+		a.logger.Info(message)
+	}
+}
+
+func (a *App) logWarning(message string) {
+	if a.logger != nil {
+		a.logger.Warning(message)
+	}
+}
+
+func (a *App) logError(message string) {
+	if a.logger != nil {
+		a.logger.Error(message)
+	}
+}
+
+func (a *App) logDebug(message string) {
+	if a.logger != nil {
+		a.logger.Debug(message)
+	}
 }

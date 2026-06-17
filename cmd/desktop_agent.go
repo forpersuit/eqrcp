@@ -1322,6 +1322,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
 		return err
 	}
+	srv.ChatDebug = desktopSettings.DebugLog
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)

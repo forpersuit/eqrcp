@@ -127,6 +127,7 @@ export namespace main {
 	    os: string;
 	    arch: string;
 	    cliPath?: string;
+	    logPath?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -141,6 +142,7 @@ export namespace main {
 	        this.os = source["os"];
 	        this.arch = source["arch"];
 	        this.cliPath = source["cliPath"];
+	        this.logPath = source["logPath"];
 	    }
 	}
 	export class DesktopIntegrationStatus {
@@ -188,6 +190,8 @@ export namespace main {
 	    closeBehavior: string;
 	    chatSender: string;
 	    chatAvatar: string;
+	    devMode: boolean;
+	    debugLog: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -205,6 +209,8 @@ export namespace main {
 	        this.closeBehavior = source["closeBehavior"];
 	        this.chatSender = source["chatSender"];
 	        this.chatAvatar = source["chatAvatar"];
+	        this.devMode = source["devMode"];
+	        this.debugLog = source["debugLog"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
