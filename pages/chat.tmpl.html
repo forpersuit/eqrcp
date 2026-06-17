@@ -1453,7 +1453,8 @@
             sender: currentSender(),
             avatar: currentAvatar(),
             token: clientToken,
-            theme: currentClientTheme(clientToken)
+            theme: currentClientTheme(clientToken),
+            isEditingName: false
         };
         var draftKey = 'eqrcp-chat-draft:' + window.location.pathname;
         var messagesEl = document.getElementById('messages');
@@ -1968,8 +1969,10 @@
             if (!devices.length && !onlineDot.classList.contains('offline')) {
                 devices = [{label: state.sender, count: 1}];
             }
-            deviceRoster.innerHTML = devices.length ? devices.map(renderDeviceRosterItem).join('') : '<div class="device-empty">No active device connection.</div>';
-            bindDeviceRoster();
+            if (!state.isEditingName) {
+                deviceRoster.innerHTML = devices.length ? devices.map(renderDeviceRosterItem).join('') : '<div class="device-empty">No active device connection.</div>';
+                bindDeviceRoster();
+            }
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
                 setConnectionState(false, 'Session ' + data.state + '.');
@@ -2038,6 +2041,7 @@
             deviceRoster.querySelectorAll('.edit-device-name').forEach(function(button) {
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
+                    state.isEditingName = true;
                     var head = button.closest('.device-detail-head');
                     if (head) {
                         head.querySelector('.device-detail-name-static').style.display = 'none';
@@ -2056,6 +2060,7 @@
             deviceRoster.querySelectorAll('.cancel-device-edit').forEach(function(button) {
                 button.addEventListener('click', function(event) {
                     event.stopPropagation();
+                    state.isEditingName = false;
                     var head = button.closest('.device-detail-head');
                     if (head) {
                         var input = head.querySelector('.device-detail-name-input');
@@ -2125,6 +2130,7 @@
             .then(function(r) {
                 if (!r.ok) { throw new Error('rename failed'); }
                 state.sender = newName;
+                state.isEditingName = false;
                 safeStorage.setItem('eqrcp-chat-sender:' + window.location.pathname, newName);
                 showSystemNotice('Device renamed successfully.');
                 return refreshChatStatus();
