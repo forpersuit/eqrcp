@@ -39,9 +39,11 @@ type App struct {
 }
 
 type AgentTask struct {
-	Action string   `json:"action"`
-	Paths  []string `json:"paths"`
+	Action  string   `json:"action"`
+	Paths   []string `json:"paths"`
+	Browser *bool    `json:"browser,omitempty"`
 }
+
 
 type TaskRecord struct {
 	ID                  int        `json:"id"`
@@ -584,6 +586,8 @@ func (a *App) postTask(task AgentTask) (AgentStatus, error) {
 	if err := a.ensureAgent(); err != nil {
 		return AgentStatus{}, err
 	}
+	browserVal := false
+	task.Browser = &browserVal
 	var status AgentStatus
 	if err := a.postJSON("/tasks", task, &status); err != nil {
 		return AgentStatus{}, err

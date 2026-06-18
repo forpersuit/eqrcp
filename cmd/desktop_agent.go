@@ -46,9 +46,11 @@ func getDesktopAgentAddress() string {
 }
 
 type desktopAgentTask struct {
-	Action string   `json:"action"`
-	Paths  []string `json:"paths"`
+	Action  string   `json:"action"`
+	Paths   []string `json:"paths"`
+	Browser *bool    `json:"browser,omitempty"`
 }
+
 
 type desktopAgentTaskRecord struct {
 	ID                  int        `json:"id"`
@@ -1448,6 +1450,9 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 	agentApp := application.New()
 	agentApp.Flags = agent.baseFlags
 	agentApp.Flags.Browser = desktopBrowserPreference(agent.baseFlags, true)
+	if task.Browser != nil {
+		agentApp.Flags.Browser = *task.Browser
+	}
 	if task.Action == "receive" {
 		agentApp.Flags.Output = task.Paths[0]
 	}
