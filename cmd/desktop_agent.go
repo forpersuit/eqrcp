@@ -151,6 +151,7 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/stop-current", agent.handleStopCurrent)
 	mux.HandleFunc("/stop-chat", agent.handleStopChat)
 	mux.HandleFunc("/shutdown", agent.handleShutdown)
+	mux.HandleFunc("/set-paid-status", agent.handleSetPaidStatus)
 	return mux
 }
 
@@ -702,6 +703,30 @@ func (agent *desktopAgent) handleStopChat(w http.ResponseWriter, r *http.Request
 	}
 	w.WriteHeader(http.StatusAccepted)
 	fmt.Fprintln(w, "Current desktop chat stopped.")
+}
+
+func (agent *desktopAgent) handleSetPaidStatus(w http.ResponseWriter, r *http.Request) {
+	if handleDesktopAgentCORS(w, r, http.MethodPost) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Paid bool `json:"paid"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	server.SetPaidStatus(req.Paid)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
 
 func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {

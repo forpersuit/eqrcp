@@ -103,4 +103,14 @@ func TestChatLimiter(t *testing.T) {
 	if !usage.IsPaid {
 		t.Errorf("expected to retain paid status across days")
 	}
+
+	// Test 7: Exported SetPaidStatus / GetPaidStatus
+	SetPaidStatus(false)
+	if GetPaidStatus() {
+		t.Errorf("expected unpaid status via SetPaidStatus")
+	}
+	SetPaidStatus(true)
+	if !GetPaidStatus() {
+		t.Errorf("expected paid status via SetPaidStatus")
+	}
 }

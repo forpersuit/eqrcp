@@ -94,6 +94,10 @@ close_eqt_processes
 if [[ "$run_checks" -eq 1 ]]; then
   echo "Running Go tests..."
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
+  if wails_cmd="$(find_wails)"; then
+    echo "Generating Wails bindings..."
+    (cd "$root_dir/desktop/gui" && "$wails_cmd" build -platform windows/amd64 -s)
+  fi
   echo "Building GUI frontend..."
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
   echo "Running GUI Go tests..."

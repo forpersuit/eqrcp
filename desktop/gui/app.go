@@ -754,6 +754,12 @@ func (a *App) postNoBody(path string) error {
 	return nil
 }
 
+// SetPaidStatus updates the premium status of the chat server.
+func (a *App) SetPaidStatus(paid bool) error {
+	a.logInfo(fmt.Sprintf("[GUI] SetPaidStatus called with paid=%v", paid))
+	return a.postJSON("/set-paid-status", map[string]bool{"paid": paid}, nil)
+}
+
 type desktopAgentHTTPError struct {
 	statusCode int
 	status     string

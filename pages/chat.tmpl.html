@@ -3974,10 +3974,142 @@
         }
 
         // ── Premium Limit System ──
+        var lang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+        
+        var i18n = {
+            zh: {
+                proActive: 'Pro 已激活',
+                limitReached: '已超额',
+                upgradePlaceholder: '今日免费额度已用完，请付费订阅',
+                messagePlaceholder: '输入消息...',
+                title: '解锁无限局域网 Chat',
+                description: '每天前 5 分钟免费。升级至年费订阅，享受不受限制的高速文本、文件与图片传输体验。',
+                price: '$11.99',
+                period: '/ 年',
+                feature1: '无限聊天时间',
+                feature2: '无限制大文件与原图传输',
+                feature3: '更稳定的多设备局域网同步',
+                subscribeBtn: '立即订阅 (年付 $11.99)',
+                subscribeProgress: '正在订阅...',
+                subscribeSuccess: '订阅成功！🎉',
+                subscribeFail: '订阅失败，请重试',
+                hint: '支持模拟支付以供测试体验。支付后立即可用。',
+                premium: '专业版',
+                titleAttr: '点击查看订阅详情'
+            },
+            en: {
+                proActive: 'Pro Active',
+                limitReached: 'Limit reached',
+                upgradePlaceholder: 'Daily free quota used up. Please upgrade to continue.',
+                messagePlaceholder: 'Message',
+                title: 'Unlock Unlimited Chat',
+                description: 'Daily free chat is limited to 5 minutes. Upgrade to Premium for unlimited text, file, and image transfers.',
+                price: '$11.99',
+                period: '/ yr',
+                feature1: 'Unlimited chat duration',
+                feature2: 'No limit on file & image sizes',
+                feature3: 'Smoother multi-device sync',
+                subscribeBtn: 'Subscribe Now ($11.99/yr)',
+                subscribeProgress: 'Subscribing...',
+                subscribeSuccess: 'Subscribed successfully! 🎉',
+                subscribeFail: 'Subscription failed, retry',
+                hint: 'Supports mock payment for testing. Active immediately.',
+                premium: 'PREMIUM',
+                titleAttr: 'Click to view subscription details'
+            }
+        };
+
+        var dict = i18n[lang];
         var limitState = {
             usedSeconds: 0,
             isPaid: false
         };
+
+        function initPayModalDOM() {
+            var backdrop = document.getElementById('pay-modal-backdrop');
+            if (!backdrop) return;
+            backdrop.innerHTML = `
+                <div class="pay-modal">
+                    <div class="pay-modal-glow"></div>
+                    <button class="pay-modal-close" id="pay-modal-close" type="button" aria-label="Close">
+                        <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                    </button>
+                    <div class="pay-modal-header">
+                        <div class="pay-badge">${dict.premium}</div>
+                        <h2>${dict.title}</h2>
+                        <p>${dict.description}</p>
+                    </div>
+                    <div class="pay-modal-pricing">
+                        <span class="price-value">${dict.price}</span>
+                        <span class="price-period">${dict.period}</span>
+                    </div>
+                    <div class="pay-features">
+                        <div class="feature-item">
+                            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            <span>${dict.feature1}</span>
+                        </div>
+                        <div class="feature-item">
+                            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            <span>${dict.feature2}</span>
+                        </div>
+                        <div class="feature-item">
+                            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            <span>${dict.feature3}</span>
+                        </div>
+                    </div>
+                    <div class="pay-modal-actions">
+                        <button class="pay-btn-primary" id="subscribe-button">
+                            <span>${dict.subscribeBtn}</span>
+                            <div class="shimmer"></div>
+                        </button>
+                        <p class="pay-modal-hint">${dict.hint}</p>
+                    </div>
+                </div>
+            `;
+            
+            // Re-bind actions to new elements
+            document.getElementById('pay-modal-close').addEventListener('click', function() {
+                document.getElementById('pay-modal-backdrop').classList.remove('open');
+            });
+            
+            document.getElementById('subscribe-button').addEventListener('click', function() {
+                var btn = this;
+                if (btn.disabled) return;
+                btn.disabled = true;
+                var textSpan = btn.querySelector('span');
+                textSpan.textContent = dict.subscribeProgress;
+                
+                var payURL = withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.PayRoute}}')))));
+                fetch(payURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ pay: true })
+                })
+                .then(function(r) {
+                    if (!r.ok) {
+                        throw new Error('Payment failed');
+                    }
+                    return r.json();
+                })
+                .then(function(data) {
+                    btn.disabled = false;
+                    textSpan.textContent = dict.subscribeSuccess;
+                    setTimeout(function() {
+                        textSpan.textContent = dict.subscribeBtn;
+                        updateLimitUI(data);
+                    }, 1500);
+                })
+                .catch(function(err) {
+                    btn.disabled = false;
+                    textSpan.textContent = dict.subscribeFail;
+                    setTimeout(function() {
+                        textSpan.textContent = dict.subscribeBtn;
+                    }, 2000);
+                });
+            });
+        }
 
         function updateLimitUI(data) {
             if (!data) return;
@@ -3988,15 +4120,16 @@
 
             var pill = document.getElementById('limit-status-pill');
             var pillText = document.getElementById('limit-status-text');
+            pill.setAttribute('title', dict.titleAttr);
             
             if (isPaid) {
                 pill.style.display = 'inline-flex';
                 pill.className = 'limit-status-pill paid';
-                pillText.textContent = 'Pro 已激活';
+                pillText.textContent = dict.proActive;
                 
                 textEl.disabled = false;
                 fileEl.disabled = false;
-                textEl.placeholder = 'Message';
+                textEl.placeholder = dict.messagePlaceholder;
                 document.getElementById('pay-modal-backdrop').classList.remove('open');
             } else {
                 pill.style.display = 'inline-flex';
@@ -4007,15 +4140,15 @@
                 
                 if (remaining <= 0) {
                     pill.className = 'limit-status-pill danger';
-                    pillText.textContent = '已超额';
+                    pillText.textContent = dict.limitReached;
                     textEl.disabled = true;
                     fileEl.disabled = true;
-                    textEl.placeholder = '今日免费额度已用完，请付费订阅';
+                    textEl.placeholder = dict.upgradePlaceholder;
                     document.getElementById('pay-modal-backdrop').classList.add('open');
                 } else {
                     textEl.disabled = false;
                     fileEl.disabled = false;
-                    textEl.placeholder = 'Message';
+                    textEl.placeholder = dict.messagePlaceholder;
                     pillText.textContent = timeStr;
                     if (remaining <= 60) {
                         pill.className = 'limit-status-pill warning';
@@ -4025,6 +4158,9 @@
                 }
             }
         }
+
+        // Initialize dynamic i18n DOM
+        initPayModalDOM();
 
         // 定时器模拟时间流逝（每秒）
         setInterval(function() {
@@ -4040,91 +4176,13 @@
         document.getElementById('limit-status-pill').addEventListener('click', function() {
             document.getElementById('pay-modal-backdrop').classList.add('open');
         });
-        document.getElementById('pay-modal-close').addEventListener('click', function() {
-            document.getElementById('pay-modal-backdrop').classList.remove('open');
-        });
         document.getElementById('pay-modal-backdrop').addEventListener('click', function(e) {
             if (e.target === this) {
                 this.classList.remove('open');
             }
         });
-
-        document.getElementById('subscribe-button').addEventListener('click', function() {
-            var btn = this;
-            if (btn.disabled) return;
-            btn.disabled = true;
-            var textSpan = btn.querySelector('span');
-            textSpan.textContent = '正在订阅...';
-            
-            var payURL = withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.PayRoute}}')))));
-            fetch(payURL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ pay: true })
-            })
-            .then(function(r) {
-                if (!r.ok) {
-                    throw new Error('Payment failed');
-                }
-                return r.json();
-            })
-            .then(function(data) {
-                btn.disabled = false;
-                textSpan.textContent = '订阅成功！🎉';
-                setTimeout(function() {
-                    textSpan.textContent = '立即订阅 (年付 $11.99)';
-                    updateLimitUI(data);
-                }, 1500);
-            })
-            .catch(function(err) {
-                btn.disabled = false;
-                textSpan.textContent = '订阅失败，请重试';
-                setTimeout(function() {
-                    textSpan.textContent = '立即订阅 (年付 $11.99)';
-                }, 2000);
-            });
-        });
     </script>
     
-    <div class="pay-modal-backdrop" id="pay-modal-backdrop">
-        <div class="pay-modal">
-            <div class="pay-modal-glow"></div>
-            <button class="pay-modal-close" id="pay-modal-close" type="button" aria-label="Close">
-                <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
-            </button>
-            <div class="pay-modal-header">
-                <div class="pay-badge">PREMIUM</div>
-                <h2>解锁无限局域网 Chat</h2>
-                <p>每天前 5 分钟免费。升级至年费订阅，享受不受限制的高速文本、文件与图片传输体验。</p>
-            </div>
-            <div class="pay-modal-pricing">
-                <span class="price-value">$11.99</span>
-                <span class="price-period">/ 年</span>
-            </div>
-            <div class="pay-features">
-                <div class="feature-item">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <span>无限聊天时间</span>
-                </div>
-                <div class="feature-item">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <span>无限制大文件与原图传输</span>
-                </div>
-                <div class="feature-item">
-                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    <span>更稳定的多设备局域网同步</span>
-                </div>
-            </div>
-            <div class="pay-modal-actions">
-                <button class="pay-btn-primary" id="subscribe-button">
-                    <span>立即订阅 (年付 $11.99)</span>
-                    <div class="shimmer"></div>
-                </button>
-                <p class="pay-modal-hint">支持模拟支付以供测试体验。支付后立即可用。</p>
-            </div>
-        </div>
-    </div>
+    <div class="pay-modal-backdrop" id="pay-modal-backdrop"></div>
 </body>
 </html>

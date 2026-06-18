@@ -19,7 +19,8 @@ type ChatUsage struct {
 
 // ChatLimiter manages daily chat time limits and payment state.
 type ChatLimiter struct {
-	mu sync.Mutex
+	mu            sync.Mutex
+	activeSession *chatSession
 }
 
 var limiterInstance = &ChatLimiter{}
@@ -85,5 +86,23 @@ func (l *ChatLimiter) SetPaid(paid bool) ChatUsage {
 	usage := l.loadUsage()
 	usage.IsPaid = paid
 	l.saveUsage(usage)
+
+	// Notify active session to immediately refresh frontend clients
+	if l.activeSession != nil {
+		l.activeSession.mu.Lock()
+		l.activeSession.notifyLocked()
+		l.activeSession.mu.Unlock()
+	}
+
 	return usage
+}
+
+// SetPaidStatus updates the payment status globally.
+func SetPaidStatus(paid bool) {
+	limiterInstance.SetPaid(paid)
+}
+
+// GetPaidStatus returns whether the premium status is activated.
+func GetPaidStatus() bool {
+	return limiterInstance.GetStatus().IsPaid
 }

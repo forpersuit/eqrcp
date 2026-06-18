@@ -141,6 +141,9 @@ func (s *Server) Chat() error {
 		statusHook:       s.chatStatusHook,
 		hostRenameHook:   s.chatHostRenameHook,
 	}
+	limiterInstance.mu.Lock()
+	limiterInstance.activeSession = session
+	limiterInstance.mu.Unlock()
 	session.notifyStatus("waiting")
 	qrImg, err := qr.RenderImage(s.ChatJoinURL())
 	if err != nil {
@@ -1461,6 +1464,12 @@ func (session *chatSession) end(state string) {
 	hook, snapshot := session.statusSnapshotLocked(state)
 	session.mu.Unlock()
 	notifyChatStatusHook(hook, snapshot)
+
+	limiterInstance.mu.Lock()
+	if limiterInstance.activeSession == session {
+		limiterInstance.activeSession = nil
+	}
+	limiterInstance.mu.Unlock()
 }
 
 func isTerminalChatState(state string) bool {

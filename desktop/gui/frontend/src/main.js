@@ -28,6 +28,7 @@ import {
     Share,
     SetRightClickIntegrationEnabled,
     SetStartupEnabled,
+    SetPaidStatus,
     StartupStatus,
     StopChat,
     StopCurrent,
@@ -232,7 +233,6 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    ${renderChatQuotaPill()}
                     <button class="menu-button" id="open-settings" title="Settings" aria-label="Settings">
                         <span class="menu-icon">${settingsIcon()}</span>
                         <span class="menu-label">Settings</span>
@@ -2153,6 +2153,10 @@ function confirmRedeem() {
     });
     state.redeemMessage = `${licenseTiers[result.tier]} activated.`;
     stopChatUsage();
+    // Synchronize paid status to backend
+    SetPaidStatus(true).catch(function(e) {
+        console.error('Failed to sync paid status to backend:', e);
+    });
     render();
 }
 
@@ -2164,6 +2168,10 @@ function resetLicense() {
     if (state.mode === 'chat') {
         startChatUsage();
     }
+    // Synchronize paid status to backend
+    SetPaidStatus(false).catch(function(e) {
+        console.error('Failed to sync paid status to backend:', e);
+    });
     render();
 }
 
