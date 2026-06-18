@@ -201,6 +201,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		CanStop            bool
 		Version            string
 		PayRoute           string
+		LicenseTier        string
 	}{
 		URL:                "http://127.0.0.1:8080/chat/test",
 		QRImageRoute:       "/chat/test/qr/image",
@@ -280,6 +281,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		CanStop            bool
 		Version            string
 		PayRoute           string
+		LicenseTier        string
 	}{
 		URL:                "http://127.0.0.1:8080/chat/test",
 		QRImageRoute:       "/chat/test/qr/image",

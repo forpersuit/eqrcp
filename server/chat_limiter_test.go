@@ -78,7 +78,7 @@ func TestChatLimiter(t *testing.T) {
 	}
 
 	// Test 4: Set paid
-	usage = limiter.SetPaidDetails(true, "", "")
+	usage = limiter.SetPaidDetails(true, "", "", "PLUS")
 	if !usage.IsPaid {
 		t.Errorf("expected marked as paid")
 	}
@@ -108,12 +108,15 @@ func TestChatLimiter(t *testing.T) {
 	}
 
 	// Test 7: Exported SetPaidStatus / GetPaidStatus
-	SetPaidStatus(false, "", "")
+	SetPaidStatus(false, "", "", "")
 	if GetPaidStatus() {
 		t.Errorf("expected unpaid status via SetPaidStatus")
 	}
-	SetPaidStatus(true, "", "")
+	SetPaidStatus(true, "", "", "PLUS")
 	if !GetPaidStatus() {
 		t.Errorf("expected paid status via SetPaidStatus")
+	}
+	if GetLicenseTier() != "PLUS" {
+		t.Errorf("expected GetLicenseTier() to return 'PLUS', got '%s'", GetLicenseTier())
 	}
 }

@@ -1732,11 +1732,11 @@ async function loadSettings() {
         loadChatUsage();
         state.license = loadLicense();
         if (state.license) {
-            SetPaidStatus(true, state.license.redeemedAt || '', state.license.codeDate || '').catch(function(e) {
+            SetPaidStatus(true, state.license.redeemedAt || '', state.license.codeDate || '', state.license.tier || '').catch(function(e) {
                 console.error('Failed to sync paid status to backend during init:', e);
             });
         } else {
-            SetPaidStatus(false, '', '').catch(function(e) {
+            SetPaidStatus(false, '', '', '').catch(function(e) {
                 console.error('Failed to sync paid status to backend during init:', e);
             });
         }
@@ -2165,7 +2165,7 @@ function confirmRedeem() {
     state.redeemMessage = `${licenseTiers[result.tier]} activated.`;
     stopChatUsage();
     // Synchronize paid status to backend
-    SetPaidStatus(true, redeemedAt, result.codeDate).catch(function(e) {
+    SetPaidStatus(true, redeemedAt, result.codeDate, result.tier).catch(function(e) {
         console.error('Failed to sync paid status to backend:', e);
     });
     render();
@@ -2180,7 +2180,7 @@ function resetLicense() {
         startChatUsage();
     }
     // Synchronize paid status to backend
-    SetPaidStatus(false, '', '').catch(function(e) {
+    SetPaidStatus(false, '', '', '').catch(function(e) {
         console.error('Failed to sync paid status to backend:', e);
     });
     render();

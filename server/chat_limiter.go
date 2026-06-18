@@ -21,7 +21,9 @@ type ChatUsage struct {
 	RedeemedAt    string `json:"redeemedAt"`    // ISO format activation time
 	CodeDate      string `json:"codeDate"`      // Code issue date or "LIFETIME"
 	ClockTampered bool   `json:"clockTampered"` // Locked if clock rollback is detected
+	LicenseTier   string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
 }
+
 
 // ChatLimiter manages daily chat time limits and payment state.
 type ChatLimiter struct {
@@ -185,7 +187,7 @@ func (l *ChatLimiter) GetStatus() ChatUsage {
 }
 
 // SetPaidDetails updates the payment status and license metadata.
-func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate string) ChatUsage {
+func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate string, tier string) ChatUsage {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -193,6 +195,7 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 	usage.IsPaid = paid
 	usage.RedeemedAt = redeemedAt
 	usage.CodeDate = codeDate
+	usage.LicenseTier = tier
 	if !paid {
 		usage.ClockTampered = false // Reset rollback lock on license reset
 	}
@@ -208,11 +211,16 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 }
 
 // SetPaidStatus updates the payment status globally.
-func SetPaidStatus(paid bool, redeemedAt string, codeDate string) {
-	limiterInstance.SetPaidDetails(paid, redeemedAt, codeDate)
+func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
+	limiterInstance.SetPaidDetails(paid, redeemedAt, codeDate, tier)
 }
 
 // GetPaidStatus returns whether the premium status is activated.
 func GetPaidStatus() bool {
 	return limiterInstance.GetStatus().IsPaid
+}
+
+// GetLicenseTier returns the current license tier (e.g. PLUS, PRO).
+func GetLicenseTier() string {
+	return limiterInstance.GetStatus().LicenseTier
 }

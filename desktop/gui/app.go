@@ -759,12 +759,13 @@ func (a *App) postNoBody(path string) error {
 }
 
 // SetPaidStatus updates the premium status of the chat server.
-func (a *App) SetPaidStatus(paid bool, redeemedAt string, codeDate string) error {
-	a.logInfo(fmt.Sprintf("[GUI] SetPaidStatus called with paid=%v redeemedAt=%s codeDate=%s", paid, redeemedAt, codeDate))
+func (a *App) SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) error {
+	a.logInfo(fmt.Sprintf("[GUI] SetPaidStatus called with paid=%v redeemedAt=%s codeDate=%s tier=%s", paid, redeemedAt, codeDate, tier))
 	return a.postJSON("/set-paid-status", map[string]interface{}{
 		"paid":       paid,
 		"redeemedAt": redeemedAt,
 		"codeDate":   codeDate,
+		"tier":       tier,
 	}, nil)
 }
 

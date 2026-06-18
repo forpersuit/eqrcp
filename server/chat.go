@@ -187,6 +187,21 @@ func (s *Server) Chat() error {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		licenseTierDisplay := ""
+		rawTier := GetLicenseTier()
+		if rawTier != "" {
+			switch rawTier {
+			case "PLUS":
+				licenseTierDisplay = "PLUS"
+			case "PRO":
+				licenseTierDisplay = "PRO"
+			case "TEAM":
+				licenseTierDisplay = "UNLIMITED"
+			default:
+				licenseTierDisplay = strings.ToUpper(rawTier)
+			}
+		}
+
 		variables := struct {
 			URL                string
 			QRImageRoute       string
@@ -201,6 +216,7 @@ func (s *Server) Chat() error {
 			CanStop            bool
 			Version            string
 			PayRoute           string
+			LicenseTier        string
 		}{
 			URL:                s.ChatJoinURL(),
 			QRImageRoute:       imageRoute,
@@ -215,6 +231,7 @@ func (s *Server) Chat() error {
 			CanStop:            session.validHostToken(r.URL.Query().Get("hostToken")),
 			Version:            version.String(),
 			PayRoute:           payRoute,
+			LicenseTier:        licenseTierDisplay,
 		}
 		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -314,7 +331,11 @@ func (s *Server) Chat() error {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
-		usage := limiterInstance.SetPaidDetails(req.Pay, time.Now().Format(time.RFC3339), "WEBPAY")
+		tier := ""
+		if req.Pay {
+			tier = "PRO"
+		}
+		usage := limiterInstance.SetPaidDetails(req.Pay, time.Now().Format(time.RFC3339), "WEBPAY", tier)
 		session.mu.Lock()
 		session.notifyLocked()
 		session.mu.Unlock()
