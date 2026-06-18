@@ -200,6 +200,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		HostToken          string
 		CanStop            bool
 		Version            string
+		PayRoute           string
 	}{
 		URL:                "http://127.0.0.1:8080/chat/test",
 		QRImageRoute:       "/chat/test/qr/image",
@@ -213,6 +214,7 @@ func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 		HostToken:          "host-token",
 		CanStop:            true,
 		Version:            "eqt test [date: now]",
+		PayRoute:           "/chat/test/pay",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {
@@ -277,6 +279,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		HostToken          string
 		CanStop            bool
 		Version            string
+		PayRoute           string
 	}{
 		URL:                "http://127.0.0.1:8080/chat/test",
 		QRImageRoute:       "/chat/test/qr/image",
@@ -288,6 +291,7 @@ func TestChatPageHidesStopWithoutHostToken(t *testing.T) {
 		HealthRoute:        "/chat/test/health",
 		ViewportDebugRoute: "/chat/test/viewport-debug",
 		Version:            "eqt test [date: now]",
+		PayRoute:           "/chat/test/pay",
 	}
 
 	if err := serveTemplate("chat", pages.Chat, &out, data); err != nil {

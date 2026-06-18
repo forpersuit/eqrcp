@@ -1346,6 +1346,262 @@
             .head-actions { gap: 6px; }
             .device-pill { padding: 0 9px; }
         }
+        /* ── Limit Status Pill & Pay Modal ── */
+        .limit-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px;
+            height: 36px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            background: rgba(21, 111, 90, 0.08);
+            color: var(--accent);
+            border: 1px solid rgba(21, 111, 90, 0.16);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .limit-status-pill:hover {
+            background: rgba(21, 111, 90, 0.14);
+        }
+        .limit-status-pill.warning {
+            background: rgba(217, 119, 6, 0.08);
+            color: #d97706;
+            border-color: rgba(217, 119, 6, 0.16);
+        }
+        .limit-status-pill.warning:hover {
+            background: rgba(217, 119, 6, 0.14);
+        }
+        .limit-status-pill.danger {
+            background: rgba(220, 38, 38, 0.08);
+            color: #dc2626;
+            border-color: rgba(220, 38, 38, 0.16);
+            animation: pulse-limit 2.5s infinite;
+        }
+        .limit-status-pill.danger:hover {
+            background: rgba(220, 38, 38, 0.14);
+        }
+        .limit-status-pill.paid {
+            background: rgba(16, 185, 129, 0.08);
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.16);
+        }
+        .limit-status-pill.paid:hover {
+            background: rgba(16, 185, 129, 0.14);
+        }
+        .limit-status-pill .pill-icon {
+            width: 14px;
+            height: 14px;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        @keyframes pulse-limit {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.98); }
+        }
+        .pay-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(24, 33, 31, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .pay-modal-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .pay-modal {
+            background: #ffffff;
+            border: 1px solid rgba(215, 222, 215, 0.6);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 440px;
+            padding: 32px;
+            position: relative;
+            box-shadow: 0 24px 60px rgba(24, 33, 31, 0.2);
+            transform: translateY(20px) scale(0.96);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+            color: var(--ink);
+            font-family: inherit;
+        }
+        .pay-modal-backdrop.open .pay-modal {
+            transform: translateY(0) scale(1);
+        }
+        .pay-modal-glow {
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(21, 111, 90, 0.12) 0%, rgba(255, 255, 255, 0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .pay-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+            color: var(--muted);
+            padding: 6px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+            z-index: 10;
+        }
+        .pay-modal-close:hover {
+            background: var(--wash);
+            color: var(--ink);
+        }
+        .pay-modal-close svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            fill: none;
+        }
+        .pay-modal-header {
+            text-align: center;
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+        }
+        .pay-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            color: var(--accent);
+            background: rgba(21, 111, 90, 0.08);
+            padding: 4px 12px;
+            border-radius: 999px;
+            margin-bottom: 12px;
+        }
+        .pay-modal-header h2 {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent-strong);
+            margin-bottom: 10px;
+        }
+        .pay-modal-header p {
+            font-size: 14px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .pay-modal-pricing {
+            text-align: center;
+            margin-bottom: 28px;
+            position: relative;
+            z-index: 1;
+        }
+        .pay-modal-pricing .price-value {
+            font-size: 44px;
+            font-weight: 900;
+            color: var(--ink);
+            letter-spacing: -0.02em;
+        }
+        .pay-modal-pricing .price-period {
+            font-size: 16px;
+            color: var(--muted);
+            font-weight: 600;
+        }
+        .pay-features {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 32px;
+            position: relative;
+            z-index: 1;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: var(--ink);
+            font-weight: 500;
+        }
+        .feature-item svg {
+            width: 16px;
+            height: 16px;
+            stroke: #22c55e;
+            stroke-width: 3;
+            fill: none;
+            flex-shrink: 0;
+        }
+        .pay-modal-actions {
+            position: relative;
+            z-index: 1;
+        }
+        .pay-btn-primary {
+            width: 100%;
+            background: var(--accent);
+            color: #ffffff;
+            border: 0;
+            border-radius: 12px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 4px 12px rgba(21, 111, 90, 0.24);
+        }
+        .pay-btn-primary:hover {
+            background: var(--accent-strong);
+            transform: translateY(-1px);
+        }
+        .pay-btn-primary:active {
+            transform: translateY(1px);
+        }
+        .pay-btn-primary .shimmer {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.2) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            animation: shimmer-anim 3s infinite;
+        }
+        @keyframes shimmer-anim {
+            0% { left: -100%; }
+            30% { left: 150%; }
+            100% { left: 150%; }
+        }
+        .pay-modal-hint {
+            font-size: 11px;
+            color: var(--muted);
+            text-align: center;
+            margin-top: 12px;
+        }
     </style>
 </head>
 <body>
@@ -1361,6 +1617,10 @@
                     </div>
                 </div>
                 <div class="head-actions">
+                    <div class="limit-status-pill" id="limit-status-pill" style="display: none;" title="点击查看订阅详情">
+                        <svg viewBox="0 0 24 24" class="pill-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        <span id="limit-status-text">5:00</span>
+                    </div>
                     <button class="device-pill" type="button" id="devices-toggle" title="Show connected devices" aria-label="Show connected devices" aria-expanded="false">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
                         <span id="device-count">0</span>
@@ -1995,6 +2255,9 @@
             if (data && data.state && data.state !== 'active' && data.state !== 'waiting') {
                 showSystemNotice('Session ' + data.state + '.');
                 setConnectionState(false, 'Session ' + data.state + '.');
+            }
+            if (data) {
+                updateLimitUI(data);
             }
         }
         function renderDeviceRosterItem(device) {
@@ -3055,6 +3318,10 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({sender: state.sender, avatar: state.avatar, token: state.token, theme: state.theme, join: joinToken, text: text})
             }).then(function(r) {
+                if (r.status === 402) {
+                    document.getElementById('pay-modal-backdrop').classList.add('open');
+                    throw new Error('payment required');
+                }
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
             }).then(function(message) {
@@ -3244,7 +3511,14 @@
                 data.append('files', file, file.name || 'attachment');
             });
             fetch('{{.AttachmentsRoute}}', {method: 'POST', body: data})
-                .then(function(r) { if (!r.ok) { throw new Error('upload failed'); } return r.json(); })
+                .then(function(r) {
+                    if (r.status === 402) {
+                        document.getElementById('pay-modal-backdrop').classList.add('open');
+                        throw new Error('payment required');
+                    }
+                    if (!r.ok) { throw new Error('upload failed'); }
+                    return r.json();
+                })
                 .then(function(messages) { mergeMessages(messages || [], true); })
                 .catch(function() {
                     showSystemNotice('Attachment upload failed.');
@@ -3698,6 +3972,159 @@
             showSystemNotice('EventSource not supported. Using polling...');
             setInterval(function() { if (isPageVisible) { loadMessages(); } }, 3000);
         }
+
+        // ── Premium Limit System ──
+        var limitState = {
+            usedSeconds: 0,
+            isPaid: false
+        };
+
+        function updateLimitUI(data) {
+            if (!data) return;
+            var usedSeconds = data.usedSeconds || 0;
+            var isPaid = !!data.isPaid;
+            limitState.usedSeconds = usedSeconds;
+            limitState.isPaid = isPaid;
+
+            var pill = document.getElementById('limit-status-pill');
+            var pillText = document.getElementById('limit-status-text');
+            
+            if (isPaid) {
+                pill.style.display = 'inline-flex';
+                pill.className = 'limit-status-pill paid';
+                pillText.textContent = 'Pro 已激活';
+                
+                textEl.disabled = false;
+                fileEl.disabled = false;
+                textEl.placeholder = 'Message';
+                document.getElementById('pay-modal-backdrop').classList.remove('open');
+            } else {
+                pill.style.display = 'inline-flex';
+                var remaining = Math.max(0, 300 - usedSeconds);
+                var mins = Math.floor(remaining / 60);
+                var secs = remaining % 60;
+                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                
+                if (remaining <= 0) {
+                    pill.className = 'limit-status-pill danger';
+                    pillText.textContent = '已超额';
+                    textEl.disabled = true;
+                    fileEl.disabled = true;
+                    textEl.placeholder = '今日免费额度已用完，请付费订阅';
+                    document.getElementById('pay-modal-backdrop').classList.add('open');
+                } else {
+                    textEl.disabled = false;
+                    fileEl.disabled = false;
+                    textEl.placeholder = 'Message';
+                    pillText.textContent = timeStr;
+                    if (remaining <= 60) {
+                        pill.className = 'limit-status-pill warning';
+                    } else {
+                        pill.className = 'limit-status-pill';
+                    }
+                }
+            }
+        }
+
+        // 定时器模拟时间流逝（每秒）
+        setInterval(function() {
+            if (isPageVisible && events && events.readyState === EventSource.OPEN && !limitState.isPaid) {
+                if (limitState.usedSeconds < 300) {
+                    limitState.usedSeconds++;
+                    updateLimitUI(limitState);
+                }
+            }
+        }, 1000);
+
+        // 绑定事件
+        document.getElementById('limit-status-pill').addEventListener('click', function() {
+            document.getElementById('pay-modal-backdrop').classList.add('open');
+        });
+        document.getElementById('pay-modal-close').addEventListener('click', function() {
+            document.getElementById('pay-modal-backdrop').classList.remove('open');
+        });
+        document.getElementById('pay-modal-backdrop').addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('open');
+            }
+        });
+
+        document.getElementById('subscribe-button').addEventListener('click', function() {
+            var btn = this;
+            if (btn.disabled) return;
+            btn.disabled = true;
+            var textSpan = btn.querySelector('span');
+            textSpan.textContent = '正在订阅...';
+            
+            var payURL = withClientJoin(withClientAvatar(withClientTheme(withClientPeer(withClientToken('{{.PayRoute}}')))));
+            fetch(payURL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ pay: true })
+            })
+            .then(function(r) {
+                if (!r.ok) {
+                    throw new Error('Payment failed');
+                }
+                return r.json();
+            })
+            .then(function(data) {
+                btn.disabled = false;
+                textSpan.textContent = '订阅成功！🎉';
+                setTimeout(function() {
+                    textSpan.textContent = '立即订阅 (年付 $11.99)';
+                    updateLimitUI(data);
+                }, 1500);
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                textSpan.textContent = '订阅失败，请重试';
+                setTimeout(function() {
+                    textSpan.textContent = '立即订阅 (年付 $11.99)';
+                }, 2000);
+            });
+        });
     </script>
+    
+    <div class="pay-modal-backdrop" id="pay-modal-backdrop">
+        <div class="pay-modal">
+            <div class="pay-modal-glow"></div>
+            <button class="pay-modal-close" id="pay-modal-close" type="button" aria-label="Close">
+                <svg viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </button>
+            <div class="pay-modal-header">
+                <div class="pay-badge">PREMIUM</div>
+                <h2>解锁无限局域网 Chat</h2>
+                <p>每天前 5 分钟免费。升级至年费订阅，享受不受限制的高速文本、文件与图片传输体验。</p>
+            </div>
+            <div class="pay-modal-pricing">
+                <span class="price-value">$11.99</span>
+                <span class="price-period">/ 年</span>
+            </div>
+            <div class="pay-features">
+                <div class="feature-item">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>无限聊天时间</span>
+                </div>
+                <div class="feature-item">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>无限制大文件与原图传输</span>
+                </div>
+                <div class="feature-item">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>更稳定的多设备局域网同步</span>
+                </div>
+            </div>
+            <div class="pay-modal-actions">
+                <button class="pay-btn-primary" id="subscribe-button">
+                    <span>立即订阅 (年付 $11.99)</span>
+                    <div class="shimmer"></div>
+                </button>
+                <p class="pay-modal-hint">支持模拟支付以供测试体验。支付后立即可用。</p>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

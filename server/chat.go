@@ -121,6 +121,7 @@ func (s *Server) Chat() error {
 	stopRoute := route + "/stop"
 	healthRoute := route + "/health"
 	viewportDebugRoute := route + "/viewport-debug"
+	payRoute := route + "/pay"
 	viewportDebugLog := chatViewportDebugLogPath()
 	session := &chatSession{
 		attachments:      map[string]chatAttachment{},
@@ -196,6 +197,7 @@ func (s *Server) Chat() error {
 			HostToken          string
 			CanStop            bool
 			Version            string
+			PayRoute           string
 		}{
 			URL:                s.ChatJoinURL(),
 			QRImageRoute:       imageRoute,
@@ -209,6 +211,7 @@ func (s *Server) Chat() error {
 			HostToken:          session.hostToken,
 			CanStop:            session.validHostToken(r.URL.Query().Get("hostToken")),
 			Version:            version.String(),
+			PayRoute:           payRoute,
 		}
 		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -269,6 +272,7 @@ func (s *Server) Chat() error {
 		}
 		theme := session.chatThemeForClientLocked(token, r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"))
 		session.mu.Unlock()
+		usage := limiterInstance.GetStatus()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":       "ok",
@@ -282,10 +286,67 @@ func (s *Server) Chat() error {
 			"clientId":     clientID,
 			"startedAt":    startedAt,
 			"lastActivity": lastActivity,
+			"usedSeconds":  usage.UsedSeconds,
+			"isPaid":       usage.IsPaid,
 		}); err != nil {
 			log.Println(err)
 		}
 	})
+
+	s.mux.HandleFunc(payRoute, func(w http.ResponseWriter, r *http.Request) {
+		if handleChatCORS(w, r, http.MethodPost) {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if rejectCrossOriginChat(w, r) {
+			return
+		}
+		var req struct {
+			Pay bool `json:"pay"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		usage := limiterInstance.SetPaid(req.Pay)
+		session.mu.Lock()
+		session.notifyLocked()
+		session.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":      "ok",
+			"isPaid":      usage.IsPaid,
+			"usedSeconds": usage.UsedSeconds,
+		})
+	})
+
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if session.isTerminal() {
+					return
+				}
+				session.mu.Lock()
+				clientCount := len(session.clients)
+				session.mu.Unlock()
+				if clientCount > 0 {
+					usage, limitReached := limiterInstance.IncrementUsage(2)
+					if limitReached && !usage.IsPaid {
+						session.mu.Lock()
+						session.notifyLocked()
+						session.mu.Unlock()
+					}
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
@@ -572,6 +633,13 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		if rejectCrossOriginChat(w, r) {
 			return
 		}
+		usage := limiterInstance.GetStatus()
+		if !usage.IsPaid && usage.UsedSeconds >= 300 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusPaymentRequired)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "free_limit_exceeded"})
+			return
+		}
 		var request struct {
 			Sender string `json:"sender"`
 			Avatar string `json:"avatar"`
@@ -623,6 +691,13 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	}
 	if session.isTerminal() {
 		writeChatTerminal(w)
+		return
+	}
+	usage := limiterInstance.GetStatus()
+	if !usage.IsPaid && usage.UsedSeconds >= 300 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "free_limit_exceeded"})
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
