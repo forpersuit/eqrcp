@@ -1731,6 +1731,15 @@ async function loadSettings() {
     await run(async () => {
         loadChatUsage();
         state.license = loadLicense();
+        if (state.license) {
+            SetPaidStatus(true, state.license.redeemedAt || '', state.license.codeDate || '').catch(function(e) {
+                console.error('Failed to sync paid status to backend during init:', e);
+            });
+        } else {
+            SetPaidStatus(false, '', '').catch(function(e) {
+                console.error('Failed to sync paid status to backend during init:', e);
+            });
+        }
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
         state.receiveDir = state.settings.output || '';
@@ -2146,15 +2155,17 @@ function confirmRedeem() {
         render();
         return;
     }
+    const redeemedAt = new Date().toISOString();
     saveLicense({
         tier: result.tier,
         codeHash: checksum(`${code}:stored`, 10),
-        redeemedAt: new Date().toISOString(),
+        redeemedAt: redeemedAt,
+        codeDate: result.codeDate,
     });
     state.redeemMessage = `${licenseTiers[result.tier]} activated.`;
     stopChatUsage();
     // Synchronize paid status to backend
-    SetPaidStatus(true).catch(function(e) {
+    SetPaidStatus(true, redeemedAt, result.codeDate).catch(function(e) {
         console.error('Failed to sync paid status to backend:', e);
     });
     render();
@@ -2169,7 +2180,7 @@ function resetLicense() {
         startChatUsage();
     }
     // Synchronize paid status to backend
-    SetPaidStatus(false).catch(function(e) {
+    SetPaidStatus(false, '', '').catch(function(e) {
         console.error('Failed to sync paid status to backend:', e);
     });
     render();
@@ -2194,7 +2205,7 @@ function validateRedeemCode(code) {
     if (check !== expected) {
         return {ok: false, error: 'Code check failed.'};
     }
-    return {ok: true, tier};
+    return {ok: true, tier, codeDate: date};
 }
 
 function checksum(value, length) {

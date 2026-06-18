@@ -10,6 +10,9 @@ import (
 )
 
 func TestChatLimiter(t *testing.T) {
+	os.Setenv("EQT_TESTING", "true")
+	defer os.Unsetenv("EQT_TESTING")
+
 	// Setup temporary config directory for testing
 	tempDir, err := os.MkdirTemp("", "eqt-test-config-*")
 	if err != nil {
@@ -75,7 +78,7 @@ func TestChatLimiter(t *testing.T) {
 	}
 
 	// Test 4: Set paid
-	usage = limiter.SetPaid(true)
+	usage = limiter.SetPaidDetails(true, "", "")
 	if !usage.IsPaid {
 		t.Errorf("expected marked as paid")
 	}
@@ -90,7 +93,7 @@ func TestChatLimiter(t *testing.T) {
 	// Mock a different date
 	usage.Date = "2000-01-01"
 	usage.UsedSeconds = 250
-	limiter.saveUsage(usage)
+	limiter.saveUsageLocked(usage)
 
 	// Fetch status again, should reset usedSeconds but keep isPaid
 	usage = limiter.GetStatus()
@@ -105,11 +108,11 @@ func TestChatLimiter(t *testing.T) {
 	}
 
 	// Test 7: Exported SetPaidStatus / GetPaidStatus
-	SetPaidStatus(false)
+	SetPaidStatus(false, "", "")
 	if GetPaidStatus() {
 		t.Errorf("expected unpaid status via SetPaidStatus")
 	}
-	SetPaidStatus(true)
+	SetPaidStatus(true, "", "")
 	if !GetPaidStatus() {
 		t.Errorf("expected paid status via SetPaidStatus")
 	}

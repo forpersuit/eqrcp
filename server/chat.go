@@ -314,7 +314,7 @@ func (s *Server) Chat() error {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
-		usage := limiterInstance.SetPaid(req.Pay)
+		usage := limiterInstance.SetPaidDetails(req.Pay, time.Now().Format(time.RFC3339), "WEBPAY")
 		session.mu.Lock()
 		session.notifyLocked()
 		session.mu.Unlock()

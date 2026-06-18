@@ -42,7 +42,7 @@ export function SelectReceiveDirectory():Promise<string>;
 
 export function SelectShareDirectory():Promise<string>;
 
-export function SetPaidStatus(arg1:boolean):Promise<void>;
+export function SetPaidStatus(arg1:boolean,arg2:string,arg3:string):Promise<void>;
 
 export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
 

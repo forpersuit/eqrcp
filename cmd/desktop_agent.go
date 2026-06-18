@@ -718,13 +718,15 @@ func (agent *desktopAgent) handleSetPaidStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var req struct {
-		Paid bool `json:"paid"`
+		Paid       bool   `json:"paid"`
+		RedeemedAt string `json:"redeemedAt"`
+		CodeDate   string `json:"codeDate"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	server.SetPaidStatus(req.Paid)
+	server.SetPaidStatus(req.Paid, req.RedeemedAt, req.CodeDate)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 }
