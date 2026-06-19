@@ -115,7 +115,60 @@ func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
 	}
 }
 
+func getMockUsageForAcceptance() *ChatUsage {
+	mockEnv := os.Getenv("EQT_MOCK_STATUS")
+	if mockEnv == "" {
+		return nil
+	}
+	switch mockEnv {
+	case "clock_tampered":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   300,
+			IsPaid:        false,
+			ClockTampered: true,
+			LicenseTier:   "PLUS U",
+		}
+	case "inconsistent_unpaid":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   300,
+			IsPaid:        false,
+			ClockTampered: false,
+			LicenseTier:   "PLUS U",
+		}
+	case "premium_active":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   120,
+			IsPaid:        true,
+			ClockTampered: false,
+			LicenseTier:   "PLUS U",
+		}
+	case "free_quota":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   120,
+			IsPaid:        false,
+			ClockTampered: false,
+			LicenseTier:   "",
+		}
+	case "free_exceeded":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   300,
+			IsPaid:        false,
+			ClockTampered: false,
+			LicenseTier:   "",
+		}
+	}
+	return nil
+}
+
 func (l *ChatLimiter) loadUsageLocked() ChatUsage {
+	if mock := getMockUsageForAcceptance(); mock != nil {
+		return *mock
+	}
 	path := getChatUsageFilePath()
 	var usage ChatUsage
 	data, err := os.ReadFile(path)
