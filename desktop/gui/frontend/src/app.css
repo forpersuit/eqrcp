@@ -1298,6 +1298,13 @@ dd {
     display: grid;
     gap: 4px;
     padding: 12px;
+    cursor: pointer;
+    transition: background 0.16s, border-color 0.16s;
+}
+
+.license-card:hover {
+    background: #f0f4ea;
+    border-color: var(--accent-strong);
 }
 
 .license-card span {
@@ -1354,6 +1361,13 @@ dd {
     gap: 4px;
     min-width: 0;
     padding: 12px;
+    cursor: pointer;
+    transition: background 0.16s, border-color 0.16s;
+}
+
+.about-plan:hover {
+    background: #f0f4ea;
+    border-color: var(--accent-strong);
 }
 
 .about-plan span {
@@ -1545,6 +1559,7 @@ dd {
     transform: translate(-50%, -20px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 9999;
+    white-space: pre-line;
 }
 
 .toast-notification.show {

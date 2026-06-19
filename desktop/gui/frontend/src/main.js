@@ -1096,6 +1096,8 @@ function bindPanelEvents() {
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
+    document.querySelector('.license-card')?.addEventListener('click', handleLicenseCardClick);
+    document.querySelector('.about-plan')?.addEventListener('click', handleLicenseCardClick);
 
     // About logo click helper for dev mode
     let clickCount = 0;
@@ -2532,6 +2534,47 @@ function escapeHTML(value) {
 
 function escapeAttr(value) {
     return escapeHTML(value).replace(/`/g, '&#096;');
+}
+
+function handleLicenseCardClick() {
+    const license = state.license || loadLicense();
+    const isClockTampered = !!state.status?.clockTampered;
+    const active = hasPaidLicense();
+    
+    let statusStr = '';
+    let detailStr = '';
+    
+    const isZh = (navigator.language || navigator.userLanguage || 'en').toLowerCase().indexOf('zh') === 0;
+    
+    if (isClockTampered) {
+        statusStr = isZh ? '已锁定 (时钟异常)' : 'Locked (Clock Tampered)';
+        detailStr = isZh 
+            ? '检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。'
+            : 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in settings.';
+    } else if (active) {
+        statusStr = isZh ? '已激活' : 'Active';
+        detailStr = license?.redeemedAt 
+            ? (isZh 
+                ? `激活时间: ${new Date(license.redeemedAt).toLocaleString()}` 
+                : `Redeemed at: ${new Date(license.redeemedAt).toLocaleString()}`)
+            : '';
+    } else {
+        if (license && license.tier) {
+            statusStr = isZh ? '已过期' : 'Expired';
+            detailStr = isZh ? '授权已过期或失效' : 'License expired or invalidated';
+        } else {
+            statusStr = isZh ? '未激活' : 'Not Active';
+            detailStr = isZh ? '免费额度：每天 5 分钟' : 'Free daily quota: 5 minutes';
+        }
+    }
+    
+    const tierName = license?.tier ? getLicenseDisplayName(license) : 'FREE';
+    
+    const msg = isZh 
+        ? `授权详情:\n• 授权级别: ${tierName}\n• 状态: ${statusStr}${detailStr ? `\n• 说明: ${detailStr}` : ''}`
+        : `License Details:\n• Tier: ${tierName}\n• Status: ${statusStr}${detailStr ? `\n• Info: ${detailStr}` : ''}`;
+        
+    showToast(msg);
 }
 
 OnFileDrop((_x, _y, paths) => {

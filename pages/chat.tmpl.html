@@ -135,8 +135,9 @@
             background: #22c55e;
             border-radius: 999px;
             flex-shrink: 0;
-            height: 9px;
-            width: 9px;
+            height: 8px;
+            width: 8px;
+            margin-left: 3px;
         }
         .chat-logo {
             flex-shrink: 0;
@@ -1639,7 +1640,7 @@
                     <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
                     <div class="online-dot" id="online-dot"></div>
                     <div>
-                        <h1 id="chat-title-text">EQT Chat{{if .LicenseTier}}<span class="license-badge" id="chat-license-badge">{{.LicenseTier}}</span>{{end}}</h1>
+                        <h1 id="chat-title-text">EQT{{if .LicenseTier}}<span class="license-badge" id="chat-license-badge">{{.LicenseTier}}</span>{{end}}</h1>
                     </div>
                 </div>
                 <div class="head-actions">
@@ -4207,7 +4208,16 @@
                 premium: '专业版',
                 titleAttr: '点击查看订阅详情',
                 clockError: '时钟异常',
-                clockErrorHint: '检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。'
+                clockErrorHint: '检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。',
+                tierInfo: '授权详情：',
+                statusLabel: '状态',
+                tierLabel: '授权级别',
+                reasonLabel: '锁定原因',
+                activeStatus: '已激活',
+                freeStatus: '免费额度',
+                limitStatus: '已超额',
+                lockedStatus: '时钟异常锁定',
+                expiredStatus: '授权已过期'
             },
             en: {
                 proActive: 'Pro Active',
@@ -4229,14 +4239,25 @@
                 premium: 'PREMIUM',
                 titleAttr: 'Click to view subscription details',
                 clockError: 'Clock Error',
-                clockErrorHint: 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in client settings.'
+                clockErrorHint: 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in client settings.',
+                tierInfo: 'License Details:',
+                statusLabel: 'Status',
+                tierLabel: 'Tier',
+                reasonLabel: 'Reason',
+                activeStatus: 'Active',
+                freeStatus: 'Free Quota',
+                limitStatus: 'Limit Reached',
+                lockedStatus: 'Locked (Clock Tampered)',
+                expiredStatus: 'Expired'
             }
         };
 
         var dict = i18n[lang];
         var limitState = {
             usedSeconds: 0,
-            isPaid: false
+            isPaid: false,
+            clockTampered: false,
+            licenseTier: '{{.LicenseTier}}'
         };
 
         function initPayModalDOM() {
@@ -4333,6 +4354,7 @@
             limitState.usedSeconds = usedSeconds;
             limitState.isPaid = isPaid;
             limitState.clockTampered = clockTampered;
+            limitState.licenseTier = data.licenseTier || '{{.LicenseTier}}' || '';
 
             var pill = document.getElementById('limit-status-pill');
             var pillText = document.getElementById('limit-status-text');
@@ -4365,7 +4387,7 @@
                         newBadge.setAttribute('title', dict.clockErrorHint);
                         newBadge.addEventListener('click', function(e) {
                             e.stopPropagation();
-                            alert(dict.clockErrorHint);
+                            showLicenseDetailsNotice();
                         });
                         titleText.appendChild(newBadge);
                     }
@@ -4460,12 +4482,44 @@
             }
         }, 1000);
 
+        function showLicenseDetailsNotice() {
+            var currentTier = limitState.licenseTier || '{{.LicenseTier}}' || '';
+            var statusStr = '';
+            var reasonStr = '';
+            var displayTier = currentTier || 'FREE';
+
+            if (limitState.clockTampered) {
+                statusStr = dict.lockedStatus;
+                reasonStr = dict.clockErrorHint;
+            } else if (limitState.isPaid) {
+                statusStr = dict.activeStatus;
+            } else {
+                if (currentTier && currentTier !== 'FREE') {
+                    statusStr = dict.expiredStatus;
+                    reasonStr = lang === 'zh' ? '授权已过期或失效' : 'License expired or invalidated';
+                } else {
+                    var remaining = Math.max(0, 300 - limitState.usedSeconds);
+                    if (remaining <= 0) {
+                        statusStr = dict.limitStatus;
+                    } else {
+                        statusStr = dict.freeStatus;
+                    }
+                }
+            }
+
+            var text = dict.tierInfo + '\n' +
+                       '• ' + dict.tierLabel + ': ' + displayTier + '\n' +
+                       '• ' + dict.statusLabel + ': ' + statusStr;
+            if (reasonStr) {
+                text += '\n• ' + dict.reasonLabel + ': ' + reasonStr;
+            }
+            showSystemNotice(text);
+        }
+
         // 绑定事件
         document.getElementById('limit-status-pill').addEventListener('click', function(e) {
-            if (limitState.clockTampered) {
-                e.stopPropagation();
-                alert(dict.clockErrorHint);
-            } else {
+            showLicenseDetailsNotice();
+            if (!limitState.clockTampered && !limitState.isPaid) {
                 document.getElementById('pay-modal-backdrop').classList.add('open');
             }
         });
