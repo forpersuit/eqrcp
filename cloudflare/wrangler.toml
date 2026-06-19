@@ -1,0 +1,16 @@
+name = "eqt-drm-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+
+# D1 Database binding. DB is bound in the code.
+[[d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db"
+# Replace with your actual D1 Database ID after running `wrangler d1 create eqt-drm-db`
+database_id = "YOUR_D1_DATABASE_ID"
+
+[vars]
+# In production, use `wrangler secret put ED25519_PRIVATE_KEY`
+# In development, you can add ED25519_PRIVATE_KEY here (64-char hex)
+# ED25519_PRIVATE_KEY = "your_test_hex_private_key"
+# ADMIN_SECRET = "your_admin_secret_key"

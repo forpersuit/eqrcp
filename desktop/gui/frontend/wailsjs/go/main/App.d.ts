@@ -44,6 +44,10 @@ export function SelectShareDirectory():Promise<string>;
 
 export function SetPaidStatus(arg1:boolean,arg2:string,arg3:string,arg4:string):Promise<void>;
 
+export function ActivateLicense(arg1:string):Promise<void>;
+
+export function ResetLicense():Promise<void>;
+
 export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
 
 export function SetStartupEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;

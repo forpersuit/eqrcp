@@ -85,6 +85,8 @@ export namespace main {
 	    // Go type: time
 	    agentStartedAt: any;
 	    clockTampered: boolean;
+	    isPaid: boolean;
+	    licenseTier: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentStatus(source);
@@ -101,6 +103,8 @@ export namespace main {
 	        this.version = source["version"];
 	        this.agentStartedAt = this.convertValues(source["agentStartedAt"], null);
 	        this.clockTampered = source["clockTampered"];
+	        this.isPaid = source["isPaid"];
+	        this.licenseTier = source["licenseTier"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

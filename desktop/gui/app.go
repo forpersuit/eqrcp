@@ -772,6 +772,20 @@ func (a *App) SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier 
 	}, nil)
 }
 
+// ActivateLicense triggers online activation for a license key
+func (a *App) ActivateLicense(code string) error {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicense called with code=%s", code))
+	return a.postJSON("/activate", map[string]interface{}{
+		"license_code": code,
+	}, nil)
+}
+
+// ResetLicense resets local activation status
+func (a *App) ResetLicense() error {
+	a.logInfo("[GUI] ResetLicense called")
+	return a.postJSON("/reset-license", map[string]interface{}{}, nil)
+}
+
 type desktopAgentHTTPError struct {
 	statusCode int
 	status     string

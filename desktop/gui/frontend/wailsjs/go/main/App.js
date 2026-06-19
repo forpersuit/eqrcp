@@ -86,6 +86,14 @@ export function SetPaidStatus(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SetPaidStatus'](arg1, arg2, arg3, arg4);
 }
 
+export function ActivateLicense(arg1) {
+  return window['go']['main']['App']['ActivateLicense'](arg1);
+}
+
+export function ResetLicense() {
+  return window['go']['main']['App']['ResetLicense']();
+}
+
 export function SetRightClickIntegrationEnabled(arg1) {
   return window['go']['main']['App']['SetRightClickIntegrationEnabled'](arg1);
 }

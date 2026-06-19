@@ -29,6 +29,8 @@ import {
     SetRightClickIntegrationEnabled,
     SetStartupEnabled,
     SetPaidStatus,
+    ActivateLicense,
+    ResetLicense,
     StartupStatus,
     StopChat,
     StopCurrent,
@@ -2206,35 +2208,51 @@ function confirmRedeem() {
         render();
         return;
     }
-    const redeemedAt = new Date().toISOString();
-    saveLicense({
-        tier: result.tier,
-        codeHash: checksum(`${code}:stored`, 10),
-        redeemedAt: redeemedAt,
-        codeDate: result.codeDate,
+    const button = document.querySelector('#confirm-redeem');
+    if (button) {
+        button.disabled = true;
+        button.innerText = 'Activating...';
+    }
+    ActivateLicense(code).then(function() {
+        const redeemedAt = new Date().toISOString();
+        saveLicense({
+            tier: result.tier,
+            codeHash: checksum(`${code}:stored`, 10),
+            redeemedAt: redeemedAt,
+            codeDate: result.codeDate,
+        });
+        state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
+        stopChatUsage();
+        render();
+    }).catch(function(e) {
+        state.redeemError = e || 'Activation failed. Please check network and code validity.';
+        render();
+    }).finally(function() {
+        if (button) {
+            button.disabled = false;
+            button.innerText = 'Confirm';
+        }
     });
-    state.redeemMessage = `${licenseTiers[result.tier]} activated.`;
-    stopChatUsage();
-    // Synchronize paid status to backend
-    SetPaidStatus(true, redeemedAt, result.codeDate, result.tier).catch(function(e) {
-        console.error('Failed to sync paid status to backend:', e);
-    });
-    render();
 }
 
 function resetLicense() {
-    window.localStorage.removeItem(licenseStorageKey);
-    state.license = null;
-    state.redeemMessage = 'Activation reset on this device.';
-    state.redeemError = '';
-    if (state.mode === 'chat') {
-        startChatUsage();
-    }
-    // Synchronize paid status to backend
-    SetPaidStatus(false, '', '', '').catch(function(e) {
-        console.error('Failed to sync paid status to backend:', e);
+    const button = document.querySelector('#reset-license');
+    if (button) button.disabled = true;
+    ResetLicense().then(function() {
+        window.localStorage.removeItem(licenseStorageKey);
+        state.license = null;
+        state.redeemMessage = 'Activation reset on this device.';
+        state.redeemError = '';
+        if (state.mode === 'chat') {
+            startChatUsage();
+        }
+        render();
+    }).catch(function(e) {
+        state.redeemError = e || 'Failed to reset activation.';
+        render();
+    }).finally(function() {
+        if (button) button.disabled = false;
     });
-    render();
 }
 
 function validateRedeemCode(code) {

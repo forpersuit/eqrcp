@@ -1,0 +1,23 @@
+-- D1 Database Schema for EQT DRM
+
+CREATE TABLE IF NOT EXISTS licenses (
+    license_code TEXT PRIMARY KEY,
+    tier TEXT NOT NULL,          -- 'PLUS' or 'PRO'
+    status TEXT NOT NULL DEFAULT 'active', -- 'active', 'suspended', 'revoked'
+    max_devices INTEGER DEFAULT 2,
+    expires_at TEXT,             -- ISO format time, or 'LIFETIME'
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS activations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_code TEXT NOT NULL,
+    uuid_hash TEXT,
+    cpu_hash TEXT,
+    disk_hash TEXT,
+    activated_at TEXT NOT NULL,
+    FOREIGN KEY (license_code) REFERENCES licenses(license_code)
+);
+
+-- Indexing for speed
+CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);

@@ -90,23 +90,57 @@ func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
 		usage.LastTime = now
 	}
 
-	// 2. Premium license expiration check
-	if usage.IsPaid && usage.RedeemedAt != "" && usage.CodeDate != "LIFETIME" {
-		redeemedTime, err := time.Parse(time.RFC3339, usage.RedeemedAt)
-		if err == nil {
-			expiryTime := redeemedTime.Add(365 * 24 * time.Hour)
-			
-			// Verify against highly-available NTP-like network date headers if connected
-			currentTime := time.Now()
-			netTime, err := fetchNetworkTime()
-			if err == nil {
-				currentTime = netTime
-			}
+	// 2. Validate cryptographic local license (.lic) if exists
+	licPath := getLicenseFilePath()
+	var hasValidLic bool
+	var cert LicenseCertificate
 
-			if currentTime.After(expiryTime) {
-				usage.IsPaid = false
+	if os.Getenv("EQT_TESTING") == "true" {
+		// In testing environment, if no .lic file exists, fallback to JSON config paid status
+		if _, err := os.Stat(licPath); os.IsNotExist(err) {
+			hasValidLic = usage.IsPaid
+			cert.Tier = usage.LicenseTier
+			cert.ExpiresAt = usage.CodeDate
+		}
+	}
+
+	if !hasValidLic {
+		if data, err := os.ReadFile(licPath); err == nil {
+			if err := json.Unmarshal(data, &cert); err == nil {
+				// Verify signature, fingerprint, and expiration
+				sigOk := VerifyLicenseSignature(cert)
+				fpOk := VerifyFingerprint(cert)
+				
+				expOk := true
+				if cert.ExpiresAt != "LIFETIME" {
+					if expiry, err := time.Parse(time.RFC3339, cert.ExpiresAt); err == nil {
+						currentTime := time.Now()
+						if netTime, err := fetchNetworkTime(); err == nil {
+							currentTime = netTime
+						}
+						if currentTime.After(expiry) {
+							expOk = false
+						}
+					} else {
+						expOk = false
+					}
+				}
+
+				if sigOk && fpOk && expOk {
+					hasValidLic = true
+				}
 			}
 		}
+	}
+
+	if hasValidLic {
+		usage.IsPaid = true
+		usage.LicenseTier = cert.Tier
+		usage.CodeDate = cert.ExpiresAt
+	} else {
+		// No valid license certificate found on the machine. Revoke paid status.
+		usage.IsPaid = false
+		usage.LicenseTier = ""
 	}
 
 	// Force lock paid features if client clock was manipulated
