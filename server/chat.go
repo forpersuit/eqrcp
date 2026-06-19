@@ -697,10 +697,12 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		}
 		usage := limiterInstance.GetStatus()
 		if !usage.IsPaid && usage.UsedSeconds >= 300 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusPaymentRequired)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "free_limit_exceeded"})
-			return
+			// Experience degradation instead of hard lock: 30% message send failure rate.
+			nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+			if err == nil && nBig.Int64() < 30 {
+				http.Error(w, "Message failed to send (free tier limit reached). Please retry.", http.StatusInternalServerError)
+				return
+			}
 		}
 		var request struct {
 			Sender string `json:"sender"`
@@ -756,12 +758,6 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		return
 	}
 	usage := limiterInstance.GetStatus()
-	if !usage.IsPaid && usage.UsedSeconds >= 300 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusPaymentRequired)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "free_limit_exceeded"})
-		return
-	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "upload failed", http.StatusBadRequest)
@@ -791,11 +787,17 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		http.Error(w, "no file uploaded", http.StatusBadRequest)
 		return
 	}
+	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
 	var uploaded []chatMessage
 	for _, header := range files {
 		file, err := header.Open()
 		if err != nil {
 			http.Error(w, "upload failed", http.StatusBadRequest)
+			return
+		}
+		if isFreeLimitExceeded && header.Size > 2*1024*1024 {
+			file.Close()
+			http.Error(w, "File size exceeds 2MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
 			return
 		}
 		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
@@ -842,6 +844,30 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 	if attachment.MimeType != "" {
 		w.Header().Set("Content-Type", attachment.MimeType)
 	}
+
+	usage := limiterInstance.GetStatus()
+	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+
+	if isFreeLimitExceeded {
+		file, err := os.Open(attachment.Path)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+
+		// Limit to 100 KB/s (102400 bytes/sec)
+		throttled := &ThrottledReader{
+			r:      file,
+			limit:  100 * 1024,
+			active: true,
+		}
+		
+		w.Header().Set("Content-Length", strconv.FormatInt(attachment.Size, 10))
+		_, _ = io.Copy(w, throttled)
+		return
+	}
+
 	http.ServeFile(w, r, attachment.Path)
 }
 
@@ -1246,7 +1272,19 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 	if err != nil {
 		return chatMessage{}, err
 	}
-	written, copyErr := io.Copy(out, reader)
+	usage := limiterInstance.GetStatus()
+	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+
+	var r io.Reader = reader
+	if isFreeLimitExceeded {
+		r = &ThrottledReader{
+			r:      reader,
+			limit:  100 * 1024,
+			active: true,
+		}
+	}
+
+	written, copyErr := io.Copy(out, r)
 	closeErr := out.Close()
 	if copyErr != nil {
 		return chatMessage{}, copyErr
@@ -1661,4 +1699,29 @@ func safeInlineChatMime(mimeType string) bool {
 		return false
 	}
 	return mimeType != "image/svg+xml"
+}
+
+// ThrottledReader limits the read rate to a specified bytes per second.
+type ThrottledReader struct {
+	r      io.Reader
+	limit  int // bytes per second
+	active bool
+}
+
+func (tr *ThrottledReader) Read(p []byte) (n int, err error) {
+	if !tr.active {
+		return tr.r.Read(p)
+	}
+	maxToRead := len(p)
+	if maxToRead > 16*1024 {
+		maxToRead = 16 * 1024
+	}
+	n, err = tr.r.Read(p[:maxToRead])
+	if n > 0 {
+		delayMs := (int64(n) * 1000) / int64(tr.limit)
+		if delayMs > 0 {
+			time.Sleep(time.Duration(delayMs) * time.Millisecond)
+		}
+	}
+	return n, err
 }

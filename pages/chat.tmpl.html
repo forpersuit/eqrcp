@@ -4240,10 +4240,9 @@
                 if (remaining <= 0) {
                     pill.className = 'limit-status-pill danger';
                     pillText.textContent = dict.limitReached;
-                    textEl.disabled = true;
-                    fileEl.disabled = true;
-                    textEl.placeholder = dict.upgradePlaceholder;
-                    document.getElementById('pay-modal-backdrop').classList.add('open');
+                    textEl.disabled = false;
+                    fileEl.disabled = false;
+                    textEl.placeholder = dict.messagePlaceholder;
                 } else {
                     textEl.disabled = false;
                     fileEl.disabled = false;
