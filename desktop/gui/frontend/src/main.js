@@ -793,33 +793,45 @@ function renderAboutPanel() {
         `;
     }
 
+    let planPopover = '';
+    if (state.showPlanInfoDetails) {
+        planPopover = `
+            <div class="popover-backdrop" id="close-plan-popover-bg"></div>
+            <div class="plan-popover">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
+                    <strong style="color: var(--accent-strong); font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                        💡 套餐版本说明
+                    </strong>
+                    <button class="tool-button" id="close-plan-popover" title="Close" aria-label="Close" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
+                </div>
+                <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                    <div>
+                        <strong style="color: var(--ink);">• Plus（标准版）：</strong>
+                        支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
+                    </div>
+                    <div>
+                        <strong style="color: var(--ink);">• Plus 终身（买断版）：</strong>
+                        一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     return `
         <div class="about-panel">
             ${warningBox}
             <div class="about-hero">
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
-                    <span style="display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; left: 10px;">
-                        Plan
-                        <button class="tool-button" id="toggle-plan-info" title="查看套餐说明" aria-label="查看套餐说明" style="padding: 2px; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong);">
-                            ${aboutIcon()}
-                        </button>
-                    </span>
-                    <strong>${escapeHTML(plan)}</strong>
-                    <small>${escapeHTML(planDetail)}</small>
-                    ${state.showPlanInfoDetails ? `
-                        <div class="notice info compact about-plan-desc" style="margin-top: 12px; font-size: 13px; line-height: 1.5; border-radius: var(--radius-sm); padding: 10px; text-align: left; width: 100%; box-sizing: border-box;">
-                            <strong style="display:block; margin-bottom: 6px; color: var(--accent-strong);">💡 套餐版本说明：</strong>
-                            <div style="margin-bottom: 6px;">
-                                <strong>• Plus（标准版）：</strong>
-                                支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
-                            </div>
-                            <div>
-                                <strong>• Plus 终身（买断版）：</strong>
-                                一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
-                            </div>
-                        </div>
-                    ` : ''}
+                    <div class="about-plan-left">
+                        <span>Plan</span>
+                        <strong>${escapeHTML(plan)}</strong>
+                        <small>${escapeHTML(planDetail)}</small>
+                    </div>
+                    <button class="tool-button" id="toggle-plan-info" title="查看套餐说明" aria-label="查看套餐说明" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
+                        <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${aboutIcon()}</span>
+                    </button>
                 </div>
             </div>
             <dl>
@@ -831,6 +843,7 @@ function renderAboutPanel() {
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqt">Project page</button>
             ${devSection}
+            ${planPopover}
         </div>
     `;
 }
@@ -1138,6 +1151,16 @@ function bindPanelEvents() {
     document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
     document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
         state.showPlanInfoDetails = !state.showPlanInfoDetails;
+        syncPanelSurface();
+        bindPanelEvents();
+    });
+    document.querySelector('#close-plan-popover')?.addEventListener('click', () => {
+        state.showPlanInfoDetails = false;
+        syncPanelSurface();
+        bindPanelEvents();
+    });
+    document.querySelector('#close-plan-popover-bg')?.addEventListener('click', () => {
+        state.showPlanInfoDetails = false;
         syncPanelSurface();
         bindPanelEvents();
     });
