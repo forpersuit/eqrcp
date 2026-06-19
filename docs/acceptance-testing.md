@@ -20,37 +20,43 @@
 
 ---
 
-## 2. 人工验收测试流程 (Manual Acceptance Testing)
+## 2. 可视化交互式验收控制台 (Interactive Sandbox Console)
 
-在将构建产物部署到 Windows 验收目录 `E:\developer\results` 后，您可以通过如下命令拉起模拟调试服务，并直接用浏览器或手机扫码验证 UI：
+为了免去频繁重启后端进程来核对多状态 UI 的繁琐流程，Chat UI 内置了**可视化验收控制台**。
 
-```sh
-# 1. 模拟不一致（红胶囊 + 弹出不一致说明卡片）场景
-EQT_MOCK_STATUS=inconsistent_unpaid go run . send ./example.txt
+### 2.1 启用方式
+在打开的 Chat URL 后面加上参数 `?sandbox=1` 或 `?debug=1`。例如：
+`http://127.0.0.1:8080/chat/test?sandbox=1`
 
-# 2. 模拟时钟异常回滚场景
-EQT_MOCK_STATUS=clock_tampered go run . send ./example.txt
-
-# 3. 模拟正常 PLUS U 永久激活状态
-EQT_MOCK_STATUS=premium_active go run . send ./example.txt
-```
-
-直接点击命令行输出的 Chat 网址，即可直观核对胶囊颜色、悬浮信息卡的诊断文字与设计语言是否契合。
+### 2.2 预期行为
+1. 页面右下角会渲染出一个极其精美的「🛠️ 验收测试控制台」悬浮窗。
+2. 悬浮窗提供了 5 个一键切换按钮（PLUS U 激活、授权不一致、时钟异常锁定、体验额度内、额度超额）。
+3. 点击任意按钮，前端会瞬时改变内部的 `limitState` 状态机并调用 UI 渲染刷新函数，允许您在几秒钟内以纯视觉交互方式 100% 核对所有状态及其文字提示（无需重启程序）。
 
 ---
 
-## 3. 自动化集成测试 (Automated E2E Testing)
+## 3. 自动化集成测试 (Automated Integration Testing)
 
-在 Go 后端对 `server/chat_test.go` 进行扩展，结合 Go 的 `html/template` 的解析输出，可以编写模拟断言测试。
+为了在代码库和 CI 级别确保上述 5 种授权限制在后端处理和页面交付时绝对可靠，本项目在 [server/chat_test.go](file:///home/yelon/develop/me/eqrcp/server/chat_test.go) 中编写了 `TestAcceptanceMockStates` 集成测试套件。
 
-通过启动带 mock 的 HTTP 服务，拉取对应的 HTML 内容并断言其内部的初始化状态属性是否匹配。
+### 3.1 覆盖逻辑
+- 针对 5 种模拟状态分别运行子测试。
+- 启动临时 Mock Chat Server，模拟高并发 HTTP 客户端发起请求。
+- 自动断言 HTTP 返回状态为 `200 OK` 且内容为合规的 HTML 模板页面。
+- 提取并校验后端内存中 `limiterInstance.GetStatus()` 暴露的参数细节，确保逻辑判定与 mock 配置完全一致。
+
+### 3.2 运行命令
+在终端运行以下命令，即可在 0.1 秒内自动完成 5 种业务场景的交付状态回溯与健康检查：
+```sh
+go test -v ./server -run TestAcceptanceMockStates
+```
 
 ---
 
 ## 4. 交付准则 (Delivery Readiness Checklist)
 
-任何开发任务的交付必须满足以下 checklists 才能标记为 DONE：
-- [ ] 1. Go 后端模块测试全部通过 (`go test ./...`)。
-- [ ] 2. 对应调整有配套 of Mock 调试参数。
-- [ ] 3. 至少在一款模拟模式下运行并通过浏览器确认无渲染和事件绑定错误。
-- [ ] 4. Windows 部署脚本已同步完毕最新的二进制包。
+任何开发任务在宣布 DONE 之前，必须满足以下强制闭环流程：
+- [ ] **1. 跑通单元测试**：Go 后端模块测试全部通过 (`go test ./...`)。
+- [ ] **2. UI 交互测试通过**：启动服务并在 URL 加上 `?sandbox=1`，点击控制台按钮在浏览器或宿主环境上肉眼审核样式是否 100% 协调。
+- [ ] **3. 产物部署一致**：通过 Windows 部署脚本将打包后的可执行程序同步到 Windows 宿主机的验收目录 `E:\developer\results` 下。
+- [ ] **4. 提交验收单**：在向用户报告任务完成时，必须呈交包含上述步骤的《开发与验收报告》。

@@ -908,3 +908,54 @@ func TestChatRenameDevice(t *testing.T) {
 		t.Fatalf("empty label rename status = %d, want %d", wEmpty.Code, http.StatusBadRequest)
 	}
 }
+
+func TestAcceptanceMockStates(t *testing.T) {
+	states := []string{"clock_tampered", "inconsistent_unpaid", "premium_active", "free_quota", "free_exceeded"}
+
+	for _, state := range states {
+		t.Run(state, func(t *testing.T) {
+			t.Setenv("EQT_MOCK_STATUS", state)
+			server := newTestChatServer(t)
+			defer os.RemoveAll(server.chatDir)
+
+			// 1. Request chat template page to verify HTML output stability
+			req := httptest.NewRequest(http.MethodGet, "/chat/test", nil)
+			w := httptest.NewRecorder()
+			server.mux.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("state %s: status code = %d, want 200", state, w.Code)
+			}
+
+			body := w.Body.String()
+			if !strings.Contains(body, "<!doctype html>") {
+				t.Fatalf("state %s: missing doctype in body", state)
+			}
+
+			// 2. Validate current memory states from mock mapping
+			usage := limiterInstance.GetStatus()
+			switch state {
+			case "clock_tampered":
+				if !usage.ClockTampered || usage.LicenseTier != "PLUS U" {
+					t.Fatalf("clock_tampered mock mismatch: %+v", usage)
+				}
+			case "inconsistent_unpaid":
+				if usage.IsPaid || usage.ClockTampered || usage.LicenseTier != "PLUS U" {
+					t.Fatalf("inconsistent_unpaid mock mismatch: %+v", usage)
+				}
+			case "premium_active":
+				if !usage.IsPaid || usage.ClockTampered || usage.LicenseTier != "PLUS U" {
+					t.Fatalf("premium_active mock mismatch: %+v", usage)
+				}
+			case "free_quota":
+				if usage.IsPaid || usage.ClockTampered || usage.LicenseTier != "" {
+					t.Fatalf("free_quota mock mismatch: %+v", usage)
+				}
+			case "free_exceeded":
+				if usage.IsPaid || usage.ClockTampered || usage.UsedSeconds < 300 {
+					t.Fatalf("free_exceeded mock mismatch: %+v", usage)
+				}
+			}
+		})
+	}
+}

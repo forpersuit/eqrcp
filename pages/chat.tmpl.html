@@ -4749,6 +4749,124 @@
                 this.classList.remove('open');
             }
         });
+
+        // 验收测试沙箱控制面板注入
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('sandbox') || urlParams.has('debug')) {
+            injectSandboxConsole();
+        }
+
+        function injectSandboxConsole() {
+            var style = document.createElement('style');
+            style.textContent = `
+                .acceptance-sandbox {
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    background: rgba(255, 255, 255, 0.98);
+                    border: 1px solid var(--accent);
+                    border-radius: 12px;
+                    box-shadow: 0 12px 32px rgba(24, 33, 31, 0.25);
+                    padding: 12px;
+                    z-index: 999999;
+                    font-family: inherit;
+                    font-size: 12px;
+                    width: 240px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    backdrop-filter: blur(8px);
+                    border-left: 4px solid var(--accent);
+                }
+                .acceptance-sandbox-title {
+                    font-weight: 800;
+                    color: var(--accent-strong);
+                    border-bottom: 1px solid var(--line);
+                    padding-bottom: 6px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .acceptance-sandbox-close {
+                    cursor: pointer;
+                    color: var(--danger);
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 0 4px;
+                }
+                .acceptance-sandbox button {
+                    background: var(--wash);
+                    border: 1px solid var(--line);
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    cursor: pointer;
+                    text-align: left;
+                    font-weight: 600;
+                    color: var(--ink);
+                    transition: all 0.15s;
+                    font-size: 11px;
+                }
+                .acceptance-sandbox button:hover {
+                    background: var(--accent);
+                    color: #fff;
+                    border-color: var(--accent);
+                }
+                .acceptance-sandbox button.active {
+                    background: var(--accent-strong);
+                    color: #fff;
+                    border-color: var(--accent-strong);
+                }
+            `;
+            document.head.appendChild(style);
+
+            var container = document.createElement('div');
+            container.className = 'acceptance-sandbox';
+            container.id = 'acceptance-sandbox';
+            
+            var isZh = lang === 'zh';
+            
+            container.innerHTML = `
+                <div class="acceptance-sandbox-title">
+                    <span>🛠️ ${isZh ? '验收测试控制台' : 'Acceptance Sandbox'}</span>
+                    <span class="acceptance-sandbox-close" id="sandbox-close-btn" title="${isZh ? '隐藏' : 'Hide'}">×</span>
+                </div>
+                <button data-status="premium_active">🟢 PLUS U ${isZh ? '永久付费激活' : 'Lifetime Paid Active'}</button>
+                <button data-status="inconsistent_unpaid">🔴 PLUS U ${isZh ? '授权未激活/失效(不一致)' : 'Unpaid (Inconsistent)'}</button>
+                <button data-status="clock_tampered">🔴 PLUS U ${isZh ? '已锁定 (时钟异常)' : 'Locked (Clock Tampered)'}</button>
+                <button data-status="free_quota">⚪ ${isZh ? '免费额度体验中' : 'Free Quota Active'}</button>
+                <button data-status="free_exceeded">🔴 ${isZh ? '免费额度已超额' : 'Free Quota Exceeded'}</button>
+            `;
+            
+            document.body.appendChild(container);
+            
+            document.getElementById('sandbox-close-btn').addEventListener('click', function() {
+                container.style.display = 'none';
+            });
+            
+            var buttons = container.querySelectorAll('button');
+            buttons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    buttons.forEach(function(b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    var status = btn.getAttribute('data-status');
+                    
+                    var mockState = {};
+                    if (status === 'premium_active') {
+                        mockState = { usedSeconds: 120, isPaid: true, clockTampered: false, licenseTier: 'PLUS U' };
+                    } else if (status === 'inconsistent_unpaid') {
+                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: 'PLUS U' };
+                    } else if (status === 'clock_tampered') {
+                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: true, licenseTier: 'PLUS U' };
+                    } else if (status === 'free_quota') {
+                        mockState = { usedSeconds: 120, isPaid: false, clockTampered: false, licenseTier: '' };
+                    } else if (status === 'free_exceeded') {
+                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: '' };
+                    }
+                    
+                    updateLimitUI(mockState);
+                });
+            });
+        }
     </script>
     
     <div class="pay-modal-backdrop" id="pay-modal-backdrop"></div>
