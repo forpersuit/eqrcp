@@ -4008,7 +4008,9 @@
                 subscribeFail: '订阅失败，请重试',
                 hint: '支持模拟支付以供测试体验。支付后立即可用。',
                 premium: '专业版',
-                titleAttr: '点击查看订阅详情'
+                titleAttr: '点击查看订阅详情',
+                clockError: '时钟异常',
+                clockErrorHint: '检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。'
             },
             en: {
                 proActive: 'Pro Active',
@@ -4028,7 +4030,9 @@
                 subscribeFail: 'Subscription failed, retry',
                 hint: 'Supports mock payment for testing. Active immediately.',
                 premium: 'PREMIUM',
-                titleAttr: 'Click to view subscription details'
+                titleAttr: 'Click to view subscription details',
+                clockError: 'Clock Error',
+                clockErrorHint: 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in client settings.'
             }
         };
 
@@ -4128,11 +4132,53 @@
             if (!data) return;
             var usedSeconds = data.usedSeconds || 0;
             var isPaid = !!data.isPaid;
+            var clockTampered = !!data.clockTampered;
             limitState.usedSeconds = usedSeconds;
             limitState.isPaid = isPaid;
+            limitState.clockTampered = clockTampered;
 
             var pill = document.getElementById('limit-status-pill');
             var pillText = document.getElementById('limit-status-text');
+            
+            // Clean up license badge in title first in case it was there
+            var badge = document.getElementById('chat-license-badge');
+            if (badge) {
+                badge.remove();
+            }
+
+            if (clockTampered) {
+                pill.style.display = 'inline-flex';
+                pill.className = 'limit-status-pill danger';
+                pillText.textContent = dict.clockError;
+                pill.setAttribute('title', dict.clockErrorHint);
+                
+                textEl.disabled = true;
+                fileEl.disabled = true;
+                textEl.placeholder = dict.clockError;
+                
+                // Show description inside pay-modal as clock error description if opened
+                var payDesc = document.querySelector('.pay-modal-header p');
+                if (payDesc) {
+                    payDesc.textContent = dict.clockErrorHint;
+                }
+                var payTitle = document.querySelector('.pay-modal-header h2');
+                if (payTitle) {
+                    payTitle.textContent = dict.clockError;
+                }
+                
+                return;
+            }
+            
+            // Restore normal descriptions inside pay-modal
+            var payDesc = document.querySelector('.pay-modal-header p');
+            if (payDesc) {
+                payDesc.textContent = dict.description;
+            }
+            var payTitle = document.querySelector('.pay-modal-header h2');
+            if (payTitle) {
+                payTitle.textContent = dict.title;
+            }
+
             pill.setAttribute('title', dict.titleAttr);
             
             if (isPaid) {
@@ -4161,10 +4207,6 @@
                 textEl.placeholder = dict.messagePlaceholder;
                 document.getElementById('pay-modal-backdrop').classList.remove('open');
             } else {
-                var badge = document.getElementById('chat-license-badge');
-                if (badge) {
-                    badge.remove();
-                }
                 pill.style.display = 'inline-flex';
                 var remaining = Math.max(0, 300 - usedSeconds);
                 var mins = Math.floor(remaining / 60);
@@ -4197,7 +4239,7 @@
 
         // 定时器模拟时间流逝（每秒）
         setInterval(function() {
-            if (isPageVisible && events && events.readyState === EventSource.OPEN && !limitState.isPaid) {
+            if (isPageVisible && events && events.readyState === EventSource.OPEN && !limitState.isPaid && !limitState.clockTampered) {
                 if (limitState.usedSeconds < 300) {
                     limitState.usedSeconds++;
                     updateLimitUI(limitState);

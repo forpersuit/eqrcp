@@ -88,6 +88,7 @@ type desktopAgentResponse struct {
 	LastError      string                   `json:"lastError,omitempty"`
 	Version        string                   `json:"version"`
 	AgentStartedAt time.Time                `json:"agentStartedAt"`
+	ClockTampered  bool                     `json:"clockTampered"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -1334,6 +1335,7 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 		LastError:      agent.lastError,
 		Version:        version.String(),
 		AgentStartedAt: agent.startedAt,
+		ClockTampered:  server.GetClockTamperedStatus(),
 	}
 	if agent.busy {
 		response.State = "busy"

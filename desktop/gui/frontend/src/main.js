@@ -736,8 +736,20 @@ function integrationStatusText(status, fallback) {
 function renderAboutPanel() {
     const info = state.appInfo || {};
     const license = state.license || loadLicense();
-    const plan = license?.tier ? `${getLicenseDisplayName(license)} active` : 'Free daily quota';
-    const planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
+    let plan = license?.tier ? `${getLicenseDisplayName(license)} active` : 'Free daily quota';
+    let planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
+    
+    let warningBox = '';
+    if (state.status?.clockTampered) {
+        plan = 'PAID Locked (时钟异常)';
+        planDetail = '检测到系统时钟回退锁定';
+        warningBox = `
+            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                <strong>⚠️ 时钟回退锁定：</strong>
+                检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在下方的 Settings 里重新激活。
+            </div>
+        `;
+    }
     
     let devSection = '';
     if (state.settings?.devMode) {
@@ -771,6 +783,7 @@ function renderAboutPanel() {
 
     return `
         <div class="about-panel">
+            ${warningBox}
             <div class="about-hero">
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
@@ -805,9 +818,22 @@ function ensureFavicon() {
 
 function renderRedeemPanel() {
     const license = state.license || loadLicense();
-    const active = license?.tier ? `${getLicenseDisplayName(license)} active` : 'No paid plan active';
+    let active = license?.tier ? `${getLicenseDisplayName(license)} active` : 'No paid plan active';
+    
+    let warningBox = '';
+    if (state.status?.clockTampered) {
+        active = 'PAID Locked (时钟异常)';
+        warningBox = `
+            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                <strong>⚠️ 时钟回退锁定：</strong>
+                检测到系统时钟回退，已锁定付费功能。请恢复同步系统时钟后再重新输入兑换码激活。
+            </div>
+        `;
+    }
+
     return `
         <div class="redeem-panel">
+            ${warningBox}
             <div class="license-card">
                 <strong>${escapeHTML(active)}</strong>
                 <span>${license?.redeemedAt ? `Redeemed ${escapeHTML(new Date(license.redeemedAt).toLocaleString())}` : 'Enter a valid EQT code to unlock a paid tier on this device.'}</span>

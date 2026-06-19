@@ -250,3 +250,8 @@ func GetLicenseTier() string {
 func GetCodeDate() string {
 	return limiterInstance.GetStatus().CodeDate
 }
+
+// GetClockTamperedStatus returns whether the system clock has been tampered.
+func GetClockTamperedStatus() bool {
+	return limiterInstance.GetStatus().ClockTampered
+}

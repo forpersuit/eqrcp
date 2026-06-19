@@ -313,20 +313,21 @@ func (s *Server) Chat() error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":       "ok",
-			"timestamp":    time.Now().Unix(),
-			"messageCount": messageCount,
-			"eventSeq":     eventSeq,
-			"deviceCount":  deviceCount,
-			"devices":      devices,
-			"state":        state,
-			"theme":        theme,
-			"clientId":     clientID,
-			"startedAt":    startedAt,
-			"lastActivity": lastActivity,
-			"usedSeconds":  usage.UsedSeconds,
-			"isPaid":       usage.IsPaid,
-			"licenseTier":  licenseTierDisplay,
+			"status":        "ok",
+			"timestamp":     time.Now().Unix(),
+			"messageCount":  messageCount,
+			"eventSeq":      eventSeq,
+			"deviceCount":   deviceCount,
+			"devices":       devices,
+			"state":         state,
+			"theme":         theme,
+			"clientId":      clientID,
+			"startedAt":     startedAt,
+			"lastActivity":  lastActivity,
+			"usedSeconds":   usage.UsedSeconds,
+			"isPaid":        usage.IsPaid,
+			"licenseTier":   licenseTierDisplay,
+			"clockTampered": usage.ClockTampered,
 		}); err != nil {
 			log.Println(err)
 		}

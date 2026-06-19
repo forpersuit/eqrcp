@@ -79,6 +79,7 @@ type AgentStatus struct {
 	LastError      string       `json:"lastError,omitempty"`
 	Version        string       `json:"version"`
 	AgentStartedAt time.Time    `json:"agentStartedAt"`
+	ClockTampered  bool         `json:"clockTampered"`
 }
 
 type DesktopSettings struct {
