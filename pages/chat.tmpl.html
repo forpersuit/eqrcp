@@ -3521,6 +3521,20 @@
         }
         function uploadFileList(files) {
             if (!files || !files.length) { return; }
+            
+            // Double check 1: Client side intercept for large files when limit is exceeded
+            var isFreeExceeded = !limitState.isPaid && (300 - limitState.usedSeconds <= 0);
+            if (isFreeExceeded && !limitState.clockTampered) {
+                for (var i = 0; i < files.length; i++) {
+                    if (files[i].size > 2 * 1024 * 1024) {
+                        var errMsg = '文件 "' + files[i].name + '" 超过免费版 2MB 大小限制。';
+                        showSystemNotice(errMsg);
+                        alert(errMsg + '\n请升级至 Plus 或 Pro 解锁大文件传输。');
+                        return;
+                    }
+                }
+            }
+            
             var data = new FormData();
             data.append('sender', state.sender);
             data.append('avatar', state.avatar);
@@ -3536,13 +3550,25 @@
                         document.getElementById('pay-modal-backdrop').classList.add('open');
                         throw new Error('payment required');
                     }
+                    if (r.status === 413) {
+                        throw new Error('File exceeds 2MB limit in free tier.');
+                    }
                     if (!r.ok) { throw new Error('upload failed'); }
                     return r.json();
                 })
                 .then(function(messages) { mergeMessages(messages || [], true); })
-                .catch(function() {
-                    showSystemNotice('Attachment upload failed.');
-                    setConnectionState(true, 'Attachment upload failed.');
+                .catch(function(err) {
+                    var msg = err && err.message;
+                    if (msg === 'payment required') return;
+                    if (msg === 'upload failed') {
+                        msg = 'Attachment upload failed.';
+                    } else if (msg === 'File exceeds 2MB limit in free tier.') {
+                        msg = '上传失败：文件体积超过免费版 2MB 大小限制。';
+                    } else if (!msg) {
+                        msg = 'Attachment upload failed.';
+                    }
+                    showSystemNotice(msg);
+                    setConnectionState(true, msg);
                 });
         }
         function formatBytes(value) {
