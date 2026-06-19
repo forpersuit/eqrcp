@@ -3,7 +3,11 @@ package server
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -169,5 +173,121 @@ func TestVerifyFingerprintWeightedModel(t *testing.T) {
 				t.Errorf("VerifyFingerprint() = %v, want %v", got, tt.wantResult)
 			}
 		})
+	}
+}
+
+func TestIntegrationActivateAndLocalVerify(t *testing.T) {
+	// Disable testing mock mode to enforce real signature and local file verification
+	os.Setenv("EQT_TESTING", "false")
+	defer os.Setenv("EQT_TESTING", "true")
+
+	// Mock server mimicking Cloudflare Workers activation endpoint
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/activate" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			LicenseCode string `json:"license_code"`
+			UUIDHash    string `json:"uuid_hash"`
+			CPUHash     string `json:"cpu_hash"`
+			DiskHash    string `json:"disk_hash"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		cert := LicenseCertificate{
+			LicenseCode: req.LicenseCode,
+			Tier:        "PLUS",
+			UUIDHash:    req.UUIDHash,
+			CPUHash:     req.CPUHash,
+			DiskHash:    req.DiskHash,
+			ExpiresAt:   "LIFETIME",
+			MaxDevices:  2,
+		}
+		cert.Signature = signTestPayload(cert)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(cert)
+	}))
+	defer ts.Close()
+
+	// Redirect client to target mock server
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+
+	// Direct license validation cleanup first
+	ResetLicense()
+	defer ResetLicense()
+
+	// 1. Initially must be unpaid
+	if GetPaidStatus() {
+		t.Fatal("expected initially unpaid status")
+	}
+
+	// 2. Perform online activation call
+	testCode := "EQT-PLUS-20260620-TESTINTEGRATION"
+	err := ActivateLicenseOnline(testCode)
+	if err != nil {
+		t.Fatalf("ActivateLicenseOnline failed: %v", err)
+	}
+
+	// 3. Status must immediately become paid
+	if !GetPaidStatus() {
+		t.Fatal("expected paid status after successful online activation")
+	}
+
+	// Check if file is written to local dir
+	licPath := getLicenseFilePath()
+	if _, err := os.Stat(licPath); os.IsNotExist(err) {
+		t.Fatal("expected license.lic to be created on disk")
+	}
+
+	// 4. Force reset memory payment status by backing up lic file first
+	licPathBak := licPath + ".bak"
+	_ = os.Rename(licPath, licPathBak)
+
+	ResetLicense() // Clears disk file (which we moved) and memory state
+	if GetPaidStatus() {
+		t.Fatal("failed to reset memory payment state after ResetLicense")
+	}
+
+	// Restore the lic file back to simulate local offline restoration
+	_ = os.Rename(licPathBak, licPath)
+
+	// Run offline verification
+	ok := VerifyLocalLicense()
+	if !ok {
+		t.Fatal("expected offline license verification to succeed using license.lic on disk")
+	}
+
+	if !GetPaidStatus() {
+		t.Fatal("expected paid status restored after successful offline license verification")
+	}
+
+	// 5. Verification must fail if hardware fingerprint shifts
+	// Change mock values to cause 3-of-2 mismatch
+	origUUID := testBoardUUID
+	origCPU := testCPUSerial
+	origDisk := testDiskSerial
+	testBoardUUID = "different_uuid"
+	testCPUSerial = "different_cpu"
+	testDiskSerial = "different_disk"
+
+	defer func() {
+		testBoardUUID = origUUID
+		testCPUSerial = origCPU
+		testDiskSerial = origDisk
+	}()
+
+	limiterInstance.SetPaidDetails(false, "", "", "") // reset memory state again
+	ok2 := VerifyLocalLicense()
+	if ok2 {
+		t.Fatal("expected offline verification to fail after hardware fingerprint mismatched")
+	}
+	if GetPaidStatus() {
+		t.Fatal("expected unpaid status when fingerprint validation fails")
 	}
 }
