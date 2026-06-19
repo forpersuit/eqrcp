@@ -959,3 +959,22 @@ func TestAcceptanceMockStates(t *testing.T) {
 		})
 	}
 }
+
+func TestAcceptanceWailsWebViewURL(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	// Simulate Wails native WebView request with exact URL parameters
+	req := httptest.NewRequest(http.MethodGet, "/chat/test?hostToken=835824174ecf0014fc6643093f34b9e2&peer=desktop", nil)
+	w := httptest.NewRecorder()
+	server.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Wails WebView URL request failed with status: %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "<!doctype html>") {
+		t.Fatal("HTML missing doctype header")
+	}
+}
