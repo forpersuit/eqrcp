@@ -3529,7 +3529,6 @@
                     if (files[i].size > 2 * 1024 * 1024) {
                         var errMsg = '文件 "' + files[i].name + '" 超过免费版 2MB 大小限制。';
                         showSystemNotice(errMsg);
-                        alert(errMsg + '\n请升级至 Plus 或 Pro 解锁大文件传输。');
                         return;
                     }
                 }
