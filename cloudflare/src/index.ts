@@ -141,9 +141,14 @@ export default {
         }
         const privateKeyBytes = hexToUint8Array(privateKeyHex);
         
+        // Convert 32-byte raw private key (seed) to PKCS8 format for SubtleCrypto
+        const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
+        pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+        pkcs8Bytes.set(privateKeyBytes, 16);
+
         const key = await crypto.subtle.importKey(
-          "raw",
-          privateKeyBytes,
+          "pkcs8",
+          pkcs8Bytes,
           { name: "Ed25519" },
           true,
           ["sign"]

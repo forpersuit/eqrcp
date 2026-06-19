@@ -865,10 +865,9 @@ function renderRedeemPanel() {
                 <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${state.isActivating ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
             </label>
             <div class="redeem-actions">
-                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? 'Activating...' : 'Confirm'}</button>
+                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? '激活中...' : 'Confirm'}</button>
                 <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>Reset</button>
             </div>
-            ${state.isActivating ? `<div class="notice info compact">Activating... Please wait.</div>` : ''}
             ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
             ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
         </div>
