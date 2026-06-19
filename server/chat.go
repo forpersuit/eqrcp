@@ -189,14 +189,17 @@ func (s *Server) Chat() error {
 		}
 		licenseTierDisplay := ""
 		rawTier := GetLicenseTier()
+		codeDate := GetCodeDate()
 		if rawTier != "" {
 			switch rawTier {
 			case "PLUS":
-				licenseTierDisplay = "PLUS"
+				if codeDate == "LIFETIME" {
+					licenseTierDisplay = "PLUS U"
+				} else {
+					licenseTierDisplay = "PLUS"
+				}
 			case "PRO":
 				licenseTierDisplay = "PRO"
-			case "TEAM":
-				licenseTierDisplay = "UNLIMITED"
 			default:
 				licenseTierDisplay = strings.ToUpper(rawTier)
 			}

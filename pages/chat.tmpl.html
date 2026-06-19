@@ -4138,7 +4138,7 @@
             if (isPaid) {
                 pill.style.display = 'inline-flex';
                 pill.className = 'limit-status-pill paid';
-                pillText.textContent = dict.proActive;
+                pillText.textContent = '{{.LicenseTier}}';
                 
                 textEl.disabled = false;
                 fileEl.disabled = false;

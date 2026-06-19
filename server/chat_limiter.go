@@ -224,3 +224,8 @@ func GetPaidStatus() bool {
 func GetLicenseTier() string {
 	return limiterInstance.GetStatus().LicenseTier
 }
+
+// GetCodeDate returns the current license code issue date or "LIFETIME".
+func GetCodeDate() string {
+	return limiterInstance.GetStatus().CodeDate
+}

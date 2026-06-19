@@ -37,16 +37,24 @@ func checksum(value string, length int) string {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run scripts/gen-license-code.go <PLUS|PRO|TEAM> [serial]")
-		fmt.Println("Example: go run scripts/gen-license-code.go PLUS")
+		fmt.Println("Usage: go run scripts/gen-license-code.go <PLUS|PRO> [serial] [date|LIFETIME]")
+		fmt.Println("Example (Plus Lifetime): go run scripts/gen-license-code.go PLUS ABC1234 LIFETIME")
+		fmt.Println("Example (Plus Yearly):   go run scripts/gen-license-code.go PLUS ABC1234 20260619")
 		os.Exit(1)
 	}
 	tier := strings.ToUpper(os.Args[1])
+	if tier != "PLUS" && tier != "PRO" {
+		fmt.Println("Error: Invalid tier. Must be PLUS or PRO.")
+		os.Exit(1)
+	}
 	serial := "ABC1234"
 	if len(os.Args) > 2 {
 		serial = strings.ToUpper(os.Args[2])
 	}
 	date := "LIFETIME"
+	if len(os.Args) > 3 {
+		date = strings.ToUpper(os.Args[3])
+	}
 	codeBase := fmt.Sprintf("EQT-%s-%s-%s", tier, date, serial)
 	check := checksum(codeBase+"-"+redeemSecret, 6)
 	fmt.Printf("%s-%s\n", codeBase, check)

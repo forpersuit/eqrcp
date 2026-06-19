@@ -91,8 +91,14 @@ const redeemSecret = 'EQT-LOCAL-2026-V1';
 const licenseTiers = {
     PLUS: 'EQT Plus',
     PRO: 'EQT Pro',
-    TEAM: 'EQT Team',
 };
+function getLicenseDisplayName(license) {
+    if (!license || !license.tier) return 'No paid plan active';
+    if (license.tier === 'PLUS' && license.codeDate === 'LIFETIME') {
+        return 'EQT Plus U';
+    }
+    return licenseTiers[license.tier] || license.tier;
+}
 let agentEvents = null;
 let agentEventsRetry = null;
 let chatQRPulseTimer = null;
@@ -730,7 +736,7 @@ function integrationStatusText(status, fallback) {
 function renderAboutPanel() {
     const info = state.appInfo || {};
     const license = state.license || loadLicense();
-    const plan = license?.tier && licenseTiers[license.tier] ? `${licenseTiers[license.tier]} active` : 'Free daily quota';
+    const plan = license?.tier ? `${getLicenseDisplayName(license)} active` : 'Free daily quota';
     const planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
     
     let devSection = '';
@@ -799,7 +805,7 @@ function ensureFavicon() {
 
 function renderRedeemPanel() {
     const license = state.license || loadLicense();
-    const active = license?.tier ? `${licenseTiers[license.tier] || license.tier} active` : 'No paid plan active';
+    const active = license?.tier ? `${getLicenseDisplayName(license)} active` : 'No paid plan active';
     return `
         <div class="redeem-panel">
             <div class="license-card">
