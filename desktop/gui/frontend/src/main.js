@@ -862,14 +862,15 @@ function renderRedeemPanel() {
             </div>
             <label>
                 Redeem code
-                <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" />
+                <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${state.isActivating ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
             </label>
             <div class="redeem-actions">
-                <button class="primary" id="confirm-redeem">Confirm</button>
-                <button class="ghost" id="reset-license">Reset</button>
+                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? 'Activating...' : 'Confirm'}</button>
+                <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>Reset</button>
             </div>
-            ${state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
-            ${state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
+            ${state.isActivating ? `<div class="notice info compact">Activating... Please wait.</div>` : ''}
+            ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
+            ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
         </div>
     `;
 }
@@ -2201,6 +2202,7 @@ function saveLicense(license) {
 function confirmRedeem() {
     const input = document.querySelector('#redeem-code');
     const code = String(input?.value || '').trim().toUpperCase();
+    state.tempRedeemCode = code; // Save current input value so it's not cleared on re-render
     const result = validateRedeemCode(code);
     state.redeemMessage = '';
     state.redeemError = '';
@@ -2209,11 +2211,10 @@ function confirmRedeem() {
         render();
         return;
     }
-    const button = document.querySelector('#confirm-redeem');
-    if (button) {
-        button.disabled = true;
-        button.innerText = 'Activating...';
-    }
+    
+    state.isActivating = true;
+    render();
+
     ActivateLicense(code).then(function() {
         const redeemedAt = new Date().toISOString();
         saveLicense({
@@ -2223,16 +2224,14 @@ function confirmRedeem() {
             codeDate: result.codeDate,
         });
         state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
+        state.tempRedeemCode = ''; // Clear on success
         stopChatUsage();
-        render();
     }).catch(function(e) {
+        state.redeemMessage = '';
         state.redeemError = e || 'Activation failed. Please check network and code validity.';
-        render();
     }).finally(function() {
-        if (button) {
-            button.disabled = false;
-            button.innerText = 'Confirm';
-        }
+        state.isActivating = false;
+        render();
     });
 }
 

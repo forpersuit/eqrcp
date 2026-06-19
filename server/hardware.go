@@ -9,13 +9,20 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 )
+
+var hideWindowAttr *syscall.SysProcAttr
 
 // runCommand runs a CLI command and returns stdout trimmed.
 func runCommand(name string, args ...string) string {
 	var stdout bytes.Buffer
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = &stdout
+	if hideWindowAttr != nil {
+		cmd.SysProcAttr = hideWindowAttr
+	}
 	if err := cmd.Run(); err != nil {
 		return ""
 	}
@@ -179,19 +186,63 @@ var (
 	testBoardUUID  string
 	testCPUSerial  string
 	testDiskSerial string
+
+	fingerprintMu sync.Mutex
+	cachedUUID    string
+	cachedCPU     string
+	cachedDisk    string
+	hasCached     bool
 )
+
+// PrecomputeDeviceFingerprints concurrently fetches and caches the motherboard, CPU, and disk fingerprints in background
+func PrecomputeDeviceFingerprints() {
+	go func() {
+		fingerprintMu.Lock()
+		defer fingerprintMu.Unlock()
+		if hasCached {
+			return
+		}
+
+		uuidChan := make(chan string, 1)
+		cpuChan := make(chan string, 1)
+		diskChan := make(chan string, 1)
+
+		go func() { uuidChan <- GetBoardUUID() }()
+		go func() { cpuChan <- GetCPUSerial() }()
+		go func() { diskChan <- GetSystemDiskSerial() }()
+
+		cachedUUID = <-uuidChan
+		cachedCPU = <-cpuChan
+		cachedDisk = <-diskChan
+		hasCached = true
+	}()
+}
 
 // GetDeviceFingerprintHashes returns the current motherboard, CPU, and disk SHA-256 hashes.
 func GetDeviceFingerprintHashes() (string, string, string) {
-	uuid := GetBoardUUID()
+	fingerprintMu.Lock()
+	defer fingerprintMu.Unlock()
+
+	uuid := cachedUUID
+	cpu := cachedCPU
+	disk := cachedDisk
+
+	if !hasCached {
+		uuid = GetBoardUUID()
+		cpu = GetCPUSerial()
+		disk = GetSystemDiskSerial()
+		cachedUUID = uuid
+		cachedCPU = cpu
+		cachedDisk = disk
+		hasCached = true
+	}
+
 	if testBoardUUID != "" {
 		uuid = testBoardUUID
 	}
-	cpu := GetCPUSerial()
 	if testCPUSerial != "" {
 		cpu = testCPUSerial
 	}
-	disk := GetSystemDiskSerial()
 	if testDiskSerial != "" {
 		disk = testDiskSerial
 	}

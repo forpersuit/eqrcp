@@ -32,6 +32,7 @@ const chatSaveRetentionDays = 7
 type App struct {
 	ctx           context.Context
 	client        *http.Client
+	clientLong    *http.Client // For long-running operations like online activation
 	mu            sync.Mutex
 	closeBehavior string
 	forceQuit     bool
@@ -129,6 +130,7 @@ var desktopCommandRunner = runDesktopCommand
 func NewApp() *App {
 	return &App{
 		client:        &http.Client{Timeout: 5 * time.Second},
+		clientLong:    &http.Client{Timeout: 30 * time.Second},
 		closeBehavior: "tray",
 	}
 }
@@ -775,9 +777,27 @@ func (a *App) SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier 
 // ActivateLicense triggers online activation for a license key
 func (a *App) ActivateLicense(code string) error {
 	a.logInfo(fmt.Sprintf("[GUI] ActivateLicense called with code=%s", code))
-	return a.postJSON("/activate", map[string]interface{}{
+	in := map[string]interface{}{
 		"license_code": code,
-	}, nil)
+	}
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+"/activate", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := a.clientLong.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return newDesktopAgentHTTPError(resp)
+	}
+	return nil
 }
 
 // ResetLicense resets local activation status
