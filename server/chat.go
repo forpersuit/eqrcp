@@ -758,7 +758,19 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		return
 	}
 	usage := limiterInstance.GetStatus()
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+	var reqBody io.ReadCloser = r.Body
+	if isFreeLimitExceeded {
+		reqBody = &ThrottledReadCloser{
+			Reader: &ThrottledReader{
+				r:      r.Body,
+				limit:  100 * 1024,
+				active: true,
+			},
+			Closer: r.Body,
+		}
+	}
+	r.Body = http.MaxBytesReader(w, reqBody, maxUploadBytes)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "upload failed", http.StatusBadRequest)
 		return
@@ -787,7 +799,6 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		http.Error(w, "no file uploaded", http.StatusBadRequest)
 		return
 	}
-	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
 	var uploaded []chatMessage
 	for _, header := range files {
 		file, err := header.Open()
@@ -1724,4 +1735,10 @@ func (tr *ThrottledReader) Read(p []byte) (n int, err error) {
 		}
 	}
 	return n, err
+}
+
+// ThrottledReadCloser wraps a reader and a closer to provide a rate-limited io.ReadCloser.
+type ThrottledReadCloser struct {
+	io.Reader
+	io.Closer
 }
