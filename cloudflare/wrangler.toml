@@ -7,7 +7,7 @@ compatibility_date = "2026-06-19"
 binding = "DB"
 database_name = "eqt-drm-db"
 # Replace with your actual D1 Database ID after running `wrangler d1 create eqt-drm-db`
-database_id = "YOUR_D1_DATABASE_ID"
+database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
 [vars]
 # In production, use `wrangler secret put ED25519_PRIVATE_KEY`
