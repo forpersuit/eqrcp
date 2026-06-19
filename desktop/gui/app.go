@@ -80,6 +80,8 @@ type AgentStatus struct {
 	Version        string       `json:"version"`
 	AgentStartedAt time.Time    `json:"agentStartedAt"`
 	ClockTampered  bool         `json:"clockTampered"`
+	IsPaid         bool         `json:"isPaid"`
+	LicenseTier    string       `json:"licenseTier"`
 }
 
 type DesktopSettings struct {

@@ -740,6 +740,7 @@ function renderAboutPanel() {
     let planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
     
     let warningBox = '';
+    const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
     if (state.status?.clockTampered) {
         plan = 'PAID Locked (时钟异常)';
         planDetail = '检测到系统时钟回退锁定';
@@ -747,6 +748,15 @@ function renderAboutPanel() {
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                 <strong>⚠️ 时钟回退锁定：</strong>
                 检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在下方的 Settings 里重新激活。
+            </div>
+        `;
+    } else if (license?.tier && !isPaid) {
+        plan = `${getLicenseDisplayName(license)} Locked (已受限)`;
+        planDetail = '服务端付费判定未激活 (不一致)';
+        warningBox = `
+            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                <strong>⚠️ 授权校验未通过：</strong>
+                虽然本地有激活的 ${getLicenseDisplayName(license)}，但服务端付费判定未激活。请确保核心服务已开启并连接；若仍异常，请在下方的 Settings 里“Reset”重置授权并重新输入兑换码激活。
             </div>
         `;
     }
@@ -821,12 +831,21 @@ function renderRedeemPanel() {
     let active = license?.tier ? `${getLicenseDisplayName(license)} active` : 'No paid plan active';
     
     let warningBox = '';
+    const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
     if (state.status?.clockTampered) {
         active = 'PAID Locked (时钟异常)';
         warningBox = `
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                 <strong>⚠️ 时钟回退锁定：</strong>
                 检测到系统时钟回退，已锁定付费功能。请恢复同步系统时钟后再重新输入兑换码激活。
+            </div>
+        `;
+    } else if (license?.tier && !isPaid) {
+        active = `${getLicenseDisplayName(license)} Locked (已受限)`;
+        warningBox = `
+            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                <strong>⚠️ 授权校验未通过：</strong>
+                服务端付费判定未激活 (不一致)。请确保核心服务正常运行并已连接。若仍异常，请点击下方的 “Reset” 重置激活，并重新兑换激活码。
             </div>
         `;
     }

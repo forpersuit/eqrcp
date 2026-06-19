@@ -89,6 +89,8 @@ type desktopAgentResponse struct {
 	Version        string                   `json:"version"`
 	AgentStartedAt time.Time                `json:"agentStartedAt"`
 	ClockTampered  bool                     `json:"clockTampered"`
+	IsPaid         bool                     `json:"isPaid"`
+	LicenseTier    string                   `json:"licenseTier"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -1336,6 +1338,8 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 		Version:        version.String(),
 		AgentStartedAt: agent.startedAt,
 		ClockTampered:  server.GetClockTamperedStatus(),
+		IsPaid:         server.GetPaidStatus(),
+		LicenseTier:    server.GetLicenseTier(),
 	}
 	if agent.busy {
 		response.State = "busy"
