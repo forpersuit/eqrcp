@@ -858,6 +858,7 @@ function renderRedeemPanel() {
             <div class="license-card">
                 <strong>${escapeHTML(active)}</strong>
                 <span>${license?.redeemedAt ? `Redeemed ${escapeHTML(new Date(license.redeemedAt).toLocaleString())}` : 'Enter a valid EQT code to unlock a paid tier on this device.'}</span>
+                ${state.status?.maxDevices ? `<span style="font-size: 11px; margin-top: 4px; opacity: 0.85;">Maximum Devices Limit: ${state.status.maxDevices}</span>` : ''}
             </div>
             <label>
                 Redeem code

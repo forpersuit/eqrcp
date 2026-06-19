@@ -30,8 +30,9 @@ type LicenseCertificate struct {
 	UUIDHash    string `json:"uuid_hash"`
 	CPUHash     string `json:"cpu_hash"`
 	DiskHash    string `json:"disk_hash"`
-	ExpiresAt   string `json:"expires_at"` // ISO string or "LIFETIME"
-	Signature   string `json:"signature"`  // Ed25519 signature in hex
+	ExpiresAt   string `json:"expires_at"`  // ISO string or "LIFETIME"
+	MaxDevices  int    `json:"max_devices"` // Maximum activation count
+	Signature   string `json:"signature"`   // Ed25519 signature in hex
 }
 
 func getLicenseFilePath() string {
@@ -53,14 +54,15 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 	}
 	pubKey := ed25519.PublicKey(pubBytes)
 
-	// Format matching worker signature payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at
-	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+	// Format matching worker signature payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices
+	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
 		cert.LicenseCode,
 		cert.Tier,
 		cert.UUIDHash,
 		cert.CPUHash,
 		cert.DiskHash,
 		cert.ExpiresAt,
+		cert.MaxDevices,
 	)
 	payloadData := []byte(payloadStr)
 

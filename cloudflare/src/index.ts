@@ -129,8 +129,8 @@ export default {
         }
 
         // Generate license signature
-        // Formulate the raw payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at
-        const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${license.expires_at || "LIFETIME"}`;
+        // Formulate the raw payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices
+        const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${license.expires_at || "LIFETIME"}|${license.max_devices}`;
         const encoder = new TextEncoder();
         const payloadData = encoder.encode(payloadStr);
 
@@ -161,6 +161,7 @@ export default {
           cpu_hash: cpu_hash || "",
           disk_hash: disk_hash || "",
           expires_at: license.expires_at || "LIFETIME",
+          max_devices: license.max_devices,
           signature: signatureHex
         }), {
           status: 200,

@@ -91,6 +91,7 @@ type desktopAgentResponse struct {
 	ClockTampered  bool                     `json:"clockTampered"`
 	IsPaid         bool                     `json:"isPaid"`
 	LicenseTier    string                   `json:"licenseTier"`
+	MaxDevices     int                      `json:"maxDevices"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -1383,6 +1384,11 @@ func (agent *desktopAgent) snapshot() desktopAgentResponse {
 func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	var maxDev int
+	if cert, ok := server.GetLocalLicenseInfo(); ok {
+		maxDev = cert.MaxDevices
+	}
+
 	response := desktopAgentResponse{
 		State:          "idle",
 		Queued:         len(agent.queue),
@@ -1393,6 +1399,7 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 		ClockTampered:  server.GetClockTamperedStatus(),
 		IsPaid:         server.GetPaidStatus(),
 		LicenseTier:    server.GetLicenseTier(),
+		MaxDevices:     maxDev,
 	}
 	if agent.busy {
 		response.State = "busy"

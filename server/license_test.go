@@ -14,13 +14,14 @@ func signTestPayload(cert LicenseCertificate) string {
 	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
 	privKey := ed25519.NewKeyFromSeed(seedBytes)
 
-	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
 		cert.LicenseCode,
 		cert.Tier,
 		cert.UUIDHash,
 		cert.CPUHash,
 		cert.DiskHash,
 		cert.ExpiresAt,
+		cert.MaxDevices,
 	)
 	payloadData := []byte(payloadStr)
 	sigBytes := ed25519.Sign(privKey, payloadData)
@@ -35,6 +36,7 @@ func TestVerifyLicenseSignature(t *testing.T) {
 		CPUHash:     "cpu_hash_val",
 		DiskHash:    "disk_hash_val",
 		ExpiresAt:   "LIFETIME",
+		MaxDevices:  2,
 	}
 
 	// 1. Valid Signature Test
