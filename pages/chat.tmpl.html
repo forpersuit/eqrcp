@@ -1626,7 +1626,7 @@
                     <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
                     <div class="online-dot" id="online-dot"></div>
                     <div>
-                        <h1>EQT Chat{{if .LicenseTier}}<span class="license-badge">{{.LicenseTier}}</span>{{end}}</h1>
+                        <h1 id="chat-title-text">EQT Chat{{if .LicenseTier}}<span class="license-badge" id="chat-license-badge">{{.LicenseTier}}</span>{{end}}</h1>
                     </div>
                 </div>
                 <div class="head-actions">
@@ -4138,7 +4138,23 @@
             if (isPaid) {
                 pill.style.display = 'inline-flex';
                 pill.className = 'limit-status-pill paid';
-                pillText.textContent = '{{.LicenseTier}}';
+                
+                var currentTier = data.licenseTier || '{{.LicenseTier}}' || 'PAID';
+                pillText.textContent = currentTier;
+                
+                var titleText = document.getElementById('chat-title-text');
+                if (titleText) {
+                    var badge = document.getElementById('chat-license-badge');
+                    if (badge) {
+                        badge.textContent = currentTier;
+                    } else if (currentTier && currentTier !== 'PAID') {
+                        var newBadge = document.createElement('span');
+                        newBadge.className = 'license-badge';
+                        newBadge.id = 'chat-license-badge';
+                        newBadge.textContent = currentTier;
+                        titleText.appendChild(newBadge);
+                    }
+                }
                 
                 textEl.disabled = false;
                 fileEl.disabled = false;

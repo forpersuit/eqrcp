@@ -296,6 +296,21 @@ func (s *Server) Chat() error {
 		theme := session.chatThemeForClientLocked(token, r.URL.Query().Get("label"), r.URL.Query().Get("peer"), r.URL.Query().Get("theme"), r.URL.Query().Get("join"))
 		session.mu.Unlock()
 		usage := limiterInstance.GetStatus()
+		licenseTierDisplay := ""
+		if usage.LicenseTier != "" {
+			switch usage.LicenseTier {
+			case "PLUS":
+				if usage.CodeDate == "LIFETIME" {
+					licenseTierDisplay = "PLUS U"
+				} else {
+					licenseTierDisplay = "PLUS"
+				}
+			case "PRO":
+				licenseTierDisplay = "PRO"
+			default:
+				licenseTierDisplay = strings.ToUpper(usage.LicenseTier)
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":       "ok",
@@ -311,6 +326,7 @@ func (s *Server) Chat() error {
 			"lastActivity": lastActivity,
 			"usedSeconds":  usage.UsedSeconds,
 			"isPaid":       usage.IsPaid,
+			"licenseTier":  licenseTierDisplay,
 		}); err != nil {
 			log.Println(err)
 		}
