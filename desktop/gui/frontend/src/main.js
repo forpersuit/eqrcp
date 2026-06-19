@@ -799,9 +799,27 @@ function renderAboutPanel() {
             <div class="about-hero">
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
-                    <span>Plan</span>
+                    <span style="display: inline-flex; align-items: center; justify-content: center; gap: 4px; position: relative; left: 10px;">
+                        Plan
+                        <button class="tool-button" id="toggle-plan-info" title="查看套餐说明" aria-label="查看套餐说明" style="padding: 2px; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong);">
+                            ${aboutIcon()}
+                        </button>
+                    </span>
                     <strong>${escapeHTML(plan)}</strong>
                     <small>${escapeHTML(planDetail)}</small>
+                    ${state.showPlanInfoDetails ? `
+                        <div class="notice info compact" style="margin-top: 12px; font-size: 13px; line-height: 1.5; border-radius: var(--radius-sm); padding: 10px; text-align: left; width: 100%; box-sizing: border-box;">
+                            <strong style="display:block; margin-bottom: 6px; color: var(--accent-strong);">💡 套餐版本说明：</strong>
+                            <div style="margin-bottom: 6px;">
+                                <strong>• Plus（标准版）：</strong>
+                                支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
+                            </div>
+                            <div>
+                                <strong>• Plus 终身（买断版）：</strong>
+                                一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
             <dl>
@@ -858,7 +876,7 @@ function renderRedeemPanel() {
             <div class="license-card">
                 <strong>${escapeHTML(active)}</strong>
                 <span>${license?.redeemedAt ? `Redeemed ${escapeHTML(new Date(license.redeemedAt).toLocaleString())}` : 'Enter a valid EQT code to unlock a paid tier on this device.'}</span>
-                ${state.status?.maxDevices ? `<span style="font-size: 11px; margin-top: 4px; opacity: 0.85;">Maximum Devices Limit: ${state.status.maxDevices}</span>` : ''}
+                ${state.status?.maxDevices ? `<span style="font-size: 11px; margin-top: 4px; opacity: 0.85;">Device Limit: ${state.status.activatedDevices || 0} / ${state.status.maxDevices}</span>` : ''}
             </div>
             <label>
                 Redeem code
@@ -1118,6 +1136,11 @@ function bindPanelEvents() {
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
+    document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
+        state.showPlanInfoDetails = !state.showPlanInfoDetails;
+        syncPanelSurface();
+        bindPanelEvents();
+    });
 
     // About logo click helper for dev mode
     let clickCount = 0;
@@ -1227,6 +1250,9 @@ function openPanel(panel) {
     if (panel === 'redeem') {
         state.redeemMessage = '';
         state.redeemError = '';
+    }
+    if (panel === 'about') {
+        state.showPlanInfoDetails = false;
     }
     clearMessages();
     updateMessagesSurface();

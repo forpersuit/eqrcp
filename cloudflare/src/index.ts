@@ -158,6 +158,12 @@ export default {
         const signatureBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
         const signatureHex = bufToHex(signatureBuf);
 
+        // Calculate the actual activated devices count (including this one)
+        let activatedCount = activations.length;
+        if (!isAlreadyActivated) {
+          activatedCount += 1;
+        }
+
         // Return signed license
         return new Response(JSON.stringify({
           license_code: license_code,
@@ -167,6 +173,7 @@ export default {
           disk_hash: disk_hash || "",
           expires_at: license.expires_at || "LIFETIME",
           max_devices: license.max_devices,
+          activated_devices: activatedCount,
           signature: signatureHex
         }), {
           status: 200,

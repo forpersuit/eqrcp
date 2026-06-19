@@ -25,14 +25,15 @@ const defaultLicenseServer = "https://lic.246146.xyz"
 
 // LicenseCertificate matches the signed license JSON structure returned from the API
 type LicenseCertificate struct {
-	LicenseCode string `json:"license_code"`
-	Tier        string `json:"tier"`
-	UUIDHash    string `json:"uuid_hash"`
-	CPUHash     string `json:"cpu_hash"`
-	DiskHash    string `json:"disk_hash"`
-	ExpiresAt   string `json:"expires_at"`  // ISO string or "LIFETIME"
-	MaxDevices  int    `json:"max_devices"` // Maximum activation count
-	Signature   string `json:"signature"`   // Ed25519 signature in hex
+	LicenseCode      string `json:"license_code"`
+	Tier             string `json:"tier"`
+	UUIDHash         string `json:"uuid_hash"`
+	CPUHash          string `json:"cpu_hash"`
+	DiskHash         string `json:"disk_hash"`
+	ExpiresAt        string `json:"expires_at"`        // ISO string or "LIFETIME"
+	MaxDevices       int    `json:"max_devices"`       // Maximum activation count
+	ActivatedDevices int    `json:"activated_devices"` // Current activated devices count
+	Signature        string `json:"signature"`         // Ed25519 signature in hex
 }
 
 func getLicenseFilePath() string {

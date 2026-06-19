@@ -80,9 +80,11 @@ type AgentStatus struct {
 	LastError      string       `json:"lastError,omitempty"`
 	Version        string       `json:"version"`
 	AgentStartedAt time.Time    `json:"agentStartedAt"`
-	ClockTampered  bool         `json:"clockTampered"`
-	IsPaid         bool         `json:"isPaid"`
-	LicenseTier    string       `json:"licenseTier"`
+	ClockTampered    bool         `json:"clockTampered"`
+	IsPaid           bool         `json:"isPaid"`
+	LicenseTier      string       `json:"licenseTier"`
+	MaxDevices       int          `json:"maxDevices"`
+	ActivatedDevices int          `json:"activatedDevices"`
 }
 
 type DesktopSettings struct {

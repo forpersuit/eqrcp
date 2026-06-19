@@ -80,18 +80,19 @@ type desktopAgentTaskRecord struct {
 }
 
 type desktopAgentResponse struct {
-	State          string                   `json:"state"`
-	Current        *desktopAgentTaskRecord  `json:"current,omitempty"`
-	Chat           *desktopAgentTaskRecord  `json:"chat,omitempty"`
-	Queued         int                      `json:"queued"`
-	History        []desktopAgentTaskRecord `json:"history,omitempty"`
-	LastError      string                   `json:"lastError,omitempty"`
-	Version        string                   `json:"version"`
-	AgentStartedAt time.Time                `json:"agentStartedAt"`
-	ClockTampered  bool                     `json:"clockTampered"`
-	IsPaid         bool                     `json:"isPaid"`
-	LicenseTier    string                   `json:"licenseTier"`
-	MaxDevices     int                      `json:"maxDevices"`
+	State            string                   `json:"state"`
+	Current          *desktopAgentTaskRecord  `json:"current,omitempty"`
+	Chat             *desktopAgentTaskRecord  `json:"chat,omitempty"`
+	Queued           int                      `json:"queued"`
+	History          []desktopAgentTaskRecord `json:"history,omitempty"`
+	LastError        string                   `json:"lastError,omitempty"`
+	Version          string                   `json:"version"`
+	AgentStartedAt   time.Time                `json:"agentStartedAt"`
+	ClockTampered    bool                     `json:"clockTampered"`
+	IsPaid           bool                     `json:"isPaid"`
+	LicenseTier      string                   `json:"licenseTier"`
+	MaxDevices       int                      `json:"maxDevices"`
+	ActivatedDevices int                      `json:"activatedDevices"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -1385,21 +1386,24 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
 	var maxDev int
+	var actDev int
 	if cert, ok := server.GetLocalLicenseInfo(); ok {
 		maxDev = cert.MaxDevices
+		actDev = cert.ActivatedDevices
 	}
 
 	response := desktopAgentResponse{
-		State:          "idle",
-		Queued:         len(agent.queue),
-		History:        cloneDesktopAgentRecords(agent.history),
-		LastError:      agent.lastError,
-		Version:        version.String(),
-		AgentStartedAt: agent.startedAt,
-		ClockTampered:  server.GetClockTamperedStatus(),
-		IsPaid:         server.GetPaidStatus(),
-		LicenseTier:    server.GetLicenseTier(),
-		MaxDevices:     maxDev,
+		State:            "idle",
+		Queued:           len(agent.queue),
+		History:          cloneDesktopAgentRecords(agent.history),
+		LastError:        agent.lastError,
+		Version:          version.String(),
+		AgentStartedAt:   agent.startedAt,
+		ClockTampered:    server.GetClockTamperedStatus(),
+		IsPaid:           server.GetPaidStatus(),
+		LicenseTier:      server.GetLicenseTier(),
+		MaxDevices:       maxDev,
+		ActivatedDevices: actDev,
 	}
 	if agent.busy {
 		response.State = "busy"
