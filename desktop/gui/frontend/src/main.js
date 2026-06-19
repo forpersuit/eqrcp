@@ -2214,7 +2214,7 @@ function confirmRedeem() {
     state.isActivating = true;
     render();
 
-    ActivateLicense(code).then(function() {
+    ActivateLicense(code).then(async function() {
         const redeemedAt = new Date().toISOString();
         saveLicense({
             tier: result.tier,
@@ -2225,6 +2225,7 @@ function confirmRedeem() {
         state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
         state.tempRedeemCode = ''; // Clear on success
         stopChatUsage();
+        await loadStatusData();
     }).catch(function(e) {
         state.redeemMessage = '';
         state.redeemError = e || 'Activation failed. Please check network and code validity.';
@@ -2237,7 +2238,7 @@ function confirmRedeem() {
 function resetLicense() {
     const button = document.querySelector('#reset-license');
     if (button) button.disabled = true;
-    ResetLicense().then(function() {
+    ResetLicense().then(async function() {
         window.localStorage.removeItem(licenseStorageKey);
         state.license = null;
         state.redeemMessage = 'Activation reset on this device.';
@@ -2245,6 +2246,7 @@ function resetLicense() {
         if (state.mode === 'chat') {
             startChatUsage();
         }
+        await loadStatusData();
         render();
     }).catch(function(e) {
         state.redeemError = e || 'Failed to reset activation.';
