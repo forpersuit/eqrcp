@@ -2798,7 +2798,7 @@
         function renderAttachmentDescription(container, message) {
             if (message.sending) {
                 var pct = message.progress || 0;
-                var desc = message.type === 'text' ? '正在发送... ' + pct + '%' : fileDescription(message) + ' · ' + pct + '%';
+                var desc = message.type === 'text' ? '正在发送...' : fileDescription(message);
                 container.textContent = desc;
                 container.classList.add('uploading');
                 var sc = messageColor(message);
@@ -3459,11 +3459,11 @@
                 if (meta) {
                     var desc = '';
                     if (msg && msg.type === 'text') {
-                        desc = '正在发送... ' + pct + '%';
+                        desc = '正在发送...';
                     } else if (msg) {
-                        desc = fileDescription(msg) + ' · ' + pct + '%';
+                        desc = fileDescription(msg);
                     } else {
-                        desc = pct + '%';
+                        desc = '正在发送...';
                     }
                     meta.textContent = desc;
                     meta.classList.add('uploading');
