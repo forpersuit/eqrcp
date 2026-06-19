@@ -808,7 +808,7 @@ function renderAboutPanel() {
                     <strong>${escapeHTML(plan)}</strong>
                     <small>${escapeHTML(planDetail)}</small>
                     ${state.showPlanInfoDetails ? `
-                        <div class="notice info compact" style="margin-top: 12px; font-size: 13px; line-height: 1.5; border-radius: var(--radius-sm); padding: 10px; text-align: left; width: 100%; box-sizing: border-box;">
+                        <div class="notice info compact about-plan-desc" style="margin-top: 12px; font-size: 13px; line-height: 1.5; border-radius: var(--radius-sm); padding: 10px; text-align: left; width: 100%; box-sizing: border-box;">
                             <strong style="display:block; margin-bottom: 6px; color: var(--accent-strong);">💡 套餐版本说明：</strong>
                             <div style="margin-bottom: 6px;">
                                 <strong>• Plus（标准版）：</strong>
