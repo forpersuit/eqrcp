@@ -773,6 +773,12 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .message-footer-meta.uploading {
+            -webkit-background-clip: text !important;
+            background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            color: transparent !important;
+        }
         .message.mine .message-footer-meta {
             text-align: right;
         }
@@ -2715,7 +2721,7 @@
             return wrap;
         }
         function renderMessageFooter(message) {
-            var hasMeta = Boolean(message.url);
+            var hasMeta = Boolean(message.url) || message.sending;
             var actions = renderFooterActions(message);
             var hasActions = actions && actions.childNodes && actions.childNodes.length > 0;
             if (!hasMeta && !hasActions) {
@@ -2790,7 +2796,19 @@
             return wrap;
         }
         function renderAttachmentDescription(container, message) {
-            container.textContent = fileDescription(message);
+            if (message.sending) {
+                var pct = message.progress || 0;
+                var desc = message.type === 'text' ? '正在发送... ' + pct + '%' : fileDescription(message) + ' · ' + pct + '%';
+                container.textContent = desc;
+                container.classList.add('uploading');
+                var sc = messageColor(message);
+                var fillClr = sc ? sc.border : '#2f9e73';
+                container.style.backgroundImage = 'linear-gradient(to right, ' + fillClr + ' ' + pct + '%, var(--muted) ' + pct + '%)';
+            } else {
+                container.textContent = fileDescription(message);
+                container.classList.remove('uploading');
+                container.style.backgroundImage = '';
+            }
         }
         function captureMessageFocus() {
             var active = document.activeElement;
@@ -2818,7 +2836,7 @@
             item.focus({preventScroll: true});
         }
         function renderDownloadAction(message) {
-            if (!message || !message.url || message.type === 'text') {
+            if (!message || !message.url || message.type === 'text' || message.sending) {
                 return null;
             }
             if (inWails) {
@@ -2847,14 +2865,23 @@
         function renderAttachment(message) {
             var wrap = document.createElement('div');
             wrap.className = 'attachment-card';
-            var sourceURL = attachmentURL(message.url);
+            var sourceURL = '';
+            if (message.file) {
+                sourceURL = URL.createObjectURL(message.file);
+            } else {
+                sourceURL = attachmentURL(message.url);
+            }
             if (message.type === 'image') {
                 wrap.classList.add('media-attachment');
                 wrap.classList.add('image-attachment');
                 var open = document.createElement('button');
                 open.type = 'button';
                 open.className = 'media-frame';
-                open.addEventListener('click', function() { openImagePreview(sourceURL, message.fileName || 'image'); });
+                if (!message.sending) {
+                    open.addEventListener('click', function() { openImagePreview(sourceURL, message.fileName || 'image'); });
+                } else {
+                    open.style.cursor = 'default';
+                }
                 var image = document.createElement('img');
                 image.className = 'media-preview';
                 image.src = sourceURL;
@@ -2873,7 +2900,9 @@
                 var video = document.createElement('video');
                 video.className = 'media-preview';
                 video.src = sourceURL;
-                video.controls = true;
+                if (!message.sending) {
+                    video.controls = true;
+                }
                 video.preload = 'metadata';
                 video.addEventListener('loadedmetadata', function() {
                     applyMediaAspect(wrap, video.videoWidth, video.videoHeight);
@@ -2886,7 +2915,9 @@
                 var player = document.createElement('audio');
                 player.className = 'audio-player';
                 player.src = sourceURL;
-                player.controls = true;
+                if (!message.sending) {
+                    player.controls = true;
+                }
                 player.preload = 'metadata';
                 wrap.appendChild(renderFileCard(message));
                 wrap.appendChild(player);
@@ -2921,6 +2952,13 @@
             name.textContent = fileName;
             name.title = fileName;
             details.appendChild(name);
+            if (message.sending) {
+                var card = document.createElement('div');
+                card.className = 'file-card uploading';
+                card.appendChild(icon);
+                card.appendChild(details);
+                return card;
+            }
             if (inWails) {
                 var card = document.createElement('button');
                 card.type = 'button';
@@ -3333,6 +3371,33 @@
             if (!text) { return; }
             setFollowLatest(true);
             refocusComposer();
+
+            var tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            var tempMsg = {
+                id: tempId,
+                sender: state.sender,
+                senderId: state.clientId,
+                avatar: state.avatar,
+                theme: state.theme,
+                type: 'text',
+                text: text,
+                createdAt: new Date().toISOString(),
+                sending: true,
+                progress: 0
+            };
+
+            // Clear composer inputs immediately
+            textEl.value = '';
+            clearDraft();
+            resizeComposer();
+            updateComposerState();
+            refocusComposer();
+
+            // Append and render
+            state.messages.push(tempMsg);
+            renderMessages();
+            scrollMessagesToBottomSoon(tempId);
+
             fetch('{{.MessagesRoute}}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -3345,20 +3410,80 @@
                 if (!r.ok) { throw new Error('send failed'); }
                 return r.json();
             }).then(function(message) {
-                textEl.value = '';
-                clearDraft();
-                resizeComposer();
-                updateComposerState();
-                refocusComposer();
-                mergeMessages([message], true);
-            }).catch(function() {
-                showSystemNotice('Message send failed.');
-                setConnectionState(true, 'Message send failed.');
-                saveDraft();
-                resizeComposer();
-                updateComposerState();
-                refocusComposer();
+                replaceTempMessage(tempId, [message]);
+            }).catch(function(err) {
+                if (err && err.message === 'payment required') {
+                    removeTempMessage(tempId);
+                    return;
+                }
+                updateTextFailed(tempId, text);
             });
+        }
+        function removeTempMessage(tempId) {
+            var idx = state.messages.findIndex(function(m) { return m.id === tempId; });
+            if (idx !== -1) {
+                state.messages.splice(idx, 1);
+                renderMessages();
+                saveChatCache();
+            }
+        }
+        function replaceTempMessage(tempId, newMessages) {
+            var idx = state.messages.findIndex(function(m) { return m.id === tempId; });
+            if (idx !== -1) {
+                state.messages.splice(idx, 1);
+                var existingIds = {};
+                state.messages.forEach(function(m) { existingIds[m.id] = true; });
+                var toInsert = (newMessages || []).filter(function(msg) {
+                    return !existingIds[msg.id];
+                });
+                if (toInsert.length) {
+                    toInsert.forEach(function(msg, i) {
+                        state.messages.splice(idx + i, 0, msg);
+                    });
+                }
+                renderMessages();
+                saveChatCache();
+                if (newMessages && newMessages.length) {
+                    scrollMessagesToBottomSoon(newMessages[newMessages.length - 1].id);
+                }
+            }
+        }
+        function updateUploadProgress(tempId, pct) {
+            var msg = state.messages.find(function(m) { return m.id === tempId; });
+            if (msg) {
+                msg.progress = pct;
+            }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(tempId) + '"]');
+            if (item) {
+                var meta = item.querySelector('.message-footer-meta');
+                if (meta) {
+                    var desc = '';
+                    if (msg && msg.type === 'text') {
+                        desc = '正在发送... ' + pct + '%';
+                    } else if (msg) {
+                        desc = fileDescription(msg) + ' · ' + pct + '%';
+                    } else {
+                        desc = pct + '%';
+                    }
+                    meta.textContent = desc;
+                    meta.classList.add('uploading');
+                    var sc = msg ? messageColor(msg) : null;
+                    var fillClr = sc ? sc.border : '#2f9e73';
+                    meta.style.backgroundImage = 'linear-gradient(to right, ' + fillClr + ' ' + pct + '%, var(--muted) ' + pct + '%)';
+                }
+            }
+        }
+        function updateUploadFailed(tempId, errorMsg) {
+            removeTempMessage(tempId);
+            showSystemNotice(errorMsg);
+        }
+        function updateTextFailed(tempId, text) {
+            removeTempMessage(tempId);
+            textEl.value = text;
+            resizeComposer();
+            updateComposerState();
+            refocusComposer();
+            showSystemNotice('Message send failed.');
         }
         function recallMessage(message) {
             fetch('{{.MessagesRoute}}/' + encodeURIComponent(message.id), {
@@ -3521,18 +3646,48 @@
         }
         function uploadFileList(files) {
             if (!files || !files.length) { return; }
-            
-            // Double check 1: Client side intercept for large files when limit is exceeded
+            Array.prototype.forEach.call(files, function(file) {
+                uploadSingleFile(file);
+            });
+        }
+        function uploadSingleFile(file) {
+            // Client side intercept for large files when limit is exceeded
             var isFreeExceeded = !limitState.isPaid && (300 - limitState.usedSeconds <= 0);
             if (isFreeExceeded && !limitState.clockTampered) {
-                for (var i = 0; i < files.length; i++) {
-                    if (files[i].size > 2 * 1024 * 1024) {
-                        var errMsg = '文件 "' + files[i].name + '" 超过免费版 2MB 大小限制。';
-                        showSystemNotice(errMsg);
-                        return;
-                    }
+                if (file.size > 2 * 1024 * 1024) {
+                    var errMsg = '文件 "' + file.name + '" 超过免费版 2MB 大小限制。';
+                    showSystemNotice(errMsg);
+                    return;
                 }
             }
+            
+            var tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            var tempMsg = {
+                id: tempId,
+                sender: state.sender,
+                senderId: state.clientId,
+                avatar: state.avatar,
+                theme: state.theme,
+                type: 'file',
+                fileName: file.name,
+                size: file.size,
+                createdAt: new Date().toISOString(),
+                sending: true,
+                progress: 0,
+                file: file
+            };
+            
+            if (file.type && file.type.startsWith('image/')) {
+                tempMsg.type = 'image';
+            } else if (file.type && file.type.startsWith('video/')) {
+                tempMsg.type = 'video';
+            } else if (file.type && file.type.startsWith('audio/')) {
+                tempMsg.type = 'audio';
+            }
+            
+            state.messages.push(tempMsg);
+            renderMessages();
+            scrollMessagesToBottomSoon(tempId);
             
             var data = new FormData();
             data.append('sender', state.sender);
@@ -3540,35 +3695,45 @@
             data.append('token', state.token);
             data.append('theme', state.theme);
             data.append('join', joinToken);
-            Array.prototype.forEach.call(files, function(file) {
-                data.append('files', file, file.name || 'attachment');
+            data.append('files', file, file.name || 'attachment');
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '{{.AttachmentsRoute}}', true);
+            
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    var pct = Math.round((e.loaded / e.total) * 100);
+                    updateUploadProgress(tempId, pct);
+                }
             });
-            fetch('{{.AttachmentsRoute}}', {method: 'POST', body: data})
-                .then(function(r) {
-                    if (r.status === 402) {
-                        document.getElementById('pay-modal-backdrop').classList.add('open');
-                        throw new Error('payment required');
+            
+            xhr.onload = function() {
+                if (xhr.status === 402) {
+                    document.getElementById('pay-modal-backdrop').classList.add('open');
+                    removeTempMessage(tempId);
+                    return;
+                }
+                if (xhr.status === 413) {
+                    updateUploadFailed(tempId, '上传失败：文件体积超过免费版 2MB 大小限制。');
+                    return;
+                }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        var messages = JSON.parse(xhr.responseText);
+                        replaceTempMessage(tempId, messages);
+                    } catch(e) {
+                        updateUploadFailed(tempId, 'Attachment upload failed.');
                     }
-                    if (r.status === 413) {
-                        throw new Error('File exceeds 2MB limit in free tier.');
-                    }
-                    if (!r.ok) { throw new Error('upload failed'); }
-                    return r.json();
-                })
-                .then(function(messages) { mergeMessages(messages || [], true); })
-                .catch(function(err) {
-                    var msg = err && err.message;
-                    if (msg === 'payment required') return;
-                    if (msg === 'upload failed') {
-                        msg = 'Attachment upload failed.';
-                    } else if (msg === 'File exceeds 2MB limit in free tier.') {
-                        msg = '上传失败：文件体积超过免费版 2MB 大小限制。';
-                    } else if (!msg) {
-                        msg = 'Attachment upload failed.';
-                    }
-                    showSystemNotice(msg);
-                    setConnectionState(true, msg);
-                });
+                } else {
+                    updateUploadFailed(tempId, 'Attachment upload failed.');
+                }
+            };
+            
+            xhr.onerror = function() {
+                updateUploadFailed(tempId, 'Attachment upload failed.');
+            };
+            
+            xhr.send(data);
         }
         function formatBytes(value) {
             var units = ['B', 'KB', 'MB', 'GB', 'TB'];
