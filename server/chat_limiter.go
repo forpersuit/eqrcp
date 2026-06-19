@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -192,6 +193,7 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 	defer l.mu.Unlock()
 
 	usage := l.loadUsageLocked()
+	oldPaid := usage.IsPaid
 	usage.IsPaid = paid
 	usage.RedeemedAt = redeemedAt
 	usage.CodeDate = codeDate
@@ -203,6 +205,26 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 
 	if l.activeSession != nil {
 		l.activeSession.mu.Lock()
+		if paid && !oldPaid {
+			tierText := "PRO"
+			if tier != "" {
+				switch tier {
+				case "PLUS":
+					if codeDate == "LIFETIME" {
+						tierText = "PLUS U"
+					} else {
+						tierText = "PLUS"
+					}
+				case "PRO":
+					tierText = "PRO"
+				default:
+					tierText = strings.ToUpper(tier)
+				}
+			}
+			l.activeSession.addSystemMessageLocked("Premium activated: " + tierText + ".")
+		} else if !paid && oldPaid {
+			l.activeSession.addSystemMessageLocked("License reset. Back to free tier.")
+		}
 		l.activeSession.notifyLocked()
 		l.activeSession.mu.Unlock()
 	}

@@ -4161,6 +4161,10 @@
                 textEl.placeholder = dict.messagePlaceholder;
                 document.getElementById('pay-modal-backdrop').classList.remove('open');
             } else {
+                var badge = document.getElementById('chat-license-badge');
+                if (badge) {
+                    badge.remove();
+                }
                 pill.style.display = 'inline-flex';
                 var remaining = Math.max(0, 300 - usedSeconds);
                 var mins = Math.floor(remaining / 60);

@@ -358,11 +358,29 @@ func (s *Server) Chat() error {
 		session.mu.Lock()
 		session.notifyLocked()
 		session.mu.Unlock()
+
+		licenseTierDisplay := ""
+		if usage.LicenseTier != "" {
+			switch usage.LicenseTier {
+			case "PLUS":
+				if usage.CodeDate == "LIFETIME" {
+					licenseTierDisplay = "PLUS U"
+				} else {
+					licenseTierDisplay = "PLUS"
+				}
+			case "PRO":
+				licenseTierDisplay = "PRO"
+			default:
+				licenseTierDisplay = strings.ToUpper(usage.LicenseTier)
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":      "ok",
 			"isPaid":      usage.IsPaid,
 			"usedSeconds": usage.UsedSeconds,
+			"licenseTier": licenseTierDisplay,
 		})
 	})
 
