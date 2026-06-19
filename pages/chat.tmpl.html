@@ -4505,6 +4505,10 @@
                     payTitle.textContent = dict.clockError;
                 }
                 
+                // Refresh floating diagnostic card if active
+                if (licensePanel && licensePanel.classList.contains('open')) {
+                    updateLicensePanelUI();
+                }
                 return;
             }
             
@@ -4533,6 +4537,10 @@
                     newBadge.className = 'license-badge';
                     newBadge.id = 'chat-license-badge';
                     newBadge.textContent = displayTier;
+                    newBadge.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        toggleLicensePanel(e);
+                    });
                     titleText.appendChild(newBadge);
                 }
                 
@@ -4541,29 +4549,57 @@
                 textEl.placeholder = dict.messagePlaceholder;
                 document.getElementById('pay-modal-backdrop').classList.remove('open');
             } else {
-                pill.style.display = 'inline-flex';
-                var remaining = Math.max(0, 300 - usedSeconds);
-                var mins = Math.floor(remaining / 60);
-                var secs = remaining % 60;
-                var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
-                
-                if (remaining <= 0) {
-                    pill.className = 'limit-status-pill danger';
-                    pillText.textContent = dict.limitReached;
+                // isPaid is false
+                if (currentTier && currentTier !== 'FREE') {
+                    // Paid tier exists on server but isPaid is false -> Inconsistency state (Expired or Unsynced)
+                    pill.style.display = 'inline-flex';
+                    pill.className = 'limit-status-pill danger'; // Red pill!
+                    pillText.textContent = currentTier;
+                    
+                    var titleText = document.getElementById('chat-title-text');
+                    if (titleText) {
+                        var newBadge = document.createElement('span');
+                        newBadge.className = 'license-badge clock-error'; // Red badge!
+                        newBadge.id = 'chat-license-badge';
+                        newBadge.textContent = currentTier;
+                        newBadge.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            toggleLicensePanel(e);
+                        });
+                        titleText.appendChild(newBadge);
+                    }
                     textEl.disabled = false;
                     fileEl.disabled = false;
                     textEl.placeholder = dict.messagePlaceholder;
                 } else {
-                    textEl.disabled = false;
-                    fileEl.disabled = false;
-                    textEl.placeholder = dict.messagePlaceholder;
-                    pillText.textContent = timeStr;
-                    if (remaining <= 60) {
-                        pill.className = 'limit-status-pill warning';
+                    pill.style.display = 'inline-flex';
+                    var remaining = Math.max(0, 300 - usedSeconds);
+                    var mins = Math.floor(remaining / 60);
+                    var secs = remaining % 60;
+                    var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                    
+                    if (remaining <= 0) {
+                        pill.className = 'limit-status-pill danger';
+                        pillText.textContent = dict.limitReached;
+                        textEl.disabled = false;
+                        fileEl.disabled = false;
+                        textEl.placeholder = dict.messagePlaceholder;
                     } else {
-                        pill.className = 'limit-status-pill';
+                        textEl.disabled = false;
+                        fileEl.disabled = false;
+                        textEl.placeholder = dict.messagePlaceholder;
+                        pillText.textContent = timeStr;
+                        if (remaining <= 60) {
+                            pill.className = 'limit-status-pill warning';
+                        } else {
+                            pill.className = 'limit-status-pill';
+                        }
                     }
                 }
+            }
+
+            if (licensePanel && licensePanel.classList.contains('open')) {
+                updateLicensePanelUI();
             }
         }
 
@@ -4632,7 +4668,8 @@
                 `;
             } else {
                 if (currentTier && currentTier !== 'FREE') {
-                    statusStr = isZh ? '授权已过期' : 'Expired';
+                    // Expired or unsynced inconsistency state
+                    statusStr = isZh ? '授权未激活/已失效' : 'License Inactive/Expired';
                     statusClass = 'danger';
                     
                     detailsHtml = `
@@ -4641,8 +4678,14 @@
                             <span>${displayTier}</span>
                         </div>
                         <div class="license-info-row">
-                            <strong>${isZh ? '失效原因' : 'Reason'}:</strong>
-                            <span>${isZh ? '授权码已过期或在其他地方被重置' : 'License has expired or been reset elsewhere'}</span>
+                            <strong>${isZh ? '异常原因' : 'Violation'}:</strong>
+                            <span class="text-danger">${isZh ? '服务端付费判定未激活 (不一致)' : 'Server verification inactive'}</span>
+                        </div>
+                        <div class="license-info-row flex-column">
+                            <strong>${isZh ? '如何恢复' : 'How to Restore'}:</strong>
+                            <p class="license-solution-text">${isZh 
+                                ? '1. 请确保电脑端客户端软件已处于开启并连接状态。\n2. 若仍不一致，请在客户端中点击“重置授权”，并重新兑换激活码。' 
+                                : '1. Please make sure the desktop app is running and connected.\n2. If state persists, reset activation and redeem code again in client settings.'}</p>
                         </div>
                     `;
                 } else {
