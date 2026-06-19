@@ -82,8 +82,8 @@ export function SelectShareDirectory() {
   return window['go']['main']['App']['SelectShareDirectory']();
 }
 
-export function SetPaidStatus(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SetPaidStatus'](arg1, arg2, arg3);
+export function SetPaidStatus(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SetPaidStatus'](arg1, arg2, arg3, arg4);
 }
 
 export function SetRightClickIntegrationEnabled(arg1) {

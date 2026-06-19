@@ -460,6 +460,7 @@ func (e windowsContextEntry) install(icon string) error {
 
 func runReg(args ...string) error {
 	cmd := exec.Command("reg", args...)
+	configureDesktopAgentBackgroundCommand(cmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("reg %v failed: %w: %s", args, err, output)
@@ -472,6 +473,7 @@ func runRegAllowMissing(args ...string) error {
 		return nil
 	}
 	cmd := exec.Command("reg", args...)
+	configureDesktopAgentBackgroundCommand(cmd)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		if !regDeleteTargetExists(args...) {
 			return nil
@@ -486,7 +488,9 @@ func regDeleteTargetExists(args ...string) bool {
 	if !ok {
 		return true
 	}
-	return exec.Command("reg", queryArgs...).Run() == nil
+	cmd := exec.Command("reg", queryArgs...)
+	configureDesktopAgentBackgroundCommand(cmd)
+	return cmd.Run() == nil
 }
 
 func regDeleteQueryArgs(args ...string) ([]string, bool) {
@@ -507,7 +511,9 @@ func regDeleteQueryArgs(args ...string) ([]string, bool) {
 }
 
 func queryRegDefault(key string) (string, error) {
-	output, err := exec.Command("reg", "query", key, "/ve").CombinedOutput()
+	cmd := exec.Command("reg", "query", key, "/ve")
+	configureDesktopAgentBackgroundCommand(cmd)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
 	}
@@ -515,7 +521,9 @@ func queryRegDefault(key string) (string, error) {
 }
 
 func queryRegValue(key string, name string) (string, error) {
-	output, err := exec.Command("reg", "query", key, "/v", name).CombinedOutput()
+	cmd := exec.Command("reg", "query", key, "/v", name)
+	configureDesktopAgentBackgroundCommand(cmd)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
 	}
