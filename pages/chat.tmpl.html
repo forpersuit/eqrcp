@@ -197,6 +197,97 @@
             z-index: 10;
         }
         .device-panel.open { display: grid; }
+
+        /* ── License Panel ── */
+        .license-panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 18px 36px rgba(24, 33, 31, 0.16);
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 280px;
+            max-width: 320px;
+            padding: 16px;
+            position: absolute;
+            right: 0;
+            top: 44px;
+            z-index: 10;
+        }
+        .license-panel.open {
+            display: flex;
+        }
+        .license-panel-title {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .license-status-badge {
+            align-self: flex-start;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 8px;
+            text-transform: uppercase;
+        }
+        .license-status-badge.success {
+            background: rgba(34, 197, 94, 0.12);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .license-status-badge.warning {
+            background: rgba(234, 179, 8, 0.12);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.2);
+        }
+        .license-status-badge.danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .license-details-box {
+            display: grid;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .license-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            line-height: 1.4;
+        }
+        .license-info-row.flex-column {
+            flex-direction: column;
+            gap: 6px;
+        }
+        .license-info-row strong {
+            color: var(--muted);
+            font-weight: 600;
+        }
+        .license-info-row span {
+            color: var(--accent-strong);
+            word-break: break-all;
+            text-align: right;
+        }
+        .license-info-row span.text-success {
+            color: #22c55e;
+        }
+        .license-info-row span.text-danger {
+            color: #ef4444;
+        }
+        .license-info-row span.font-bold {
+            font-weight: 800;
+        }
+        .license-solution-text {
+            color: var(--ink);
+            font-size: 12px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            margin: 0;
+        }
         .device-panel-title {
             color: var(--muted);
             font-size: 11px;
@@ -1668,6 +1759,7 @@
                         <div class="device-panel-title">Online devices</div>
                         <div class="device-roster" id="device-roster"></div>
                     </div>
+                    <div class="license-panel" id="license-panel"></div>
                 </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
@@ -1775,6 +1867,7 @@
         var deviceCountEl = document.getElementById('device-count');
         var devicesToggle = document.getElementById('devices-toggle');
         var devicePanel = document.getElementById('device-panel');
+        var licensePanel = document.getElementById('license-panel');
         var deviceRoster = document.getElementById('device-roster');
         var shareSessionButton = document.getElementById('share-session');
         var sessionBackdrop = document.getElementById('session-backdrop');
@@ -3751,6 +3844,7 @@
         }
         function toggleDevicePanel(event) {
             if (event) { event.stopPropagation(); }
+            closeLicensePanel();
             var open = !devicePanel.classList.contains('open');
             devicePanel.classList.toggle('open', open);
             devicesToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -3940,7 +4034,11 @@
         document.getElementById('copy-url').addEventListener('click', copyURL);
         devicesToggle.addEventListener('click', toggleDevicePanel);
         devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });
-        document.addEventListener('click', closeDevicePanel);
+        licensePanel.addEventListener('click', function(e) { e.stopPropagation(); });
+        document.addEventListener('click', function() {
+            closeDevicePanel();
+            closeLicensePanel();
+        });
         shareSessionButton.addEventListener('click', openSessionPanel);
         document.getElementById('close-page').addEventListener('click', closePage);
         document.getElementById('close-session').addEventListener('click', closeSessionPanel);
@@ -4387,7 +4485,7 @@
                         newBadge.setAttribute('title', dict.clockErrorHint);
                         newBadge.addEventListener('click', function(e) {
                             e.stopPropagation();
-                            showLicenseDetailsNotice();
+                            toggleLicensePanel(e);
                         });
                         titleText.appendChild(newBadge);
                     }
@@ -4482,47 +4580,127 @@
             }
         }, 1000);
 
-        function showLicenseDetailsNotice() {
+        function updateLicensePanelUI() {
+            var panel = document.getElementById('license-panel');
+            if (!panel) return;
+
             var currentTier = limitState.licenseTier || '{{.LicenseTier}}' || '';
-            var statusStr = '';
-            var reasonStr = '';
             var displayTier = currentTier || 'FREE';
+            
+            var statusStr = '';
+            var statusClass = '';
+            var detailsHtml = '';
+            var isZh = lang === 'zh';
 
             if (limitState.clockTampered) {
-                statusStr = dict.lockedStatus;
-                reasonStr = dict.clockErrorHint;
+                statusStr = isZh ? '已锁定 (时钟异常)' : 'Locked (Clock Tampered)';
+                statusClass = 'danger';
+                
+                detailsHtml = `
+                    <div class="license-info-row">
+                        <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                        <span>${displayTier}</span>
+                    </div>
+                    <div class="license-info-row">
+                        <strong>${isZh ? '异常原因' : 'Violation'}:</strong>
+                        <span class="text-danger">${isZh ? '系统时钟被回退（早于上次运行时间）' : 'System clock rollback detected'}</span>
+                    </div>
+                    <div class="license-info-row flex-column">
+                        <strong>${isZh ? '解决方法' : 'Solution'}:</strong>
+                        <p class="license-solution-text">${isZh 
+                            ? '1. 请检查并同步您的系统时间。\n2. 重启核心进程并在电脑端软件的设置中重新激活。' 
+                            : '1. Please synchronize your system clock.\n2. Restart the app and reactivate it in desktop client settings.'}</p>
+                    </div>
+                `;
             } else if (limitState.isPaid) {
-                statusStr = dict.activeStatus;
+                statusStr = isZh ? '已激活' : 'Active';
+                statusClass = 'success';
+                
+                detailsHtml = `
+                    <div class="license-info-row">
+                        <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                        <span class="text-success font-bold">${displayTier}</span>
+                    </div>
+                    <div class="license-info-row">
+                        <strong>${isZh ? '聊天时长' : 'Chat Duration'}:</strong>
+                        <span>${isZh ? '无限制' : 'Unlimited'}</span>
+                    </div>
+                    <div class="license-info-row">
+                        <strong>${isZh ? '传输文件' : 'File Transfers'}:</strong>
+                        <span>${isZh ? '无限制' : 'Unlimited'}</span>
+                    </div>
+                `;
             } else {
                 if (currentTier && currentTier !== 'FREE') {
-                    statusStr = dict.expiredStatus;
-                    reasonStr = lang === 'zh' ? '授权已过期或失效' : 'License expired or invalidated';
+                    statusStr = isZh ? '授权已过期' : 'Expired';
+                    statusClass = 'danger';
+                    
+                    detailsHtml = `
+                        <div class="license-info-row">
+                            <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                            <span>${displayTier}</span>
+                        </div>
+                        <div class="license-info-row">
+                            <strong>${isZh ? '失效原因' : 'Reason'}:</strong>
+                            <span>${isZh ? '授权码已过期或在其他地方被重置' : 'License has expired or been reset elsewhere'}</span>
+                        </div>
+                    `;
                 } else {
                     var remaining = Math.max(0, 300 - limitState.usedSeconds);
+                    var mins = Math.floor(remaining / 60);
+                    var secs = remaining % 60;
+                    var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+
                     if (remaining <= 0) {
-                        statusStr = dict.limitStatus;
+                        statusStr = isZh ? '已超额' : 'Limit Reached';
+                        statusClass = 'danger';
                     } else {
-                        statusStr = dict.freeStatus;
+                        statusStr = isZh ? '免费额度' : 'Free Quota';
+                        statusClass = 'warning';
                     }
+
+                    detailsHtml = `
+                        <div class="license-info-row">
+                            <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                            <span>FREE</span>
+                        </div>
+                        <div class="license-info-row">
+                            <strong>${isZh ? '剩余免费时间' : 'Remaining Time'}:</strong>
+                            <span>${timeStr}</span>
+                        </div>
+                        <div class="license-info-row">
+                            <strong>${isZh ? '限制详情' : 'Limit Details'}:</strong>
+                            <span>${isZh ? '每日 5 分钟，大文件限 20MB' : '5 mins daily, 20MB file limit'}</span>
+                        </div>
+                    `;
                 }
             }
 
-            var text = dict.tierInfo + '\n' +
-                       '• ' + dict.tierLabel + ': ' + displayTier + '\n' +
-                       '• ' + dict.statusLabel + ': ' + statusStr;
-            if (reasonStr) {
-                text += '\n• ' + dict.reasonLabel + ': ' + reasonStr;
+            panel.innerHTML = `
+                <div class="license-panel-title">${isZh ? '授权与限制状态' : 'License & Limits'}</div>
+                <div class="license-status-badge ${statusClass}">${statusStr}</div>
+                <div class="license-details-box">${detailsHtml}</div>
+            `;
+        }
+
+        function toggleLicensePanel(event) {
+            if (event) { event.stopPropagation(); }
+            closeDevicePanel();
+            var open = !licensePanel.classList.contains('open');
+            licensePanel.classList.toggle('open', open);
+            if (open) {
+                updateLicensePanelUI();
             }
-            showSystemNotice(text);
+        }
+
+        function closeLicensePanel() {
+            if (licensePanel) {
+                licensePanel.classList.remove('open');
+            }
         }
 
         // 绑定事件
-        document.getElementById('limit-status-pill').addEventListener('click', function(e) {
-            showLicenseDetailsNotice();
-            if (!limitState.clockTampered && !limitState.isPaid) {
-                document.getElementById('pay-modal-backdrop').classList.add('open');
-            }
-        });
+        document.getElementById('limit-status-pill').addEventListener('click', toggleLicensePanel);
         document.getElementById('pay-modal-backdrop').addEventListener('click', function(e) {
             if (e.target === this) {
                 this.classList.remove('open');
