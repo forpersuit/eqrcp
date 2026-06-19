@@ -84,6 +84,7 @@ export namespace main {
 	    version: string;
 	    // Go type: time
 	    agentStartedAt: any;
+	    clockTampered: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentStatus(source);
@@ -99,6 +100,7 @@ export namespace main {
 	        this.lastError = source["lastError"];
 	        this.version = source["version"];
 	        this.agentStartedAt = this.convertValues(source["agentStartedAt"], null);
+	        this.clockTampered = source["clockTampered"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

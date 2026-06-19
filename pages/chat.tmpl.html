@@ -124,6 +124,13 @@
             line-height: 1.2;
             letter-spacing: 0.05em;
         }
+        .license-badge.clock-error {
+            background: rgba(220, 38, 38, 0.08) !important;
+            color: #dc2626 !important;
+            border: 1.2px solid #dc2626 !important;
+            box-sizing: border-box;
+            cursor: help;
+        }
         .online-dot {
             background: #22c55e;
             border-radius: 999px;
@@ -4139,7 +4146,8 @@
 
             var pill = document.getElementById('limit-status-pill');
             var pillText = document.getElementById('limit-status-text');
-            
+            var currentTier = data.licenseTier || '{{.LicenseTier}}' || '';
+
             // Clean up license badge in title first in case it was there
             var badge = document.getElementById('chat-license-badge');
             if (badge) {
@@ -4149,8 +4157,29 @@
             if (clockTampered) {
                 pill.style.display = 'inline-flex';
                 pill.className = 'limit-status-pill danger';
-                pillText.textContent = dict.clockError;
                 pill.setAttribute('title', dict.clockErrorHint);
+                
+                if (currentTier && currentTier !== 'PAID') {
+                    pillText.textContent = currentTier;
+                } else {
+                    pillText.textContent = dict.clockError;
+                }
+                
+                if (currentTier && currentTier !== 'PAID') {
+                    var titleText = document.getElementById('chat-title-text');
+                    if (titleText) {
+                        var newBadge = document.createElement('span');
+                        newBadge.className = 'license-badge clock-error';
+                        newBadge.id = 'chat-license-badge';
+                        newBadge.textContent = currentTier;
+                        newBadge.setAttribute('title', dict.clockErrorHint);
+                        newBadge.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            alert(dict.clockErrorHint);
+                        });
+                        titleText.appendChild(newBadge);
+                    }
+                }
                 
                 textEl.disabled = true;
                 fileEl.disabled = true;
@@ -4185,21 +4214,16 @@
                 pill.style.display = 'inline-flex';
                 pill.className = 'limit-status-pill paid';
                 
-                var currentTier = data.licenseTier || '{{.LicenseTier}}' || 'PAID';
-                pillText.textContent = currentTier;
+                var displayTier = currentTier || 'PAID';
+                pillText.textContent = displayTier;
                 
                 var titleText = document.getElementById('chat-title-text');
                 if (titleText) {
-                    var badge = document.getElementById('chat-license-badge');
-                    if (badge) {
-                        badge.textContent = currentTier;
-                    } else if (currentTier && currentTier !== 'PAID') {
-                        var newBadge = document.createElement('span');
-                        newBadge.className = 'license-badge';
-                        newBadge.id = 'chat-license-badge';
-                        newBadge.textContent = currentTier;
-                        titleText.appendChild(newBadge);
-                    }
+                    var newBadge = document.createElement('span');
+                    newBadge.className = 'license-badge';
+                    newBadge.id = 'chat-license-badge';
+                    newBadge.textContent = displayTier;
+                    titleText.appendChild(newBadge);
                 }
                 
                 textEl.disabled = false;
@@ -4248,8 +4272,13 @@
         }, 1000);
 
         // 绑定事件
-        document.getElementById('limit-status-pill').addEventListener('click', function() {
-            document.getElementById('pay-modal-backdrop').classList.add('open');
+        document.getElementById('limit-status-pill').addEventListener('click', function(e) {
+            if (limitState.clockTampered) {
+                e.stopPropagation();
+                alert(dict.clockErrorHint);
+            } else {
+                document.getElementById('pay-modal-backdrop').classList.add('open');
+            }
         });
         document.getElementById('pay-modal-backdrop').addEventListener('click', function(e) {
             if (e.target === this) {
