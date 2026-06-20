@@ -198,13 +198,18 @@ graph TD
 5. **发布 Release 资产**：
    工作流利用 `softprops/action-gh-release`，自动创建一个名为 `v1.3.0` 的 GitHub Release，并将上述编译包、`checksums.txt` 和 `update-metadata.json` 作为 Releases 附件上传。
 
-#### 2.6.2 客户端同步拉取与检测机制
-- **拉取路径**：客户端向 GitHub Releases API 请求最新一条发布元数据，或者直接下载该仓库 master 分支下文档中或最新 Release 中的 `update-metadata.json` 文件：
-  `GET https://github.com/forpersuit/eqrcp/releases/latest/download/update-metadata.json`
-- **弱网代理路由**：为了规避部分地区用户无法直接稳定访问 `github.com` 的问题，在更新链中默认内置一个由 **Cloudflare Workers 托管的反向代理路由**（例如 `https://update.eqt.dev/check`）。该 Worker 拦截请求后：
-  1. 向 GitHub Release API 读取 `update-metadata.json`。
-  2. 若有必要，Worker 会自动将 `download_url` 的域名重写为公共加速 CDN（如第三方节点镜像），确保大文件下载顺畅。
-  3. 将经过优化后的元数据返回给客户端。
+#### 2.6.2 云端 Worker 中转与边缘缓存适配 (Cloudflare Workers Proxy & Caching)
+为了规避匿名访问 GitHub Releases API 带来的 60次/小时 速率限制，同时保证国内用户在弱网环境下能稳定读取最新版本，我们已在**云端授权校验 Worker** ([cloudflare/src/index.ts](file:///home/yelon/develop/me/eqrcp/cloudflare/src/index.ts)) 中整合了版本检测的代理路由：
+- **请求地址**：客户端发起 GET 请求：
+  `GET https://license.eqt.dev/api/v1/update/check`
+- **边缘缓存机制 (Cloudflare Cache API)**：
+  为了避免客户端频繁轮询对云端 Worker 和 GitHub API 造成负载压力，Worker 内部集成了 Cloudflare 边缘缓存：
+  - 首次请求时，Worker 在后台向 GitHub Releases 发起请求；
+  - 成功获取数据后，将定制好的精简 JSON 响应，利用 `Cache-Control: public, s-maxage=3600`（缓存 1 小时）存入 Cloudflare 边缘 CDN 中；
+  - 在接下来的 1 小时内，任何客户端请求此接口都将**直接命中缓存**返回，实现毫秒级响应，且不消耗任何 GitHub API 的额度。
+- **安全身份鉴权与加速**：
+  - Worker 在向 GitHub API 发送请求时，如果配置了 `GITHUB_TOKEN`（在云端以 Secret 形式安全保存），会自动带上 `Authorization: Bearer <TOKEN>` 头部，使我们在云端拥有每小时 5000 次的安全探测额度；
+  - 在返回的 JSON 中，Worker 可以根据客户端的地理 IP 或环境，将 `"download_url"` 指向加速的 CDN 反代节点，进一步提高国内用户的下载成功率。
 
 ---
 

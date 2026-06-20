@@ -2,6 +2,8 @@ export interface Env {
   DB: D1Database;
   ED25519_PRIVATE_KEY: string; // 64-char hex string (32 bytes raw private key)
   ADMIN_SECRET?: string;       // Secret header to allow manually generating licenses
+  GITHUB_TOKEN?: string;       // Optional token to prevent GitHub Rate Limit
+  GITHUB_REPO?: string;        // Optional repository path, default 'forpersuit/eqrcp'
 }
 
 // Helper to convert hex string to Uint8Array
@@ -240,7 +242,64 @@ export default {
         });
       }
 
-      // 3. Health check or basic index
+      // 3. Update checking endpoint (caches results for 1 hour to prevent Rate Limits)
+      if (url.pathname === "/api/v1/update/check" && request.method === "GET") {
+        const cacheUrl = new URL(request.url);
+        const cacheKey = new Request(cacheUrl.toString(), request);
+        const cache = caches.default;
+        
+        let response = await cache.match(cacheKey);
+        if (response) {
+          return response;
+        }
+
+        const repo = env.GITHUB_REPO || "forpersuit/eqrcp";
+        const ghUrl = `https://api.github.com/repos/${repo}/releases/latest`;
+        
+        const headers: Record<string, string> = {
+          "User-Agent": "EQT-Update-Worker",
+          "Accept": "application/vnd.github+json",
+        };
+        
+        if (env.GITHUB_TOKEN) {
+          headers["Authorization"] = `Bearer ${env.GITHUB_TOKEN}`;
+        }
+
+        const ghRes = await fetch(ghUrl, { headers });
+        if (!ghRes.ok) {
+          return new Response(JSON.stringify({ error: `Failed to fetch latest release from GitHub: ${ghRes.statusText}` }), {
+            status: ghRes.status,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const release: any = await ghRes.json();
+        
+        const result = {
+          version: release.tag_name,
+          published_at: release.published_at,
+          changelog: release.body || "",
+          assets: (release.assets || []).map((asset: any) => ({
+            name: asset.name,
+            download_url: asset.browser_download_url,
+            size: asset.size
+          }))
+        };
+
+        response = new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Cache-Control": "public, s-maxage=3600"
+          }
+        });
+
+        ctx.waitUntil(cache.put(cacheKey, response.clone()));
+        return response;
+      }
+
+      // 4. Health check or basic index
       return new Response(JSON.stringify({ status: "EQT DRM Serverless API Running" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
