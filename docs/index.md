@@ -46,8 +46,10 @@ The default configuration file is:
 
 Environment variables use the `EQT_` prefix.
 
-## Planning
+## Planning & Docs
 
+- [Product Presentation & Merchant Compliance (支付合规页)](product-landing.md)
+- [Auto-Update Design & Settings (自动更新设计)](auto-update-design.md)
 - [Test analysis](test-analysis.md)
 - [Desktop integration plan](desktop-integration-plan.md)
 - [Chat mode development](chat-mode-development.md)

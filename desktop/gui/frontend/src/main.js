@@ -811,6 +811,9 @@ function renderAboutPanel() {
                     <strong style="color: var(--ink);">• Plus 终身（买断版）：</strong>
                     一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
                 </div>
+                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
+                    💡 <strong>激活绑定说明</strong>：激活采用“3选2”加权硬件指纹绑定模型。重装系统不更换硬件的情况下，在同一设备上重新激活<strong>不会消耗额外设备额度</strong>，可放心进行系统重装。在离线环境下，你亦可通过恢复备份的 <code>license.lic</code> 文件实现离线自动验证。
+                </div>
             </div>
         </div>
     `;
