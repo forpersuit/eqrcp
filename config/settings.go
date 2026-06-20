@@ -27,6 +27,8 @@ type DesktopSettings struct {
 	DevMode          bool                     `json:"devMode"`
 	DebugLog         bool                     `json:"debugLog"`
 	ViewportDebug    bool                     `json:"viewportDebug"`
+	AutoUpdateMode   string                   `json:"autoUpdateMode"`
+	UpdateChannel    string                   `json:"updateChannel"`
 }
 
 const (
@@ -92,6 +94,14 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("viewportDebug") {
 		viewportDebug = v.GetBool("viewportDebug")
 	}
+	autoUpdateMode := "download"
+	if v.IsSet("autoUpdateMode") {
+		autoUpdateMode = v.GetString("autoUpdateMode")
+	}
+	updateChannel := "stable"
+	if v.IsSet("updateChannel") {
+		updateChannel = v.GetString("updateChannel")
+	}
 	return DesktopSettings{
 		ConfigPath:       v.ConfigFileUsed(),
 		Interface:        selectedInterface,
@@ -107,6 +117,8 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		DevMode:          devMode,
 		DebugLog:         debugLog,
 		ViewportDebug:    viewportDebug,
+		AutoUpdateMode:   autoUpdateMode,
+		UpdateChannel:    updateChannel,
 	}, nil
 }
 
@@ -156,6 +168,8 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("devMode", settings.DevMode)
 	v.Set("debugLog", settings.DebugLog)
 	v.Set("viewportDebug", settings.ViewportDebug)
+	v.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))
+	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
@@ -170,6 +184,30 @@ func normalizeDesktopCloseBehavior(value string) string {
 		return DesktopCloseBehaviorQuit
 	default:
 		return ""
+	}
+}
+
+func normalizeAutoUpdateMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "off":
+		return "off"
+	case "notify":
+		return "notify"
+	case "silent":
+		return "silent"
+	default:
+		return "download"
+	}
+}
+
+func normalizeUpdateChannel(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "beta":
+		return "beta"
+	case "nightly":
+		return "nightly"
+	default:
+		return "stable"
 	}
 }
 

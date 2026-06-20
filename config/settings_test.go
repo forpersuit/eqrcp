@@ -22,26 +22,28 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Mode != "dev" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" {
+	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Mode != "dev" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" || settings.AutoUpdateMode != "download" || settings.UpdateChannel != "stable" {
 		t.Fatalf("settings = %#v, want config values", settings)
 	}
 
 	newOutput := t.TempDir()
 	updated := DesktopSettings{
-		Interface:     "any",
-		Port:          19001,
-		Output:        newOutput,
-		Browser:       true,
-		ChatAutoSave:  false,
-		CloseBehavior: DesktopCloseBehaviorQuit,
-		ChatSender:    " Alice ",
-		ChatAvatar:    " A ",
+		Interface:      "any",
+		Port:           19001,
+		Output:         newOutput,
+		Browser:        true,
+		ChatAutoSave:   false,
+		CloseBehavior:  DesktopCloseBehaviorQuit,
+		ChatSender:     " Alice ",
+		ChatAvatar:     " A ",
+		AutoUpdateMode: " notify ",
+		UpdateChannel:  " NIGHTLY ",
 	}
 	saved, err := WriteDesktopSettings(app, updated)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Output != newOutput || saved.Interface != "any" || saved.Mode != "dev" || saved.Port != 19001 || !saved.Browser || saved.ChatAutoSave || saved.CloseBehavior != DesktopCloseBehaviorQuit || saved.ChatSender != "Alice" || saved.ChatAvatar != "A" {
+	if saved.Output != newOutput || saved.Interface != "any" || saved.Mode != "dev" || saved.Port != 19001 || !saved.Browser || saved.ChatAutoSave || saved.CloseBehavior != DesktopCloseBehaviorQuit || saved.ChatSender != "Alice" || saved.ChatAvatar != "A" || saved.AutoUpdateMode != "notify" || saved.UpdateChannel != "nightly" {
 		t.Fatalf("saved settings = %#v, want updated values", saved)
 	}
 
@@ -59,6 +61,8 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 		"closebehavior: quit",
 		"chatsender: alice",
 		"chatavatar: a",
+		"autoupdatemode: notify",
+		"updatechannel: nightly",
 	} {
 		if !strings.Contains(strings.ToLower(string(data)), want) {
 			t.Fatalf("config = %q, want to contain %q", string(data), want)
