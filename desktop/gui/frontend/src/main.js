@@ -793,30 +793,27 @@ function renderAboutPanel() {
         `;
     }
 
-    let planPopover = '';
-    if (state.showPlanInfoDetails) {
-        planPopover = `
-            <div class="popover-backdrop" id="close-plan-popover-bg"></div>
-            <div class="plan-popover">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
-                    <strong style="color: var(--accent-strong); font-size: 14px; display: flex; align-items: center; gap: 4px;">
-                        💡 套餐版本说明
-                    </strong>
-                    <button class="tool-button" id="close-plan-popover" title="Close" aria-label="Close" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
+    let planPopover = `
+        <div class="popover-backdrop" id="close-plan-popover-bg"></div>
+        <div class="plan-popover">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
+                <strong style="color: var(--accent-strong); font-size: 14px; display: flex; align-items: center; gap: 4px;">
+                    💡 套餐版本说明
+                </strong>
+                <button class="tool-button" id="close-plan-popover" title="Close" aria-label="Close" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
+            </div>
+            <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                <div>
+                    <strong style="color: var(--ink);">• Plus（标准版）：</strong>
+                    支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
                 </div>
-                <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
-                    <div>
-                        <strong style="color: var(--ink);">• Plus（标准版）：</strong>
-                        支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
-                    </div>
-                    <div>
-                        <strong style="color: var(--ink);">• Plus 终身（买断版）：</strong>
-                        一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
-                    </div>
+                <div>
+                    <strong style="color: var(--ink);">• Plus 终身（买断版）：</strong>
+                    一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
                 </div>
             </div>
-        `;
-    }
+        </div>
+    `;
 
     return `
         <div class="about-panel">
@@ -829,8 +826,10 @@ function renderAboutPanel() {
                         <strong>${escapeHTML(plan)}</strong>
                         <small>${escapeHTML(planDetail)}</small>
                     </div>
-                    <button class="tool-button" id="toggle-plan-info" title="查看套餐说明" aria-label="查看套餐说明" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
-                        <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${aboutIcon()}</span>
+                    <button class="tool-button" id="toggle-plan-info" aria-label="查看套餐说明" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
+                        <span class="plan-info-icon-wrapper" data-tooltip="点击查看 Plus 与 Plus 终身版套餐对比">
+                            <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
+                        </span>
                     </button>
                 </div>
             </div>
@@ -1150,19 +1149,16 @@ function bindPanelEvents() {
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
     document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
-        state.showPlanInfoDetails = !state.showPlanInfoDetails;
-        syncPanelSurface();
-        bindPanelEvents();
+        document.querySelector('.plan-popover')?.classList.toggle('visible');
+        document.querySelector('.popover-backdrop')?.classList.toggle('visible');
     });
     document.querySelector('#close-plan-popover')?.addEventListener('click', () => {
-        state.showPlanInfoDetails = false;
-        syncPanelSurface();
-        bindPanelEvents();
+        document.querySelector('.plan-popover')?.classList.remove('visible');
+        document.querySelector('.popover-backdrop')?.classList.remove('visible');
     });
     document.querySelector('#close-plan-popover-bg')?.addEventListener('click', () => {
-        state.showPlanInfoDetails = false;
-        syncPanelSurface();
-        bindPanelEvents();
+        document.querySelector('.plan-popover')?.classList.remove('visible');
+        document.querySelector('.popover-backdrop')?.classList.remove('visible');
     });
 
     // About logo click helper for dev mode
@@ -2488,6 +2484,10 @@ function feedbackIcon() {
 
 function giftIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8H4v-8"></path><path d="M2 7h20v5H2z"></path><path d="M12 7v13"></path><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5c0 1.4 1 2.5 1 2.5z"></path><path d="M12 7h3.5A2.5 2.5 0 1 0 13 4.5c0 1.4-1 2.5-1 2.5z"></path></svg>';
+}
+
+function diamondIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9z"></path><path d="M11 3 8 9l4 12 4-12-3-6"></path><path d="M2 9h20"></path></svg>';
 }
 
 function computerIcon() {

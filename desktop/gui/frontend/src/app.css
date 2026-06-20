@@ -1428,7 +1428,7 @@ dd {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -46%) scale(0.96);
     width: calc(100% - 24px);
     max-width: 310px;
     background: #ffffff;
@@ -1438,9 +1438,16 @@ dd {
     padding: 16px;
     z-index: 11;
     box-sizing: border-box;
-    animation: popover-in 0.25s cubic-bezier(0.2, 0, 0, 1) forwards;
-    transform-origin: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), opacity 0.25s cubic-bezier(0.2, 0, 0, 1);
     will-change: transform, opacity;
+}
+
+.plan-popover.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
 }
 
 .popover-backdrop {
@@ -1453,23 +1460,65 @@ dd {
     backdrop-filter: blur(2px);
     z-index: 10;
     border-radius: 12px;
-    animation: fade-in 0.2s ease forwards;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
 }
 
-@keyframes popover-in {
-    from {
-        opacity: 0;
-        transform: translate(-50%, -46%) scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
+.popover-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-@keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+.plan-info-icon-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Hover Tooltip */
+.plan-info-icon-wrapper::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    padding: 6px 10px;
+    background: var(--ink, #1f2d23);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.3;
+    border-radius: 6px;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+    z-index: 100;
+}
+
+/* Tooltip arrow */
+.plan-info-icon-wrapper::after {
+    content: '';
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--ink, #1f2d23) transparent transparent transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+    z-index: 100;
+}
+
+.plan-info-icon-wrapper:hover::before,
+.plan-info-icon-wrapper:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
 
 
