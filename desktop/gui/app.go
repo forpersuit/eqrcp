@@ -161,8 +161,25 @@ func (a *App) quit() {
 	a.mu.Lock()
 	a.forceQuit = true
 	a.mu.Unlock()
+
+	// 1. 尝试发送优雅关闭指令给后台 Agent
+	_ = a.shutdownAgent()
+
+	// 2. 强杀可能残留的后台进程（如 eqt.exe 和 eqt-launcher.exe，但不杀当前 desktop 进程）
+	killLingeringProcesses()
+
 	if a.ctx != nil {
 		wailsruntime.Quit(a.ctx)
+	}
+}
+
+func killLingeringProcesses() {
+	if isWindows() {
+		// 强杀 Windows 平台的后台传输 agent 及启动器，不匹配 eqt-desktop 避免杀掉自身
+		_ = exec.Command("taskkill", "/F", "/IM", "eqt.exe", "/IM", "eqt-launcher.exe").Run()
+	} else {
+		// 强杀 Unix 平台下的后台进程
+		_ = exec.Command("killall", "-9", "eqt").Run()
 	}
 }
 

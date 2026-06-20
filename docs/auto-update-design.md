@@ -277,3 +277,55 @@ graph TD
    检查 GitHub Actions 任务运行状态，确认其能正确编译二进制、自动提取 GitHub Repository Secrets 进行加签，生成正确的 `update-metadata.json`，并将所有资产上传至 Releases。
 3. **灰度检测校验**：
    启动本地开发模式下的 EQT 客户端，在配置文件中将检测源临时修改为该 Sandbox Release 地址，点击“检查更新”，观察客户端是否能顺畅下载该临时安装包并正常拉起，确认替换机制对 Windows 进程占用、Linux 权限提升处理得当。
+
+### 5.4 基于 Fara 的用户仿真与多模式 E2E 测试方案 (E2E Simulation via Fara)
+为了以真实用户的视角对 `off` / `notify` / `download` / `silent` 各种更新模式进行闭环验证，我们可以引入 **Fara (Computer Use Agent)** 模型作为自动化测试执行器。
+
+Fara 具备高精度的 Playwright 浏览器自动化与桌面系统级控制能力（CUA），是模拟 E2E 用户交互的理想平台。
+
+#### 5.4.1 E2E 仿真测试架构设计
+```mermaid
+sequenceDiagram
+    participant F as Fara Agent (E2E Executor)
+    participant E as EQT Client (Wails & Webview)
+    participant M as Mock Release Server
+    
+    F->>E: 1. 启动 EQT 客户端并进入设置页
+    F->>E: 2. 模拟点击下拉框修改 AutoUpdateMode (如 notify)
+    F->>M: 3. 启动本地 Mock 更新服务，下发更高版本元数据
+    E->>M: 4. 后台发起版本探测
+    M-->>E: 返回新版本 (v1.3.0) + 下载地址
+    E->>E: 5. 异步下载并在消息列表追加 [立即重启] 气泡
+    F->>E: 6. 监测到气泡卡片，模拟用户点击 [立即重启]
+    E->>E: 7. 退出 Wails GUI 并调用 killLingeringProcesses 强杀后台
+    F->>F: 8. 执行系统命令校验是否有端口/进程残留
+    F->>E: 9. 自动拉起新版本，验证版本号为 v1.3.0 且授权证书完好
+```
+
+#### 5.4.2 不同模式的 Fara 仿真验证用例
+
+##### 用例 A：`off` 模式测试
+1. Fara 使用 Playwright 定位并点击 `/settings` 下的 `AutoUpdateMode`，切换为 `off`。
+2. Fara 触发 EQT 探测，监测后台日志及网络报文，确保客户端**不会**自动向服务器发起检测请求。
+3. Fara 模拟用户在界面点击“手动检查更新”按钮，验证此时能够手动触发检测并弹出最新版本提示。
+
+##### 用例 B：`notify` 模式测试（交互引导）
+1. Fara 将更新模式设置为 `notify`。
+2. 当 Mock 接口返回新版本元数据后，Fara 通过 Playwright 监测 EQT 的 Chat 界面通知流。
+3. **断言拦截**：验证客户端**没有**使用任何 Alert 阻塞弹窗，且**没有**自动在后台下载文件。
+4. Fara 监测到聊天下方追加了 `💡 系统提示：检测到新版本 v1.3.0`，定位并模拟点击 `[下载更新]` 按钮。
+5. 验证下载进度在 UI 上静默展示，下载就绪后，点击 `[立即重启]` 验证原子替换及重启逻辑。
+
+##### 用例 C：`download` 模式测试（自动下载）
+1. Fara 将更新模式设置为 `download`。
+2. 检测到新版本后，客户端自动在后台执行下载。Fara 观察并验证在此期间大文件传输或聊天通话无任何中断。
+3. 下载就绪后，Fara 监测消息流中追加的 `[立即重启]` 重启气泡，模拟用户点击以执行覆盖。
+
+##### 用例 D：`silent` 模式测试（静默替换与避让）
+1. Fara 将更新模式设置为 `silent`。
+2. Fara 在本地发起一个持续 1 分钟的大文件局域网传输任务。
+3. 模拟新版本下载完成就绪。
+4. **互斥避让验证**：Fara 验证客户端在**传输活跃期间**不会执行任何替换和退出行为。
+5. 当文件传输完毕（空闲状态），或者 Fara 模拟在托盘中右键点击 `Quit` 时：
+   - 验证客户端调用 `killLingeringProcesses` 强杀所有 `eqt.exe` 后台进程，释放文件锁定；
+   - 执行静默替换，并在下一次启动时顺利将版本迁移至最新，且保留原本的离线证书与聊天数据。
