@@ -29,6 +29,8 @@ type DesktopSettings struct {
 	ViewportDebug    bool                     `json:"viewportDebug"`
 	AutoUpdateMode   string                   `json:"autoUpdateMode"`
 	UpdateChannel    string                   `json:"updateChannel"`
+	LastUpdateCheckTime      int64            `json:"lastUpdateCheckTime"`
+	UpdateCheckIntervalHours int              `json:"updateCheckIntervalHours"`
 }
 
 const (
@@ -102,23 +104,33 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("updateChannel") {
 		updateChannel = v.GetString("updateChannel")
 	}
+	var lastUpdateCheckTime int64
+	if v.IsSet("lastUpdateCheckTime") {
+		lastUpdateCheckTime = v.GetInt64("lastUpdateCheckTime")
+	}
+	updateCheckIntervalHours := 24
+	if v.IsSet("updateCheckIntervalHours") {
+		updateCheckIntervalHours = v.GetInt("updateCheckIntervalHours")
+	}
 	return DesktopSettings{
-		ConfigPath:       v.ConfigFileUsed(),
-		Interface:        selectedInterface,
-		InterfaceOptions: options,
-		Mode:             strings.ToLower(strings.TrimSpace(v.GetString("mode"))),
-		Port:             v.GetInt("port"),
-		Output:           output,
-		Browser:          browser,
-		ChatAutoSave:     chatAutoSave,
-		CloseBehavior:    closeBehavior,
-		ChatSender:       chatSender,
-		ChatAvatar:       chatAvatar,
-		DevMode:          devMode,
-		DebugLog:         debugLog,
-		ViewportDebug:    viewportDebug,
-		AutoUpdateMode:   autoUpdateMode,
-		UpdateChannel:    updateChannel,
+		ConfigPath:               v.ConfigFileUsed(),
+		Interface:                selectedInterface,
+		InterfaceOptions:         options,
+		Mode:                     strings.ToLower(strings.TrimSpace(v.GetString("mode"))),
+		Port:                     v.GetInt("port"),
+		Output:                   output,
+		Browser:                  browser,
+		ChatAutoSave:             chatAutoSave,
+		CloseBehavior:            closeBehavior,
+		ChatSender:               chatSender,
+		ChatAvatar:               chatAvatar,
+		DevMode:                  devMode,
+		DebugLog:                 debugLog,
+		ViewportDebug:            viewportDebug,
+		AutoUpdateMode:           autoUpdateMode,
+		UpdateChannel:            updateChannel,
+		LastUpdateCheckTime:      lastUpdateCheckTime,
+		UpdateCheckIntervalHours: updateCheckIntervalHours,
 	}, nil
 }
 
@@ -170,6 +182,8 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("viewportDebug", settings.ViewportDebug)
 	v.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))
 	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
+	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
+	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
