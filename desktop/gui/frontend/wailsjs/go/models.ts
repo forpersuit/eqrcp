@@ -132,6 +132,7 @@ export namespace main {
 	export class AppInfo {
 	    product: string;
 	    name: string;
+	    version: string;
 	    description: string;
 	    agentUrl: string;
 	    os: string;
@@ -147,6 +148,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.product = source["product"];
 	        this.name = source["name"];
+	        this.version = source["version"];
 	        this.description = source["description"];
 	        this.agentUrl = source["agentUrl"];
 	        this.os = source["os"];
