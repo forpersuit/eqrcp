@@ -80,6 +80,11 @@ const state = {
     chatUsageMs: 0,
     chatUsageStartedAt: 0,
     chatQuotaNoticeShown: false,
+    updateStatusText: 'Click button to manually check.',
+    updateBtnText: 'Check now',
+    updateBtnDisabled: false,
+    updateCheckRes: null,
+    updateStage: 'idle',
     license: null,
     redeemMessage: '',
     redeemError: '',
@@ -717,9 +722,9 @@ function renderSettingsPanel() {
                 <div class="setting-row">
                     <div class="setting-copy">
                         <strong>Check for updates</strong>
-                        <span id="update-check-status">Click button to manually check.</span>
+                        <span id="update-check-status">${escapeHTML(state.updateStatusText || 'Click button to manually check.')}</span>
                     </div>
-                    <button type="button" class="secondary" id="btn-manual-update-check">Check now</button>
+                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check now')}</button>
                 </div>
             </section>
             <button class="primary full" id="save-side-settings">Save settings</button>
@@ -1500,7 +1505,8 @@ async function saveSettings() {
     });
 }
 
-async function saveSettingsData() {
+function syncSettingsFromDOM() {
+    if (!state.settings) return;
     const receiveInput = document.querySelector('#receive-dir');
     const receiveBrowser = document.querySelector('#browser-open');
     const sideBrowser = document.querySelector('#settings-browser');
@@ -1512,23 +1518,32 @@ async function saveSettingsData() {
     const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
     const updateChannel = document.querySelector('#settings-update-channel');
-    const chatSenderValue = chatSender ? chatSender.value : state.settings?.chatSender || '';
-    const chatAvatarValue = chatAvatar ? chatAvatar.value : state.settings?.chatAvatar || '';
+
+    if (receiveInput) state.settings.output = receiveInput.value;
+    if (receiveBrowser) state.settings.browser = receiveBrowser.checked;
+    if (sideBrowser) state.settings.browser = sideBrowser.checked;
+    if (chatAutoSave) state.settings.chatAutoSave = chatAutoSave.checked;
+    if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
+    if (iface) state.settings.interface = iface.value;
+    if (port) state.settings.port = Number(port.value);
+    if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
+    if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
+    if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
+    if (updateChannel) state.settings.updateChannel = updateChannel.value;
+
+    state.receiveDir = state.settings.output || '';
+    state.browserFallback = Boolean(state.settings.browser);
+    state.chatAutoSave = state.settings.chatAutoSave !== false;
+    state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
+}
+
+async function saveSettingsData() {
+    syncSettingsFromDOM();
     const settings = {
         ...(state.settings || {}),
-        output: receiveInput?.value || state.receiveDir || state.settings?.output || '',
-        browser: Boolean(receiveBrowser?.checked ?? sideBrowser?.checked ?? state.browserFallback),
-        chatAutoSave: Boolean(chatAutoSave?.checked ?? state.chatAutoSave),
-        closeBehavior: closeBehavior?.value || state.closeBehavior || 'tray',
-        interface: iface?.value || state.settings?.interface || '',
-        port: Number(port?.value ?? state.settings?.port ?? 0),
-        chatSender: cleanChatProfileName(chatSenderValue),
-        chatAvatar: cleanChatAvatar(chatAvatarValue),
         devMode: Boolean(state.settings?.devMode ?? false),
         debugLog: Boolean(state.settings?.debugLog ?? false),
         viewportDebug: Boolean(state.settings?.viewportDebug ?? false),
-        autoUpdateMode: autoUpdateMode?.value || state.settings?.autoUpdateMode || 'download',
-        updateChannel: updateChannel?.value || state.settings?.updateChannel || 'stable',
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;
@@ -1583,6 +1598,7 @@ function bindSettingsControls() {
             if (previewEl) {
                 previewEl.textContent = cleaned || (cleanChatProfileName(state.settings?.chatSender).charAt(0) || 'D').toUpperCase();
             }
+            syncSettingsFromDOM();
         });
     }
 
@@ -1594,6 +1610,23 @@ function bindSettingsControls() {
                 avatarInput.dispatchEvent(new Event('input'));
             }
         });
+    });
+
+    const inputs = [
+        '#settings-interface',
+        '#settings-port',
+        '#settings-browser',
+        '#settings-chat-autosave',
+        '#settings-close-behavior',
+        '#settings-auto-update-mode',
+        '#settings-update-channel'
+    ];
+    inputs.forEach(selector => {
+        const el = document.querySelector(selector);
+        if (el) {
+            el.addEventListener('change', syncSettingsFromDOM);
+            el.addEventListener('input', syncSettingsFromDOM);
+        }
     });
 
     document.querySelector('#btn-manual-update-check')?.addEventListener('click', runManualUpdateCheck);
@@ -2671,83 +2704,101 @@ EventsOn('eqt:tray-command', handleTrayCommand);
 window.addEventListener('beforeunload', stopChatUsage);
 
 async function runManualUpdateCheck() {
-    const btn = document.querySelector('#btn-manual-update-check');
-    const statusText = document.querySelector('#update-check-status');
-    if (!btn || !statusText) return;
+    if (state.updateStage === 'checking' || state.updateStage === 'downloading' || state.updateStage === 'installing') {
+        return;
+    }
 
-    btn.disabled = true;
-    statusText.textContent = 'Checking updates...';
+    // 同步最新的 DOM 值到内存配置中
+    syncSettingsFromDOM();
+
+    if (state.updateStage === 'idle') {
+        state.updateStage = 'checking';
+        state.updateStatusText = 'Checking updates...';
+        state.updateBtnText = 'Checking...';
+        state.updateBtnDisabled = true;
+        syncPanelSurface();
+
+        try {
+            const checkRes = await window.go.main.App.CheckForUpdates();
+            state.updateCheckRes = checkRes;
+
+            if (!checkRes || !checkRes.new_version_available) {
+                state.updateStage = 'idle';
+                state.updateStatusText = 'Already up to date.';
+                state.updateBtnText = 'Check now';
+                state.updateBtnDisabled = false;
+                syncPanelSurface();
+                return;
+            }
+
+            const mode = state.settings?.autoUpdateMode || 'download';
+            if (mode === 'off' || mode === 'notify') {
+                state.updateStage = 'available';
+                state.updateStatusText = `New version ${checkRes.version} is available.`;
+                state.updateBtnText = 'Download now';
+                state.updateBtnDisabled = false;
+                syncPanelSurface();
+            } else {
+                await triggerDownloadUpdate();
+            }
+        } catch (err) {
+            state.updateStage = 'idle';
+            state.updateStatusText = `Failed: ${err.message || err || 'unknown error'}`;
+            state.updateBtnText = 'Check now';
+            state.updateBtnDisabled = false;
+            syncPanelSurface();
+        }
+        return;
+    }
+
+    if (state.updateStage === 'available') {
+        await triggerDownloadUpdate();
+        return;
+    }
+
+    if (state.updateStage === 'ready') {
+        state.updateStage = 'installing';
+        state.updateStatusText = 'Installing update and restarting...';
+        state.updateBtnText = 'Installing...';
+        state.updateBtnDisabled = true;
+        syncPanelSurface();
+
+        try {
+            await window.go.main.App.InstallUpdate(state.updateCheckRes.asset_name);
+        } catch (err) {
+            state.updateStage = 'ready';
+            state.updateStatusText = `Install failed: ${err.message || err}`;
+            state.updateBtnText = 'Restart to update';
+            state.updateBtnDisabled = false;
+            syncPanelSurface();
+        }
+        return;
+    }
+}
+
+async function triggerDownloadUpdate() {
+    const checkRes = state.updateCheckRes;
+    if (!checkRes) return;
+
+    state.updateStage = 'downloading';
+    state.updateStatusText = `Downloading version ${checkRes.version}...`;
+    state.updateBtnText = 'Downloading...';
+    state.updateBtnDisabled = true;
+    syncPanelSurface();
 
     try {
-        const checkRes = await window.go.main.App.CheckForUpdates();
-        if (!checkRes || !checkRes.new_version_available) {
-            statusText.textContent = `Already up to date.`;
-            btn.disabled = false;
-            return;
-        }
-
-        const mode = state.settings?.autoUpdateMode || 'download';
-        if (mode === 'off' || mode === 'notify') {
-            statusText.textContent = `New version ${checkRes.version} is available.`;
-            btn.textContent = 'Download now';
-            btn.disabled = false;
-
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-            newBtn.addEventListener('click', async () => {
-                newBtn.disabled = true;
-                statusText.textContent = `Downloading version ${checkRes.version}...`;
-                try {
-                    await window.go.main.App.DownloadUpdate(checkRes);
-                    statusText.textContent = `Version ${checkRes.version} is ready.`;
-
-                    newBtn.textContent = 'Restart to update';
-                    newBtn.disabled = false;
-                    const installBtn = newBtn.cloneNode(true);
-                    newBtn.parentNode.replaceChild(installBtn, newBtn);
-                    installBtn.addEventListener('click', async () => {
-                        installBtn.disabled = true;
-                        statusText.textContent = 'Installing update and restarting...';
-                        try {
-                            await window.go.main.App.InstallUpdate(checkRes.asset_name);
-                        } catch (err) {
-                            statusText.textContent = `Install failed: ${err.message || err}`;
-                            installBtn.disabled = false;
-                        }
-                    });
-                } catch (err) {
-                    statusText.textContent = `Download failed: ${err.message || err}`;
-                    newBtn.disabled = false;
-                }
-            });
-            return;
-        }
-
-        statusText.textContent = `New version ${checkRes.version} found. Downloading...`;
-        
         await window.go.main.App.DownloadUpdate(checkRes);
-        statusText.textContent = `Version ${checkRes.version} is ready.`;
-        
-        btn.textContent = 'Restart to update';
-        btn.disabled = false;
-        
-        // Remove old listener and add install listener
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', async () => {
-            newBtn.disabled = true;
-            statusText.textContent = 'Installing update and restarting...';
-            try {
-                await window.go.main.App.InstallUpdate(checkRes.asset_name);
-            } catch (err) {
-                statusText.textContent = `Install failed: ${err.message || err}`;
-                newBtn.disabled = false;
-            }
-        });
-
+        state.updateStage = 'ready';
+        state.updateStatusText = `Version ${checkRes.version} is ready.`;
+        state.updateBtnText = 'Restart to update';
+        state.updateBtnDisabled = false;
+        syncPanelSurface();
     } catch (err) {
-        statusText.textContent = `Failed: ${err || 'unknown error'}`;
-        btn.disabled = false;
+        state.updateStage = 'available';
+        state.updateStatusText = `Download failed: ${err.message || err}`;
+        state.updateBtnText = 'Download now';
+        state.updateBtnDisabled = false;
+        syncPanelSurface();
     }
 }
 
