@@ -803,16 +803,34 @@ func (agent *desktopAgent) handleUpdateCheck(w http.ResponseWriter, r *http.Requ
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
+	
+	// Read settings to check dev mode and dynamically set server package logger
+	settings, err := config.ReadDesktopSettings(agent.settingsApp())
+	if err == nil {
+		if settings.DevMode || settings.DebugLog {
+			server.Log = agent.log
+		} else {
+			server.Log = logger.New(true)
+		}
+	}
+
+	agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
 	if r.Method != http.MethodGet {
+		agent.log.Errorf("handleUpdateCheck: method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	
+	agent.log.Infof("handleUpdateCheck: starting check with version %s", version.Version())
 	res, err := server.CheckForUpdates(true, version.Version())
 	if err != nil {
 		agent.log.Errorf("handleUpdateCheck error: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	agent.log.Infof("handleUpdateCheck success: new_version_available: %v, version: %s", res.NewVersionAvailable, res.Version)
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(res)
 }
@@ -825,7 +843,20 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
+
+	settings, err := config.ReadDesktopSettings(agent.settingsApp())
+	if err == nil {
+		if settings.DevMode || settings.DebugLog {
+			server.Log = agent.log
+		} else {
+			server.Log = logger.New(true)
+		}
+	}
+
+	agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
 	if r.Method != http.MethodPost {
+		agent.log.Errorf("handleUpdateDownload: method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -836,11 +867,14 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 		AssetName    string `json:"asset_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		agent.log.Errorf("handleUpdateDownload: failed to decode JSON: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	agent.log.Infof("handleUpdateDownload: req.AssetName: %s, req.AssetURL: %s", req.AssetName, req.AssetURL)
 	if req.AssetURL == "" || req.SignatureURL == "" || req.AssetName == "" {
+		agent.log.Errorf("handleUpdateDownload: missing parameters")
 		http.Error(w, "Missing required parameters", http.StatusBadRequest)
 		return
 	}
@@ -851,6 +885,7 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	agent.log.Infof("handleUpdateDownload success: savedPath: %s", savedPath)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -867,7 +902,20 @@ func (agent *desktopAgent) handleUpdateInstall(w http.ResponseWriter, r *http.Re
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
+
+	settings, err := config.ReadDesktopSettings(agent.settingsApp())
+	if err == nil {
+		if settings.DevMode || settings.DebugLog {
+			server.Log = agent.log
+		} else {
+			server.Log = logger.New(true)
+		}
+	}
+
+	agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+
 	if r.Method != http.MethodPost {
+		agent.log.Errorf("handleUpdateInstall: method not allowed: %s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -876,11 +924,14 @@ func (agent *desktopAgent) handleUpdateInstall(w http.ResponseWriter, r *http.Re
 		AssetName string `json:"asset_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		agent.log.Errorf("handleUpdateInstall: failed to decode JSON: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	agent.log.Infof("handleUpdateInstall: req.AssetName: %s", req.AssetName)
 	if req.AssetName == "" {
+		agent.log.Errorf("handleUpdateInstall: missing asset_name")
 		http.Error(w, "Missing asset_name", http.StatusBadRequest)
 		return
 	}
@@ -893,10 +944,12 @@ func (agent *desktopAgent) handleUpdateInstall(w http.ResponseWriter, r *http.Re
 	agent.mu.Unlock()
 
 	if hasActiveTransfer {
+		agent.log.Infof("handleUpdateInstall: reject install due to active transfer task")
 		http.Error(w, "Cannot install update during active transfer", http.StatusConflict)
 		return
 	}
 
+	agent.log.Infof("handleUpdateInstall: starting installer routine...")
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "installing"})
 
