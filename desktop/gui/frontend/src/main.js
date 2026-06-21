@@ -2002,6 +2002,9 @@ function connectAgentEvents() {
                 updateChatQRPulseButton();
                 return;
             }
+            if (state.activePanel === 'settings' || state.activePanel === 'redeem') {
+                return;
+            }
             render();
         } catch {
             refreshStatus(false);
@@ -2680,6 +2683,43 @@ async function runManualUpdateCheck() {
         if (!checkRes || !checkRes.new_version_available) {
             statusText.textContent = `Already up to date.`;
             btn.disabled = false;
+            return;
+        }
+
+        const mode = state.settings?.autoUpdateMode || 'download';
+        if (mode === 'off' || mode === 'notify') {
+            statusText.textContent = `New version ${checkRes.version} is available.`;
+            btn.textContent = 'Download now';
+            btn.disabled = false;
+
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            newBtn.addEventListener('click', async () => {
+                newBtn.disabled = true;
+                statusText.textContent = `Downloading version ${checkRes.version}...`;
+                try {
+                    await window.go.main.App.DownloadUpdate(checkRes);
+                    statusText.textContent = `Version ${checkRes.version} is ready.`;
+
+                    newBtn.textContent = 'Restart to update';
+                    newBtn.disabled = false;
+                    const installBtn = newBtn.cloneNode(true);
+                    newBtn.parentNode.replaceChild(installBtn, newBtn);
+                    installBtn.addEventListener('click', async () => {
+                        installBtn.disabled = true;
+                        statusText.textContent = 'Installing update and restarting...';
+                        try {
+                            await window.go.main.App.InstallUpdate(checkRes.asset_name);
+                        } catch (err) {
+                            statusText.textContent = `Install failed: ${err.message || err}`;
+                            installBtn.disabled = false;
+                        }
+                    });
+                } catch (err) {
+                    statusText.textContent = `Download failed: ${err.message || err}`;
+                    newBtn.disabled = false;
+                }
+            });
             return;
         }
 

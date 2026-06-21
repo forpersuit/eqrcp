@@ -55,3 +55,14 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 ```
 运行后会在同级目录下生成同名 `.sig` 文件，随后在 GitHub Release 中使用 `gh release upload <tag> <file.sig> --clobber` 将其重新覆盖即可。
 
+### 3.3 前端设置界面闪烁与重新渲染机制
+- **重绘冲突**：由于前端采用粗暴的“全量覆写 `innerHTML`”模式，当后台进程通过 SSE 推送状态更新包并执行重新渲染时，会瞬间销毁原本展开的 Select 下拉菜单或处于输入状态的 Input 元素，造成严重的闪烁和焦点丢失。
+- **解决方法**：在后台状态事件监听器中，检查如果当前激活的面板为设置（`state.activePanel === 'settings'` 或 `'redeem'`），则只更新内存状态，跳过全局大渲染，等待用户点击 `Save` 或通过局部机制进行重绘，完美解决交互冲突。
+
+### 3.4 手动 Check Now 时遵循 Auto-Update 策略
+- **下载策略分流**：手动点击更新检测按钮（`Check now`）时，系统需要智能识别当前的更新模式（`autoUpdateMode`）。
+- **流程分化**：
+  - 在 `off` 或 `notify` 模式下：发现新版本后仅做版本信息提示，不自动下载，而是将按钮更改为 `Download now`，让用户保留最终的主动下载控制权；
+  - 在 `download` 或 `silent` 模式下：发现新版后仍会自动触发后台下载，并在准备就绪后提示安装。
+
+
