@@ -1326,6 +1326,18 @@ function closePanel() {
     syncPanelSurface();
 }
 
+function syncManualUpdateCheckUI() {
+    const statusEl = document.querySelector('#update-check-status');
+    const btnEl = document.querySelector('#btn-manual-update-check');
+    if (statusEl && btnEl) {
+        statusEl.textContent = state.updateStatusText || 'Click button to manually check.';
+        btnEl.textContent = state.updateBtnText || 'Check';
+        btnEl.disabled = Boolean(state.updateBtnDisabled);
+    } else {
+        syncPanelSurface();
+    }
+}
+
 function syncPanelSurface() {
     const existing = document.querySelector('.overlay');
     
@@ -1354,9 +1366,13 @@ function syncPanelSurface() {
         // 还原滚动位置到新的 modal 上
         const newModalEl = overlay.querySelector('.modal');
         if (newModalEl && savedScrollTop > 0) {
+            newModalEl.scrollTop = savedScrollTop;
             setTimeout(() => {
                 newModalEl.scrollTop = savedScrollTop;
             }, 0);
+            setTimeout(() => {
+                newModalEl.scrollTop = savedScrollTop;
+            }, 50);
         }
     } else {
         document.querySelector('.shell')?.appendChild(overlay);
@@ -2755,7 +2771,7 @@ async function runManualUpdateCheck() {
         state.updateStatusText = 'Checking updates...';
         state.updateBtnText = 'Checking...';
         state.updateBtnDisabled = true;
-        syncPanelSurface();
+        syncManualUpdateCheckUI();
 
         try {
             const checkRes = await window.go.main.App.CheckForUpdates();
@@ -2766,7 +2782,7 @@ async function runManualUpdateCheck() {
                 state.updateStatusText = 'Already up to date.';
                 state.updateBtnText = 'Check';
                 state.updateBtnDisabled = false;
-                syncPanelSurface();
+                syncManualUpdateCheckUI();
                 return;
             }
 
@@ -2776,7 +2792,7 @@ async function runManualUpdateCheck() {
                 state.updateStatusText = `New version ${checkRes.version} is available.`;
                 state.updateBtnText = 'Download now';
                 state.updateBtnDisabled = false;
-                syncPanelSurface();
+                syncManualUpdateCheckUI();
             } else {
                 await triggerDownloadUpdate();
             }
@@ -2785,7 +2801,7 @@ async function runManualUpdateCheck() {
             state.updateStatusText = `Failed: ${cleanLocalAddressError(err)}`;
             state.updateBtnText = 'Check';
             state.updateBtnDisabled = false;
-            syncPanelSurface();
+            syncManualUpdateCheckUI();
         }
         return;
     }
@@ -2800,7 +2816,7 @@ async function runManualUpdateCheck() {
         state.updateStatusText = 'Installing update and restarting...';
         state.updateBtnText = 'Installing...';
         state.updateBtnDisabled = true;
-        syncPanelSurface();
+        syncManualUpdateCheckUI();
 
         try {
             await window.go.main.App.InstallUpdate(state.updateCheckRes.asset_name);
@@ -2809,7 +2825,7 @@ async function runManualUpdateCheck() {
             state.updateStatusText = `Install failed: ${cleanLocalAddressError(err)}`;
             state.updateBtnText = 'Restart to update';
             state.updateBtnDisabled = false;
-            syncPanelSurface();
+            syncManualUpdateCheckUI();
         }
         return;
     }
@@ -2823,7 +2839,7 @@ async function triggerDownloadUpdate() {
     state.updateStatusText = `Downloading version ${checkRes.version}...`;
     state.updateBtnText = 'Downloading...';
     state.updateBtnDisabled = true;
-    syncPanelSurface();
+    syncManualUpdateCheckUI();
 
     try {
         await window.go.main.App.DownloadUpdate(checkRes);
@@ -2831,13 +2847,13 @@ async function triggerDownloadUpdate() {
         state.updateStatusText = `Version ${checkRes.version} is ready.`;
         state.updateBtnText = 'Restart to update';
         state.updateBtnDisabled = false;
-        syncPanelSurface();
+        syncManualUpdateCheckUI();
     } catch (err) {
         state.updateStage = 'available';
         state.updateStatusText = `Download failed: ${cleanLocalAddressError(err)}`;
         state.updateBtnText = 'Download now';
         state.updateBtnDisabled = false;
-        syncPanelSurface();
+        syncManualUpdateCheckUI();
     }
 }
 
