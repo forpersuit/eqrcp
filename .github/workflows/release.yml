@@ -41,34 +41,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: out/*
 
-  release-wails-macos:
-    name: Release macOS GUI
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: desktop/gui/frontend/package-lock.json
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-      - name: Build Wails (darwin/universal)
-        working-directory: desktop/gui
-        run: wails build -clean -platform darwin/universal
-      - name: Stage artifacts
-        run: |
-          mkdir -p out
-          cd desktop/gui/build/bin
-          tar -czf "$GITHUB_WORKSPACE/out/eqt-desktop-darwin-universal.tar.gz" eqt-desktop.app
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: out/*
-
   release-wails-linux:
     name: Release Linux GUI
     runs-on: ubuntu-latest
