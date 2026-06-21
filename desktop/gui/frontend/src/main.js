@@ -1323,7 +1323,7 @@ function openPanel(panel) {
 
 function closePanel() {
     state.activePanel = '';
-    syncPanelSurface();
+    render();
 }
 
 function syncManualUpdateCheckUI() {
@@ -1948,6 +1948,9 @@ async function refreshStatus(shouldRender = true) {
     await run(async () => {
         await loadStatusData();
         if (shouldRender) {
+            if (state.activePanel) {
+                return;
+            }
             render();
         }
     }, {busy: false});
@@ -2016,6 +2019,9 @@ function applyStatusData(nextStatus) {
     const nextMode = state.mode;
 
     if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode) {
+        if (state.activePanel) {
+            return;
+        }
         render();
     }
 }
@@ -2082,7 +2088,7 @@ function connectAgentEvents() {
                 updateChatQRPulseButton();
                 return;
             }
-            if (state.activePanel === 'settings' || state.activePanel === 'redeem') {
+            if (state.activePanel) {
                 return;
             }
             render();
