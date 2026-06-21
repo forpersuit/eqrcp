@@ -845,11 +845,11 @@ function renderAboutPanel() {
             </div>
             <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
                 <div>
-                    <strong style="color: var(--ink);">• Plus（标准版）：</strong>
+                    <strong style="color: var(--ink);">• Plus（标准版） - $11.99 / 年：</strong>
                     支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
                 </div>
                 <div>
-                    <strong style="color: var(--ink);">• Plus 终身（买断版）：</strong>
+                    <strong style="color: var(--ink);">• Plus 终身（买断版） - $29.99：</strong>
                     一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
                 </div>
                 <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
