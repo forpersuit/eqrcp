@@ -81,7 +81,7 @@ const state = {
     chatUsageStartedAt: 0,
     chatQuotaNoticeShown: false,
     updateStatusText: 'Click button to manually check.',
-    updateBtnText: 'Check now',
+    updateBtnText: 'Check',
     updateBtnDisabled: false,
     updateCheckRes: null,
     updateStage: 'idle',
@@ -724,7 +724,7 @@ function renderSettingsPanel() {
                         <strong>Check for updates</strong>
                         <span id="update-check-status">${escapeHTML(state.updateStatusText || 'Click button to manually check.')}</span>
                     </div>
-                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check now')}</button>
+                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check')}</button>
                 </div>
             </section>
         </div>
@@ -1353,8 +1353,10 @@ function syncPanelSurface() {
         
         // 还原滚动位置到新的 modal 上
         const newModalEl = overlay.querySelector('.modal');
-        if (newModalEl) {
-            newModalEl.scrollTop = savedScrollTop;
+        if (newModalEl && savedScrollTop > 0) {
+            setTimeout(() => {
+                newModalEl.scrollTop = savedScrollTop;
+            }, 0);
         }
     } else {
         document.querySelector('.shell')?.appendChild(overlay);
@@ -2762,7 +2764,7 @@ async function runManualUpdateCheck() {
             if (!checkRes || !checkRes.new_version_available) {
                 state.updateStage = 'idle';
                 state.updateStatusText = 'Already up to date.';
-                state.updateBtnText = 'Check now';
+                state.updateBtnText = 'Check';
                 state.updateBtnDisabled = false;
                 syncPanelSurface();
                 return;
@@ -2781,7 +2783,7 @@ async function runManualUpdateCheck() {
         } catch (err) {
             state.updateStage = 'idle';
             state.updateStatusText = `Failed: ${cleanLocalAddressError(err)}`;
-            state.updateBtnText = 'Check now';
+            state.updateBtnText = 'Check';
             state.updateBtnDisabled = false;
             syncPanelSurface();
         }
