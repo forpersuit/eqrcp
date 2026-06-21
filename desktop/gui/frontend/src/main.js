@@ -727,7 +727,6 @@ function renderSettingsPanel() {
                     <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check now')}</button>
                 </div>
             </section>
-            <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
     `;
 }
@@ -805,36 +804,6 @@ function renderAboutPanel() {
         `;
     }
     
-    let devSection = '';
-    if (state.settings?.devMode) {
-        devSection = `
-            <div class="dev-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
-                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">Developer Options</h3>
-                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>Enable Debug Logs</span>
-                        <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
-                    </label>
-                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>Enable Viewport Debug Box</span>
-                        <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
-                    </label>
-                    <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
-                        调试日志会将 Chat Viewport 交互信息和网络日志保存。
-                        <br>日志保存在: <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log File</button>
-                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log Dir</button>
-                    </div>
-                    <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
-                        Exit Developer Mode
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
     let planPopover = `
         <div class="popover-backdrop" id="close-plan-popover-bg"></div>
         <div class="plan-popover">
@@ -887,7 +856,6 @@ function renderAboutPanel() {
                 <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqt">Project page</button>
-            ${devSection}
             ${planPopover}
         </div>
     `;
@@ -1492,6 +1460,15 @@ function showToast(message) {
     }, 3000);
 }
 
+async function handleAutoSaveSettings() {
+    try {
+        await saveSettingsData();
+    } catch (e) {
+        state.error = 'Failed to save settings: ' + (e.message || String(e));
+        render();
+    }
+}
+
 async function saveSettings() {
     await run(async () => {
         await saveSettingsData();
@@ -1581,7 +1558,6 @@ async function toggleStartupIntegration(event) {
 }
 
 function bindSettingsControls() {
-    document.querySelector('#save-side-settings')?.addEventListener('click', saveSettings);
     document.querySelector('#settings-right-click')?.addEventListener('change', toggleRightClickIntegration);
     document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
@@ -1600,6 +1576,10 @@ function bindSettingsControls() {
             }
             syncSettingsFromDOM();
         });
+        avatarInput.addEventListener('change', async () => {
+            syncSettingsFromDOM();
+            await handleAutoSaveSettings();
+        });
     }
 
     document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
@@ -1608,6 +1588,7 @@ function bindSettingsControls() {
             if (avatarInput && presetVal) {
                 avatarInput.value = presetVal;
                 avatarInput.dispatchEvent(new Event('input'));
+                handleAutoSaveSettings();
             }
         });
     });
@@ -1624,7 +1605,10 @@ function bindSettingsControls() {
     inputs.forEach(selector => {
         const el = document.querySelector(selector);
         if (el) {
-            el.addEventListener('change', syncSettingsFromDOM);
+            el.addEventListener('change', async () => {
+                syncSettingsFromDOM();
+                await handleAutoSaveSettings();
+            });
             el.addEventListener('input', syncSettingsFromDOM);
         }
     });
@@ -2681,6 +2665,14 @@ function feedbackMailto(body, category = 'Feedback') {
     return `mailto:jinxpeeter@outlook.com?subject=${subject}&body=${encodedBody}`;
 }
 
+function cleanLocalAddressError(err) {
+    const msg = String(err?.message || err || '');
+    if (msg.includes('127.0.0.1') || msg.includes('localhost')) {
+        return 'Local service connection failed.';
+    }
+    return msg;
+}
+
 function escapeHTML(value) {
     return String(value ?? '').replace(/[&<>"']/g, (char) => ({
         '&': '&amp;',
@@ -2743,7 +2735,7 @@ async function runManualUpdateCheck() {
             }
         } catch (err) {
             state.updateStage = 'idle';
-            state.updateStatusText = `Failed: ${err.message || err || 'unknown error'}`;
+            state.updateStatusText = `Failed: ${cleanLocalAddressError(err)}`;
             state.updateBtnText = 'Check now';
             state.updateBtnDisabled = false;
             syncPanelSurface();
@@ -2767,7 +2759,7 @@ async function runManualUpdateCheck() {
             await window.go.main.App.InstallUpdate(state.updateCheckRes.asset_name);
         } catch (err) {
             state.updateStage = 'ready';
-            state.updateStatusText = `Install failed: ${err.message || err}`;
+            state.updateStatusText = `Install failed: ${cleanLocalAddressError(err)}`;
             state.updateBtnText = 'Restart to update';
             state.updateBtnDisabled = false;
             syncPanelSurface();
@@ -2795,7 +2787,7 @@ async function triggerDownloadUpdate() {
         syncPanelSurface();
     } catch (err) {
         state.updateStage = 'available';
-        state.updateStatusText = `Download failed: ${err.message || err}`;
+        state.updateStatusText = `Download failed: ${cleanLocalAddressError(err)}`;
         state.updateBtnText = 'Download now';
         state.updateBtnDisabled = false;
         syncPanelSurface();
