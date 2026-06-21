@@ -880,12 +880,10 @@ function renderAboutPanel() {
             <dl>
                 <dt>Product</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
                 <dt>Version</dt><dd>${escapeHTML(info.version || 'Unknown')}</dd>
-                <dt>Agent</dt><dd>${escapeHTML(info.agentUrl || agentEventsURL.replace('/events', ''))}</dd>
                 <dt>Platform</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
                 <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
                 <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
-            <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqt">Project page</button>
             ${devSection}
             ${planPopover}
         </div>
