@@ -1330,6 +1330,16 @@ function closePanel() {
 
 function syncPanelSurface() {
     const existing = document.querySelector('.overlay');
+    
+    // 记录旧 modal 的滚动位置，防止重绘后面板回退到顶部
+    let savedScrollTop = 0;
+    if (existing) {
+        const modalEl = existing.querySelector('.modal');
+        if (modalEl) {
+            savedScrollTop = modalEl.scrollTop;
+        }
+    }
+
     if (!state.activePanel) {
         existing?.remove();
         return;
@@ -1342,6 +1352,12 @@ function syncPanelSurface() {
     }
     if (existing) {
         existing.replaceWith(overlay);
+        
+        // 还原滚动位置到新的 modal 上
+        const newModalEl = overlay.querySelector('.modal');
+        if (newModalEl) {
+            newModalEl.scrollTop = savedScrollTop;
+        }
     } else {
         document.querySelector('.shell')?.appendChild(overlay);
     }

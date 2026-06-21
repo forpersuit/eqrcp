@@ -593,6 +593,14 @@ func (a *App) SelectReceiveDirectory() (string, error) {
 }
 
 func (a *App) AppInfo() AppInfo {
+	// Dynamically resolve agent port on query to align with variable-port design
+	portFilePath := desktopAgentPortFilePath()
+	if data, err := os.ReadFile(portFilePath); err == nil {
+		if portVal := strings.TrimSpace(string(data)); portVal != "" {
+			agentBaseURL = "http://127.0.0.1:" + portVal
+		}
+	}
+
 	info := AppInfo{
 		Product:     "EQT",
 		Name:        "Easy QR Transfer",
