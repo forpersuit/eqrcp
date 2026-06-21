@@ -359,29 +359,53 @@ func (agent *desktopAgent) handleSettings(w http.ResponseWriter, r *http.Request
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
+	
+	// Read current settings to determine if dev mode is enabled
+	currentSettings, err := agent.readSettings()
+	isDev := err == nil && (currentSettings.DevMode || currentSettings.DebugLog)
+
 	switch r.Method {
 	case http.MethodGet:
-		settings, err := agent.readSettings()
-		if err != nil {
-			http.Error(w, fmt.Sprintf("desktop agent settings unavailable: %v", err), http.StatusInternalServerError)
-			return
+		agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		if isDev {
+			agent.log.Debugf("handleSettings GET: ReadSettings requested. Current config path: %s", currentSettings.ConfigPath)
+			settingsJSON, _ := json.Marshal(currentSettings)
+			agent.log.Debugf("handleSettings GET: Current settings JSON: %s", string(settingsJSON))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(settings)
+		_ = json.NewEncoder(w).Encode(currentSettings)
+
 	case http.MethodPost:
+		agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		
 		var settings config.DesktopSettings
 		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+			agent.log.Errorf("handleSettings POST: Failed to decode incoming settings: %v", err)
 			http.Error(w, fmt.Sprintf("invalid settings: %v", err), http.StatusBadRequest)
 			return
 		}
+		
+		isIncomingDev := settings.DevMode || settings.DebugLog
+		if isDev || isIncomingDev {
+			settingsJSON, _ := json.Marshal(settings)
+			agent.log.Debugf("handleSettings POST: Incoming settings payload to save: %s", string(settingsJSON))
+		}
+
 		saved, err := agent.writeSettings(settings)
 		if err != nil {
+			agent.log.Errorf("handleSettings POST: Save settings failed: %v", err)
 			http.Error(w, fmt.Sprintf("save desktop agent settings failed: %v", err), http.StatusBadRequest)
 			return
 		}
+
+		if isDev || isIncomingDev {
+			agent.log.Debugf("handleSettings POST: Settings successfully persisted on disk at: %s", saved.ConfigPath)
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(saved)
 	default:
+		agent.log.Errorf("handleSettings: method not allowed: %s", r.Method)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
@@ -406,7 +430,12 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 	chatTaskRunning := agent.chat != nil && agent.chat.State == "running"
 	agent.mu.Unlock()
 
+	if settings.DevMode || settings.DebugLog {
+		agent.log.Debugf("writeSettings: Saved settings. chatTaskRunning: %v, activeServer != nil: %v", chatTaskRunning, srv != nil)
+	}
+
 	if chatTaskRunning && srv != nil {
+		agent.log.Infof("writeSettings: Updating chat host avatar to: %s", settings.ChatAvatar)
 		srv.UpdateChatHostAvatar(settings.ChatAvatar)
 	}
 	return saved, nil
