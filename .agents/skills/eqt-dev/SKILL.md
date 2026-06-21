@@ -60,9 +60,18 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 - **解决方法**：在后台状态事件监听器中，检查如果当前激活的面板为设置（`state.activePanel === 'settings'` 或 `'redeem'`），则只更新内存状态，跳过全局大渲染，等待用户点击 `Save` 或通过局部机制进行重绘，完美解决交互冲突。
 
 ### 3.4 手动 Check Now 时遵循 Auto-Update 策略
-- **下载策略分流**：手动点击更新检测按钮（`Check now`）时，系统需要智能识别当前的更新模式（`autoUpdateMode`）。
-- **流程分化**：
-  - 在 `off` 或 `notify` 模式下：发现新版本后仅做版本信息提示，不自动下载，而是将按钮更改为 `Download now`，让用户保留最终的主动下载控制权；
-  - 在 `download` 或 `silent` 模式下：发现新版后仍会自动触发后台下载，并在准备就绪后提示安装。
+- **手动/自动控制**：手动点击更新检测按钮（`Check now`）时，系统会根据当前的 `autoUpdateMode`（`off`/`notify` 仅提示，`download`/`silent` 自动触发下载）智能分流，确保在开发和生产环境下更新策略一致。
 
+---
 
+## 4. 大文件传输与断点续传技术规格说明 (Large File Transfer & Resumable Transfer Limitations)
+
+### 4.1 服务端断点续传支持
+- **基础实现**：后端的 `server.go` 与 `chat.go` 在提供文件下载（`/send/` 路由）和聊天附件下载（`/attachments/` 路由）时，均调用了 Go 标准库的 `http.ServeFile`。
+- **Range 响应**：Go 标准库 `ServeFile` 会针对客户端发送的 HTTP `Range` 请求头自动返回 `206 Partial Content` 以及 `Accept-Ranges: bytes`。这在服务端底层完美支持了文件的断点下载。
+
+### 4.2 业务链路中的暂不支持项 (目前限制)
+虽然服务端底层具备 Range 处理能力，但在 EQT 目前的局域网 Chat 业务闭环中，大文件传输在以下环节**并不支持断点续传**：
+1. **大文件发送 (上传方向)**：Chat 模式下的文件发送为标准的单 HTTP `Multipart Form` 一次性上传。服务端由 `handleAttachmentUpload` 接收并通过 `r.ParseMultipartForm` 解析。一旦网络在上传中途瞬断，整个上传失败，用户需要重新从头发送整个文件。
+2. **大文件接收 (Wails 客户端下载)**：Wails 客户端在下载附件时（由 `downloadChatAttachmentTo` 执行），采用了标准的 HTTP GET 请求，并通过 `io.Copy(out, resp.Body)` 将流一次性拉取并写入。若下载中途断开，不具备 Range 断点重新下载继续合并的逻辑，会导致任务报错并从头开始。
+3. **大文件接收 (H5 网页端下载)**：采用的是标准 `<a download>` 的原生浏览器下载方式，在复杂的局域网 IP 重置、Wi-Fi 波动环境中很容易中断且难以自动恢复，需要额外的分片暂存机制方能稳定实现。
