@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"eqt/version"
 	"fmt"
 	"io"
 	"net/http"
@@ -112,6 +113,7 @@ type InterfaceOption struct {
 type AppInfo struct {
 	Product     string `json:"product"`
 	Name        string `json:"name"`
+	Version     string `json:"version"`
 	Description string `json:"description"`
 	AgentURL    string `json:"agentUrl"`
 	OS          string `json:"os"`
@@ -594,6 +596,7 @@ func (a *App) AppInfo() AppInfo {
 	info := AppInfo{
 		Product:     "EQT",
 		Name:        "Easy QR Transfer",
+		Version:     version.Version(),
 		Description: "Local QR-code file transfer for desktop and mobile devices.",
 		AgentURL:    agentBaseURL,
 		OS:          runtime.GOOS,
