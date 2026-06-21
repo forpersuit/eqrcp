@@ -13,8 +13,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - Only use standard dialog elements (like error click/touch callbacks on badge status) when explicitly designed for user-interactive diagnostic lookups.
 
 ## Handling Volatile UI State During Full Rerender
-- **Issue**: Full DOM overwriting (using `innerHTML` replacements) causes temporary form changes and button loading states to be destroyed.
+- **Issue**: Full DOM overwriting (using `innerHTML` replacements) causes temporary form changes, button loading states, scroll positions, and focus states to be destroyed.
 - **Rule**:
   - Keep volatile state (such as update checking/downloading stages, warning messages, buttons content, etc.) synchronized in the global `state` store rather than keeping them purely inside the DOM.
   - Dynamically read from the global `state` when constructing panels (e.g. `renderSettingsPanel()`).
   - Wire change/input event listeners on settings controls to eagerly write back latest DOM values to memory (e.g. via `syncSettingsFromDOM()`). This prevents user configuration changes from being wiped out by a sudden global page redraw before clicking "Save".
+  - **In-place Node Updates**: For high-frequency or local state changes (e.g. update check statuses, buttons), prefer updating target DOM elements directly in-place (e.g. via `textContent` or `disabled` status) instead of calling a full re-render or overlay recreation (`syncPanelSurface`). This avoids layout-timing scroll jumps (which clamp `scrollTop` to 0 because of unfinished layout passes when DOM is replaced) and preserves focus.
+  - **Fallback Scroll Restoration**: When replacing the overlay/modal is unavoidable, restore `scrollTop` immediately and also in subsequent ticks (e.g. `setTimeout(..., 0)` and `setTimeout(..., 50)`) to ensure the browser has completed its layout calculation and will not clamp `scrollTop` back to 0.
