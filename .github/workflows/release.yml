@@ -51,6 +51,10 @@ jobs:
         run: |
           mkdir -p out
           cp desktop/gui/build/bin/eqt-desktop.exe out/eqt-desktop-windows-amd64.exe
+      - name: Generate Update Signature
+        shell: bash
+        run: |
+          go run scripts/generate-update-sig/main.go out/eqt-desktop-windows-amd64.exe
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
