@@ -4,7 +4,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 
-import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop} from '../wailsjs/runtime/runtime';
+import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
@@ -237,6 +237,7 @@ function isTrustedChatURL(rawURL, origin) {
 
 function render() {
     console.log('[Antigravity Debug] render() called, activePanel:', state.activePanel, 'stack:', new Error().stack);
+    LogInfo('[Antigravity Debug] render() called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     ensureFavicon();
     app.innerHTML = `
         <main class="shell">
@@ -1331,18 +1332,21 @@ function syncManualUpdateCheckUI() {
     const statusEl = document.querySelector('#update-check-status');
     const btnEl = document.querySelector('#btn-manual-update-check');
     console.log('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl:', statusEl, 'btnEl:', btnEl, 'updateStatusText:', state.updateStatusText, 'updateBtnText:', state.updateBtnText);
+    LogInfo('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl: ' + (statusEl ? 'found' : 'null') + ', btnEl: ' + (btnEl ? 'found' : 'null') + ', updateStatusText: ' + state.updateStatusText + ', updateBtnText: ' + state.updateBtnText);
     if (statusEl && btnEl) {
         statusEl.textContent = state.updateStatusText || 'Click button to manually check.';
         btnEl.textContent = state.updateBtnText || 'Check';
         btnEl.disabled = Boolean(state.updateBtnDisabled);
     } else {
         console.log('[Antigravity Debug] syncManualUpdateCheckUI fallback to syncPanelSurface');
+        LogInfo('[Antigravity Debug] syncManualUpdateCheckUI fallback to syncPanelSurface');
         syncPanelSurface();
     }
 }
 
 function syncPanelSurface() {
     console.log('[Antigravity Debug] syncPanelSurface called, activePanel:', state.activePanel, 'stack:', new Error().stack);
+    LogInfo('[Antigravity Debug] syncPanelSurface called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     const existing = document.querySelector('.overlay');
     
     // 记录旧 modal 的滚动位置，防止重绘后面板回退到顶部
