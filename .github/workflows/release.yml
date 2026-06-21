@@ -9,28 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  release-cli:
-    name: Release CLI (goreleaser)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   release-wails-windows:
     name: Release Windows GUI
     runs-on: windows-latest
-    needs: release-cli
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -63,7 +44,6 @@ jobs:
   release-wails-macos:
     name: Release macOS GUI
     runs-on: macos-latest
-    needs: release-cli
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -92,7 +72,6 @@ jobs:
   release-wails-linux:
     name: Release Linux GUI
     runs-on: ubuntu-latest
-    needs: release-cli
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
