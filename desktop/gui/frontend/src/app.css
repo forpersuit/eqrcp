@@ -1275,6 +1275,15 @@ dd {
     align-items: center;
     display: flex;
     justify-content: space-between;
+    position: sticky;
+    top: -20px;
+    background: var(--panel);
+    z-index: 10;
+    margin-top: -20px;
+    margin-left: -20px;
+    margin-right: -20px;
+    padding: 20px 20px 10px 20px;
+    border-bottom: 1px solid var(--line);
     margin-bottom: 18px;
 }
 
