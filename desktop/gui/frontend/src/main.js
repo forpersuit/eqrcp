@@ -804,6 +804,36 @@ function renderAboutPanel() {
         `;
     }
     
+    let devSection = '';
+    if (state.settings?.devMode) {
+        devSection = `
+            <div class="dev-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
+                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">Developer Options</h3>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                        <span>Enable Debug Logs</span>
+                        <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
+                    </label>
+                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                        <span>Enable Viewport Debug Box</span>
+                        <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
+                    </label>
+                    <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
+                        调试日志会将 Chat Viewport 交互信息和网络日志保存。
+                        <br>日志保存在: <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log File</button>
+                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log Dir</button>
+                    </div>
+                    <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
+                        Exit Developer Mode
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
     let planPopover = `
         <div class="popover-backdrop" id="close-plan-popover-bg"></div>
         <div class="plan-popover">
@@ -856,6 +886,7 @@ function renderAboutPanel() {
                 <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             <button class="ghost open-docs" data-open-external="https://github.com/forpersuit/eqt">Project page</button>
+            ${devSection}
             ${planPopover}
         </div>
     `;
