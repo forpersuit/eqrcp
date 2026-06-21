@@ -161,6 +161,9 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/set-paid-status", agent.handleSetPaidStatus)
 	mux.HandleFunc("/activate", agent.handleActivate)
 	mux.HandleFunc("/reset-license", agent.handleResetLicense)
+	mux.HandleFunc("/update/check", agent.handleUpdateCheck)
+	mux.HandleFunc("/update/download", agent.handleUpdateDownload)
+	mux.HandleFunc("/update/install", agent.handleUpdateInstall)
 	return mux
 }
 
@@ -790,6 +793,120 @@ func (agent *desktopAgent) handleResetLicense(w http.ResponseWriter, r *http.Req
 	server.ResetLicense()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+}
+
+func (agent *desktopAgent) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if handleDesktopAgentCORS(w, r, http.MethodGet) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	res, err := server.CheckForUpdates(true, version.Version())
+	if err != nil {
+		agent.log.Errorf("handleUpdateCheck error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.Request) {
+	if handleDesktopAgentCORS(w, r, http.MethodPost) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	var req struct {
+		AssetURL     string `json:"asset_url"`
+		SignatureURL string `json:"signature_url"`
+		AssetName    string `json:"asset_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.AssetURL == "" || req.SignatureURL == "" || req.AssetName == "" {
+		http.Error(w, "Missing required parameters", http.StatusBadRequest)
+		return
+	}
+
+	savedPath, err := server.DownloadUpdate(req.AssetURL, req.SignatureURL, req.AssetName)
+	if err != nil {
+		agent.log.Errorf("handleUpdateDownload error: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"saved_path": savedPath,
+		"status":     "ready",
+	})
+}
+
+func (agent *desktopAgent) handleUpdateInstall(w http.ResponseWriter, r *http.Request) {
+	if handleDesktopAgentCORS(w, r, http.MethodPost) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		AssetName string `json:"asset_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.AssetName == "" {
+		http.Error(w, "Missing asset_name", http.StatusBadRequest)
+		return
+	}
+
+	agent.mu.Lock()
+	hasActiveTransfer := false
+	if agent.current != nil && agent.current.State != "completed" && agent.current.State != "failed" && agent.current.State != "" {
+		hasActiveTransfer = true
+	}
+	agent.mu.Unlock()
+
+	if hasActiveTransfer {
+		http.Error(w, "Cannot install update during active transfer", http.StatusConflict)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "installing"})
+
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		err := server.InstallAndRestart(req.AssetName)
+		if err != nil {
+			agent.log.Errorf("handleUpdateInstall failed to install: %v", err)
+		}
+	}()
 }
 
 func (agent *desktopAgent) handleShutdown(w http.ResponseWriter, r *http.Request) {

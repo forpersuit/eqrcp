@@ -606,6 +606,63 @@ func (a *App) AppInfo() AppInfo {
 	return info
 }
 
+type GUIUpdateCheckResult struct {
+	NewVersionAvailable bool   `json:"new_version_available"`
+	Version             string `json:"version"`
+	Changelog           string `json:"changelog"`
+	AssetURL            string `json:"asset_url"`
+	AssetName           string `json:"asset_name"`
+	AssetSize           int64  `json:"asset_size"`
+	SignatureURL        string `json:"signature_url"`
+}
+
+func (a *App) CheckForUpdates() (GUIUpdateCheckResult, error) {
+	if err := a.ensureAgent(); err != nil {
+		return GUIUpdateCheckResult{}, err
+	}
+	var res GUIUpdateCheckResult
+	if err := a.getJSON("/update/check", &res); err != nil {
+		return GUIUpdateCheckResult{}, err
+	}
+	return res, nil
+}
+
+func (a *App) DownloadUpdate(result GUIUpdateCheckResult) (string, error) {
+	if err := a.ensureAgent(); err != nil {
+		return "", err
+	}
+	req := map[string]string{
+		"asset_url":     result.AssetURL,
+		"signature_url": result.SignatureURL,
+		"asset_name":    result.AssetName,
+	}
+	var resp struct {
+		SavedPath string `json:"saved_path"`
+		Status    string `json:"status"`
+	}
+	if err := a.postJSON("/update/download", req, &resp); err != nil {
+		return "", err
+	}
+	return resp.SavedPath, nil
+}
+
+func (a *App) InstallUpdate(assetName string) error {
+	if err := a.ensureAgent(); err != nil {
+		return err
+	}
+	req := map[string]string{
+		"asset_name": assetName,
+	}
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := a.postJSON("/update/install", req, &resp); err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func (a *App) postTask(task AgentTask) (AgentStatus, error) {
 	if err := a.ensureAgent(); err != nil {
 		return AgentStatus{}, err

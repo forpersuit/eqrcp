@@ -685,6 +685,43 @@ function renderSettingsPanel() {
                     </select>
                 </div>
             </section>
+
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>Software Updates</h3>
+                    <span>Manage app update checking.</span>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Auto-update mode</strong>
+                        <span>Control update checks and download behavior.</span>
+                    </div>
+                    <select id="settings-auto-update-mode">
+                        <option value="off" ${state.settings?.autoUpdateMode === 'off' ? 'selected' : ''}>Off</option>
+                        <option value="notify" ${state.settings?.autoUpdateMode === 'notify' ? 'selected' : ''}>Notify</option>
+                        <option value="download" ${state.settings?.autoUpdateMode === 'download' ? 'selected' : ''}>Download (Default)</option>
+                        <option value="silent" ${state.settings?.autoUpdateMode === 'silent' ? 'selected' : ''}>Silent</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Update channel</strong>
+                        <span>Choose stable or pre-release update streams.</span>
+                    </div>
+                    <select id="settings-update-channel">
+                        <option value="stable" ${state.settings?.updateChannel === 'stable' ? 'selected' : ''}>Stable</option>
+                        <option value="beta" ${state.settings?.updateChannel === 'beta' ? 'selected' : ''}>Beta</option>
+                        <option value="nightly" ${state.settings?.updateChannel === 'nightly' ? 'selected' : ''}>Nightly</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>Check for updates</strong>
+                        <span id="update-check-status">Click button to manually check.</span>
+                    </div>
+                    <button type="button" class="secondary" id="btn-manual-update-check">Check now</button>
+                </div>
+            </section>
             <button class="primary full" id="save-side-settings">Save settings</button>
         </div>
     `;
@@ -1472,6 +1509,8 @@ async function saveSettingsData() {
     const port = document.querySelector('#settings-port');
     const chatSender = document.querySelector('#settings-chat-sender');
     const chatAvatar = document.querySelector('#settings-chat-avatar');
+    const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
+    const updateChannel = document.querySelector('#settings-update-channel');
     const chatSenderValue = chatSender ? chatSender.value : state.settings?.chatSender || '';
     const chatAvatarValue = chatAvatar ? chatAvatar.value : state.settings?.chatAvatar || '';
     const settings = {
@@ -1487,6 +1526,8 @@ async function saveSettingsData() {
         devMode: Boolean(state.settings?.devMode ?? false),
         debugLog: Boolean(state.settings?.debugLog ?? false),
         viewportDebug: Boolean(state.settings?.viewportDebug ?? false),
+        autoUpdateMode: autoUpdateMode?.value || state.settings?.autoUpdateMode || 'download',
+        updateChannel: updateChannel?.value || state.settings?.updateChannel || 'stable',
     };
     state.settings = await SaveSettings(settings);
     state.receiveDir = state.settings.output;
@@ -1553,6 +1594,8 @@ function bindSettingsControls() {
             }
         });
     });
+
+    document.querySelector('#btn-manual-update-check')?.addEventListener('click', runManualUpdateCheck);
 }
 
 function updateIntegrationRow(kind) {
@@ -2622,6 +2665,50 @@ OnFileDrop((_x, _y, paths) => {
 EventsOn('eqt:tray-command', handleTrayCommand);
 
 window.addEventListener('beforeunload', stopChatUsage);
+
+async function runManualUpdateCheck() {
+    const btn = document.querySelector('#btn-manual-update-check');
+    const statusText = document.querySelector('#update-check-status');
+    if (!btn || !statusText) return;
+
+    btn.disabled = true;
+    statusText.textContent = 'Checking updates...';
+
+    try {
+        const checkRes = await window.go.main.App.CheckForUpdates();
+        if (!checkRes || !checkRes.new_version_available) {
+            statusText.textContent = `Already up to date.`;
+            btn.disabled = false;
+            return;
+        }
+
+        statusText.textContent = `New version ${checkRes.version} found. Downloading...`;
+        
+        await window.go.main.App.DownloadUpdate(checkRes);
+        statusText.textContent = `Version ${checkRes.version} is ready.`;
+        
+        btn.textContent = 'Restart to update';
+        btn.disabled = false;
+        
+        // Remove old listener and add install listener
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', async () => {
+            newBtn.disabled = true;
+            statusText.textContent = 'Installing update and restarting...';
+            try {
+                await window.go.main.App.InstallUpdate(checkRes.asset_name);
+            } catch (err) {
+                statusText.textContent = `Install failed: ${err.message || err}`;
+                newBtn.disabled = false;
+            }
+        });
+
+    } catch (err) {
+        statusText.textContent = `Failed: ${err || 'unknown error'}`;
+        btn.disabled = false;
+    }
+}
 
 loadChatUsage();
 render();

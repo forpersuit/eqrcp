@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"eqt/config"
 	"eqt/version"
 )
 
@@ -154,4 +158,169 @@ func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error
 		AssetSize:           mainAsset.Size,
 		SignatureURL:        sigAsset.DownloadURL,
 	}, nil
+}
+
+func getUpdateTempDir() string {
+	dir := filepath.Join(config.DefaultConfigDir(), "updates")
+	_ = os.MkdirAll(dir, 0755)
+	return dir
+}
+
+// DownloadUpdate downloads the update package and its signature, verifies it,
+// and saves it to a persistent update buffer folder in the config directory.
+func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, error) {
+	tempDir := getUpdateTempDir()
+	
+	// Create paths for saving download files
+	pkgPath := filepath.Join(tempDir, assetName)
+	sigPath := pkgPath + ".sig"
+
+	client := &http.Client{Timeout: 60 * time.Second} // Larger timeout for file downloads
+
+	// 1. Download main asset package
+	resp, err := client.Get(assetURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to download update package: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("package download returned status code %d", resp.StatusCode)
+	}
+
+	pkgBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read downloaded package: %w", err)
+	}
+
+	// 2. Download signature file
+	respSig, err := client.Get(sigURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to download update signature: %w", err)
+	}
+	defer respSig.Body.Close()
+
+	if respSig.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("signature download returned status code %d", respSig.StatusCode)
+	}
+
+	sigBytes, err := io.ReadAll(respSig.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read downloaded signature: %w", err)
+	}
+
+	// 3. Cryptographic Signature Verification
+	if !VerifyUpdateSignature(pkgBytes, sigBytes) {
+		return "", fmt.Errorf("cryptographic signature verification failed for update package")
+	}
+
+	// 4. Save the verified package and signature locally
+	if err := os.WriteFile(pkgPath, pkgBytes, 0644); err != nil {
+		return "", fmt.Errorf("failed to save verified update package: %w", err)
+	}
+	if err := os.WriteFile(sigPath, sigBytes, 0644); err != nil {
+		return "", fmt.Errorf("failed to save verified update signature: %w", err)
+	}
+
+	return pkgPath, nil
+}
+
+// InstallAndRestart performs atomic binary replacement and restarts the current process.
+// It supports differential handling for Windows (Rename scheme) and Linux/macOS.
+func InstallAndRestart(assetName string) error {
+	tempDir := getUpdateTempDir()
+	pkgPath := filepath.Join(tempDir, assetName)
+
+	// Check if update file exists
+	if _, err := os.Stat(pkgPath); err != nil {
+		return fmt.Errorf("verified update package not found at %s: %w", pkgPath, err)
+	}
+
+	// Read new binary bytes
+	newBytes, err := os.ReadFile(pkgPath)
+	if err != nil {
+		return fmt.Errorf("failed to read verified update package: %w", err)
+	}
+
+	// Get running executable absolute path
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get running executable path: %w", err)
+	}
+
+	// Perform platform-specific atomic replacement
+	if runtime.GOOS == "windows" {
+		// Windows: rename current running exe to .old, write new file to original path
+		exeOldPath := exePath + ".old"
+		
+		// Remove existing old file if any
+		_ = os.Remove(exeOldPath)
+
+		// Rename running exe (Windows allows renaming running executables)
+		if err := os.Rename(exePath, exeOldPath); err != nil {
+			return fmt.Errorf("failed to rename running executable: %w", err)
+		}
+
+		// Write new binary
+		if err := os.WriteFile(exePath, newBytes, 0755); err != nil {
+			// Try to rollback rename if write failed
+			_ = os.Rename(exeOldPath, exePath)
+			return fmt.Errorf("failed to write new executable: %w", err)
+		}
+	} else {
+		// POSIX (Linux, macOS): atomic swap with os.Rename.
+		// Write new binary to a temporary file in the same directory as original exe,
+		// chmod to executable, then rename to target path.
+		exeDir := filepath.Dir(exePath)
+		tempNewFile := filepath.Join(exeDir, filepath.Base(exePath)+".new")
+		
+		if err := os.WriteFile(tempNewFile, newBytes, 0755); err != nil {
+			return fmt.Errorf("failed to write temporary new executable: %w", err)
+		}
+		
+		if err := os.Chmod(tempNewFile, 0755); err != nil {
+			_ = os.Remove(tempNewFile)
+			return fmt.Errorf("failed to set executable permission: %w", err)
+		}
+
+		if err := os.Rename(tempNewFile, exePath); err != nil {
+			_ = os.Remove(tempNewFile)
+			return fmt.Errorf("failed to rename target executable: %w", err)
+		}
+	}
+
+	// Clean up update package cache files
+	_ = os.Remove(pkgPath)
+	_ = os.Remove(pkgPath + ".sig")
+
+	// Restart EQT: spawn a new process and exit the current one.
+	// We preserve the environment variables and run arguments.
+	cmd := exec.Command(exePath, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start new EQT process: %w", err)
+	}
+
+	// Exit the current process cleanly
+	os.Exit(0)
+	return nil
+}
+
+// CleanLingeringOldExecutables deletes the .old executable files left by Windows rename scheme
+func CleanLingeringOldExecutables() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exeOldPath := exePath + ".old"
+	if _, err := os.Stat(exeOldPath); err == nil {
+		// Attempt to delete it. If it fails (e.g. process is still shutting down), we just ignore.
+		_ = os.Remove(exeOldPath)
+	}
 }

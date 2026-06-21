@@ -12,9 +12,15 @@ export function Chat():Promise<main.AgentStatus>;
 
 export function ChatSaveDirectory():Promise<string>;
 
+export function CheckForUpdates():Promise<main.GUIUpdateCheckResult>;
+
 export function ClearHistory():Promise<void>;
 
 export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
+
+export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;
+
+export function InstallUpdate(arg1:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;
 

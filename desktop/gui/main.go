@@ -16,6 +16,7 @@ import (
 	"golang.org/x/term"
 
 	"eqt/cmd"
+	"eqt/server"
 )
 
 //go:embed all:frontend/dist
@@ -134,6 +135,9 @@ func startWailsGUI() {
 	defer fileLogger.Close()
 
 	fileLogger.Info("EQT GUI Starting...")
+	
+	// Clean lingering old executables from update replacement (Windows only)
+	server.CleanLingeringOldExecutables()
 
 	// Create an instance of the app structure
 	app := NewApp()

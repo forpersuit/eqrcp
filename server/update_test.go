@@ -167,3 +167,67 @@ func TestCheckForUpdates(t *testing.T) {
 		}
 	})
 }
+
+func TestDownloadUpdate(t *testing.T) {
+	// Reconstruct private key
+	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
+	privKey := ed25519.NewKeyFromSeed(seedBytes)
+
+	// Fake executable content
+	fakeBinary := []byte("fake compiled executable for EQT update download testing")
+	hash := sha256.Sum256(fakeBinary)
+	sigRaw := ed25519.Sign(privKey, hash[:])
+	sigHex := hex.EncodeToString(sigRaw)
+
+	// Server mocking download assets
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/binary.zip" {
+			_, _ = w.Write(fakeBinary)
+			return
+		}
+		if r.URL.Path == "/binary.zip.sig" {
+			_, _ = w.Write([]byte(sigHex))
+			return
+		}
+		if r.URL.Path == "/bad-binary.zip" {
+			_, _ = w.Write([]byte("some bad modified binary content"))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	// 1. Test successful download and signature verification
+	t.Run("Successful download and verify", func(t *testing.T) {
+		pkgURL := server.URL + "/binary.zip"
+		sigURL := server.URL + "/binary.zip.sig"
+		
+		savedPath, err := DownloadUpdate(pkgURL, sigURL, "test-eqt-update.zip")
+		if err != nil {
+			t.Fatalf("expected DownloadUpdate to succeed: %v", err)
+		}
+		defer os.Remove(savedPath)
+		defer os.Remove(savedPath + ".sig")
+
+		// Read and check saved content
+		savedBytes, err := os.ReadFile(savedPath)
+		if err != nil {
+			t.Fatalf("failed to read saved update file: %v", err)
+		}
+		if string(savedBytes) != string(fakeBinary) {
+			t.Error("saved content mismatch")
+		}
+	})
+
+	// 2. Test failed verification when binary is tampered
+	t.Run("Failed verification on tampered binary", func(t *testing.T) {
+		pkgURL := server.URL + "/bad-binary.zip"
+		sigURL := server.URL + "/binary.zip.sig"
+
+		_, err := DownloadUpdate(pkgURL, sigURL, "test-eqt-update-bad.zip")
+		if err == nil {
+			t.Error("expected DownloadUpdate to fail due to signature mismatch")
+		}
+	})
+}
+

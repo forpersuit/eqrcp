@@ -243,6 +243,30 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class GUIUpdateCheckResult {
+	    new_version_available: boolean;
+	    version: string;
+	    changelog: string;
+	    asset_url: string;
+	    asset_name: string;
+	    asset_size: number;
+	    signature_url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GUIUpdateCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.new_version_available = source["new_version_available"];
+	        this.version = source["version"];
+	        this.changelog = source["changelog"];
+	        this.asset_url = source["asset_url"];
+	        this.asset_name = source["asset_name"];
+	        this.asset_size = source["asset_size"];
+	        this.signature_url = source["signature_url"];
+	    }
+	}
 	
 
 }

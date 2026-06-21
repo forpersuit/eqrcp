@@ -22,12 +22,24 @@ export function ChatSaveDirectory() {
   return window['go']['main']['App']['ChatSaveDirectory']();
 }
 
+export function CheckForUpdates() {
+  return window['go']['main']['App']['CheckForUpdates']();
+}
+
 export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
 export function DownloadChatAttachment(arg1, arg2) {
   return window['go']['main']['App']['DownloadChatAttachment'](arg1, arg2);
+}
+
+export function DownloadUpdate(arg1) {
+  return window['go']['main']['App']['DownloadUpdate'](arg1);
+}
+
+export function InstallUpdate(arg1) {
+  return window['go']['main']['App']['InstallUpdate'](arg1);
 }
 
 export function OpenExternal(arg1) {
