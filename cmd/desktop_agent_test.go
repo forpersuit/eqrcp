@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1670,5 +1674,188 @@ func assertNotificationContains(t *testing.T, notifications <-chan string, want 
 		case <-deadline:
 			t.Fatalf("notification %q was not sent", want)
 		}
+	}
+}
+
+func TestDesktopAgentUpdateEndpoints(t *testing.T) {
+	// Reconstruct private key using test seed
+	testSeed := "fc0993ec4a68da7e6f10be87959d8ecd7f227ddd4b9e65a7b925287b9b2ed12e"
+	seedBytes, err := hex.DecodeString(testSeed)
+	if err != nil {
+		t.Fatalf("failed to decode private key seed: %v", err)
+	}
+	privKey := ed25519.NewKeyFromSeed(seedBytes)
+
+	// Fake executable content for update download
+	fakeBinary := []byte("fake compiled executable for EQT update integration testing")
+	hash := sha256.Sum256(fakeBinary)
+	sigRaw := ed25519.Sign(privKey, hash[:])
+	sigHex := hex.EncodeToString(sigRaw)
+
+	// Local mock server for Github API / CF Workers
+	mockResponse := server.UpdateResponse{
+		Version:     "v10.0.0", // Significantly larger than program v1.4.9
+		PublishedAt: "2026-06-20T12:00:00Z",
+		Changelog:   "Integration Test Update Changelog",
+		Assets: []server.UpdateAsset{
+			{
+				Name:        fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH),
+				DownloadURL: "/download/binary.zip",
+				Size:        int64(len(fakeBinary)),
+			},
+			{
+				Name:        fmt.Sprintf("eqt-desktop-%s-%s.sig", runtime.GOOS, runtime.GOARCH),
+				DownloadURL: "/download/binary.zip.sig",
+				Size:        int64(len(sigHex)),
+			},
+		},
+	}
+
+	// 1. Mock Update Release Server
+	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/update/check" {
+			w.Header().Set("Content-Type", "application/json")
+			// Make absolute URL for download
+			resp := mockResponse
+			for i := range resp.Assets {
+				resp.Assets[i].DownloadURL = "http://" + r.Host + resp.Assets[i].DownloadURL
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+		if r.URL.Path == "/download/binary.zip" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(fakeBinary)
+			return
+		}
+		if r.URL.Path == "/download/binary.zip.sig" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(sigHex))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer updateServer.Close()
+
+	// Redirect Update client location to our mock updateServer
+	origServerEnv := os.Getenv("EQT_LICENSE_SERVER")
+	_ = os.Setenv("EQT_LICENSE_SERVER", updateServer.URL)
+	t.Cleanup(func() {
+		if origServerEnv == "" {
+			_ = os.Unsetenv("EQT_LICENSE_SERVER")
+		} else {
+			_ = os.Setenv("EQT_LICENSE_SERVER", origServerEnv)
+		}
+	})
+
+	// 2. Set up Desktop Agent and its routing
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(configPath, []byte("port: 19000\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	agent := newDesktopAgent(application.Flags{Config: configPath})
+	agentServer := httptest.NewServer(agent.routes())
+	defer agentServer.Close()
+
+	// A. Test /update/check endpoint
+	checkResp, err := http.Get(agentServer.URL + "/update/check")
+	if err != nil {
+		t.Fatalf("failed to GET /update/check: %v", err)
+	}
+	defer checkResp.Body.Close()
+	if checkResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(checkResp.Body)
+		t.Fatalf("/update/check returned status %d, body: %s", checkResp.StatusCode, body)
+	}
+
+	var checkResult server.CheckResult
+	if err := json.NewDecoder(checkResp.Body).Decode(&checkResult); err != nil {
+		t.Fatalf("failed to decode check result: %v", err)
+	}
+
+	if !checkResult.NewVersionAvailable {
+		t.Error("expected new version to be available")
+	}
+	if checkResult.Version != "v10.0.0" {
+		t.Errorf("expected version v10.0.0, got %s", checkResult.Version)
+	}
+	if !strings.Contains(checkResult.AssetURL, "/download/binary.zip") {
+		t.Errorf("unexpected AssetURL: %s", checkResult.AssetURL)
+	}
+
+	// B. Test /update/download endpoint
+	downloadPayload, _ := json.Marshal(map[string]string{
+		"asset_url":     checkResult.AssetURL,
+		"signature_url": checkResult.SignatureURL,
+		"asset_name":    checkResult.AssetName,
+	})
+	downloadResp, err := http.Post(agentServer.URL+"/update/download", "application/json", bytes.NewReader(downloadPayload))
+	if err != nil {
+		t.Fatalf("failed to POST /update/download: %v", err)
+	}
+	defer downloadResp.Body.Close()
+	if downloadResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(downloadResp.Body)
+		t.Fatalf("/update/download returned status %d, body: %s", downloadResp.StatusCode, body)
+	}
+
+	var downloadResult struct {
+		SavedPath string `json:"saved_path"`
+		Status    string `json:"status"`
+	}
+	if err := json.NewDecoder(downloadResp.Body).Decode(&downloadResult); err != nil {
+		t.Fatalf("failed to decode download result: %v", err)
+	}
+	if downloadResult.Status != "ready" {
+		t.Errorf("expected download status 'ready', got %s", downloadResult.Status)
+	}
+	if _, err := os.Stat(downloadResult.SavedPath); err != nil {
+		t.Errorf("saved package file not found: %v", err)
+	}
+	// Clean up temp package file
+	defer os.Remove(downloadResult.SavedPath)
+	defer os.Remove(downloadResult.SavedPath + ".sig")
+
+	// C. Test /update/install endpoint during active transfer (409 Conflict)
+	agent.mu.Lock()
+	agent.current = &desktopAgentTaskRecord{
+		ID:    99,
+		State: "running",
+	}
+	agent.mu.Unlock()
+
+	installPayload, _ := json.Marshal(map[string]string{
+		"asset_name": checkResult.AssetName,
+	})
+	conflictResp, err := http.Post(agentServer.URL+"/update/install", "application/json", bytes.NewReader(installPayload))
+	if err != nil {
+		t.Fatalf("failed to POST /update/install: %v", err)
+	}
+	defer conflictResp.Body.Close()
+	if conflictResp.StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 Conflict when task is active, got %d", conflictResp.StatusCode)
+	}
+
+	// D. Test /update/install endpoint when idle (200 OK)
+	agent.mu.Lock()
+	agent.current = nil
+	agent.mu.Unlock()
+
+	okResp, err := http.Post(agentServer.URL+"/update/install", "application/json", bytes.NewReader(installPayload))
+	if err != nil {
+		t.Fatalf("failed to POST /update/install: %v", err)
+	}
+	defer okResp.Body.Close()
+	if okResp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 OK when idle, got %d", okResp.StatusCode)
+	}
+	var installResult struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(okResp.Body).Decode(&installResult); err != nil {
+		t.Fatalf("failed to decode install result: %v", err)
+	}
+	if installResult.Status != "installing" {
+		t.Errorf("expected install status 'installing', got %s", installResult.Status)
 	}
 }
