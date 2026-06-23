@@ -434,9 +434,13 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 		agent.log.Debugf("writeSettings: Saved settings. chatTaskRunning: %v, activeServer != nil: %v", chatTaskRunning, srv != nil)
 	}
 
-	if chatTaskRunning && srv != nil {
-		agent.log.Infof("writeSettings: Updating chat host avatar to: %s", settings.ChatAvatar)
-		srv.UpdateChatHostAvatar(settings.ChatAvatar)
+	if srv != nil {
+		if chatTaskRunning {
+			agent.log.Infof("writeSettings: Updating chat host avatar to: %s", settings.ChatAvatar)
+			srv.UpdateChatHostAvatar(settings.ChatAvatar)
+		}
+		agent.log.Infof("writeSettings: Updating server ViewportDebug flag to: %v", settings.ViewportDebug)
+		srv.ViewportDebug = settings.ViewportDebug
 	}
 	return saved, nil
 }

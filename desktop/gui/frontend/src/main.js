@@ -1621,7 +1621,28 @@ async function saveSettingsData() {
     state.browserFallback = state.settings.browser;
     state.chatAutoSave = state.settings.chatAutoSave !== false;
     state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
+    syncViewportDebugToChatFrame();
 }
+
+function syncViewportDebugToChatFrame() {
+    const frame = document.querySelector('#chat-iframe');
+    if (!frame) { return; }
+    const enabled = Boolean(state.settings?.viewportDebug ?? false);
+    const payload = {
+        type: 'update-viewport-debug',
+        enabled: enabled
+    };
+    const post = () => {
+        try {
+            frame.contentWindow?.postMessage(payload, activeChatFrameOrigin() || '*');
+        } catch (e) {
+            // Ignored
+        }
+    };
+    frame.addEventListener('load', post, {once: true});
+    window.setTimeout(post, 0);
+}
+
 
 async function toggleRightClickIntegration(event) {
     const enabled = Boolean(event.currentTarget?.checked);

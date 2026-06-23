@@ -4101,6 +4101,22 @@
                 startSessionQRPulse(event.data.until);
                 return;
             }
+            if (event.data.type === 'update-viewport-debug') {
+                viewportDebugEnabled = event.data.enabled;
+                if (viewportDebugEl) {
+                    if (viewportDebugEnabled) {
+                        viewportDebugEl.classList.add('open');
+                        viewportDebugEl.removeAttribute('aria-hidden');
+                        updateViewportDebug('setting-enable');
+                    } else {
+                        viewportDebugEl.classList.remove('open');
+                        viewportDebugEl.setAttribute('aria-hidden', 'true');
+                        viewportDebugEl.textContent = '';
+                    }
+                    handleViewportChange();
+                }
+                return;
+            }
             if (event.data.type === 'clipboard-text') {
                 var requestId = String(event.data.requestId || '');
                 var resolve = clipboardRequests[requestId];
