@@ -239,6 +239,14 @@ function render() {
     console.log('[Antigravity Debug] render() called, activePanel:', state.activePanel, 'stack:', new Error().stack);
     LogInfo('[Antigravity Debug] render() called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     ensureFavicon();
+
+    // 记录旧 modal 的滚动位置，防止全局重绘时弹窗回退到顶部
+    let savedScrollTop = 0;
+    const existingModal = document.querySelector('.overlay .modal');
+    if (existingModal) {
+        savedScrollTop = existingModal.scrollTop;
+    }
+
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
@@ -275,6 +283,21 @@ function render() {
         </main>
     `;
     bindEvents();
+
+    // 还原滚动位置到新的 modal 上
+    if (savedScrollTop > 0) {
+        const newModalEl = document.querySelector('.overlay .modal');
+        if (newModalEl) {
+            newModalEl.scrollTop = savedScrollTop;
+            setTimeout(() => {
+                newModalEl.scrollTop = savedScrollTop;
+            }, 0);
+            setTimeout(() => {
+                newModalEl.scrollTop = savedScrollTop;
+            }, 50);
+        }
+    }
+
     pulseChatFrameQR();
 }
 
