@@ -2774,12 +2774,23 @@
             if (index < 0) { return null; }
             return generateSenderColor(index);
         }
+        function senderColor(sender) {
+            if (!sender || sender === 'system') { return null; }
+            if (senderColorMap[sender]) { return senderColorMap[sender]; }
+            var hash = 0;
+            String(sender).split('').forEach(function(ch) {
+                hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
+            });
+            var colorIndex = (Math.abs(hash) % 1000) + 1;
+            var color = generateSenderColor(colorIndex);
+            senderColorMap[sender] = color;
+            return color;
+        }
         function messageColor(message) {
             if (!message || isSystemMessage(message)) { return null; }
-            // Prefer the server-assigned theme; fall back to the current
-            // device's own theme so that bubbles match the UI accent even
-            // before the server confirms the first theme assignment.
-            return themeColor(message.theme) || themeColor(state.theme);
+            // Prefer the server-assigned theme; fall back to the sender's unique random color
+            // or the current device's own theme.
+            return themeColor(message.theme) || senderColor(message.sender) || themeColor(state.theme);
         }
         // ── Device theme: apply this device's theme as UI accent ──
         var _lastThemeIdx = -1;
