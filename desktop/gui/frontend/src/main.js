@@ -1359,7 +1359,17 @@ function bindChatQRPanelEvents() {
     });
 }
 
+function syncAndSaveSettingsInBackground() {
+    if (state.activePanel === 'settings') {
+        syncSettingsFromDOM();
+        saveSettingsData().catch(err => {
+            console.error('Failed to auto-save settings in background:', err);
+        });
+    }
+}
+
 function openPanel(panel) {
+    syncAndSaveSettingsInBackground();
     state.activePanel = panel;
     if (panel === 'redeem') {
         state.redeemMessage = '';
@@ -1374,6 +1384,7 @@ function openPanel(panel) {
 }
 
 function closePanel() {
+    syncAndSaveSettingsInBackground();
     state.activePanel = '';
     render();
 }
