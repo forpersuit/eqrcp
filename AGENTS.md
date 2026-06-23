@@ -84,7 +84,7 @@ After branding, desktop integration, chat-device, or Windows-facing changes, use
 For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
 
 
-# 14-rule template
+# 15-rule template
 
 These rules apply to every task in this project unless explicitly overridden.
 Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
@@ -160,5 +160,16 @@ If a structural or design conflict is detected, stop immediately and raise it fo
   - If it belongs to an existing module, update the corresponding skill (such as `eqt-dev`, `eqt-ux`, `eqt-drm`) with Progressive Disclosure to keep the instructions compact.
   - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary project features or business-specific changes to avoid noise.
 - **Reporting**: In your final delivery, you must explicitly declare which skills were updated or why no updates were necessary.
+
+## Rule 15 — Definition of Done & Delivery Standards (定义完成与交付标准)
+- **DoD (Definition of Done)**: A task is NOT complete until all the following criteria are met:
+  1. **Compilation & Tests**: Code compiles without errors, and `go test ./...` (or other suite tests) passes 100% with zero silent skips.
+  2. **Acceptance Deployment**: Run the project-specific deployment command (e.g., `scripts/deploy-windows-results.sh` to update acceptance paths like `/mnt/e/developer/results`) if integration, branding, or core logic changes.
+  3. **Git Cleanliness**: Working tree must be clean (no temp debug files left untracked), changes committed, and pushed to remote via smart-push scripts.
+- **Delivery Artifact (交付汇报规范)**: Your final response MUST outline:
+  - **What was modified**: A bullet list of edited files and their core change logic.
+  - **How it was verified**: The exact commands run (e.g., `go test`) and a deterministic statement of runtime behaviors observed.
+  - **Skills Updated**: Clear declaration of updated `.agents/skills` or explicit rationale for why no changes were required.
+
 
 
