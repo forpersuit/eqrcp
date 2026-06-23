@@ -158,3 +158,9 @@ If you genuinely think a convention is harmful, surface it. Don't fork silently.
 "Completed" is wrong if anything was skipped silently.
 "Tests pass" is wrong if any were skipped.
 Default to surfacing uncertainty, not hiding it.
+
+## Rule 13 — Zero Tolerance for Regression (防止功能退化)
+Never silently compromise or disable existing features when adding new functionality. Identify and protect all legacy and concurrent behaviors in the modified area.
+Test explicitly for backward compatibility: when editing a module (such as settings, styles, layout logic, or network actions), run a regression check on existing flows.
+If a structural or design conflict is detected, stop immediately and raise it for user clarification instead of silently averaging, ignoring, or hiding it.
+
