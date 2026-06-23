@@ -250,6 +250,11 @@ function render() {
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
+                <div class="app-brand">
+                    <img src="${logoMarkURL}" alt="EQT logo">
+                    <span>EQT</span>
+                    ${hasPaidLicense() ? `<span class="license-badge">${escapeHTML(state.license.tier)}</span>` : ''}
+                </div>
                 <nav class="mode-switch" aria-label="Transfer modes">
                     <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
                     <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
@@ -520,7 +525,7 @@ function renderChatPanel(task) {
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <div>
-                        <div class="panel-title-inline"><span class="status-dot"></span><h2>Chat Status</h2></div>
+                        <div class="panel-title-inline"><h2>Chat Status</h2></div>
                         <p class="side-note tight">${escapeHTML(chatStateLabel(chatState))}</p>
                     </div>
                     <div class="side-head-actions">

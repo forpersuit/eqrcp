@@ -107,11 +107,6 @@
             gap: 10px;
             min-width: 0;
         }
-        .chat-logo-wrapper {
-            position: relative;
-            display: inline-flex;
-            flex-shrink: 0;
-        }
         .chat-title-container {
             min-width: 0;
             display: flex;
@@ -148,25 +143,10 @@
             box-sizing: border-box;
             cursor: help;
         }
-        .online-dot {
-            position: absolute;
-            bottom: -1px;
-            right: -1px;
-            background: #22c55e;
-            border-radius: 999px;
-            flex-shrink: 0;
-            height: 10px;
-            width: 10px;
-            border: 2px solid var(--panel);
-            box-sizing: border-box;
-        }
         .chat-logo {
             flex-shrink: 0;
             height: 34px;
             width: 34px;
-        }
-        .online-dot.offline {
-            background: var(--muted);
         }
         h1 {
             font-size: 17px;
@@ -1496,11 +1476,6 @@
                 width: 28px;
                 height: 28px;
             }
-            .online-dot {
-                width: 9px;
-                height: 9px;
-                border-width: 1.5px;
-            }
         }
         /* ── Limit Status Pill & Pay Modal ── */
         .limit-status-pill {
@@ -1766,10 +1741,7 @@
             <section class="chat-shell">
             <header class="chat-head offline" id="chat-head">
                 <div class="chat-head-title">
-                    <div class="chat-logo-wrapper">
-                        <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
-                        <div class="online-dot" id="online-dot"></div>
-                    </div>
+                    <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
                     <div class="chat-title-container">
                         <h1 id="chat-title-text">EQT{{if .LicenseTier}}<span class="license-badge" id="chat-license-badge">{{.LicenseTier}}</span>{{end}}</h1>
                     </div>
@@ -4580,7 +4552,7 @@
             pill.setAttribute('title', dict.titleAttr);
             
             if (isPaid) {
-                pill.style.display = 'inline-flex';
+                pill.style.display = 'none';
                 pill.className = 'limit-status-pill paid';
                 
                 var displayTier = currentTier || 'PAID';

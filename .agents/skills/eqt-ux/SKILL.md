@@ -22,7 +22,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **Fallback Scroll Restoration**: When replacing the overlay/modal is unavoidable, restore `scrollTop` immediately and also in subsequent ticks (e.g. `setTimeout(..., 0)` and `setTimeout(..., 50)`) to ensure the browser has completed its layout calculation and will not clamp `scrollTop` back to 0.
 
 ## Mobile Layout Adaptations & Titlebar Constraints
-- **Absolute Indicator Overlays**: Rather than placing inline status dots (like online indicator dots) directly inside the Flex layout flow (which wastes horizontal margin & padding space), wrap it inside the profile/logo wrapper and use absolute positioning with a panel-matching border (`border: 2px solid var(--panel)`) for a clean, overlapping badge appearance.
+- **Branding & License Badges**: Add high-contrast license tier badges (e.g. using `.license-badge` with `var(--accent)`) next to the brand logo or title text on both mobile and desktop GUI views to unify branding. Hide irrelevant timer status capsules (`.limit-status-pill`) when a paid plan is active, showing only the badge.
 - **Prevent Action Overflows**:
   - Keep titles and badges strictly non-wrapping by applying `white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`.
   - For narrow viewports (e.g. `<= 360px`), hide low-priority action buttons (such as `#share-session` session sharing button which is rarely used on visitor mobile devices) and scale down logos/gaps slightly to allocate sufficient space for the remaining actions.
