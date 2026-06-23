@@ -149,27 +149,28 @@ If you genuinely think a convention is harmful, surface it. Don't fork silently.
 Default to surfacing uncertainty, not hiding it.
 
 ## Rule 13 — Zero Tolerance for Regression (防止功能退化)
-Never silently compromise or disable existing features when adding new functionality. Identify and protect all legacy and concurrent behaviors in the modified area.
-Test explicitly for backward compatibility: when editing a module (such as settings, styles, layout logic, or network actions), run a regression check on existing flows.
-If a structural or design conflict is detected, stop immediately and raise it for user clarification instead of silently averaging, ignoring, or hiding it.
+Never compromise or disable existing features when adding new code. Identify and protect all legacy and concurrent behaviors in the modified area.
+Verify backward compatibility: when editing a module, run regression checks on all related existing flows.
+If a structural or design conflict is detected, stop immediately and raise it for user clarification instead of silently averaging or ignoring it.
 
 ## Rule 14 — Memory & Skill Consolidation (任务反思与技能固化)
-- **Action Required**: At the end of every single task, you must explicitly evaluate if there is any long-term engineering value to preserve (e.g., hidden configs, environment traps, specific interactive commands, Wails build workflows).
+- **Action Required**: At the end of every task, evaluate if there is any long-term engineering value to preserve (e.g., hidden configurations, environment traps, specific interactive commands, complex build workflows).
 - **Consolidation**:
-  - If it is a new area, define a new skill in `.agents/skills/<skill-name>/SKILL.md`.
-  - If it belongs to an existing module, update the corresponding skill (such as `eqt-dev`, `eqt-ux`, `eqt-drm`) with Progressive Disclosure to keep the instructions compact.
-  - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary project features or business-specific changes to avoid noise.
-- **Reporting**: In your final delivery, you must explicitly declare which skills were updated or why no updates were necessary.
+  - For new areas, define a new skill in the custom skills directory (e.g., `.agents/skills/<skill-name>/SKILL.md`).
+  - For existing topics, update the corresponding skill file with progressive disclosure to keep instructions compact.
+  - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary features or business-specific logic.
+- **Reporting**: In your final delivery, explicitly declare which skills were updated or explain why no changes were required.
 
 ## Rule 15 — Definition of Done & Delivery Standards (定义完成与交付标准)
 - **DoD (Definition of Done)**: A task is NOT complete until all the following criteria are met:
-  1. **Compilation & Tests**: Code compiles without errors, and `go test ./...` (or other suite tests) passes 100% with zero silent skips.
-  2. **Acceptance Deployment**: Run the project-specific deployment command (e.g., `scripts/deploy-windows-results.sh` to update acceptance paths like `/mnt/e/developer/results`) if integration, branding, or core logic changes.
-  3. **Git Cleanliness**: Working tree must be clean (no temp debug files left untracked), changes committed, and pushed to remote via smart-push scripts.
+  1. **Compilation & Tests**: Code compiles without errors, and the test suite passes 100% with zero silent skips.
+  2. **Acceptance & Deployment**: If core logic or integration boundaries change, execute project-specific deployment/build scripts to ensure physical artifacts are updated.
+  3. **Git Cleanliness**: Working tree must be clean (no temp debug files left untracked), changes committed, and pushed to remote.
 - **Delivery Artifact (交付汇报规范)**: Your final response MUST outline:
   - **What was modified**: A bullet list of edited files and their core change logic.
-  - **How it was verified**: The exact commands run (e.g., `go test`) and a deterministic statement of runtime behaviors observed.
-  - **Skills Updated**: Clear declaration of updated `.agents/skills` or explicit rationale for why no changes were required.
+  - **How it was verified**: The exact commands run and a deterministic statement of runtime behaviors observed.
+  - **Skills Updated**: Clear declaration of updated custom skills or explicit rationale for why no changes were required.
+
 
 
 
