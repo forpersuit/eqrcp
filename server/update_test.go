@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestVerifyUpdateSignature(t *testing.T) {
@@ -230,4 +233,71 @@ func TestDownloadUpdate(t *testing.T) {
 		}
 	})
 }
+
+func TestProductionUpdateFlow(t *testing.T) {
+	// Ensure we are using the real production license server
+	origServerEnv := os.Getenv("EQT_LICENSE_SERVER")
+	_ = os.Unsetenv("EQT_LICENSE_SERVER")
+	t.Cleanup(func() {
+		if origServerEnv != "" {
+			_ = os.Setenv("EQT_LICENSE_SERVER", origServerEnv)
+		}
+	})
+
+	t.Logf("Checking updates from production server: %s", getLicenseServer())
+
+	// 1. Get raw metadata response from production server
+	apiURL := fmt.Sprintf("%s/api/v1/update/check", getLicenseServer())
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		t.Fatalf("Failed to call production update api: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Production server returned status code %d", resp.StatusCode)
+	}
+
+	var updateRes UpdateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&updateRes); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	t.Logf("Production server version: %s, PublishedAt: %s", updateRes.Version, updateRes.PublishedAt)
+
+	// 2. Find Windows asset (since currently production only has windows-amd64 assets)
+	var winAsset *UpdateAsset
+	var winSigAsset *UpdateAsset
+	for i := range updateRes.Assets {
+		asset := &updateRes.Assets[i]
+		if strings.Contains(asset.Name, "windows-amd64") {
+			if strings.HasSuffix(asset.Name, ".sig") {
+				winSigAsset = asset
+			} else {
+				winAsset = asset
+			}
+		}
+	}
+
+	if winAsset == nil || winSigAsset == nil {
+		t.Skip("Production server does not contain windows-amd64 asset or signature, skipping verification")
+	}
+
+	t.Logf("Found production Windows asset: %s (size: %d bytes)", winAsset.Name, winAsset.Size)
+	t.Logf("Found production Windows signature: %s", winSigAsset.Name)
+
+	// 3. Download and verify the production Windows package
+	// Note: We run this test on any platform (e.g. Linux/WSL) but verify the Windows pack and signature.
+	t.Logf("Downloading and verifying production Windows package...")
+	savedPath, err := DownloadUpdate(winAsset.DownloadURL, winSigAsset.DownloadURL, "prod-test-" + winAsset.Name)
+	if err != nil {
+		t.Fatalf("Download/Verification of production Windows asset failed: %v", err)
+	}
+	defer os.Remove(savedPath)
+	defer os.Remove(savedPath + ".sig")
+
+	t.Logf("Successfully downloaded and verified production Windows asset signature at: %s", savedPath)
+}
+
 
