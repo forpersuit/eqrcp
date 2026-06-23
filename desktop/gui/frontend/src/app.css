@@ -65,6 +65,14 @@
     flex-shrink: 0;
 }
 
+.license-badge.sidebar-badge {
+    margin-left: 0;
+    margin-right: 8px;
+    font-size: 9px;
+    padding: 1.5px 5px;
+    border-radius: 3.5px;
+}
+
 .top-actions {
     align-items: center;
     display: flex;
