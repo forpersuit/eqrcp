@@ -62,6 +62,20 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 ### 3.4 手动 Check Now 时遵循 Auto-Update 策略
 - **手动/自动控制**：手动点击更新检测按钮（`Check now`）时，系统会根据当前的 `autoUpdateMode`（`off`/`notify` 仅提示，`download`/`silent` 自动触发下载）智能分流，确保在开发和生产环境下更新策略一致。
 
+### 3.5 自动更新的运行链路与集成测试验证机制
+
+#### 3.5.1 自动更新核心运行链路
+自动更新采用“前端 UI -> Wails Go App -> 后台 Desktop Agent 守护进程 -> 云端/GitHub API”的调用架构：
+1. **版本检测 (`/update/check`)**：前端触发 `CheckForUpdates` RPC。桌面守护进程会请求 `EQT_LICENSE_SERVER`（默认是云端中转 Worker 接口 `/api/v1/update/check`），如果最新发布版本高于当前运行版本，根据当前客户端 `GOOS` 和 `GOARCH` 过滤并匹配出主二进制资产与配套的 `.sig` 签名文件资产，向前端返回两者的绝对下载链接。
+2. **包下载与验签 (`/update/download`)**：接收到前端请求后，桌面端异步下载二进制包及签名文件。使用内置的 Ed25519 公钥（`defaultUpdatePublicKeyHex`）对包的 SHA-256 哈希值进行验签，确认包内容未被篡改后，存放到本地缓存路径（例如 `~/.config/eqt/updates/`）。
+3. **安全替换与重启 (`/update/install`)**：检测当前队列中是否有活跃的局域网传输任务（避免断连），若有则抛出 `409 Conflict` 拒绝安装。若应用处于空闲状态，则开始安装：
+   - **Windows**：将当前运行的 `.exe` 重命名为 `.exe.old`，写入新二进制，然后启动新进程退出旧进程，并在下次启动时清理 `.old`。
+   - **POSIX (Linux/macOS)**：写入 `.new` 临时文件，并通过 `os.Rename` 原子覆盖旧的二进制。
+
+#### 3.5.2 本地与集成测试验证方法
+- **单元测试 (`server/update_test.go`)**：通过 `TestVerifyUpdateSignature`、`TestCheckForUpdates` 和 `TestDownloadUpdate` 验证签名校验合法性、语义化版本反降级逻辑、及下载写入完整性。
+- **集成测试 (`cmd/desktop_agent_test.go`)**：在 `TestDesktopAgentUpdateEndpoints` 中通过 `httptest` 创建 Mock Update 服务，临时修改 `EQT_LICENSE_SERVER` 环境变量重定向客户端，并使用测试私钥种子对测试包加签，模拟并发访问 `/update/check`、`/update/download` 及有任务冲突/空闲时的 `/update/install`。
+
 ---
 
 ## 4. 大文件传输与断点续传技术规格说明 (Large File Transfer & Resumable Transfer Limitations)
