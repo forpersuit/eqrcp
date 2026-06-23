@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"eqt/config"
@@ -195,13 +196,29 @@ func ActivateLicenseOnline(licenseCode string) error {
 		return fmt.Errorf("failed to write license file: %w", err)
 	}
 
+	licenseCacheMu.Lock()
+	cachedLicense = &cert
+	hasCachedLicense = true
+	licenseCacheMu.Unlock()
+
 	// Apply activation status immediately
 	SetPaidStatus(true, time.Now().Format(time.RFC3339), cert.ExpiresAt, cert.Tier)
 	return nil
 }
 
+var (
+	licenseCacheMu   sync.Mutex
+	cachedLicense    *LicenseCertificate
+	hasCachedLicense bool
+)
+
 // ResetLicense deletes the local license file and updates state back to free.
 func ResetLicense() {
+	licenseCacheMu.Lock()
+	cachedLicense = nil
+	hasCachedLicense = true
+	licenseCacheMu.Unlock()
+
 	path := getLicenseFilePath()
 	_ = os.Remove(path)
 	SetPaidStatus(false, "", "", "")
@@ -209,14 +226,29 @@ func ResetLicense() {
 
 // GetLocalLicenseInfo retrieves active license info, if any.
 func GetLocalLicenseInfo() (LicenseCertificate, bool) {
+	licenseCacheMu.Lock()
+	defer licenseCacheMu.Unlock()
+	if hasCachedLicense {
+		if cachedLicense == nil {
+			return LicenseCertificate{}, false
+		}
+		return *cachedLicense, true
+	}
+
 	path := getLicenseFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
+		cachedLicense = nil
+		hasCachedLicense = true
 		return LicenseCertificate{}, false
 	}
 	var cert LicenseCertificate
 	if err := json.Unmarshal(data, &cert); err != nil {
+		cachedLicense = nil
+		hasCachedLicense = true
 		return LicenseCertificate{}, false
 	}
+	cachedLicense = &cert
+	hasCachedLicense = true
 	return cert, true
 }

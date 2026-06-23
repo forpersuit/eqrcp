@@ -30,6 +30,9 @@ type ChatUsage struct {
 type ChatLimiter struct {
 	mu            sync.Mutex
 	activeSession *chatSession
+	cachedUsage   ChatUsage
+	hasCached     bool
+	lastCacheTime time.Time
 }
 
 var limiterInstance = &ChatLimiter{}
@@ -78,6 +81,71 @@ func fetchNetworkTime() (time.Time, error) {
 	return time.Parse(time.RFC1123, dateStr)
 }
 
+var (
+	netTimeMu         sync.Mutex
+	netTimeOffset     time.Duration
+	netTimeCached     bool
+	netTimeLastCheck  time.Time
+	netTimeIsChecking bool
+)
+
+// getNetworkTimeOrStartFetch returns the best estimation of network time.
+// It is non-blocking and triggers an asynchronous HTTP request if cache is stale or missing.
+func getNetworkTimeOrStartFetch() time.Time {
+	now := time.Now()
+	if os.Getenv("EQT_TESTING") == "true" {
+		return now
+	}
+
+	netTimeMu.Lock()
+	// If cached, and the last check was successful and within 1 hour, use it.
+	if netTimeCached && now.Sub(netTimeLastCheck) < 1*time.Hour {
+		offset := netTimeOffset
+		netTimeMu.Unlock()
+		return now.Add(offset)
+	}
+
+	// If currently fetching, return estimated time (cached offset if available, otherwise local time).
+	if netTimeIsChecking {
+		if netTimeCached {
+			offset := netTimeOffset
+			netTimeMu.Unlock()
+			return now.Add(offset)
+		}
+		netTimeMu.Unlock()
+		return now
+	}
+
+	// Rate-limit failed checks to avoid spamming network requests when offline (e.g. retry once every 1 minute)
+	if !netTimeCached && !netTimeLastCheck.IsZero() && now.Sub(netTimeLastCheck) < 1*time.Minute {
+		netTimeMu.Unlock()
+		return now
+	}
+
+	// Trigger async check
+	netTimeIsChecking = true
+	netTimeMu.Unlock()
+
+	go func() {
+		netTime, err := fetchNetworkTime()
+		netTimeMu.Lock()
+		defer netTimeMu.Unlock()
+		netTimeIsChecking = false
+		netTimeLastCheck = time.Now()
+		if err == nil {
+			netTimeOffset = netTime.Sub(time.Now())
+			netTimeCached = true
+		}
+	}()
+
+	netTimeMu.Lock()
+	defer netTimeMu.Unlock()
+	if netTimeCached {
+		return now.Add(netTimeOffset)
+	}
+	return now
+}
+
 func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
 	now := time.Now().Unix()
 
@@ -114,10 +182,7 @@ func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
 				expOk := true
 				if cert.ExpiresAt != "LIFETIME" {
 					if expiry, err := time.Parse(time.RFC3339, cert.ExpiresAt); err == nil {
-						currentTime := time.Now()
-						if netTime, err := fetchNetworkTime(); err == nil {
-							currentTime = netTime
-						}
+						currentTime := getNetworkTimeOrStartFetch()
 						if currentTime.After(expiry) {
 							expOk = false
 						}
@@ -203,6 +268,11 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if mock := getMockUsageForAcceptance(); mock != nil {
 		return *mock
 	}
+	today := time.Now().Format("2006-01-02")
+	if l.hasCached && time.Since(l.lastCacheTime) < 5*time.Second && l.cachedUsage.Date == today {
+		return l.cachedUsage
+	}
+
 	path := getChatUsageFilePath()
 	var usage ChatUsage
 	data, err := os.ReadFile(path)
@@ -217,7 +287,6 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		_ = json.Unmarshal(data, &usage)
 	}
 
-	today := time.Now().Format("2006-01-02")
 	dateChanged := false
 	if usage.Date != today {
 		usage.Date = today
@@ -233,6 +302,10 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || usage.LastTime != oldLastTime {
 		l.saveUsageLocked(usage)
+	} else {
+		l.cachedUsage = usage
+		l.hasCached = true
+		l.lastCacheTime = time.Now()
 	}
 
 	return usage
@@ -248,6 +321,10 @@ func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
 		obfuscated := xorObfuscate(data)
 		_ = os.WriteFile(backupPath, obfuscated, 0600)
 	}
+
+	l.cachedUsage = usage
+	l.hasCached = true
+	l.lastCacheTime = time.Now()
 }
 
 // IncrementUsage adds used seconds to the daily counter if not paid.
