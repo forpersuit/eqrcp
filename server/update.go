@@ -397,3 +397,117 @@ func CleanLingeringOldExecutables() {
 		}
 	}
 }
+
+// ApplyOfflineUpdateIfExists checks if there is a verified update package locally.
+// If it exists and passes Ed25519 signature verification, it atomically replaces
+// the current running binary and restarts itself.
+// Returns true if an update was applied and a restart was triggered.
+func ApplyOfflineUpdateIfExists() bool {
+	tempDir := getUpdateTempDir()
+	
+	// Target binary name based on type (desktop) and current platform
+	// E.g., eqt-desktop-windows-amd64.exe or eqt-desktop-linux-amd64
+	var assetName string
+	if runtime.GOOS == "windows" {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	pkgPath := filepath.Join(tempDir, assetName)
+	sigPath := pkgPath + ".sig"
+
+	// Check if both files exist
+	if _, err := os.Stat(pkgPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(sigPath); err != nil {
+		return false
+	}
+
+	Log.Infof("ApplyOfflineUpdateIfExists: found pending update package: %s", assetName)
+
+	// Read package and signature
+	pkgBytes, err := os.ReadFile(pkgPath)
+	if err != nil {
+		Log.Errorf("ApplyOfflineUpdateIfExists: failed to read package: %v", err)
+		return false
+	}
+	sigBytes, err := os.ReadFile(sigPath)
+	if err != nil {
+		Log.Errorf("ApplyOfflineUpdateIfExists: failed to read signature: %v", err)
+		return false
+	}
+
+	// Verify Ed25519 signature
+	if !VerifyUpdateSignature(pkgBytes, sigBytes) {
+		Log.Errorf("ApplyOfflineUpdateIfExists: pending update signature verification failed. Deleting corrupted files.")
+		_ = os.Remove(pkgPath)
+		_ = os.Remove(sigPath)
+		return false
+	}
+
+	Log.Infof("ApplyOfflineUpdateIfExists: signature verified successfully. Proceeding to apply update.")
+
+	// Get current running executable path
+	exePath, err := os.Executable()
+	if err != nil {
+		Log.Errorf("ApplyOfflineUpdateIfExists: failed to get running executable path: %v", err)
+		return false
+	}
+
+	// Perform atomic replacement
+	if runtime.GOOS == "windows" {
+		exeOldPath := exePath + ".old"
+		_ = os.Remove(exeOldPath)
+		
+		if err := os.Rename(exePath, exeOldPath); err != nil {
+			Log.Errorf("ApplyOfflineUpdateIfExists: failed to rename running exe: %v", err)
+			return false
+		}
+		if err := os.WriteFile(exePath, pkgBytes, 0755); err != nil {
+			Log.Errorf("ApplyOfflineUpdateIfExists: failed to write new exe, rolling back: %v", err)
+			_ = os.Rename(exeOldPath, exePath)
+			return false
+		}
+	} else {
+		exeDir := filepath.Dir(exePath)
+		tempNewFile := filepath.Join(exeDir, filepath.Base(exePath)+".new")
+		if err := os.WriteFile(tempNewFile, pkgBytes, 0755); err != nil {
+			Log.Errorf("ApplyOfflineUpdateIfExists: failed to write temp exe: %v", err)
+			return false
+		}
+		if err := os.Chmod(tempNewFile, 0755); err != nil {
+			_ = os.Remove(tempNewFile)
+			Log.Errorf("ApplyOfflineUpdateIfExists: failed to chmod temp file: %v", err)
+			return false
+		}
+		if err := os.Rename(tempNewFile, exePath); err != nil {
+			_ = os.Remove(tempNewFile)
+			Log.Errorf("ApplyOfflineUpdateIfExists: failed to rename temp file: %v", err)
+			return false
+		}
+	}
+
+	// Clean up update package cache files
+	_ = os.Remove(pkgPath)
+	_ = os.Remove(sigPath)
+
+	Log.Infof("ApplyOfflineUpdateIfExists: update applied successfully. Restarting EQT...")
+
+	// Spawn the new process
+	cmd := exec.Command(exePath, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Start(); err != nil {
+		Log.Errorf("ApplyOfflineUpdateIfExists: failed to restart: %v", err)
+		return false
+	}
+
+	// Exit the current bootstrap process immediately
+	os.Exit(0)
+	return true
+}
+

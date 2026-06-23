@@ -1557,6 +1557,7 @@ function showToast(message) {
 async function handleAutoSaveSettings() {
     try {
         await saveSettingsData();
+        render();
     } catch (e) {
         state.error = 'Failed to save settings: ' + (e.message || String(e));
         render();
@@ -1715,7 +1716,8 @@ function bindSettingsControls() {
         '#settings-chat-autosave',
         '#settings-close-behavior',
         '#settings-auto-update-mode',
-        '#settings-update-channel'
+        '#settings-update-channel',
+        '#settings-chat-sender'
     ];
     inputs.forEach(selector => {
         const el = document.querySelector(selector);

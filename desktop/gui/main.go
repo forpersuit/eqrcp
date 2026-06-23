@@ -139,6 +139,11 @@ func startWailsGUI() {
 	// Clean lingering old executables from update replacement (Windows only)
 	server.CleanLingeringOldExecutables()
 
+	// Apply pending offline update if exists, then restart
+	if server.ApplyOfflineUpdateIfExists() {
+		return
+	}
+
 	// Create an instance of the app structure
 	app := NewApp()
 	tray := newTrayController(app)
