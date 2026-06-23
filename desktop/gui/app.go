@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"eqt/util"
 	"eqt/version"
 	"fmt"
 	"io"
@@ -178,10 +179,14 @@ func (a *App) quit() {
 func killLingeringProcesses() {
 	if isWindows() {
 		// 强杀 Windows 平台的后台传输 agent 及启动器，不匹配 eqt-desktop 避免杀掉自身
-		_ = exec.Command("taskkill", "/F", "/IM", "eqt.exe", "/IM", "eqt-launcher.exe").Run()
+		cmd := exec.Command("taskkill", "/F", "/IM", "eqt.exe", "/IM", "eqt-launcher.exe")
+		util.HideCommand(cmd)
+		_ = cmd.Run()
 	} else {
 		// 强杀 Unix 平台下的后台进程
-		_ = exec.Command("killall", "-9", "eqt").Run()
+		cmd := exec.Command("killall", "-9", "eqt")
+		util.HideCommand(cmd)
+		_ = cmd.Run()
 	}
 }
 
