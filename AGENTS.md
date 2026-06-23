@@ -84,21 +84,11 @@ After branding, desktop integration, chat-device, or Windows-facing changes, use
 For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
 
 
-## 任务反思与 Skill 固化规范 (LLM Memory & Skill Consolidation)
-
-- **在每次任务结束前，必须主动进行自我反思与复盘**。
-- **经验评估**：评估本次任务中是否包含具有长期沉淀价值 of 工程经验（例如：隐蔽的配置入口、环境干扰避坑、命令行特殊交互、不直观的调用路径等）。
-- **同步工程 Skill**：
-  - 如果属于全新领域的工程沉淀，在 `.agents/skills/<skill-name>/SKILL.md` 下定义并创建新技能。
-  - 如果属于已有模块，在已有技能（如 `eqt-drm`、`eqt-ux`、`eqt-dev`）中以**渐进式披露**（Progressive Disclosure）的方式归纳更新，保持 SKILL.md 结构紧凑且易读。
-  - **避免信息冗余**：不记录与具体业务功能相关的临时改动，只沉淀具有复用价值的基础开发与调试方法。
-- **闭环汇报**：在最终向用户交付时，明确指出本次任务更新了哪些 Skill，帮助后续团队及 AI 助手快速理解。
-
-
-# 12-rule template
+# 14-rule template
 
 These rules apply to every task in this project unless explicitly overridden.
 Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
+
 
 ## Rule 1 — Think Before Coding
 State assumptions explicitly. If uncertain, ask rather than guess.
@@ -162,4 +152,13 @@ Default to surfacing uncertainty, not hiding it.
 Never silently compromise or disable existing features when adding new functionality. Identify and protect all legacy and concurrent behaviors in the modified area.
 Test explicitly for backward compatibility: when editing a module (such as settings, styles, layout logic, or network actions), run a regression check on existing flows.
 If a structural or design conflict is detected, stop immediately and raise it for user clarification instead of silently averaging, ignoring, or hiding it.
+
+## Rule 14 — Memory & Skill Consolidation (任务反思与技能固化)
+- **Action Required**: At the end of every single task, you must explicitly evaluate if there is any long-term engineering value to preserve (e.g., hidden configs, environment traps, specific interactive commands, Wails build workflows).
+- **Consolidation**:
+  - If it is a new area, define a new skill in `.agents/skills/<skill-name>/SKILL.md`.
+  - If it belongs to an existing module, update the corresponding skill (such as `eqt-dev`, `eqt-ux`, `eqt-drm`) with Progressive Disclosure to keep the instructions compact.
+  - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary project features or business-specific changes to avoid noise.
+- **Reporting**: In your final delivery, you must explicitly declare which skills were updated or why no updates were necessary.
+
 
