@@ -1874,7 +1874,7 @@
         var sendButton = document.getElementById('send-button');
         var fileEl = document.getElementById('file-input');
         var chatHead = document.getElementById('chat-head');
-        var onlineDot = document.getElementById('online-dot');
+        var onlineDot = document.getElementById('online-dot') || document.createElement('div');
         var deviceCountEl = document.getElementById('device-count');
         var devicesToggle = document.getElementById('devices-toggle');
         var devicePanel = document.getElementById('device-panel');
