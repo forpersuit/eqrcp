@@ -462,7 +462,24 @@ function renderChat() {
             </div>
         `;
     }
-    const src = chatUrl;
+    let src = chatUrl;
+    if (state.settings?.viewportDebug) {
+        try {
+            const urlObj = new URL(src);
+            urlObj.searchParams.set('viewportDebug', '1');
+            src = urlObj.toString();
+        } catch (e) {
+            // Ignored
+        }
+    } else {
+        try {
+            const urlObj = new URL(src);
+            urlObj.searchParams.delete('viewportDebug');
+            src = urlObj.toString();
+        } catch (e) {
+            // Ignored
+        }
+    }
     return `
         <div class="chat-panel">
             <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write" title="Chat"></iframe>

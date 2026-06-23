@@ -65,8 +65,15 @@ func fetchNetworkTime() (time.Time, error) {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
-	resp, err := client.Head("https://www.google.com")
+	// 1. 优先使用当前 DRM 激活所用的许可证服务器（基于 Cloudflare 全球 CDN，国内外访问都快且准确）
+	url := getLicenseServer()
+	resp, err := client.Head(url)
 	if err != nil {
+		// 2. 备选全球高可用 CDN 域名
+		resp, err = client.Head("https://www.cloudflare.com")
+	}
+	if err != nil {
+		// 3. 备选国内高可用域名
 		resp, err = client.Head("https://www.baidu.com")
 	}
 	if err != nil {
