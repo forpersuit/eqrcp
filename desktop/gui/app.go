@@ -100,9 +100,13 @@ type DesktopSettings struct {
 	CloseBehavior    string            `json:"closeBehavior"`
 	ChatSender       string            `json:"chatSender"`
 	ChatAvatar       string            `json:"chatAvatar"`
-	DevMode          bool              `json:"devMode"`
-	DebugLog         bool              `json:"debugLog"`
-	ViewportDebug    bool              `json:"viewportDebug"`
+	DevMode                  bool              `json:"devMode"`
+	DebugLog                 bool              `json:"debugLog"`
+	ViewportDebug            bool              `json:"viewportDebug"`
+	AutoUpdateMode           string            `json:"autoUpdateMode"`
+	UpdateChannel            string            `json:"updateChannel"`
+	LastUpdateCheckTime      int64             `json:"lastUpdateCheckTime"`
+	UpdateCheckIntervalHours int               `json:"updateCheckIntervalHours"`
 }
 
 type InterfaceOption struct {
