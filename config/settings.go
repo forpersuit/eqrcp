@@ -257,19 +257,9 @@ func validateDesktopOutput(path string) error {
 }
 
 func validateDesktopInterface(app application.App, name string) error {
-	if name == "" || name == "any" {
-		return nil
-	}
-	options, err := desktopInterfaceOptions(app.Flags.ListAllInterfaces)
-	if err != nil {
-		return err
-	}
-	for _, option := range options {
-		if option.Name == name {
-			return nil
-		}
-	}
-	return fmt.Errorf("interface %q is not available", name)
+	// Allow saving any interface name to configuration, as the interface may be temporarily offline.
+	// Validation will happen when a server task is actually started.
+	return nil
 }
 
 func desktopInterfaceOptions(listAll bool) ([]DesktopInterfaceOption, error) {

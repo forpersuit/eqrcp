@@ -691,6 +691,13 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
+                        <strong>Chat profile name</strong>
+                        <span>Your nickname in chat sessions.</span>
+                    </div>
+                    <input id="settings-chat-sender" type="text" maxlength="20" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
                         <strong>Chat avatar badge</strong>
                         <span>Use an emoji or 1-4 initials.</span>
                         <div class="avatar-presets">
@@ -1577,7 +1584,10 @@ function showToast(message) {
 async function handleAutoSaveSettings() {
     try {
         await saveSettingsData();
-        render();
+        if (state.error) {
+            state.error = '';
+            render();
+        }
     } catch (e) {
         state.error = 'Failed to save settings: ' + (e.message || String(e));
         render();
@@ -1715,6 +1725,18 @@ function bindSettingsControls() {
         avatarInput.addEventListener('change', async () => {
             syncSettingsFromDOM();
             await handleAutoSaveSettings();
+        });
+    }
+    const chatSenderInput = document.querySelector('#settings-chat-sender');
+    if (chatSenderInput) {
+        chatSenderInput.addEventListener('input', (event) => {
+            const cleaned = cleanChatProfileName(event.target.value);
+            const previewEl = document.querySelector('.avatar-preview');
+            if (previewEl) {
+                const avatarVal = document.querySelector('#settings-chat-avatar')?.value || '';
+                previewEl.textContent = cleanChatAvatar(avatarVal) || (cleaned.charAt(0) || 'D').toUpperCase();
+            }
+            syncSettingsFromDOM();
         });
     }
 

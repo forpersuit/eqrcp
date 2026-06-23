@@ -63,7 +63,14 @@ currentStatus
 .gitignore
 .kiro
 
+
 node_modules
 .codegraph
 .commandcode
+
+# Temp generated files
+design.dark.md
+design.md
+docs/img/transparent1.jpg
+pkgconfig/
 
