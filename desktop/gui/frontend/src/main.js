@@ -760,17 +760,7 @@ function renderSettingsPanel() {
                         <option value="silent" ${state.settings?.autoUpdateMode === 'silent' ? 'selected' : ''}>Silent</option>
                     </select>
                 </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong>Update channel</strong>
-                        <span>Choose stable or pre-release update streams.</span>
-                    </div>
-                    <select id="settings-update-channel">
-                        <option value="stable" ${state.settings?.updateChannel === 'stable' ? 'selected' : ''}>Stable</option>
-                        <option value="beta" ${state.settings?.updateChannel === 'beta' ? 'selected' : ''}>Beta</option>
-                        <option value="nightly" ${state.settings?.updateChannel === 'nightly' ? 'selected' : ''}>Nightly</option>
-                    </select>
-                </div>
+
                 <div class="setting-row">
                     <div class="setting-copy">
                         <strong>Check for updates</strong>
@@ -1630,7 +1620,7 @@ function syncSettingsFromDOM() {
     const chatSender = document.querySelector('#settings-chat-sender');
     const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
-    const updateChannel = document.querySelector('#settings-update-channel');
+
 
     if (receiveInput) state.settings.output = receiveInput.value;
     if (receiveBrowser) state.settings.browser = receiveBrowser.checked;
@@ -1642,7 +1632,7 @@ function syncSettingsFromDOM() {
     if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
     if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
-    if (updateChannel) state.settings.updateChannel = updateChannel.value;
+
 
     state.receiveDir = state.settings.output || '';
     state.browserFallback = Boolean(state.settings.browser);
@@ -1769,7 +1759,7 @@ function bindSettingsControls() {
         '#settings-chat-autosave',
         '#settings-close-behavior',
         '#settings-auto-update-mode',
-        '#settings-update-channel',
+
         '#settings-chat-sender'
     ];
     inputs.forEach(selector => {

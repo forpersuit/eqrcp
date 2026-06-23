@@ -205,6 +205,10 @@ export namespace main {
 	    devMode: boolean;
 	    debugLog: boolean;
 	    viewportDebug: boolean;
+	    autoUpdateMode: string;
+	    updateChannel: string;
+	    lastUpdateCheckTime: number;
+	    updateCheckIntervalHours: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -225,6 +229,10 @@ export namespace main {
 	        this.devMode = source["devMode"];
 	        this.debugLog = source["debugLog"];
 	        this.viewportDebug = source["viewportDebug"];
+	        this.autoUpdateMode = source["autoUpdateMode"];
+	        this.updateChannel = source["updateChannel"];
+	        this.lastUpdateCheckTime = source["lastUpdateCheckTime"];
+	        this.updateCheckIntervalHours = source["updateCheckIntervalHours"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
