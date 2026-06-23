@@ -199,6 +199,64 @@
         }
         .device-panel.open { display: grid; }
 
+        /* ── Language Panel ── */
+        .lang-panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: 0 18px 36px rgba(24, 33, 31, 0.16);
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 160px;
+            padding: 12px;
+            position: absolute;
+            right: 0;
+            top: 44px;
+            z-index: 1000;
+        }
+        .lang-panel.open {
+            display: flex;
+        }
+        .lang-panel-title {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .lang-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .lang-option {
+            background: none;
+            border: none;
+            color: var(--ink);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            text-align: left;
+            transition: background 0.15s ease, color 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .lang-option:hover {
+            background: var(--wash);
+            color: var(--accent-strong);
+        }
+        .lang-option.active {
+            background: var(--accent);
+            color: #ffffff;
+            font-weight: 600;
+        }
+
         /* ── License Panel ── */
         .license-panel {
             background: var(--panel);
@@ -1395,7 +1453,8 @@
             .history-progress {
                 right: 5px;
             }
-            .device-panel {
+            .device-panel,
+            .lang-panel {
                 right: 0;
                 max-height: calc(var(--chat-viewport-height, 100dvh) - var(--composer-height, 58px) - 64px);
                 overflow-y: auto;
@@ -1766,11 +1825,22 @@
                     <button class="icon-button mobile-close-action" type="button" id="close-page" title="Close" aria-label="Close">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
+                    <button class="icon-button" type="button" id="lang-toggle" title="Switch language" aria-label="Switch language">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                    </button>
                     <div class="device-panel" id="device-panel">
                         <div class="device-panel-title">Online devices</div>
                         <div class="device-roster" id="device-roster"></div>
                     </div>
                     <div class="license-panel" id="license-panel"></div>
+                    <div class="lang-panel" id="lang-panel">
+                        <div class="lang-panel-title">Language</div>
+                        <div class="lang-list" id="lang-list"></div>
+                    </div>
                 </div>
             </header>
             <div class="messages" id="messages" aria-live="polite"></div>
@@ -1855,6 +1925,1008 @@
                 };
             }
         })();
+
+        var i18n = {
+            zh: {
+                proActive: "Pro 已激活",
+
+                limitReached: "已超额",
+
+                upgradePlaceholder: "今日免费额度已用完，请付费订阅",
+
+                messagePlaceholder: "输入消息...",
+
+                title: "解锁无限局域网 Chat",
+
+                description: "每天前 5 分钟免费。升级至年费订阅，享受不受限制的高速文本、文件与图片传输体验。",
+
+                price: "$11.99",
+
+                period: "/ 年",
+
+                feature1: "无限聊天时间",
+
+                feature2: "无限制大文件与原图传输",
+
+                feature3: "更稳定的多设备局域网同步",
+
+                subscribeBtn: "立即订阅 (年付 $11.99)",
+
+                subscribeProgress: "正在订阅...",
+
+                subscribeSuccess: "订阅成功！🎉",
+
+                subscribeFail: "订阅失败，请重试",
+
+                hint: "支持模拟支付以供测试体验。支付后立即可用。",
+
+                premium: "专业版",
+
+                titleAttr: "点击查看订阅详情",
+
+                clockError: "时钟异常",
+
+                clockErrorHint: "检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。",
+
+                tierInfo: "授权详情：",
+
+                statusLabel: "状态",
+
+                tierLabel: "授权级别",
+
+                reasonLabel: "锁定原因",
+
+                activeStatus: "已激活",
+
+                freeStatus: "免费额度",
+
+                limitStatus: "已超额",
+
+                lockedStatus: "时钟异常锁定",
+
+                expiredStatus: "授权已过期",
+
+                sending: "正在发送...",
+
+                fileTooLarge: "文件 \"{name}\" 超过免费版 2MB 大小限制。",
+
+                uploadFailedLimit: "上传失败：文件体积超过免费版 2MB 大小限制。",
+
+                uploadFailed: "附件上传失败。",
+
+                eventSourceNotSupported: "不支持 EventSource，切换为轮询模式...",
+
+                hideUrl: "隐藏 URL",
+
+                showUrl: "显示 URL",
+
+                devicesOnline: "在线设备",
+
+                showSessionQR: "显示会话二维码",
+
+                showConnectedDevices: "查看连接的设备",
+
+                stopChat: "停止聊天",
+
+                close: "关闭",
+
+                langPanelTitle: "选择语言",
+
+                sandboxTitle: "验收测试控制台",
+
+                hide: "隐藏",
+
+                sandboxPaidActive: "永久付费激活",
+
+                sandboxUnpaidInconsistent: "授权未激活/失效(不一致)",
+
+                sandboxClockLocked: "已锁定 (时钟异常)",
+
+                sandboxFreeQuota: "免费额度体验中",
+
+                sandboxFreeExceeded: "免费额度已超额",
+
+                clockRollbackReason: "系统时钟被回退（早于上次运行时间）",
+
+                clockRollbackSolution: "1. 请检查并同步您的系统时间。\n2. 重启核心进程并在电脑端软件的设置中重新激活。",
+
+                chatDuration: "聊天时长",
+
+                unlimited: "无限制",
+
+                fileTransfers: "传输文件",
+
+                serverInconsistentReason: "服务端付费判定未激活 (不一致)",
+
+                serverInconsistentSolution: "1. 请确保电脑端客户端软件已处于开启并连接状态。\n2. 若仍不一致，请在客户端中点击“重置授权”，并重新兑换激活码。",
+
+                remainingFreeTime: "剩余免费时间",
+
+                limitDetailsText: "限制详情",
+
+                limitDetailsVal: "每日 5 分钟，大文件限 20MB",
+
+                licenseInactiveOrExpired: "授权未激活/已失效",
+
+                howToRestore: "如何恢复"
+
+            },
+            en: {
+                proActive: "Pro Active",
+
+                limitReached: "Limit reached",
+
+                upgradePlaceholder: "Daily free quota used up. Please upgrade to continue.",
+
+                messagePlaceholder: "Message",
+
+                title: "Unlock Unlimited Chat",
+
+                description: "Daily free chat is limited to 5 minutes. Upgrade to Premium for unlimited text, file, and image transfers.",
+
+                price: "$11.99",
+
+                period: "/ yr",
+
+                feature1: "Unlimited chat duration",
+
+                feature2: "No limit on file & image sizes",
+
+                feature3: "Smoother multi-device sync",
+
+                subscribeBtn: "Subscribe Now ($11.99/yr)",
+
+                subscribeProgress: "Subscribing...",
+
+                subscribeSuccess: "Subscribed successfully! 🎉",
+
+                subscribeFail: "Subscription failed, retry",
+
+                hint: "Supports mock payment for testing. Active immediately.",
+
+                premium: "PREMIUM",
+
+                titleAttr: "Click to view subscription details",
+
+                clockError: "Clock Error",
+
+                clockErrorHint: "System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in client settings.",
+
+                tierInfo: "License Details:",
+
+                statusLabel: "Status",
+
+                tierLabel: "Tier",
+
+                reasonLabel: "Reason",
+
+                activeStatus: "Active",
+
+                freeStatus: "Free Quota",
+
+                limitStatus: "Limit Reached",
+
+                lockedStatus: "Locked (Clock Tampered)",
+
+                expiredStatus: "Expired",
+
+                sending: "Sending...",
+
+                fileTooLarge: "File \"{name}\" exceeds the free tier limit of 2MB.",
+
+                uploadFailedLimit: "Upload failed: File size exceeds the free tier limit of 2MB.",
+
+                uploadFailed: "Attachment upload failed.",
+
+                eventSourceNotSupported: "EventSource not supported. Using polling...",
+
+                hideUrl: "Hide URL",
+
+                showUrl: "Show URL",
+
+                devicesOnline: "Online devices",
+
+                showSessionQR: "Show session QR",
+
+                showConnectedDevices: "Show connected devices",
+
+                stopChat: "Stop" + " chat",
+
+                close: "Close",
+
+                langPanelTitle: "Language",
+
+                sandboxTitle: "Acceptance Sandbox",
+
+                hide: "Hide",
+
+                sandboxPaidActive: "Lifetime Paid Active",
+
+                sandboxUnpaidInconsistent: "Unpaid (Inconsistent)",
+
+                sandboxClockLocked: "Locked (Clock Tampered)",
+
+                sandboxFreeQuota: "Free Quota Active",
+
+                sandboxFreeExceeded: "Free Quota Exceeded",
+
+                clockRollbackReason: "System clock rollback detected",
+
+                clockRollbackSolution: "1. Please synchronize your system clock.\n2. Restart the app and reactivate it in desktop client settings.",
+
+                chatDuration: "Chat Duration",
+
+                unlimited: "Unlimited",
+
+                fileTransfers: "File Transfers",
+
+                serverInconsistentReason: "Server verification inactive",
+
+                serverInconsistentSolution: "1. Please make sure the desktop app is running and connected.\n2. If state persists, reset activation and redeem code again in client settings.",
+
+                remainingFreeTime: "Remaining Time",
+
+                limitDetailsText: "Limit Details",
+
+                limitDetailsVal: "5 mins daily, 20MB file limit",
+
+                licenseInactiveOrExpired: "License Inactive/Expired",
+
+                howToRestore: "How to Restore"
+
+            },
+            ja: {
+                proActive: "Pro アクティブ",
+
+                limitReached: "制限に達しました",
+
+                upgradePlaceholder: "本日の無料枠が終了しました。アップグレードしてください。",
+
+                messagePlaceholder: "メッセージ...",
+
+                title: "無制限チャットをアンロック",
+
+                description: "毎日の無料チャットは5分間に制限されています。無制限のテキスト、ファイル、画像転送を利用するにはプレミアムにアップグレードしてください。",
+
+                price: "$11.99",
+
+                period: "/ 年",
+
+                feature1: "無制限のチャット時間",
+
+                feature2: "ファイル・画像サイズ制限なし",
+
+                feature3: "より安定した複数デバイス間同期",
+
+                subscribeBtn: "今すぐ購読 ($11.99/年)",
+
+                subscribeProgress: "購読処理中...",
+
+                subscribeSuccess: "購読が成功しました！🎉",
+
+                subscribeFail: "購読に失敗しました。再試行してください",
+
+                hint: "テスト用の模擬支払いに対応。支払後すぐに利用可能。",
+
+                premium: "プレミアム",
+
+                titleAttr: "クリックして購読詳細を表示",
+
+                clockError: "クロック異常",
+
+                clockErrorHint: "システムクロックの巻き戻しが検出されました。有料機能がロックされています。システム時刻を同期し、クライアント設定で再有効化してください。",
+
+                tierInfo: "ライセンス詳細：",
+
+                statusLabel: "ステータス",
+
+                tierLabel: "ティア",
+
+                reasonLabel: "ロックの原因",
+
+                activeStatus: "有効",
+
+                freeStatus: "無料枠",
+
+                limitStatus: "制限超過",
+
+                lockedStatus: "ロック中 (クロック異常)",
+
+                expiredStatus: "期限切れ",
+
+                sending: "送信中...",
+
+                fileTooLarge: "ファイル \"{name}\" は無料プランの制限2MBを超えています。",
+
+                uploadFailedLimit: "アップロード失敗：ファイルサイズが無料プランの制限2MBを超えています。",
+
+                uploadFailed: "ファイルのアップロードに失敗しました。",
+
+                eventSourceNotSupported: "EventSourceがサポートされていないため、ポーリングに切り替えます...",
+
+                hideUrl: "URLを非表示",
+
+                showUrl: "URLを表示",
+
+                devicesOnline: "オンラインデバイス",
+
+                showSessionQR: "セッションQRを表示",
+
+                showConnectedDevices: "接続デバイスを表示",
+
+                stopChat: "チャットを停止",
+
+                close: "閉じる",
+
+                langPanelTitle: "言語を選択",
+
+                sandboxTitle: "受入テストコンソール",
+
+                hide: "非表示",
+
+                sandboxPaidActive: "永久ライセンス有効",
+
+                sandboxUnpaidInconsistent: "未払い（不一致）",
+
+                sandboxClockLocked: "ロック中（クロック異常）",
+
+                sandboxFreeQuota: "無料体験中",
+
+                sandboxFreeExceeded: "無料体験の制限超過",
+
+                clockRollbackReason: "システムクロックの巻き戻しが検出されました",
+
+                clockRollbackSolution: "1. システムクロックを同期してください。\n2. アプリを再起動し、デスクトップ設定で再有効化してください。",
+
+                chatDuration: "チャット時間",
+
+                unlimited: "無制限",
+
+                fileTransfers: "ファイル転送",
+
+                serverInconsistentReason: "サーバー側の支払判定が未有効（不一致）",
+
+                serverInconsistentSolution: "1. デスクトップアプリが起動し接続されていることを確認してください。\n2. 状態が続く場合は、設定でライセンスをリセットし再適用してください。",
+
+                remainingFreeTime: "残り無料時間",
+
+                limitDetailsText: "制限の詳細",
+
+                limitDetailsVal: "毎日5分間、ファイルサイズ制限20MB",
+
+                licenseInactiveOrExpired: "ライセンス未有効/期限切れ",
+
+                howToRestore: "復元の手順"
+
+            },
+            ko: {
+                proActive: "Pro 활성화됨",
+
+                limitReached: "한도 초과",
+
+                upgradePlaceholder: "오늘 무료 제공량이 소진되었습니다. 계속하려면 업그레이드하세요.",
+
+                messagePlaceholder: "메시지 입력...",
+
+                title: "무제한 채팅 잠금 해제",
+
+                description: "일일 무료 채팅은 5분으로 제한됩니다. 프리미엄으로 업그레이드하여 무제한 텍스트, 파일 및 이미지 전송을 즐겨보세요.",
+
+                price: "$11.99",
+
+                period: "/ 년",
+
+                feature1: "무제한 채팅 시간",
+
+                feature2: "파일 및 이미지 크기 제한 없음",
+
+                feature3: "보다 안정적인 다중 장치 동기화",
+
+                subscribeBtn: "지금 구독하기 ($11.99/년)",
+
+                subscribeProgress: "구독 중...",
+
+                subscribeSuccess: "구독 완료! 🎉",
+
+                subscribeFail: "구독 실패, 다시 시도하세요",
+
+                hint: "테스트용 모의 결제를 지원합니다. 결제 즉시 사용 가능.",
+
+                premium: "프리미엄",
+
+                titleAttr: "구독 세부 정보를 보려면 클릭하세요",
+
+                clockError: "시계 오류",
+
+                clockErrorHint: "시스템 시계 되돌리기가 감지되었습니다. 유료 기능이 잠겼습니다. 시스템 시계를 동기화하고 클라이언트 설정에서 다시 활성화하십시오.",
+
+                tierInfo: "라이센스 세부 정보:",
+
+                statusLabel: "상태",
+
+                tierLabel: "등급",
+
+                reasonLabel: "잠금 사유",
+
+                activeStatus: "활성화됨",
+
+                freeStatus: "무료 제공량",
+
+                limitStatus: "한도 초과",
+
+                lockedStatus: "잠김 (시계 조작됨)",
+
+                expiredStatus: "만료됨",
+
+                sending: "전송 중...",
+
+                fileTooLarge: "파일 \"{name}\"이(가) 무료 등급 제한인 2MB를 초과합니다.",
+
+                uploadFailedLimit: "업로드 실패: 파일 크기가 무료 등급 제한인 2MB를 초과합니다.",
+
+                uploadFailed: "파일 업로드에 실패했습니다.",
+
+                eventSourceNotSupported: "EventSource가 지원되지 않아 폴링 모드로 전환합니다...",
+
+                hideUrl: "URL 숨기기",
+
+                showUrl: "URL 표시",
+
+                devicesOnline: "온라인 장치",
+
+                showSessionQR: "세션 QR 표시",
+
+                showConnectedDevices: "연결된 장치 보기",
+
+                stopChat: "채팅 중지",
+
+                close: "닫기",
+
+                langPanelTitle: "언어 선택",
+
+                sandboxTitle: "인수 테스트 콘솔",
+
+                hide: "숨기기",
+
+                sandboxPaidActive: "평생 유료 활성화",
+
+                sandboxUnpaidInconsistent: "미결제 (불일치)",
+
+                sandboxClockLocked: "잠김 (시계 조작됨)",
+
+                sandboxFreeQuota: "무료 체험 중",
+
+                sandboxFreeExceeded: "무료 한도 초과",
+
+                clockRollbackReason: "시스템 시계 되돌리기가 감지되었습니다",
+
+                clockRollbackSolution: "1. 시스템 시계를 동기화하십시오.\n2. 앱을 재부팅하고 데스크톱 설정에서 다시 활성화하십시오.",
+
+                chatDuration: "채팅 시간",
+
+                unlimited: "무제한",
+
+                fileTransfers: "파일 전송",
+
+                serverInconsistentReason: "서버 측 결제 검증이 활성화되지 않음 (불일치)",
+
+                serverInconsistentSolution: "1. 데스크톱 앱이 실행 중이고 연결되어 있는지 확인하십시오.\n2. 상태가 지속되면 설정에서 활성화를 재설정하고 다시 인증하십시오.",
+
+                remainingFreeTime: "남은 무료 시간",
+
+                limitDetailsText: "제한 세부 사항",
+
+                limitDetailsVal: "매일 5분, 파일 크기 제한 20MB",
+
+                licenseInactiveOrExpired: "라이센스 비활성화됨/만료됨",
+
+                howToRestore: "복구 방법"
+
+            },
+            es: {
+                proActive: "Pro Activo",
+
+                limitReached: "Límite alcanzado",
+
+                upgradePlaceholder: "Cupo gratuito diario agotado. Suscríbete para continuar.",
+
+                messagePlaceholder: "Mensaje...",
+
+                title: "Desbloquear Chat Ilimitado",
+
+                description: "El chat gratuito diario está limitado a 5 minutos. Suscríbete a Premium para transferencias ilimitadas de texto, archivos e imágenes.",
+
+                price: "$11.99",
+
+                period: "/ año",
+
+                feature1: "Duración de chat ilimitada",
+
+                feature2: "Sin límite de tamaño en archivos e imágenes",
+
+                feature3: "Sincronización multidispositivo más fluida",
+
+                subscribeBtn: "Suscribirse Ahora ($11.99/año)",
+
+                subscribeProgress: "Suscribiendo...",
+
+                subscribeSuccess: "¡Suscripción exitosa! 🎉",
+
+                subscribeFail: "Suscripción fallida, reintentar",
+
+                hint: "Soporta pago simulado para pruebas. Activo de inmediato.",
+
+                premium: "PREMIUM",
+
+                titleAttr: "Haz clic para ver los detalles de suscripción",
+
+                clockError: "Error de Reloj",
+
+                clockErrorHint: "Se detectó retroceso del reloj del sistema. Funciones de pago bloqueadas. Sincroniza la hora de tu sistema y reactívala en la configuración.",
+
+                tierInfo: "Detalles de la Licencia:",
+
+                statusLabel: "Estado",
+
+                tierLabel: "Nivel",
+
+                reasonLabel: "Razón",
+
+                activeStatus: "Activo",
+
+                freeStatus: "Cupo Gratuito",
+
+                limitStatus: "Límite Superado",
+
+                lockedStatus: "Bloqueado (Reloj Alterado)",
+
+                expiredStatus: "Expirado",
+
+                sending: "Enviando...",
+
+                fileTooLarge: "El archivo \"{name}\" supera el límite de 2MB de la versión gratuita.",
+
+                uploadFailedLimit: "Error al subir: el tamaño del archivo supera el límite de 2MB de la versión gratuita.",
+
+                uploadFailed: "Error al subir el archivo.",
+
+                eventSourceNotSupported: "EventSource no soportado. Cambiando a sondeo...",
+
+                hideUrl: "Ocultar URL",
+
+                showUrl: "Mostrar URL",
+
+                devicesOnline: "Dispositivos en línea",
+
+                showSessionQR: "Mostrar QR de la sesión",
+
+                showConnectedDevices: "Mostrar dispositivos conectados",
+
+                stopChat: "Detener chat",
+
+                close: "Cerrar",
+
+                langPanelTitle: "Idioma",
+
+                sandboxTitle: "Consola de Sandbox de Aceptación",
+
+                hide: "Ocultar",
+
+                sandboxPaidActive: "Activo de Pago de por Vida",
+
+                sandboxUnpaidInconsistent: "Impago (Inconsistente)",
+
+                sandboxClockLocked: "Bloqueado (Reloj Alterado)",
+
+                sandboxFreeQuota: "Cupo Gratuito Activo",
+
+                sandboxFreeExceeded: "Cupo Gratuito Excedido",
+
+                clockRollbackReason: "Se detectó retroceso del reloj del sistema",
+
+                clockRollbackSolution: "1. Sincroniza el reloj del sistema.\n2. Reinicia la aplicación y vuelve a activarla en la configuración del cliente.",
+
+                chatDuration: "Duración de Chat",
+
+                unlimited: "Ilimitado",
+
+                fileTransfers: "Transferencia de Archivos",
+
+                serverInconsistentReason: "Verificación del servidor inactiva (inconsistente)",
+
+                serverInconsistentSolution: "1. Asegúrate de que la app de escritorio esté abierta y conectada.\n2. Si el problema persiste, restablece la activación y canjea el código en los ajustes.",
+
+                remainingFreeTime: "Tiempo Restante",
+
+                limitDetailsText: "Detalles del Límite",
+
+                limitDetailsVal: "5 min al día, archivo límite 20MB",
+
+                licenseInactiveOrExpired: "Licencia Inactiva/Expirada",
+
+                howToRestore: "Cómo Restaurar"
+
+            },
+            de: {
+                proActive: "Pro Aktiv",
+
+                limitReached: "Limit erreicht",
+
+                upgradePlaceholder: "Tägliches Gratis-Guthaben aufgebraucht. Bitte abonnieren Sie, um fortzufahren.",
+
+                messagePlaceholder: "Nachricht...",
+
+                title: "Unbegrenzten Chat Freischalten",
+
+                description: "Der tägliche kostenlose Chat ist auf 5 Minuten begrenzt. Upgrade auf Premium für unbegrenzte Text-, Datei- und Bildübertragungen.",
+
+                price: "$11.99",
+
+                period: "/ Jahr",
+
+                feature1: "Unbegrenzte Chat-Dauer",
+
+                feature2: "Keine Begrenzung der Datei- und Bildgröße",
+
+                feature3: "Reibungslosere Synchronisation mehrerer Geräte",
+
+                subscribeBtn: "Jetzt Abonnieren ($11.99/Jahr)",
+
+                subscribeProgress: "Abonnieren...",
+
+                subscribeSuccess: "Erfolgreich abonniert! 🎉",
+
+                subscribeFail: "Abonnement fehlgeschlagen, erneut versuchen",
+
+                hint: "Unterstützt Testzahlungen. Sofort aktiv.",
+
+                premium: "PREMIUM",
+
+                titleAttr: "Klicken Sie, um die Abonnementdetails anzuzeigen",
+
+                clockError: "Uhrzeitfehler",
+
+                clockErrorHint: "Systemzeit-Rückstellung erkannt. Kostenpflichtige Funktionen gesperrt. Bitte synchronisieren Sie Ihre Systemzeit und reaktivieren Sie sie in den Einstellungen.",
+
+                tierInfo: "Lizenzdetails:",
+
+                statusLabel: "Status",
+
+                tierLabel: "Stufe",
+
+                reasonLabel: "Grund",
+
+                activeStatus: "Aktiv",
+
+                freeStatus: "Gratis-Kontingent",
+
+                limitStatus: "Limit Überschritten",
+
+                lockedStatus: "Gesperrt (Uhrzeit manipuliert)",
+
+                expiredStatus: "Abgelaufen",
+
+                sending: "Senden...",
+
+                fileTooLarge: "Die Datei \"{name}\" überschreitet das Limit der kostenlosen Version von 2 MB.",
+
+                uploadFailedLimit: "Upload fehlgeschlagen: Dateigröße überschreitet das Limit der kostenlosen Version von 2 MB.",
+
+                uploadFailed: "Dateiupload fehlgeschlagen.",
+
+                eventSourceNotSupported: "EventSource nicht unterstützt. Verwende Polling...",
+
+                hideUrl: "URL ausblenden",
+
+                showUrl: "URL anzeigen",
+
+                devicesOnline: "Online-Geräte",
+
+                showSessionQR: "Sitzungs-QR anzeigen",
+
+                showConnectedDevices: "Verbundene Geräte anzeigen",
+
+                stopChat: "Chat beenden",
+
+                close: "Schließen",
+
+                langPanelTitle: "Sprache",
+
+                sandboxTitle: "Abnahmetest-Konsole",
+
+                hide: "Ausblenden",
+
+                sandboxPaidActive: "Lebenslang bezahlt aktiv",
+
+                sandboxUnpaidInconsistent: "Unbezahlt (inkonsistent)",
+
+                sandboxClockLocked: "Gesperrt (Uhrzeit manipuliert)",
+
+                sandboxFreeQuota: "Gratis-Kontingent aktiv",
+
+                sandboxFreeExceeded: "Gratis-Kontingent überschritten",
+
+                clockRollbackReason: "Systemzeit-Rückstellung erkannt",
+
+                clockRollbackSolution: "1. Synchronisieren Sie Ihre Systemzeit.\n2. Starten Sie die App neu und reaktivieren Sie sie in den Desktop-Einstellungen.",
+
+                chatDuration: "Chat-Dauer",
+
+                unlimited: "Unbegrenzt",
+
+                fileTransfers: "Dateiübertragungen",
+
+                serverInconsistentReason: "Serverseitige Zahlungsprüfung nicht aktiv (inkonsistent)",
+
+                serverInconsistentSolution: "1. Stellen Sie sicher, dass die Desktop-App läuft und verbunden ist.\n2. Wenn das Problem weiterhin besteht, setzen Sie die Aktivierung zurück und lösen Sie den Code erneut ein.",
+
+                remainingFreeTime: "Verbleibende Zeit",
+
+                limitDetailsText: "Limit-Details",
+
+                limitDetailsVal: "Täglich 5 Min., Dateigrößenlimit 20MB",
+
+                licenseInactiveOrExpired: "Lizenz Inaktiv/Abgelaufen",
+
+                howToRestore: "Wiederherstellung"
+
+            },
+            fr: {
+                proActive: "Pro Activé",
+
+                limitReached: "Limite atteinte",
+
+                upgradePlaceholder: "Quota gratuit quotidien épuisé. Veuillez vous abonner pour continuer.",
+
+                messagePlaceholder: "Message...",
+
+                title: "Débloquer le Chat Illimité",
+
+                description: "Le chat gratuit quotidien est limité à 5 minutes. Passez à la version Premium pour des transferts illimités de textes, fichiers et images.",
+
+                price: "$11.99",
+
+                period: "/ an",
+
+                feature1: "Durée de chat illimitée",
+
+                feature2: "Aucune limite de taille pour les fichiers et images",
+
+                feature3: "Synchronisation multi-appareil plus fluide",
+
+                subscribeBtn: "S'abonner Maintenant (11,99 $/an)",
+
+                subscribeProgress: "Inscription en cours...",
+
+                subscribeSuccess: "Inscription réussie ! 🎉",
+
+                subscribeFail: "Échec de l'inscription, réessayez",
+
+                hint: "Prend en charge le paiement fictif pour test. Actif immédiatement.",
+
+                premium: "PREMIUM",
+
+                titleAttr: "Cliquez pour voir les détails de l'abonnement",
+
+                clockError: "Erreur d'Horloge",
+
+                clockErrorHint: "Retour en arrière de l'horloge système détecté. Fonctions payantes verrouillées. Veuillez synchroniser votre horloge système et réactiver dans les paramètres.",
+
+                tierInfo: "Détails de la licence :",
+
+                statusLabel: "Statut",
+
+                tierLabel: "Niveau",
+
+                reasonLabel: "Raison",
+
+                activeStatus: "Actif",
+
+                freeStatus: "Quota Gratuit",
+
+                limitStatus: "Limite Dépassée",
+
+                lockedStatus: "Verrouillé (Horloge altérée)",
+
+                expiredStatus: "Expiré",
+
+                sending: "Envoi en cours...",
+
+                fileTooLarge: "Le fichier \"{name}\" dépasse la limite de 2 Mo de l'offre gratuite.",
+
+                uploadFailedLimit: "Échec du chargement : la taille du fichier dépasse la limite de 2 Mo de l'offre gratuite.",
+
+                uploadFailed: "Échec du chargement du fichier.",
+
+                eventSourceNotSupported: "EventSource non pris en charge. Utilisation du polling...",
+
+                hideUrl: "Masquer l'URL",
+
+                showUrl: "Afficher l'URL",
+
+                devicesOnline: "Appareils en ligne",
+
+                showSessionQR: "Afficher le QR de session",
+
+                showConnectedDevices: "Afficher les appareils connectés",
+
+                stopChat: "Arrêter le chat",
+
+                close: "Fermer",
+
+                langPanelTitle: "Langue",
+
+                sandboxTitle: "Console de test d'acceptation",
+
+                hide: "Masquer",
+
+                sandboxPaidActive: "Actif Payé à vie",
+
+                sandboxUnpaidInconsistent: "Impayé (incohérent)",
+
+                sandboxClockLocked: "Verrouillé (Horloge altérée)",
+
+                sandboxFreeQuota: "Quota gratuit actif",
+
+                sandboxFreeExceeded: "Quota gratuit dépassé",
+
+                clockRollbackReason: "Retour en arrière de l'horloge système détecté",
+
+                clockRollbackSolution: "1. Synchronisez l'horloge de votre système.\n2. Redémarrez l'application et réactivez-la dans les paramètres.",
+
+                chatDuration: "Durée du Chat",
+
+                unlimited: "Illimité",
+
+                fileTransfers: "Transferts de fichiers",
+
+                serverInconsistentReason: "Vérification du serveur inactive (incohérente)",
+
+                serverInconsistentSolution: "1. Assurez-vous que l'application de bureau est lancée et connectée.\n2. Si le problème persiste, réinitialisez l'activation et entrez à nouveau le code.",
+
+                remainingFreeTime: "Temps Restant",
+
+                limitDetailsText: "Détails de la limite",
+
+                limitDetailsVal: "5 min par jour, fichier limité à 20 Mo",
+
+                licenseInactiveOrExpired: "Licence Inactive/Expirée",
+
+                howToRestore: "Comment restaurer"
+
+            }
+        };
+
+        var supportedLangs = {
+            en: 'English',
+            zh: '简体中文',
+            ja: '日本語',
+            ko: '한국어',
+            es: 'Español',
+            de: 'Deutsch',
+            fr: 'Français'
+        };
+        var savedLang = safeStorage.getItem('eqt_lang');
+        var detectedLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
+        var lang = supportedLangs[savedLang] ? savedLang : (supportedLangs[detectedLang] ? detectedLang : 'en');
+        var dict = i18n[lang];
+        var limitState = {
+            usedSeconds: 0,
+            isPaid: false,
+            clockTampered: false,
+            licenseTier: '{{.LicenseTier}}'
+        };
+
+        function updatePageTranslations() {
+            // Update input placeholder
+            var textEl = document.getElementById('message-text');
+            if (textEl) {
+                if (limitState.clockTampered) {
+                    textEl.placeholder = dict.clockError;
+                } else if (limitState.isPaid) {
+                    textEl.placeholder = dict.messagePlaceholder;
+                } else {
+                    var remaining = Math.max(0, 300 - limitState.usedSeconds);
+                    if (remaining <= 0) {
+                        textEl.placeholder = dict.upgradePlaceholder;
+                    } else {
+                        textEl.placeholder = dict.messagePlaceholder;
+                    }
+                }
+            }
+
+            // Update offline device title
+            var devPanelTitle = document.querySelector('.device-panel-title');
+            if (devPanelTitle) devPanelTitle.textContent = dict.devicesOnline;
+
+            // Update lang panel title
+            var langPanelTitle = document.querySelector('.lang-panel-title');
+            if (langPanelTitle) langPanelTitle.textContent = dict.langPanelTitle;
+
+            // Update headers buttons title & aria-label
+            var devToggle = document.getElementById('devices-toggle');
+            if (devToggle) {
+                devToggle.setAttribute('title', dict.showConnectedDevices);
+                devToggle.setAttribute('aria-label', dict.showConnectedDevices);
+            }
+            var shareSession = document.getElementById('share-session');
+            if (shareSession) {
+                shareSession.setAttribute('title', dict.showSessionQR);
+                shareSession.setAttribute('aria-label', dict.showSessionQR);
+            }
+            var stopBtn = document.querySelector('.head-stop-form button');
+            if (stopBtn) {
+                stopBtn.setAttribute('title', dict.stopChat);
+                stopBtn.setAttribute('aria-label', dict.stopChat);
+            }
+            var closeBtn = document.getElementById('close-page');
+            if (closeBtn) {
+                closeBtn.setAttribute('title', dict.close);
+                closeBtn.setAttribute('aria-label', dict.close);
+            }
+            var limitPill = document.getElementById('limit-status-pill');
+            if (limitPill) {
+                if (limitState.clockTampered) {
+                    limitPill.setAttribute('title', dict.clockErrorHint);
+                } else {
+                    limitPill.setAttribute('title', dict.titleAttr);
+                }
+            }
+
+            // Update show/hide url text on session qr
+            var sessionToggle = document.getElementById('session-toggle');
+            if (sessionToggle) {
+                var isCollapsed = document.getElementById('session-collapsible').classList.contains('collapsed');
+                sessionToggle.textContent = isCollapsed ? dict.showUrl : dict.hideUrl;
+            }
+
+            // Reload payment modal markup if open
+            var backdrop = document.getElementById('pay-modal-backdrop');
+            if (backdrop && backdrop.classList.contains('open')) {
+                initPayModalDOM();
+            }
+
+            // Re-render license details
+            updateLicensePanelUI();
+
+            // Re-render sandbox console if loaded
+            if (document.getElementById('acceptance-sandbox')) {
+                renderSandboxConsoleUI();
+            }
+
+            // Refresh Language Switcher List options active classes
+            renderLanguageList();
+        }
+
+        function updateLanguage(newLang) {
+            if (supportedLangs[newLang]) {
+                lang = newLang;
+                dict = i18n[lang];
+                safeStorage.setItem('eqt_lang', lang);
+                updatePageTranslations();
+            }
+        }
+
+        function renderLanguageList() {
+            var listEl = document.getElementById('lang-list');
+            if (!listEl) return;
+            listEl.innerHTML = '';
+            Object.keys(supportedLangs).forEach(function(key) {
+                var btn = document.createElement('button');
+                btn.className = 'lang-option';
+                if (key === lang) {
+                    btn.classList.add('active');
+                }
+                btn.textContent = supportedLangs[key];
+                btn.addEventListener('click', function() {
+                    updateLanguage(key);
+                    var lp = document.getElementById('lang-panel');
+                    if (lp) lp.classList.remove('open');
+                });
+                listEl.appendChild(btn);
+            });
+        }
+
         var clientToken = currentClientToken();
         var joinToken = currentJoinToken();
         var state = {
@@ -1888,6 +2960,7 @@
         var scrollArrow = document.getElementById('scroll-arrow');
         var scrollArrowBadge = document.getElementById('scroll-arrow-badge');
         var unreadSinceScroll = 0;
+        updatePageTranslations();
         var inWails = window.parent !== window;
         var previewScale = 1;
         var previewX = 0;
@@ -2932,7 +4005,7 @@
         function renderAttachmentDescription(container, message) {
             if (message.sending) {
                 var pct = message.progress || 0;
-                var desc = message.type === 'text' ? '正在发送...' : fileDescription(message);
+                var desc = message.type === 'text' ? dict.sending : fileDescription(message);
                 container.textContent = desc;
                 container.classList.add('uploading');
                 var sc = messageColor(message);
@@ -3593,11 +4666,11 @@
                 if (meta) {
                     var desc = '';
                     if (msg && msg.type === 'text') {
-                        desc = '正在发送...';
+                        desc = dict.sending;
                     } else if (msg) {
                         desc = fileDescription(msg);
                     } else {
-                        desc = '正在发送...';
+                        desc = dict.sending;
                     }
                     meta.textContent = desc;
                     meta.classList.add('uploading');
@@ -3789,7 +4862,7 @@
             var isFreeExceeded = !limitState.isPaid && (300 - limitState.usedSeconds <= 0);
             if (isFreeExceeded && !limitState.clockTampered) {
                 if (file.size > 2 * 1024 * 1024) {
-                    var errMsg = '文件 "' + file.name + '" 超过免费版 2MB 大小限制。';
+                    var errMsg = dict.fileTooLarge.replace('{name}', file.name);
                     showSystemNotice(errMsg);
                     return;
                 }
@@ -3848,7 +4921,7 @@
                     return;
                 }
                 if (xhr.status === 413) {
-                    updateUploadFailed(tempId, '上传失败：文件体积超过免费版 2MB 大小限制。');
+                    updateUploadFailed(tempId, dict.uploadFailedLimit);
                     return;
                 }
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -3856,15 +4929,15 @@
                         var messages = JSON.parse(xhr.responseText);
                         replaceTempMessage(tempId, messages);
                     } catch(e) {
-                        updateUploadFailed(tempId, 'Attachment upload failed.');
+                        updateUploadFailed(tempId, dict.uploadFailed);
                     }
                 } else {
-                    updateUploadFailed(tempId, 'Attachment upload failed.');
+                    updateUploadFailed(tempId, dict.uploadFailed);
                 }
             };
             
             xhr.onerror = function() {
-                updateUploadFailed(tempId, 'Attachment upload failed.');
+                updateUploadFailed(tempId, dict.uploadFailed);
             };
             
             xhr.send(data);
@@ -4075,9 +5148,30 @@
         devicesToggle.addEventListener('click', toggleDevicePanel);
         devicePanel.addEventListener('click', function(e) { e.stopPropagation(); });
         licensePanel.addEventListener('click', function(e) { e.stopPropagation(); });
+
+        var langToggle = document.getElementById('lang-toggle');
+        var langPanel = document.getElementById('lang-panel');
+
+        function closeLangPanel() {
+            if (langPanel) langPanel.classList.remove('open');
+        }
+
+        langToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeDevicePanel();
+            closeLicensePanel();
+            var open = !langPanel.classList.contains('open');
+            langPanel.classList.toggle('open', open);
+            if (open) {
+                renderLanguageList();
+            }
+        });
+        langPanel.addEventListener('click', function(e) { e.stopPropagation(); });
+
         document.addEventListener('click', function() {
             closeDevicePanel();
             closeLicensePanel();
+            closeLangPanel();
         });
         shareSessionButton.addEventListener('click', openSessionPanel);
         document.getElementById('close-page').addEventListener('click', closePage);
@@ -4088,11 +5182,11 @@
             var isCollapsed = collapsible.classList.contains('collapsed');
             if (isCollapsed) {
                 collapsible.classList.remove('collapsed');
-                toggle.textContent = 'Hide URL';
+                toggle.textContent = dict.hideUrl;
                 toggle.setAttribute('aria-expanded', 'true');
             } else {
                 collapsible.classList.add('collapsed');
-                toggle.textContent = 'Show URL';
+                toggle.textContent = dict.showUrl;
                 toggle.setAttribute('aria-expanded', 'false');
             }
         });
@@ -4333,86 +5427,11 @@
             connectSSE();
             setInterval(function() { if (isPageVisible) { refreshChatStatus().catch(function() {}); } }, 5000);
         } else {
-            setConnectionState(false, 'EventSource not supported. Using polling...');
-            showSystemNotice('EventSource not supported. Using polling...');
+            setConnectionState(false, dict.eventSourceNotSupported);
+            showSystemNotice(dict.eventSourceNotSupported);
             setInterval(function() { if (isPageVisible) { loadMessages(); } }, 3000);
         }
 
-        // ── Premium Limit System ──
-        var lang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
-        
-        var i18n = {
-            zh: {
-                proActive: 'Pro 已激活',
-                limitReached: '已超额',
-                upgradePlaceholder: '今日免费额度已用完，请付费订阅',
-                messagePlaceholder: '输入消息...',
-                title: '解锁无限局域网 Chat',
-                description: '每天前 5 分钟免费。升级至年费订阅，享受不受限制的高速文本、文件与图片传输体验。',
-                price: '$11.99',
-                period: '/ 年',
-                feature1: '无限聊天时间',
-                feature2: '无限制大文件与原图传输',
-                feature3: '更稳定的多设备局域网同步',
-                subscribeBtn: '立即订阅 (年付 $11.99)',
-                subscribeProgress: '正在订阅...',
-                subscribeSuccess: '订阅成功！🎉',
-                subscribeFail: '订阅失败，请重试',
-                hint: '支持模拟支付以供测试体验。支付后立即可用。',
-                premium: '专业版',
-                titleAttr: '点击查看订阅详情',
-                clockError: '时钟异常',
-                clockErrorHint: '检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在客户端设置里重新激活。',
-                tierInfo: '授权详情：',
-                statusLabel: '状态',
-                tierLabel: '授权级别',
-                reasonLabel: '锁定原因',
-                activeStatus: '已激活',
-                freeStatus: '免费额度',
-                limitStatus: '已超额',
-                lockedStatus: '时钟异常锁定',
-                expiredStatus: '授权已过期'
-            },
-            en: {
-                proActive: 'Pro Active',
-                limitReached: 'Limit reached',
-                upgradePlaceholder: 'Daily free quota used up. Please upgrade to continue.',
-                messagePlaceholder: 'Message',
-                title: 'Unlock Unlimited Chat',
-                description: 'Daily free chat is limited to 5 minutes. Upgrade to Premium for unlimited text, file, and image transfers.',
-                price: '$11.99',
-                period: '/ yr',
-                feature1: 'Unlimited chat duration',
-                feature2: 'No limit on file & image sizes',
-                feature3: 'Smoother multi-device sync',
-                subscribeBtn: 'Subscribe Now ($11.99/yr)',
-                subscribeProgress: 'Subscribing...',
-                subscribeSuccess: 'Subscribed successfully! 🎉',
-                subscribeFail: 'Subscription failed, retry',
-                hint: 'Supports mock payment for testing. Active immediately.',
-                premium: 'PREMIUM',
-                titleAttr: 'Click to view subscription details',
-                clockError: 'Clock Error',
-                clockErrorHint: 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in client settings.',
-                tierInfo: 'License Details:',
-                statusLabel: 'Status',
-                tierLabel: 'Tier',
-                reasonLabel: 'Reason',
-                activeStatus: 'Active',
-                freeStatus: 'Free Quota',
-                limitStatus: 'Limit Reached',
-                lockedStatus: 'Locked (Clock Tampered)',
-                expiredStatus: 'Expired'
-            }
-        };
-
-        var dict = i18n[lang];
-        var limitState = {
-            usedSeconds: 0,
-            isPaid: false,
-            clockTampered: false,
-            licenseTier: '{{.LicenseTier}}'
-        };
 
         function initPayModalDOM() {
             var backdrop = document.getElementById('pay-modal-backdrop');
@@ -4682,66 +5701,61 @@
             var statusStr = '';
             var statusClass = '';
             var detailsHtml = '';
-            var isZh = lang === 'zh';
 
             if (limitState.clockTampered) {
-                statusStr = isZh ? '已锁定 (时钟异常)' : 'Locked (Clock Tampered)';
+                statusStr = dict.lockedStatus;
                 statusClass = 'danger';
                 
                 detailsHtml = `
                     <div class="license-info-row">
-                        <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                        <strong>${dict.tierLabel}:</strong>
                         <span>${displayTier}</span>
                     </div>
                     <div class="license-info-row">
-                        <strong>${isZh ? '异常原因' : 'Violation'}:</strong>
-                        <span class="text-danger">${isZh ? '系统时钟被回退（早于上次运行时间）' : 'System clock rollback detected'}</span>
+                        <strong>${dict.reasonLabel}:</strong>
+                        <span class="text-danger">${dict.clockRollbackReason}</span>
                     </div>
                     <div class="license-info-row flex-column">
-                        <strong>${isZh ? '解决方法' : 'Solution'}:</strong>
-                        <p class="license-solution-text">${isZh 
-                            ? '1. 请检查并同步您的系统时间。\n2. 重启核心进程并在电脑端软件的设置中重新激活。' 
-                            : '1. Please synchronize your system clock.\n2. Restart the app and reactivate it in desktop client settings.'}</p>
+                        <strong>${dict.howToRestore}:</strong>
+                        <p class="license-solution-text">${dict.clockRollbackSolution}</p>
                     </div>
                 `;
             } else if (limitState.isPaid) {
-                statusStr = isZh ? '已激活' : 'Active';
+                statusStr = dict.activeStatus;
                 statusClass = 'success';
                 
                 detailsHtml = `
                     <div class="license-info-row">
-                        <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                        <strong>${dict.tierLabel}:</strong>
                         <span class="text-success font-bold">${displayTier}</span>
                     </div>
                     <div class="license-info-row">
-                        <strong>${isZh ? '聊天时长' : 'Chat Duration'}:</strong>
-                        <span>${isZh ? '无限制' : 'Unlimited'}</span>
+                        <strong>${dict.chatDuration}:</strong>
+                        <span>${dict.unlimited}</span>
                     </div>
                     <div class="license-info-row">
-                        <strong>${isZh ? '传输文件' : 'File Transfers'}:</strong>
-                        <span>${isZh ? '无限制' : 'Unlimited'}</span>
+                        <strong>${dict.fileTransfers}:</strong>
+                        <span>${dict.unlimited}</span>
                     </div>
                 `;
             } else {
                 if (currentTier && currentTier !== 'FREE') {
                     // Expired or unsynced inconsistency state
-                    statusStr = isZh ? '授权未激活/已失效' : 'License Inactive/Expired';
+                    statusStr = dict.licenseInactiveOrExpired;
                     statusClass = 'danger';
                     
                     detailsHtml = `
                         <div class="license-info-row">
-                            <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                            <strong>${dict.tierLabel}:</strong>
                             <span>${displayTier}</span>
                         </div>
                         <div class="license-info-row">
-                            <strong>${isZh ? '异常原因' : 'Violation'}:</strong>
-                            <span class="text-danger">${isZh ? '服务端付费判定未激活 (不一致)' : 'Server verification inactive'}</span>
+                            <strong>${dict.reasonLabel}:</strong>
+                            <span class="text-danger">${dict.serverInconsistentReason}</span>
                         </div>
                         <div class="license-info-row flex-column">
-                            <strong>${isZh ? '如何恢复' : 'How to Restore'}:</strong>
-                            <p class="license-solution-text">${isZh 
-                                ? '1. 请确保电脑端客户端软件已处于开启并连接状态。\n2. 若仍不一致，请在客户端中点击“重置授权”，并重新兑换激活码。' 
-                                : '1. Please make sure the desktop app is running and connected.\n2. If state persists, reset activation and redeem code again in client settings.'}</p>
+                            <strong>${dict.howToRestore}:</strong>
+                            <p class="license-solution-text">${dict.serverInconsistentSolution}</p>
                         </div>
                     `;
                 } else {
@@ -4751,32 +5765,32 @@
                     var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
 
                     if (remaining <= 0) {
-                        statusStr = isZh ? '已超额' : 'Limit Reached';
+                        statusStr = dict.limitStatus;
                         statusClass = 'danger';
                     } else {
-                        statusStr = isZh ? '免费额度' : 'Free Quota';
+                        statusStr = dict.freeStatus;
                         statusClass = 'warning';
                     }
 
                     detailsHtml = `
                         <div class="license-info-row">
-                            <strong>${isZh ? '授权级别' : 'License Tier'}:</strong>
+                            <strong>${dict.tierLabel}:</strong>
                             <span>FREE</span>
                         </div>
                         <div class="license-info-row">
-                            <strong>${isZh ? '剩余免费时间' : 'Remaining Time'}:</strong>
+                            <strong>${dict.remainingFreeTime}:</strong>
                             <span>${timeStr}</span>
                         </div>
                         <div class="license-info-row">
-                            <strong>${isZh ? '限制详情' : 'Limit Details'}:</strong>
-                            <span>${isZh ? '每日 5 分钟，大文件限 20MB' : '5 mins daily, 20MB file limit'}</span>
+                            <strong>${dict.limitDetailsText}:</strong>
+                            <span>${dict.limitDetailsVal}</span>
                         </div>
                     `;
                 }
             }
 
             panel.innerHTML = `
-                <div class="license-panel-title">${isZh ? '授权与限制状态' : 'License & Limits'}</div>
+                <div class="license-panel-title">${dict.licensePanelTitle}</div>
                 <div class="license-status-badge ${statusClass}">${statusStr}</div>
                 <div class="license-details-box">${detailsHtml}</div>
             `;
@@ -4878,50 +5892,55 @@
             var container = document.createElement('div');
             container.className = 'acceptance-sandbox';
             container.id = 'acceptance-sandbox';
-            
-            var isZh = lang === 'zh';
-            
-            container.innerHTML = `
-                <div class="acceptance-sandbox-title">
-                    <span>🛠️ ${isZh ? '验收测试控制台' : 'Acceptance Sandbox'}</span>
-                    <span class="acceptance-sandbox-close" id="sandbox-close-btn" title="${isZh ? '隐藏' : 'Hide'}">×</span>
-                </div>
-                <button data-status="premium_active">🟢 PLUS U ${isZh ? '永久付费激活' : 'Lifetime Paid Active'}</button>
-                <button data-status="inconsistent_unpaid">🔴 PLUS U ${isZh ? '授权未激活/失效(不一致)' : 'Unpaid (Inconsistent)'}</button>
-                <button data-status="clock_tampered">🔴 PLUS U ${isZh ? '已锁定 (时钟异常)' : 'Locked (Clock Tampered)'}</button>
-                <button data-status="free_quota">⚪ ${isZh ? '免费额度体验中' : 'Free Quota Active'}</button>
-                <button data-status="free_exceeded">🔴 ${isZh ? '免费额度已超额' : 'Free Quota Exceeded'}</button>
-            `;
-            
             document.body.appendChild(container);
             
-            document.getElementById('sandbox-close-btn').addEventListener('click', function() {
-                container.style.display = 'none';
-            });
-            
-            var buttons = container.querySelectorAll('button');
-            buttons.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    buttons.forEach(function(b) { b.classList.remove('active'); });
-                    btn.classList.add('active');
-                    var status = btn.getAttribute('data-status');
-                    
-                    var mockState = {};
-                    if (status === 'premium_active') {
-                        mockState = { usedSeconds: 120, isPaid: true, clockTampered: false, licenseTier: 'PLUS U' };
-                    } else if (status === 'inconsistent_unpaid') {
-                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: 'PLUS U' };
-                    } else if (status === 'clock_tampered') {
-                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: true, licenseTier: 'PLUS U' };
-                    } else if (status === 'free_quota') {
-                        mockState = { usedSeconds: 120, isPaid: false, clockTampered: false, licenseTier: '' };
-                    } else if (status === 'free_exceeded') {
-                        mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: '' };
-                    }
-                    
-                    updateLimitUI(mockState);
+            window.renderSandboxConsoleUI = function() {
+                container.innerHTML = `
+                    <div class="acceptance-sandbox-title">
+                        <span>🛠️ ${dict.sandboxTitle}</span>
+                        <span class="acceptance-sandbox-close" id="sandbox-close-btn" title="${dict.hide}">×</span>
+                    </div>
+                    <button data-status="premium_active">🟢 PLUS U ${dict.sandboxPaidActive}</button>
+                    <button data-status="inconsistent_unpaid">🔴 PLUS U ${dict.sandboxUnpaidInconsistent}</button>
+                    <button data-status="clock_tampered">🔴 PLUS U ${dict.sandboxClockLocked}</button>
+                    <button data-status="free_quota">⚪ ${dict.sandboxFreeQuota}</button>
+                    <button data-status="free_exceeded">🔴 ${dict.sandboxFreeExceeded}</button>
+                `;
+                
+                document.getElementById('sandbox-close-btn').addEventListener('click', function() {
+                    container.style.display = 'none';
                 });
-            });
+                
+                var buttons = container.querySelectorAll('button');
+                buttons.forEach(function(btn) {
+                    var status = btn.getAttribute('data-status');
+                    if (window.currentAcceptanceStatus === status) {
+                        btn.classList.add('active');
+                    }
+                    btn.addEventListener('click', function() {
+                        buttons.forEach(function(b) { b.classList.remove('active'); });
+                        btn.classList.add('active');
+                        window.currentAcceptanceStatus = status;
+                        
+                        var mockState = {};
+                        if (status === 'premium_active') {
+                            mockState = { usedSeconds: 120, isPaid: true, clockTampered: false, licenseTier: 'PLUS U' };
+                        } else if (status === 'inconsistent_unpaid') {
+                            mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: 'PLUS U' };
+                        } else if (status === 'clock_tampered') {
+                            mockState = { usedSeconds: 300, isPaid: false, clockTampered: true, licenseTier: 'PLUS U' };
+                        } else if (status === 'free_quota') {
+                            mockState = { usedSeconds: 120, isPaid: false, clockTampered: false, licenseTier: '' };
+                        } else if (status === 'free_exceeded') {
+                            mockState = { usedSeconds: 300, isPaid: false, clockTampered: false, licenseTier: '' };
+                        }
+                        
+                        updateLimitUI(mockState);
+                    });
+                });
+            };
+
+            renderSandboxConsoleUI();
         }
     </script>
     
