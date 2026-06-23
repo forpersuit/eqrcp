@@ -107,9 +107,25 @@
             gap: 10px;
             min-width: 0;
         }
+        .chat-logo-wrapper {
+            position: relative;
+            display: inline-flex;
+            flex-shrink: 0;
+        }
+        .chat-title-container {
+            min-width: 0;
+            display: flex;
+            align-items: center;
+        }
         .chat-head-title h1 {
             color: var(--accent-strong);
             transition: color 0.16s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            max-width: 100%;
         }
         .license-badge {
             background: var(--accent);
@@ -123,6 +139,7 @@
             display: inline-block;
             line-height: 1.2;
             letter-spacing: 0.05em;
+            flex-shrink: 0;
         }
         .license-badge.clock-error {
             background: rgba(220, 38, 38, 0.08) !important;
@@ -132,12 +149,16 @@
             cursor: help;
         }
         .online-dot {
+            position: absolute;
+            bottom: -1px;
+            right: -1px;
             background: #22c55e;
             border-radius: 999px;
             flex-shrink: 0;
-            height: 8px;
-            width: 8px;
-            margin-left: 3px;
+            height: 10px;
+            width: 10px;
+            border: 2px solid var(--panel);
+            box-sizing: border-box;
         }
         .chat-logo {
             flex-shrink: 0;
@@ -1459,10 +1480,27 @@
         }
         @media (max-width: 480px) {
             .chat-head { gap: 8px; padding-left: 10px; padding-right: 10px; }
-            .chat-head-title { gap: 8px; }
+            .chat-head-title { gap: 6px; }
             .chat-head-title h1 { font-size: 15px; }
-            .head-actions { gap: 6px; }
-            .device-pill { padding: 0 9px; }
+            .head-actions { gap: 5px; }
+            .device-pill { padding: 0 8px; gap: 5px; height: 34px; }
+            .limit-status-pill { padding: 0 8px; gap: 4px; height: 34px; font-size: 12px; }
+            .icon-button { width: 34px; height: 34px; border-radius: 6px; }
+            .icon-button svg { height: 16px; width: 16px; }
+        }
+        @media (max-width: 360px) {
+            .icon-button#share-session {
+                display: none;
+            }
+            .chat-head-title .chat-logo {
+                width: 28px;
+                height: 28px;
+            }
+            .online-dot {
+                width: 9px;
+                height: 9px;
+                border-width: 1.5px;
+            }
         }
         /* ── Limit Status Pill & Pay Modal ── */
         .limit-status-pill {
@@ -1728,9 +1766,11 @@
             <section class="chat-shell">
             <header class="chat-head offline" id="chat-head">
                 <div class="chat-head-title">
-                    <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
-                    <div class="online-dot" id="online-dot"></div>
-                    <div>
+                    <div class="chat-logo-wrapper">
+                        <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
+                        <div class="online-dot" id="online-dot"></div>
+                    </div>
+                    <div class="chat-title-container">
                         <h1 id="chat-title-text">EQT{{if .LicenseTier}}<span class="license-badge" id="chat-license-badge">{{.LicenseTier}}</span>{{end}}</h1>
                     </div>
                 </div>
