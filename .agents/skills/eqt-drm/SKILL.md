@@ -23,6 +23,15 @@ description: Guides EQT licensing architecture, offline cryptographic activation
 
 - **Ed25519 签名**：客户端内置 32 字节的公钥哈希，私钥应严格保存在 Cloudflare Workers 中。验签格式必须与 Workers 生成时严格对称（用 `|` 拼接 `license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at`），避免因 JSON 库序列化字段字典序不一致导致验签失败。
 - **时钟篡改保护**：如果用户本地系统时间比上一次写入的混淆文件 `LastTime` 早，系统将置 `ClockTampered=true`。此时即使证书有效，也必须强制降级并锁死付费功能。
+- **非阻塞网络时间校验（异步防挂起）**：
+  - 如果 `.lic` 包含有限的过期时间（非 `LIFETIME`），必须对网络时间 `fetchNetworkTime` 实施非阻塞异步刷新机制。
+  - **绝不允许**在处理前端 HTTP `/status` 等轮询请求的主线程中同步阻塞式进行网络 HTTP 请求。
+  - 应使用内存缓存存储网络时间偏置（`offset = netTime - systemTime`），在无缓存或缓存过期（例如超过 1 小时）时，在后台异步启动 goroutine 进行拉取，当前请求应立刻使用系统时间（或上一次的 offset 缓存）先行返回，确保 `/status` 接口调用响应在微秒级，永远不会引发 `context deadline exceeded`。
+  - 对于测试环境（`EQT_TESTING == "true"`）应直接跳过网络拉取。对网络时间请求失败的情况应建立退避机制（例如 1 分钟内不重复拉取），防止断网状态下高频产生僵尸 goroutine。
+- **内存级别状态与许可证书短期缓存**：
+  - 由于类似 Wails GUI 的 `snapshotWithRevision` 状态查询会同时连续多次调用 `ChatLimiter.GetStatus()`，每次都执行磁盘 I/O 读写 `chat_usage.json` 及解密会造成严重性能瓶颈。
+  - 必须对读出的许可/限额状态实施极短时间（如 5 秒内）的内存短期缓存。在写操作发生时主动刷新缓存；在没有写操作的 5 秒内再次查询，直接返回内存中对应日期的缓存，极大地降低磁盘压力。
+  - 对 `.lic` 证书的读取和解析（`GetLocalLicenseInfo`）应在首次读取后进行持久内存缓存，在发生激活（Online Activation）或重置（Reset）时手动更新该缓存，避免常规状态轮询下不断解析文件并进行设备硬件指纹获取与验签运算。
 - **测试兼容模式**：在单元测试或 mock 状态下（`os.Getenv("EQT_TESTING") == "true"`），若本地没有 `.lic` 文件，必须自动降级到传统模式，支持模拟付费判定，不可在测试环境中强求真实公私钥签名，以免破坏基础 CI。
 
 ---
