@@ -2390,6 +2390,24 @@
             if (data) {
                 updateLimitUI(data);
             }
+            if (data && data.viewportDebug !== undefined) {
+                var enabled = Boolean(data.viewportDebug);
+                if (enabled !== viewportDebugEnabled) {
+                    viewportDebugEnabled = enabled;
+                    if (viewportDebugEl) {
+                        if (viewportDebugEnabled) {
+                            viewportDebugEl.classList.add('open');
+                            viewportDebugEl.removeAttribute('aria-hidden');
+                            updateViewportDebug('setting-enable');
+                        } else {
+                            viewportDebugEl.classList.remove('open');
+                            viewportDebugEl.setAttribute('aria-hidden', 'true');
+                            viewportDebugEl.textContent = '';
+                        }
+                        handleViewportChange();
+                    }
+                }
+            }
         }
         function renderDeviceRosterItem(device) {
             var id = String(device.id || '');

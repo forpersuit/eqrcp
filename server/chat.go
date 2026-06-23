@@ -328,6 +328,7 @@ func (s *Server) Chat() error {
 			"isPaid":        usage.IsPaid,
 			"licenseTier":   licenseTierDisplay,
 			"clockTampered": usage.ClockTampered,
+			"viewportDebug": s.ViewportDebug,
 		}); err != nil {
 			log.Println(err)
 		}
