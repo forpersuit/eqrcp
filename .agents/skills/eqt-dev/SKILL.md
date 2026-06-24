@@ -89,3 +89,26 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 1. **大文件发送 (上传方向)**：Chat 模式下的文件发送为标准的单 HTTP `Multipart Form` 一次性上传。服务端由 `handleAttachmentUpload` 接收并通过 `r.ParseMultipartForm` 解析。一旦网络在上传中途瞬断，整个上传失败，用户需要重新从头发送整个文件。
 2. **大文件接收 (Wails 客户端下载)**：Wails 客户端在下载附件时（由 `downloadChatAttachmentTo` 执行），采用了标准的 HTTP GET 请求，并通过 `io.Copy(out, resp.Body)` 将流一次性拉取并写入。若下载中途断开，不具备 Range 断点重新下载继续合并的逻辑，会导致任务报错并从头开始。
 3. **大文件接收 (H5 网页端下载)**：采用的是标准 `<a download>` 的原生浏览器下载方式，在复杂的局域网 IP 重置、Wi-Fi 波动环境中很容易中断且难以自动恢复，需要额外的分片暂存机制方能稳定实现。
+
+---
+
+## 5. 局域网网络绑定与 IP 解析性能优化 (LAN Network Binding & IP Resolution Optimization)
+
+在启动局域网互传/聊天服务（Share、Receive、Chat 模式）时，如果监听地址绑定为 `0.0.0.0` (any)：
+
+### 5.1 历史性能瓶颈
+- **外部共识查询瓶颈**：原版 `qrcp` 在绑定到 `0.0.0.0` 时，会通过外部共识库（`go-external-ip`）向公网上的多个服务器（如 OpenDNS、Google、ipify）发起 HTTP/DNS 请求来查询外网 WAN IP。
+- **导致的后果**：在局域网互传场景中，设备通常处于内网，公网 WAN IP 因 NAT 屏蔽根本无法直接访问。此外，该查询在网络延迟高或代理网络下会造成 **1~3秒以上的严重启动延迟**，且在完全离线状态下会导致服务直接报错无法启动。
+
+### 5.2 瞬间 IP 解析最佳实践 (Instant local IP resolution)
+为了实现不到 1 毫秒的零延迟启动并完美支持离线运行，EQT 采用分级 IP 发现逻辑：
+1. **UDP 路由探测 (UDP Routing Probe)**：
+   - 运行 `net.Dial("udp", "8.8.8.8:80")`。
+   - **特点**：这纯粹是 OS 路由表查询，**不会发送任何实际网络数据包，耗时小于 0.1ms**，且离线状态下只要有默认网关存在即可成功。它能精确返回 OS 当前用于访问外网的本地网卡 IP（例如 `192.168.x.x`），这正是其他局域网设备连接所需的最佳 IP。
+2. **活跃网卡扫描 (Active interface scan)**：
+   - 如果 UDP 探测因完全无默认路由而失败，扫描所有 `Up` 且非 `Loopback` 的网络接口，获取第一个 valid IPv4 地址。
+3. **外部共识兜底 (External consensus fallback)**：
+   - 仅在上述两步都失败时，才调用 `go-external-ip` 进行公网查询。
+
+这保证了互传与聊天服务在任何局域网或离线环境下都能瞬间秒开。
+
