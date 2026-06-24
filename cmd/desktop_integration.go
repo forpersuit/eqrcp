@@ -862,3 +862,30 @@ func unescapeXMLText(s string) string {
 	s = strings.ReplaceAll(s, "&amp;", "&")
 	return s
 }
+
+// Exported wrapper APIs for in-process memory calls in desktop GUI mode
+
+func InstallDesktopIntegration() error {
+	return installDesktopIntegration()
+}
+
+func UninstallDesktopIntegration() error {
+	return uninstallDesktopIntegration()
+}
+
+func InstallDesktopStartup() error {
+	return installDesktopStartup()
+}
+
+func UninstallDesktopStartup() error {
+	return uninstallDesktopStartup()
+}
+
+func DesktopStartupStatus() (string, error) {
+	return desktopStartupStatus()
+}
+
+func DesktopIntegrationStatus() (string, error) {
+	return desktopIntegrationStatus()
+}
+

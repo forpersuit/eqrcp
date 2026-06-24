@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 	"testing"
 )
@@ -41,21 +40,46 @@ func TestParseDesktopStartupStatus(t *testing.T) {
 }
 
 func TestDesktopIntegrationCommands(t *testing.T) {
-	t.Setenv("EQT_CLI", "/tmp/eqt")
-	oldRunner := desktopCommandRunner
-	defer func() { desktopCommandRunner = oldRunner }()
+	oldInstallInt := cmdInstallDesktopIntegration
+	oldUninstallInt := cmdUninstallDesktopIntegration
+	oldInstallStart := cmdInstallDesktopStartup
+	oldUninstallStart := cmdUninstallDesktopStartup
+	oldStartStatus := cmdDesktopStartupStatus
+	oldIntStatus := cmdDesktopIntegrationStatus
+
+	defer func() {
+		cmdInstallDesktopIntegration = oldInstallInt
+		cmdUninstallDesktopIntegration = oldUninstallInt
+		cmdInstallDesktopStartup = oldInstallStart
+		cmdUninstallDesktopStartup = oldUninstallStart
+		cmdDesktopStartupStatus = oldStartStatus
+		cmdDesktopIntegrationStatus = oldIntStatus
+	}()
 
 	var calls []string
-	desktopCommandRunner = func(ctx context.Context, cli string, args ...string) (string, error) {
-		calls = append(calls, cli+" "+strings.Join(args, " "))
-		switch args[len(args)-1] {
-		case "status":
-			return "Windows desktop integration status\n- summary: 6 installed, 0 needs repair, 0 not installed", nil
-		case "startup-status":
-			return "Windows desktop agent startup status\n- Agent startup: enabled", nil
-		default:
-			return "ok", nil
-		}
+	cmdInstallDesktopIntegration = func() error {
+		calls = append(calls, "InstallDesktopIntegration")
+		return nil
+	}
+	cmdUninstallDesktopIntegration = func() error {
+		calls = append(calls, "UninstallDesktopIntegration")
+		return nil
+	}
+	cmdInstallDesktopStartup = func() error {
+		calls = append(calls, "InstallDesktopStartup")
+		return nil
+	}
+	cmdUninstallDesktopStartup = func() error {
+		calls = append(calls, "UninstallDesktopStartup")
+		return nil
+	}
+	cmdDesktopStartupStatus = func() (string, error) {
+		calls = append(calls, "DesktopStartupStatus")
+		return "Windows desktop agent startup status\n- Agent startup: enabled", nil
+	}
+	cmdDesktopIntegrationStatus = func() (string, error) {
+		calls = append(calls, "DesktopIntegrationStatus")
+		return "Windows desktop integration status\n- summary: 6 installed, 0 needs repair, 0 not installed", nil
 	}
 
 	app := NewApp()
@@ -74,12 +98,12 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 
 	got := strings.Join(calls, "\n")
 	for _, want := range []string{
-		"/tmp/eqt desktop install",
-		"/tmp/eqt desktop status",
-		"/tmp/eqt desktop uninstall",
-		"/tmp/eqt desktop startup-enable",
-		"/tmp/eqt desktop startup-status",
-		"/tmp/eqt desktop startup-disable",
+		"InstallDesktopIntegration",
+		"UninstallDesktopIntegration",
+		"InstallDesktopStartup",
+		"UninstallDesktopStartup",
+		"DesktopStartupStatus",
+		"DesktopIntegrationStatus",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("calls = %q, want to contain %q", got, want)

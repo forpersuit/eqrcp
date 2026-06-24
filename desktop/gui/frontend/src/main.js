@@ -2094,9 +2094,19 @@ async function loadSettings() {
         state.browserFallback = Boolean(state.settings.browser);
         state.chatAutoSave = state.settings.chatAutoSave !== false;
         state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
-        await loadIntegrationStatusData();
+        
+        // Prioritize loading history and main state to render the home screen instantly
         await loadStatusData();
         render();
+
+        // Query integration status asynchronously in the background so it doesn't block startup
+        loadIntegrationStatusData().then(() => {
+            if (state.activePanel === 'settings') {
+                render();
+            }
+        }).catch((e) => {
+            console.error('Failed to load integration status in background:', e);
+        });
     });
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"eqt/cmd"
 	"eqt/util"
 	"eqt/version"
 	"fmt"
@@ -19,6 +20,15 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 const chatSaveRetentionDays = 7
+
+var (
+	cmdInstallDesktopIntegration   = cmd.InstallDesktopIntegration
+	cmdUninstallDesktopIntegration = cmd.UninstallDesktopIntegration
+	cmdInstallDesktopStartup       = cmd.InstallDesktopStartup
+	cmdUninstallDesktopStartup     = cmd.UninstallDesktopStartup
+	cmdDesktopStartupStatus        = cmd.DesktopStartupStatus
+	cmdDesktopIntegrationStatus    = cmd.DesktopIntegrationStatus
+)
 
 type App struct {
 	ctx           context.Context
@@ -501,38 +511,44 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 }
 
 func (a *App) RightClickIntegrationStatus() (DesktopIntegrationStatus, error) {
-	output, err := a.runEqtDesktopCommand("status")
+	status, err := cmdDesktopIntegrationStatus()
 	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
+	output := fmt.Sprintf("%s\n%s", version.String(), status)
 	return parseDesktopIntegrationStatus(output), nil
 }
 
 func (a *App) SetRightClickIntegrationEnabled(enabled bool) (DesktopIntegrationStatus, error) {
-	command := "uninstall"
+	var err error
 	if enabled {
-		command = "install"
+		err = cmdInstallDesktopIntegration()
+	} else {
+		err = cmdUninstallDesktopIntegration()
 	}
-	if _, err := a.runEqtDesktopCommand(command); err != nil {
+	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
 	return a.RightClickIntegrationStatus()
 }
 
 func (a *App) StartupStatus() (DesktopIntegrationStatus, error) {
-	output, err := a.runEqtDesktopCommand("startup-status")
+	status, err := cmdDesktopStartupStatus()
 	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
+	output := fmt.Sprintf("%s\n%s", version.String(), status)
 	return parseDesktopStartupStatus(output), nil
 }
 
 func (a *App) SetStartupEnabled(enabled bool) (DesktopIntegrationStatus, error) {
-	command := "startup-disable"
+	var err error
 	if enabled {
-		command = "startup-enable"
+		err = cmdInstallDesktopStartup()
+	} else {
+		err = cmdUninstallDesktopStartup()
 	}
-	if _, err := a.runEqtDesktopCommand(command); err != nil {
+	if err != nil {
 		return DesktopIntegrationStatus{}, err
 	}
 	return a.StartupStatus()
