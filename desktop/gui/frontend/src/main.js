@@ -770,17 +770,6 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong>Update channel</strong>
-                            <span>Select the release channel for update checks.</span>
-                        </div>
-                        <select id="settings-update-channel">
-                            <option value="stable" ${state.settings?.updateChannel === 'stable' ? 'selected' : ''}>Stable (Recommended)</option>
-                            <option value="beta" ${state.settings?.updateChannel === 'beta' ? 'selected' : ''}>Beta</option>
-                            <option value="nightly" ${state.settings?.updateChannel === 'nightly' ? 'selected' : ''}>Nightly</option>
-                        </select>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-copy">
                             <strong>Update check interval</strong>
                             <span>Choose how often to check for updates automatically.</span>
                         </div>
@@ -1643,7 +1632,6 @@ function syncSettingsFromDOM() {
     const chatSender = document.querySelector('#settings-chat-sender');
     const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
-    const updateChannel = document.querySelector('#settings-update-channel');
     const updateInterval = document.querySelector('#settings-update-interval');
 
 
@@ -1657,7 +1645,6 @@ function syncSettingsFromDOM() {
     if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
     if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
-    if (updateChannel) state.settings.updateChannel = updateChannel.value;
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
 
 
@@ -1786,7 +1773,6 @@ function bindSettingsControls() {
         '#settings-chat-autosave',
         '#settings-close-behavior',
         '#settings-auto-update-mode',
-        '#settings-update-channel',
         '#settings-update-interval',
 
         '#settings-chat-sender'
