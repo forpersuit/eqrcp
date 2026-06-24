@@ -86,6 +86,31 @@ After branding, desktop integration, chat-device, or Windows-facing changes, use
 For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
 
 
+## Front-end & Go Engineering Best Practices (前端与 Go 后端开发最佳实践规则)
+
+### 1. 前端开发规范 (JavaScript / TypeScript)
+- **模块化分离 (Modularity & Separation of Concerns)**：
+  - **规则**：禁止继续向 `main.js` 中无限制堆积新的功能模块。任何独立的业务交互、全局字典（如多语言 `translations`）、大块渲染模板，必须进行组件化或模块化剥离（在 `frontend/src/` 中拆分子文件）。
+  - **合理性**：降低单文件膨胀度（控制在合理行数内），提高代码可读性，避免庞大文件发生 git 合并冲突。
+- **数据状态与渲染分离 (State-Template Separation)**：
+  - **规则**：渲染模板纯函数（以 `render` 开头的方法）中禁止直接修改全局 `state` 的值。状态修改必须由明确的 Controller 方法或事件处理函数统一调度。
+  - **合理性**：理顺单向数据流。渲染函数应仅充当 `Data -> DOM` 的纯映射，避免局部 Side Effects 引发的状态漂移或内存泄露。
+- **标准事件绑定 (Declarative Event Listeners)**：
+  - **规则**：严禁在 HTML 字符串中拼装内联的全局 `onclick="..."` 事件。事件应当使用标准的 `addEventListener` 进行注册绑定。
+  - **合理性**：降低全局作用域污染，提高调试可见性，且易于事件的生命周期清理，防范页面长期挂载导致内存溢出。
+
+### 2. 后端开发规范 (Go 语言)
+- **非阻塞异步外部网络调用 (Non-blocking Asynchronous Operations)**：
+  - **规则**：在处理客户端轮询 HTTP 请求（如 `/status`）或 Wails 核心交互主线程中，绝对禁止同步阻塞式发起 network HTTP 请求或进行高时延 I/O。必须使用后台协程（goroutine）异步拉取并在内存中更新缓存。
+  - **合理性**：确保客户端状态轮询在微秒级返回，防止网络延迟导致前端 GUI 挂起或抛出 `context deadline exceeded` 异常。
+- **磁盘 I/O 隔离与内存缓存 (Memory Cache Isolation)**：
+  - **规则**：高频查询的数据（如 `.lic` 证书与本地使用度限额等）必须实施内存缓存。只在发生写入或重置时更新缓存。
+  - **合理性**：保护用户硬盘寿命，提升系统响应速度，避免频繁的磁盘读取造成严重的 I/O 卡顿。
+- **设备指纹匹配空值防呆 (Robust Hardware Fingerprint Matching)**：
+  - **规则**：在硬件特征比对时，若任何一方的值为空字符串 `""`，此字段判定比对直接跳过，不得被视作匹配成功。至少需要有 2 项有效的非空指纹相匹配才算合法。
+  - **合理性**：确保因运行权限不足而造成部分特征缺失时，授权不被滥用。
+
+
 # 15-rule template
 
 These rules apply to every task in this project unless explicitly overridden.
