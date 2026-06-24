@@ -12,7 +12,7 @@
 | :--- | :--- | :--- | :--- |
 | `eqt.net.im` | Cloudflare Pages | 官方主页 / 重定向到 `www` | 映射 `docs/product-landing.md` |
 | `www.eqt.net.im` | Cloudflare Pages | EQT 官方合规页（Jekyll/HTML 渲染） | 包含产品说明、价格表、退款政策及联系方式 |
-| `api.eqt.net.im` | Cloudflare Workers | DRM 授权与设备指纹激活 API | `cloudflare/` (连接 `eqt-drm-db` 数据库) |
+| `lic.eqt.net.im` | Cloudflare Workers | DRM 授权与设备指纹激活 API | `cloudflare/` (连接 `eqt-drm-db` 数据库) |
 
 ---
 
@@ -24,7 +24,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **CNAME** | `@` (根域名) | `forpersuit.github.io` (或 Pages 映射的专属域) | 开启 (Proxied) | 映射到 Cloudflare Pages 托管的主页 |
 | **CNAME** | `www` | `eqt-landing-page.pages.dev` (Pages 默认域名) | 开启 (Proxied) | 承载 Stripe 审核所要求的 Merchant Website |
-| **Workers Route** | `api` | *不需要显式在 DNS 添加* | 自动创建 | `wrangler.toml` 中的 `routes` 绑定后，CF 自动在 DNS 里添加 Worker 虚拟 CNAME |
+| **Workers Route** | lic | *不需要显式在 DNS 添加* | 自动创建 | `wrangler.toml` 中的 `routes` 绑定后，CF 自动在 DNS 里添加 Worker 虚拟 CNAME |
 
 > 💡 **Stripe / PayPal 支付合规性验证专用记录**：
 > 在接入支付网关进行网关认证时，支付商会要求验证您对该域名的所有权。您需要在 DNS 控制面板中，根据支付商的后台提示追加相关的 **TXT** 记录（如 `stripe-verification`）或 **CNAME** 记录。
@@ -48,14 +48,14 @@
   1. 我们已将自定义域名加入到 `/cloudflare/wrangler.toml`：
      ```toml
      routes = [
-       { pattern = "api.eqt.net.im", custom_domain = true }
+       { pattern = "lic.eqt.net.im", custom_domain = true }
      ]
      ```
   2. 部署命令：
      ```sh
      CLOUDFLARE_API_TOKEN="" npx wrangler deploy
      ```
-  3. Wrangler 会自动在 Cloudflare 边缘节点为您创建 `api.eqt.net.im` 到 Worker `eqt-drm-api` 的绑定关系。
+  3. Wrangler 会自动在 Cloudflare 边缘节点为您创建 `lic.eqt.net.im` 到 Worker `eqt-drm-api` 的绑定关系。
 
 ---
 
@@ -68,16 +68,16 @@ sequenceDiagram
     participant 用户
     participant 官网 (www.eqt.net.im)
     participant Stripe 支付收银台
-    participant Workers API (api.eqt.net.im)
+    participant Workers API (lic.eqt.net.im)
     participant D1 数据库 (eqt-drm-db)
 
     用户->>官网 (www.eqt.net.im): 点击订阅/购买
     官网 (www.eqt.net.im)->>Stripe 支付收银台: 跳转至 Stripe Checkout 页面
     用户->>Stripe 支付收银台: 完成支付 (信用卡/Apple Pay等)
-    Stripe 支付收银台-->>Workers API (api.eqt.net.im): 发送支付成功 Webhook (checkout.session.completed)
-    Note over Workers API (api.eqt.net.im): 1. 生成随机激活码 (EQT-PLUS-LIFETIME-...)<br/>2. 计算初始过期时间 (expires_at)
-    Workers API (api.eqt.net.im)->>D1 数据库 (eqt-drm-db): 插入未激活的 License 记录
-    Workers API (api.eqt.net.im)->>用户: 通过 Cloudflare Email / SendGrid 邮件 API 发送激活码至用户邮箱
+    Stripe 支付收银台-->>Workers API (lic.eqt.net.im): 发送支付成功 Webhook (checkout.session.completed)
+    Note over Workers API (lic.eqt.net.im): 1. 生成随机激活码 (EQT-PLUS-LIFETIME-...)<br/>2. 计算初始过期时间 (expires_at)
+    Workers API (lic.eqt.net.im)->>D1 数据库 (eqt-drm-db): 插入未激活的 License 记录
+    Workers API (lic.eqt.net.im)->>用户: 通过 Cloudflare Email / SendGrid 邮件 API 发送激活码至用户邮箱
     用户->>用户: 拷贝激活码输入至 EQT 客户端激活
 ```
 

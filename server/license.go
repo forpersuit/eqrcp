@@ -22,7 +22,7 @@ import (
 const defaultPublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
 
 // Default DRM API Server, can be overridden by environment variable EQT_LICENSE_SERVER
-const defaultLicenseServer = "https://api.eqt.net.im"
+const defaultLicenseServer = "https://lic.eqt.net.im"
 
 // LicenseCertificate matches the signed license JSON structure returned from the API
 type LicenseCertificate struct {
