@@ -16,7 +16,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 - **配置文件控制**：保存在客户端的 `settings.json`（对应结构体 `DesktopSettings`），可通过设置面板进行切换：
   - `devMode`: `true` (开启 WebView 调试面板和开发者选项)
   - `debugLog`: `true` (开启后台详尽请求/处理日志)
-- **获取机制**：后端路由（如 `cmd/desktop_agent.go` 中的 `/settings`）通过 `config.ReadDesktopSettings` 动态加载。若开启，系统会将后端 server 包的 `server.Log` 输出目标重定向到详细日志流中。
+- **获取机制**：Wails App 直接通过内存中的 Agent（`desktopAgent` 实例）调用 `config.ReadDesktopSettings` 动态加载。若开启，系统会将后端 server 包的 `server.Log` 输出目标重定向到详细日志流中。
 
 ---
 
@@ -24,7 +24,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ### 2.1 临时落盘与位置机制
 为了避免无谓的磁盘占用，同时保证崩溃后可追溯：
-- **进程重定向**：后台运行的 `desktop agent` 守护进程的标准输出（Stdout）和标准错误（Stderr）会被重定向到一个动态命名的日志文件中。
+- **日志文件机制**：桌面端日志（`desktop.log`）路径由 `desktopLogFilePath()` 指明，标准日志和调试信息直接落盘在用户缓存目录下，消除由于进程跨界带来的重定向混乱。
 - **文件命名与路径**：
   - **Windows**：落盘在 `%LOCALAPPDATA%/eqt/agent-*.log` 下。
   - **Linux / WSL**：落盘在 `~/.cache/eqt/agent-*.log` 下。
@@ -32,7 +32,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ### 2.2 日志记录特征
 在 `DevMode` 或 `DebugLog` 激活时，日志具备以下追溯特点：
-1. **网络拦截流**：记录每次 HTTP 请求（如 `/settings`、`/update/check`、`/update/download`）的 Method、Path、RemoteAddr、响应状态码，以及 CORS 过滤的具体判定。
+1. **状态机转换日志**：记录内存 Agent 在任务推送、停止和状态改变时的内部生命周期（例如任务入队、运行、终结及错误诊断等）。
 2. **更新与验签全链路**：
    - 记录检查更新时，版本号的语义化比对结果（如 `currentVersion -> targetVersion` 是否满足 `IsNewerVersion`）。
    - 记录下载更新包与签名时，从云端获取的资产包哈希长度、文件大小。
@@ -65,10 +65,10 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 ### 3.5 自动更新的运行链路与集成测试验证机制
 
 #### 3.5.1 自动更新核心运行链路
-自动更新采用“前端 UI -> Wails Go App -> 后台 Desktop Agent 守护进程 -> 云端/GitHub API”的调用架构：
-1. **版本检测 (`/update/check`)**：前端触发 `CheckForUpdates` RPC。桌面守护进程会请求 `EQT_LICENSE_SERVER`（默认是云端中转 Worker 接口 `/api/v1/update/check`），如果最新发布版本高于当前运行版本，根据当前客户端 `GOOS` 和 `GOARCH` 过滤并匹配出主二进制资产与配套的 `.sig` 签名文件资产，向前端返回两者的绝对下载链接。
-2. **包下载与验签 (`/update/download`)**：接收到前端请求后，桌面端异步下载二进制包及签名文件。使用内置的 Ed25519 公钥（`defaultUpdatePublicKeyHex`）对包的 SHA-256 哈希值进行验签，确认包内容未被篡改后，存放到本地缓存路径（例如 `~/.config/eqt/updates/`）。
-3. **安全替换与重启 (`/update/install`)**：检测当前队列中是否有活跃的局域网传输任务（避免断连），若有则抛出 `409 Conflict` 拒绝安装。若应用处于空闲状态，则开始安装：
+自动更新采用“前端 UI -> Wails Go App 内存 Agent -> 云端/GitHub API”的单进程集中调用架构：
+1. **版本检测**：前端触发 `CheckForUpdates` Wails 绑定方法。App 内存 Agent 会直接调用 `server.CheckForUpdates` 请求 `EQT_LICENSE_SERVER`（默认是云端中转 Worker 接口 `/api/v1/update/check`），如果最新发布版本高于当前运行版本，根据当前客户端 `GOOS` 和 `GOARCH` 过滤并匹配出主二进制资产与配套的 `.sig` 签名文件资产，返回两者的绝对下载链接。
+2. **包下载与验签**：在 `DownloadUpdate` 中，内存 Agent 直接异步下载二进制包及签名文件并调用 `server.DownloadUpdate`。使用内置的 Ed25519 公钥（`defaultUpdatePublicKeyHex`）对包的 SHA-256 哈希值进行验签，确认包内容未被篡改后，存放到本地缓存路径。
+3. **安全替换与重启**：内存 Agent 检测当前是否有活跃的局域网传输任务，若有则拒绝安装更新。若应用处于空闲状态，在调用 `server.InstallAndRestart` 后，开始安装：
    - **Windows**：将当前运行的 `.exe` 重命名为 `.exe.old`，写入新二进制，然后启动新进程退出旧进程，并在下次启动时清理 `.old`。
    - **POSIX (Linux/macOS)**：写入 `.new` 临时文件，并通过 `os.Rename` 原子覆盖旧的二进制。
 
