@@ -629,33 +629,7 @@ function renderSettingsPanel() {
     const chatAvatarPreview = cleanChatAvatar(chatAvatar) || (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase();
     return `
         <div class="settings-panel">
-            <section class="settings-section">
-                <div class="settings-section-head">
-                    <h3>Network</h3>
-                    <span>How QR transfer links are created.</span>
-                </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong>Network interface</strong>
-                        <span>Use the adapter your phone can reach on the local network.</span>
-                    </div>
-                    <select id="settings-interface">${options}</select>
-                </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></strong>
-                        <span>Keep 0 unless you need a fixed local port.</span>
-                    </div>
-                    <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
-                </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong>Browser fallback</strong>
-                        <span>Open browser control pages for QR tasks when useful.</span>
-                    </div>
-                    ${renderSwitch('settings-browser', state.browserFallback)}
-                </div>
-            </section>
+
 
             <section class="settings-section">
                 <div class="settings-section-head">
@@ -769,6 +743,55 @@ function renderSettingsPanel() {
                     <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check')}</button>
                 </div>
             </section>
+
+            <details class="settings-advanced-details" ${state.settingsAdvancedOpen ? 'open' : ''}>
+                <summary class="settings-advanced-summary">Advanced Settings</summary>
+                <div class="settings-advanced-content">
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>Network interface</strong>
+                            <span>Use the adapter your phone can reach on the local network.</span>
+                        </div>
+                        <select id="settings-interface">${options}</select>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></strong>
+                            <span>Keep 0 unless you need a fixed local port.</span>
+                        </div>
+                        <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>Browser fallback</strong>
+                            <span>Open browser control pages for QR tasks when useful.</span>
+                        </div>
+                        ${renderSwitch('settings-browser', state.browserFallback)}
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>Update channel</strong>
+                            <span>Select the release channel for update checks.</span>
+                        </div>
+                        <select id="settings-update-channel">
+                            <option value="stable" ${state.settings?.updateChannel === 'stable' ? 'selected' : ''}>Stable (Recommended)</option>
+                            <option value="beta" ${state.settings?.updateChannel === 'beta' ? 'selected' : ''}>Beta</option>
+                            <option value="nightly" ${state.settings?.updateChannel === 'nightly' ? 'selected' : ''}>Nightly</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>Update check interval</strong>
+                            <span>Choose how often to check for updates automatically.</span>
+                        </div>
+                        <select id="settings-update-interval">
+                            <option value="12" ${state.settings?.updateCheckIntervalHours === 12 ? 'selected' : ''}>12 Hours</option>
+                            <option value="24" ${state.settings?.updateCheckIntervalHours === 24 || !state.settings?.updateCheckIntervalHours ? 'selected' : ''}>24 Hours (Default)</option>
+                            <option value="48" ${state.settings?.updateCheckIntervalHours === 48 ? 'selected' : ''}>48 Hours</option>
+                        </select>
+                    </div>
+                </div>
+            </details>
         </div>
     `;
 }
@@ -1620,6 +1643,8 @@ function syncSettingsFromDOM() {
     const chatSender = document.querySelector('#settings-chat-sender');
     const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
+    const updateChannel = document.querySelector('#settings-update-channel');
+    const updateInterval = document.querySelector('#settings-update-interval');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -1632,6 +1657,8 @@ function syncSettingsFromDOM() {
     if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
     if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
+    if (updateChannel) state.settings.updateChannel = updateChannel.value;
+    if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
 
 
     state.receiveDir = state.settings.output || '';
@@ -1759,6 +1786,8 @@ function bindSettingsControls() {
         '#settings-chat-autosave',
         '#settings-close-behavior',
         '#settings-auto-update-mode',
+        '#settings-update-channel',
+        '#settings-update-interval',
 
         '#settings-chat-sender'
     ];
@@ -1772,6 +1801,13 @@ function bindSettingsControls() {
             el.addEventListener('input', syncSettingsFromDOM);
         }
     });
+
+    const advDetails = document.querySelector('.settings-advanced-details');
+    if (advDetails) {
+        advDetails.addEventListener('toggle', (event) => {
+            state.settingsAdvancedOpen = event.currentTarget.open;
+        });
+    }
 
     document.querySelector('#btn-manual-update-check')?.addEventListener('click', runManualUpdateCheck);
 }

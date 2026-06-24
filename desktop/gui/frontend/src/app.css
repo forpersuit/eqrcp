@@ -1844,3 +1844,60 @@ dd {
     text-align: left;
     width: 100%;
 }
+
+/* Advanced Settings details/summary styles */
+.settings-advanced-details {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.settings-advanced-details[open] {
+    border-color: var(--accent-light);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.settings-advanced-summary {
+    background: #f8faf7;
+    padding: 13px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid transparent;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.settings-advanced-details[open] .settings-advanced-summary {
+    background: #f3f6f1;
+    border-bottom-color: var(--line);
+}
+
+.settings-advanced-summary::-webkit-details-marker {
+    display: none;
+}
+
+.settings-advanced-summary::after {
+    content: "▲";
+    font-size: 9px;
+    color: var(--muted);
+    transition: transform 0.3s ease;
+    transform: rotate(180deg);
+}
+
+.settings-advanced-details[open] .settings-advanced-summary::after {
+    transform: rotate(0deg);
+    color: var(--accent-strong);
+}
+
+.settings-advanced-summary:hover {
+    background: #f1f4ef;
+}
+
