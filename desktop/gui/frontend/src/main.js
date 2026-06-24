@@ -2967,6 +2967,15 @@ async function runManualUpdateCheck() {
     // 同步最新的 DOM 值到内存配置中
     syncSettingsFromDOM();
 
+    // 如果当前按钮是 Retry 状态（说明发生了本地连接失败），直接重置回 idle 重新触发检测与拉起
+    if (state.updateBtnText === 'Retry') {
+        state.updateStage = 'idle';
+        state.updateStatusText = 'Click button to manually check.';
+        state.updateBtnText = 'Check';
+        state.updateBtnDisabled = false;
+        syncManualUpdateCheckUI();
+    }
+
     if (state.updateStage === 'idle') {
         state.updateStage = 'checking';
         state.updateStatusText = 'Checking updates...';
@@ -2999,8 +3008,13 @@ async function runManualUpdateCheck() {
             }
         } catch (err) {
             state.updateStage = 'idle';
-            state.updateStatusText = `Failed: ${cleanLocalAddressError(err)}`;
-            state.updateBtnText = 'Check';
+            const cleanedErr = cleanLocalAddressError(err);
+            state.updateStatusText = `Failed: ${cleanedErr}`;
+            if (cleanedErr === 'Local service connection failed.') {
+                state.updateBtnText = 'Retry';
+            } else {
+                state.updateBtnText = 'Check';
+            }
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
         }
@@ -3023,8 +3037,13 @@ async function runManualUpdateCheck() {
             await window.go.main.App.InstallUpdate(state.updateCheckRes.asset_name);
         } catch (err) {
             state.updateStage = 'ready';
-            state.updateStatusText = `Install failed: ${cleanLocalAddressError(err)}`;
-            state.updateBtnText = 'Restart to update';
+            const cleanedErr = cleanLocalAddressError(err);
+            state.updateStatusText = `Install failed: ${cleanedErr}`;
+            if (cleanedErr === 'Local service connection failed.') {
+                state.updateBtnText = 'Retry';
+            } else {
+                state.updateBtnText = 'Restart to update';
+            }
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
         }
@@ -3051,8 +3070,13 @@ async function triggerDownloadUpdate() {
         syncManualUpdateCheckUI();
     } catch (err) {
         state.updateStage = 'available';
-        state.updateStatusText = `Download failed: ${cleanLocalAddressError(err)}`;
-        state.updateBtnText = 'Download now';
+        const cleanedErr = cleanLocalAddressError(err);
+        state.updateStatusText = `Download failed: ${cleanedErr}`;
+        if (cleanedErr === 'Local service connection failed.') {
+            state.updateBtnText = 'Retry';
+        } else {
+            state.updateBtnText = 'Download now';
+        }
         state.updateBtnDisabled = false;
         syncManualUpdateCheckUI();
     }
