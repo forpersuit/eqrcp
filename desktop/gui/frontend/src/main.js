@@ -2106,6 +2106,7 @@ function applyStatusData(nextStatus) {
     const prevCurrentUrl = String(state.status?.current?.pageUrl || '');
     const prevBusy = state.busy;
     const prevMode = state.mode;
+    const prevStatusState = state.status?.state || 'idle';
 
     state.status = nextStatus;
     reconcileChatQRState(state.status);
@@ -2114,6 +2115,17 @@ function applyStatusData(nextStatus) {
     const nextCurrentUrl = String(nextStatus?.current?.pageUrl || '');
     const nextBusy = state.busy;
     const nextMode = state.mode;
+    const nextStatusState = nextStatus?.state || 'idle';
+
+    if (prevStatusState === 'busy' && nextStatusState !== 'busy') {
+        const updateMode = state.settings?.autoUpdateMode || 'download';
+        if (state.updateStage === 'available' && (updateMode === 'download' || updateMode === 'silent')) {
+            console.log('[AutoUpdate] Transfer finished, agent returned to idle. Resuming update download.');
+            triggerDownloadUpdate().catch((e) => {
+                console.error('[AutoUpdate] Failed to resume download:', e);
+            });
+        }
+    }
 
     if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode) {
         if (state.activePanel) {
@@ -2861,6 +2873,70 @@ EventsOn('eqt:tray-command', handleTrayCommand);
 
 window.addEventListener('beforeunload', stopChatUsage);
 
+async function runAutoUpdateCheck() {
+    const mode = state.settings?.autoUpdateMode || 'download';
+    if (mode === 'off') {
+        console.log('[AutoUpdate] Auto update mode is off, skipping check.');
+        return;
+    }
+
+    if (state.updateStage !== 'idle') {
+        console.log('[AutoUpdate] Update state is busy:', state.updateStage);
+        return;
+    }
+
+    console.log('[AutoUpdate] Starting auto update check. Mode:', mode);
+    state.updateStage = 'checking';
+    state.updateStatusText = 'Checking updates automatically...';
+    syncManualUpdateCheckUI();
+
+    try {
+        const checkRes = await window.go.main.App.CheckForUpdates();
+        state.updateCheckRes = checkRes;
+
+        if (!checkRes || !checkRes.new_version_available) {
+            state.updateStage = 'idle';
+            state.updateStatusText = 'Already up to date.';
+            syncManualUpdateCheckUI();
+            return;
+        }
+
+        console.log('[AutoUpdate] New version available:', checkRes.version);
+        if (mode === 'notify') {
+            state.updateStage = 'available';
+            state.updateStatusText = `New version ${checkRes.version} is available.`;
+            state.updateBtnText = 'Download now';
+            state.updateBtnDisabled = false;
+            syncManualUpdateCheckUI();
+
+            state.notice = `New version ${checkRes.version} is available. Go to settings to update.`;
+            updateMessagesSurface();
+        } else {
+            if (state.status?.state === 'busy') {
+                console.log('[AutoUpdate] Agent is busy transferring. Postponing download.');
+                state.updateStage = 'available';
+                state.updateStatusText = `New version ${checkRes.version} is available. Download postponed until transfer finishes.`;
+                syncManualUpdateCheckUI();
+                return;
+            }
+            await triggerDownloadUpdate();
+            if (state.updateStage === 'ready') {
+                if (mode === 'download') {
+                    state.notice = `Version ${checkRes.version} has been downloaded. Restart to apply the update.`;
+                    updateMessagesSurface();
+                } else if (mode === 'silent') {
+                    console.log('[AutoUpdate] Silent update downloaded and ready. It will apply on next restart.');
+                }
+            }
+        }
+    } catch (err) {
+        state.updateStage = 'idle';
+        state.updateStatusText = `Auto update check failed: ${cleanLocalAddressError(err)}`;
+        syncManualUpdateCheckUI();
+        console.error('[AutoUpdate] Auto update check failed:', err);
+    }
+}
+
 async function runManualUpdateCheck() {
     if (state.updateStage === 'checking' || state.updateStage === 'downloading' || state.updateStage === 'installing') {
         return;
@@ -2962,4 +3038,7 @@ async function triggerDownloadUpdate() {
 
 loadChatUsage();
 render();
-loadSettings().then(connectAgentEvents);
+loadSettings().then(() => {
+    connectAgentEvents();
+    window.setTimeout(runAutoUpdateCheck, 5000);
+});
