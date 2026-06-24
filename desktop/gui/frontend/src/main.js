@@ -1104,6 +1104,22 @@ function openFolderIcon() {
     </svg>`;
 }
 
+function getTaskFolder(task) {
+    if (task.action === 'receive') {
+        if (task.paths && task.paths.length > 0) {
+            return task.paths[0];
+        }
+        if (task.savedFiles && task.savedFiles.length > 0) {
+            return getContainingFolder(task.savedFiles[0]);
+        }
+    } else {
+        if (task.paths && task.paths.length > 0) {
+            return getContainingFolder(task.paths[0]);
+        }
+    }
+    return '';
+}
+
 function renderHistoryFiles(task) {
     let files = [];
     if (task.action === 'receive') {
@@ -1122,7 +1138,6 @@ function renderHistoryFiles(task) {
     return `<div class="history-files-list">
         ${files.map((file) => {
             const name = shortName(file);
-            const parentDir = getContainingFolder(file);
             return `
                 <div class="history-file-row">
                     <div class="history-filename-wrapper">
@@ -1132,9 +1147,6 @@ function renderHistoryFiles(task) {
                     <div class="history-file-actions">
                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="Open file: ${escapeAttr(file)}">
                             ${openFileIcon()}
-                        </button>
-                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(parentDir)}" title="Open containing folder: ${escapeAttr(parentDir)}">
-                            ${openFolderIcon()}
                         </button>
                     </div>
                 </div>
@@ -1147,7 +1159,9 @@ function renderHistory(history) {
     if (!history.length) {
         return `<div class="empty-state">No completed tasks yet.</div>`;
     }
-    return `<ol class="history">${history.slice(0, 8).map((task) => `
+    return `<ol class="history">${history.slice(0, 8).map((task) => {
+        const taskFolder = getTaskFolder(task);
+        return `
         <li>
             <div class="history-item-left">
                 <div class="history-title-row">
@@ -1155,13 +1169,19 @@ function renderHistory(history) {
                     <span class="history-status-icon" title="${escapeAttr(task.state)}${task.transferState ? ` / ${escapeAttr(task.transferState)}` : ''}">
                         ${getStatusIcon(task)}
                     </span>
+                    ${taskFolder ? `
+                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(taskFolder)}" title="Open containing folder: ${escapeAttr(taskFolder)}" style="margin-left: 8px;">
+                            ${openFolderIcon()}
+                        </button>
+                    ` : ''}
                 </div>
             </div>
             <div class="history-item-right">
                 ${renderHistoryFiles(task)}
             </div>
         </li>
-    `).join('')}</ol>`;
+        `;
+    }).join('')}</ol>`;
 }
 
 function bindEvents() {
@@ -2116,7 +2136,7 @@ async function loadSettings() {
         }).catch((e) => {
             console.error('Failed to load integration status in background:', e);
         });
-    });
+    }, {busy: false});
 }
 
 async function loadIntegrationStatusData() {

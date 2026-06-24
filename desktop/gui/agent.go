@@ -126,6 +126,22 @@ func (agent *desktopAgent) touchLocked() {
 
 func (agent *desktopAgent) addHistoryLocked(record TaskRecord) {
 	record = cloneTaskRecord(record)
+	// Force resolve all paths to absolute paths
+	for i, p := range record.Paths {
+		if !filepath.IsAbs(p) {
+			if abs, err := filepath.Abs(p); err == nil {
+				record.Paths[i] = abs
+			}
+		}
+	}
+	for i, p := range record.SavedFiles {
+		if !filepath.IsAbs(p) {
+			if abs, err := filepath.Abs(p); err == nil {
+				record.SavedFiles[i] = abs
+			}
+		}
+	}
+
 	agent.history = append([]TaskRecord{record}, agent.history...)
 	if len(agent.history) > desktopAgentMaxHistory {
 		agent.history = agent.history[:desktopAgentMaxHistory]
@@ -185,6 +201,23 @@ func loadDesktopAgentHistory(path string) ([]TaskRecord, error) {
 	var store desktopAgentHistoryStore
 	if err := json.Unmarshal(data, &store); err != nil {
 		return nil, err
+	}
+	// Force resolve all paths loaded from disk to absolute paths
+	for i := range store.History {
+		for j, p := range store.History[i].Paths {
+			if !filepath.IsAbs(p) {
+				if abs, err := filepath.Abs(p); err == nil {
+					store.History[i].Paths[j] = abs
+				}
+			}
+		}
+		for j, p := range store.History[i].SavedFiles {
+			if !filepath.IsAbs(p) {
+				if abs, err := filepath.Abs(p); err == nil {
+					store.History[i].SavedFiles[j] = abs
+				}
+			}
+		}
 	}
 	return cloneTaskRecords(store.History), nil
 }
@@ -330,6 +363,14 @@ func (agent *desktopAgent) handleChatHostRename(newName string) {
 }
 
 func (agent *desktopAgent) pushTask(task AgentTask) (AgentStatus, error) {
+	// Resolve relative paths to absolute paths immediately
+	for i, p := range task.Paths {
+		if !filepath.IsAbs(p) {
+			if abs, err := filepath.Abs(p); err == nil {
+				task.Paths[i] = abs
+			}
+		}
+	}
 	if err := validateDesktopAgentTask(task); err != nil {
 		return AgentStatus{}, err
 	}
