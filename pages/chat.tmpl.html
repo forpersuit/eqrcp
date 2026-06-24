@@ -1871,7 +1871,7 @@
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
                     </button>
                 </div>
-                <p class="side-note">Scan this code to join from another device.</p>
+                <p class="side-note" id="chat-scan-note">Scan this code to join from another device.</p>
                 <div class="qr-frame">
                     <img class="qr" src="{{.QRImageRoute}}" alt="Chat QR code">
                 </div>
@@ -2047,7 +2047,17 @@
 
                 licenseInactiveOrExpired: "授权未激活/已失效",
 
-                howToRestore: "如何恢复"
+                howToRestore: "如何恢复",
+
+                zoomOut: "缩小",
+                zoomIn: "放大",
+                copyImage: "复制图片",
+                latestMessage: "最新消息",
+                jumpToLatest: "跳转至最新消息",
+                addAttachment: "添加附件",
+                scanToJoin: "扫描此二维码加入对话",
+                copy: "复制",
+                send: "发送"
 
             },
             en: {
@@ -2171,7 +2181,17 @@
 
                 licenseInactiveOrExpired: "License Inactive/Expired",
 
-                howToRestore: "How to Restore"
+                howToRestore: "How to Restore",
+
+                zoomOut: "Zoom out",
+                zoomIn: "Zoom in",
+                copyImage: "Copy image",
+                latestMessage: "Latest message",
+                jumpToLatest: "Jump to latest message",
+                addAttachment: "Add attachment",
+                scanToJoin: "Scan this code to join from another device.",
+                copy: "Copy",
+                send: "Send"
 
             },
             ja: {
@@ -2295,7 +2315,17 @@
 
                 licenseInactiveOrExpired: "ライセンス未有効/期限切れ",
 
-                howToRestore: "復元の手順"
+                howToRestore: "復元の手順",
+
+                zoomOut: "縮小",
+                zoomIn: "拡大",
+                copyImage: "画像をコピー",
+                latestMessage: "最新のメッセージ",
+                jumpToLatest: "最新のメッセージへ移動",
+                addAttachment: "添付ファイルを追加",
+                scanToJoin: "このコードをスキャンして別のデバイスから参加します。",
+                copy: "コピー",
+                send: "送信"
 
             },
             ko: {
@@ -2808,7 +2838,21 @@
         var savedLang = safeStorage.getItem('eqt_lang');
         var detectedLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
         var lang = supportedLangs[savedLang] ? savedLang : (supportedLangs[detectedLang] ? detectedLang : 'en');
-        var dict = i18n[lang];
+        
+        var dict = {};
+        function mergeDict(target, source) {
+            if (!source) return;
+            for (var k in source) {
+                if (source.hasOwnProperty(k)) {
+                    target[k] = source[k];
+                }
+            }
+        }
+        mergeDict(dict, i18n.en);
+        if (i18n[lang]) {
+            mergeDict(dict, i18n[lang]);
+        }
+
         var limitState = {
             usedSeconds: 0,
             isPaid: false,
@@ -2893,6 +2937,49 @@
                 renderSandboxConsoleUI();
             }
 
+            // Update static English strings in HTML dynamically
+            var scanNote = document.getElementById('chat-scan-note');
+            if (scanNote && dict.scanToJoin) scanNote.textContent = dict.scanToJoin;
+
+            var copyUrlBtn = document.getElementById('copy-url');
+            if (copyUrlBtn && dict.copy) copyUrlBtn.textContent = dict.copy;
+
+            var sendBtn = document.getElementById('send-button');
+            if (sendBtn && dict.send) sendBtn.setAttribute('aria-label', dict.send);
+
+            var fileLabel = document.querySelector('.file-label');
+            if (fileLabel && dict.addAttachment) {
+                fileLabel.setAttribute('title', dict.addAttachment);
+                fileLabel.setAttribute('aria-label', dict.addAttachment);
+            }
+
+            var scrollArrow = document.getElementById('scroll-arrow');
+            if (scrollArrow && dict.latestMessage && dict.jumpToLatest) {
+                scrollArrow.setAttribute('title', dict.latestMessage);
+                scrollArrow.setAttribute('aria-label', dict.jumpToLatest);
+            }
+
+            var zoomOutBtn = document.getElementById('preview-zoom-out');
+            if (zoomOutBtn && dict.zoomOut) {
+                zoomOutBtn.setAttribute('title', dict.zoomOut);
+                zoomOutBtn.setAttribute('aria-label', dict.zoomOut);
+            }
+            var zoomInBtn = document.getElementById('preview-zoom-in');
+            if (zoomInBtn && dict.zoomIn) {
+                zoomInBtn.setAttribute('title', dict.zoomIn);
+                zoomInBtn.setAttribute('aria-label', dict.zoomIn);
+            }
+            var previewCopyBtn = document.getElementById('preview-copy');
+            if (previewCopyBtn && dict.copyImage) {
+                previewCopyBtn.setAttribute('title', dict.copyImage);
+                previewCopyBtn.setAttribute('aria-label', dict.copyImage);
+            }
+            var previewCloseBtn = document.getElementById('preview-close');
+            if (previewCloseBtn && dict.close) {
+                previewCloseBtn.setAttribute('title', dict.close);
+                previewCloseBtn.setAttribute('aria-label', dict.close);
+            }
+
             // Refresh Language Switcher List options active classes
             renderLanguageList();
         }
@@ -2900,7 +2987,11 @@
         function updateLanguage(newLang) {
             if (supportedLangs[newLang]) {
                 lang = newLang;
-                dict = i18n[lang];
+                dict = {};
+                mergeDict(dict, i18n.en);
+                if (i18n[lang]) {
+                    mergeDict(dict, i18n[lang]);
+                }
                 safeStorage.setItem('eqt_lang', lang);
                 updatePageTranslations();
             }

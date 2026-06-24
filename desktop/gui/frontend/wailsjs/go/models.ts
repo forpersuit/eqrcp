@@ -209,6 +209,7 @@ export namespace main {
 	    updateChannel: string;
 	    lastUpdateCheckTime: number;
 	    updateCheckIntervalHours: number;
+	    lang: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -233,6 +234,7 @@ export namespace main {
 	        this.updateChannel = source["updateChannel"];
 	        this.lastUpdateCheckTime = source["lastUpdateCheckTime"];
 	        this.updateCheckIntervalHours = source["updateCheckIntervalHours"];
+	        this.lang = source["lang"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

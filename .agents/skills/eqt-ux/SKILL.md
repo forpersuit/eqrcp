@@ -36,4 +36,14 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - In client-side JS (`updateChatStatus(data)`), detect the change dynamically by comparing `enabled !== viewportDebugEnabled`.
   - When state changes, manipulate DOM class attributes directly (add/remove `.open`, `aria-hidden`), update layout constraints inline, and fire viewport metric adjustments (e.g., `handleViewportChange()`) without forcing a full client page refresh.
 
+## Multi-language (i18n) & Locale Matching
+- **Desktop UI (Wails)**:
+  - 界面语言首选项（例如 Settings 页面下的 `Lang` 字段）在后台 `config/settings.go` 中持久化并同步给前端。
+  - 使用 `translations[lang][key]` 进行界面词条替换。在保存并更新语言选项时，应通过 `updatePageTranslations()` 及时动态局部更新 DOM 以支持无缝的语种热切换。
+- **Mobile Pages (`upload.tmpl.html` & `chat.tmpl.html`)**:
+  - 默认根据打开网页的浏览器语言首选项 `navigator.language` 来动态渲染对应的语种。
+  - 扫码接入的 receive 模式（`upload.tmpl.html`）应在右下角悬浮显示可进行语种切换的下拉框 `<select>`，允许用户切换时在 LocalStorage 中持久化 `eqt-page-lang` 偏好。
+  - 为了稳妥应对翻译缺漏或新增词条，对其它不支持的次要语言，在字典初始化时必须先与 `i18n.en` 英文词条进行深度 Merge，作为安全回退兜底，防止出现 JS 未定义键的空指针报错。
+
+
 

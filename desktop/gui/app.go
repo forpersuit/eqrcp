@@ -106,6 +106,7 @@ type DesktopSettings struct {
 	UpdateChannel            string            `json:"updateChannel"`
 	LastUpdateCheckTime      int64             `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int               `json:"updateCheckIntervalHours"`
+	Lang                     string            `json:"lang"`
 }
 
 type InterfaceOption struct {

@@ -52,6 +52,268 @@ window.onunhandledrejection = function(event) {
     }
 };
 
+const translations = {
+    zh: {
+        // Navigation / Tabs
+        share: '分享文件',
+        receive: '接收文件',
+        chat: '局域网对话',
+        settings: '软件设置',
+        pro_tier: '高级版功能',
+
+        // General
+        working: '正在处理...',
+        stop: '停止',
+        running: '运行中',
+        completed: '已完成',
+        failed: '已失败',
+        stopped: '已停止',
+        no_tasks: '暂无已完成的任务',
+        recent_history: '最近传输历史',
+        clear: '清空',
+        current_task: '当前任务',
+        refresh: '刷新',
+        choose: '选择',
+        open_folder: '打开目录',
+
+        // Share Page
+        drag_drop_tips: '拖拽文件或文件夹到这里',
+        or_click_to: '或者点击按钮进行选择',
+        select_files: '选择文件',
+        select_folder: '选择文件夹',
+        selected_items: '已选择的文件/文件夹：',
+        start_transfer: '开始分享',
+        status_idle_tips: '配置好选项并启动传输服务。',
+        drop_more_tips: '继续拖入文件，或手动选择。',
+        items_ready: '个项已就绪',
+        share_active: '分享服务已启动',
+        open_in_browser: '浏览器中打开',
+        target: '接收端设备',
+        bytes: '传输流量',
+        qr_page: '网页端链接',
+        locked_list: '已锁定传输列表',
+        waiting_qr: '正在等待生成二维码...',
+
+        // Receive Page
+        save_path: '保存目录',
+        select_save_path: '更改目录',
+        start_receive: '开始接收',
+        status_receive_tips: '配置好保存目录并启动接收服务。',
+        receive_dir: '接收保存目录',
+        receive_active: '接收服务已启动',
+
+        // Chat Page
+        chat_limit_reached: '今日免费对话时长已用尽',
+        upgrade_to_keep: '请升级以继续在今天使用对话功能。',
+        start_chat: '开启对话',
+        chat_running_tips: '局域网内的其他设备扫码后即可加入对话。',
+        waiting_network_url: '正在等待网络地址就绪...',
+        chat_history_save_path: '对话附件保存目录',
+        remaining_duration: '今日剩余时长：',
+        session_mode: '会话模式',
+        chat_title: '局域网设备对话免流量聊天',
+        starting_chat: '正在启动对话服务...',
+        chat_status: '对话服务状态',
+        scan_to_join: '扫码加入对话',
+        copy_chat_url: '复制对话链接',
+        devices: '已连接设备',
+        connected: '已连接',
+        desktop: '电脑端',
+        remote: '移动端/其他设备',
+        waiting_connection: '等待设备加入...',
+        last_activity: '最后活动时间',
+        no_active_chat: '当前无活动对话',
+        chat_session: '局域网对话',
+
+        // Settings Page
+        lang_title: '界面语言',
+        lang_desc: '选择软件界面的显示语言。',
+        lang_pref: '首选语言',
+        lang_zh: '简体中文',
+        lang_en: 'English',
+
+        sys_integration: '系统集成',
+        sys_integration_desc: '本地桌面日常使用的便捷入口。',
+        right_click_menu: 'Windows 右键菜单分享和接收',
+        right_click_desc: '在资源管理器右键中添加分享所选文件或接收到此文件夹的菜单。',
+        startup_title: '开机自动运行 EQT',
+        startup_desc: '登录系统时自动在后台启动 EQT 传输服务。',
+        
+        chat_identity: '局域网对话设置',
+        chat_identity_desc: '设置您在局域网对话中的身份信息和附件保存选项。',
+        chat_sender: '对话昵称',
+        chat_sender_desc: '在局域网对话中显示的昵称。',
+        chat_avatar: '对话头像',
+        chat_avatar_desc: '使用表情符号(Emoji)或 1-4 个英文字母。',
+        chat_autosave: '自动保存对话附件',
+        chat_autosave_desc: '接收到的附件按天分类保存，并自动清理 7 天前的文件。',
+
+        window_settings: '窗口选项',
+        window_settings_desc: '设置关闭 EQT 主窗口时的软件行为。',
+        close_action: '关闭窗口动作',
+        close_action_desc: '关闭窗口时保留在系统托盘可以实现极速启动与常驻传输。',
+        keep_tray: '保留在系统托盘中',
+        quit_app: '退出 EQT 软件',
+
+        update_settings: '软件更新',
+        update_settings_desc: '管理软件自动更新检查行为。',
+        update_mode: '自动更新模式',
+        update_mode_desc: '控制新版本的检测和自动下载行为。',
+        update_off: '关闭自动更新',
+        update_notify: '仅提醒有新版本',
+        update_download: '自动下载新版本 (默认)',
+        update_silent: '静默自动更新与安装',
+        check_update: '检查新版本',
+        manual_check_tips: '点击按钮手动检查更新。',
+        manual_check_btn: '检查',
+
+        adv_settings: '高级设置',
+        net_interface: '网卡接口',
+        net_interface_desc: '选择您的移动设备在局域网内可以访问的网卡适配器。',
+        port_title: '服务端口',
+        port_desc: '若无固定本地端口需求，建议保持 0 自动分配。',
+        browser_fallback: '回退浏览器控制页面',
+        browser_fallback_desc: '需要时为扫码任务提供备用的浏览器控制端页面。',
+        update_check_interval: '更新检查频率',
+        update_check_interval_desc: '选择软件自动检测新版本的频率。',
+        hours_12: '12 小时',
+        hours_24: '24 小时 (默认)',
+        hours_48: '48 小时',
+    },
+    en: {
+        // Navigation / Tabs
+        share: 'Share',
+        receive: 'Receive',
+        chat: 'Local Chat',
+        settings: 'Settings',
+        pro_tier: 'Pro Features',
+
+        // General
+        working: 'Working...',
+        stop: 'Stop',
+        running: 'Running',
+        completed: 'Completed',
+        failed: 'Failed',
+        stopped: 'Stopped',
+        no_tasks: 'No completed tasks yet.',
+        recent_history: 'Recent history',
+        clear: 'Clear',
+        current_task: 'Current task',
+        refresh: 'Refresh',
+        choose: 'Choose',
+        open_folder: 'Open Folder',
+
+        // Share Page
+        drag_drop_tips: 'Drag & drop files or folders here',
+        or_click_to: 'or click buttons to choose',
+        select_files: 'Select Files',
+        select_folder: 'Select Folder',
+        selected_items: 'Selected items:',
+        start_transfer: 'Start transfer',
+        status_idle_tips: 'Configure options and start the sharing service.',
+        drop_more_tips: 'Drop more items here, or choose manually.',
+        items_ready: 'item(s) ready',
+        share_active: 'Share active',
+        open_in_browser: 'Open in browser',
+        target: 'Target',
+        bytes: 'Bytes',
+        qr_page: 'QR page',
+        locked_list: 'Locked transfer list',
+        waiting_qr: 'Waiting for QR...',
+
+        // Receive Page
+        save_path: 'Save Directory',
+        select_save_path: 'Change Directory',
+        start_receive: 'Start receive',
+        status_receive_tips: 'Configure target directory and start receiving.',
+        receive_dir: 'Receive directory',
+        receive_active: 'Receive active',
+
+        // Chat Page
+        chat_limit_reached: 'Daily free chat limit reached',
+        upgrade_to_keep: 'Upgrade to keep using chat today.',
+        start_chat: 'Start chat',
+        chat_running_tips: 'Other devices on the local network can scan QR to join.',
+        waiting_network_url: 'Waiting for network URL...',
+        chat_history_save_path: 'Autosave folder',
+        remaining_duration: 'Chat remaining:',
+        session_mode: 'Session mode',
+        chat_title: 'Local chat with phones and nearby devices',
+        starting_chat: 'Starting chat session...',
+        chat_status: 'Chat Status',
+        scan_to_join: 'Scan to Join Chat',
+        copy_chat_url: 'Copy chat URL',
+        devices: 'Devices',
+        connected: 'Connected',
+        desktop: 'Desktop',
+        remote: 'Remote',
+        waiting_connection: 'Waiting for connection...',
+        last_activity: 'Last activity',
+        no_active_chat: 'No active chat.',
+        chat_session: 'Chat session',
+
+        // Settings Page
+        lang_title: 'Interface Language',
+        lang_desc: 'Choose UI language for EQT.',
+        lang_pref: 'Preferred Language',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+
+        sys_integration: 'System Integration',
+        sys_integration_desc: 'Native entry points for daily desktop use.',
+        right_click_menu: 'Windows right-click share and receive',
+        right_click_desc: 'Adds Explorer actions for sharing selected files and receiving into a folder.',
+        startup_title: 'Start EQT at login',
+        startup_desc: 'Starts the background transfer service when you sign in.',
+        
+        chat_identity: 'Chat Settings',
+        chat_identity_desc: 'Identity and attachment handling for desktop chat sessions.',
+        chat_sender: 'Chat profile name',
+        chat_sender_desc: 'Your nickname in chat sessions.',
+        chat_avatar: 'Chat avatar badge',
+        chat_avatar_desc: 'Use an emoji or 1-4 initials.',
+        chat_autosave: 'Auto-save chat attachments',
+        chat_autosave_desc: 'Save received attachments by day and clean folders older than 7 days.',
+
+        window_settings: 'Window',
+        window_settings_desc: 'What happens when the EQT window is closed.',
+        close_action: 'Close action',
+        close_action_desc: 'Keeping EQT in the tray leaves the app ready for fast access.',
+        keep_tray: 'Keep EQT in taskbar tray',
+        quit_app: 'Quit EQT app',
+
+        update_settings: 'Software Updates',
+        update_settings_desc: 'Manage app update checking.',
+        update_mode: 'Auto-update mode',
+        update_mode_desc: 'Control update checks and download behavior.',
+        update_off: 'Off',
+        update_notify: 'Notify',
+        update_download: 'Download (Default)',
+        update_silent: 'Silent',
+        check_update: 'Check for updates',
+        manual_check_tips: 'Click button to manually check.',
+        manual_check_btn: 'Check',
+
+        adv_settings: 'Advanced Settings',
+        net_interface: 'Network interface',
+        net_interface_desc: 'Use the adapter your phone can reach on the local network.',
+        port_title: 'Port',
+        port_desc: 'Keep 0 unless you need a fixed local port.',
+        browser_fallback: 'Browser fallback',
+        browser_fallback_desc: 'Open browser control pages for QR tasks when useful.',
+        update_check_interval: 'Update check interval',
+        update_check_interval_desc: 'Choose how often to check for updates automatically.',
+        hours_12: '12 Hours',
+        hours_24: '24 Hours (Default)',
+        hours_48: '48 Hours',
+    }
+};;
+
+function t(key) {
+    const lang = (state && state.settings && state.settings.lang) || 'zh';
+    return (translations[lang] && translations[lang][key]) || translations['zh'][key] || key;
+}
+
 const state = {
     mode: 'share',
     sharePaths: [],
@@ -251,14 +513,14 @@ function render() {
         <main class="shell">
             <header class="topbar">
                 <nav class="mode-switch" aria-label="Transfer modes">
-                    <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">Share</button>
-                    <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">Receive</button>
-                    <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">Chat</button>
+                    <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">${t('share')}</button>
+                    <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">${t('receive')}</button>
+                    <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    <button class="menu-button" id="open-settings" title="Settings" aria-label="Settings">
+                    <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}">
                         <span class="menu-icon">${settingsIcon()}</span>
-                        <span class="menu-label">Settings</span>
+                        <span class="menu-label">${t('settings')}</span>
                     </button>
                     <button class="menu-button" id="open-about" title="About EQT" aria-label="About EQT">
                         <span class="menu-icon">${aboutIcon()}</span>
@@ -329,19 +591,19 @@ function renderShare() {
     return `
         <div class="dropzone">
             <div class="drop-target" style="--wails-drop-target: drop">
-                <div class="drop-title">Drop files or folders here</div>
-                <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} item(s) ready` : 'Drop more items here, or choose files manually.'}</div>
+                <div class="drop-title">${t('drag_drop_tips')}</div>
+                <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} ${t('items_ready')}` : t('or_click_to')}</div>
             </div>
             <div class="actions">
-                <button type="button" id="choose-files">Choose files</button>
-                <button type="button" id="choose-folder" class="secondary">Choose folder</button>
+                <button type="button" id="choose-files">${t('select_files')}</button>
+                <button type="button" id="choose-folder" class="secondary">${t('select_folder')}</button>
             </div>
         </div>
         ${hasItems ? `
             <ul class="path-list">${items}</ul>
             <div class="primary-row">
-                <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start transfer'}</button>
-                <button class="ghost" id="clear-share">Clear</button>
+                <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
+                <button class="ghost" id="clear-share">${t('clear')}</button>
             </div>
         ` : ''}
     `;
@@ -357,15 +619,15 @@ function renderSide() {
         <aside class="side">
             <div class="panel">
                 <div class="panel-head">
-                    <h2>Current task</h2>
-                    <button class="ghost" id="refresh">Refresh</button>
+                    <h2>${t('current_task')}</h2>
+                    <button class="ghost" id="refresh">${t('refresh')}</button>
                 </div>
                 ${renderCurrent(current)}
             </div>
             <div class="panel">
                 <div class="panel-head">
-                    <h2>Recent history</h2>
-                    <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'}>Clear</button>
+                    <h2>${t('recent_history')}</h2>
+                    <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'}>${t('clear')}</button>
                 </div>
                 ${renderHistory(history)}
             </div>
@@ -381,25 +643,25 @@ function renderShareTransfer(task) {
         <div class="transfer-stage">
             <div class="transfer-head">
                 <div>
-                    <div class="eyebrow">Share active</div>
+                    <div class="eyebrow">${t('share_active')}</div>
                     <h2>${escapeHTML(task.transferState || task.state || 'Waiting')}</h2>
                 </div>
-                <button class="danger inline stop-current-action">Stop</button>
+                <button class="danger inline stop-current-action">${t('stop')}</button>
             </div>
             ${qrImage ? `
                 <div class="qr-hero">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">Open in browser</button>
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
-            ` : '<div class="empty-state transfer-empty">Waiting for QR page.</div>'}
+            ` : `<div class="empty-state transfer-empty">${t('waiting_qr')}</div>`}
             <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl class="transfer-details">
-                <dt>Target</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || 'Waiting')}</dd>
-                <dt>Bytes</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>QR page</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : 'Waiting'}</dd>
+                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || 'Waiting')}</dd>
+                <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : 'Waiting'}</dd>
             </dl>
             <div class="locked-list">
-                <strong>Locked transfer list</strong>
+                <strong>${t('locked_list')}</strong>
                 <ul class="path-list locked">${paths.map((path) => `
                     <li>
                         <div>
@@ -419,15 +681,15 @@ function renderReceive() {
     const output = state.receiveDir || state.settings?.output || '';
     return `
         <div class="receive-box">
-            <label>Receive directory</label>
+            <label>${t('receive_dir')}</label>
             <div class="directory-row">
                 <input id="receive-dir" value="${escapeAttr(output)}" placeholder="Choose a folder" />
-                <button id="choose-receive">Choose</button>
+                <button id="choose-receive">${t('choose')}</button>
             </div>
         </div>
         <div class="primary-row">
-            <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Working...' : 'Start receive'}</button>
-            <button class="ghost" id="save-receive-dir">Save directory</button>
+            <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_receive')}</button>
+            <button class="ghost" id="save-receive-dir">${t('save_dir')}</button>
         </div>
     `;
 }
@@ -440,8 +702,8 @@ function renderChat() {
         return `
             <div class="chat-start">
                 <div>
-                    <div class="eyebrow">Session mode</div>
-                    <h2>Local chat with phones and nearby devices</h2>
+                    <div class="eyebrow">${t('session_mode')}</div>
+                    <h2>${t('chat_title')}</h2>
                     <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
                 <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${chatStartButtonText()}</button>
@@ -454,9 +716,9 @@ function renderChat() {
             <div class="chat-panel">
                 <div class="chat-start">
                     <div>
-                        <div class="eyebrow">Session mode</div>
-                        <h2>Starting chat session...</h2>
-                        <p>Waiting for agent to prepare the network URL.</p>
+                        <div class="eyebrow">${t('session_mode')}</div>
+                        <h2>${t('starting_chat')}</h2>
+                        <p>${t('waiting_network_url')}</p>
                     </div>
                 </div>
             </div>
@@ -494,10 +756,10 @@ function renderChatSide() {
             <aside class="side">
                 <div class="panel chat-session-panel">
                     <div class="panel-head">
-                        <h2>Chat session</h2>
-                        <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
+                        <h2>${t('chat_session')}</h2>
+                        <button type="button" class="side-icon-button refresh-action" title="${t('refresh')}" aria-label="${t('refresh')}">${refreshIcon()}</button>
                     </div>
-                    <div class="empty-state">No active chat.</div>
+                    <div class="empty-state">${t('no_active_chat')}</div>
                 </div>
             </aside>
         `;
@@ -522,51 +784,51 @@ function renderChatPanel(task) {
                     <div>
                         <div class="panel-title-inline">
                             ${hasPaidLicense() ? `<span class="license-badge sidebar-badge">${escapeHTML(state.license.tier)}</span>` : ''}
-                            <h2>Chat Status</h2>
+                            <h2>${t('chat_status')}</h2>
                         </div>
                         <p class="side-note tight">${escapeHTML(chatStateLabel(chatState))}</p>
                     </div>
                     <div class="side-head-actions">
-                        <button type="button" class="side-icon-button refresh-action" title="Refresh" aria-label="Refresh">${refreshIcon()}</button>
-                        <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="Open chat in browser" aria-label="Open chat in browser" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
-                        <button type="button" class="side-icon-button danger-icon stop-chat-action" title="Stop chat" aria-label="Stop chat">${stopIcon()}</button>
+                        <button type="button" class="side-icon-button refresh-action" title="${t('refresh')}" aria-label="${t('refresh')}">${refreshIcon()}</button>
+                        <button type="button" class="side-icon-button open-qr" data-open-url="${escapeAttr(chatUrl)}" title="${t('open_in_browser')}" aria-label="${t('open_in_browser')}" ${chatUrl ? '' : 'disabled'}>${browserIcon()}</button>
+                        <button type="button" class="side-icon-button danger-icon stop-chat-action" title="${t('stop')}" aria-label="${t('stop')}">${stopIcon()}</button>
                     </div>
                 </div>
                 <div class="chat-count">${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</div>
-                ${lastActivity ? `<p class="side-note">Last activity: ${escapeHTML(lastActivity)}</p>` : ''}
+                ${lastActivity ? `<p class="side-note">${t('last_activity')}: ${escapeHTML(lastActivity)}</p>` : ''}
             </div>
             <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
                 <div class="panel-head">
-                    <h2>Scan to Join Chat</h2>
+                    <h2>${t('scan_to_join')}</h2>
                     <button type="button" class="side-icon-button chat-qr-toggle-action ${qrPulse ? 'qr-breathe' : ''}" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}</button>
                 </div>
                 ${state.chatQROpen ? `
                     <div class="chat-qr-content">
                         <div class="chat-qr-card chat-qr-card-large">
-                            ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : '<div class="empty-state">Waiting for QR</div>'}
+                            ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : `<div class="empty-state">${t('waiting_qr')}</div>`}
                         </div>
                         <div class="chat-url-row">
-                            <span>${escapeHTML(chatUrl || 'Waiting for chat URL')}</span>
-                            <button type="button" class="copy-chat-url-action" title="Copy chat URL" aria-label="Copy chat URL" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
+                            <span>${escapeHTML(chatUrl || t('waiting_network_url'))}</span>
+                            <button type="button" class="copy-chat-url-action" title="${t('copy_chat_url')}" aria-label="${t('copy_chat_url')}" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
                         </div>
                     </div>
-                ` : '<p class="side-note">Expand when you need to invite another device.</p>'}
+                ` : `<p class="side-note">${state.settings?.lang === 'en' ? 'Expand when you need to invite another device.' : '展开以为其他设备扫码接入。'}</p>`}
             </div>
             <div class="panel chat-session-panel">
                 <div class="panel-head">
-                    <h2>Devices</h2>
+                    <h2>${t('devices')}</h2>
                     <span class="side-count">${deviceCount}</span>
                 </div>
                 <div class="device-list compact">
                     <div class="device-row">
                         <span class="device-icon">${computerIcon()}</span>
-                        <strong>Desktop</strong>
-                        <span>Connected</span>
+                        <strong>${t('desktop')}</strong>
+                        <span>${t('connected')}</span>
                     </div>
                     <div class="device-row">
                         <span class="device-icon">${phoneIcon()}</span>
-                        <strong>Remote</strong>
-                        <span>${remoteDeviceCount} connected</span>
+                        <strong>${t('remote')}</strong>
+                        <span>${remoteDeviceCount} ${t('connected')}</span>
                     </div>
                 </div>
             </div>
@@ -576,10 +838,10 @@ function renderChatPanel(task) {
 
 function chatStateLabel(chatState) {
     if (chatState === 'active') {
-        return 'Connected';
+        return t('connected');
     }
     if (chatState === 'waiting' || chatState === 'running') {
-        return 'Waiting for connection';
+        return t('waiting_connection');
     }
     return titleCase(chatState || 'waiting');
 }
@@ -630,16 +892,32 @@ function renderSettingsPanel() {
     return `
         <div class="settings-panel">
 
-
             <section class="settings-section">
                 <div class="settings-section-head">
-                    <h3>System Integration</h3>
-                    <span>Native entry points for daily desktop use.</span>
+                    <h3>${t('lang_title')}</h3>
+                    <span>${t('lang_desc')}</span>
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Windows right-click share and receive</strong>
-                        <span id="right-click-status-text">${escapeHTML(integrationStatusText(state.rightClickIntegration, 'Adds Explorer actions for sharing selected files and receiving into a folder.'))}</span>
+                        <strong>${t('lang_pref')}</strong>
+                        <span>${t('lang_desc')}</span>
+                    </div>
+                    <select id="settings-lang">
+                        <option value="zh" ${state.settings?.lang !== 'en' ? 'selected' : ''}>${t('lang_zh')}</option>
+                        <option value="en" ${state.settings?.lang === 'en' ? 'selected' : ''}>${t('lang_en')}</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <div class="settings-section-head">
+                    <h3>${t('sys_integration')}</h3>
+                    <span>${t('sys_integration_desc')}</span>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('right_click_menu')}</strong>
+                        <span id="right-click-status-text">${escapeHTML(integrationStatusText(state.rightClickIntegration, t('right_click_desc')))}</span>
                     </div>
                     <div class="setting-control-stack" id="right-click-control">
                         ${renderStatusBadge(state.rightClickIntegration)}
@@ -648,8 +926,8 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Start EQT at login</strong>
-                        <span id="startup-status-text">${escapeHTML(integrationStatusText(state.startupIntegration, 'Starts the background transfer service when you sign in.'))}</span>
+                        <strong>${t('startup_title')}</strong>
+                        <span id="startup-status-text">${escapeHTML(integrationStatusText(state.startupIntegration, t('startup_desc')))}</span>
                     </div>
                     <div class="setting-control-stack" id="startup-control">
                         ${renderStatusBadge(state.startupIntegration)}
@@ -660,20 +938,20 @@ function renderSettingsPanel() {
 
             <section class="settings-section">
                 <div class="settings-section-head">
-                    <h3>Chat</h3>
-                    <span>Identity and attachment handling for desktop chat sessions.</span>
+                    <h3>${t('chat')}</h3>
+                    <span>${t('chat_identity_desc')}</span>
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Chat profile name</strong>
-                        <span>Your nickname in chat sessions.</span>
+                        <strong>${t('chat_sender')}</strong>
+                        <span>${t('chat_sender_desc')}</span>
                     </div>
                     <input id="settings-chat-sender" type="text" maxlength="20" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Chat avatar badge</strong>
-                        <span>Use an emoji or 1-4 initials.</span>
+                        <strong>${t('chat_avatar')}</strong>
+                        <span>${t('chat_avatar_desc')}</span>
                         <div class="avatar-presets">
                             <button type="button" class="avatar-preset-btn" data-avatar="🚀" title="Rocket">🚀</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="😎" title="Cool">😎</button>
@@ -690,93 +968,93 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Auto-save chat attachments</strong>
-                        <span>Save received attachments by day and clean folders older than 7 days.</span>
+                        <strong>${t('chat_autosave')}</strong>
+                        <span>${t('chat_autosave_desc')}</span>
                     </div>
                     <div class="setting-control-stack">
                         ${renderSwitch('settings-chat-autosave', state.chatAutoSave)}
-                        <button type="button" class="ghost inline" id="open-chat-save">Open folder</button>
+                        <button type="button" class="ghost inline" id="open-chat-save">${t('open_folder')}</button>
                     </div>
                 </div>
             </section>
 
             <section class="settings-section">
                 <div class="settings-section-head">
-                    <h3>Window</h3>
-                    <span>What happens when the EQT window is closed.</span>
+                    <h3>${t('window_settings')}</h3>
+                    <span>${t('window_settings_desc')}</span>
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Close action</strong>
-                        <span>Keeping EQT in the tray leaves the app ready for fast access.</span>
+                        <strong>${t('close_action')}</strong>
+                        <span>${t('close_action_desc')}</span>
                     </div>
                     <select id="settings-close-behavior">
-                        <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>Keep EQT in taskbar tray</option>
-                        <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>Quit EQT app</option>
+                        <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>${t('keep_tray')}</option>
+                        <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>${t('quit_app')}</option>
                     </select>
                 </div>
             </section>
 
             <section class="settings-section">
                 <div class="settings-section-head">
-                    <h3>Software Updates</h3>
-                    <span>Manage app update checking.</span>
+                    <h3>${t('update_settings')}</h3>
+                    <span>${t('update_settings_desc')}</span>
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Auto-update mode</strong>
-                        <span>Control update checks and download behavior.</span>
+                        <strong>${t('update_mode')}</strong>
+                        <span>${t('update_mode_desc')}</span>
                     </div>
                     <select id="settings-auto-update-mode">
-                        <option value="off" ${state.settings?.autoUpdateMode === 'off' ? 'selected' : ''}>Off</option>
-                        <option value="notify" ${state.settings?.autoUpdateMode === 'notify' ? 'selected' : ''}>Notify</option>
-                        <option value="download" ${state.settings?.autoUpdateMode === 'download' ? 'selected' : ''}>Download (Default)</option>
-                        <option value="silent" ${state.settings?.autoUpdateMode === 'silent' ? 'selected' : ''}>Silent</option>
+                        <option value="off" ${state.settings?.autoUpdateMode === 'off' ? 'selected' : ''}>${t('update_off')}</option>
+                        <option value="notify" ${state.settings?.autoUpdateMode === 'notify' ? 'selected' : ''}>${t('update_notify')}</option>
+                        <option value="download" ${state.settings?.autoUpdateMode === 'download' ? 'selected' : ''}>${t('update_download')}</option>
+                        <option value="silent" ${state.settings?.autoUpdateMode === 'silent' ? 'selected' : ''}>${t('update_silent')}</option>
                     </select>
                 </div>
 
                 <div class="setting-row">
                     <div class="setting-copy">
-                        <strong>Check for updates</strong>
-                        <span id="update-check-status">${escapeHTML(state.updateStatusText || 'Click button to manually check.')}</span>
+                        <strong>${t('check_update')}</strong>
+                        <span id="update-check-status">${escapeHTML(state.updateStatusText || t('manual_check_tips'))}</span>
                     </div>
-                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || 'Check')}</button>
+                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || t('manual_check_btn'))}</button>
                 </div>
             </section>
 
             <details class="settings-advanced-details" ${state.settingsAdvancedOpen ? 'open' : ''}>
-                <summary class="settings-advanced-summary">Advanced Settings</summary>
+                <summary class="settings-advanced-summary">${t('adv_settings')}</summary>
                 <div class="settings-advanced-content">
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong>Network interface</strong>
-                            <span>Use the adapter your phone can reach on the local network.</span>
+                            <strong>${t('net_interface')}</strong>
+                            <span>${t('net_interface_desc')}</span>
                         </div>
                         <select id="settings-interface">${options}</select>
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">Port <span aria-hidden="true">?</span></strong>
-                            <span>Keep 0 unless you need a fixed local port.</span>
+                            <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">${t('port_title')} <span aria-hidden="true">?</span></strong>
+                            <span>${t('port_desc')}</span>
                         </div>
                         <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong>Browser fallback</strong>
-                            <span>Open browser control pages for QR tasks when useful.</span>
+                            <strong>${t('browser_fallback')}</strong>
+                            <span>${t('browser_fallback_desc')}</span>
                         </div>
                         ${renderSwitch('settings-browser', state.browserFallback)}
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong>Update check interval</strong>
-                            <span>Choose how often to check for updates automatically.</span>
+                            <strong>${t('update_check_interval')}</strong>
+                            <span>${t('update_check_interval_desc')}</span>
                         </div>
                         <select id="settings-update-interval">
-                            <option value="12" ${state.settings?.updateCheckIntervalHours === 12 ? 'selected' : ''}>12 Hours</option>
-                            <option value="24" ${state.settings?.updateCheckIntervalHours === 24 || !state.settings?.updateCheckIntervalHours ? 'selected' : ''}>24 Hours (Default)</option>
-                            <option value="48" ${state.settings?.updateCheckIntervalHours === 48 ? 'selected' : ''}>48 Hours</option>
+                            <option value="12" ${state.settings?.updateCheckIntervalHours === 12 ? 'selected' : ''}>${t('hours_12')}</option>
+                            <option value="24" ${state.settings?.updateCheckIntervalHours === 24 || !state.settings?.updateCheckIntervalHours ? 'selected' : ''}>${t('hours_24')}</option>
+                            <option value="48" ${state.settings?.updateCheckIntervalHours === 48 ? 'selected' : ''}>${t('hours_48')}</option>
                         </select>
                     </div>
                 </div>
@@ -1662,6 +1940,7 @@ function syncSettingsFromDOM() {
     const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
     const updateInterval = document.querySelector('#settings-update-interval');
+    const lang = document.querySelector('#settings-lang');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -1675,6 +1954,7 @@ function syncSettingsFromDOM() {
     if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
+    if (lang) state.settings.lang = lang.value;
 
 
     state.receiveDir = state.settings.output || '';
@@ -1803,6 +2083,7 @@ function bindSettingsControls() {
         '#settings-close-behavior',
         '#settings-auto-update-mode',
         '#settings-update-interval',
+        '#settings-lang',
 
         '#settings-chat-sender'
     ];

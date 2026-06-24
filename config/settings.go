@@ -31,6 +31,7 @@ type DesktopSettings struct {
 	UpdateChannel    string                   `json:"updateChannel"`
 	LastUpdateCheckTime      int64            `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int              `json:"updateCheckIntervalHours"`
+	Lang             string                   `json:"lang"`
 }
 
 const (
@@ -112,6 +113,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("updateCheckIntervalHours") {
 		updateCheckIntervalHours = v.GetInt("updateCheckIntervalHours")
 	}
+	lang := "zh"
+	if v.IsSet("lang") {
+		lang = v.GetString("lang")
+	}
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
@@ -131,6 +136,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		UpdateChannel:            updateChannel,
 		LastUpdateCheckTime:      lastUpdateCheckTime,
 		UpdateCheckIntervalHours: updateCheckIntervalHours,
+		Lang:                     lang,
 	}, nil
 }
 
@@ -184,6 +190,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
 	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
 	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
+	v.Set("lang", settings.Lang)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
