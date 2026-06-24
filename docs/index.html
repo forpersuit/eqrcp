@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html class="dark scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EQT - Easy QR Transfer | LAN File Transfer & Secure Chat via QR Code</title>
+<meta name="description" content="EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux."/>
+<meta name="keywords" content="qr transfer, local file transfer, lan transfer, p2p chat, qrcp, no cloud, windows file transfer"/>
+<meta property="og:title" content="EQT - Easy QR Transfer"/>
+<meta property="og:description" content="Transfer files at full LAN speed via QR code. No cloud, no app. Encrypted local chat."/>
+<meta property="og:url" content="https://eqt.net.im"/>
+<meta property="og:type" content="website"/>
+<link rel="canonical" href="https://eqt.net.im"/>
+
+<!-- Google Fonts: Outfit -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#c0c1ff",
+                        "surface-bright": "#31394d",
+                        "primary": "#ddb7ff",
+                        "on-secondary-container": "#00515d",
+                        "on-surface-variant": "#cfc2d6",
+                        "surface-variant": "#2d3449",
+                        "secondary": "#5de6ff",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-error": "#690005",
+                        "on-surface": "#dae2fd",
+                        "outline-variant": "#4d4354",
+                        "on-tertiary-container": "#0d0096",
+                        "surface-dim": "#0b1326",
+                        "on-secondary-fixed": "#001f25",
+                        "secondary-fixed-dim": "#2fd9f4",
+                        "primary-fixed-dim": "#ddb7ff",
+                        "on-primary-fixed-variant": "#6900b3",
+                        "surface-container-low": "#131b2e",
+                        "on-secondary": "#00363e",
+                        "on-error-container": "#ffdad6",
+                        "outline": "#988d9f",
+                        "secondary-container": "#00cbe6",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "on-primary-fixed": "#2c0051",
+                        "surface-container-highest": "#2d3449",
+                        "on-secondary-fixed-variant": "#004e5a",
+                        "on-tertiary-fixed": "#07006c",
+                        "background": "#0b1326",
+                        "on-tertiary": "#1000a9",
+                        "tertiary-container": "#8083ff",
+                        "surface-container": "#171f33",
+                        "on-primary": "#490080",
+                        "on-primary-container": "#400071",
+                        "primary-container": "#b76dff",
+                        "secondary-fixed": "#a2eeff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "inverse-surface": "#dae2fd",
+                        "on-background": "#dae2fd",
+                        "primary-fixed": "#f0dbff",
+                        "error": "#ffb4ab",
+                        "inverse-on-surface": "#283044",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-lowest": "#060e20",
+                        "surface-container-high": "#222a3d",
+                        "surface-tint": "#ddb7ff",
+                        "surface": "#0b1326"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "container-max": "1280px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "xxl": "48px",
+                        "gutter": "24px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Outfit"],
+                        "body-lg": ["Outfit"],
+                        "body-md": ["Outfit"],
+                        "label-md": ["Outfit"],
+                        "display-lg": ["Outfit"],
+                        "headline-md": ["Outfit"],
+                        "headline-lg": ["Outfit"],
+                        "display-lg-mobile": ["Outfit"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "display-lg-mobile": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Custom Utilities for Glassmorphism & Glows not easily done with arbitary TW in this restricted setup */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-primary {
+            box-shadow: 0 0 20px rgba(221, 183, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-x-hidden selection:bg-primary selection:text-on-primary min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-surface-dim/50 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(221,183,255,0.1)]">
+<div class="flex justify-between items-center px-lg py-md max-w-container-max mx-auto">
+<!-- Brand -->
+<a class="flex items-center gap-sm" href="#">
+<img alt="EQT Logo" class="w-10 h-10 rounded-md" src="data:image/png;base64,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"/>
+<span class="font-display-lg text-display-lg-mobile md:text-display-lg font-bold tracking-tighter text-primary">EQT</span>
+</a>
+<!-- Navigation Links (Desktop) -->
+<nav class="hidden md:flex items-center gap-lg">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#features">Features</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#pricing">Pricing</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#compliance">Compliance</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#support">Support</a>
+</nav>
+<!-- Trailing Action -->
+<a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-[#a855f7] text-white rounded font-label-md text-label-md hover:shadow-[0_0_10px_#a855f7] transition-shadow active:scale-95" href="#download">
+                Download Client
+            </a>
+<!-- Mobile Menu Toggle (Visual only for this static demo) -->
+<button class="md:hidden text-on-surface-variant">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-32 pb-xxl px-md md:px-lg max-w-container-max mx-auto w-full flex flex-col gap-xxl">
+<!-- Hero Section -->
+<section class="flex flex-col md:flex-row items-center justify-between gap-xl min-h-[60vh]">
+<div class="flex-1 space-y-lg relative z-10">
+<div class="inline-flex items-center gap-sm px-sm py-xs rounded-full glass-panel border-secondary/50">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest">Version 2.0 Live</span>
+</div>
+<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface">
+                    Instant Local File Transfer &amp; <br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Secure Chat</span>, via QR Code
+                </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                    Super fast local-network P2P transfer tool between PC and Mobile. No cloud, no lag, just scan and send. Experience seamless integration and military-grade encryption within your local environment.
+                </p>
+<div class="flex flex-wrap items-center gap-md pt-md">
+<a class="inline-flex items-center justify-center gap-sm px-lg py-md bg-[#a855f7] text-white rounded-lg font-label-md text-label-md hover:shadow-[0_0_15px_#a855f7] transition-all" href="#download">
+<span class="material-symbols-outlined">download</span> Download for Windows
+                    </a>
+<a class="inline-flex items-center justify-center gap-sm px-lg py-md glass-panel text-secondary border-secondary/30 hover:border-secondary hover:shadow-[0_0_15px_rgba(93,230,255,0.2)] rounded-lg font-label-md text-label-md transition-all" href="#download">
+                        macOS &amp; Linux
+                    </a>
+</div>
+</div>
+<div class="flex-1 relative w-full aspect-video md:aspect-square max-w-lg mx-auto flex items-center justify-center">
+<!-- Ambient Glow behind image -->
+<div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full"></div>
+<!-- Glass Frame -->
+<div class="relative w-full glass-panel rounded-2xl p-sm glow-primary">
+<img alt="EQT Application Interface" class="w-full h-auto rounded-xl object-cover border border-white/5" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDh6oVl4RaTrcCBCDOZ1XCKw_rrBmW7-f7CJD7Ln0V0gs6sb96B-USlX99N2pep-B6in4R46zfM52Po996GXSTqQcKzYdx5x4y2lp2xW8agEz0l-OAEuk070QUIX6bkDEtGm6rWP_4Z27HicJ2q4oJnGCbzW3XYAgsdOGtdBnobqx60LqRaE4mqvCsJj-0QfdWo6tGfvkCxyc06QdgEG4Ih511b1p2XW3TqeC3jy8n5W2VQ2BT8iWqaUaUftl2v46pjpOnE_-IAh_Q"/>
+</div>
+</div>
+</section>
+<!-- Features Grid -->
+<section class="space-y-xl pt-xxl" id="features">
+<div class="text-center space-y-sm">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Engineered for Speed &amp; Security</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Core capabilities that redefine local data exchange.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg">
+<!-- Feature Card 1 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">QR-Based Transfer</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.</p>
+</div>
+<!-- Feature Card 2 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">speed</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Local Speed Limitless</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Utilize full network potential. Achieve 10MB/s - 100MB/s local bandwidth bypassing ISP bottlenecks.</p>
+</div>
+<!-- Feature Card 3 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">P2P Encrypted Chat</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Communicate securely over local networks. End-to-end encrypted text and file sharing with zero cloud footprint.</p>
+</div>
+<!-- Feature Card 4 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">devices</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Cross-Platform</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Seamless operation across operating systems. No dedicated mobile app installation required for receivers.</p>
+</div>
+</div>
+</section>
+<!-- Pricing Section -->
+<section class="space-y-xl pt-xxl" id="pricing">
+<div class="text-center space-y-sm">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Transparent Licensing</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Choose the tier that fits your workflow.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg max-w-5xl mx-auto items-center">
+<!-- Free -->
+<div class="glass-panel p-xl rounded-2xl flex flex-col h-full border-t border-t-white/5">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Free</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$0<span class="text-body-md font-body-md text-on-surface-variant">/forever</span></div>
+<ul class="space-y-md mb-xl flex-grow">
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Basic local transfer</li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Community support</li>
+<li class="flex items-center gap-sm text-on-surface-variant opacity-50"><span class="material-symbols-outlined text-sm">close</span> Priority bandwidth</li>
+</ul>
+<button class="w-full py-md glass-panel text-on-surface rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md">Get Started</button>
+</div>
+<!-- Plus Lifetime (Highlighted) -->
+<div class="glass-panel p-xl rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80">
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-[#490080] px-sm py-xs rounded-full font-label-sm text-label-sm">BEST VALUE</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-xs">Plus Lifetime</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$29.99<span class="text-body-md font-body-md text-on-surface-variant">/one-time</span></div>
+<ul class="space-y-md mb-xl flex-grow">
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> All Plus features forever</li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> No recurring fees</li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> Lifetime updates</li>
+</ul>
+<button class="w-full py-md bg-[#a855f7] text-white rounded-lg hover:shadow-[0_0_15px_#a855f7] transition-all font-label-md text-label-md">Buy Lifetime</button>
+</div>
+<!-- Plus Yearly -->
+<div class="glass-panel p-xl rounded-2xl flex flex-col h-full border-t border-t-white/5">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Plus</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$11.99<span class="text-body-md font-body-md text-on-surface-variant">/year</span></div>
+<ul class="space-y-md mb-xl flex-grow">
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> High-speed priority</li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Encrypted chat</li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Priority support</li>
+</ul>
+<button class="w-full py-md glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md">Subscribe Yearly</button>
+</div>
+</div>
+</section>
+<!-- Compliance Section (Simplified Bento/Grid) -->
+<section class="pt-xxl border-t border-white/5 mt-xl" id="compliance">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-lg">Merchant Policy &amp; Compliance</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="glass-panel p-md rounded-lg">
+<h4 class="font-label-md text-label-md text-primary mb-xs">Fulfillment &amp; Delivery</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Digital licenses are delivered instantly via email upon successful payment confirmation.</p>
+</div>
+<div class="glass-panel p-md rounded-lg">
+<h4 class="font-label-md text-label-md text-primary mb-xs">Refund &amp; Cancellation</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.</p>
+</div>
+<div class="glass-panel p-md rounded-lg hover:bg-surface-bright/50 transition-colors cursor-pointer">
+<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center">Privacy Policy <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+</div>
+<div class="glass-panel p-md rounded-lg hover:bg-surface-bright/50 transition-colors cursor-pointer">
+<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center">Terms of Service <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full py-xxl bg-surface-container-lowest border-t border-outline-variant">
+<div class="max-w-container-max mx-auto px-lg flex flex-col md:flex-row justify-between items-start gap-lg">
+<div class="space-y-sm">
+<div class="font-headline-md text-headline-md text-on-surface">EQT</div>
+<p class="font-body-md text-body-md text-tertiary opacity-70">© 2025 EQT (Easy QR Transfer). All rights reserved.</p>
+</div>
+<div class="flex flex-col md:flex-row gap-lg md:gap-xl">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.dev">Support: support@eqt.dev</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="https://github.com/forpersuit/eqt" target="_blank" rel="noopener">GitHub</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#">Privacy Policy</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#">Terms of Service</a>
+</div>
+</div>
+</footer>
+</body></html>
+
