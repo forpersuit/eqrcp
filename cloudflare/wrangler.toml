@@ -14,3 +14,8 @@ database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 # In development, you can add ED25519_PRIVATE_KEY here (64-char hex)
 # ED25519_PRIVATE_KEY = "your_test_hex_private_key"
 # ADMIN_SECRET = "your_admin_secret_key"
+
+routes = [
+  { pattern = "api.eqt.net.im", custom_domain = true }
+]
+
