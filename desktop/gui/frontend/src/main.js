@@ -136,7 +136,7 @@ const translations = {
         sys_integration_desc: '本地桌面日常使用的便捷入口。',
         right_click_menu: 'Windows 右键菜单分享和接收',
         right_click_desc: '在资源管理器右键中添加分享所选文件或接收到此文件夹的菜单。',
-        startup_title: '开机自动运行 EQT',
+        startup_title: '开机启动',
         startup_desc: '登录系统时自动在后台启动 EQT 传输服务。',
         
         chat_identity: '局域网对话设置',
@@ -179,6 +179,95 @@ const translations = {
         hours_12: '12 小时',
         hours_24: '24 小时 (默认)',
         hours_48: '48 小时',
+
+        // Receive page new
+        save_dir: '设为默认目录',
+
+        // About / Plan
+        about_title: '关于 EQT',
+        plan_label: '套餐计划',
+        free_quota: '每日免费额度',
+        redeemed_at: '激活于 {date}',
+        paid_locked_clock: '付费版已锁定（时钟异常）',
+        locked_rollback: '时钟回退锁定',
+        locked_rollback_desc: '检测到系统时钟回退，已锁定付费功能。请将系统时间恢复同步，然后在下方的设置中重新激活。',
+        license_locked_limit: '授权已锁定（已受限）',
+        license_locked_server: '服务端付费判定未激活（不一致）',
+        license_verify_failed: '授权校验未通过：',
+        license_verify_failed_desc: '虽然本地有激活的 {tier}，但服务端判定未激活。请确保核心服务开启并连接；若仍异常，请在设置中重置授权并重新激活。',
+        
+        dev_options: '开发者选项',
+        enable_debug_logs: '启用调试日志',
+        enable_viewport_debug: '启用调试框 (Viewport Debug Box)',
+        dev_logs_desc: '调试日志会记录 Chat 窗口的交互信息和网络日志。',
+        dev_logs_path: '日志保存在：',
+        btn_open_log_file: '打开日志文件',
+        btn_open_log_dir: '打开日志目录',
+        btn_exit_dev_mode: '退出开发者模式',
+        
+        plan_desc_title: '套餐版本说明',
+        plan_plus_annual: 'Plus - $11.99 / 年：',
+        plan_plus_annual_desc: '支持最大 2 台设备同时激活。解锁局域网 Chat 与大文件传输，高速稳定。',
+        plan_plus_lifetime: 'Plus 终身 - $29.99：',
+        plan_plus_lifetime_desc: '一次买断，终身可用，同样支持最大 2 台设备同时激活，解锁所有 PLUS 高级付费权益。',
+        plan_binding_note: '激活绑定说明',
+        plan_binding_note_desc: '激活采用“3选2”加权硬件指纹绑定模型。重装系统不更换硬件的情况下，重新激活不会消耗额度。离线环境下可通过恢复备份的 license.lic 自动验证。',
+        tooltip_popover_comparsion: '点击查看 Plus 与 Plus 终身版套餐对比',
+        
+        // Feedback
+        feedback_category: '反馈类别',
+        feedback_bug: 'Bug 报告',
+        feedback_transfer_fail: '传输失败',
+        feedback_gui_issue: 'GUI 界面问题',
+        feedback_feature_req: '新功能建议',
+        feedback_license_issue: '购买或授权问题',
+        feedback_other: '其他问题',
+        feedback_contact: '联系邮箱',
+        feedback_optional: '选填',
+        feedback_message: '反馈内容',
+        feedback_placeholder: '请详细描述您遇到的问题...',
+        feedback_include_diag: '包含诊断信息',
+        feedback_diag_note: '诊断信息会在发送前在下方显示。EQT 绝不会附带您的任何传输文件。',
+        btn_open_email_draft: '撰写邮件反馈',
+        btn_copy_feedback: '复制反馈内容',
+        
+        // Add-ons
+        redeem_title: '兑换激活码',
+        close: '关闭',
+        agent_idle: '服务处于空闲状态。',
+        chat_unlocked: '{tier} 已激活。局域网对话已解锁。',
+        chat_time_left: '今日免费对话剩余时间：{time}。',
+        chat_time_used_up: '今日免费对话时长已用尽。请升级以继续在今天使用对话功能。',
+        chat_0_00: '对话时间已用尽',
+        about: '关于 EQT',
+        feedback: '反馈建议',
+
+        // Updates
+        up_to_date: '已是最新版本。',
+        check_updates_auto: '正在自动检查更新...',
+        version_available: '新版本 {version} 已可用。',
+        btn_download_now: '立即下载',
+        new_version_go_settings: '新版本 {version} 已可用，请前往设置进行更新。',
+        postponed_transfer: '新版本 {version} 已可用。将在传输结束后开始下载。',
+        update_ready_restart: '版本 {version} 已下载完成。请重启软件以应用更新。',
+        auto_check_failed: '自动更新检查失败：{err}',
+        click_manual_check: '点击按钮手动检查更新。',
+        btn_check: '检查更新',
+        checking_updates: '正在检查更新...',
+        btn_checking: '正在检查...',
+        btn_retry: '重试',
+        btn_install_restart: '重启并应用更新',
+        btn_downloading: '正在下载...',
+        downloading_progress: '正在下载：{percent}%',
+        download_failed: '下载失败：{err}',
+        install_failed: '安装失败：{err}',
+        installing_updates: '正在准备安装更新...',
+        btn_installing: '正在安装...',
+        silent_ready: '后台静默更新已下载完成，将在下次启动时自动应用。',
+
+        // Chat quota text translations
+        chat_top_time: '对话 {time}',
+        chat_top_used_up: '对话已用尽',
     },
     en: {
         // Navigation / Tabs
@@ -306,12 +395,107 @@ const translations = {
         hours_12: '12 Hours',
         hours_24: '24 Hours (Default)',
         hours_48: '48 Hours',
-    }
-};;
 
-function t(key) {
+        // Receive page new
+        save_dir: 'Set as Default',
+
+        // About / Plan
+        about_title: 'About EQT',
+        plan_label: 'Plan',
+        free_quota: 'Free daily quota',
+        redeemed_at: 'Redeemed {date}',
+        paid_locked_clock: 'PAID Locked (Clock Error)',
+        locked_rollback: 'Clock rollback detected',
+        locked_rollback_desc: 'System clock rollback detected. Paid features locked. Please synchronize your system clock and reactivate in settings.',
+        license_locked_limit: 'License Locked (Limited)',
+        license_locked_server: 'Server verification inactive (Inconsistent)',
+        license_verify_failed: 'License verification failed:',
+        license_verify_failed_desc: 'Local license for {tier} is active, but server verification returned inactive. Make sure core service is running; reset activation if issues persist.',
+        
+        dev_options: 'Developer Options',
+        enable_debug_logs: 'Enable Debug Logs',
+        enable_viewport_debug: 'Enable Viewport Debug Box',
+        dev_logs_desc: 'Debug logs will save Chat viewport interactions and network requests.',
+        dev_logs_path: 'Logs saved in:',
+        btn_open_log_file: 'Open Log File',
+        btn_open_log_dir: 'Open Log Dir',
+        btn_exit_dev_mode: 'Exit Developer Mode',
+        
+        plan_desc_title: 'License Details',
+        plan_plus_annual: 'Plus - $11.99 / yr:',
+        plan_plus_annual_desc: 'Up to 2 concurrent devices. Unlock unlimited local chat and large files transfer, fast & stable.',
+        plan_plus_lifetime: 'Plus Lifetime - $29.99:',
+        plan_plus_lifetime_desc: 'One-time purchase, lifetime access. Up to 2 concurrent devices, unlock all Plus features.',
+        plan_binding_note: 'Activation & Binding Note',
+        plan_binding_note_desc: 'Binding is based on a "2 of 3" hardware fingerprint. Reinstalling OS on the same hardware does not consume additional activation slots. Supports offline validation using license.lic backup.',
+        tooltip_popover_comparsion: 'Click to view Plus vs Plus Lifetime details',
+        
+        // Feedback
+        feedback_category: 'Category',
+        feedback_bug: 'Bug report',
+        feedback_transfer_fail: 'Transfer failure',
+        feedback_gui_issue: 'GUI issue',
+        feedback_feature_req: 'Feature request',
+        feedback_license_issue: 'Purchase or license issue',
+        feedback_other: 'Other',
+        feedback_contact: 'Contact email',
+        feedback_optional: 'Optional',
+        feedback_message: 'Message',
+        feedback_placeholder: 'What happened?',
+        feedback_include_diag: 'Include diagnostics',
+        feedback_diag_note: 'Diagnostics are shown below before sending. EQT never attaches files being transferred.',
+        btn_open_email_draft: 'Open email draft',
+        btn_copy_feedback: 'Copy feedback',
+        
+        // Add-ons
+        redeem_title: 'Redeem code',
+        close: 'Close',
+        agent_idle: 'Agent is idle.',
+        chat_unlocked: '{tier} active. Chat is unlocked.',
+        chat_time_left: 'Daily free chat time left: {time}.',
+        chat_time_used_up: 'Daily free chat time is used up. Upgrade to keep using chat today.',
+        chat_0_00: 'Chat 0:00',
+        about: 'About EQT',
+        feedback: 'Feedback',
+
+        // Updates
+        up_to_date: 'Already up to date.',
+        check_updates_auto: 'Checking updates automatically...',
+        version_available: 'New version {version} is available.',
+        btn_download_now: 'Download now',
+        new_version_go_settings: 'New version {version} is available. Go to settings to update.',
+        postponed_transfer: 'New version {version} is available. Download postponed until transfer finishes.',
+        update_ready_restart: 'Version {version} has been downloaded. Restart to apply the update.',
+        auto_check_failed: 'Auto update check failed: {err}',
+        click_manual_check: 'Click button to manually check.',
+        btn_check: 'Check',
+        checking_updates: 'Checking updates...',
+        btn_checking: 'Checking...',
+        btn_retry: 'Retry',
+        btn_install_restart: 'Restart to Apply',
+        btn_downloading: 'Downloading...',
+        downloading_progress: 'Downloading: {percent}%',
+        download_failed: 'Download failed: {err}',
+        install_failed: 'Installation failed: {err}',
+        installing_updates: 'Preparing update installation...',
+        btn_installing: 'Installing...',
+        silent_ready: 'Silent update downloaded and ready. It will apply on next restart.',
+
+        // Chat quota text translations
+        chat_top_time: 'Chat {time}',
+        chat_top_used_up: 'Chat 0:00',
+    }
+};
+
+function t(key, params) {
     const lang = (state && state.settings && state.settings.lang) || 'zh';
-    return (translations[lang] && translations[lang][key]) || translations['zh'][key] || key;
+    let val = (translations[lang] && translations[lang][key]) || translations['zh'][key] || key;
+    if (params) {
+        for (const k in params) {
+            val = val.replace(`{${k}}`, params[k]);
+        }
+    }
+    return val;
 }
 
 const state = {
@@ -520,15 +704,12 @@ function render() {
                 <div class="top-actions" role="menubar" aria-label="Application menu">
                     <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}">
                         <span class="menu-icon">${settingsIcon()}</span>
-                        <span class="menu-label">${t('settings')}</span>
                     </button>
-                    <button class="menu-button" id="open-about" title="About EQT" aria-label="About EQT">
+                    <button class="menu-button" id="open-about" title="${t('about')}" aria-label="${t('about')}">
                         <span class="menu-icon">${aboutIcon()}</span>
-                        <span class="menu-label">About</span>
                     </button>
-                    <button class="menu-button" id="open-feedback" title="Send feedback" aria-label="Send feedback">
+                    <button class="menu-button" id="open-feedback" title="${t('feedback')}" aria-label="${t('feedback')}">
                         <span class="menu-icon">${feedbackIcon()}</span>
-                        <span class="menu-label">Feedback</span>
                     </button>
                 </div>
             </header>
@@ -855,10 +1036,10 @@ function renderPanel() {
         return '';
     }
     const title = {
-        settings: 'Settings',
-        redeem: 'Redeem code',
-        about: 'About EQT',
-        feedback: 'Send feedback',
+        settings: t('settings'),
+        redeem: t('redeem_title'),
+        about: t('about_title'),
+        feedback: t('feedback'),
     }[state.activePanel] || '';
     return `
         <div class="overlay" role="presentation">
@@ -866,8 +1047,8 @@ function renderPanel() {
                 <div class="modal-head">
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
-                        ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="Redeem code" aria-label="Redeem code">${giftIcon()}</button>` : ''}
-                        <button class="tool-button" id="close-panel" title="Close" aria-label="Close">x</button>
+                        ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">${giftIcon()}</button>` : ''}
+                        <button class="tool-button" id="close-panel" title="${t('close')}" aria-label="${t('close')}">x</button>
                     </div>
                 </div>
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
@@ -973,7 +1154,7 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-control-stack">
                         ${renderSwitch('settings-chat-autosave', state.chatAutoSave)}
-                        <button type="button" class="ghost inline" id="open-chat-save">${t('open_folder')}</button>
+                        <button type="button" class="icon-button-mini" id="open-chat-save" title="${t('open_folder')}" aria-label="${t('open_folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center;">${openFolderIcon()}</button>
                     </div>
                 </div>
             </section>
@@ -1111,27 +1292,27 @@ function integrationStatusText(status, fallback) {
 function renderAboutPanel() {
     const info = state.appInfo || {};
     const license = state.license || loadLicense();
-    let plan = license?.tier ? `${getLicenseDisplayName(license)} active` : 'Free daily quota';
-    let planDetail = license?.redeemedAt ? `Redeemed ${new Date(license.redeemedAt).toLocaleString()}` : chatQuotaText();
+    let plan = license?.tier ? `${getLicenseDisplayName(license)} ${t('running')}` : t('free_quota');
+    let planDetail = license?.redeemedAt ? `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}` : chatQuotaText();
     
     let warningBox = '';
     const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
     if (state.status?.clockTampered) {
-        plan = 'PAID Locked (时钟异常)';
-        planDetail = '检测到系统时钟回退锁定';
+        plan = t('paid_locked_clock');
+        planDetail = t('locked_rollback');
         warningBox = `
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ 时钟回退锁定：</strong>
-                检测到系统时钟回退（当前时间落后于上次运行时间），已锁定付费功能。请将系统时间恢复同步，然后在下方的 Settings 里重新激活。
+                <strong>⚠️ ${t('locked_rollback')}：</strong>
+                ${t('locked_rollback_desc')}
             </div>
         `;
     } else if (license?.tier && !isPaid) {
-        plan = `${getLicenseDisplayName(license)} Locked (已受限)`;
-        planDetail = '服务端付费判定未激活 (不一致)';
+        plan = `${getLicenseDisplayName(license)} ${t('license_locked_limit')}`;
+        planDetail = t('license_locked_server');
         warningBox = `
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ 授权校验未通过：</strong>
-                虽然本地有激活的 ${getLicenseDisplayName(license)}，但服务端付费判定未激活。请确保核心服务已开启并连接；若仍异常，请在下方的 Settings 里“Reset”重置授权并重新输入兑换码激活。
+                <strong>⚠️ ${t('license_verify_failed')}</strong>
+                ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
             </div>
         `;
     }
@@ -1140,26 +1321,26 @@ function renderAboutPanel() {
     if (state.settings?.devMode) {
         devSection = `
             <div class="dev-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
-                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">Developer Options</h3>
+                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">${t('dev_options')}</h3>
                 <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
                     <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>Enable Debug Logs</span>
+                        <span>${t('enable_debug_logs')}</span>
                         <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
                     </label>
                     <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>Enable Viewport Debug Box</span>
+                        <span>${t('enable_viewport_debug')}</span>
                         <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
                     </label>
                     <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
-                        调试日志会将 Chat Viewport 交互信息和网络日志保存。
-                        <br>日志保存在: <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
+                        ${t('dev_logs_desc')}
+                        <br>${t('dev_logs_path')} <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log File</button>
-                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">Open Log Dir</button>
+                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_file')}</button>
+                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_dir')}</button>
                     </div>
                     <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
-                        Exit Developer Mode
+                        ${t('btn_exit_dev_mode')}
                     </button>
                 </div>
             </div>
@@ -1171,21 +1352,21 @@ function renderAboutPanel() {
         <div class="plan-popover">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
                 <strong style="color: var(--accent-strong); font-size: 14px; display: flex; align-items: center; gap: 4px;">
-                    💡 套餐版本说明
+                    ${t('plan_desc_title')}
                 </strong>
-                <button class="tool-button" id="close-plan-popover" title="Close" aria-label="Close" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
+                <button class="tool-button" id="close-plan-popover" title="${t('close')}" aria-label="${t('close')}" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
             <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
                 <div>
-                    <strong style="color: var(--ink);">• Plus - $11.99 / 年：</strong>
-                    支持最大 <strong>2 台</strong> 设备同时激活。解锁无限局域网 Chat 聊天通话与大文件传输，高速稳定。
+                    <strong style="color: var(--ink);">${t('plan_plus_annual')}</strong>
+                    ${t('plan_plus_annual_desc')}
                 </div>
                 <div>
-                    <strong style="color: var(--ink);">• Plus 终身 - $29.99：</strong>
-                    一次买断，终身可用，同样支持最大 <strong>2 台</strong> 设备同时激活，解锁所有 PLUS 高级付费权益。
+                    <strong style="color: var(--ink);">${t('plan_plus_lifetime')}</strong>
+                    ${t('plan_plus_lifetime_desc')}
                 </div>
                 <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
-                    💡 <strong>激活绑定说明</strong>：激活采用“3选2”加权硬件指纹绑定模型。重装系统不更换硬件的情况下，在同一设备上重新激活<strong>不会消耗额外设备额度</strong>，可放心进行系统重装。在离线环境下，你亦可通过恢复备份的 <code>license.lic</code> 文件实现离线自动验证。
+                    💡 <strong>${t('plan_binding_note')}</strong>：${t('plan_binding_note_desc')}
                 </div>
             </div>
         </div>
@@ -1198,12 +1379,12 @@ function renderAboutPanel() {
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
                     <div class="about-plan-left">
-                        <span>Plan</span>
+                        <span>${t('plan_label')}</span>
                         <strong>${escapeHTML(plan)}</strong>
                         <small>${escapeHTML(planDetail)}</small>
                     </div>
-                    <button class="tool-button" id="toggle-plan-info" aria-label="查看套餐说明" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
-                        <span class="plan-info-icon-wrapper" data-tooltip="点击查看 Plus 与 Plus 终身版套餐对比">
+                    <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
+                        <span class="plan-info-icon-wrapper" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}">
                             <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
                         </span>
                     </button>
@@ -1284,28 +1465,28 @@ function renderFeedbackPanel() {
     const mailto = feedbackMailto(diagnostics);
     return `
         <div class="feedback-panel">
-            <label>Category</label>
+            <label>${t('feedback_category')}</label>
             <select id="feedback-category">
-                <option>Bug report</option>
-                <option>Transfer failure</option>
-                <option>GUI issue</option>
-                <option>Feature request</option>
-                <option>Purchase or license issue</option>
-                <option>Other</option>
+                <option value="bug">${t('feedback_bug')}</option>
+                <option value="transfer">${t('feedback_transfer_fail')}</option>
+                <option value="gui">${t('feedback_gui_issue')}</option>
+                <option value="feature">${t('feedback_feature_req')}</option>
+                <option value="license">${t('feedback_license_issue')}</option>
+                <option value="other">${t('feedback_other')}</option>
             </select>
-            <label>Contact email</label>
-            <input id="feedback-contact" type="email" placeholder="Optional" />
-            <label>Message</label>
-            <textarea id="feedback-message" rows="5" placeholder="What happened?"></textarea>
+            <label>${t('feedback_contact')}</label>
+            <input id="feedback-contact" type="email" placeholder="${t('feedback_optional')}" />
+            <label>${t('feedback_message')}</label>
+            <textarea id="feedback-message" rows="5" placeholder="${t('feedback_placeholder')}"></textarea>
             <label class="check">
                 <input id="feedback-diagnostics" type="checkbox" checked />
-                Include diagnostics
+                ${t('feedback_include_diag')}
             </label>
-            <div class="feedback-note">Diagnostics are shown below before sending. EQT never attaches files being transferred.</div>
+            <div class="feedback-note">${t('feedback_diag_note')}</div>
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
-                <button class="primary" id="send-feedback" data-mailto="${escapeAttr(mailto)}">Open email draft</button>
-                <button class="ghost" id="copy-feedback">Copy feedback</button>
+                <button class="primary" id="send-feedback" data-mailto="${escapeAttr(mailto)}">${t('btn_open_email_draft')}</button>
+                <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
         </div>
     `;
@@ -1313,7 +1494,7 @@ function renderFeedbackPanel() {
 
 function renderCurrent(task) {
     if (!task) {
-        return `<div class="empty-state">Agent is idle.</div>`;
+        return `<div class="empty-state">${t('agent_idle')}</div>`;
     }
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
@@ -3213,7 +3394,7 @@ async function runAutoUpdateCheck() {
 
     console.log('[AutoUpdate] Starting auto update check. Mode:', mode);
     state.updateStage = 'checking';
-    state.updateStatusText = 'Checking updates automatically...';
+    state.updateStatusText = t('check_updates_auto');
     syncManualUpdateCheckUI();
 
     try {
@@ -3222,7 +3403,7 @@ async function runAutoUpdateCheck() {
 
         if (!checkRes || !checkRes.new_version_available) {
             state.updateStage = 'idle';
-            state.updateStatusText = 'Already up to date.';
+            state.updateStatusText = t('up_to_date');
             syncManualUpdateCheckUI();
             return;
         }
@@ -3230,25 +3411,25 @@ async function runAutoUpdateCheck() {
         console.log('[AutoUpdate] New version available:', checkRes.version);
         if (mode === 'notify') {
             state.updateStage = 'available';
-            state.updateStatusText = `New version ${checkRes.version} is available.`;
-            state.updateBtnText = 'Download now';
+            state.updateStatusText = t('version_available', { version: checkRes.version });
+            state.updateBtnText = t('btn_download_now');
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
 
-            state.notice = `New version ${checkRes.version} is available. Go to settings to update.`;
+            state.notice = t('new_version_go_settings', { version: checkRes.version });
             updateMessagesSurface();
         } else {
             if (state.status?.state === 'busy') {
                 console.log('[AutoUpdate] Agent is busy transferring. Postponing download.');
                 state.updateStage = 'available';
-                state.updateStatusText = `New version ${checkRes.version} is available. Download postponed until transfer finishes.`;
+                state.updateStatusText = t('postponed_transfer', { version: checkRes.version });
                 syncManualUpdateCheckUI();
                 return;
             }
             await triggerDownloadUpdate();
             if (state.updateStage === 'ready') {
                 if (mode === 'download') {
-                    state.notice = `Version ${checkRes.version} has been downloaded. Restart to apply the update.`;
+                    state.notice = t('update_ready_restart', { version: checkRes.version });
                     updateMessagesSurface();
                 } else if (mode === 'silent') {
                     console.log('[AutoUpdate] Silent update downloaded and ready. It will apply on next restart.');
@@ -3257,7 +3438,7 @@ async function runAutoUpdateCheck() {
         }
     } catch (err) {
         state.updateStage = 'idle';
-        state.updateStatusText = `Auto update check failed: ${cleanLocalAddressError(err)}`;
+        state.updateStatusText = t('auto_check_failed', { err: cleanLocalAddressError(err) });
         syncManualUpdateCheckUI();
         console.error('[AutoUpdate] Auto update check failed:', err);
     }
@@ -3272,18 +3453,18 @@ async function runManualUpdateCheck() {
     syncSettingsFromDOM();
 
     // 如果当前按钮是 Retry 状态（说明发生了本地连接失败），直接重置回 idle 重新触发检测与拉起
-    if (state.updateBtnText === 'Retry') {
+    if (state.updateBtnText === t('btn_retry')) {
         state.updateStage = 'idle';
-        state.updateStatusText = 'Click button to manually check.';
-        state.updateBtnText = 'Check';
+        state.updateStatusText = t('click_manual_check');
+        state.updateBtnText = t('btn_check');
         state.updateBtnDisabled = false;
         syncManualUpdateCheckUI();
     }
 
     if (state.updateStage === 'idle') {
         state.updateStage = 'checking';
-        state.updateStatusText = 'Checking updates...';
-        state.updateBtnText = 'Checking...';
+        state.updateStatusText = t('checking_updates');
+        state.updateBtnText = t('btn_checking');
         state.updateBtnDisabled = true;
         syncManualUpdateCheckUI();
 
@@ -3293,8 +3474,8 @@ async function runManualUpdateCheck() {
 
             if (!checkRes || !checkRes.new_version_available) {
                 state.updateStage = 'idle';
-                state.updateStatusText = 'Already up to date.';
-                state.updateBtnText = 'Check';
+                state.updateStatusText = t('up_to_date');
+                state.updateBtnText = t('btn_check');
                 state.updateBtnDisabled = false;
                 syncManualUpdateCheckUI();
                 return;
@@ -3303,8 +3484,8 @@ async function runManualUpdateCheck() {
             const mode = state.settings?.autoUpdateMode || 'download';
             if (mode === 'off' || mode === 'notify') {
                 state.updateStage = 'available';
-                state.updateStatusText = `New version ${checkRes.version} is available.`;
-                state.updateBtnText = 'Download now';
+                state.updateStatusText = t('version_available', { version: checkRes.version });
+                state.updateBtnText = t('btn_download_now');
                 state.updateBtnDisabled = false;
                 syncManualUpdateCheckUI();
             } else {
@@ -3313,11 +3494,11 @@ async function runManualUpdateCheck() {
         } catch (err) {
             state.updateStage = 'idle';
             const cleanedErr = cleanLocalAddressError(err);
-            state.updateStatusText = `Failed: ${cleanedErr}`;
+            state.updateStatusText = t('download_failed', { err: cleanedErr });
             if (cleanedErr === 'Local service connection failed.') {
-                state.updateBtnText = 'Retry';
+                state.updateBtnText = t('btn_retry');
             } else {
-                state.updateBtnText = 'Check';
+                state.updateBtnText = t('btn_check');
             }
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
@@ -3332,8 +3513,8 @@ async function runManualUpdateCheck() {
 
     if (state.updateStage === 'ready') {
         state.updateStage = 'installing';
-        state.updateStatusText = 'Installing update and restarting...';
-        state.updateBtnText = 'Installing...';
+        state.updateStatusText = t('installing_updates');
+        state.updateBtnText = t('btn_installing');
         state.updateBtnDisabled = true;
         syncManualUpdateCheckUI();
 
@@ -3342,11 +3523,11 @@ async function runManualUpdateCheck() {
         } catch (err) {
             state.updateStage = 'ready';
             const cleanedErr = cleanLocalAddressError(err);
-            state.updateStatusText = `Install failed: ${cleanedErr}`;
+            state.updateStatusText = t('install_failed', { err: cleanedErr });
             if (cleanedErr === 'Local service connection failed.') {
-                state.updateBtnText = 'Retry';
+                state.updateBtnText = t('btn_retry');
             } else {
-                state.updateBtnText = 'Restart to update';
+                state.updateBtnText = t('btn_install_restart');
             }
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
@@ -3360,26 +3541,26 @@ async function triggerDownloadUpdate() {
     if (!checkRes) return;
 
     state.updateStage = 'downloading';
-    state.updateStatusText = `Downloading version ${checkRes.version}...`;
-    state.updateBtnText = 'Downloading...';
+    state.updateStatusText = t('btn_downloading');
+    state.updateBtnText = t('btn_downloading');
     state.updateBtnDisabled = true;
     syncManualUpdateCheckUI();
 
     try {
         await window.go.main.App.DownloadUpdate(checkRes);
         state.updateStage = 'ready';
-        state.updateStatusText = `Version ${checkRes.version} is ready.`;
-        state.updateBtnText = 'Restart to update';
+        state.updateStatusText = t('update_ready_restart', { version: checkRes.version });
+        state.updateBtnText = t('btn_install_restart');
         state.updateBtnDisabled = false;
         syncManualUpdateCheckUI();
     } catch (err) {
         state.updateStage = 'available';
         const cleanedErr = cleanLocalAddressError(err);
-        state.updateStatusText = `Download failed: ${cleanedErr}`;
+        state.updateStatusText = t('download_failed', { err: cleanedErr });
         if (cleanedErr === 'Local service connection failed.') {
-            state.updateBtnText = 'Retry';
+            state.updateBtnText = t('btn_retry');
         } else {
-            state.updateBtnText = 'Download now';
+            state.updateBtnText = t('btn_download_now');
         }
         state.updateBtnDisabled = false;
         syncManualUpdateCheckUI();

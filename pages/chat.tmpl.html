@@ -2057,7 +2057,10 @@
                 addAttachment: "添加附件",
                 scanToJoin: "扫描此二维码加入对话",
                 copy: "复制",
-                send: "发送"
+                send: "发送",
+
+                NoMessagesYet: "暂无消息",
+                ScanQRToJoin: "扫描二维码从其他设备加入对话。"
 
             },
             en: {
@@ -2191,7 +2194,10 @@
                 addAttachment: "Add attachment",
                 scanToJoin: "Scan this code to join from another device.",
                 copy: "Copy",
-                send: "Send"
+                send: "Send",
+
+                NoMessagesYet: "No messages yet.",
+                ScanQRToJoin: "Scan the QR code to join from another device."
 
             },
             ja: {
@@ -2325,7 +2331,10 @@
                 addAttachment: "添付ファイルを追加",
                 scanToJoin: "このコードをスキャンして別のデバイスから参加します。",
                 copy: "コピー",
-                send: "送信"
+                send: "送信",
+
+                NoMessagesYet: "メッセージはまだありません",
+                ScanQRToJoin: "QRコードをスキャンして、別のデバイスから参加します。"
 
             },
             ko: {
@@ -2982,6 +2991,13 @@
 
             // Refresh Language Switcher List options active classes
             renderLanguageList();
+
+            // Refresh message empty state translation if no messages
+            if (typeof state !== 'undefined' && state && state.messages && !state.messages.length) {
+                if (typeof renderMessages === 'function') {
+                    renderMessages();
+                }
+            }
         }
 
         function updateLanguage(newLang) {
@@ -3782,7 +3798,7 @@
         function renderMessages() {
             var focusState = captureMessageFocus();
             if (!state.messages.length) {
-                messagesEl.innerHTML = '<div class="messages-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><strong>No messages yet.</strong>Scan the QR code to join from another device.</div>';
+                messagesEl.innerHTML = '<div class="messages-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><strong>' + escapeHTML(dict.NoMessagesYet || "No messages yet.") + '</strong>' + escapeHTML(dict.ScanQRToJoin || "Scan the QR code to join from another device.") + '</div>';
                 updateScrollArrow();
                 return;
             }
