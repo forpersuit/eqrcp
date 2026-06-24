@@ -228,7 +228,7 @@ const translations = {
         feedback_placeholder: '请详细描述您遇到的问题...',
         feedback_include_diag: '包含诊断信息',
         feedback_diag_note: '诊断信息会在发送前在下方显示。EQT 绝不会附带您的任何传输文件。',
-        btn_open_email_draft: '撰写邮件反馈',
+        btn_open_email_draft: '发送',
         btn_copy_feedback: '复制反馈内容',
         
         // Add-ons
@@ -268,6 +268,63 @@ const translations = {
         // Chat quota text translations
         chat_top_time: '对话 {time}',
         chat_top_used_up: '对话已用尽',
+
+        btn_confirm: '确认',
+        btn_reset: '重置',
+        btn_activating: '激活中...',
+        btn_checking: '正在检查...',
+        btn_retry: '重试',
+        btn_install_restart: '重启并应用更新',
+        btn_downloading: '正在下载...',
+        btn_installing: '正在安装...',
+        redeem_no_paid_plan: '未激活付费方案',
+        redeem_active_tier: '{tier} 已激活',
+        redeem_desc: '输入有效的 EQT 激活码以在此设备上解锁付费版本。',
+        device_limit: '设备限制：{activated} / {max}',
+        upgrade_required: '需要升级',
+        btn_draft_opened: '草稿已生成',
+        feedback_draft_opened_notice: '已成功拉起系统默认邮件客户端并生成草稿。请在弹出的邮件窗口中点击发送。如果您的系统没有配置默认邮箱客户端，请点击下方的 “复制反馈内容” 手动发送至 jinxpeeter@outlook.com。',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        up_to_date: 'Déjà à jour.',
+        check_updates_auto: 'Recherche de mise à jour automatique...',
+        version_available: 'La nouvelle version {version} est disponible.',
+        btn_download_now: 'Télécharger maintenant',
+        new_version_go_settings: 'La nouvelle version {version} est disponible. Allez dans les paramètres pour mettre à jour.',
+        postponed_transfer: 'La nouvelle version {version} est disponible. Téléchargement reporté après la fin du transfert.',
+        update_ready_restart: 'La version {version} a été téléchargée. Redémarrez pour appliquer la mise à jour.',
+        auto_check_failed: 'Échec de la recherche de mise à jour automatique : {err}',
+        click_manual_check: 'Cliquez sur le bouton pour rechercher des mises à jour manuellement.',
+        checking_updates: 'Recherche de mises à jour...',
+        btn_retry: 'Réessayer',
+        btn_install_restart: 'Redémarrer pour appliquer',
+        btn_downloading: 'Téléchargement...',
+        downloading_progress: 'Téléchargement : {percent}%',
+        download_failed: 'Échec du téléchargement : {err}',
+        install_failed: 'Échec de l\'installation : {err}',
+        installing_updates: 'Préparation de l\'installation de la mise à jour...',
+        btn_installing: 'Installation...',
+        silent_ready: 'Mise à jour silencieuse téléchargée. Elle s\'appliquera au prochain redémarrage.',
+        manual_check_tips: 'Cliquez sur le bouton pour rechercher des mises à jour manuellement.',
+        manual_check_btn: 'Vérifier',
+        check_update: 'Rechercher des mises à jour',
+        chat_unlocked: '{tier} actif. Chat déverrouillé.',
+        chat_time_left: 'Temps de chat gratuit restant aujourd\'hui : {time}.',
+        chat_time_used_up: 'Le temps de chat gratuit d\'aujourd\'hui est épuisé. Mettez à niveau pour continuer à chatter aujourd\'hui.',
+        upgrade_required: 'Mise à niveau requise',
+        redeem_desc: 'Entrez un code EQT valide pour déverrouiller une version payante sur cet appareil.',
+        device_limit: 'Limite d\'appareils : {activated} / {max}',
+        redeemed_at: 'Activé le {date}',
+        paid_locked_clock: 'Payant verrouillé (erreur d\'horloge)',
+        locked_rollback: 'Retour arrière de l\'horloge système détecté',
+        locked_rollback_desc: 'Un retour arrière de l\'horloge système a été détecté. Les fonctionnalités payantes sont verrouillées. Synchronisez l\'horloge et réactivez dans les paramètres.',
+        license_locked_limit: 'Licence verrouillée (limitée)',
+        license_locked_server: 'Vérification du serveur inactive (incohérente)',
+        license_verify_failed: 'Échec de la vérification de la licence :',
+        license_verify_failed_desc: 'La licence locale pour {tier} est active, aber la vérification du serveur a échoué. Assurez-vous que le service fonctionne et réinitialisez l\'activation si nécessaire.',
     },
     en: {
         // Navigation / Tabs
@@ -444,7 +501,7 @@ const translations = {
         feedback_placeholder: 'What happened?',
         feedback_include_diag: 'Include diagnostics',
         feedback_diag_note: 'Diagnostics are shown below before sending. EQT never attaches files being transferred.',
-        btn_open_email_draft: 'Open email draft',
+        btn_open_email_draft: 'Send',
         btn_copy_feedback: 'Copy feedback',
         
         // Add-ons
@@ -484,12 +541,352 @@ const translations = {
         // Chat quota text translations
         chat_top_time: 'Chat {time}',
         chat_top_used_up: 'Chat 0:00',
+
+        btn_confirm: 'Confirm',
+        btn_reset: 'Reset',
+        btn_activating: 'Activating...',
+        btn_checking: 'Checking...',
+        btn_retry: 'Retry',
+        btn_install_restart: 'Restart to Apply',
+        btn_downloading: 'Downloading...',
+        btn_installing: 'Installing...',
+        redeem_no_paid_plan: 'No paid plan active',
+        redeem_active_tier: '{tier} active',
+        redeem_desc: 'Enter a valid EQT code to unlock a paid tier on this device.',
+        device_limit: 'Device Limit: {activated} / {max}',
+        upgrade_required: 'Upgrade required',
+        manual_check_tips: 'Click button to manually check.',
+        manual_check_btn: 'Check',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        btn_draft_opened: 'Draft Opened',
+        feedback_draft_opened_notice: 'Mail client opened with draft. Please send it in your email app. If it didn\'t open, you can click "Copy feedback" below and manually email it to jinxpeeter@outlook.com.',
+    },
+    ja: {
+        share: 'ファイル共有',
+        receive: 'ファイル受信',
+        chat: 'ローカルチャット',
+        settings: '設定',
+        close: '閉じる',
+        working: '処理中...',
+        stop: '停止',
+        running: '実行中',
+        completed: '完了',
+        failed: '失敗',
+        stopped: '停止済み',
+        save_dir: 'デフォルトに設定',
+        about_title: 'EQTについて',
+        redeem_title: 'ライセンス認証',
+        feedback: 'フィードバック',
+        btn_check: '更新を確認',
+        btn_checking: '確認中...',
+        btn_confirm: '確認',
+        btn_reset: 'リセット',
+        btn_activating: '有効化中...',
+        redeem_no_paid_plan: '有料プラン未有効',
+        btn_open_email_draft: '送信',
+        btn_draft_opened: '下書きを作成しました',
+        feedback_draft_opened_notice: 'メールクライアントを起動しました。メールアプリで送信を完了してください。起動しない場合は「フィードバックをコピー」して直接 jinxpeeter@outlook.com 宛てにお送りください。',
+        start_chat: 'チャットを開始',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        up_to_date: 'すでに最新バージョンです。',
+        check_updates_auto: 'アップデートを自動的に確認しています...',
+        version_available: '新バージョン {version} が利用可能です。',
+        btn_download_now: '今すぐダウンロード',
+        new_version_go_settings: '新バージョン {version} が利用可能です。設定に移動して更新してください。',
+        postponed_transfer: '新バージョン {version} が利用可能です。転送が完了するまでダウンロードを保留します。',
+        update_ready_restart: 'バージョン {version} がダウンロードされました。再起動して更新を適用してください。',
+        auto_check_failed: '自動アップデート確認に失敗しました: {err}',
+        click_manual_check: 'ボタンをクリックして手動でアップデートを確認します。',
+        checking_updates: 'アップデートを確認しています...',
+        btn_retry: '再試行',
+        btn_install_restart: '再起動して適用',
+        btn_downloading: 'ダウンロード中...',
+        downloading_progress: 'ダウンロード中: {percent}%',
+        download_failed: 'ダウンロード失敗: {err}',
+        install_failed: 'インストール失敗: {err}',
+        installing_updates: 'アップデートのインストールを準備しています...',
+        btn_installing: 'インストール中...',
+        silent_ready: 'サイレントアップデートがダウンロードされ、準備が整いました。次回起動時に適用されます。',
+        manual_check_tips: 'ボタンをクリックして手動でアップデートを確認します。',
+        manual_check_btn: '確認',
+        check_update: 'アップデートを確認',
+        chat_unlocked: '{tier} が有効です。チャットが利用可能です。',
+        chat_time_left: '本日の無料チャット残り時間: {time}。',
+        chat_time_used_up: '本日の無料チャット時間は使い果たされました。本日チャットを使い続けるにはアップグレードしてください。',
+        upgrade_required: 'アップグレードが必要',
+        redeem_desc: 'このデバイスで有料プランを有効にするには、有効な EQT コードを入力してください。',
+        device_limit: 'デバイス制限: {activated} / {max}',
+        redeemed_at: '{date} に有効化済み',
+        paid_locked_clock: '有料プランがロックされました（時計異常）',
+        locked_rollback: 'システム時計の巻き戻しを検出',
+        locked_rollback_desc: 'システム時計の巻き戻しを検出したため、有料機能をロックしました。システム時計を同期し、設定で再有効化してください。',
+        license_locked_limit: 'ライセンスがロックされました（制限あり）',
+        license_locked_server: 'サーバー確認が未有効（不一致）',
+        license_verify_failed: 'ライセンス確認に失敗しました:',
+        license_verify_failed_desc: 'ローカルの {tier} ライセンスは有効ですが、サーバー確認で無効と判定されました。コアサービスが実行されていることを確認し、問題が解決しない場合はアクティベーションをリセットしてください。',
+    },
+    ko: {
+        share: '파일 공유',
+        receive: '파일 수신',
+        chat: '로컬 채팅',
+        settings: '설정',
+        close: '닫기',
+        working: '처리 중...',
+        stop: '중지',
+        running: '실행 중',
+        completed: '완료됨',
+        failed: '실패함',
+        stopped: '중지됨',
+        save_dir: '기본 폴더로 설정',
+        about_title: 'EQT 정보',
+        redeem_title: '라이센스 활성화',
+        feedback: '피드백',
+        btn_check: '업데이트 확인',
+        btn_checking: '확인 중...',
+        btn_confirm: '확인',
+        btn_reset: '초기화',
+        btn_activating: '활성화 중...',
+        redeem_no_paid_plan: '활성화된 요금제 없음',
+        btn_open_email_draft: '보내기',
+        btn_draft_opened: '임시 보관함에 저장됨',
+        feedback_draft_opened_notice: '이메일 클라이언트가 시작되었습니다. 이메일 창에서 발송을 완료해 주세요. 시작되지 않을 경우 "피드백 복사"를 눌러 jinxpeeter@outlook.com으로 직접 발송할 수 있습니다.',
+        start_chat: '채팅 시작',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        up_to_date: '이미 최신 버전입니다.',
+        check_updates_auto: '업데이트를 자동으로 확인하는 중...',
+        version_available: '새 버전 {version}을 사용할 수 있습니다.',
+        btn_download_now: '지금 다운로드',
+        new_version_go_settings: '새 버전 {version}을 사용할 수 있습니다. 설정으로 이동하여 업데이트하십시오.',
+        postponed_transfer: '새 버전 {version}을 사용할 수 있습니다. 전송이 완료될 때까지 다운로드가 보류됩니다.',
+        update_ready_restart: '버전 {version} 다운로드가 완료되었습니다. 업데이트를 적용하려면 재시작하십시오.',
+        auto_check_failed: '자동 업데이트 확인 실패: {err}',
+        click_manual_check: '버튼을 클릭하여 수동으로 업데이트를 확인하십시오.',
+        checking_updates: '업데이트 확인 중...',
+        btn_retry: '재시도',
+        btn_install_restart: '재시작하여 적용',
+        btn_downloading: '다운로드 중...',
+        downloading_progress: '다운로드 중: {percent}%',
+        download_failed: '다운로드 실패: {err}',
+        install_failed: '설치 실패: {err}',
+        installing_updates: '업데이트 설치 준비 중...',
+        btn_installing: '설치 중...',
+        silent_ready: '백그라운드 업데이트 다운로드가 완료되었습니다. 다음 시작 시 적용됩니다.',
+        manual_check_tips: '버튼을 클릭하여 수동으로 업데이트를 확인하십시오.',
+        manual_check_btn: '확인',
+        check_update: '업데이트 확인',
+        chat_unlocked: '{tier} 활성화됨. 채팅이 잠금 해제되었습니다.',
+        chat_time_left: '오늘 무료 채팅 남은 시간: {time}.',
+        chat_time_used_up: '오늘 무료 채팅 시간이 모두 소모되었습니다. 계속하려면 업그레이드하십시오.',
+        upgrade_required: '업그레이드 필요',
+        redeem_desc: '이 기기에서 유효한 EQT 코드를 입력하여 유료 요금제를 사용하십시오.',
+        device_limit: '기기 제한: {activated} / {max}',
+        redeemed_at: '{date}에 활성화됨',
+        paid_locked_clock: '유료 서비스 잠김 (시계 오류)',
+        locked_rollback: '시스템 시계 되돌리기 감지됨',
+        locked_rollback_desc: '시스템 시계 되돌리기가 감지되어 유료 기능이 잠겼습니다. 시스템 시계를 동기화하고 설정에서 다시 활성화하십시오.',
+        license_locked_limit: '라이선스 잠김 (제한됨)',
+        license_locked_server: '서버 확인 미활성 (불일치)',
+        license_verify_failed: '라이선스 확인 실패:',
+        license_verify_failed_desc: '로컬 {tier} 라이선스는 활성화되어 있으나 서버 확인에서 비활성으로 나타납니다. 코어 서비스가 실행 중인지 확인하고, 문제가 지속되면 활성화를 초기화하십시오.',
+    },
+    es: {
+        share: 'Compartir',
+        receive: 'Recibir',
+        chat: 'Chat Local',
+        settings: 'Ajustes',
+        close: 'Cerrar',
+        working: 'Procesando...',
+        stop: 'Detener',
+        running: 'Ejecutando',
+        completed: 'Completado',
+        failed: 'Fallado',
+        stopped: 'Detenido',
+        save_dir: 'Establecer predeterminado',
+        about_title: 'Acerca de EQT',
+        redeem_title: 'Activar código',
+        feedback: 'Comentarios',
+        btn_check: 'Buscar actualizaciones',
+        btn_checking: 'Buscando...',
+        btn_confirm: 'Confirmar',
+        btn_reset: 'Restablecer',
+        btn_activating: 'Activando...',
+        redeem_no_paid_plan: 'Sin plan de pago activo',
+        btn_open_email_draft: 'Enviar',
+        btn_draft_opened: 'Borrador abierto',
+        feedback_draft_opened_notice: 'Se ha abierto el cliente de correo. Confirme y envíe en la ventana emergente. Si no funciona, puede "Copiar comentarios" y enviarlos directamente a jinxpeeter@outlook.com.',
+        start_chat: 'Iniciar chat',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        up_to_date: 'Ya está actualizado.',
+        check_updates_auto: 'Buscando actualizaciones automáticamente...',
+        version_available: 'La nueva versión {version} está disponible.',
+        btn_download_now: 'Descargar ahora',
+        new_version_go_settings: 'La nueva versión {version} está disponible. Vaya a ajustes para actualizar.',
+        postponed_transfer: 'La nueva versión {version} está disponible. Descarga pospuesta hasta que termine la transferencia.',
+        update_ready_restart: 'La versión {version} ha sido descargada. Reinicie para aplicar la actualización.',
+        auto_check_failed: 'Error al buscar actualizaciones automáticamente: {err}',
+        click_manual_check: 'Haga clic en el botón para buscar actualizaciones manualmente.',
+        checking_updates: 'Buscando actualizaciones...',
+        btn_retry: 'Reintentar',
+        btn_install_restart: 'Reiniciar para aplicar',
+        btn_downloading: 'Descargando...',
+        downloading_progress: 'Descargando: {percent}%',
+        download_failed: 'Error al descargar: {err}',
+        install_failed: 'Error al instalar: {err}',
+        installing_updates: 'Preparando la instalación de la actualización...',
+        btn_installing: 'Instalando...',
+        silent_ready: 'Actualización silenciosa descargada. Se aplicará en el próximo reinicio.',
+        manual_check_tips: 'Haga clic en el botón para buscar actualizaciones manualmente.',
+        manual_check_btn: 'Buscar',
+        check_update: 'Buscar actualizaciones',
+        chat_unlocked: '{tier} activo. Chat desbloqueado.',
+        chat_time_left: 'Tiempo libre de chat hoy: {time}.',
+        chat_time_used_up: 'El tiempo libre de chat de hoy se ha agotado. Actualice para seguir chateando hoy.',
+        upgrade_required: 'Se requiere actualizar',
+        redeem_desc: 'Ingrese un código EQT válido para desbloquear un plan de pago en este dispositivo.',
+        device_limit: 'Límite de dispositivos: {activated} / {max}',
+        redeemed_at: 'Activado el {date}',
+        paid_locked_clock: 'Pago bloqueado (error de reloj)',
+        locked_rollback: 'Retroceso del reloj del sistema detectado',
+        locked_rollback_desc: 'Se detectó un retroceso en el reloj del sistema. Las funciones de pago están bloqueadas. Sincronice el reloj y vuelva a activar en ajustes.',
+        license_locked_limit: 'Licencia bloqueada (limitada)',
+        license_locked_server: 'Verificación del servidor inactiva (inconsistente)',
+        license_verify_failed: 'Error al verificar la licencia:',
+        license_verify_failed_desc: 'La licencia local para {tier} está activa, pero la verificación del servidor falló. Asegúrese de que el servicio esté ejecutándose y restablezca la activación si el problema persiste.',
+    },
+    de: {
+        share: 'Teilen',
+        receive: 'Empfangen',
+        chat: 'Lokaler Chat',
+        settings: 'Einstellungen',
+        close: 'Schließen',
+        working: 'Verarbeitung...',
+        stop: 'Stoppen',
+        running: 'Laufend',
+        completed: 'Abgeschlossen',
+        failed: 'Fehlgeschlagen',
+        stopped: 'Gestoppt',
+        save_dir: 'Als Standard festlegen',
+        about_title: 'Über EQT',
+        redeem_title: 'Code einlösen',
+        feedback: 'Feedback',
+        btn_check: 'Nach Updates suchen',
+        btn_checking: 'Suchen...',
+        btn_confirm: 'Bestätigen',
+        btn_reset: 'Zurücksetzen',
+        btn_activating: 'Aktivieren...',
+        redeem_no_paid_plan: 'Kein kostenpflichtiges Abo aktiv',
+        btn_open_email_draft: 'Senden',
+        btn_draft_opened: 'Entwurf geöffnet',
+        feedback_draft_opened_notice: 'E-Mail-Client wurde geöffnet. Bitte im E-Mail-Fenster senden. Falls es nicht klappt, kopieren Sie das Feedback und senden Sie es direkt an jinxpeeter@outlook.com.',
+        start_chat: 'Chat starten',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
+        up_to_date: 'Bereits auf dem neuesten Stand.',
+        check_updates_auto: 'Automatische Updatesuche...',
+        version_available: 'Neue Version {version} ist verfügbar.',
+        btn_download_now: 'Jetzt herunterladen',
+        new_version_go_settings: 'Neue Version {version} ist verfügbar. Gehen Sie zu den Einstellungen, um das Update durchzuführen.',
+        postponed_transfer: 'Neue Version {version} ist verfügbar. Herunterladen verschoben, bis die Übertragung beendet ist.',
+        update_ready_restart: 'Version {version} wurde heruntergeladen. Starten Sie neu, um das Update anzuwenden.',
+        auto_check_failed: 'Automatische Updatesuche fehlgeschlagen: {err}',
+        click_manual_check: 'Klicken Sie auf die Schaltfläche, um manuell nach Updates zu suchen.',
+        checking_updates: 'Suche nach Updates...',
+        btn_retry: 'Wiederholen',
+        btn_install_restart: 'Neu starten zum Anwenden',
+        btn_downloading: 'Herunterladen...',
+        downloading_progress: 'Herunterladen: {percent}%',
+        download_failed: 'Herunterladen fehlgeschlagen: {err}',
+        install_failed: 'Installation fehlgeschlagen: {err}',
+        installing_updates: 'Update-Installation wird vorbereitet...',
+        btn_installing: 'Installieren...',
+        silent_ready: 'Stilles Update heruntergeladen. Es wird beim nächsten Neustart angewendet.',
+        manual_check_tips: 'Klicken Sie auf die Schaltfläche, um manuell nach Updates zu suchen.',
+        manual_check_btn: 'Prüfen',
+        check_update: 'Nach Updates suchen',
+        chat_unlocked: '{tier} aktiv. Chat freigeschaltet.',
+        chat_time_left: 'Verbleibende kostenlose Chat-Zeit heute: {time}.',
+        chat_time_used_up: 'Die kostenlose Chat-Zeit für heute ist abgelaufen. Aktualisieren Sie, um heute weiterzuchatten.',
+        upgrade_required: 'Upgrade erforderlich',
+        redeem_desc: 'Geben Sie einen gültigen EQT-Code ein, um eine kostenpflichtige Version auf diesem Gerät freizuschalten.',
+        device_limit: 'Geräte-Limit: {activated} / {max}',
+        redeemed_at: 'Aktiviert am {date}',
+        paid_locked_clock: 'Zahlung gesperrt (Uhrzeitfehler)',
+        locked_rollback: 'Systemzeit-Rückstellung erkannt',
+        locked_rollback_desc: 'Die Systemzeit wurde zurückgesetzt. Kostenpflichtige Funktionen wurden gesperrt. Bitte synchronisieren Sie die Systemzeit und reaktivieren Sie diese in den Einstellungen.',
+        license_locked_limit: 'Lizenz gesperrt (eingeschränkt)',
+        license_locked_server: 'Serververifizierung inaktiv (inkonsistent)',
+        license_verify_failed: 'Lizenzverifizierung fehlgeschlagen:',
+        license_verify_failed_desc: 'Die lokale Lizenz für {tier} ist aktiv, aber die Serververifizierung ergab inaktiv. Stellen Sie sicher, dass der Kerndienst läuft, und setzen Sie die Aktivierung zurück, falls das Problem bestehen bleibt.',
+    },
+    fr: {
+        share: 'Partager',
+        receive: 'Recevoir',
+        chat: 'Chat Local',
+        settings: 'Paramètres',
+        close: 'Fermer',
+        working: 'Traitement...',
+        stop: 'Arrêter',
+        running: 'En cours',
+        completed: 'Terminé',
+        failed: 'Échoué',
+        stopped: 'Arrêté',
+        save_dir: 'Définir par défaut',
+        about_title: 'À propos de EQT',
+        redeem_title: 'Activer le code',
+        feedback: 'Commentaires',
+        btn_check: 'Rechercher les mises à jour',
+        btn_checking: 'Recherche...',
+        btn_confirm: 'Confirmer',
+        btn_reset: 'Réinitialiser',
+        btn_activating: 'Activation...',
+        redeem_no_paid_plan: 'Aucun forfait payant actif',
+        btn_open_email_draft: 'Envoyer',
+        btn_draft_opened: 'Brouillon ouvert',
+        feedback_draft_opened_notice: 'Le client de messagerie a été ouvert. Veuillez envoyer le message. Sinon, copiez les commentaires et envoyez-les directement à jinxpeeter@outlook.com.',
+        start_chat: 'Démarrer le chat',
+        lang_zh: '简体中文 (Chinese)',
+        lang_en: 'English',
+        lang_ja: '日本語 (Japanese)',
+        lang_ko: '한국어 (Korean)',
+        lang_es: 'Español (Spanish)',
+        lang_de: 'Deutsch (German)',
+        lang_fr: 'Français (French)',
     }
 };
 
 function t(key, params) {
     const lang = (state && state.settings && state.settings.lang) || 'zh';
-    let val = (translations[lang] && translations[lang][key]) || translations['zh'][key] || key;
+    let val = (translations[lang] && translations[lang][key]) || 
+              (translations['en'] && translations['en'][key]) || 
+              (translations['zh'] && translations['zh'][key]) || 
+              key;
     if (params) {
         for (const k in params) {
             val = val.replace(`{${k}}`, params[k]);
@@ -526,14 +923,16 @@ const state = {
     chatUsageMs: 0,
     chatUsageStartedAt: 0,
     chatQuotaNoticeShown: false,
-    updateStatusText: 'Click button to manually check.',
-    updateBtnText: 'Check',
+    updateStatusText: '',
+    updateBtnText: '',
     updateBtnDisabled: false,
     updateCheckRes: null,
     updateStage: 'idle',
     license: null,
     redeemMessage: '',
     redeemError: '',
+    feedbackNotice: '',
+    feedbackSent: false,
 };
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
@@ -1084,8 +1483,13 @@ function renderSettingsPanel() {
                         <span>${t('lang_desc')}</span>
                     </div>
                     <select id="settings-lang">
-                        <option value="zh" ${state.settings?.lang !== 'en' ? 'selected' : ''}>${t('lang_zh')}</option>
+                        <option value="zh" ${state.settings?.lang === 'zh' ? 'selected' : ''}>${t('lang_zh')}</option>
                         <option value="en" ${state.settings?.lang === 'en' ? 'selected' : ''}>${t('lang_en')}</option>
+                        <option value="ja" ${state.settings?.lang === 'ja' ? 'selected' : ''}>${t('lang_ja')}</option>
+                        <option value="ko" ${state.settings?.lang === 'ko' ? 'selected' : ''}>${t('lang_ko')}</option>
+                        <option value="es" ${state.settings?.lang === 'es' ? 'selected' : ''}>${t('lang_es')}</option>
+                        <option value="de" ${state.settings?.lang === 'de' ? 'selected' : ''}>${t('lang_de')}</option>
+                        <option value="fr" ${state.settings?.lang === 'fr' ? 'selected' : ''}>${t('lang_fr')}</option>
                     </select>
                 </div>
             </section>
@@ -1416,24 +1820,24 @@ function ensureFavicon() {
 
 function renderRedeemPanel() {
     const license = state.license || loadLicense();
-    let active = license?.tier ? `${getLicenseDisplayName(license)} active` : 'No paid plan active';
+    let active = license?.tier ? t('redeem_active_tier', { tier: getLicenseDisplayName(license) }) : t('redeem_no_paid_plan');
     
     let warningBox = '';
     const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
     if (state.status?.clockTampered) {
-        active = 'PAID Locked (时钟异常)';
+        active = t('paid_locked_clock');
         warningBox = `
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ 时钟回退锁定：</strong>
-                检测到系统时钟回退，已锁定付费功能。请恢复同步系统时钟后再重新输入兑换码激活。
+                <strong>⚠️ ${t('locked_rollback')}：</strong>
+                ${t('locked_rollback_desc')}
             </div>
         `;
     } else if (license?.tier && !isPaid) {
-        active = `${getLicenseDisplayName(license)} Locked (已受限)`;
+        active = t('license_locked_limit');
         warningBox = `
             <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ 授权校验未通过：</strong>
-                服务端付费判定未激活 (不一致)。请确保核心服务正常运行并已连接。若仍异常，请点击下方的 “Reset” 重置激活，并重新兑换激活码。
+                <strong>⚠️ ${t('license_verify_failed')}</strong>
+                ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
             </div>
         `;
     }
@@ -1443,16 +1847,16 @@ function renderRedeemPanel() {
             ${warningBox}
             <div class="license-card">
                 <strong>${escapeHTML(active)}</strong>
-                <span>${license?.redeemedAt ? `Redeemed ${escapeHTML(new Date(license.redeemedAt).toLocaleString())}` : 'Enter a valid EQT code to unlock a paid tier on this device.'}</span>
-                ${state.status?.maxDevices ? `<span style="font-size: 11px; margin-top: 4px; opacity: 0.85;">Device Limit: ${state.status.activatedDevices || 0} / ${state.status.maxDevices}</span>` : ''}
+                <span>${license?.redeemedAt ? t('redeemed_at', { date: escapeHTML(new Date(license.redeemedAt).toLocaleString()) }) : t('redeem_desc')}</span>
+                ${state.status?.maxDevices ? `<span style="font-size: 11px; margin-top: 4px; opacity: 0.85;">${t('device_limit', { activated: state.status.activatedDevices || 0, max: state.status.maxDevices })}</span>` : ''}
             </div>
             <label>
-                Redeem code
+                ${t('redeem_title')}
                 <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${state.isActivating ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
             </label>
             <div class="redeem-actions">
-                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? '激活中...' : 'Confirm'}</button>
-                <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>Reset</button>
+                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? t('btn_activating') : t('btn_confirm')}</button>
+                <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_reset')}</button>
             </div>
             ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
             ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
@@ -1465,6 +1869,7 @@ function renderFeedbackPanel() {
     const mailto = feedbackMailto(diagnostics);
     return `
         <div class="feedback-panel">
+            ${state.feedbackNotice ? `<div class="notice success compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackNotice)}</div>` : ''}
             <label>${t('feedback_category')}</label>
             <select id="feedback-category">
                 <option value="bug">${t('feedback_bug')}</option>
@@ -1485,7 +1890,7 @@ function renderFeedbackPanel() {
             <div class="feedback-note">${t('feedback_diag_note')}</div>
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
-                <button class="primary" id="send-feedback" data-mailto="${escapeAttr(mailto)}">${t('btn_open_email_draft')}</button>
+                <button class="primary" id="send-feedback" ${state.feedbackSent ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">${state.feedbackSent ? t('btn_draft_opened') : t('btn_open_email_draft')}</button>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
         </div>
@@ -1850,6 +2255,10 @@ function openPanel(panel) {
         state.redeemMessage = '';
         state.redeemError = '';
     }
+    if (panel === 'feedback') {
+        state.feedbackNotice = '';
+        state.feedbackSent = false;
+    }
     if (panel === 'about') {
         state.showPlanInfoDetails = false;
     }
@@ -1870,8 +2279,8 @@ function syncManualUpdateCheckUI() {
     console.log('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl:', statusEl, 'btnEl:', btnEl, 'updateStatusText:', state.updateStatusText, 'updateBtnText:', state.updateBtnText);
     LogInfo('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl: ' + (statusEl ? 'found' : 'null') + ', btnEl: ' + (btnEl ? 'found' : 'null') + ', updateStatusText: ' + state.updateStatusText + ', updateBtnText: ' + state.updateBtnText);
     if (statusEl && btnEl) {
-        statusEl.textContent = state.updateStatusText || 'Click button to manually check.';
-        btnEl.textContent = state.updateBtnText || 'Check';
+        statusEl.textContent = state.updateStatusText || t('manual_check_tips');
+        btnEl.textContent = state.updateBtnText || t('manual_check_btn');
         btnEl.disabled = Boolean(state.updateBtnDisabled);
     } else {
         console.log('[Antigravity Debug] syncManualUpdateCheckUI fallback to syncPanelSurface');
@@ -2536,6 +2945,15 @@ async function sendFeedback(event) {
         const feedback = collectFeedback();
         const mailto = feedbackMailto(feedback.body, feedback.category);
         await OpenExternal(mailto || event.currentTarget.dataset.mailto);
+        
+        state.feedbackNotice = t('feedback_draft_opened_notice');
+        state.feedbackSent = true;
+        render();
+        
+        window.setTimeout(() => {
+            state.feedbackSent = false;
+            render();
+        }, 3000);
     }, {busy: false});
 }
 
@@ -2942,13 +3360,13 @@ function formatDuration(ms) {
 
 function chatQuotaText() {
     if (hasPaidLicense()) {
-        return `${licenseTiers[state.license.tier] || state.license.tier} active. Chat is unlocked.`;
+        return t('chat_unlocked', { tier: licenseTiers[state.license.tier] || state.license.tier });
     }
     const remaining = chatRemainingMs();
     if (remaining <= 0) {
-        return 'Daily free chat time is used up. Upgrade to keep using chat today.';
+        return t('chat_time_used_up');
     }
-    return `Daily free chat time left: ${formatDuration(remaining)}.`;
+    return t('chat_time_left', { time: formatDuration(remaining) });
 }
 
 function chatQuotaTopText() {
@@ -2964,12 +3382,12 @@ function chatQuotaTopText() {
 
 function chatStartButtonText() {
     if (state.busy) {
-        return 'Working...';
+        return t('working');
     }
     if (!hasPaidLicense() && chatRemainingMs() <= 0) {
-        return 'Upgrade required';
+        return t('upgrade_required');
     }
-    return 'Start chat';
+    return t('start_chat');
 }
 
 function hasPaidLicense() {
