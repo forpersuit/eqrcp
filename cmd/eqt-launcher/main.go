@@ -84,13 +84,36 @@ func runLauncher(rawArgs []string) string {
 	return ""
 }
 
+func isPathAbsolute(p string) bool {
+	if filepath.IsAbs(p) {
+		return true
+	}
+	if len(p) >= 2 && p[1] == ':' && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) {
+		return true
+	}
+	if strings.HasPrefix(p, `\\`) {
+		return true
+	}
+	return false
+}
+
 func agentTaskFromArgs(args []string) (desktopAgentTask, bool) {
 	if len(args) == 0 {
 		return desktopAgentTask{}, false
 	}
 	switch args[0] {
 	case "share", "receive":
-		return desktopAgentTask{Action: args[0], Paths: args[1:]}, true
+		absPaths := make([]string, len(args[1:]))
+		for i, p := range args[1:] {
+			if isPathAbsolute(p) {
+				absPaths[i] = p
+			} else if abs, err := filepath.Abs(p); err == nil {
+				absPaths[i] = abs
+			} else {
+				absPaths[i] = p
+			}
+		}
+		return desktopAgentTask{Action: args[0], Paths: absPaths}, true
 	default:
 		return desktopAgentTask{}, false
 	}

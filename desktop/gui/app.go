@@ -447,14 +447,46 @@ func (a *App) OpenPath(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
+
+	// Clean and resolve to absolute path if relative
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		if abs, err := filepath.Abs(cleaned); err == nil {
+			cleaned = abs
+		}
 	}
-	target := path
-	if !info.IsDir() {
-		target = filepath.Dir(path)
+
+	// Determine starting target folder
+	target := cleaned
+	info, err := os.Stat(target)
+	if err != nil || !info.IsDir() {
+		target = filepath.Dir(cleaned)
 	}
+
+	// Walk up to find the closest existing directory
+	for {
+		if target == "." || target == "/" || target == "" || len(target) <= 3 { // e.g. "C:\"
+			break
+		}
+		info, err := os.Stat(target)
+		if err == nil && info.IsDir() {
+			break
+		}
+		parent := filepath.Dir(target)
+		if parent == target {
+			break
+		}
+		target = parent
+	}
+
+	// Fallback to current working directory if still not valid
+	info, err = os.Stat(target)
+	if err != nil || !info.IsDir() {
+		if wd, err := os.Getwd(); err == nil {
+			target = wd
+		}
+	}
+
 	cmd, err := openPathCommand(target)
 	if err != nil {
 		return err
@@ -469,14 +501,24 @@ func (a *App) OpenFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
-	info, err := os.Stat(path)
+
+	// Clean and resolve to absolute path if relative
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		if abs, err := filepath.Abs(cleaned); err == nil {
+			cleaned = abs
+		}
+	}
+
+	info, err := os.Stat(cleaned)
 	if err != nil {
-		return err
+		// File does not exist, fall back to opening its closest existing parent directory
+		return a.OpenPath(cleaned)
 	}
 	if info.IsDir() {
-		return a.OpenPath(path)
+		return a.OpenPath(cleaned)
 	}
-	cmd, err := openFileCommand(path)
+	cmd, err := openFileCommand(cleaned)
 	if err != nil {
 		return err
 	}
