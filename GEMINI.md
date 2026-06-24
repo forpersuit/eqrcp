@@ -10,6 +10,7 @@
 - keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
 - avoid alert-style prompts (such as browser-level alert dialogs) for user warnings, errors, or size limit messages; always use in-app notifications (e.g., appending system messages to the chat message list) instead
 - replace grep by rg
+- 一旦有功能增加，则小版本号+1
 
 ## Project Structure & Module Organization
 

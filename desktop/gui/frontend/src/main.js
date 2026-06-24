@@ -1208,12 +1208,6 @@ function bindEvents() {
     document.querySelectorAll('.repeat-task').forEach((button) => {
         button.addEventListener('click', repeatTask);
     });
-    document.querySelectorAll('.path-link').forEach((button) => {
-        button.addEventListener('click', openPath);
-    });
-    document.querySelectorAll('[data-open-file]').forEach((button) => {
-        button.addEventListener('click', openSavedFile);
-    });
     document.querySelectorAll('[data-save-url]').forEach((element) => {
         element.addEventListener('contextmenu', openChatContextMenu);
         element.addEventListener('click', saveAttachmentAsFromButton);
@@ -1502,15 +1496,29 @@ async function startChat() {
         return;
     }
     console.log('[Frontend] startChat: Requesting chat task start from Wails App.Chat()...');
-    await run(async () => {
+    
+    // 1. Transition immediately to the chat interface with a loading status for instant UI responsiveness
+    setMode('chat');
+    state.status = state.status || {};
+    state.status.chat = {
+        action: 'chat',
+        state: 'running',
+        pageUrl: ''
+    };
+    state.notice = '';
+    render();
+
+    // 2. Run settings saving and chat session startup asynchronously in the background
+    run(async () => {
         await saveSettingsData();
         state.chatQRPulseArmed = true;
         state.chatQRPromptDismissed = false;
-        state.status = await Chat();
-        console.log('[Frontend] startChat: Chat task started. Status response:', state.status);
-        setMode('chat');
-        state.notice = '';
-        reconcileChatQRState(state.status);
+        
+        const finalStatus = await Chat();
+        console.log('[Frontend] startChat: Chat task started. Status response:', finalStatus);
+        
+        state.status = finalStatus;
+        reconcileChatQRState(finalStatus);
         if (!state.chatQRPulseUntil) {
             triggerChatQRPulse();
         }
@@ -1518,7 +1526,8 @@ async function startChat() {
             state.chatSaveDir = await ChatSaveDirectory();
             console.log('[Frontend] startChat: Chat autosave path set to:', state.chatSaveDir);
         }
-    });
+        render();
+    }, {busy: false});
 }
 
 async function openChatSaveDirectory() {
@@ -3081,4 +3090,29 @@ render();
 loadSettings().then(() => {
     connectAgentEvents();
     window.setTimeout(runAutoUpdateCheck, 5000);
+});
+
+// Register one-time global event delegations for opening history files & folders
+document.addEventListener('click', (event) => {
+    const pathLink = event.target.closest('.path-link');
+    if (pathLink) {
+        const path = pathLink.dataset.openPath;
+        if (path) {
+            run(async () => {
+                await OpenPath(path);
+            }, {busy: false});
+        }
+        return;
+    }
+
+    const fileLink = event.target.closest('[data-open-file]');
+    if (fileLink) {
+        const file = fileLink.dataset.openFile;
+        if (file) {
+            run(async () => {
+                await OpenFile(file);
+            }, {busy: false});
+        }
+        return;
+    }
 });
