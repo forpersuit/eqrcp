@@ -3,8 +3,6 @@ package util
 import (
 	"net"
 	"regexp"
-
-	externalip "github.com/glendc/go-external-ip"
 )
 
 // Interfaces returns a `name:ip` map of the suitable interfaces found
@@ -31,9 +29,9 @@ func Interfaces(listAll bool) (map[string]string, error) {
 	return names, nil
 }
 
-// GetExternalIP of this host
+// GetExternalIP of this host (returns the primary local interface IP)
 func GetExternalIP() (net.IP, error) {
-	// 1. Try dialing a public DNS server via UDP to get the local interface IP that has an internet route.
+	// 1. Try dialing a public IP via UDP to get the local interface IP that has an internet route.
 	// This is instant (under 0.1ms), does not send any packets, and works offline if default gateway is present.
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err == nil {
@@ -72,11 +70,6 @@ func GetExternalIP() (net.IP, error) {
 		}
 	}
 
-	// 3. Last fallback: Query external consensus engine (could be slow or fail offline)
-	consensus := externalip.DefaultConsensus(nil, nil)
-	ip, err := consensus.ExternalIP()
-	if err != nil {
-		return nil, err
-	}
-	return ip, nil
+	// 3. Last fallback: return localhost (127.0.0.1) if absolutely no active interface is found.
+	return net.ParseIP("127.0.0.1"), nil
 }

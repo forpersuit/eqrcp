@@ -817,6 +817,7 @@ func (agent *desktopAgent) setTaskPageURL(action string, pageURL string) {
 			agent.current.PageURL = pageURL
 		}
 	}
+	agent.touchLocked()
 }
 
 func (agent *desktopAgent) checkForUpdates() (GUIUpdateCheckResult, error) {
