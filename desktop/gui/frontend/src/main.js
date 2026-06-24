@@ -2200,19 +2200,16 @@ function addSharePaths(paths) {
     render();
 }
 
+let agentEventsSubscribed = false;
+
 function connectAgentEvents() {
-    if (!window.EventSource || agentEvents) {
+    if (agentEventsSubscribed) {
         return;
     }
-    let url = agentEventsURL;
-    if (state.appInfo && state.appInfo.agentUrl) {
-        url = state.appInfo.agentUrl + '/events';
-    }
-    agentEvents = new EventSource(url);
-    agentEvents.onmessage = (event) => {
+    agentEventsSubscribed = true;
+    EventsOn('agent-status', (nextStatus) => {
         try {
             const previousChatURL = activeChatPageURL();
-            const nextStatus = JSON.parse(event.data);
             applyStatusData(nextStatus);
             if (canKeepChatFrame(previousChatURL)) {
                 updateChatQuotaSurface();
@@ -2223,26 +2220,13 @@ function connectAgentEvents() {
                 return;
             }
             render();
-        } catch {
+        } catch (e) {
+            console.error('[Frontend] Failed to process agent-status event:', e);
             refreshStatus(false);
         }
-    };
-    agentEvents.onerror = () => {
-        agentEvents.close();
-        agentEvents = null;
-        if (!agentEventsRetry) {
-            agentEventsRetry = window.setTimeout(async () => {
-                agentEventsRetry = null;
-                try {
-                    state.appInfo = await AppInfo();
-                } catch (e) {
-                    console.error('[Frontend] Failed to refresh AppInfo for EventSource retry:', e);
-                }
-                connectAgentEvents();
-            }, 1500);
-        }
-    };
+    });
 }
+
 
 function handleFileDrop(paths) {
     setMode('share');
@@ -2828,7 +2812,7 @@ function buildDiagnostics() {
     return [
         `product: ${info.product || 'EQT'} (${info.name || 'Easy QR Transfer'})`,
         `platform: ${[info.os, info.arch].filter(Boolean).join('/') || 'unknown'}`,
-        `agent: ${info.agentUrl || agentEventsURL.replace('/events', '')}`,
+        `agent: embedded`,
         `cli: ${info.cliPath || 'not found'}`,
         `agent state: ${status.state || 'unknown'}`,
         `agent version: ${status.version || 'unknown'}`,

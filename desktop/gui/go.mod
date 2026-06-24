@@ -5,12 +5,12 @@ go 1.25.0
 require (
 	eqt v0.0.0
 	fyne.io/systray v1.12.0
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/term v0.44.0
 )
 
 require (
-	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/bep/debounce v1.2.1 // indirect

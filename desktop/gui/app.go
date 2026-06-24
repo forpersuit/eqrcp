@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"eqt/util"
 	"eqt/version"
 	"fmt"
@@ -20,25 +18,16 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
-
-var agentBaseURL = getAgentBaseURL()
-
-func getAgentBaseURL() string {
-	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {
-		return "http://127.0.0.1:" + port
-	}
-	return "http://127.0.0.1:48176"
-}
 const chatSaveRetentionDays = 7
 
 type App struct {
 	ctx           context.Context
 	client        *http.Client
-	clientLong    *http.Client // For long-running operations like online activation
 	mu            sync.Mutex
 	closeBehavior string
 	forceQuit     bool
 	logger        *FileLogger
+	agent         *desktopAgent
 }
 
 type AgentTask struct {
@@ -139,13 +128,18 @@ var desktopCommandRunner = runDesktopCommand
 func NewApp() *App {
 	return &App{
 		client:        &http.Client{Timeout: 5 * time.Second},
-		clientLong:    &http.Client{Timeout: 30 * time.Second},
 		closeBehavior: "tray",
 	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.agent = newDesktopAgent(ctx)
+	go func() {
+		if err := a.agent.loadHistory(); err != nil {
+			wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
+		}
+	}()
 }
 
 func (a *App) showWindow() {
@@ -169,10 +163,14 @@ func (a *App) quit() {
 	a.forceQuit = true
 	a.mu.Unlock()
 
-	// 1. 尝试发送优雅关闭指令给后台 Agent
-	_ = a.shutdownAgent()
+	if a.agent != nil {
+		a.agent.mu.Lock()
+		if a.agent.activeServer != nil {
+			a.agent.activeServer.Shutdown()
+		}
+		a.agent.mu.Unlock()
+	}
 
-	// 2. 强杀可能残留的后台进程（如 eqt.exe 和 eqt-launcher.exe，但不杀当前 desktop 进程）
 	killLingeringProcesses()
 
 	if a.ctx != nil {
@@ -182,12 +180,10 @@ func (a *App) quit() {
 
 func killLingeringProcesses() {
 	if isWindows() {
-		// 强杀 Windows 平台的后台传输 agent 及启动器，不匹配 eqt-desktop 避免杀掉自身
 		cmd := exec.Command("taskkill", "/F", "/IM", "eqt.exe", "/IM", "eqt-launcher.exe")
 		util.HideCommand(cmd)
 		_ = cmd.Run()
 	} else {
-		// 强杀 Unix 平台下的后台进程
 		cmd := exec.Command("killall", "-9", "eqt")
 		util.HideCommand(cmd)
 		_ = cmd.Run()
@@ -227,21 +223,22 @@ func (a *App) emitTrayCommand(command string) {
 }
 
 func (a *App) AgentStatus() (AgentStatus, error) {
-	if err := a.ensureAgent(); err != nil {
-		return AgentStatus{}, err
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
-	var status AgentStatus
-	if err := a.getJSON("/status", &status); err != nil {
-		return AgentStatus{}, err
-	}
-	return status, nil
+	a.agent.mu.Lock()
+	defer a.agent.mu.Unlock()
+	return a.agent.snapshotLocked(), nil
 }
 
 func (a *App) Share(paths []string) (AgentStatus, error) {
 	if len(paths) == 0 {
 		return AgentStatus{}, fmt.Errorf("choose at least one file or folder")
 	}
-	return a.postTask(AgentTask{Action: "share", Paths: paths})
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	return a.agent.pushTask(AgentTask{Action: "share", Paths: paths})
 }
 
 func (a *App) Receive(output string) (AgentStatus, error) {
@@ -249,39 +246,26 @@ func (a *App) Receive(output string) (AgentStatus, error) {
 	if output != "" {
 		paths = []string{output}
 	}
-	return a.postTask(AgentTask{Action: "receive", Paths: paths})
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	return a.agent.pushTask(AgentTask{Action: "receive", Paths: paths})
 }
 
 func (a *App) Chat() (AgentStatus, error) {
 	a.logInfo("[GUI] Chat() called. Submitting chat task to agent.")
-	status, err := a.postTask(AgentTask{Action: "chat"})
-	if err == nil {
-		a.logInfo("[GUI] Chat task started successfully.")
-		return status, nil
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
-	a.logError(fmt.Sprintf("[GUI] Chat task failed initially: %v", err))
-	if !isRecoverableChatAgentError(err) {
-		a.logError("[GUI] Error is not recoverable. Aborting chat start.")
-		return AgentStatus{}, err
-	}
-	a.logInfo("[GUI] Recoverable chat agent error detected. Attempting agent self-healing...")
-	_ = a.shutdownAgent()
-	a.logInfo("[GUI] Waiting for old agent process to exit...")
-	waitForAgentExit(a)
-	a.logInfo("[GUI] Restarting agent...")
-	if ensureErr := a.ensureAgent(); ensureErr != nil {
-		a.logError(fmt.Sprintf("[GUI] Restarting agent failed during self-healing: %v", ensureErr))
-		return AgentStatus{}, ensureErr
-	}
-	a.logInfo("[GUI] Resubmitting chat task to newly started agent...")
-	status, err = a.postTask(AgentTask{Action: "chat"})
+	status, err := a.agent.pushTask(AgentTask{Action: "chat"})
 	if err != nil {
-		a.logError(fmt.Sprintf("[GUI] Chat task failed to start after agent restart: %v", err))
+		a.logError(fmt.Sprintf("[GUI] Chat task failed to start: %v", err))
 		return AgentStatus{}, err
 	}
-	a.logInfo("[GUI] Chat task started successfully after self-healing.")
+	a.logInfo("[GUI] Chat task started successfully.")
 	return status, nil
 }
+
 
 
 func (a *App) ChatSaveDirectory() (string, error) {
@@ -385,64 +369,48 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 }
 
 func (a *App) StopCurrent() error {
-	if err := a.ensureAgent(); err != nil {
-		return err
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-	return a.postNoBody("/stop-current")
+	if !a.agent.stopCurrent("stopped") {
+		return fmt.Errorf("no task currently running to stop")
+	}
+	return nil
 }
 
 func (a *App) StopChat() error {
-	if err := a.ensureAgent(); err != nil {
-		return err
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-	return a.postNoBody("/stop-chat")
+	if !a.agent.stopChat("stopped") {
+		return fmt.Errorf("no active chat to stop")
+	}
+	return nil
 }
 
 func (a *App) ClearHistory() error {
-	if err := a.ensureAgent(); err != nil {
-		return err
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodDelete, agentBaseURL+"/history", nil)
-	if err != nil {
-		return err
-	}
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("desktop agent returned %s", resp.Status)
-	}
-	return nil
+	return a.agent.clearHistory()
 }
 
 func (a *App) RepeatTask(id int) (AgentStatus, error) {
 	if id <= 0 {
 		return AgentStatus{}, fmt.Errorf("invalid task id")
 	}
-	if err := a.ensureAgent(); err != nil {
-		return AgentStatus{}, err
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
-	var status AgentStatus
-	if err := a.postJSON(fmt.Sprintf("/tasks/%d/repeat", id), nil, &status); err != nil {
-		return AgentStatus{}, err
-	}
-	return status, nil
+	return a.agent.repeatTask(id)
 }
 
 func (a *App) RestartAgent() error {
-	if err := a.ensureAgent(); err != nil {
-		return err
-	}
-	return a.postNoBody("/restart")
+	return nil
 }
 
 func (a *App) ShutdownAgent() error {
-	if err := a.health(); err != nil {
-		return nil
-	}
-	return a.postNoBody("/shutdown")
+	return nil
 }
 
 func (a *App) OpenURL(rawURL string) error {
@@ -509,11 +477,11 @@ func (a *App) OpenFile(path string) error {
 }
 
 func (a *App) ReadSettings() (DesktopSettings, error) {
-	if err := a.ensureAgent(); err != nil {
-		return DesktopSettings{}, err
+	if a.agent == nil {
+		return DesktopSettings{}, fmt.Errorf("agent not initialized")
 	}
-	var settings DesktopSettings
-	if err := a.getJSON("/settings", &settings); err != nil {
+	settings, err := a.agent.readSettings()
+	if err != nil {
 		return DesktopSettings{}, err
 	}
 	a.setCloseBehavior(settings.CloseBehavior)
@@ -521,11 +489,11 @@ func (a *App) ReadSettings() (DesktopSettings, error) {
 }
 
 func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
-	if err := a.ensureAgent(); err != nil {
-		return DesktopSettings{}, err
+	if a.agent == nil {
+		return DesktopSettings{}, fmt.Errorf("agent not initialized")
 	}
-	var saved DesktopSettings
-	if err := a.postJSON("/settings", settings, &saved); err != nil {
+	saved, err := a.agent.writeSettings(settings)
+	if err != nil {
 		return DesktopSettings{}, err
 	}
 	a.setCloseBehavior(saved.CloseBehavior)
@@ -602,20 +570,12 @@ func (a *App) SelectReceiveDirectory() (string, error) {
 }
 
 func (a *App) AppInfo() AppInfo {
-	// Dynamically resolve agent port on query to align with variable-port design
-	portFilePath := desktopAgentPortFilePath()
-	if data, err := os.ReadFile(portFilePath); err == nil {
-		if portVal := strings.TrimSpace(string(data)); portVal != "" {
-			agentBaseURL = "http://127.0.0.1:" + portVal
-		}
-	}
-
 	info := AppInfo{
 		Product:     "EQT",
 		Name:        "Easy QR Transfer",
 		Version:     version.Version(),
 		Description: "Local QR-code file transfer for desktop and mobile devices.",
-		AgentURL:    agentBaseURL,
+		AgentURL:    "",
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
 		LogPath:     desktopLogFilePath(),
@@ -637,300 +597,50 @@ type GUIUpdateCheckResult struct {
 }
 
 func (a *App) CheckForUpdates() (GUIUpdateCheckResult, error) {
-	if err := a.ensureAgent(); err != nil {
-		return GUIUpdateCheckResult{}, err
+	if a.agent == nil {
+		return GUIUpdateCheckResult{}, fmt.Errorf("agent not initialized")
 	}
-	var res GUIUpdateCheckResult
-	if err := a.getJSON("/update/check", &res); err != nil {
-		return GUIUpdateCheckResult{}, err
-	}
-	return res, nil
+	return a.agent.checkForUpdates()
 }
 
 func (a *App) DownloadUpdate(result GUIUpdateCheckResult) (string, error) {
-	if err := a.ensureAgent(); err != nil {
-		return "", err
+	if a.agent == nil {
+		return "", fmt.Errorf("agent not initialized")
 	}
-	req := map[string]string{
-		"asset_url":     result.AssetURL,
-		"signature_url": result.SignatureURL,
-		"asset_name":    result.AssetName,
-	}
-	var resp struct {
-		SavedPath string `json:"saved_path"`
-		Status    string `json:"status"`
-	}
-	if err := a.postJSON("/update/download", req, &resp); err != nil {
-		return "", err
-	}
-	return resp.SavedPath, nil
+	return a.agent.downloadUpdate(result.AssetURL, result.SignatureURL, result.AssetName)
 }
 
 func (a *App) InstallUpdate(assetName string) error {
-	if err := a.ensureAgent(); err != nil {
-		return err
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-	req := map[string]string{
-		"asset_name": assetName,
-	}
-	var resp struct {
-		Status string `json:"status"`
-	}
-	if err := a.postJSON("/update/install", req, &resp); err != nil {
-		return err
-	}
-	return nil
+	return a.agent.installUpdate(assetName)
 }
 
-
-func (a *App) postTask(task AgentTask) (AgentStatus, error) {
-	if err := a.ensureAgent(); err != nil {
-		return AgentStatus{}, err
-	}
-	browserVal := false
-	task.Browser = &browserVal
-	var status AgentStatus
-	if err := a.postJSON("/tasks", task, &status); err != nil {
-		return AgentStatus{}, err
-	}
-	return status, nil
-}
-
-func (a *App) ensureAgent() error {
-	if err := a.health(); err == nil {
-		wailsruntime.LogDebug(a.ctx, "[GUI] ensureAgent: Agent is already running and healthy.")
-		return nil
-	} else {
-		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: Agent health check failed (%v). Attempting to start agent...", err))
-	}
-	cli, err := findEqtCLI()
-	if err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to find eqt CLI binary: %v", err))
-		return err
-	}
-	cmd := exec.Command(cli, "desktop", "agent-start", "-B")
-	if launcher, ok := findEqtLauncher(cli); ok {
-		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using launcher %s for CLI %s", launcher, cli))
-		cmd = exec.Command(launcher, "--eqt-exe", cli, "agent-start", "-B")
-	} else {
-		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: using direct command %s", cli))
-	}
-	configureHiddenCommand(cmd)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	wailsruntime.LogInfo(a.ctx, "[GUI] ensureAgent: launching background agent command...")
-	if err := cmd.Start(); err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: failed to start agent command process: %v", err))
-		return fmt.Errorf("start desktop agent: %w", err)
-	}
-	wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: agent process started (PID: %d). Waiting for command to write configs and exit...", cmd.Process.Pid))
-	if err := cmd.Wait(); err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] ensureAgent: agent start process returned error: %v", err))
-		return fmt.Errorf("start desktop agent: %w", err)
-	}
-	wailsruntime.LogInfo(a.ctx, "[GUI] ensureAgent: start command exited successfully. Starting health check loop (up to 5s)...")
-	deadline := time.Now().Add(5 * time.Second)
-	attempt := 0
-	for time.Now().Before(deadline) {
-		attempt++
-		if err := a.health(); err == nil {
-			wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] ensureAgent: Agent became healthy and ready on attempt %d.", attempt))
-			return nil
-		}
-		time.Sleep(150 * time.Millisecond)
-	}
-	wailsruntime.LogError(a.ctx, "[GUI] ensureAgent: desktop agent failed to respond to health checks within 5 seconds.")
-	return fmt.Errorf("desktop agent did not become ready")
-}
-
-func (a *App) shutdownAgent() error {
-	wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: Sending HTTP POST to %s/shutdown", agentBaseURL))
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+"/shutdown", nil)
-	if err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: failed to build request: %v", err))
-		return err
-	}
-	resp, err := a.client.Do(req)
-	if err != nil {
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: failed to execute request: %v", err))
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		errObj := newDesktopAgentHTTPError(resp)
-		wailsruntime.LogError(a.ctx, fmt.Sprintf("[GUI] shutdownAgent: agent returned error status: %v", errObj))
-		return errObj
-	}
-	wailsruntime.LogInfo(a.ctx, "[GUI] shutdownAgent: agent successfully acknowledged shutdown.")
-	return nil
-}
-
-func waitForAgentExit(a *App) {
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if a.health() != nil {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func (a *App) health() error {
-	portFilePath := desktopAgentPortFilePath()
-	if data, err := os.ReadFile(portFilePath); err == nil {
-		if portVal := strings.TrimSpace(string(data)); portVal != "" {
-			agentBaseURL = "http://127.0.0.1:" + portVal
-		}
-	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+"/health", nil)
-	if err != nil {
-		return err
-	}
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("desktop agent health returned %s", resp.Status)
-	}
-	return nil
-}
-
-func (a *App) getJSON(path string, out interface{}) error {
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, agentBaseURL+path, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newDesktopAgentHTTPError(resp)
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func (a *App) postJSON(path string, in interface{}, out interface{}) error {
-	var body *bytes.Reader
-	if in == nil {
-		body = bytes.NewReader(nil)
-	} else {
-		data, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(data)
-	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newDesktopAgentHTTPError(resp)
-	}
-	if out == nil {
-		return nil
-	}
-	return json.NewDecoder(resp.Body).Decode(out)
-}
-
-func (a *App) postNoBody(path string) error {
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+path, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newDesktopAgentHTTPError(resp)
-	}
-	return nil
-}
-
-// SetPaidStatus updates the premium status of the chat server.
 func (a *App) SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) error {
 	a.logInfo(fmt.Sprintf("[GUI] SetPaidStatus called with paid=%v redeemedAt=%s codeDate=%s tier=%s", paid, redeemedAt, codeDate, tier))
-	return a.postJSON("/set-paid-status", map[string]interface{}{
-		"paid":       paid,
-		"redeemedAt": redeemedAt,
-		"codeDate":   codeDate,
-		"tier":       tier,
-	}, nil)
-}
-
-// ActivateLicense triggers online activation for a license key
-func (a *App) ActivateLicense(code string) error {
-	a.logInfo(fmt.Sprintf("[GUI] ActivateLicense called with code=%s", code))
-	in := map[string]interface{}{
-		"license_code": code,
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, agentBaseURL+"/activate", bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.clientLong.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newDesktopAgentHTTPError(resp)
-	}
+	a.agent.setPaidStatus(paid, redeemedAt, codeDate, tier)
 	return nil
 }
 
-// ResetLicense resets local activation status
+func (a *App) ActivateLicense(code string) error {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicense called with code=%s", code))
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
+	}
+	return a.agent.activateLicense(code)
+}
+
 func (a *App) ResetLicense() error {
 	a.logInfo("[GUI] ResetLicense called")
-	return a.postJSON("/reset-license", map[string]interface{}{}, nil)
-}
-
-type desktopAgentHTTPError struct {
-	statusCode int
-	status     string
-	body       string
-}
-
-func newDesktopAgentHTTPError(resp *http.Response) error {
-	message, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	return desktopAgentHTTPError{
-		statusCode: resp.StatusCode,
-		status:     resp.Status,
-		body:       strings.TrimSpace(string(message)),
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
 	}
-}
-
-func (err desktopAgentHTTPError) Error() string {
-	if err.body == "" {
-		return fmt.Sprintf("desktop agent returned %s", err.status)
-	}
-	return fmt.Sprintf("desktop agent returned %s: %s", err.status, err.body)
-}
-
-func isRecoverableChatAgentError(err error) bool {
-	httpErr, ok := err.(desktopAgentHTTPError)
-	if !ok || httpErr.statusCode != http.StatusBadRequest {
-		return false
-	}
-	body := strings.ToLower(httpErr.body)
-	return strings.Contains(body, "unsupported desktop action") || strings.Contains(body, "chat")
+	a.agent.resetLicense()
+	return nil
 }
 
 func findEqtCLI() (string, error) {
@@ -966,7 +676,7 @@ func findEqtLauncher(cli string) (string, bool) {
 
 func runDesktopCommand(ctx context.Context, cli string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, cli, args...)
-	configureHiddenCommand(cmd)
+	util.HideCommand(cmd)
 	output, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(output))
 	if err != nil {
@@ -1035,7 +745,7 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		cmd := exec.Command("explorer.exe", path)
-		configureHiddenCommand(cmd)
+		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -1050,7 +760,7 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)
-		configureHiddenCommand(cmd)
+		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -1140,14 +850,6 @@ func uniquePath(dir string, name string) (string, error) {
 	}
 }
 
-func desktopAgentPortFilePath() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "eqt", "agent.port")
-}
-
 func (a *App) logInfo(message string) {
 	if a.logger != nil {
 		a.logger.Info(message)
@@ -1171,3 +873,13 @@ func (a *App) logDebug(message string) {
 		a.logger.Debug(message)
 	}
 }
+
+func desktopAgentPortFilePath() string {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "eqt", "agent.port")
+}
+
+
