@@ -2061,6 +2061,7 @@
                 scanToJoin: "扫描此二维码加入对话",
                 copy: "复制",
                 send: "发送",
+                switchLanguage: "切换语言",
 
                 NoMessagesYet: "暂无消息",
                 ScanQRToJoin: "扫描二维码从其他设备加入对话。"
@@ -2198,6 +2199,7 @@
                 scanToJoin: "Scan this code to join from another device.",
                 copy: "Copy",
                 send: "Send",
+                switchLanguage: "Switch language",
 
                 NoMessagesYet: "No messages yet.",
                 ScanQRToJoin: "Scan the QR code to join from another device."
@@ -2335,6 +2337,7 @@
                 scanToJoin: "このコードをスキャンして別のデバイスから参加します。",
                 copy: "コピー",
                 send: "送信",
+                switchLanguage: "言語を切り替える",
 
                 NoMessagesYet: "メッセージはまだありません",
                 ScanQRToJoin: "QRコードをスキャンして、別のデバイスから参加します。"
@@ -2461,7 +2464,21 @@
 
                 licenseInactiveOrExpired: "라이센스 비활성화됨/만료됨",
 
-                howToRestore: "복구 방법"
+                howToRestore: "복구 방법",
+
+                zoomOut: "축소",
+                zoomIn: "확대",
+                copyImage: "이미지 복사",
+                latestMessage: "최신 메시지",
+                jumpToLatest: "최신 메시지로 이동",
+                addAttachment: "첨부 파일 추가",
+                scanToJoin: "이 코드를 스캔하여 다른 기기에서 참여하세요.",
+                copy: "복사",
+                send: "보내기",
+                switchLanguage: "언어 변경",
+
+                NoMessagesYet: "아직 메시지가 없습니다.",
+                ScanQRToJoin: "다른 기기에서 참여하려면 QR 코드를 스캔하세요."
 
             },
             es: {
@@ -2585,7 +2602,21 @@
 
                 licenseInactiveOrExpired: "Licencia Inactiva/Expirada",
 
-                howToRestore: "Cómo Restaurar"
+                howToRestore: "Cómo Restaurar",
+
+                zoomOut: "Alejar",
+                zoomIn: "Acercar",
+                copyImage: "Copiar imagen",
+                latestMessage: "Último mensaje",
+                jumpToLatest: "Ir al último mensaje",
+                addAttachment: "Añadir archivo adjunto",
+                scanToJoin: "Escanea este código para unirte desde otro dispositivo.",
+                copy: "Copiar",
+                send: "Enviar",
+                switchLanguage: "Cambiar idioma",
+
+                NoMessagesYet: "Aún no hay mensajes.",
+                ScanQRToJoin: "Escanea el código QR para unirte desde otro dispositivo."
 
             },
             de: {
@@ -2709,7 +2740,21 @@
 
                 licenseInactiveOrExpired: "Lizenz Inaktiv/Abgelaufen",
 
-                howToRestore: "Wiederherstellung"
+                howToRestore: "Wiederherstellung",
+
+                zoomOut: "Verkleinern",
+                zoomIn: "Vergrößern",
+                copyImage: "Bild kopieren",
+                latestMessage: "Neueste Nachricht",
+                jumpToLatest: "Zur neuesten Nachricht springen",
+                addAttachment: "Anhang hinzufügen",
+                scanToJoin: "Scannen Sie diesen Code, um von einem anderen Gerät beizutreten.",
+                copy: "Kopieren",
+                send: "Senden",
+                switchLanguage: "Sprache wechseln",
+
+                NoMessagesYet: "Noch keine Nachrichten.",
+                ScanQRToJoin: "Scannen Sie den QR-Code, um von einem anderen Gerät beizutreten."
 
             },
             fr: {
@@ -2833,7 +2878,21 @@
 
                 licenseInactiveOrExpired: "Licence Inactive/Expirée",
 
-                howToRestore: "Comment restaurer"
+                howToRestore: "Comment restaurer",
+
+                zoomOut: "Zoom arrière",
+                zoomIn: "Zoom avant",
+                copyImage: "Copier l'image",
+                latestMessage: "Dernier message",
+                jumpToLatest: "Aller au dernier message",
+                addAttachment: "Ajouter une pièce jointe",
+                scanToJoin: "Scannez ce code pour rejoindre depuis un autre appareil.",
+                copy: "Copier",
+                send: "Envoyer",
+                switchLanguage: "Changer de langue",
+
+                NoMessagesYet: "Aucun message pour l'instant.",
+                ScanQRToJoin: "Scannez le code QR pour rejoindre depuis un autre appareil."
 
             }
         };
@@ -2903,6 +2962,12 @@
             // Update lang panel title
             var langPanelTitle = document.querySelector('.lang-panel-title');
             if (langPanelTitle) langPanelTitle.textContent = dict.langPanelTitle;
+
+            var langToggle = document.getElementById('lang-toggle');
+            if (langToggle && dict.switchLanguage) {
+                langToggle.setAttribute('title', dict.switchLanguage);
+                langToggle.setAttribute('aria-label', dict.switchLanguage);
+            }
 
             // Update headers buttons title & aria-label
             var devToggle = document.getElementById('devices-toggle');
