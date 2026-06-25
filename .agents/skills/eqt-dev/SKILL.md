@@ -120,3 +120,20 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 
 这保证了互传与聊天服务在任何局域网或离线环境下都能瞬间秒开。
 
+---
+
+## 6. 多模块 Go 工程重构中的 internal 可见性与 pkg 避坑实践 (Multi-module Go internal Visibility vs. pkg)
+
+在对多可执行二进制/多模块仓库（如 EQT 主模块 `eqt` 与桌面 GUI 模块 `eqt-desktop` 拥有各自独立的 `go.mod` 文件并通过 `replace eqt => ../../` 关联引用）进行项目目录瘦身与重构时，需防范以下限制：
+
+### 6.1 Go internal 可见性强制约束 (Go internal Visibility Restriction)
+- **限制机制**：Go 语言官方规范规定，任何位于包含 `internal` 命名目录（如 `eqt/internal/config`）下的包，仅能被父目录相同（即处于同一 `go.mod` Module 定义内）的包导入（Import）。
+- **编译错误**：即使在桌面 GUI `eqt-desktop` 的 `go.mod` 中显式设置了 `replace eqt => ../../`，由于它是一个完全独立的 module，在引用重构后位于 `internal/` 的包时，Go 编译器依然会强行拦截并报错：
+  `use of internal package eqt/internal/... not allowed`
+
+### 6.2 最佳实践：使用 pkg 目录进行同仓库多模块共享 (Standard /pkg Directory)
+- **解决方案**：若后端业务模块需要被同仓库内的其他独立模块（如 Wails 桌面端、启动器等）重用，统一将整理收纳的文件夹命名为 `pkg/`（如 `eqt/pkg/config`）而非 `internal/`。
+- **合理性**：Go 语言对 `pkg/` 文件夹没有特殊的可见性硬限制，能完美通过 `replace` 语法提供跨 module 重用，同时依然能将复杂的 Go 后端模块从根目录中隐退，彻底保持根目录的清洁性。
+- **.gitignore 强限制避坑**：若原有的 `.gitignore` 包含直接写法的忽略规则 `eqt`，它会忽略任何含有 `eqt` 字符串的子路径（包括 `cmd/eqt/main.go`）。必须将 `.gitignore` 中的规则订正为以斜杠开头的绝对目录规则 `/eqt`，以防止新增的 cmd 子项目被 Git 误忽略。
+
+
