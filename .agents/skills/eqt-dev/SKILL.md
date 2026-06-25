@@ -136,4 +136,17 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 - **合理性**：Go 语言对 `pkg/` 文件夹没有特殊的可见性硬限制，能完美通过 `replace` 语法提供跨 module 重用，同时依然能将复杂的 Go 后端模块从根目录中隐退，彻底保持根目录的清洁性。
 - **.gitignore 强限制避坑**：若原有的 `.gitignore` 包含直接写法的忽略规则 `eqt`，它会忽略任何含有 `eqt` 字符串的子路径（包括 `cmd/eqt/main.go`）。必须将 `.gitignore` 中的规则订正为以斜杠开头的绝对目录规则 `/eqt`，以防止新增的 cmd 子项目被 Git 误忽略。
 
+---
 
+## 7. Windows / WSL 混合环境下的路径调起与界面交互优化 (Path Launching & Interaction in WSL)
+
+### 7.1 WSL 环境下资源管理器打开的空格与路径问题 (Explorer Spaces & UNC Paths in WSL)
+在 WSL 环境下，调用 Windows 宿主机的 `explorer.exe` 会遇到严重的路径和空格兼容问题：
+- **Linux 绝对路径不识别**：直接将 WSL 中的 Linux 格式路径（如 `/home/yelon/...`）传递给 Windows 的 `explorer.exe`，Windows 将完全无法解析，导致资源管理器调起静默失败。
+- **解决方案**：在 Go 后端通过 `isWSL()` 检测到环境后，必须使用 `wslpath -w <path>` 将 Linux 绝对路径转换为标准的 Windows UNC 格式路径（如 `\\wsl.localhost\Ubuntu\home\yelon\...`）再传给宿主机的 `explorer.exe` 进程。
+- **Windows 空格参数失效避坑**：在 Windows 上运行命令时，使用 `explorer.exe winPath` 可能会因为路径中的空格（如临时文件夹 Temp 下的 `EQT Chat`）被命令行参数截断打不开。应当使用 `rundll32.exe url.dll,FileProtocolHandler <winPath>` 作为更稳健的路径和文件打开机制，该 API 能够自动且鲁棒地关联宿主机默认资源管理器/应用程序打开对应路径。
+
+### 7.2 默认取消高亮与防误触聚焦机制 (Cancel Focus Highlight on Secondary Dialogs)
+对于具有高风险的客户端破坏性修改（如重置设备授权、清空付费凭证等操作），重置界面的交互应当轻量且具有强防误触特征：
+- **视觉主次分明**：将“确认重置”与“取消”拆分为并排的微型精致按钮，并利用 `danger-light`（浅红底红字）和 `primary`（高对比色）将视觉焦点默认对齐在取消按钮。
+- **回车键安全聚焦**：在前端 DOM 渲染或面板切换重绘（`syncPanelSurface()`）结束后，通过对 `#cancel-reset-license` 进行显式聚焦（`document.getElementById('cancel-reset-license')?.focus()`），使得用户即使误触回车键，也会默认触发“取消”而非重置，最大程度防止误触。
