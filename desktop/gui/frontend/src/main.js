@@ -669,13 +669,28 @@ function renderSettingsPanel() {
                     <div class="setting-copy">
                         <strong>${t('chat_avatar')}</strong>
                         <span>${t('chat_avatar_desc')}</span>
-                        <div class="avatar-presets">
+                        <div class="avatar-presets" style="position: relative;">
                             <button type="button" class="avatar-preset-btn" data-avatar="🚀" title="Rocket">🚀</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="😎" title="Cool">😎</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="💻" title="Computer">💻</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="👍" title="Like">👍</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="🌟" title="Star">🌟</button>
                             <button type="button" class="avatar-preset-btn" data-avatar="🎨" title="Art">🎨</button>
+                            <button type="button" class="avatar-preset-btn" id="btn-emoji-more" title="More Emojis">💬</button>
+                            ${state.showEmojiPicker ? `
+                                <div class="emoji-picker-popover" id="emoji-picker-popover">
+                                    <div class="emoji-picker-grid">
+                                        ${['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','🔥','⚡️','🎉','❤️','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗'].map(emoji => `
+                                            <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                        `).join('')}
+                                    </div>
+                                    <div class="emoji-picker-divider"></div>
+                                    <div class="emoji-picker-custom-row">
+                                        <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || '自定义...')}" maxlength="8" />
+                                        <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || '确定'}</button>
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="avatar-setting-row">
@@ -1002,7 +1017,12 @@ function renderRedeemPanel() {
                     <span class="btn-gift-icon" style="margin-right: 6px; display: inline-flex; align-items: center;">${giftIcon()}</span>
                     ${state.isActivating ? t('btn_activating') : t('btn_confirm')}
                 </button>
-                <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_reset')}</button>
+                ${state.confirmResetPending ? `
+                    <button class="danger" id="confirm-reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_confirm_reset')}</button>
+                    <button class="ghost" id="cancel-reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_cancel')}</button>
+                ` : `
+                    <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_reset')}</button>
+                `}
             </div>
             ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
             ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
@@ -1300,7 +1320,18 @@ function bindPanelEvents() {
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
-    document.querySelector('#reset-license')?.addEventListener('click', resetLicense);
+    document.querySelector('#reset-license')?.addEventListener('click', () => {
+        state.confirmResetPending = true;
+        syncPanelSurface();
+    });
+    document.querySelector('#cancel-reset-license')?.addEventListener('click', () => {
+        state.confirmResetPending = false;
+        syncPanelSurface();
+    });
+    document.querySelector('#confirm-reset-license')?.addEventListener('click', () => {
+        state.confirmResetPending = false;
+        resetLicense();
+    });
     document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
         document.querySelector('.plan-popover')?.classList.toggle('visible');
         document.querySelector('.popover-backdrop')?.classList.toggle('visible');
@@ -1432,6 +1463,7 @@ function openPanel(panel) {
     if (panel === 'redeem') {
         state.redeemMessage = '';
         state.redeemError = '';
+        state.confirmResetPending = false;
     }
     if (panel === 'feedback') {
         state.feedbackNotice = '';
@@ -1448,6 +1480,8 @@ function openPanel(panel) {
 function closePanel() {
     syncAndSaveSettingsInBackground();
     state.activePanel = '';
+    state.confirmResetPending = false;
+    state.showEmojiPicker = false;
     render();
 }
 
@@ -1901,13 +1935,34 @@ function bindSettingsControls() {
         const file = event.target.files?.[0];
         if (file && state.settings) {
             const reader = new FileReader();
-            reader.onload = async (e) => {
-                const base64 = e.target.result;
-                if (base64) {
-                    state.settings.chatAvatar = base64;
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = async () => {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 128;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    state.settings.chatAvatar = compressedBase64;
+                    event.target.value = '';
                     await handleAutoSaveSettings();
                     syncPanelSurface();
-                }
+                };
+                img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -1949,6 +2004,57 @@ function bindSettingsControls() {
                 syncPanelSurface();
             }
         });
+    });
+
+    document.querySelector('#btn-emoji-more')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.showEmojiPicker = !state.showEmojiPicker;
+        syncPanelSurface();
+    });
+
+    document.querySelectorAll('.emoji-picker-item').forEach(btn => {
+        btn.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const emojiVal = event.currentTarget.dataset.emoji;
+            if (state.settings && emojiVal) {
+                state.settings.chatAvatar = emojiVal;
+                state.showEmojiPicker = false;
+                await handleAutoSaveSettings();
+                syncPanelSurface();
+            }
+        });
+    });
+
+    const customEmojiInput = document.querySelector('#emoji-picker-custom-input');
+    if (customEmojiInput) {
+        customEmojiInput.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+        customEmojiInput.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.querySelector('#btn-emoji-picker-custom-submit')?.click();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                state.showEmojiPicker = false;
+                syncPanelSurface();
+            }
+        });
+    }
+
+    document.querySelector('#btn-emoji-picker-custom-submit')?.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const inputEl = document.querySelector('#emoji-picker-custom-input');
+        if (inputEl && state.settings) {
+            const rawVal = inputEl.value.trim();
+            const emojiVal = cleanChatAvatar(rawVal);
+            if (emojiVal) {
+                state.settings.chatAvatar = emojiVal;
+                state.showEmojiPicker = false;
+                await handleAutoSaveSettings();
+                syncPanelSurface();
+            }
+        }
     });
 
     const inputs = [
@@ -3308,6 +3414,15 @@ loadSettings().then(() => {
 
 // Register one-time global event delegations for opening history files & folders
 document.addEventListener('click', (event) => {
+    if (state.showEmojiPicker) {
+        const picker = document.getElementById('emoji-picker-popover');
+        const trigger = document.getElementById('btn-emoji-more');
+        if (picker && !picker.contains(event.target) && !trigger?.contains(event.target)) {
+            state.showEmojiPicker = false;
+            syncPanelSurface();
+        }
+    }
+
     const pathLink = event.target.closest('.path-link');
     if (pathLink) {
         const path = pathLink.dataset.openPath;

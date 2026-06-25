@@ -37,4 +37,6 @@ export const state = {
     feedbackNotice: '',
     feedbackSent: false,
     isEditingChatSender: false,
+    confirmResetPending: false,
+    showEmojiPicker: false,
 };

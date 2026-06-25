@@ -1634,6 +1634,12 @@ func sanitizeChatAvatar(avatar string) string {
 	if avatar == "" {
 		return ""
 	}
+	if strings.HasPrefix(avatar, "data:image/") {
+		if len(avatar) > 102400 {
+			return avatar[:102400]
+		}
+		return avatar
+	}
 	runes := []rune(avatar)
 	if len(runes) > 4 {
 		avatar = string(runes[:4])

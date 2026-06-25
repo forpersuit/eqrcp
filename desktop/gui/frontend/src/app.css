@@ -2023,3 +2023,102 @@ dd {
     background: #f1f4ef;
 }
 
+/* ── Emoji Picker Popover ── */
+.emoji-picker-popover {
+    position: absolute;
+    top: 40px;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 10px 32px rgba(24, 33, 31, 0.18);
+    z-index: 99;
+    width: 240px;
+    backdrop-filter: blur(8px);
+}
+.emoji-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+}
+.emoji-picker-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 2px 0;
+}
+.emoji-picker-custom-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+#emoji-picker-custom-input {
+    flex: 1;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+}
+#emoji-picker-custom-input:focus {
+    border-color: var(--accent);
+}
+#btn-emoji-picker-custom-submit {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    margin: 0;
+    line-height: 26px;
+}
+.emoji-picker-item {
+    background: transparent;
+    border: 0;
+    font-size: 18px;
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.emoji-picker-item:hover {
+    background: var(--wash);
+    transform: scale(1.15);
+}
+.emoji-picker-item:active {
+    transform: scale(0.95);
+}
+
+/* ── Redeem Submit Button Styling ── */
+#confirm-redeem {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+    box-shadow: 0 4px 12px rgba(21, 111, 90, 0.16);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+#confirm-redeem:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(21, 111, 90, 0.26);
+}
+#confirm-redeem:active {
+    transform: translateY(1px);
+}
+#open-redeem .menu-icon {
+    color: var(--accent-strong);
+    animation: gift-float 3s ease-in-out infinite;
+}
+@keyframes gift-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
+
+
