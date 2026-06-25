@@ -85,3 +85,32 @@ sequenceDiagram
 在 Cloudflare Worker 的路由中，新建一个接口 `/api/v1/webhook/stripe`，当 Stripe 发生 `checkout.session.completed` 事件时，服务器端会收到回调。
 * **安全合理性**：必须在 Worker 侧校验 Stripe 签名头部 `stripe-signature`，防止恶意的伪造请求刷码。
 * **生成发码**：校验无误后，生成一段随机兑换码插入到 D1 数据库，并调用第三方邮件 API（如 Cloudflare Email Routing 或 SendGrid）实时发给购买填写的邮箱。
+
+---
+
+## 5. 工程中所有对外请求的域名及作用一览 (External Domain Outbound Requests)
+
+为保障升级检测、内网快速 IP 路由绑定以及商业授权的完全离线/在线高可用性，整理工程中（包括客户端、云端服务及 CI/CD）所有对外发起网络请求的域名及其对应作用：
+
+### 5.1 本地/云端子域名服务 (EQT Subdomains)
+
+| 域名 | 请求来源 | 协议 | 物理作用与承载业务 | 缓存与安全特性 |
+| :--- | :--- | :--- | :--- | :--- |
+| `eqt.net.im` <br> `www.eqt.net.im` | 用户浏览器 | HTTPS | 官方主页、多语言功能介绍和合规性政策承载（主要应对 Stripe 审核）。 | 较短缓存策略，确保网页更新能够快速呈现。 |
+| `download.eqt.net.im` | 客户端 / 浏览器 | HTTPS | 静态升级元数据 `update-metadata.json` 下载、各平台客户端二进制包与 `.sig` 数字签名文件的托管分发。 | 开启 `Access-Control-Allow-Origin: *` CORS，大文件提供一年强缓存。 |
+| `lic.eqt.net.im` | 客户端 | HTTPS | 云端 DRM 授权 API。处理许可证激活兑换（Redeem）、机器设备指纹定期联机验证。 | 动态 API，关闭缓存。 |
+
+### 5.2 第三方 API 与云依赖服务 (Third-Party APIs)
+
+| 域名 | 请求来源 | 协议 | 物理作用与承载业务 |
+| :--- | :--- | :--- | :--- |
+| `api.github.com` <br> `github.com` | CI/CD Runner / 客户端 | HTTPS | 代码托管、分支构建与自动发布。并在静态 Pages 升级通道失效时，作为版本检测和 Release 包分发的最后备份源。 |
+| `api.stripe.com` | 云端 Worker | HTTPS | Stripe 收银台 API。用于云端 Worker 进行许可证结账会话创建、以及对 Stripe Webhook 支付成功通知执行加签安全验证。 |
+
+### 5.3 辅助网络探测服务 (Network Probe Fallbacks)
+
+| 域名 | 请求来源 | 协议 | 物理作用与承载业务 | 关键避坑设计 |
+| :--- | :--- | :--- | :--- | :--- |
+| `8.8.8.8` <br> `8.8.4.4` | 客户端 (本地运行) | UDP | 本地网络绑定 UDP 路由探测。通过 OS 路由表快速解析出本机对外首选物理网卡内网 IP。 | **不发送任何实际网络数据包，耗时小于 0.1ms**，保证局域网互传在完全离线无公网状态下也能秒开，杜绝延迟。 |
+| `opendns.com` <br> `ipify.org` <br> `domains.google.com` | 客户端 (本地运行) | HTTP / DNS | 外网公网 IP 反向探测。作为本地 UDP 路由探测失败后的最终 fallback，向公网回显服务查询本机的外网 NAT 出口 IP。 | 仅在无任何默认网卡内网 IP，且必须绑定外网公网时触发，高频请求有重试指数退避，严防无公网环境下卡死。 |
+
