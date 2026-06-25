@@ -272,6 +272,11 @@
             <select id="page-lang-select" aria-label="Switch Language">
                 <option value="zh">简体中文</option>
                 <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
             </select>
         </div>
     </main>
@@ -304,42 +309,147 @@
                 btn_transfer: 'Transfer',
                 btn_transferring: 'Transferring...',
                 err_failed: 'Transfer failed. Keep this page open and try again.'
+            },
+            ja: {
+                title: 'このデバイスにファイルを送信',
+                subtitle: 'ファイルを追加、スクリーンショットを貼り付け、またはテキストを直接入力できます。EQT が受信側のコンピュータに自動的に保存します。',
+                composer: 'テキストエディタ',
+                composer_hint: '入力されたテキストは .txt ファイルとして保存されます。改行は Shift+Enter を押してください。',
+                add_files: 'ファイルを追加',
+                file_name_label: 'テキストファイル名',
+                file_name_placeholder: '任意のファイル名（空欄の場合は自動生成）',
+                text_label: 'テキスト内容',
+                text_placeholder: 'ここにテキストを直接入力するか、スクリーンショットやファイルを貼り付けます',
+                btn_transfer: '転送開始',
+                btn_transferring: '転送中...',
+                err_failed: '転送に失敗しました。このページを開いたままにして再試行してください。'
+            },
+            ko: {
+                title: '이 기기로 파일 전송',
+                subtitle: '파일을 추가하거나 스크린샷을 붙여넣거나 텍스트를 직접 입력할 수 있습니다. EQT가 수신 측 컴퓨터에 자동으로 저장합니다.',
+                composer: '텍스트 편집기',
+                composer_hint: '입력한 텍스트는 .txt 파일로 저장됩니다. 줄바꿈은 Shift+Enter를 누르세요.',
+                add_files: '파일 추가',
+                file_name_label: '텍스트 파일 이름',
+                file_name_placeholder: '선택적 파일 이름 (비워 두면 자동 생성)',
+                text_label: '텍스트 내용',
+                text_placeholder: '여기에 텍스트를 직접 입력하거나 스크린샷 또는 파일을 붙여넣으십시오',
+                btn_transfer: '전송 시작',
+                btn_transferring: '전송 중...',
+                err_failed: '전송에 실패했습니다. 이 페이지를 열어두고 다시 시도하십시오.'
+            },
+            es: {
+                title: 'Enviar archivos a este dispositivo',
+                subtitle: 'Puede añadir archivos, pegar capturas de pantalla o escribir texto directamente. EQT lo guardará automáticamente en el ordenador receptor.',
+                composer: 'Editor de texto',
+                composer_hint: 'El texto introducido se guardará como un archivo .txt. Pulse Shift+Enter para una nueva línea.',
+                add_files: 'Añadir archivos',
+                file_name_label: 'Nombre del archivo de texto',
+                file_name_placeholder: 'Nombre de archivo opcional (vacío para generación automática)',
+                text_label: 'Contenido del texto',
+                text_placeholder: 'Escriba texto directamente aquí, o pegue capturas de pantalla o archivos',
+                btn_transfer: 'Iniciar transferencia',
+                btn_transferring: 'Transfiriendo...',
+                err_failed: 'Error de transferencia. Mantenga esta página abierta e inténtelo de nuevo.'
+            },
+            de: {
+                title: 'Dateien an dieses Gerät senden',
+                subtitle: 'Sie können Dateien hinzufügen, Screenshots einfügen oder Text direkt eingeben. EQT speichert dies automatisch auf dem Empfänger-Computer.',
+                composer: 'Text-Editor',
+                composer_hint: 'Eingegebener Text wird als .txt Datei gespeichert. Drücken Sie Shift+Enter für eine neue Zeile.',
+                add_files: 'Dateien hinzufügen',
+                file_name_label: 'Dateiname des Textes',
+                file_name_placeholder: 'Optionaler Dateiname (leer lassen für automatische Generierung)',
+                text_label: 'Textinhalt',
+                text_placeholder: 'Geben Sie hier Text direkt ein, oder fügen Sie Screenshots oder Dateien ein',
+                btn_transfer: 'Übertragung starten',
+                btn_transferring: 'Übertrage...',
+                err_failed: 'Übertragung fehlgeschlagen. Bitte lassen Sie diese Seite geöffnet und versuchen Sie es erneut.'
+            },
+            fr: {
+                title: 'Envoyer des fichiers vers cet appareil',
+                subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
+                composer: 'Éditeur de texte',
+                composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
+                add_files: 'Ajouter des fichiers',
+                file_name_label: 'Nom du fichier texte',
+                file_name_placeholder: 'Nom de fichier facultatif (laisser vide pour génération automatique)',
+                text_label: 'Contenu du texte',
+                text_placeholder: 'Saisissez du texte directement ici, ou collez des captures d\'écran ou des fichiers',
+                btn_transfer: 'Démarrer le transfert',
+                btn_transferring: 'Transfert en cours...',
+                err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.'
             }
         };
 
+        var supportedLangs = {
+            zh: true,
+            en: true,
+            ja: true,
+            ko: true,
+            es: true,
+            de: true,
+            fr: true
+        };
         var currentLang = 'zh';
-        var userLang = navigator.language || navigator.userLanguage || 'zh';
-        if (userLang.indexOf('en') === 0) {
+        var userLang = (navigator.language || navigator.userLanguage || 'zh').toLowerCase().split('-')[0];
+        if (supportedLangs[userLang]) {
+            currentLang = userLang;
+        } else {
             currentLang = 'en';
         }
         var savedLang = window.localStorage.getItem('eqt-page-lang');
-        if (savedLang) {
+        if (savedLang && supportedLangs[savedLang]) {
             currentLang = savedLang;
         }
 
+        function mergeDict(target, source) {
+            if (!source) return;
+            for (var k in source) {
+                if (source.hasOwnProperty(k)) {
+                    target[k] = source[k];
+                }
+            }
+        }
+
+        function t(key) {
+            var dict = {};
+            mergeDict(dict, pageTranslations.en);
+            if (pageTranslations[currentLang]) {
+                mergeDict(dict, pageTranslations[currentLang]);
+            }
+            return dict[key] || '';
+        }
+
         function applyLanguage() {
+            var dict = {};
+            mergeDict(dict, pageTranslations.en);
+            if (pageTranslations[currentLang]) {
+                mergeDict(dict, pageTranslations[currentLang]);
+            }
+
             var elements = document.querySelectorAll('[data-i18n]');
             elements.forEach(function(el) {
                 var key = el.getAttribute('data-i18n');
-                if (pageTranslations[currentLang] && pageTranslations[currentLang][key]) {
-                    el.textContent = pageTranslations[currentLang][key];
+                if (dict[key] !== undefined) {
+                    el.textContent = dict[key];
                 }
             });
             var placeholders = document.querySelectorAll('[data-i18n-placeholder]');
             placeholders.forEach(function(el) {
                 var key = el.getAttribute('data-i18n-placeholder');
-                if (pageTranslations[currentLang] && pageTranslations[currentLang][key]) {
-                    el.setAttribute('placeholder', pageTranslations[currentLang][key]);
+                if (dict[key] !== undefined) {
+                    el.setAttribute('placeholder', dict[key]);
                 }
             });
             var values = document.querySelectorAll('[data-i18n-value]');
             values.forEach(function(el) {
                 var key = el.getAttribute('data-i18n-value');
-                if (pageTranslations[currentLang] && pageTranslations[currentLang][key]) {
-                    el.value = pageTranslations[currentLang][key];
+                if (dict[key] !== undefined) {
+                    el.value = dict[key];
                 }
             });
-            document.title = currentLang === 'zh' ? '发送到 EQT' : 'Send to EQT';
+            document.title = currentLang === 'zh' ? '发送到 EQT' : (currentLang === 'ja' ? 'EQTに送信' : 'Send to EQT');
             var langSelect = document.getElementById('page-lang-select');
             if (langSelect) {
                 langSelect.value = currentLang;
@@ -510,7 +620,7 @@
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
             errorBox.textContent = '';
-            submitButton.value = pageTranslations[currentLang]['btn_transferring'];
+            submitButton.value = t('btn_transferring');
             submitButton.disabled = true;
             var formData = new FormData(uploadForm);
             var textInput = document.getElementById('plaintext-text');
@@ -546,8 +656,8 @@
                 document.head.innerHTML = nextDoc.head.innerHTML;
                 document.body.innerHTML = nextDoc.body.innerHTML;
             }).catch(function() {
-                errorBox.textContent = pageTranslations[currentLang]['err_failed'];
-                submitButton.value = pageTranslations[currentLang]['btn_transfer'];
+                errorBox.textContent = t('err_failed');
+                submitButton.value = t('btn_transfer');
                 submitButton.disabled = false;
             });
         });
@@ -556,6 +666,7 @@
         if (langSelect) {
             langSelect.addEventListener('change', function() {
                 currentLang = langSelect.value;
+                window.localStorage.setItem('eqt_lang', currentLang);
                 window.localStorage.setItem('eqt-page-lang', currentLang);
                 applyLanguage();
             });

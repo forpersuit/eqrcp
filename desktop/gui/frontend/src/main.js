@@ -514,7 +514,7 @@ function renderChatPanel(task) {
                             <button type="button" class="copy-chat-url-action" title="${t('copy_chat_url')}" aria-label="${t('copy_chat_url')}" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
                         </div>
                     </div>
-                ` : `<p class="side-note">${state.settings?.lang === 'en' ? 'Expand when you need to invite another device.' : '展开以为其他设备扫码接入。'}</p>`}
+                ` : `<p class="side-note">${t('chat_qr_expand_tips')}</p>`}
             </div>
             <div class="panel chat-session-panel">
                 <div class="panel-head">
@@ -1613,13 +1613,29 @@ function showToast(message) {
     }, 3000);
 }
 
+function applyLanguageChange(newLang) {
+    const frame = document.querySelector('#chat-iframe');
+    if (frame) {
+        const payload = {
+            type: 'update-lang',
+            lang: newLang
+        };
+        try {
+            frame.contentWindow?.postMessage(payload, activeChatFrameOrigin() || '*');
+        } catch (e) {
+            // Ignored
+        }
+    }
+    render();
+}
+
 async function handleAutoSaveSettings() {
     try {
         await saveSettingsData();
         if (state.error) {
             state.error = '';
-            render();
         }
+        applyLanguageChange(state.settings?.lang || 'zh');
     } catch (e) {
         state.error = 'Failed to save settings: ' + (e.message || String(e));
         render();
@@ -1634,8 +1650,8 @@ async function saveSettings() {
             showToast('Settings saved.');
         } else {
             state.notice = 'Settings saved.';
-            render();
         }
+        applyLanguageChange(state.settings?.lang || 'zh');
     });
 }
 

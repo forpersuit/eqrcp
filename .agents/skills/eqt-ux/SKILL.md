@@ -39,11 +39,13 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 ## Multi-language (i18n) & Locale Matching
 - **Desktop UI (Wails)**:
   - 界面语言首选项（例如 Settings 页面下的 `Lang` 字段）在后台 `config/settings.go` 中持久化并同步给前端。
-  - 使用 `translations[lang][key]` 进行界面词条替换。在保存并更新语言选项时，应通过 `updatePageTranslations()` 及时动态局部更新 DOM 以支持无缝的语种热切换。
+  - 使用 `t(key)` 进行界面词条替换。在保存语言选项时，通过 `applyLanguageChange(newLang)` 立刻执行重绘 `render()` 刷新 DOM，并向当前存在的 `#chat-iframe` 发送 `postMessage` 同步事件，支持零重启无缝热切换。
 - **Mobile Pages (`upload.tmpl.html` & `chat.tmpl.html`)**:
   - 默认根据打开网页的浏览器语言首选项 `navigator.language` 来动态渲染对应的语种。
-  - 扫码接入的 receive 模式（`upload.tmpl.html`）应在右下角悬浮显示可进行语种切换的下拉框 `<select>`，允许用户切换时在 LocalStorage 中持久化 `eqt-page-lang` 偏好。
-  - 为了稳妥应对翻译缺漏或新增词条，对其它不支持的次要语言，在字典初始化时必须先与 `i18n.en` 英文词条进行深度 Merge，作为安全回退兜底，防止出现 JS 未定义键的空指针报错。
+  - 扫码接入的 receive 模式（`upload.tmpl.html`）和 done 模式（`done.tmpl.html`）应在右下角显示可进行语种切换的下拉框 `<select>`。
+  - **偏好持久化规范**：统一读取 `eqt_lang` (或兼容读取 `eqt-page-lang`) 作为偏好标识。切换语种时，必须同时在 LocalStorage 中写入 `eqt_lang` 和 `eqt-page-lang` 双键，以确保用户跨页面跳动时无缝继承语种偏好。
+  - **兜底翻译机制**：为了稳妥应对翻译缺漏，小语种词条加载时必须与最完备的 `en` 英文词条包进行安全深度 Merge 兜底，防止出现 JS 未定义键的报错，并保证漏译词条显示为英文而非空白。
+  - **Iframe 消息接收**：内嵌在桌面 GUI 内的 `chat.tmpl.html` 必须监听 `window.addEventListener('message')` 中类型为 `update-lang` 的广播，当外部宿主语言切换时同步调用 `updateLanguage()` 瞬间热重载。
 
 
 

@@ -237,6 +237,7 @@ const translations = {
         lang_es: 'Español (Spanish)',
         lang_de: 'Deutsch (German)',
         lang_fr: 'Français (French)',
+        chat_qr_expand_tips: '展开以为其他设备扫码接入。',
     },
     en: {
         // Navigation / Tabs
@@ -476,6 +477,7 @@ const translations = {
         lang_fr: 'Français (French)',
         btn_draft_opened: 'Draft Opened',
         feedback_draft_opened_notice: 'Mail client opened with draft. Please send it in your email app. If it didn\'t open, you can click "Copy feedback" below and manually email it to jinxpeeter@outlook.com.',
+        chat_qr_expand_tips: 'Expand to scan and invite other devices.',
     },
     ja: {
         share: 'ファイル共有',
@@ -546,6 +548,7 @@ const translations = {
         license_locked_server: 'サーバー確認が未有効（不一致）',
         license_verify_failed: 'ライセンス確認に失敗しました:',
         license_verify_failed_desc: 'ローカルの {tier} ライセンスは有効ですが、サーバー確認で無効と判定されました。コアサービスが実行されていることを確認し、問題が解決しない場合はアクティベーションをリセットしてください。',
+        chat_qr_expand_tips: '他のデバイスをスキャンして招待するには展開します。',
     },
     ko: {
         share: '파일 공유',
@@ -616,6 +619,7 @@ const translations = {
         license_locked_server: '서버 확인 미활성 (불일치)',
         license_verify_failed: '라이선스 확인 실패:',
         license_verify_failed_desc: '로컬 {tier} 라이선스는 활성화되어 있으나 서버 확인에서 비활성으로 나타납니다. 코어 서비스가 실행 중인지 확인하고, 문제가 지속되면 활성화를 초기화하십시오.',
+        chat_qr_expand_tips: '다른 기기를 스캔하여 초대하려면 펼치십시오.',
     },
     es: {
         share: 'Compartir',
@@ -686,6 +690,7 @@ const translations = {
         license_locked_server: 'Verificación del servidor inactiva (inconsistente)',
         license_verify_failed: 'Error al verificar la licencia:',
         license_verify_failed_desc: 'La licencia local para {tier} está activa, pero la verificación del servidor falló. Asegúrese de que el servicio esté ejecutándose y restablezca la activación si el problema persiste.',
+        chat_qr_expand_tips: 'Expandir para escanear e invitar a otros dispositivos.',
     },
     de: {
         share: 'Teilen',
@@ -756,6 +761,7 @@ const translations = {
         license_locked_server: 'Serververifizierung inaktiv (inkonsistent)',
         license_verify_failed: 'Lizenzverifizierung fehlgeschlagen:',
         license_verify_failed_desc: 'Die lokale Lizenz für {tier} ist aktiv, aber die Serververifizierung ergab inaktiv. Stellen Sie sicher, dass der Kerndienst läuft, und setzen Sie die Aktivierung zurück, falls das Problem bestehen bleibt.',
+        chat_qr_expand_tips: 'Erweitern, um andere Geräte zu scannen und einzuladen.',
     },
     fr: {
         share: 'Partager',
@@ -826,6 +832,7 @@ const translations = {
         license_locked_server: 'Vérification du serveur inactive (incohérente)',
         license_verify_failed: 'Échec de la vérification de la licence :',
         license_verify_failed_desc: 'La licence locale pour {tier} est active, aber la vérification du serveur a échoué. Assurez-vous que le service fonctionne et réinitialisez l\'activation si nécessaire.',
+        chat_qr_expand_tips: 'Développer pour scanner et inviter d\'autres appareils.',
     }
 };
 

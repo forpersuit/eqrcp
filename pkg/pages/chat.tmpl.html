@@ -2847,7 +2847,7 @@
             de: 'Deutsch',
             fr: 'Français'
         };
-        var savedLang = safeStorage.getItem('eqt_lang');
+        var savedLang = safeStorage.getItem('eqt_lang') || safeStorage.getItem('eqt-page-lang');
         var detectedLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
         var lang = supportedLangs[savedLang] ? savedLang : (supportedLangs[detectedLang] ? detectedLang : 'en');
         
@@ -3012,6 +3012,7 @@
                     mergeDict(dict, i18n[lang]);
                 }
                 safeStorage.setItem('eqt_lang', lang);
+                safeStorage.setItem('eqt-page-lang', lang);
                 updatePageTranslations();
             }
         }
@@ -5341,6 +5342,12 @@
         window.addEventListener('pagehide', saveDraft);
         window.addEventListener('message', function(event) {
             if (!event.data || typeof event.data !== 'object') { return; }
+            if (event.data.type === 'update-lang') {
+                if (typeof updateLanguage === 'function') {
+                    updateLanguage(event.data.lang);
+                }
+                return;
+            }
             if (event.data.type === 'pulse-session-qr') {
                 startSessionQRPulse(event.data.until);
                 return;
