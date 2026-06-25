@@ -1558,6 +1558,16 @@ dd {
     border-color: #ef4444;
 }
 
+.btn-mini.secondary {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line);
+}
+
+.btn-mini.secondary:hover {
+    background: #f4f6f3;
+}
+
 /* 微型重置提示行 */
 .reset-entry-row {
     margin-top: 16px;

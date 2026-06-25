@@ -342,21 +342,16 @@ function renderSide() {
     if (state.mode === 'chat') {
         return '';
     }
-    const current = state.status?.current;
     const history = state.status?.history || [];
     return `
         <aside class="side">
             <div class="panel">
                 <div class="panel-head">
-                    <h2>${t('current_task')}</h2>
-                    <button class="ghost" id="refresh">${t('refresh')}</button>
-                </div>
-                ${renderCurrent(current)}
-            </div>
-            <div class="panel">
-                <div class="panel-head">
                     <h2>${t('recent_history')}</h2>
-                    <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'}>${t('clear')}</button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="ghost" id="refresh" style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('refresh')}</button>
+                        <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'} style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('clear')}</button>
+                    </div>
                 </div>
                 ${renderHistory(history)}
             </div>
@@ -406,7 +401,19 @@ function renderShareTransfer(task) {
     `;
 }
 
+function activeReceiveTask() {
+    const task = state.status?.current;
+    if (!task || task.action !== 'receive' || isTerminal(task)) {
+        return null;
+    }
+    return task;
+}
+
 function renderReceive() {
+    const activeTask = activeReceiveTask();
+    if (activeTask) {
+        return renderReceiveTransfer(activeTask);
+    }
     const output = state.receiveDir || state.settings?.output || '';
     return `
         <div class="receive-box">
@@ -419,6 +426,49 @@ function renderReceive() {
         <div class="primary-row">
             <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_receive')}</button>
             <button class="ghost" id="save-receive-dir">${t('save_dir')}</button>
+        </div>
+    `;
+}
+
+function renderReceiveTransfer(task) {
+    const percent = task.transferPercent || 0;
+    const qrImage = qrImageURL(task.pageUrl);
+    const files = task.savedFiles || [];
+    return `
+        <div class="transfer-stage">
+            <div class="transfer-head">
+                <div>
+                    <div class="eyebrow">${t('receive_active')}</div>
+                    <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
+                </div>
+                <button class="danger inline stop-current-action">${t('stop')}</button>
+            </div>
+            ${qrImage ? `
+                <div class="qr-hero">
+                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                </div>
+            ` : `<div class="empty-state transfer-empty">${t('waiting_qr')}</div>`}
+            <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
+            <dl class="transfer-details">
+                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
+                <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
+            </dl>
+            ${files.length > 0 ? `
+                <div class="locked-list">
+                    <strong>${t('saved_files')}</strong>
+                    <ul class="path-list locked">${files.map((file) => `
+                        <li>
+                            <div>
+                                <strong>${escapeHTML(shortName(file))}</strong>
+                                <span>${escapeHTML(file)}</span>
+                            </div>
+                        </li>
+                    `).join('')}</ul>
+                </div>
+            ` : ''}
+            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>
     `;
 }
@@ -613,9 +663,9 @@ function renderConfirmSwitchPanel() {
             <div style="font-size: 15px; margin-bottom: 24px; color: var(--ink); line-height: 1.5; text-align: left;">
                 ${escapeHTML(t('confirm_switch_mode'))}
             </div>
-            <div class="actions" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
-                <button type="button" class="secondary" id="confirm-switch-cancel">${t('btn_cancel')}</button>
-                <button type="button" class="primary danger" id="confirm-switch-ok">${t('btn_confirm')}</button>
+            <div style="margin-top: 24px; display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" class="btn-mini secondary" id="confirm-switch-cancel">${t('btn_cancel')}</button>
+                <button type="button" class="btn-mini primary" id="confirm-switch-ok">${t('btn_confirm')}</button>
             </div>
         </div>
     `;
