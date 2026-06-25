@@ -2847,7 +2847,13 @@
             de: 'Deutsch',
             fr: 'Français'
         };
-        var savedLang = safeStorage.getItem('eqt_lang') || safeStorage.getItem('eqt-page-lang');
+        var urlParams = new URLSearchParams(window.location.search);
+        var urlLang = urlParams.get('lang');
+        if (urlLang && supportedLangs[urlLang]) {
+            safeStorage.setItem('eqt_lang', urlLang);
+            safeStorage.setItem('eqt-page-lang', urlLang);
+        }
+        var savedLang = urlLang || safeStorage.getItem('eqt_lang') || safeStorage.getItem('eqt-page-lang');
         var detectedLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
         var lang = supportedLangs[savedLang] ? savedLang : (supportedLangs[detectedLang] ? detectedLang : 'en');
         

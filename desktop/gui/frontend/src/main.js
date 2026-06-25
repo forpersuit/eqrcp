@@ -426,22 +426,19 @@ function renderChat() {
         `;
     }
     let src = chatUrl;
-    if (state.settings?.viewportDebug) {
-        try {
-            const urlObj = new URL(src);
+    try {
+        const urlObj = new URL(src);
+        if (state.settings?.lang) {
+            urlObj.searchParams.set('lang', state.settings.lang);
+        }
+        if (state.settings?.viewportDebug) {
             urlObj.searchParams.set('viewportDebug', '1');
-            src = urlObj.toString();
-        } catch (e) {
-            // Ignored
-        }
-    } else {
-        try {
-            const urlObj = new URL(src);
+        } else {
             urlObj.searchParams.delete('viewportDebug');
-            src = urlObj.toString();
-        } catch (e) {
-            // Ignored
         }
+        src = urlObj.toString();
+    } catch (e) {
+        // Ignored
     }
     return `
         <div class="chat-panel">
@@ -2940,7 +2937,7 @@ function feedbackIcon() {
 }
 
 function giftIcon() {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8H4v-8"></path><path d="M2 7h20v5H2z"></path><path d="M12 7v13"></path><path d="M12 7H8.5A2.5 2.5 0 1 1 11 4.5c0 1.4 1 2.5 1 2.5z"></path><path d="M12 7h3.5A2.5 2.5 0 1 0 13 4.5c0 1.4-1 2.5-1 2.5z"></path></svg>';
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 6H5a3 3 0 0 0-3 3v2a2 2 0 0 1 0 4v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a2 2 0 0 1 0-4V9a3 3 0 0 0-3-3z"></path><path d="M9 6v12" stroke-dasharray="3 3"></path><path d="M15 9l1 1.5 1.5.5-1.5.5-1 1.5-1-1.5-1.5-.5 1.5-.5z"></path></svg>';
 }
 
 function diamondIcon() {
