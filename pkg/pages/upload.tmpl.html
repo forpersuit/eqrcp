@@ -915,7 +915,7 @@
                         clearInterval(pingIntervalId);
                         return;
                     }
-                    fetch(window.location.pathname + '?ping=5', { method: 'POST' })
+                    fetch(window.location.pathname + '?ping=1', { method: 'POST' })
                         .then(function(res) { return res.json(); })
                         .then(function(data) {
                             if (data && data.usedSeconds !== undefined) {
@@ -935,7 +935,7 @@
                         .catch(function(e) {
                             // ignore ping errors
                         });
-                }, 5000);
+                }, 1000);
             }
         }
     </script>

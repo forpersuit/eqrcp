@@ -413,12 +413,14 @@ function renderShareTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-            <dl class="transfer-details">
-                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
-                <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
-            </dl>
+            ${task.transferState !== 'waiting' ? `
+                <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
+                <dl class="transfer-details">
+                    <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
+                    <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                    <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
+                </dl>
+            ` : ''}
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
                 <ul class="path-list locked">${paths.map((path) => `
