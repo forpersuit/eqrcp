@@ -1243,6 +1243,23 @@ function bindEvents() {
     if (state.chatQROpen) {
         document.addEventListener('pointerdown', closeChatQROnOutside);
     }
+
+    const chatIframe = document.querySelector('#chat-iframe');
+    if (chatIframe) {
+        chatIframe.addEventListener('load', () => {
+            const lang = state.settings?.lang;
+            if (lang) {
+                try {
+                    chatIframe.contentWindow?.postMessage({
+                        type: 'update-lang',
+                        lang: lang
+                    }, activeChatFrameOrigin() || '*');
+                } catch (e) {
+                    // Ignored
+                }
+            }
+        });
+    }
 }
 
 function bindPanelEvents() {
@@ -2187,6 +2204,9 @@ async function loadSettings() {
         state.chatAutoSave = state.settings.chatAutoSave !== false;
         state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
         
+        // Apply settings language immediately to trigger smooth update & postMessage to iframe if present
+        applyLanguageChange(state.settings.lang);
+
         // Prioritize loading history and main state to render the home screen instantly
         await loadStatusData();
         render();
