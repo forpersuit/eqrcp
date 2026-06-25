@@ -286,7 +286,7 @@ function renderShare() {
                 <strong>${escapeHTML(shortName(path))}</strong>
                 <span>${escapeHTML(path)}</span>
             </div>
-            <button class="icon-button remove-path" data-path-index="${index}" title="Remove">x</button>
+            <button class="icon-button remove-path" data-path-index="${index}" title="${t('remove')}">x</button>
         </li>
     `).join('');
     const hasItems = state.sharePaths.length > 0;
@@ -346,7 +346,7 @@ function renderShareTransfer(task) {
             <div class="transfer-head">
                 <div>
                     <div class="eyebrow">${t('share_active')}</div>
-                    <h2>${escapeHTML(task.transferState || task.state || 'Waiting')}</h2>
+                    <h2>${escapeHTML(task.transferState || task.state || t('waiting'))}</h2>
                 </div>
                 <button class="danger inline stop-current-action">${t('stop')}</button>
             </div>
@@ -358,9 +358,9 @@ function renderShareTransfer(task) {
             ` : `<div class="empty-state transfer-empty">${t('waiting_qr')}</div>`}
             <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl class="transfer-details">
-                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || 'Waiting')}</dd>
+                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
                 <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : 'Waiting'}</dd>
+                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
             </dl>
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
@@ -1019,6 +1019,17 @@ function renderFeedbackPanel() {
     `;
 }
 
+function getTranslatedState(s) {
+    if (!s) return '';
+    const low = s.toLowerCase();
+    if (low === 'waiting') return t('waiting');
+    if (low === 'running') return t('running');
+    if (low === 'completed' || low === 'done') return t('completed');
+    if (low === 'failed' || low === 'error') return t('failed');
+    if (low === 'stopped' || low === 'cancelled') return t('stopped');
+    return s;
+}
+
 function renderCurrent(task) {
     if (!task) {
         return `<div class="empty-state">${t('agent_idle')}</div>`;
@@ -1026,26 +1037,27 @@ function renderCurrent(task) {
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const finished = isTerminal(task);
+    const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
     return `
         <div class="task-card">
-            <div class="task-title">${escapeHTML(titleCase(task.action))} #${task.id}</div>
-            <div class="task-state ${finished ? 'done' : ''}">${escapeHTML(task.transferState || task.state)}</div>
+            <div class="task-title">${escapeHTML(actionText)} #${task.id}</div>
+            <div class="task-state ${finished ? 'done' : ''}">${escapeHTML(getTranslatedState(task.transferState || task.state))}</div>
             ${qrImage && !finished ? `
                 <div class="qr-preview">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">Open in browser</button>
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
             ` : ''}
             <div class="progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl>
-                <dt>Target</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || shortName(task.paths?.[0] || ''))}</dd>
-                <dt>Archive</dt><dd>${escapeHTML(task.transferArchiveName || 'None')}</dd>
-                <dt>Bytes</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>QR page</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : 'Waiting'}</dd>
+                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || shortName(task.paths?.[0] || ''))}</dd>
+                <dt>${t('archive')}</dt><dd>${escapeHTML(task.transferArchiveName || t('none'))}</dd>
+                <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
             </dl>
             ${renderSavedFiles(task.savedFiles)}
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
-            ${finished ? '' : '<button class="danger stop-current-action">Stop current</button>'}
+            ${finished ? '' : `<button class="danger stop-current-action">${t('stop_current')}</button>`}
         </div>
     `;
 }
@@ -1056,7 +1068,7 @@ function renderSavedFiles(files) {
     }
     return `
         <div class="saved-files">
-            <strong>Saved files</strong>
+            <strong>${t('saved_files')}</strong>
             <ul>${files.map((file) => `<li>${escapeHTML(file)}</li>`).join('')}</ul>
         </div>
     `;
@@ -1118,12 +1130,13 @@ function renderHistoryFiles(task) {
     }
 
     if (files.length === 0) {
-        return `<div class="history-empty-files">No files</div>`;
+        return `<div class="history-empty-files">${t('no_files')}</div>`;
     }
 
     return `<div class="history-files-list">
         ${files.map((file) => {
             const name = shortName(file);
+            const openFileTooltip = t('open_file_title', { file: name });
             return `
                 <div class="history-file-row">
                     <div class="history-filename-wrapper">
@@ -1131,7 +1144,7 @@ function renderHistoryFiles(task) {
                         <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
                     </div>
                     <div class="history-file-actions">
-                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="Open file: ${escapeAttr(file)}">
+                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
                             ${openFileIcon()}
                         </button>
                     </div>
@@ -1143,20 +1156,21 @@ function renderHistoryFiles(task) {
 
 function renderHistory(history) {
     if (!history.length) {
-        return `<div class="empty-state">No completed tasks yet.</div>`;
+        return `<div class="empty-state">${t('no_tasks')}</div>`;
     }
     return `<ol class="history">${history.slice(0, 8).map((task) => {
         const taskFolder = getTaskFolder(task);
+        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
         return `
         <li>
             <div class="history-item-left">
                 <div class="history-title-row">
-                    <strong class="history-title">${escapeHTML(titleCase(task.action))} #${task.id}</strong>
+                    <strong class="history-title">${escapeHTML(actionText)} #${task.id}</strong>
                     <span class="history-status-icon" title="${escapeAttr(task.state)}${task.transferState ? ` / ${escapeAttr(task.transferState)}` : ''}">
                         ${getStatusIcon(task)}
                     </span>
                     ${taskFolder ? `
-                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(taskFolder)}" title="Open containing folder: ${escapeAttr(taskFolder)}" style="margin-left: 8px;">
+                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(taskFolder)}" title="${escapeAttr(t('open_folder_title'))}" style="margin-left: 8px;">
                             ${openFolderIcon()}
                         </button>
                     ` : ''}
