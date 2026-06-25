@@ -69,10 +69,9 @@ node_modules
 .commandcode
 
 # Temp generated files
-design.dark.md
-design.md
 docs/img/transparent1.jpg
-pkgconfig/
+/doc-html
+/softcopy-pdf
 
 
 # Local agent configuration
