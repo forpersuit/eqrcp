@@ -445,6 +445,7 @@ func (a *App) openExternal(rawURL string, allowed map[string]bool) error {
 }
 
 func (a *App) OpenPath(path string) error {
+	a.logInfo(fmt.Sprintf("[GUI] OpenPath called with path: %s", path))
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
@@ -491,17 +492,21 @@ func (a *App) OpenPath(path string) error {
 		}
 	}
 
+	a.logInfo(fmt.Sprintf("[GUI] OpenPath resolved target directory: %s", target))
 	cmd, err := openPathCommand(target)
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] OpenPath: failed to create command: %v", err))
 		return err
 	}
 	if err := cmd.Start(); err != nil {
+		a.logError(fmt.Sprintf("[GUI] OpenPath: failed to start command: %v", err))
 		return err
 	}
 	return cmd.Process.Release()
 }
 
 func (a *App) OpenFile(path string) error {
+	a.logInfo(fmt.Sprintf("[GUI] OpenFile called with path: %s", path))
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
@@ -517,16 +522,20 @@ func (a *App) OpenFile(path string) error {
 	info, err := os.Stat(cleaned)
 	if err != nil {
 		// File does not exist, fall back to opening its closest existing parent directory
+		a.logInfo(fmt.Sprintf("[GUI] OpenFile: %s does not exist, falling back to OpenPath", cleaned))
 		return a.OpenPath(cleaned)
 	}
 	if info.IsDir() {
 		return a.OpenPath(cleaned)
 	}
+	a.logInfo(fmt.Sprintf("[GUI] OpenFile resolved target file: %s", cleaned))
 	cmd, err := openFileCommand(cleaned)
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] OpenFile: failed to create command: %v", err))
 		return err
 	}
 	if err := cmd.Start(); err != nil {
+		a.logError(fmt.Sprintf("[GUI] OpenFile: failed to start command: %v", err))
 		return err
 	}
 	return cmd.Process.Release()
@@ -817,13 +826,20 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("explorer.exe", winPath)
+		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath)
 		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
 	case "linux":
 		if isWSL() {
+			out, err := exec.Command("wslpath", "-w", path).Output()
+			if err == nil {
+				winPath := strings.TrimSpace(string(out))
+				if winPath != "" {
+					return exec.Command("explorer.exe", winPath), nil
+				}
+			}
 			return exec.Command("explorer.exe", path), nil
 		}
 		return exec.Command("xdg-open", path), nil
@@ -843,6 +859,13 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 		return exec.Command("open", path), nil
 	case "linux":
 		if isWSL() {
+			out, err := exec.Command("wslpath", "-w", path).Output()
+			if err == nil {
+				winPath := strings.TrimSpace(string(out))
+				if winPath != "" {
+					return exec.Command("explorer.exe", winPath), nil
+				}
+			}
 			return exec.Command("explorer.exe", path), nil
 		}
 		return exec.Command("xdg-open", path), nil

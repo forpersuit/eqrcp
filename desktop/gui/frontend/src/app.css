@@ -1465,6 +1465,117 @@ dd {
     gap: 8px;
 }
 
+/* ── Secondary Confirmation for Reset License ── */
+.reset-confirm-box {
+    background: #fff8f8;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.reset-confirm-content {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.reset-warning-icon {
+    font-size: 16px;
+    line-height: 1.2;
+}
+
+.reset-confirm-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+}
+
+.reset-confirm-text strong {
+    font-size: 13px;
+    color: #991b1b;
+    font-weight: 600;
+}
+
+.reset-confirm-text span {
+    font-size: 11.5px;
+    color: #7f1d1d;
+    line-height: 1.4;
+}
+
+.reset-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* 精致微型按钮 */
+.btn-mini {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-mini.primary {
+    background: var(--accent-strong);
+    color: #ffffff;
+    border-color: var(--accent-strong);
+}
+
+.btn-mini.primary:hover {
+    opacity: 0.9;
+}
+
+.btn-mini.danger-light {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.btn-mini.danger-light:hover {
+    background: #fee2e2;
+    border-color: #ef4444;
+}
+
+/* 微型重置提示行 */
+.reset-entry-row {
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 0;
+}
+
+.btn-link-mini {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #b91c1c; /* 红色 */
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.btn-link-mini:hover {
+    color: #ef4444;
+}
+
+
 .feedback-note {
     background: #f6f8f3;
     border: 1px solid var(--line);
@@ -2026,7 +2137,7 @@ dd {
 /* ── Emoji Picker Popover ── */
 .emoji-picker-popover {
     position: absolute;
-    top: 40px;
+    bottom: calc(100% + 8px);
     left: 0;
     display: flex;
     flex-direction: column;
@@ -2035,8 +2146,8 @@ dd {
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 10px;
-    box-shadow: 0 10px 32px rgba(24, 33, 31, 0.18);
-    z-index: 99;
+    box-shadow: 0 -10px 32px rgba(24, 33, 31, 0.18);
+    z-index: 9999;
     width: 240px;
     backdrop-filter: blur(8px);
 }

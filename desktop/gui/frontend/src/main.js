@@ -222,9 +222,11 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
-                        <span class="menu-icon">${giftIcon()}</span>
-                    </button>
+                    ${!(state.license && state.license.tier) ? `
+                        <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
+                            <span class="menu-icon">${giftIcon()}</span>
+                        </button>
+                    ` : ''}
                     <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}">
                         <span class="menu-icon">${settingsIcon()}</span>
                     </button>
@@ -686,7 +688,7 @@ function renderSettingsPanel() {
                             ${state.showEmojiPicker ? `
                                 <div class="emoji-picker-popover" id="emoji-picker-popover">
                                     <div class="emoji-picker-grid">
-                                        ${['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','🔥','⚡️','🎉','❤️','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗'].map(emoji => `
+                                        ${['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','🔥','⚡️','🎉','❤️','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗','💡','🔑','🔒','⚙️','🛡️','📡','📟','🤖','👽','👻','😈','🤡','💩','👀','🧠','👄','✍️','🤝','👏','🙌','🔥','💎','🍎','🍓','🍩','☕️','🍻','✈️','🚲','🚂','🔔','📣'].map(emoji => `
                                             <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
                                         `).join('')}
                                     </div>
@@ -707,7 +709,7 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-control-stack">
                         ${renderSwitch('settings-chat-autosave', state.chatAutoSave)}
-                        <button type="button" class="icon-button-mini" id="open-chat-save" title="${t('open_folder')}" aria-label="${t('open_folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center;">${openFolderIcon()}</button>
+                        <button type="button" class="icon-button-mini path-link" id="open-chat-save" data-open-path="${escapeAttr(state.chatSaveDir || '')}" title="${t('open_folder')}" aria-label="${t('open_folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center;">${openFolderIcon()}</button>
                     </div>
                 </div>
             </section>
@@ -991,6 +993,34 @@ function renderRedeemPanel() {
         `;
     }
 
+    let resetSection = '';
+    if (license?.tier) {
+        if (state.confirmResetPending) {
+            resetSection = `
+                <div class="reset-confirm-box">
+                    <div class="reset-confirm-content">
+                        <span class="reset-warning-icon">⚠️</span>
+                        <div class="reset-confirm-text">
+                            <strong>${escapeHTML(t('reset_confirm_title'))}</strong>
+                            <span>${escapeHTML(t('reset_confirm_desc'))}</span>
+                        </div>
+                    </div>
+                    <div class="reset-confirm-actions">
+                        <button type="button" class="btn-mini primary" id="cancel-reset-license" ${state.isActivating ? 'disabled' : ''}>${escapeHTML(t('btn_cancel'))}</button>
+                        <button type="button" class="btn-mini danger-light" id="confirm-reset-license" ${state.isActivating ? 'disabled' : ''}>${escapeHTML(t('btn_confirm_reset'))}</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            resetSection = `
+                <div class="reset-entry-row">
+                    <span>${escapeHTML(t('redeem_reset_hint'))}</span>
+                    <button type="button" class="btn-link-mini" id="reset-license">${escapeHTML(t('btn_reset'))}</button>
+                </div>
+            `;
+        }
+    }
+
     return `
         <div class="redeem-panel">
             ${warningBox}
@@ -1008,13 +1038,8 @@ function renderRedeemPanel() {
                     <span class="btn-gift-icon" style="margin-right: 6px; display: inline-flex; align-items: center;">${giftIcon()}</span>
                     ${state.isActivating ? t('btn_activating') : t('btn_confirm')}
                 </button>
-                ${state.confirmResetPending ? `
-                    <button class="danger" id="confirm-reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_confirm_reset')}</button>
-                    <button class="ghost" id="cancel-reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_cancel')}</button>
-                ` : `
-                    <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_reset')}</button>
-                `}
             </div>
+            ${resetSection}
             ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
             ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
         </div>
@@ -1323,6 +1348,9 @@ function bindPanelEvents() {
         state.confirmResetPending = false;
         resetLicense();
     });
+    if (state.confirmResetPending) {
+        document.getElementById('cancel-reset-license')?.focus();
+    }
     document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
         document.querySelector('.plan-popover')?.classList.toggle('visible');
         document.querySelector('.popover-backdrop')?.classList.toggle('visible');
@@ -1451,6 +1479,15 @@ function syncAndSaveSettingsInBackground() {
 function openPanel(panel) {
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
+    if (panel === 'settings') {
+        ChatSaveDirectory().then((dir) => {
+            state.chatSaveDir = dir;
+            const btn = document.querySelector('#open-chat-save');
+            if (btn) {
+                btn.dataset.openPath = dir;
+            }
+        }).catch(() => {});
+    }
     if (panel === 'redeem') {
         state.redeemMessage = '';
         state.redeemError = '';
