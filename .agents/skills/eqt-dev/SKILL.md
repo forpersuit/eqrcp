@@ -78,7 +78,11 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 
 #### 3.5.3 Wails 编译与 Binding 生成环境避坑 (Wails Build & Bindings Generation in CI)
 - **问题成因**：在没有显示器（`DISPLAY`/`WAYLAND_DISPLAY` 环境变量为空）的 headless Linux CI/CD 容器中执行 `wails build`，Wails 在生成绑定时会编译并执行一个临时的 `wailsbindings` 可执行文件。如果主程序路由逻辑中，在无 DISPLAY 且无参数时自动退回到 CLI 模式并直接调用 Cobra 命令，Cobra 会因为缺失必要参数返回错误并以 exit status 1 退出，最终导致 Wails 绑定生成步骤失败。
-- **解决方案**：在应用入口（`main()`）最前端，对 `os.Args[0]` 的文件名进行判断。如果文件名中包含 `"wailsbindings"` 字符串，强制走 GUI 模式启动 `startWailsGUI()` 从而让 `wails.Run` 接管。Wails 在运行时会拦截 `wails.Run` 以提取反射绑定并正常退出，该过程不依赖实际的 X 服务器或 DISPLAY，能在 CI 容器中平滑编译成功。
+- **解决方案**：在应用入口（`main()`）最前端，对 `os.Args[0]` 的文件名进行判断。如果文件名中包含 `"wailsbindings"` 字符串，强制走 GUI 模式启动 `startWailsGUI()` 从而让 `wails.Run`接管。Wails 在运行时会拦截 `wails.Run` 以提取反射绑定并正常退出，该过程不依赖实际的 X 服务器或 DISPLAY，能在 CI 容器中平滑编译成功。
+
+#### 3.5.4 Cloudflare Pages 自动部署中的分支覆盖与生产域名映射漏洞 (Cloudflare Pages Branch Override & Production URL Mapping)
+- **问题成因**：由 Release 标签（例如 `v*`）触发的 GitHub Actions checkout 流程是分离的 HEAD，Wrangler 会自动将分支名称识别为 tag 名（如 `v1.7.3`）。若不指定分支参数，Wrangler 会把其判定为 Preview Branch 部署，更新 `head.eqt-27c.pages.dev` 却**不会更新**生产主域名 `eqt-27c.pages.dev`，导致主域名的 `update-metadata.json` 保持为旧的 404/Redirect 状态，使得客户端无法发现新版本。
+- **解决方案**：在 `.github/workflows/release.yml` 的 Pages 部署命令中强制指定 `--branch=master` 参数（即 `npx wrangler pages deploy website --project-name=eqt --branch=master`），确保即使从 Tag 触发，Wrangler 依然会将此次部署映射为 Production，直接刷新生产环境的主域名并使最新的 `update-metadata.json` 物理生效。
 
 ---
 
