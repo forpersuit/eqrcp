@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"eqt/application"
-	"eqt/config"
-	"eqt/server"
+	"eqt/pkg/application"
+	"eqt/pkg/config"
+	"eqt/pkg/server"
 	"github.com/spf13/cobra"
 )
 

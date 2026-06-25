@@ -107,7 +107,7 @@ if [[ "$run_checks" -eq 1 ]]; then
 fi
 
 echo "Building Windows CLI artifacts..."
-(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqt.exe" .)
+(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqt.exe" ./cmd/eqt)
 
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then

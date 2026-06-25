@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"eqt/util"
+	"eqt/pkg/util"
 )
 
 // Body to transfer

@@ -3,13 +3,13 @@ package cmd
 import (
 	"fmt"
 
-	"eqt/body"
-	"eqt/config"
-	"eqt/logger"
-	"eqt/qr"
+	"eqt/pkg/body"
+	"eqt/pkg/config"
+	"eqt/pkg/logger"
+	"eqt/pkg/qr"
 	"github.com/eiannone/keyboard"
 
-	"eqt/server"
+	"eqt/pkg/server"
 	"github.com/spf13/cobra"
 )
 

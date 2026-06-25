@@ -18,12 +18,12 @@ import (
 	"sync"
 	"time"
 
-	"eqt/application"
-	"eqt/body"
-	"eqt/config"
-	"eqt/logger"
-	"eqt/server"
-	"eqt/version"
+	"eqt/pkg/application"
+	"eqt/pkg/body"
+	"eqt/pkg/config"
+	"eqt/pkg/logger"
+	"eqt/pkg/server"
+	"eqt/pkg/version"
 	"github.com/spf13/cobra"
 )
 

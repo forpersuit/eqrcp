@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"eqt/config"
+	"eqt/pkg/config"
 )
 
 // Default Ed25519 public key corresponding to our Cloudflare Workers private key

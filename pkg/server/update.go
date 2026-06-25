@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"eqt/config"
-	"eqt/logger"
-	"eqt/version"
+	"eqt/pkg/config"
+	"eqt/pkg/logger"
+	"eqt/pkg/version"
 )
 
 // Log is a package level logger that can be customized externally.

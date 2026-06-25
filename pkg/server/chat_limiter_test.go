@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"eqt/config"
+	"eqt/pkg/config"
 )
 
 func TestChatLimiter(t *testing.T) {

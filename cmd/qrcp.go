@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"eqt/application"
+	"eqt/pkg/application"
 	"github.com/spf13/cobra"
 )
 

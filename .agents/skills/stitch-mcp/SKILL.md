@@ -33,8 +33,8 @@ The `generate_screen_from_text` tool is heavy and frequently encounters HTTP tim
 
 When deploying to Cloudflare Pages:
 
-- **Static Assets Directory**: Keep the website static files in the `website/` directory (rather than `docs/` or `public/`) to avoid exposing internal repository documentation to the public.
-- **Middleware Placement**: Cloudflare Pages Functions middleware (`functions/_middleware.js`) MUST be placed in the **repository root directory**, NOT inside the `website/` directory. Cloudflare automatically compiles the root-level `functions/` directory upon build detection.
+- **Static Assets Directory**: Keep the website static files in the `cloudflare/eqt-website` directory (rather than `docs/` or `public/`) to avoid exposing internal repository documentation to the public.
+- **Middleware Placement**: Cloudflare Pages Functions middleware (`_middleware.js`) MUST be placed in the `cloudflare/eqt-website/functions/` directory. Cloudflare automatically compiles the functions subdirectory when wrangler deploys this folder.
 - **Cookie & LocalStorage Integration**:
   - Middleware intercepts `CF-IPCountry` to write the initial cookie `eqt-lang=zh` (for Chinese-speaking regions like CN, HK, TW, MO) or `eqt-lang=en`.
   - Frontend scripts should check `localStorage` first (user explicit override), fallback to the `eqt-lang` cookie, and then fallback to `navigator.language`.

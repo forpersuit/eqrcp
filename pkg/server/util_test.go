@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"eqt/body"
-	"eqt/config"
-	"eqt/pages"
+	"eqt/pkg/body"
+	"eqt/pkg/config"
+	"eqt/pkg/pages"
 )
 
 func TestGetFileName(t *testing.T) {

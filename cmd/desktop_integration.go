@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"eqt/version"
+	"eqt/pkg/version"
 )
 
 const windowsStartupRunKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`

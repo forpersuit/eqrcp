@@ -85,13 +85,13 @@ mkdir -p "$build_root"
 build_current_cli() {
   local target_dir="$build_root/current"
   mkdir -p "$target_dir"
-  (cd "$root_dir" && GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go build -o "$target_dir/eqt" .)
+  (cd "$root_dir" && GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go build -o "$target_dir/eqt" ./cmd/eqt)
 }
 
 build_windows_cli() {
   local target_dir="$build_root/windows-amd64"
   mkdir -p "$target_dir"
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$target_dir/eqt.exe" .)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$target_dir/eqt.exe" ./cmd/eqt)
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$target_dir/eqt-launcher.exe" ./cmd/eqt-launcher)
 }
 
@@ -99,7 +99,7 @@ build_linux_cli() {
   for arch in amd64 arm64; do
     local target_dir="$build_root/linux-$arch"
     mkdir -p "$target_dir"
-    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" .)
+    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" ./cmd/eqt)
   done
 }
 
@@ -107,7 +107,7 @@ build_macos_cli() {
   for arch in amd64 arm64; do
     local target_dir="$build_root/darwin-$arch"
     mkdir -p "$target_dir"
-    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" .)
+    (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 go build -o "$target_dir/eqt" ./cmd/eqt)
   done
 }
 

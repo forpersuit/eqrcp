@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"eqt/cmd"
-	"eqt/util"
-	"eqt/version"
+	"eqt/pkg/util"
+	"eqt/pkg/version"
 	"fmt"
 	"io"
 	"net/http"

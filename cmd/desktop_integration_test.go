@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"eqt/version"
+	"eqt/pkg/version"
 )
 
 func TestWindowsExpectedLauncherPath(t *testing.T) {

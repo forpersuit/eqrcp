@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"eqt/application"
+	"eqt/pkg/application"
 )
 
 func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {

@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"eqt/application"
-	"eqt/config"
-	"eqt/version"
+	"eqt/pkg/application"
+	"eqt/pkg/config"
+	"eqt/pkg/version"
 	"github.com/spf13/cobra"
 )
 

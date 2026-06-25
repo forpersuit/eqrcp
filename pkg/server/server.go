@@ -21,13 +21,13 @@ import (
 	"sync"
 	"time"
 
-	"eqt/qr"
+	"eqt/pkg/qr"
 
-	"eqt/body"
-	"eqt/config"
-	"eqt/pages"
-	"eqt/util"
-	"eqt/version"
+	"eqt/pkg/body"
+	"eqt/pkg/config"
+	"eqt/pkg/pages"
+	"eqt/pkg/util"
+	"eqt/pkg/version"
 	"gopkg.in/cheggaaa/pb.v1"
 )
 

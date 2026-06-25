@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"eqt/pages"
-	"eqt/qr"
-	"eqt/version"
+	"eqt/pkg/pages"
+	"eqt/pkg/qr"
+	"eqt/pkg/version"
 )
 
 const (

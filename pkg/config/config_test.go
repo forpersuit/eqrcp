@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"eqt/application"
+	"eqt/pkg/application"
 )
 
 func TestNew(t *testing.T) {

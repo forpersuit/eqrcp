@@ -65,4 +65,4 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **自动更新链接重定向**：在云端 `eqt-drm-api` Worker 环境变量中配置 `R2_PUBLIC_URL`（例如 `https://pub.eqt.net.im`）。
   - 若配置了此变量，`/api/v1/update/check` 返回的 `download_url` 将被自动改写为 R2 的加速直链。
   - 若未配置，则回退使用私有 GitHub Releases 直链。
-- **静态网页直链**：产品介绍页面（`website/index.html`）应始终使用指向 R2 存储桶的公共直链（如 `https://pub.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe`），从而免受 GitHub 私有库 404 限制及免去 Worker 的 CPU 超时影响。
+- **静态网页直链**：产品介绍页面（`cloudflare/eqt-website/index.html`）应始终使用指向 R2 存储桶的公共直链（如 `https://pub.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe`），从而免受 GitHub 私有库 404 限制及免去 Worker 的 CPU 超时影响。

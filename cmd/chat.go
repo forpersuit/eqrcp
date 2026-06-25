@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"eqt/config"
-	"eqt/logger"
-	"eqt/qr"
-	"eqt/server"
+	"eqt/pkg/config"
+	"eqt/pkg/logger"
+	"eqt/pkg/qr"
+	"eqt/pkg/server"
 	"github.com/eiannone/keyboard"
 	"github.com/spf13/cobra"
 )

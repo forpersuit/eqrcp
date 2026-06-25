@@ -25,7 +25,7 @@ jobs:
       - run: go mod download
       - run: go vet ./...
       - run: go test ./...
-      - run: go build -o /tmp/eqt .
+      - run: go build -o /tmp/eqt ./cmd/eqt
 
   go-test-desktop:
     name: Go test (desktop GUI module)

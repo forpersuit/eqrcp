@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"eqt/pages"
+	"eqt/pkg/pages"
 )
 
 func TestChatStatusHookUpdatesEveryMessageAndAttachment(t *testing.T) {

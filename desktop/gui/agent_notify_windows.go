@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"eqt/util"
+	"eqt/pkg/util"
 	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
 )
 

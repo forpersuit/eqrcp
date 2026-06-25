@@ -17,7 +17,7 @@ import (
 	"golang.org/x/term"
 
 	"eqt/cmd"
-	"eqt/server"
+	"eqt/pkg/server"
 )
 
 //go:embed all:frontend/dist

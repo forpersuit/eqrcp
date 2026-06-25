@@ -102,13 +102,13 @@ jobs:
           ls -R out
       - name: Generate static update-metadata.json
         run: |
-          go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out website/update-metadata.json
+          go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out cloudflare/eqt-website/update-metadata.json
       - name: Copy download assets to website static folder
         run: |
-          mkdir -p website/downloads/latest
-          mkdir -p website/downloads/${{ github.ref_name }}
-          cp -r out/* website/downloads/latest/
-          cp -r out/* website/downloads/${{ github.ref_name }}/
+          mkdir -p cloudflare/eqt-website/downloads/latest
+          mkdir -p cloudflare/eqt-website/downloads/${{ github.ref_name }}
+          cp -r out/* cloudflare/eqt-website/downloads/latest/
+          cp -r out/* cloudflare/eqt-website/downloads/${{ github.ref_name }}/
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -117,7 +117,7 @@ jobs:
       - name: Deploy static site to Cloudflare Pages
         run: |
           if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
-            npx wrangler pages deploy website --project-name=eqt --branch=master
+            npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --branch=master
           else
             echo "CLOUDFLARE_API_TOKEN is not set, skipping Cloudflare Pages deployment."
           fi

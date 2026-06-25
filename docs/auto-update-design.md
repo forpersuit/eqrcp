@@ -353,7 +353,7 @@ sequenceDiagram
 
 ### 6.2 跨域与强缓存配置 (`_headers` 规范)
 
-对于托管在 Pages 或 CDN 上的静态分发内容，必须显式在 `website/_headers` 中声明如下规则，以确保跨域安全（CORS）与极速加载性能：
+对于托管在 Pages 或 CDN 上的静态分发内容，必须显式在 `cloudflare/eqt-website/_headers` 中声明如下规则，以确保跨域安全（CORS）与极速加载性能：
 
 ```
 # 元数据控制
@@ -371,5 +371,4 @@ sequenceDiagram
 
 每当通过发布 tag（如 `v*`）触发工作流自动构建时，Actions checkout 出的分支往往处于 Detached HEAD 状态。
 * **默认缺陷**：Wrangler 自动检测分支名称为 tag 名（例如 `v1.7.3`），这会导致部署被映射为 Preview（预览），主域名不会生效。
-* **修正规范**：在自动部署步骤中，必须显示追加 `--branch=master` 参数（即 `npx wrangler pages deploy website --project-name=eqt --branch=master`），强行指示 Cloudflare 将此构建提升为 Production，确保生产环境主域名和子域名能同步被物理刷新。
-
+* **修正规范**：在自动部署步骤中，必须显示追加 `--branch=master` 参数（即 `npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --branch=master`），强行指示 Cloudflare 将此构建提升为 Production，确保生产环境主域名和子域名能同步被物理刷新。

@@ -10,15 +10,15 @@
 
 | 子域名 / 主机记录 | 托管平台 | 承载业务服务 | 对应源码/文档资源位置 |
 | :--- | :--- | :--- | :--- |
-| `eqt.net.im` | Cloudflare Pages | 官方主页 / 301 重定向到 `www` | `website/_redirects` |
-| `www.eqt.net.im` | Cloudflare Pages | EQT 官方合规页（静态 HTML） | `website/index.html` — 产品说明、价格表、退款政策及联系方式 |
-| `lic.eqt.net.im` | Cloudflare Workers | DRM 授权与设备指纹激活 API | `cloudflare/` (连接 `eqt-drm-db` 数据库) |
+| `eqt.net.im` | Cloudflare Pages | 官方主页 / 301 重定向到 `www` | `cloudflare/eqt-website/_redirects` |
+| `www.eqt.net.im` | Cloudflare Pages | EQT 官方合规页（静态 HTML） | `cloudflare/eqt-website/index.html` — 产品说明、价格表、退款政策及联系方式 |
+| `lic.eqt.net.im` | Cloudflare Workers | DRM 授权与设备指纹激活 API | `cloudflare/eqt-drm-api/` (连接 `eqt-drm-db` 数据库) |
 
 ---
 
 ## 2. Cloudflare DNS 解析配置表 (DNS Records)
 
-若要将域名完全交给 Cloudflare (CF) 接管，请将您域名的 Name Servers (NS) 更改为 Cloudflare 指定的 NS。然后在 Cloudflare DNS 控制台配置如下解析记录：
+若要将域名完全交给 Cloudflare (CF) 接管，请将您域名的 Name Servers (NS) 更改为 Cloudflare 指定 of NS。然后在 Cloudflare DNS 控制台配置如下解析记录：
 
 | 记录类型 (Type) | 主机记录 (Name) | 记录值 / 目标值 (Content / Target) | 代理状态 (Proxy) | 备注 (Note) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -39,13 +39,13 @@
   2. 选择您的 `eqt` 代码仓库。
   3. 构建设置（纯静态 HTML，无需构建工具）：
      * **Framework preset**：None (Static HTML)。
-     * **Root directory**：`/website`。
+     * **Root directory**：`/cloudflare/eqt-website`。
   4. 点击部署。
   5. 部署完成后，在 Pages 详情页的 **Custom Domains** 中，添加自定义域名 `www.eqt.net.im` 与根域名 `eqt.net.im`。Cloudflare 会自动为您签发免费的 SSL/TLS 证书。
 
 ### 3.2 授权与激活服务 (Cloudflare Workers)
 * **部署与绑定**：
-  1. 我们已将自定义域名加入到 `/cloudflare/wrangler.toml`：
+  1. 我们已将自定义域名加入到 `/cloudflare/eqt-drm-api/wrangler.toml`：
      ```toml
      routes = [
        { pattern = "lic.eqt.net.im", custom_domain = true }

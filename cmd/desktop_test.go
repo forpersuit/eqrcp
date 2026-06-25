@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"eqt/application"
+	"eqt/pkg/application"
 	"github.com/spf13/cobra"
 )
 

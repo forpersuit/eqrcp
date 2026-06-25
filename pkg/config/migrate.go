@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"eqt/application"
+	"eqt/pkg/application"
 	"github.com/adrg/xdg"
 	"gopkg.in/yaml.v2"
 )

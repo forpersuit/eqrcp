@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"eqt/config"
+	"eqt/pkg/config"
 )
 
 // ChatUsage holds the daily usage statistics and premium license tracking.

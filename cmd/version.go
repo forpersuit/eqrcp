@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"eqt/version"
+	"eqt/pkg/version"
 	"github.com/spf13/cobra"
 )
 

@@ -67,7 +67,7 @@ find_wails() {
 env_cache="${GOCACHE:-/tmp/eqt-go-build}"
 
 echo "Building Windows CLI executables..."
-(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$build_root/eqt.exe" .)
+(cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$build_root/eqt.exe" ./cmd/eqt)
 (cd "$root_dir" && env GOCACHE="$env_cache" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags -H=windowsgui -o "$build_root/eqt-launcher.exe" ./cmd/eqt-launcher)
 
 wails_cmd="$(find_wails)"

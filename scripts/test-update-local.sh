@@ -10,14 +10,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MOCK_PORT=8099
-MOCK_DIR="website"
+MOCK_DIR="cloudflare/eqt-website"
 MOCK_METADATA_FILE="$MOCK_DIR/update-metadata-mock.json"
 
 echo "=== EQT Local Auto-Update Integration Test Helper ==="
 
 # 1. Compile EQT locally
 echo "Step 1: Compiling EQT CLI/Desktop launcher..."
-go build -o eqt-test-bin .
+go build -o eqt-test-bin ./cmd/eqt
 echo "✓ Compilation successful."
 
 # 2. Setup mock metadata file
