@@ -39,6 +39,7 @@ const translations = {
         chat_identity: '局域网对话设置',
         chat_identity_desc: '设置您在局域网对话中的身份信息和附件保存选项。',
         chat_limit_reached: '今日免费对话时长已用尽',
+        chat_message_count: '{count} 条消息',
         chat_qr_expand_tips: '展开以为其他设备扫码接入。',
         chat_running_tips: '局域网内的其他设备扫码后即可加入对话。',
         chat_sender: '对话昵称',
@@ -98,6 +99,7 @@ const translations = {
         feedback_placeholder: '请详细描述您遇到的问题...',
         feedback_transfer_fail: '传输失败',
         free_quota: '每日免费额度',
+        hide_chat_qr: '隐藏聊天二维码',
         history_cleared: '历史记录已清空。',
         hours_12: '12 小时',
         hours_24: '24 小时 (默认)',
@@ -192,6 +194,7 @@ const translations = {
         share: '分享文件',
         share_active: '分享服务已启动',
         share_task_started: '共享服务已开启。',
+        show_chat_qr: '显示聊天二维码',
         silent_ready: '后台静默更新已下载完成，将在下次启动时自动应用。',
         start_chat: '开启对话',
         start_receive: '开始接收',
@@ -273,6 +276,7 @@ const translations = {
         chat_identity: 'Chat Settings',
         chat_identity_desc: 'Identity and attachment handling for desktop chat sessions.',
         chat_limit_reached: 'Daily free chat limit reached',
+        chat_message_count: '{count} message(s)',
         chat_qr_expand_tips: 'Expand to scan and invite other devices.',
         chat_running_tips: 'Other devices on the local network can scan QR to join.',
         chat_sender: 'Chat profile name',
@@ -332,6 +336,7 @@ const translations = {
         feedback_placeholder: 'What happened?',
         feedback_transfer_fail: 'Transfer failure',
         free_quota: 'Free daily quota',
+        hide_chat_qr: 'Hide chat QR',
         history_cleared: 'History cleared.',
         hours_12: '12 Hours',
         hours_24: '24 Hours (Default)',
@@ -426,6 +431,7 @@ const translations = {
         share: 'Share',
         share_active: 'Share active',
         share_task_started: 'Share task started.',
+        show_chat_qr: 'Show chat QR',
         silent_ready: 'Silent update downloaded and ready. It will apply on next restart.',
         start_chat: 'Start chat',
         start_receive: 'Start receive',
@@ -507,6 +513,7 @@ const translations = {
         chat_identity: 'チャット設定',
         chat_identity_desc: 'チャットセッションのプロフィールと自動保存の設定。',
         chat_limit_reached: '本日の無料チャット制限に達しました',
+        chat_message_count: '{count} 件のメッセージ',
         chat_qr_expand_tips: '他のデバイスをスキャンして招待するには展開します。',
         chat_running_tips: 'ローカルネットワーク上の他のデバイスがQRをスキャンして参加できます。',
         chat_sender: 'チャットプロフィール名',
@@ -566,6 +573,7 @@ const translations = {
         feedback_placeholder: 'どのような問題が発生しましたか？',
         feedback_transfer_fail: '転送エラー',
         free_quota: '無料のデイリー枠',
+        hide_chat_qr: 'チャットQRコードを非表示',
         history_cleared: '履歴がクリアされました。',
         hours_12: '12 時間',
         hours_24: '24 時間 (デフォルト)',
@@ -660,6 +668,7 @@ const translations = {
         share: 'ファイル共有',
         share_active: '共有サービス起動中',
         share_task_started: '共有タスクが開始されました。',
+        show_chat_qr: 'チャットQRコードを表示',
         silent_ready: 'サイレントアップデートがダウンロードされ、準備が整いました。次回起動時に適用されます。',
         start_chat: 'チャットを開始',
         start_receive: '受信開始',
@@ -741,6 +750,7 @@ const translations = {
         chat_identity: '채팅 설정',
         chat_identity_desc: '데스크톱 채팅 세션을 위한 식별 및 첨부 파일 처리 설정.',
         chat_limit_reached: '일일 무료 채팅 제한 도달',
+        chat_message_count: '{count} 개의 메시지',
         chat_qr_expand_tips: '다른 기기를 스캔하여 초대하려면 펼치십시오.',
         chat_running_tips: '로컬 네트워크의 다른 기기가 QR을 스캔하여 참여할 수 있습니다.',
         chat_sender: '채팅 프로필 이름',
@@ -800,6 +810,7 @@ const translations = {
         feedback_placeholder: '무슨 일이 있었나요?',
         feedback_transfer_fail: '전송 실패',
         free_quota: '일일 무료 할당량',
+        hide_chat_qr: '채팅 QR코드 숨기기',
         history_cleared: '기록이 삭제되었습니다.',
         hours_12: '12 시간',
         hours_24: '24 시간 (기본값)',
@@ -894,6 +905,7 @@ const translations = {
         share: '파일 공유',
         share_active: '공유 활성화됨',
         share_task_started: '공유 작업이 시작되었습니다.',
+        show_chat_qr: '채팅 QR코드 보이기',
         silent_ready: '백그라운드 업데이트 다운로드가 완료되었습니다. 다음 시작 시 적용됩니다.',
         start_chat: '채팅 시작',
         start_receive: '수신 시작',
@@ -975,6 +987,7 @@ const translations = {
         chat_identity: 'Ajustes de chat',
         chat_identity_desc: 'Ajustes de perfil y archivos para chat de escritorio.',
         chat_limit_reached: 'Límite de chat gratuito diario alcanzado',
+        chat_message_count: '{count} mensaje(s)',
         chat_qr_expand_tips: 'Expandir para escanear e invitar a otros dispositivos.',
         chat_running_tips: 'Otros dispositivos en la red local pueden escanear el QR para unirse.',
         chat_sender: 'Nombre del perfil de chat',
@@ -1034,6 +1047,7 @@ const translations = {
         feedback_placeholder: '¿Qué sucedió?',
         feedback_transfer_fail: 'Fallo de transferencia',
         free_quota: 'Cuota diaria gratuita',
+        hide_chat_qr: 'Ocultar código QR de chat',
         history_cleared: 'Historial borrado.',
         hours_12: '12 Horas',
         hours_24: '24 Horas (Predeterminado)',
@@ -1128,6 +1142,7 @@ const translations = {
         share: 'Compartir',
         share_active: 'Compartición activa',
         share_task_started: 'Tarea de compartición iniciada.',
+        show_chat_qr: 'Mostrar código QR de chat',
         silent_ready: 'Actualización silenciosa descargada. Se aplicará en el próximo reinicio.',
         start_chat: 'Iniciar chat',
         start_receive: 'Iniciar recepción',
@@ -1209,6 +1224,7 @@ const translations = {
         chat_identity: 'Chat-Einstellungen',
         chat_identity_desc: 'Profil- und Dateieinstellungen für Desktop-Chat.',
         chat_limit_reached: 'Tägliches Limit für kostenlosen Chat erreicht',
+        chat_message_count: '{count} Nachricht(en)',
         chat_qr_expand_tips: 'Erweitern, um andere Geräte zu scannen und einzuladen.',
         chat_running_tips: 'Andere Geräte im lokalen Netzwerk können den QR-Code scannen, um beizutreten.',
         chat_sender: 'Chat-Profilname',
@@ -1268,6 +1284,7 @@ const translations = {
         feedback_placeholder: 'Was ist passiert?',
         feedback_transfer_fail: 'Übertragungsfehler',
         free_quota: 'Kostenloses tägliches Kontingent',
+        hide_chat_qr: 'Chat-QR-Code ausblenden',
         history_cleared: 'Verlauf gelöscht.',
         hours_12: '12 Stunden',
         hours_24: '24 Stunden (Standard)',
@@ -1362,6 +1379,7 @@ const translations = {
         share: 'Teilen',
         share_active: 'Freigabe aktiv',
         share_task_started: 'Freigabeaufgabe gestartet.',
+        show_chat_qr: 'Chat-QR-Code anzeigen',
         silent_ready: 'Stilles Update heruntergeladen. Es wird beim nächsten Neustart angewendet.',
         start_chat: 'Chat starten',
         start_receive: 'Empfang starten',
@@ -1443,6 +1461,7 @@ const translations = {
         chat_identity: 'Paramètres de chat',
         chat_identity_desc: 'Paramètres de profil et de fichiers pour chat sur ordinateur.',
         chat_limit_reached: 'Limite quotidienne de chat gratuit atteinte',
+        chat_message_count: '{count} message(s)',
         chat_qr_expand_tips: 'Développer pour scanner et inviter d\'autres appareils.',
         chat_running_tips: 'D\'autres appareils sur le réseau local peuvent scanner le QR pour rejoindre.',
         chat_sender: 'Nom de profil du chat',
@@ -1502,6 +1521,7 @@ const translations = {
         feedback_placeholder: 'Que s\'est-il passé ?',
         feedback_transfer_fail: 'Échec de transfert',
         free_quota: 'Quota quotidien gratuit',
+        hide_chat_qr: 'Masquer le code QR du chat',
         history_cleared: 'Historique effacé.',
         hours_12: '12 heures',
         hours_24: '24 heures (Par défaut)',
@@ -1595,6 +1615,7 @@ const translations = {
         share: 'Partager',
         share_active: 'Partage actif',
         share_task_started: 'Tâche de partage démarrée.',
+        show_chat_qr: 'Afficher le code QR du chat',
         silent_ready: 'Mise à jour silencieuse téléchargée. Elle s\'appliquera au prochain redémarrage.',
         start_chat: 'Démarrer le chat',
         start_receive: 'Démarrer la réception',
@@ -1640,8 +1661,19 @@ const translations = {
 }
 };
 
+export function getSystemLocale() {
+    const sysLang = (navigator.language || 'en').toLowerCase();
+    if (sysLang.startsWith('zh')) return 'zh';
+    if (sysLang.startsWith('ja')) return 'ja';
+    if (sysLang.startsWith('ko')) return 'ko';
+    if (sysLang.startsWith('es')) return 'es';
+    if (sysLang.startsWith('de')) return 'de';
+    if (sysLang.startsWith('fr')) return 'fr';
+    return 'en';
+}
+
 export function t(key, params) {
-    const lang = (state && state.settings && state.settings.lang) || 'zh';
+    const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
     let val = (translations[lang] && translations[lang][key]) || 
               (translations['en'] && translations['en'][key]) || 
               (translations['zh'] && translations['zh'][key]) || 

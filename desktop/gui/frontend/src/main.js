@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { t } from './i18n.js';
+import { t, getSystemLocale } from './i18n.js';
 import './style.css';
 import './app.css';
 import faviconURL from './assets/images/favicon.png';
@@ -476,7 +476,7 @@ function renderChatPanel(task) {
     const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
     const deviceCount = chatDeviceCount(task);
     const qrImage = qrImageURL(chatUrl);
-    const qrToggleLabel = state.chatQROpen ? 'Hide chat QR' : 'Show chat QR';
+    const qrToggleLabel = state.chatQROpen ? t('hide_chat_qr') : t('show_chat_qr');
     const qrPulse = !state.chatQRPromptDismissed && state.chatQRPulseUntil > Date.now();
     const remoteDeviceCount = Math.max(0, deviceCount - 1);
     return `
@@ -496,7 +496,7 @@ function renderChatPanel(task) {
                         <button type="button" class="side-icon-button danger-icon stop-chat-action" title="${t('stop')}" aria-label="${t('stop')}">${stopIcon()}</button>
                     </div>
                 </div>
-                <div class="chat-count">${escapeHTML(String(messageCount))} message${messageCount === 1 ? '' : 's'}</div>
+                <div class="chat-count">${escapeHTML(t('chat_message_count', { count: messageCount }))}</div>
                 ${lastActivity ? `<p class="side-note">${t('last_activity')}: ${escapeHTML(lastActivity)}</p>` : ''}
             </div>
             <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
@@ -2178,6 +2178,10 @@ async function loadSettings() {
         }
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
+        if (!state.settings.lang) {
+            state.settings.lang = getSystemLocale();
+            saveSettingsData().catch(() => {});
+        }
         state.receiveDir = state.settings.output || '';
         state.browserFallback = Boolean(state.settings.browser);
         state.chatAutoSave = state.settings.chatAutoSave !== false;
@@ -2554,9 +2558,9 @@ function chatQuotaTopText() {
     }
     const remaining = chatRemainingMs();
     if (remaining <= 0) {
-        return 'Chat 0:00';
+        return t('chat_top_used_up');
     }
-    return `Chat ${formatDuration(remaining)}`;
+    return t('chat_top_time', { time: formatDuration(remaining) });
 }
 
 function chatStartButtonText() {
