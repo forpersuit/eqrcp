@@ -1169,7 +1169,6 @@ dd {
 .settings-section {
     border: 1px solid var(--line);
     border-radius: 8px;
-    overflow: hidden;
 }
 
 .settings-section-head {
@@ -1178,6 +1177,8 @@ dd {
     display: grid;
     gap: 3px;
     padding: 13px 14px;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
 }
 
 .settings-section-head h3 {
@@ -2222,8 +2223,8 @@ dd {
 /* ── Emoji Picker Popover ── */
 .emoji-picker-popover {
     position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
+    top: calc(100% + 8px);
+    right: 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -2231,7 +2232,7 @@ dd {
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 10px;
-    box-shadow: 0 -10px 32px rgba(24, 33, 31, 0.18);
+    box-shadow: 0 10px 32px rgba(24, 33, 31, 0.18);
     z-index: 9999;
     width: 240px;
     backdrop-filter: blur(8px);

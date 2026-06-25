@@ -370,7 +370,7 @@ function renderShareTransfer(task) {
     const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
-    const qrBanner = `
+    const qrBanner = !isQRExpanded ? `
         <div class="qr-collapsed-banner">
             <div class="qr-collapsed-info">
                 <span class="qr-collapsed-status">
@@ -386,11 +386,8 @@ function renderShareTransfer(task) {
                     <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
                 ` : ''}
             </div>
-            <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 28px; border-radius: 6px;">
-                ${collapseText}
-            </button>
         </div>
-    `;
+    ` : '';
 
     return `
         <div class="transfer-stage">
@@ -399,13 +396,18 @@ function renderShareTransfer(task) {
                     <div class="eyebrow">${t('share_active')}</div>
                     <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
                 </div>
-                <button class="danger inline stop-current-action">${t('stop')}</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="danger inline stop-current-action">${t('stop')}</button>
+                    <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 32px; border-radius: 6px;">
+                        ${collapseText}
+                    </button>
+                </div>
             </div>
             
             ${qrBanner}
             
             ${isQRExpanded && qrImage ? `
-                <div class="qr-hero" style="margin-top: 12px;">
+                <div class="qr-hero">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                     <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
@@ -413,7 +415,7 @@ function renderShareTransfer(task) {
             
             <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl class="transfer-details">
-                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
+                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
                 <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
                 <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
             </dl>
@@ -473,7 +475,7 @@ function renderReceiveTransfer(task) {
     const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
-    const qrBanner = `
+    const qrBanner = !isQRExpanded ? `
         <div class="qr-collapsed-banner">
             <div class="qr-collapsed-info">
                 <span class="qr-collapsed-status">
@@ -489,11 +491,8 @@ function renderReceiveTransfer(task) {
                     <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
                 ` : ''}
             </div>
-            <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 28px; border-radius: 6px;">
-                ${collapseText}
-            </button>
         </div>
-    `;
+    ` : '';
 
     return `
         <div class="transfer-stage">
@@ -502,24 +501,31 @@ function renderReceiveTransfer(task) {
                     <div class="eyebrow">${t('receive_active')}</div>
                     <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
                 </div>
-                <button class="danger inline stop-current-action">${t('stop')}</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="danger inline stop-current-action">${t('stop')}</button>
+                    <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 32px; border-radius: 6px;">
+                        ${collapseText}
+                    </button>
+                </div>
             </div>
             
             ${qrBanner}
             
             ${isQRExpanded && qrImage ? `
-                <div class="qr-hero" style="margin-top: 12px;">
+                <div class="qr-hero">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                     <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-            <dl class="transfer-details">
-                <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
-                <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
-            </dl>
+            ${task.transferState !== 'waiting' ? `
+                <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
+                <dl class="transfer-details">
+                    <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
+                    <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
+                    <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
+                </dl>
+            ` : ''}
             
             ${files.length > 0 ? `
                 <div class="locked-list">
@@ -846,7 +852,7 @@ function renderSettingsPanel() {
                         <div class="avatar-preview-wrapper">
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
-                        <div class="avatar-inputs-stack" style="position: relative;">
+                        <div class="avatar-inputs-stack" style="position: relative; z-index: 15;">
                             <div class="avatar-actions">
                                 <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
                                 <button type="button" id="btn-emoji-more" class="avatar-action-btn">${t('btn_emoji') || 'Emoji'}</button>
