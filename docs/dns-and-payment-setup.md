@@ -10,8 +10,8 @@
 
 | 子域名 / 主机记录 | 托管平台 | 承载业务服务 | 对应源码/文档资源位置 |
 | :--- | :--- | :--- | :--- |
-| `eqt.net.im` | Cloudflare Pages | 官方主页 / 重定向到 `www` | 映射 `docs/product-landing.md` |
-| `www.eqt.net.im` | Cloudflare Pages | EQT 官方合规页（Jekyll/HTML 渲染） | 包含产品说明、价格表、退款政策及联系方式 |
+| `eqt.net.im` | Cloudflare Pages | 官方主页 / 301 重定向到 `www` | `website/_redirects` |
+| `www.eqt.net.im` | Cloudflare Pages | EQT 官方合规页（静态 HTML） | `website/index.html` — 产品说明、价格表、退款政策及联系方式 |
 | `lic.eqt.net.im` | Cloudflare Workers | DRM 授权与设备指纹激活 API | `cloudflare/` (连接 `eqt-drm-db` 数据库) |
 
 ---
@@ -37,9 +37,9 @@
 * **部署方式**：
   1. 登录 Cloudflare 控制台，点击 **Pages** -> **Create a project** -> **Connect to Git**。
   2. 选择您的 `eqt` 代码仓库。
-  3. 构建设置：若使用静态 Jekyll 网页：
-     * **Framework preset**：Jekyll (或者 Static HTML)。
-     * **Root directory**：`/docs`。
+  3. 构建设置（纯静态 HTML，无需构建工具）：
+     * **Framework preset**：None (Static HTML)。
+     * **Root directory**：`/website`。
   4. 点击部署。
   5. 部署完成后，在 Pages 详情页的 **Custom Domains** 中，添加自定义域名 `www.eqt.net.im` 与根域名 `eqt.net.im`。Cloudflare 会自动为您签发免费的 SSL/TLS 证书。
 

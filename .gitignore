@@ -74,3 +74,6 @@ design.md
 docs/img/transparent1.jpg
 pkgconfig/
 
+
+# Local agent configuration
+.agents/mcp_config.json

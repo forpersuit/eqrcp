@@ -140,19 +140,25 @@
 </a>
 <!-- Navigation Links (Desktop) -->
 <nav class="hidden md:flex items-center gap-lg">
-<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#features">Features</a>
-<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#pricing">Pricing</a>
-<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#compliance">Compliance</a>
-<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#support">Support</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#features" data-i18n="nav_features">Features</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#pricing" data-i18n="nav_pricing">Pricing</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#compliance" data-i18n="nav_compliance">Compliance</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#support" data-i18n="nav_support">Support</a>
 </nav>
 <!-- Trailing Action -->
-<a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-[#a855f7] text-white rounded font-label-md text-label-md hover:shadow-[0_0_10px_#a855f7] transition-shadow active:scale-95" href="#download">
-                Download Client
-            </a>
-<!-- Mobile Menu Toggle (Visual only for this static demo) -->
-<button class="md:hidden text-on-surface-variant">
-<span class="material-symbols-outlined">menu</span>
-</button>
+<div class="flex items-center gap-md">
+    <button id="lang-toggle" class="flex items-center gap-xs px-sm py-xs md:px-md md:py-sm glass-panel border-white/10 hover:border-secondary text-on-surface-variant hover:text-secondary rounded font-label-md text-label-md transition-all">
+        <span class="material-symbols-outlined text-base">language</span>
+        <span id="lang-text" class="hidden sm:inline">English</span>
+    </button>
+    <a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-[#a855f7] text-white rounded font-label-md text-label-md hover:shadow-[0_0_10px_#a855f7] transition-shadow active:scale-95" href="#download" data-i18n="nav_download">
+        Download Client
+    </a>
+    <!-- Mobile Menu Toggle (Visual only for this static demo) -->
+    <button class="md:hidden text-on-surface-variant">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+</div>
 </div>
 </header>
 <!-- Main Content -->
@@ -162,19 +168,19 @@
 <div class="flex-1 space-y-lg relative z-10">
 <div class="inline-flex items-center gap-sm px-sm py-xs rounded-full glass-panel border-secondary/50">
 <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
-<span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest">Version 2.0 Live</span>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest" data-i18n="hero_version">Version 2.0 Live</span>
 </div>
-<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface">
+<h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface" data-i18n="hero_title">
                     Instant Local File Transfer &amp; <br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Secure Chat</span>, via QR Code
                 </h1>
-<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl" data-i18n="hero_desc">
                     Super fast local-network P2P transfer tool between PC and Mobile. No cloud, no lag, just scan and send. Experience seamless integration and military-grade encryption within your local environment.
                 </p>
 <div class="flex flex-wrap items-center gap-md pt-md">
 <a class="inline-flex items-center justify-center gap-sm px-lg py-md bg-[#a855f7] text-white rounded-lg font-label-md text-label-md hover:shadow-[0_0_15px_#a855f7] transition-all" href="#download">
-<span class="material-symbols-outlined">download</span> Download for Windows
+<span class="material-symbols-outlined">download</span> <span data-i18n="hero_download_win">Download for Windows</span>
                     </a>
-<a class="inline-flex items-center justify-center gap-sm px-lg py-md glass-panel text-secondary border-secondary/30 hover:border-secondary hover:shadow-[0_0_15px_rgba(93,230,255,0.2)] rounded-lg font-label-md text-label-md transition-all" href="#download">
+<a class="inline-flex items-center justify-center gap-sm px-lg py-md glass-panel text-secondary border-secondary/30 hover:border-secondary hover:shadow-[0_0_15px_rgba(93,230,255,0.2)] rounded-lg font-label-md text-label-md transition-all" href="#download" data-i18n="hero_download_mac_linux">
                         macOS &amp; Linux
                     </a>
 </div>
@@ -191,8 +197,8 @@
 <!-- Features Grid -->
 <section class="space-y-xl pt-xxl" id="features">
 <div class="text-center space-y-sm">
-<h2 class="font-headline-lg text-headline-lg text-on-surface">Engineered for Speed &amp; Security</h2>
-<p class="font-body-md text-body-md text-on-surface-variant">Core capabilities that redefine local data exchange.</p>
+<h2 class="font-headline-lg text-headline-lg text-on-surface" data-i18n="features_title">Engineered for Speed &amp; Security</h2>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="features_subtitle">Core capabilities that redefine local data exchange.</p>
 </div>
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg">
 <!-- Feature Card 1 -->
@@ -200,95 +206,95 @@
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface">QR-Based Transfer</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat1_title">QR-Based Transfer</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat1_desc">Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.</p>
 </div>
 <!-- Feature Card 2 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">speed</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface">Local Speed Limitless</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">Utilize full network potential. Achieve 10MB/s - 100MB/s local bandwidth bypassing ISP bottlenecks.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat2_title">Local Speed Limitless</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat2_desc">Utilize full network potential. Achieve 10MB/s - 100MB/s local bandwidth bypassing ISP bottlenecks.</p>
 </div>
 <!-- Feature Card 3 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface">P2P Encrypted Chat</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">Communicate securely over local networks. End-to-end encrypted text and file sharing with zero cloud footprint.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat3_title">P2P Encrypted Chat</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat3_desc">Communicate securely over local networks. End-to-end encrypted text and file sharing with zero cloud footprint.</p>
 </div>
 <!-- Feature Card 4 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">devices</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface">Cross-Platform</h3>
-<p class="font-body-md text-body-md text-on-surface-variant">Seamless operation across operating systems. No dedicated mobile app installation required for receivers.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat4_title">Cross-Platform</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat4_desc">Seamless operation across operating systems. No dedicated mobile app installation required for receivers.</p>
 </div>
 </div>
 </section>
 <!-- Pricing Section -->
 <section class="space-y-xl pt-xxl" id="pricing">
 <div class="text-center space-y-sm">
-<h2 class="font-headline-lg text-headline-lg text-on-surface">Transparent Licensing</h2>
-<p class="font-body-md text-body-md text-on-surface-variant">Choose the tier that fits your workflow.</p>
+<h2 class="font-headline-lg text-headline-lg text-on-surface" data-i18n="pricing_title">Transparent Licensing</h2>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="pricing_subtitle">Choose the tier that fits your workflow.</p>
 </div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-lg max-w-5xl mx-auto items-center">
 <!-- Free -->
 <div class="glass-panel p-xl rounded-2xl flex flex-col h-full border-t border-t-white/5">
-<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Free</h3>
-<div class="font-display-lg text-display-lg text-on-surface mb-lg">$0<span class="text-body-md font-body-md text-on-surface-variant">/forever</span></div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs" data-i18n="price_free_title">Free</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$0<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_free_period">/forever</span></div>
 <ul class="space-y-md mb-xl flex-grow">
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Basic local transfer</li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Community support</li>
-<li class="flex items-center gap-sm text-on-surface-variant opacity-50"><span class="material-symbols-outlined text-sm">close</span> Priority bandwidth</li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat1">Basic local transfer</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat2">Community support</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant opacity-50"><span class="material-symbols-outlined text-sm">close</span> <span data-i18n="price_free_feat3">Priority bandwidth</span></li>
 </ul>
-<button class="w-full py-md glass-panel text-on-surface rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md">Get Started</button>
+<button class="w-full py-md glass-panel text-on-surface rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md" data-i18n="price_free_btn">Get Started</button>
 </div>
 <!-- Plus Lifetime (Highlighted) -->
 <div class="glass-panel p-xl rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80">
-<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-[#490080] px-sm py-xs rounded-full font-label-sm text-label-sm">BEST VALUE</div>
-<h3 class="font-headline-md text-headline-md text-primary mb-xs">Plus Lifetime</h3>
-<div class="font-display-lg text-display-lg text-on-surface mb-lg">$29.99<span class="text-body-md font-body-md text-on-surface-variant">/one-time</span></div>
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-[#490080] px-sm py-xs rounded-full font-label-sm text-label-sm" data-i18n="price_lifetime_badge">BEST VALUE</div>
+<h3 class="font-headline-md text-headline-md text-primary mb-xs" data-i18n="price_lifetime_title">Plus Lifetime</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$29.99<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_lifetime_period">/one-time</span></div>
 <ul class="space-y-md mb-xl flex-grow">
-<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> All Plus features forever</li>
-<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> No recurring fees</li>
-<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> Lifetime updates</li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat1">All Plus features forever</span></li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat2">No recurring fees</span></li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
 </ul>
-<button class="w-full py-md bg-[#a855f7] text-white rounded-lg hover:shadow-[0_0_15px_#a855f7] transition-all font-label-md text-label-md">Buy Lifetime</button>
+<button class="w-full py-md bg-[#a855f7] text-white rounded-lg hover:shadow-[0_0_15px_#a855f7] transition-all font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
 </div>
 <!-- Plus Yearly -->
 <div class="glass-panel p-xl rounded-2xl flex flex-col h-full border-t border-t-white/5">
-<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Plus</h3>
-<div class="font-display-lg text-display-lg text-on-surface mb-lg">$11.99<span class="text-body-md font-body-md text-on-surface-variant">/year</span></div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs" data-i18n="price_yearly_title">Plus</h3>
+<div class="font-display-lg text-display-lg text-on-surface mb-lg">$11.99<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_yearly_period">/year</span></div>
 <ul class="space-y-md mb-xl flex-grow">
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> High-speed priority</li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Encrypted chat</li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> Priority support</li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat1">High-speed priority</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat2">Encrypted chat</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat3">Priority support</span></li>
 </ul>
-<button class="w-full py-md glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md">Subscribe Yearly</button>
+<button class="w-full py-md glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md" data-i18n="price_yearly_btn">Subscribe Yearly</button>
 </div>
 </div>
 </section>
 <!-- Compliance Section (Simplified Bento/Grid) -->
 <section class="pt-xxl border-t border-white/5 mt-xl" id="compliance">
-<h2 class="font-headline-lg text-headline-lg text-on-surface mb-lg">Merchant Policy &amp; Compliance</h2>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-lg" data-i18n="compliance_title">Merchant Policy &amp; Compliance</h2>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-md">
 <div class="glass-panel p-md rounded-lg">
-<h4 class="font-label-md text-label-md text-primary mb-xs">Fulfillment &amp; Delivery</h4>
-<p class="font-body-md text-body-md text-on-surface-variant text-sm">Digital licenses are delivered instantly via email upon successful payment confirmation.</p>
+<h4 class="font-label-md text-label-md text-primary mb-xs" data-i18n="comp_feat1_title">Fulfillment &amp; Delivery</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="comp_feat1_desc">Digital licenses are delivered instantly via email upon successful payment confirmation.</p>
 </div>
 <div class="glass-panel p-md rounded-lg">
-<h4 class="font-label-md text-label-md text-primary mb-xs">Refund &amp; Cancellation</h4>
-<p class="font-body-md text-body-md text-on-surface-variant text-sm">14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.</p>
+<h4 class="font-label-md text-label-md text-primary mb-xs" data-i18n="comp_feat2_title">Refund &amp; Cancellation</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="comp_feat2_desc">14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.</p>
 </div>
 <div class="glass-panel p-md rounded-lg hover:bg-surface-bright/50 transition-colors cursor-pointer">
-<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center">Privacy Policy <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center"><span data-i18n="comp_privacy">Privacy Policy</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
 </div>
 <div class="glass-panel p-md rounded-lg hover:bg-surface-bright/50 transition-colors cursor-pointer">
-<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center">Terms of Service <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+<h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center"><span data-i18n="comp_terms">Terms of Service</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
 </div>
 </div>
 </section>
@@ -298,15 +304,206 @@
 <div class="max-w-container-max mx-auto px-lg flex flex-col md:flex-row justify-between items-start gap-lg">
 <div class="space-y-sm">
 <div class="font-headline-md text-headline-md text-on-surface">EQT</div>
-<p class="font-body-md text-body-md text-tertiary opacity-70">© 2025 EQT (Easy QR Transfer). All rights reserved.</p>
+<p class="font-body-md text-body-md text-tertiary opacity-70" data-i18n="footer_copy">© 2025 EQT (Easy QR Transfer). All rights reserved.</p>
 </div>
 <div class="flex flex-col md:flex-row gap-lg md:gap-xl">
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.dev">Support: support@eqt.dev</a>
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="https://github.com/forpersuit/eqt" target="_blank" rel="noopener">GitHub</a>
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#">Privacy Policy</a>
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#">Terms of Service</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.dev" data-i18n="footer_support">Support: support@eqt.dev</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="https://github.com/forpersuit/eqt" target="_blank" rel="noopener" data-i18n="footer_github">GitHub</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#" data-i18n="comp_privacy">Privacy Policy</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="#" data-i18n="comp_terms">Terms of Service</a>
 </div>
 </div>
 </footer>
+<script>
+    const translations = {
+        en: {
+            "nav_features": "Features",
+            "nav_pricing": "Pricing",
+            "nav_compliance": "Compliance",
+            "nav_support": "Support",
+            "nav_download": "Download Client",
+            "hero_version": "Version 2.0 Live",
+            "hero_title": "Instant Local File Transfer &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">Secure Chat</span>, via QR Code",
+            "hero_desc": "Super fast local-network P2P transfer tool between PC and Mobile. No cloud, no lag, just scan and send. Experience seamless integration and military-grade encryption within your local environment.",
+            "hero_download_win": "Download for Windows",
+            "hero_download_mac_linux": "macOS &amp; Linux",
+            "features_title": "Engineered for Speed &amp; Security",
+            "features_subtitle": "Core capabilities that redefine local data exchange.",
+            "feat1_title": "QR-Based Transfer",
+            "feat1_desc": "Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.",
+            "feat2_title": "Local Speed Limitless",
+            "feat2_desc": "Utilize full network potential. Achieve 10MB/s - 100MB/s local bandwidth bypassing ISP bottlenecks.",
+            "feat3_title": "P2P Encrypted Chat",
+            "feat3_desc": "Communicate securely over local networks. End-to-end encrypted text and file sharing with zero cloud footprint.",
+            "feat4_title": "Cross-Platform",
+            "feat4_desc": "Seamless operation across operating systems. No dedicated mobile app installation required for receivers.",
+            "pricing_title": "Transparent Licensing",
+            "pricing_subtitle": "Choose the tier that fits your workflow.",
+            "price_free_title": "Free",
+            "price_free_period": "/forever",
+            "price_free_feat1": "Basic local transfer",
+            "price_free_feat2": "Community support",
+            "price_free_feat3": "Priority bandwidth",
+            "price_free_btn": "Get Started",
+            "price_lifetime_badge": "BEST VALUE",
+            "price_lifetime_title": "Plus Lifetime",
+            "price_lifetime_period": "/one-time",
+            "price_lifetime_feat1": "All Plus features forever",
+            "price_lifetime_feat2": "No recurring fees",
+            "price_lifetime_feat3": "Lifetime updates",
+            "price_lifetime_btn": "Buy Lifetime",
+            "price_yearly_title": "Plus",
+            "price_yearly_period": "/year",
+            "price_yearly_feat1": "High-speed priority",
+            "price_yearly_feat2": "Encrypted chat",
+            "price_yearly_feat3": "Priority support",
+            "price_yearly_btn": "Subscribe Yearly",
+            "compliance_title": "Merchant Policy &amp; Compliance",
+            "comp_feat1_title": "Fulfillment &amp; Delivery",
+            "comp_feat1_desc": "Digital licenses are delivered instantly via email upon successful payment confirmation.",
+            "comp_feat2_title": "Refund &amp; Cancellation",
+            "comp_feat2_desc": "14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.",
+            "comp_privacy": "Privacy Policy",
+            "comp_terms": "Terms of Service",
+            "footer_copy": "© 2025 EQT (Easy QR Transfer). All rights reserved.",
+            "footer_support": "Support: support@eqt.dev",
+            "footer_github": "GitHub",
+            "meta_title": "EQT - Easy QR Transfer | LAN File Transfer &amp; Secure Chat via QR Code",
+            "meta_desc": "EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux."
+        },
+        zh: {
+            "nav_features": "功能特点",
+            "nav_pricing": "价格方案",
+            "nav_compliance": "合规政策",
+            "nav_support": "技术支持",
+            "nav_download": "下载客户端",
+            "hero_version": "版本 2.0 已发布",
+            "hero_title": "通过二维码实现<br/>极速局域网文件传输 &amp; <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">安全聊天</span>",
+            "hero_desc": "电脑与手机之间极速局域网 P2P 传输工具。无需云端，无延迟，扫码即送。在您的本地环境中畅享无缝集成与军工级加密体验。",
+            "hero_download_win": "下载 Windows 版",
+            "hero_download_mac_linux": "macOS &amp; Linux 版",
+            "features_title": "为速度与安全而生",
+            "features_subtitle": "重新定义本地数据交换的核心能力。",
+            "feat1_title": "扫码即传",
+            "feat1_desc": "即时生成一次性二维码。任何设备扫码即可开启发送/接收协议，无需配对。",
+            "feat2_title": "极速局域网",
+            "feat2_desc": "充分释放网络带宽潜力。突破运营商网络限制，局域网传输速度可达 10MB/s - 100MB/s。",
+            "feat3_title": "P2P 加密聊天",
+            "feat3_desc": "在局域网内安全沟通。端到端加密的文本和文件分享，云端零留痕。",
+            "feat4_title": "跨平台支持",
+            "feat4_desc": "各主流操作系统无缝运行。接收端无需安装任何专用移动 App。",
+            "pricing_title": "透明授权",
+            "pricing_subtitle": "选择适合您工作流的方案。",
+            "price_free_title": "免费版",
+            "price_free_period": "/ 永久",
+            "price_free_feat1": "基础本地传输",
+            "price_free_feat2": "社区支持",
+            "price_free_feat3": "高速通道限制",
+            "price_free_btn": "立即开始",
+            "price_lifetime_badge": "最划算",
+            "price_lifetime_title": "终身专业版",
+            "price_lifetime_period": "/ 一次性付款",
+            "price_lifetime_feat1": "永久享有所有专业版功能",
+            "price_lifetime_feat2": "无后续订阅费用",
+            "price_lifetime_feat3": "终身免费升级",
+            "price_lifetime_btn": "购买终身版",
+            "price_yearly_title": "年付专业版",
+            "price_yearly_period": "/ 年",
+            "price_yearly_feat1": "高速传输特权",
+            "price_yearly_feat2": "局域网加密聊天",
+            "price_yearly_feat3": "优先技术支持",
+            "price_yearly_btn": "按年订阅",
+            "compliance_title": "商家政策与合规性",
+            "comp_feat1_title": "交付服务",
+            "comp_feat1_desc": "付款成功确认后，数字许可证密钥将立即通过电子邮件发送给您。",
+            "comp_feat2_title": "退款与取消",
+            "comp_feat2_desc": "未使用的许可证享有 14 天无理由退款保证。订阅服务可随时取消。",
+            "comp_privacy": "隐私政策",
+            "comp_terms": "服务条款",
+            "footer_copy": "© 2025 EQT (Easy QR Transfer). 保留所有权利。",
+            "footer_support": "支持邮箱: support@eqt.dev",
+            "footer_github": "GitHub",
+            "meta_title": "EQT - 极速扫码文件传输 | 局域网传输与二维码安全聊天工具",
+            "meta_desc": "EQT 是一款电脑与手机之间的局域网 P2P 文件传输工具，通过二维码扫码，以 10-100 MB/s 的局域网满速进行传输。无需云端，免安装 App。支持局域网加密 P2P 聊天。支持 Windows、macOS 和 Linux。"
+        }
+    };
+
+    function getCookie(name) {
+        const value = "; " + document.cookie;
+        const parts = value.split("; " + name + "=");
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+    }
+
+    function applyLang(lang) {
+        document.documentElement.lang = lang;
+        
+        // Update elements with data-i18n attribute
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (translations[lang] && translations[lang][key] !== undefined) {
+                el.innerHTML = translations[lang][key];
+            }
+        });
+
+        // Update title and meta description
+        if (translations[lang] && translations[lang]["meta_title"]) {
+            document.title = translations[lang]["meta_title"];
+        }
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc && translations[lang] && translations[lang]["meta_desc"]) {
+            metaDesc.setAttribute('content', translations[lang]["meta_desc"]);
+        }
+
+        // Update language toggle text
+        const langTextEl = document.getElementById('lang-text');
+        if (langTextEl) {
+            langTextEl.textContent = lang === 'zh' ? '中文' : 'English';
+        }
+    }
+
+    function initLang() {
+        let lang = localStorage.getItem('eqt-lang');
+        if (!lang) {
+            lang = getCookie('eqt-lang');
+        }
+        if (!lang) {
+            const navLang = navigator.language || navigator.userLanguage;
+            lang = (navLang && navLang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
+        }
+        
+        // Final fallback
+        if (lang !== 'zh' && lang !== 'en') {
+            lang = 'en';
+        }
+
+        applyLang(lang);
+    }
+
+    // Toggle button handler
+    const toggleBtn = document.getElementById('lang-toggle');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const currentLang = document.documentElement.lang || 'en';
+            const newLang = currentLang === 'zh' ? 'en' : 'zh';
+            
+            localStorage.setItem('eqt-lang', newLang);
+            setCookie('eqt-lang', newLang, 365);
+            applyLang(newLang);
+        });
+    }
+
+    // Run on load
+    window.addEventListener('DOMContentLoaded', initLang);
+</script>
 </body></html>
 
