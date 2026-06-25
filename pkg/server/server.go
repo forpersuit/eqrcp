@@ -806,7 +806,11 @@ func New(cfg *config.Config) (*Server, error) {
 			Lang  string
 		}{}
 		htmlVariables.Route = "/receive/" + path
-		htmlVariables.Lang = app.Lang
+		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
+			htmlVariables.Lang = cookie.Value
+		} else {
+			htmlVariables.Lang = app.Lang
+		}
 		switch r.Method {
 		case "POST":
 			app.setStatus("transferring", "Receiving files from connected device.")

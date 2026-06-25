@@ -401,10 +401,11 @@
         } else {
             currentLang = 'en';
         }
-        var savedLang = window.localStorage.getItem('eqt-page-lang');
+        var savedLang = window.localStorage.getItem('eqt-page-lang') || window.localStorage.getItem('eqt_lang');
         if (savedLang && supportedLangs[savedLang]) {
             currentLang = savedLang;
         }
+        document.cookie = "eqt-lang=" + encodeURIComponent(currentLang) + ";path=/;max-age=31536000";
 
         function mergeDict(target, source) {
             if (!source) return;
@@ -682,6 +683,7 @@
                 currentLang = langSelect.value;
                 window.localStorage.setItem('eqt_lang', currentLang);
                 window.localStorage.setItem('eqt-page-lang', currentLang);
+                document.cookie = "eqt-lang=" + encodeURIComponent(currentLang) + ";path=/;max-age=31536000";
                 applyLanguage();
             });
         }

@@ -2141,6 +2141,14 @@ async function stopChat() {
     await run(async () => {
         await StopChat();
         state.notice = t('chat_stopped');
+        if (state.status) {
+            state.status.chat = null;
+            if (state.status.current && state.status.current.action === 'chat') {
+                state.status.current = null;
+            }
+        }
+        reconcileChatQRState(state.status);
+        render();
         await loadStatusData();
     });
 }

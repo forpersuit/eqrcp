@@ -826,7 +826,7 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath)
+		cmd := exec.Command("explorer.exe", winPath)
 		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
