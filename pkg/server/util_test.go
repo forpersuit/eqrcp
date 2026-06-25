@@ -185,6 +185,61 @@ func TestBrowserPagesUseBrandAssets(t *testing.T) {
 	}
 }
 
+func TestUploadLangRendering(t *testing.T) {
+	var out strings.Builder
+	htmlVariables := struct {
+		Route string
+		File  string
+		Files []string
+		Count int
+		Lang  string
+	}{
+		Route: "/receive/test",
+		Lang:  "",
+	}
+	if err := serveTemplate("upload", pages.Upload, &out, htmlVariables); err != nil {
+		t.Fatalf("serveTemplate upload error = %v", err)
+	}
+	rendered := out.String()
+	lines := strings.Split(rendered, "\n")
+	found := false
+	for _, line := range lines {
+		if strings.Contains(line, "var serverLang") {
+			found = true
+			t.Logf("Rendered var serverLang line: %s", strings.TrimSpace(line))
+		}
+	}
+	if !found {
+		t.Fatal("var serverLang line not found in rendered upload page")
+	}
+}
+
+func TestReceivePageRendering(t *testing.T) {
+	var out strings.Builder
+	htmlVariables := struct {
+		Route string
+		File  string
+		Files []string
+		Count int
+		Lang  string
+	}{
+		Route: "/receive/testtoken",
+		Lang:  "zh",
+	}
+	if err := serveTemplate("upload", pages.Upload, &out, htmlVariables); err != nil {
+		t.Fatalf("serveTemplate upload error = %v", err)
+	}
+	rendered := out.String()
+	if len(rendered) < 1000 {
+		t.Fatalf("Rendered page size too small, got %d bytes", len(rendered))
+	}
+	lines := strings.Split(rendered, "\n")
+	for i := 0; i < 30 && i < len(lines); i++ {
+		t.Logf("%d: %s", i+1, lines[i])
+	}
+}
+
+
 func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {

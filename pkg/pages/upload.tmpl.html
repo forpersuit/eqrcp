@@ -653,9 +653,22 @@
                 clearDraft();
                 pastedFiles = [];
                 pastedFileContainer.innerHTML = '';
-                document.open();
-                document.write(html);
-                document.close();
+                var parser = new DOMParser();
+                var nextDoc = parser.parseFromString(html, 'text/html');
+                document.title = nextDoc.title || document.title;
+                document.head.innerHTML = nextDoc.head.innerHTML;
+                document.body.innerHTML = nextDoc.body.innerHTML;
+                var scripts = document.body.querySelectorAll('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    var oldScript = scripts[i];
+                    var newScript = document.createElement('script');
+                    for (var j = 0; j < oldScript.attributes.length; j++) {
+                        var attr = oldScript.attributes[j];
+                        newScript.setAttribute(attr.name, attr.value);
+                    }
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                }
             }).catch(function() {
                 errorBox.textContent = t('err_failed');
                 submitButton.value = t('btn_transfer');

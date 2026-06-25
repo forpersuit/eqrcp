@@ -3041,15 +3041,8 @@
             if (textEl) {
                 if (limitState.clockTampered) {
                     textEl.placeholder = dict.clockError;
-                } else if (limitState.isPaid) {
-                    textEl.placeholder = dict.messagePlaceholder;
                 } else {
-                    var remaining = Math.max(0, 300 - limitState.usedSeconds);
-                    if (remaining <= 0) {
-                        textEl.placeholder = dict.upgradePlaceholder;
-                    } else {
-                        textEl.placeholder = dict.messagePlaceholder;
-                    }
+                    textEl.placeholder = dict.messagePlaceholder;
                 }
             }
 
@@ -5961,16 +5954,13 @@
                     var secs = remaining % 60;
                     var timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
                     
+                    textEl.placeholder = dict.messagePlaceholder;
+                    textEl.disabled = false;
+                    fileEl.disabled = false;
                     if (remaining <= 0) {
                         pill.className = 'limit-status-pill danger';
                         pillText.textContent = dict.limitReached;
-                        textEl.disabled = false;
-                        fileEl.disabled = false;
-                        textEl.placeholder = dict.upgradePlaceholder;
                     } else {
-                        textEl.disabled = false;
-                        fileEl.disabled = false;
-                        textEl.placeholder = dict.messagePlaceholder;
                         pillText.textContent = timeStr;
                         if (remaining <= 60) {
                             pill.className = 'limit-status-pill warning';
