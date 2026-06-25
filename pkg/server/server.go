@@ -46,6 +46,7 @@ type Server struct {
 	ChatURL        string
 	ChatDebug      bool
 	ViewportDebug  bool
+	Lang           string
 	instance       *http.Server
 	mux            *http.ServeMux
 	body           body.Body
@@ -608,6 +609,7 @@ func (s *Server) signalStop() {
 func New(cfg *config.Config) (*Server, error) {
 
 	app := &Server{}
+	app.Lang = cfg.Lang
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
 	bind, err := util.GetInterfaceAddress(cfg.Interface)
@@ -801,8 +803,10 @@ func New(cfg *config.Config) (*Server, error) {
 			File  string
 			Files []string
 			Count int
+			Lang  string
 		}{}
 		htmlVariables.Route = "/receive/" + path
+		htmlVariables.Lang = app.Lang
 		switch r.Method {
 		case "POST":
 			app.setStatus("transferring", "Receiving files from connected device.")

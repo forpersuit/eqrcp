@@ -391,9 +391,12 @@
             de: true,
             fr: true
         };
+        var serverLang = '{{.Lang}}';
         var currentLang = 'zh';
         var userLang = (navigator.language || navigator.userLanguage || 'zh').toLowerCase().split('-')[0];
-        if (supportedLangs[userLang]) {
+        if (supportedLangs[serverLang]) {
+            currentLang = serverLang;
+        } else if (supportedLangs[userLang]) {
             currentLang = userLang;
         } else {
             currentLang = 'en';
@@ -650,11 +653,9 @@
                 clearDraft();
                 pastedFiles = [];
                 pastedFileContainer.innerHTML = '';
-                var parser = new DOMParser();
-                var nextDoc = parser.parseFromString(html, 'text/html');
-                document.title = nextDoc.title || document.title;
-                document.head.innerHTML = nextDoc.head.innerHTML;
-                document.body.innerHTML = nextDoc.body.innerHTML;
+                document.open();
+                document.write(html);
+                document.close();
             }).catch(function() {
                 errorBox.textContent = t('err_failed');
                 submitButton.value = t('btn_transfer');

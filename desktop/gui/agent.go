@@ -737,6 +737,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		return err
 	}
 	agent.log.Infof("runTask: instantiating qrcp server...")
+	cfg.Lang = desktopSettings.Lang
 	srv, err := server.New(&cfg)
 	if err != nil {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)

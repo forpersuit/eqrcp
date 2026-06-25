@@ -31,6 +31,7 @@ type Config struct {
 	FQDN      string `yaml:",omitempty"`
 	Output    string `yaml:",omitempty"`
 	Reversed  bool   `yaml:",omitempty"`
+	Lang      string `yaml:",omitempty"`
 }
 
 var interactive bool = false

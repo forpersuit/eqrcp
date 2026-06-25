@@ -1617,12 +1617,6 @@ async function startReceive() {
 }
 
 async function startChat() {
-    if (!hasPaidLicense() && chatRemainingMs() <= 0) {
-        console.warn('[Frontend] startChat: Daily free chat limit reached.');
-        state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
-        render();
-        return;
-    }
     console.log('[Frontend] startChat: Requesting chat task start from Wails App.Chat()...');
     
     // 1. Transition immediately to the chat interface with a loading status for instant UI responsiveness
@@ -2666,21 +2660,7 @@ function scheduleChatUsageTimer() {
             updateChatQuotaSurface();
             return;
         }
-        if (state.mode === 'chat' && chatRemainingMs() <= 0) {
-            clearChatUsageTimer();
-            if (!state.chatQuotaNoticeShown) {
-                state.chatQuotaNoticeShown = true;
-                state.error = 'Daily free chat time is used up. Upgrade to keep using chat today.';
-            }
-            if (activeChatTask()) {
-                try {
-                    await StopChat();
-                } catch {
-                    // Quota state is local; a failed stop should not hide the upgrade prompt.
-                }
-            }
-            render();
-        } else if (state.mode === 'chat') {
+        if (state.mode === 'chat') {
             updateChatQuotaSurface();
         }
     }, 1000);
@@ -2701,8 +2681,7 @@ function updateChatQuotaSurface() {
     }
     const button = document.querySelector('#start-chat');
     if (button) {
-        const exhausted = !hasPaidLicense() && chatRemainingMs() <= 0;
-        button.disabled = state.busy || exhausted;
+        button.disabled = state.busy;
         button.textContent = chatStartButtonText();
     }
 }
@@ -2798,9 +2777,6 @@ function chatQuotaTopText() {
 function chatStartButtonText() {
     if (state.busy) {
         return t('working');
-    }
-    if (!hasPaidLicense() && chatRemainingMs() <= 0) {
-        return t('upgrade_required');
     }
     return t('start_chat');
 }
