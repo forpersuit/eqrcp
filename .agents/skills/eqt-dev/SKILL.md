@@ -76,6 +76,10 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 - **单元测试 (`server/update_test.go`)**：通过 `TestVerifyUpdateSignature`、`TestCheckForUpdates` 和 `TestDownloadUpdate` 验证签名校验合法性、语义化版本反降级逻辑、及下载写入完整性。
 - **集成测试 (`cmd/desktop_agent_test.go`)**：在 `TestDesktopAgentUpdateEndpoints` 中通过 `httptest` 创建 Mock Update 服务，临时修改 `EQT_LICENSE_SERVER` 环境变量重定向客户端，并使用测试私钥种子对测试包加签，模拟并发访问 `/update/check`、`/update/download` 及有任务冲突/空闲时的 `/update/install`。
 
+#### 3.5.3 Wails 编译与 Binding 生成环境避坑 (Wails Build & Bindings Generation in CI)
+- **问题成因**：在没有显示器（`DISPLAY`/`WAYLAND_DISPLAY` 环境变量为空）的 headless Linux CI/CD 容器中执行 `wails build`，Wails 在生成绑定时会编译并执行一个临时的 `wailsbindings` 可执行文件。如果主程序路由逻辑中，在无 DISPLAY 且无参数时自动退回到 CLI 模式并直接调用 Cobra 命令，Cobra 会因为缺失必要参数返回错误并以 exit status 1 退出，最终导致 Wails 绑定生成步骤失败。
+- **解决方案**：在应用入口（`main()`）最前端，对 `os.Args[0]` 的文件名进行判断。如果文件名中包含 `"wailsbindings"` 字符串，强制走 GUI 模式启动 `startWailsGUI()` 从而让 `wails.Run` 接管。Wails 在运行时会拦截 `wails.Run` 以提取反射绑定并正常退出，该过程不依赖实际的 X 服务器或 DISPLAY，能在 CI 容器中平滑编译成功。
+
 ---
 
 ## 4. 大文件传输与断点续传技术规格说明 (Large File Transfer & Resumable Transfer Limitations)
