@@ -61,8 +61,8 @@ func main() {
 
 	var mdContent strings.Builder
 	mdContent.WriteString(fmt.Sprintf("# %s 源代码鉴别材料\n\n", softwareName))
-	mdContent.WriteString(fmt.Sprintf("**软件名称**: EQT Easy QR Transfer 局域网文件传输系统\n"))
-	mdContent.WriteString(fmt.Sprintf("**软件版本**: V1.0.0\n"))
+	mdContent.WriteString("**软件名称**: EQT Easy QR Transfer 局域网文件传输系统\n")
+	mdContent.WriteString("**软件版本**: V1.0.0\n")
 	mdContent.WriteString(fmt.Sprintf("**著作权人**: %s\n\n", copyrightOwner))
 	mdContent.WriteString("---\n\n")
 
