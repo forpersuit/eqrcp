@@ -348,7 +348,7 @@ sequenceDiagram
   * **缓存特征**：
     * `/update-metadata.json`：设为零缓存，确保客户端检查版本能获取秒级实时推送。
     * `/downloads/*` 包资产：设为永久强缓存 (`max-age=31536000, immutable`)，减轻源站负载并提升边缘响应速度。
-* **有状态业务 API 域名 (`api.eqt.net.im`)**：
+* **有状态授权校验域名 (`lic.eqt.net.im`)**：
   * **职责**：专门处理离线激活、许可证兑换与指纹校验等有状态接口，指向 Cloudflare Workers，不承担任何静态大文件分发，确保接口的高安全性和低延时。
 
 ### 6.2 跨域与强缓存配置 (`_headers` 规范)
