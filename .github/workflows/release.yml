@@ -117,7 +117,7 @@ jobs:
       - name: Deploy static site to Cloudflare Pages
         run: |
           if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
-            npx wrangler pages deploy website --project-name=eqt
+            npx wrangler pages deploy website --project-name=eqt --branch=master
           else
             echo "CLOUDFLARE_API_TOKEN is not set, skipping Cloudflare Pages deployment."
           fi
