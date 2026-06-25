@@ -66,3 +66,27 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 若配置了此变量，`/api/v1/update/check` 返回的 `download_url` 将被自动改写为 R2 的加速直链。
   - 若未配置，则回退使用私有 GitHub Releases 直链。
 - **静态网页直链**：产品介绍页面（`cloudflare/eqt-website/index.html`）应始终使用指向 R2 存储桶的公共直链（如 `https://pub.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe`），从而免受 GitHub 私有库 404 限制及免去 Worker 的 CPU 超时影响。
+
+---
+
+## 4. 兑换码生成与管理工具 (License Code Generation)
+
+为了配合云端授权管理，我们提供了一个自动化脚本 [generate-license.sh](file:///home/yelon/develop/me/eqrcp/scripts/generate-license.sh) 用于快速生成兑换码，并自动屏蔽 `CLOUDFLARE_API_TOKEN` 的环境变量干扰以安全写入 Cloudflare D1 云端数据库。
+
+### 使用方法：
+在项目根目录或 `scripts/` 目录下运行：
+```sh
+# 生成默认的 PLUS 永久授权码并写入云端 D1
+./scripts/generate-license.sh
+
+# 生成 PRO 级别、限制绑定 1 台设备的临时兑换码并写入本地 D1 测试
+./scripts/generate-license.sh -t PRO -m 1 -e "2027-06-25T12:00:00Z" --local
+```
+
+### 特征算法：
+生成格式为 `EQT-TIER-YYYYMMDD-RANDOM-CHECK`：
+1. `TIER`: PLUS 或 PRO。
+2. `YYYYMMDD`: 8 位当前日期。
+3. `RANDOM`: 6 位随机大写字符。
+4. `CHECK`: 前 3 项拼接后取 MD5 前 4 位大写字符，用以校验防错漏。
+
