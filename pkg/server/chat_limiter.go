@@ -271,31 +271,53 @@ func getMockUsageForAcceptance() *ChatUsage {
 	return nil
 }
 
+func writeAtomic(filename string, data []byte, perm os.FileMode) error {
+	tmpFile := filename + ".tmp"
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(tmpFile, data, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpFile, filename); err != nil {
+		_ = os.Remove(tmpFile)
+		return err
+	}
+	return nil
+}
+
 func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if mock := getMockUsageForAcceptance(); mock != nil {
 		return *mock
 	}
 	today := time.Now().Format("2006-01-02")
-	if l.hasCached && time.Since(l.lastCacheTime) < 5*time.Second && l.cachedUsage.Date == today {
+	if l.hasCached && l.cachedUsage.Date == today {
 		return l.cachedUsage
 	}
 
 	path := getChatUsageFilePath()
 	var usage ChatUsage
-	data, err := os.ReadFile(path)
-	if err != nil {
+	readOk := false
+
+	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+		if errJson := json.Unmarshal(data, &usage); errJson == nil && usage.Date != "" {
+			readOk = true
+		}
+	}
+
+	if !readOk {
 		if backupPath := getHiddenBackupFilePath(); backupPath != "" {
-			if backupData, err := os.ReadFile(backupPath); err == nil {
+			if backupData, err := os.ReadFile(backupPath); err == nil && len(backupData) > 0 {
 				decrypted := xorObfuscate(backupData)
-				_ = json.Unmarshal(decrypted, &usage)
+				if errJson := json.Unmarshal(decrypted, &usage); errJson == nil && usage.Date != "" {
+					readOk = true
+				}
 			}
 		}
-	} else {
-		_ = json.Unmarshal(data, &usage)
 	}
 
 	dateChanged := false
-	if usage.Date != today {
+	if !readOk || usage.Date != today {
 		usage.Date = today
 		usage.UsedSeconds = 0
 		dateChanged = true
@@ -320,13 +342,14 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
 	path := getChatUsageFilePath()
-	_ = os.MkdirAll(filepath.Dir(path), 0755)
-	data, _ := json.Marshal(usage)
-	_ = os.WriteFile(path, data, 0644)
+	data, err := json.Marshal(usage)
+	if err == nil {
+		_ = writeAtomic(path, data, 0644)
 
-	if backupPath := getHiddenBackupFilePath(); backupPath != "" {
-		obfuscated := xorObfuscate(data)
-		_ = os.WriteFile(backupPath, obfuscated, 0600)
+		if backupPath := getHiddenBackupFilePath(); backupPath != "" {
+			obfuscated := xorObfuscate(data)
+			_ = writeAtomic(backupPath, obfuscated, 0600)
+		}
 	}
 
 	l.cachedUsage = usage

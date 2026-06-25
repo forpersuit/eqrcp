@@ -415,11 +415,9 @@ function renderShareTransfer(task) {
             
             ${task.transferState !== 'waiting' ? `
                 <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-                <dl class="transfer-details">
-                    <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
-                    <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                    <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
-                </dl>
+                <div class="transfer-bytes-info" style="font-size: 13px; color: var(--text-muted); margin-top: 6px; text-align: right;">
+                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                </div>
             ` : ''}
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
@@ -517,11 +515,9 @@ function renderReceiveTransfer(task) {
             
             ${task.transferState !== 'waiting' ? `
                 <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-                <dl class="transfer-details">
-                    <dt>${t('save_dir')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
-                    <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                    <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
-                </dl>
+                <div class="transfer-bytes-info" style="font-size: 13px; color: var(--text-muted); margin-top: 6px; text-align: right;">
+                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                </div>
             ` : ''}
             
             ${files.length > 0 ? `

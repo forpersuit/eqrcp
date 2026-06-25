@@ -28,9 +28,11 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - **绝不允许**在处理前端 HTTP `/status` 等轮询请求的主线程中同步阻塞式进行网络 HTTP 请求。
   - 应使用内存缓存存储网络时间偏置（`offset = netTime - systemTime`），在无缓存或缓存过期（例如超过 1 小时）时，在后台异步启动 goroutine 进行拉取，当前请求应立刻使用系统时间（或上一次的 offset 缓存）先行返回，确保 `/status` 接口调用响应在微秒级，永远不会引发 `context deadline exceeded`。
   - 对于测试环境（`EQT_TESTING == "true"`）应直接跳过网络拉取。对网络时间请求失败的情况应建立退避机制（例如 1 分钟内不重复拉取），防止断网状态下高频产生僵尸 goroutine。
-- **内存级别状态与许可证书短期缓存**：
-  - 由于类似 Wails GUI 的 `snapshotWithRevision` 状态查询会同时连续多次调用 `ChatLimiter.GetStatus()`，每次都执行磁盘 I/O 读写 `chat_usage.json` 及解密会造成严重性能瓶颈。
-  - 必须对读出的许可/限额状态实施极短时间（如 5 秒内）的内存短期缓存。在写操作发生时主动刷新缓存；在没有写操作的 5 秒内再次查询，直接返回内存中对应日期的缓存，极大地降低磁盘压力。
+- **纯内存级限额缓存与原子性持久化**：
+  - 由于类似 Wails GUI 的 `snapshotWithRevision` 状态查询会同时连续多次调用 `ChatLimiter.GetStatus()`，每次都执行磁盘 I/O 读写 `chat_usage.json` 及解密会造成严重性能瓶颈与文件并发读写损坏。
+  - **内存缓存隔离**：在同一天内（`Date == today`），限额读取必须完全基于内存缓存（`l.cachedUsage`），避免产生任何主动的磁盘读取。
+  - **原子性保存**：限额状态写入时，必须采用原子性临时文件写入机制（写入 `.tmp` 临时文件，而后通过 `os.Rename` 原子覆盖目标文件），防止并发状态读写导致文件数据不完整或损坏。
+  - **鲁棒降级**：读取主配置文件 `chat_usage.json` 失败或解析 JSON 损坏时，程序必须自动尝试解密读取隐藏备份文件 `.eqt_sys_state`，最大限度保障计时的准确与防破解安全性。
   - 对 `.lic` 证书的读取和解析（`GetLocalLicenseInfo`）应在首次读取后进行持久内存缓存，在发生激活（Online Activation）或重置（Reset）时手动更新该缓存，避免常规状态轮询下不断解析文件并进行设备硬件指纹获取与验签运算。
 - **测试兼容模式**：在单元测试或 mock 状态下（`os.Getenv("EQT_TESTING") == "true"`），若本地没有 `.lic` 文件，必须自动降级到传统模式，支持模拟付费判定，不可在测试环境中强求真实公私钥签名，以免破坏基础 CI。
 
