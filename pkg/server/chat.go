@@ -1500,6 +1500,7 @@ func (session *chatSession) updateHostAvatar(token string, newAvatar string) {
 		if oldAvatar != newAvatar {
 			client.Avatar = newAvatar
 			session.clients[token] = client
+			session.addSystemMessageLocked("roster-update")
 			session.notifyLocked()
 		}
 	}

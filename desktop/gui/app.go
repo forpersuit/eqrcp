@@ -457,6 +457,9 @@ func (a *App) OpenPath(path string) error {
 		}
 	}
 
+	// Try to create the directory if it doesn't exist yet, to ensure explorer can open it directly
+	_ = os.MkdirAll(cleaned, 0755)
+
 	// Determine starting target folder
 	target := cleaned
 	info, err := os.Stat(target)
@@ -800,15 +803,29 @@ func parseDesktopSummary(output string) (installed int, needsRepair int, notInst
 	return 0, 0, 0, false
 }
 
+func isWSL() bool {
+	if _, err := os.Stat("/proc/sys/fs/binfmt_misc/WSLInterop"); err == nil {
+		return true
+	}
+	if os.Getenv("WSL_DISTRO_NAME") != "" {
+		return true
+	}
+	return false
+}
+
 func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
-		cmd := exec.Command("explorer.exe", path)
+		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
+		cmd := exec.Command("explorer.exe", winPath)
 		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
 	case "linux":
+		if isWSL() {
+			return exec.Command("explorer.exe", path), nil
+		}
 		return exec.Command("xdg-open", path), nil
 	default:
 		return nil, fmt.Errorf("opening paths is not supported on %s", runtime.GOOS)
@@ -818,12 +835,16 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
-		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)
+		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
+		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath)
 		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
 	case "linux":
+		if isWSL() {
+			return exec.Command("explorer.exe", path), nil
+		}
 		return exec.Command("xdg-open", path), nil
 	default:
 		return nil, fmt.Errorf("opening files is not supported on %s", runtime.GOOS)
