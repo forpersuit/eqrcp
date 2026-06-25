@@ -3403,7 +3403,17 @@
         function cleanAvatarLabel(value) {
             var text = String(value || '').trim();
             if (!text) { return ''; }
+            if (text.indexOf('data:image/') === 0) {
+                return text;
+            }
             return Array.from(text).slice(0, 4).join('');
+        }
+        function renderAvatarHtml(avatarVal, fallbackText) {
+            var val = cleanAvatarLabel(avatarVal);
+            if (val.indexOf('data:image/') === 0) {
+                return '<img src="' + escapeHTML(val) + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />';
+            }
+            return escapeHTML(val || fallbackText);
         }
         function currentClientToken() {
             var params = new URLSearchParams(window.location.search);
@@ -3627,7 +3637,7 @@
             }
 
             return '<div class="device-item"' + rowStyle + '>' +
-                '<button class="device-row-lite roster-row" type="button" data-device-id="' + escapeHTML(id) + '" aria-expanded="' + (selected ? 'true' : 'false') + '"><div class="message-avatar"' + avatarStyle + '>' + escapeHTML(avatarLabel) + '</div><div><strong>' + escapeHTML(displayLabel) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></button>' +
+                '<button class="device-row-lite roster-row" type="button" data-device-id="' + escapeHTML(id) + '" aria-expanded="' + (selected ? 'true' : 'false') + '"><div class="message-avatar"' + avatarStyle + '>' + renderAvatarHtml(device.avatar, senderInitial(label)) + '</div><div><strong>' + escapeHTML(displayLabel) + '</strong><span>' + self + '</span></div><div class="device-state">online</div></button>' +
                 '<div class="device-detail ' + (selected ? 'open' : '') + '" data-device-detail="' + escapeHTML(id) + '">' +
                 '<div class="device-detail-head">' + detailHead + '</div>' +
                 '<div class="device-detail-meta"><span>Status: online</span><span>Open connections: ' + escapeHTML(String(count)) + '</span><span>Last seen: ' + escapeHTML(formatDeviceTime(device.lastSeen)) + '</span></div></div></div>';
@@ -3830,7 +3840,13 @@
                     avatarStack.className = 'avatar-stack';
                     var avatar = document.createElement('div');
                     avatar.className = 'message-avatar';
-                    avatar.textContent = cleanAvatarLabel(message.avatar || '') || (mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest'));
+                    var avVal = cleanAvatarLabel(message.avatar || '');
+                    var avFallback = mine ? (state.avatar || senderInitial(message.sender || 'You')) : senderInitial(message.sender || 'Guest');
+                    if (avVal.indexOf('data:image/') === 0) {
+                        avatar.innerHTML = '<img src="' + escapeHTML(avVal) + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />';
+                    } else {
+                        avatar.textContent = avVal || avFallback;
+                    }
                     var sc = messageColor(message);
                     if (sc) {
                         avatar.style.background = sc.bg;

@@ -36,4 +36,5 @@ export const state = {
     redeemError: '',
     feedbackNotice: '',
     feedbackSent: false,
+    isEditingChatSender: false,
 };

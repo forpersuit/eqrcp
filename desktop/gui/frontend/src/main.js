@@ -405,7 +405,6 @@ function renderChat() {
             <div class="chat-start">
                 <div>
                     <div class="eyebrow">${t('session_mode')}</div>
-                    <h2>${t('chat_title')}</h2>
                     <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
                 <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${chatStartButtonText()}</button>
@@ -653,7 +652,18 @@ function renderSettingsPanel() {
                         <strong>${t('chat_sender')}</strong>
                         <span>${t('chat_sender_desc')}</span>
                     </div>
-                    <input id="settings-chat-sender" type="text" maxlength="20" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                    ${state.isEditingChatSender ? `
+                        <div class="chat-sender-edit-wrapper">
+                            <input id="settings-chat-sender" type="text" maxlength="20" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                            <button type="button" class="icon-button save-chat-sender" title="${t('btn_confirm')}">${checkIcon()}</button>
+                            <button type="button" class="icon-button cancel-chat-sender" title="${t('btn_reset')}">${closeIcon()}</button>
+                        </div>
+                    ` : `
+                        <div class="chat-sender-static-wrapper">
+                            <span class="chat-sender-static-text">${escapeHTML(chatSender || 'Desktop')}</span>
+                            <button type="button" class="icon-button edit-chat-sender" title="${t('rename')}">${editIcon()}</button>
+                        </div>
+                    `}
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
@@ -669,8 +679,19 @@ function renderSettingsPanel() {
                         </div>
                     </div>
                     <div class="avatar-setting-row">
-                        <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
-                        <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="${escapeAttr(t('chat_avatar_placeholder'))}" />
+                        <div class="avatar-preview-wrapper">
+                            <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
+                        </div>
+                        <div class="avatar-inputs-stack">
+                            <div class="avatar-actions">
+                                <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
+                                <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
+                                ${chatAvatar.startsWith('data:image/') ? `
+                                    <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
+                                ` : ''}
+                            </div>
+                            <input id="settings-chat-avatar" value="${chatAvatar.startsWith('data:image/') ? '' : escapeAttr(chatAvatar)}" placeholder="${escapeAttr(t('chat_avatar_placeholder') || '输入文字或Emoji')}" />
+                        </div>
                     </div>
                 </div>
                 <div class="setting-row">
@@ -1819,44 +1840,109 @@ function bindSettingsControls() {
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
 
+    // Chat Sender Edit controls
+    document.querySelector('.edit-chat-sender')?.addEventListener('click', () => {
+        state.isEditingChatSender = true;
+        syncPanelSurface();
+        const inputEl = document.querySelector('#settings-chat-sender');
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+        }
+    });
+
+    document.querySelector('.cancel-chat-sender')?.addEventListener('click', () => {
+        state.isEditingChatSender = false;
+        syncPanelSurface();
+    });
+
+    document.querySelector('.save-chat-sender')?.addEventListener('click', async () => {
+        const inputEl = document.querySelector('#settings-chat-sender');
+        if (inputEl && state.settings) {
+            const newName = cleanChatProfileName(inputEl.value);
+            state.settings.chatSender = newName;
+            state.isEditingChatSender = false;
+            await handleAutoSaveSettings();
+            syncPanelSurface();
+        }
+    });
+
+    const chatSenderInput = document.querySelector('#settings-chat-sender');
+    if (chatSenderInput) {
+        chatSenderInput.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.querySelector('.save-chat-sender')?.click();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                document.querySelector('.cancel-chat-sender')?.click();
+            }
+        });
+        chatSenderInput.addEventListener('input', (event) => {
+            const previewEl = document.querySelector('.avatar-preview');
+            if (previewEl) {
+                const cleaned = cleanChatProfileName(event.target.value);
+                const avatarVal = state.settings?.chatAvatar || '';
+                previewEl.innerHTML = renderAvatarMarkup(avatarVal, (cleaned.charAt(0) || 'D').toUpperCase());
+            }
+        });
+    }
+
+    // Avatar upload/reset and presets
+    document.querySelector('#btn-avatar-upload')?.addEventListener('click', () => {
+        document.querySelector('#settings-avatar-file')?.click();
+    });
+
+    document.querySelector('#settings-avatar-file')?.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        if (file && state.settings) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64 = e.target.result;
+                if (base64) {
+                    state.settings.chatAvatar = base64;
+                    await handleAutoSaveSettings();
+                    syncPanelSurface();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    document.querySelector('#btn-avatar-reset')?.addEventListener('click', async () => {
+        if (state.settings) {
+            state.settings.chatAvatar = '';
+            await handleAutoSaveSettings();
+            syncPanelSurface();
+        }
+    });
+
     const avatarInput = document.querySelector('#settings-chat-avatar');
     if (avatarInput) {
         avatarInput.addEventListener('input', (event) => {
             const cleaned = cleanChatAvatar(event.target.value);
-            if (event.target.value !== cleaned) {
-                event.target.value = cleaned;
-            }
             const previewEl = document.querySelector('.avatar-preview');
             if (previewEl) {
-                previewEl.textContent = cleaned || (cleanChatProfileName(state.settings?.chatSender).charAt(0) || 'D').toUpperCase();
+                const sender = state.settings?.chatSender || '';
+                previewEl.innerHTML = renderAvatarMarkup(cleaned, (cleanChatProfileName(sender).charAt(0) || 'D').toUpperCase());
             }
-            syncSettingsFromDOM();
         });
-        avatarInput.addEventListener('change', async () => {
-            syncSettingsFromDOM();
-            await handleAutoSaveSettings();
-        });
-    }
-    const chatSenderInput = document.querySelector('#settings-chat-sender');
-    if (chatSenderInput) {
-        chatSenderInput.addEventListener('input', (event) => {
-            const cleaned = cleanChatProfileName(event.target.value);
-            const previewEl = document.querySelector('.avatar-preview');
-            if (previewEl) {
-                const avatarVal = document.querySelector('#settings-chat-avatar')?.value || '';
-                previewEl.textContent = cleanChatAvatar(avatarVal) || (cleaned.charAt(0) || 'D').toUpperCase();
+        avatarInput.addEventListener('change', async (event) => {
+            if (state.settings) {
+                state.settings.chatAvatar = cleanChatAvatar(event.target.value);
+                await handleAutoSaveSettings();
+                syncPanelSurface();
             }
-            syncSettingsFromDOM();
         });
     }
 
     document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
-        btn.addEventListener('click', (event) => {
+        btn.addEventListener('click', async (event) => {
             const presetVal = event.currentTarget.dataset.avatar;
-            if (avatarInput && presetVal) {
-                avatarInput.value = presetVal;
-                avatarInput.dispatchEvent(new Event('input'));
-                handleAutoSaveSettings();
+            if (state.settings && presetVal) {
+                state.settings.chatAvatar = presetVal;
+                await handleAutoSaveSettings();
+                syncPanelSurface();
             }
         });
     });
@@ -1869,9 +1955,7 @@ function bindSettingsControls() {
         '#settings-close-behavior',
         '#settings-auto-update-mode',
         '#settings-update-interval',
-        '#settings-lang',
-
-        '#settings-chat-sender'
+        '#settings-lang'
     ];
     inputs.forEach(selector => {
         const el = document.querySelector(selector);
@@ -2893,6 +2977,18 @@ function signalIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20v-3"></path><path d="M9 20v-6"></path><path d="M14 20v-9"></path><path d="M19 20V7"></path></svg>';
 }
 
+function checkIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+}
+
+function closeIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+}
+
+function editIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
+}
+
 function shortName(path) {
     return String(path || '').split(/[\\/]/).filter(Boolean).pop() || path || '';
 }
@@ -2903,7 +2999,18 @@ function cleanChatProfileName(value) {
 
 function cleanChatAvatar(value) {
     const text = String(value || '').trim();
+    if (text.startsWith('data:image/')) {
+        return text;
+    }
     return Array.from(text).slice(0, 4).join('');
+}
+
+function renderAvatarMarkup(avatarVal, fallbackText) {
+    const val = cleanChatAvatar(avatarVal);
+    if (val.startsWith('data:image/')) {
+        return `<img src="${escapeAttr(val)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
+    }
+    return escapeHTML(val || fallbackText);
 }
 
 function qrImageURL(pageUrl) {

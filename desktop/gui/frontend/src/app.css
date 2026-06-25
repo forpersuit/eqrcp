@@ -725,6 +725,128 @@ dd {
     transform: translateY(0) scale(0.95);
 }
 
+/* 用户名对齐设置效果 */
+.chat-sender-static-wrapper,
+.chat-sender-edit-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.chat-sender-static-text {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+/* 图标按钮统一样式 */
+.setting-row .icon-button {
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    transition: all 0.2s ease;
+}
+
+.setting-row .icon-button:hover {
+    background: var(--wash);
+    border-color: #b7c4bd;
+    color: var(--ink);
+}
+
+.setting-row .icon-button svg {
+    width: 14px;
+    height: 14px;
+}
+
+.chat-sender-edit-wrapper input {
+    height: 28px;
+    font-size: 13px;
+    padding: 0 8px;
+    width: 120px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+}
+
+/* 头像高级设置 */
+.avatar-preview-wrapper {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-inputs-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.avatar-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.avatar-action-btn {
+    background: var(--wash);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 8px;
+    line-height: 1.2;
+    transition: all 0.2s ease;
+}
+
+.avatar-action-btn:hover {
+    background: rgba(47, 158, 115, 0.1);
+    border-color: #2f9e73;
+    color: #14533f;
+}
+
+.avatar-action-btn.reset-btn {
+    background: #fff5f5;
+    border-color: #fed7d7;
+    color: #c53030;
+}
+
+.avatar-action-btn.reset-btn:hover {
+    background: #fff5f5;
+    border-color: #e53e3e;
+    color: #9b2c2c;
+}
+
+.avatar-inputs-stack input {
+    height: 28px;
+    font-size: 12px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .help-tooltip {
     background: #17211e;
     border: 1px solid rgba(255, 255, 255, 0.12);
