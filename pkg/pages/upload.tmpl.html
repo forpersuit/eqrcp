@@ -899,6 +899,7 @@
                 
                 var timerId = setInterval(function() {
                     remainingSeconds--;
+                    usedSeconds = 300 - remainingSeconds;
                     if (remainingSeconds <= 0) {
                         clearInterval(timerId);
                         isPlusMode = false;
@@ -908,6 +909,33 @@
                         countdownEl.textContent = formatTime(remainingSeconds);
                     }
                 }, 1000);
+
+                var pingIntervalId = setInterval(function() {
+                    if (!isPlusMode) {
+                        clearInterval(pingIntervalId);
+                        return;
+                    }
+                    fetch(window.location.pathname + '?ping=5', { method: 'POST' })
+                        .then(function(res) { return res.json(); })
+                        .then(function(data) {
+                            if (data && data.usedSeconds !== undefined) {
+                                usedSeconds = data.usedSeconds;
+                                remainingSeconds = Math.max(0, 300 - usedSeconds);
+                                if (remainingSeconds <= 0) {
+                                    isPlusMode = false;
+                                    clearInterval(pingIntervalId);
+                                    clearInterval(timerId);
+                                    countdownEl.style.display = 'none';
+                                    renderFiles();
+                                } else {
+                                    countdownEl.textContent = formatTime(remainingSeconds);
+                                }
+                            }
+                        })
+                        .catch(function(e) {
+                            // ignore ping errors
+                        });
+                }, 5000);
             }
         }
     </script>

@@ -799,6 +799,19 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 		usage := limiterInstance.GetStatus()
+		if r.URL.Query().Get("ping") != "" {
+			var pingSecs int
+			if _, err := fmt.Sscanf(r.URL.Query().Get("ping"), "%d", &pingSecs); err == nil && pingSecs > 0 {
+				usage, _ = limiterInstance.IncrementUsage(pingSecs)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":      "ok",
+				"isPaid":      usage.IsPaid,
+				"usedSeconds": usage.UsedSeconds,
+			})
+			return
+		}
 		htmlVariables := struct {
 			Route         string
 			File          string

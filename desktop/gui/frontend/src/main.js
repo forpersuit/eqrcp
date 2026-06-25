@@ -377,13 +377,13 @@ function renderShareTransfer(task) {
                     <span class="status-indicator ${task.transferState || 'waiting'}"></span>
                     <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
                 </span>
-                ${task.transferTarget ? `
+                ${task.transferTarget && task.transferState !== 'waiting' ? `
                     <span class="qr-collapsed-device">
                         📱 ${t('remote')}: <strong>${escapeHTML(task.transferTarget)}</strong>
                     </span>
                 ` : ''}
                 ${task.pageUrl ? `
-                    <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
+                    <span class="qr-collapsed-url">🔗 ${escapeHTML(task.pageUrl)}</span>
                 ` : ''}
             </div>
         </div>
@@ -398,8 +398,8 @@ function renderShareTransfer(task) {
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
-                    <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 32px; border-radius: 6px;">
-                        ${collapseText}
+                    <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
+                        ${qrIcon()}
                     </button>
                 </div>
             </div>
@@ -482,13 +482,8 @@ function renderReceiveTransfer(task) {
                     <span class="status-indicator ${task.transferState || 'waiting'}"></span>
                     <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
                 </span>
-                ${task.transferTarget ? `
-                    <span class="qr-collapsed-device">
-                        📱 ${t('remote')}: <strong>${escapeHTML(task.transferTarget)}</strong>
-                    </span>
-                ` : ''}
                 ${task.pageUrl ? `
-                    <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
+                    <span class="qr-collapsed-url">🔗 ${escapeHTML(task.pageUrl)}</span>
                 ` : ''}
             </div>
         </div>
@@ -503,8 +498,8 @@ function renderReceiveTransfer(task) {
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
-                    <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 32px; border-radius: 6px;">
-                        ${collapseText}
+                    <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
+                        ${qrIcon()}
                     </button>
                 </div>
             </div>
@@ -521,7 +516,7 @@ function renderReceiveTransfer(task) {
             ${task.transferState !== 'waiting' ? `
                 <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
                 <dl class="transfer-details">
-                    <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
+                    <dt>${t('save_dir')}</dt><dd>${escapeHTML(task.transferTarget || t('waiting'))}</dd>
                     <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
                     <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
                 </dl>
