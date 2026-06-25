@@ -33,11 +33,31 @@
             padding: 22px 16px 34px;
         }
         .brand {
-            align-items: center;
+            align-items: flex-start;
             display: grid;
             gap: 12px;
-            grid-template-columns: 52px minmax(0, 1fr);
+            grid-template-columns: 58px minmax(0, 1fr);
             margin-bottom: 18px;
+        }
+
+        .license-badge {
+            background: var(--accent);
+            color: #fff;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 4px;
+            border-radius: 4px;
+            line-height: 1.2;
+            letter-spacing: 0.05em;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .license-badge.clock-error {
+            background: rgba(220, 38, 38, 0.08) !important;
+            color: #dc2626 !important;
+            border: 1.2px solid #dc2626 !important;
+            box-sizing: border-box;
         }
         .upload-logo {
             background: #fff;
@@ -234,9 +254,14 @@
 <body>
     <main>
         <header class="brand">
-            <img class="upload-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
+            <div class="brand-left" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px;">
+                <img class="upload-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo" style="margin: 0;">
+                <span class="license-badge{{if .ClockTampered}} clock-error{{end}}">
+                    {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
+                </span>
+            </div>
             <div>
-                <h1 data-i18n="title">Send to this device</h1>
+                <h1 data-i18n="title">Send from this device</h1>
                 <p data-i18n="subtitle">Add files, paste an image, or write text. EQT saves everything on the receiving computer.</p>
             </div>
         </header>
@@ -279,9 +304,11 @@
                 <option value="fr">Français</option>
             </select>
         </div>
-           var pageTranslations = {
+    </main>
+    <script>
+        var pageTranslations = {
             zh: {
-                title: '发送文件到此设备',
+                title: '从此设备发送',
                 subtitle: '您可以添加文件、粘贴截图或直接输入文本。EQT 将为您自动保存到接收端电脑中。',
                 composer: '文本编辑器',
                 composer_hint: '输入的文本将被保存为 .txt 文件。换行请按 Shift+Enter。',
@@ -301,7 +328,7 @@
                 err_reason_default: '发生未知错误，导致文件传输未能成功完成。'
             },
             en: {
-                title: 'Send to this device',
+                title: 'Send from this device',
                 subtitle: 'Add files, paste an image, or write text. EQT saves everything on the receiving computer.',
                 composer: 'Composer',
                 composer_hint: 'Text becomes a .txt file. Shift+Enter keeps a new line.',
@@ -321,7 +348,7 @@
                 err_reason_default: 'An unknown error occurred, and the transfer could not be completed.'
             },
             ja: {
-                title: 'このデバイスにファイルを送信',
+                title: 'このデバイスから送信',
                 subtitle: 'ファイルを追加、スクリーンショットを貼り付け、またはテキストを直接入力できます。EQT が受信側のコンピュータに自動的に保存します。',
                 composer: 'テキストエディタ',
                 composer_hint: '入力されたテキストは .txt ファイルとして保存されます。改行は Shift+Enter を押してください。',
@@ -341,7 +368,7 @@
                 err_reason_default: '原因不明のエラーが発生し、転送を完了できませんでした。'
             },
             ko: {
-                title: '이 기기로 파일 전송',
+                title: '이 기기에서 전송',
                 subtitle: '파일을 추가하거나 스크린샷을 붙여넣거나 텍스트를 직접 입력할 수 있습니다. EQT가 수신 측 컴퓨터에 자동으로 저장합니다.',
                 composer: '텍스트 편집기',
                 composer_hint: '입력한 텍스트는 .txt 파일로 저장됩니다. 줄바꿈은 Shift+Enter를 누르세요.',
@@ -361,7 +388,7 @@
                 err_reason_default: '알 수 없는 오류가 발생하여 전송을 완료할 수 없습니다.'
             },
             es: {
-                title: 'Enviar archivos a este dispositivo',
+                title: 'Enviar desde este dispositivo',
                 subtitle: 'Puede añadir archivos, pegar capturas de pantalla o escribir texto directamente. EQT lo guardará automáticamente en el ordenador receptor.',
                 composer: 'Editor de texto',
                 composer_hint: 'El texto introducido se guardará como un archivo .txt. Pulse Shift+Enter para una nueva línea.',
@@ -381,7 +408,7 @@
                 err_reason_default: 'Ocurrió un error desconocido y no se pudo completar la transferencia.'
             },
             de: {
-                title: 'Dateien an dieses Gerät senden',
+                title: 'Von diesem Gerät senden',
                 subtitle: 'Sie können Dateien hinzufügen, Screenshots einfügen oder Text direkt eingeben. EQT speichert dies automatisch auf dem Empfänger-Computer.',
                 composer: 'Text-Editor',
                 composer_hint: 'Eingegebener Text wird als .txt Datei gespeichert. Drücken Sie Shift+Enter für eine neue Zeile.',
@@ -401,7 +428,7 @@
                 err_reason_default: 'Ein unbekannter Fehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.'
             },
             fr: {
-                title: 'Envoyer des fichiers vers cet appareil',
+                title: 'Envoyer depuis cet appareil',
                 subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
                 composer: 'Éditeur de texte',
                 composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
@@ -419,22 +446,6 @@
                 err_reason_too_large: 'Le fichier est trop volumineux et dépasse la limite de transfert.',
                 err_reason_server: 'L\'ordinateur destinataire n\'a pas réussi à enregistrer le fichier. Le disque est peut-être plein ou l\'autorisation d\'écriture a été refusée.',
                 err_reason_default: 'Une erreur inconnue est survenue et le transfert n\'a pas pu être complété.'
-            }
-        };te lassen Sie diese Seite geöffnet und versuchen Sie es erneut.'
-            },
-            fr: {
-                title: 'Envoyer des fichiers vers cet appareil',
-                subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
-                composer: 'Éditeur de texte',
-                composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
-                add_files: 'Ajouter des fichiers',
-                file_name_label: 'Nom du fichier texte',
-                file_name_placeholder: 'Nom de fichier facultatif (laisser vide pour génération automatique)',
-                text_label: 'Contenu du texte',
-                text_placeholder: 'Saisissez du texte directement ici, ou collez des captures d\'écran ou des fichiers',
-                btn_transfer: 'Démarrer le transfert',
-                btn_transferring: 'Transfert en cours...',
-                err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.'
             }
         };
 
