@@ -115,9 +115,12 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: out/*
       - name: Deploy static site to Cloudflare Pages
-        if: secrets.CLOUDFLARE_API_TOKEN != ''
         run: |
-          npx wrangler pages deploy website --project-name=eqt-website
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            npx wrangler pages deploy website --project-name=eqt-website
+          else
+            echo "CLOUDFLARE_API_TOKEN is not set, skipping Cloudflare Pages deployment."
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
