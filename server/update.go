@@ -98,7 +98,7 @@ func getUpdateURL() string {
 	if envURL := os.Getenv("EQT_UPDATE_URL"); envURL != "" {
 		return envURL
 	}
-	return "https://eqt.net.im/update-metadata.json"
+	return "https://download.eqt.net.im/update-metadata.json"
 }
 
 // CheckForUpdates queries the update server for a newer version matching the OS/Arch.

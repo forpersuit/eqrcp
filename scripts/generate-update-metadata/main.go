@@ -49,7 +49,7 @@ func main() {
 		}
 
 		// Download URL will point to Cloudflare Pages static downloads directory
-		downloadURL := fmt.Sprintf("https://eqt.net.im/downloads/latest/%s", file.Name())
+		downloadURL := fmt.Sprintf("https://download.eqt.net.im/downloads/latest/%s", file.Name())
 
 		assets = append(assets, UpdateAsset{
 			Name:        file.Name(),

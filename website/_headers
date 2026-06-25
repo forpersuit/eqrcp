@@ -21,3 +21,13 @@
 
 /*.css
   Cache-Control: public, max-age=31536000, immutable
+
+# Update metadata — CORS open, no cache
+/update-metadata.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Executables & Signatures — CORS open, immutable cache
+/downloads/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=31536000, immutable
