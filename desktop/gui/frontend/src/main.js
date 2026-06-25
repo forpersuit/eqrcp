@@ -36,7 +36,6 @@ import {
     StartupStatus,
     StopChat,
     StopCurrent,
-    Confirm,
 } from '../wailsjs/go/main/App';
 
 window.onerror = function(message, source, lineno, colno, error) {
@@ -74,6 +73,16 @@ function getLicenseDisplayName(license) {
     return licenseTiers[license.tier] || license.tier;
 }
 let agentEvents = null;
+let confirmSwitchResolve = null;
+
+function showConfirmSwitchDialog() {
+    return new Promise((resolve) => {
+        confirmSwitchResolve = resolve;
+        state.activePanel = 'confirm-switch';
+        render();
+    });
+}
+
 let agentEventsRetry = null;
 let chatQRPulseTimer = null;
 let chatUsageTimer = null;
@@ -575,10 +584,12 @@ function renderPanel() {
         redeem: t('redeem_title'),
         about: t('about_title'),
         feedback: t('feedback'),
+        'confirm-switch': t('confirm_switch_title'),
     }[state.activePanel] || '';
+    const isConfirm = state.activePanel === 'confirm-switch';
     return `
         <div class="overlay" role="presentation">
-            <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+            <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}" ${isConfirm ? 'style="max-width: 420px; width: min(420px, 100%);"' : ''}>
                 <div class="modal-head">
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
@@ -590,7 +601,22 @@ function renderPanel() {
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
+                ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
             </section>
+        </div>
+    `;
+}
+
+function renderConfirmSwitchPanel() {
+    return `
+        <div class="confirm-switch-panel">
+            <div style="font-size: 15px; margin-bottom: 24px; color: var(--ink); line-height: 1.5; text-align: left;">
+                ${escapeHTML(t('confirm_switch_mode'))}
+            </div>
+            <div class="actions" style="margin-top: 24px; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="secondary" id="confirm-switch-cancel">${t('btn_cancel')}</button>
+                <button type="button" class="primary danger" id="confirm-switch-ok">${t('btn_confirm')}</button>
+            </div>
         </div>
     `;
 }
@@ -1272,12 +1298,7 @@ function bindEvents() {
 
             if (activeTask) {
                 try {
-                    const confirmed = await Confirm(
-                        t('confirm_switch_title'),
-                        t('confirm_switch_mode'),
-                        t('btn_confirm'),
-                        t('btn_cancel')
-                    );
+                    const confirmed = await showConfirmSwitchDialog();
                     if (!confirmed) {
                         return;
                     }
@@ -1286,6 +1307,11 @@ function bindEvents() {
                     } else {
                         await StopCurrent();
                     }
+                    if (state.status) {
+                        state.status.current = null;
+                        state.status.chat = null;
+                    }
+                    state.busy = false;
                 } catch (e) {
                     console.error('Failed to stop current active task on mode switch:', e);
                     return;
@@ -1375,6 +1401,20 @@ function bindPanelEvents() {
         if (event.target.classList.contains('overlay')) {
             closePanel();
         }
+    });
+    document.querySelector('#confirm-switch-ok')?.addEventListener('click', () => {
+        if (confirmSwitchResolve) {
+            confirmSwitchResolve(true);
+            confirmSwitchResolve = null;
+        }
+        closePanel();
+    });
+    document.querySelector('#confirm-switch-cancel')?.addEventListener('click', () => {
+        if (confirmSwitchResolve) {
+            confirmSwitchResolve(false);
+            confirmSwitchResolve = null;
+        }
+        closePanel();
     });
     bindSettingsControls();
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
@@ -1552,6 +1592,10 @@ function openPanel(panel) {
 
 function closePanel() {
     syncAndSaveSettingsInBackground();
+    if (confirmSwitchResolve) {
+        confirmSwitchResolve(false);
+        confirmSwitchResolve = null;
+    }
     state.activePanel = '';
     state.confirmResetPending = false;
     state.showEmojiPicker = false;
@@ -2618,12 +2662,7 @@ async function handleFileDrop(paths) {
 
         if (activeTask) {
             try {
-                const confirmed = await Confirm(
-                    t('confirm_switch_title'),
-                    t('confirm_switch_mode'),
-                    t('btn_confirm'),
-                    t('btn_cancel')
-                );
+                const confirmed = await showConfirmSwitchDialog();
                 if (!confirmed) {
                     return;
                 }
@@ -2632,6 +2671,11 @@ async function handleFileDrop(paths) {
                 } else {
                     await StopCurrent();
                 }
+                if (state.status) {
+                    state.status.current = null;
+                    state.status.chat = null;
+                }
+                state.busy = false;
             } catch (e) {
                 console.error('Failed to stop current active task on file drop:', e);
                 return;

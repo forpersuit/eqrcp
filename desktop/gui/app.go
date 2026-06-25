@@ -400,21 +400,6 @@ func (a *App) StopChat() error {
 	return nil
 }
 
-func (a *App) Confirm(title, message, okLabel, cancelLabel string) (bool, error) {
-	resp, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
-		Type:          wailsruntime.QuestionDialog,
-		Title:         title,
-		Message:       message,
-		Buttons:       []string{okLabel, cancelLabel},
-		DefaultButton: okLabel,
-		CancelButton:  cancelLabel,
-	})
-	if err != nil {
-		return false, err
-	}
-	return resp == okLabel, nil
-}
-
 func (a *App) ClearHistory() error {
 	if a.agent == nil {
 		return fmt.Errorf("agent not initialized")
