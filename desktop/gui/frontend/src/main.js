@@ -222,6 +222,9 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
+                    <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
+                        <span class="menu-icon">${giftIcon()}</span>
+                    </button>
                     <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}">
                         <span class="menu-icon">${settingsIcon()}</span>
                     </button>
@@ -995,7 +998,10 @@ function renderRedeemPanel() {
                 <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${state.isActivating ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
             </label>
             <div class="redeem-actions">
-                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>${state.isActivating ? t('btn_activating') : t('btn_confirm')}</button>
+                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>
+                    <span class="btn-gift-icon" style="margin-right: 6px; display: inline-flex; align-items: center;">${giftIcon()}</span>
+                    ${state.isActivating ? t('btn_activating') : t('btn_confirm')}
+                </button>
                 <button class="ghost" id="reset-license" ${state.isActivating ? 'disabled' : ''}>${t('btn_reset')}</button>
             </div>
             ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
@@ -1215,6 +1221,7 @@ function bindEvents() {
         button.addEventListener('click', refreshStatus);
     });
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
+    document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
     document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
     document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);

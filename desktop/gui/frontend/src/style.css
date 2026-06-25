@@ -1,7 +1,7 @@
 html {
     background: #f5f7f4;
     color: #18211f;
-    font-family: ui-sans-serif, "Segoe UI", "Aptos", "Noto Sans", sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 body {
