@@ -36,7 +36,7 @@
             align-items: flex-start;
             display: grid;
             gap: 12px;
-            grid-template-columns: 58px minmax(0, 1fr);
+            grid-template-columns: 62px minmax(0, 1fr);
             margin-bottom: 18px;
         }
 
@@ -254,11 +254,12 @@
 <body>
     <main>
         <header class="brand">
-            <div class="brand-left" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 58px;">
-                <img class="upload-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo" style="margin: 0;">
-                <span class="license-badge{{if .ClockTampered}} clock-error{{end}}">
+            <div class="brand-left" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 62px;">
+                <img class="upload-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo" style="margin: 0; width: 52px; height: 52px;">
+                <span id="tier-badge" class="license-badge{{if .ClockTampered}} clock-error{{end}}">
                     {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
                 </span>
+                <div id="plus-countdown" style="font-size: 9px; color: var(--muted); font-weight: 700; white-space: nowrap; margin-top: -2px; display: none;"></div>
             </div>
             <div>
                 <h1 data-i18n="title">Send from this device</h1>
@@ -880,6 +881,35 @@
         restoreDraft();
         applyLanguage();
         resizeTextArea();
+
+        // Plus countdown logic for Free tier
+        var countdownEl = document.getElementById('plus-countdown');
+        if (!isPaid && !clockTampered && isPlusMode) {
+            var remainingSeconds = Math.max(0, 300 - usedSeconds);
+            if (remainingSeconds > 0) {
+                countdownEl.style.display = 'block';
+                
+                function formatTime(sec) {
+                    var m = Math.floor(sec / 60);
+                    var s = sec % 60;
+                    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+                }
+                
+                countdownEl.textContent = formatTime(remainingSeconds);
+                
+                var timerId = setInterval(function() {
+                    remainingSeconds--;
+                    if (remainingSeconds <= 0) {
+                        clearInterval(timerId);
+                        isPlusMode = false;
+                        countdownEl.style.display = 'none';
+                        renderFiles(); // Refresh files list to remove delete buttons
+                    } else {
+                        countdownEl.textContent = formatTime(remainingSeconds);
+                    }
+                }, 1000);
+            }
+        }
     </script>
 </body>
 </html>
