@@ -188,11 +188,15 @@ func TestBrowserPagesUseBrandAssets(t *testing.T) {
 func TestUploadLangRendering(t *testing.T) {
 	var out strings.Builder
 	htmlVariables := struct {
-		Route string
-		File  string
-		Files []string
-		Count int
-		Lang  string
+		Route         string
+		File          string
+		Files         []string
+		Count         int
+		Lang          string
+		IsPaid        bool
+		LicenseTier   string
+		UsedSeconds   int
+		ClockTampered bool
 	}{
 		Route: "/receive/test",
 		Lang:  "",
@@ -217,11 +221,15 @@ func TestUploadLangRendering(t *testing.T) {
 func TestReceivePageRendering(t *testing.T) {
 	var out strings.Builder
 	htmlVariables := struct {
-		Route string
-		File  string
-		Files []string
-		Count int
-		Lang  string
+		Route         string
+		File          string
+		Files         []string
+		Count         int
+		Lang          string
+		IsPaid        bool
+		LicenseTier   string
+		UsedSeconds   int
+		ClockTampered bool
 	}{
 		Route: "/receive/testtoken",
 		Lang:  "zh",
@@ -749,9 +757,13 @@ func TestCompletedOneShotReceiveReturnsGoneForLaterBrowser(t *testing.T) {
 func TestDonePageListsTransferredFiles(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
-		File  string
-		Files []string
-		Count int
+		File          string
+		Files         []string
+		Count         int
+		IsPaid        bool
+		LicenseTier   string
+		UsedSeconds   int
+		ClockTampered bool
 	}{
 		File:  `C:\Downloads\one.txt, C:\Downloads\two file.txt`,
 		Files: []string{`C:\Downloads\one.txt`, `C:\Downloads\two file.txt`},

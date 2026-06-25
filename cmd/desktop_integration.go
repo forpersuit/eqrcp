@@ -420,22 +420,22 @@ func windowsContextEntries(exe string, launcher string) []windowsContextEntry {
 	return []windowsContextEntry{
 		{
 			key:     `HKCU\Software\Classes\*\shell\eqt-share`,
-			label:   "Share with eqt (file)",
+			label:   "EQT Send (file)",
 			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqt-share`,
-			label:   "Share with eqt (directory)",
+			label:   "EQT Send (directory)",
 			command: windowsShellCommand(exe, launcher, "share", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\shell\eqt-receive`,
-			label:   "Receive here with eqt (directory)",
+			label:   "EQT Receive (directory)",
 			command: windowsShellCommand(exe, launcher, "receive", "%1"),
 		},
 		{
 			key:     `HKCU\Software\Classes\Directory\Background\shell\eqt-receive`,
-			label:   "Receive here with eqt (directory background)",
+			label:   "EQT Receive (directory background)",
 			command: windowsShellCommand(exe, launcher, "receive", "%V"),
 		},
 	}

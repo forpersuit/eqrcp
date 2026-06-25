@@ -2768,7 +2768,7 @@ function chatQuotaText() {
     if (remaining <= 0) {
         return t('chat_time_used_up');
     }
-    return t('chat_time_left', { time: formatDuration(remaining) });
+    return "";
 }
 
 function chatQuotaTopText() {

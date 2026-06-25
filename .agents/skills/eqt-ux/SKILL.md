@@ -44,8 +44,16 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - 默认根据打开网页的浏览器语言首选项 `navigator.language` 来动态渲染对应的语种。
   - 扫码接入的 receive 模式（`upload.tmpl.html`）和 done 模式（`done.tmpl.html`）应在右下角显示可进行语种切换的下拉框 `<select>`。
   - **偏好持久化规范**：统一读取 `eqt_lang` (或兼容读取 `eqt-page-lang`) 作为偏好标识。切换语种时，必须同时在 LocalStorage 中写入 `eqt_lang` 和 `eqt-page-lang` 双键，以确保用户跨页面跳动时无缝继承语种偏好。
-  - **兜底翻译机制**：为了稳妥应对翻译缺漏，小语种词条加载时必须与最完备的 `en` 英文词条包进行安全深度 Merge 兜底，防止出现 JS 未定义键的报错，并保证漏译词条显示为英文而非空白。
+  - **兜底翻译机制**：为了稳妥应对翻译缺漏，小语种词条加载时必须与最完备的 `en` 英文词条包进行安全深度 Merge 兜底，防止出现 JS 未定义键 of 报错，并保证漏译词条显示为英文而非空白。
   - **Iframe 消息接收**：内嵌在桌面 GUI 内的 `chat.tmpl.html` 必须监听 `window.addEventListener('message')` 中类型为 `update-lang` 的广播，当外部宿主语言切换时同步调用 `updateLanguage()` 瞬间热重载。
+
+## 移动端接收管理与失败卡片规范 (Mobile Upload Management & Failure Cards)
+- **传输异常友好呈现**：文件上传失败或异常（网络中断、大小超限、服务端 500 写入失败）时，严禁使用原生弹窗或直接把 raw 错误文本打在表单下方。必须直接将整个界面重绘为带有红色“✕”圆形徽章的“传输失败卡片”（样式与 Done 成功卡片对称），给普通用户呈现易懂的本地化解释（如局域网未联通、磁盘满、或文件超大等提示），并提供醒目的“返回并重试”按钮以快速重载页面恢复输入状态。
+- **待传输列表累加与删除控制 (Plus 特权)**：
+  - 移动端选择文件和粘贴内容应使用统一内存数组 `accumulatedFiles` 进行管理与提交。
+  - **特权检测**：通过后端注入的 `IsPaid`, `ClockTampered` 与 `UsedSeconds` 计算出 `isPlusMode = (IsPaid && !ClockTampered) || (UsedSeconds < 300)`。
+  - **累加删除**：在 `isPlusMode` 为 `true` 时，允许用户多次点击选择文件，新选中的文件将追加到 `accumulatedFiles` 中，且在 DOM 渲染列表中为每一项提供单独的删除按钮；
+  - **超额回退**：在 `isPlusMode` 为 `false` 时，禁用累加和删除功能。即每次选择文件都将先清空数组（覆盖添加），且不渲染任何删除按钮。
 
 
 

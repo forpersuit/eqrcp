@@ -798,14 +798,24 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 		}
+		usage := limiterInstance.GetStatus()
 		htmlVariables := struct {
-			Route string
-			File  string
-			Files []string
-			Count int
-			Lang  string
-		}{}
-		htmlVariables.Route = "/receive/" + path
+			Route         string
+			File          string
+			Files         []string
+			Count         int
+			Lang          string
+			IsPaid        bool
+			LicenseTier   string
+			UsedSeconds   int
+			ClockTampered bool
+		}{
+			Route:         "/receive/" + path,
+			IsPaid:        usage.IsPaid,
+			LicenseTier:   usage.LicenseTier,
+			UsedSeconds:   usage.UsedSeconds,
+			ClockTampered: usage.ClockTampered,
+		}
 		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
 			htmlVariables.Lang = cookie.Value
 		} else {

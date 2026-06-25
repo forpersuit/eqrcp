@@ -279,9 +279,7 @@
                 <option value="fr">Français</option>
             </select>
         </div>
-    </main>
-    <script>
-        var pageTranslations = {
+           var pageTranslations = {
             zh: {
                 title: '发送文件到此设备',
                 subtitle: '您可以添加文件、粘贴截图或直接输入文本。EQT 将为您自动保存到接收端电脑中。',
@@ -294,7 +292,13 @@
                 text_placeholder: '在这里直接输入文字，或在此处粘贴截图或文件',
                 btn_transfer: '开始传输',
                 btn_transferring: '正在传输...',
-                err_failed: '传输失败，请保持此页面打开并重试。'
+                err_failed: '传输失败，请保持此页面打开并重试。',
+                fail_header: '传输失败',
+                btn_retry: '返回重试',
+                err_reason_network: '网络连接中断。请检查接收端电脑和此设备是否连接到同一个 Wi-Fi (局域网)，或确认接收端未关闭。',
+                err_reason_too_large: '传输的文件太大，超出了接收端或系统的传输限制。',
+                err_reason_server: '接收端写入文件失败。可能磁盘空间不足或无写入权限。',
+                err_reason_default: '发生未知错误，导致文件传输未能成功完成。'
             },
             en: {
                 title: 'Send to this device',
@@ -308,7 +312,13 @@
                 text_placeholder: 'Write text or paste files here',
                 btn_transfer: 'Transfer',
                 btn_transferring: 'Transferring...',
-                err_failed: 'Transfer failed. Keep this page open and try again.'
+                err_failed: 'Transfer failed. Keep this page open and try again.',
+                fail_header: 'Transfer Failed',
+                btn_retry: 'Go Back & Retry',
+                err_reason_network: 'Network connection interrupted. Please ensure both devices are connected to the same Wi-Fi (LAN), and EQT is running on the receiving computer.',
+                err_reason_too_large: 'The file is too large and exceeds the transfer limit.',
+                err_reason_server: 'The receiving computer failed to save the file. Disk might be full or write permission denied.',
+                err_reason_default: 'An unknown error occurred, and the transfer could not be completed.'
             },
             ja: {
                 title: 'このデバイスにファイルを送信',
@@ -322,7 +332,13 @@
                 text_placeholder: 'ここにテキストを直接入力するか、スクリーンショットやファイルを貼り付けます',
                 btn_transfer: '転送開始',
                 btn_transferring: '転送中...',
-                err_failed: '転送に失敗しました。このページを開いたままにして再試行してください。'
+                err_failed: '転送に失敗しました。このページを開いたままにして再試行してください。',
+                fail_header: '転送に失敗しました',
+                btn_retry: '戻って再試行',
+                err_reason_network: 'ネットワーク接続が切断されました。両方のデバイスが同じWi-Fi（LAN）に接続されていること、および受信側コンピュータでEQTが実行されていることを確認してください。',
+                err_reason_too_large: 'ファイルが大きすぎるため、転送制限を超えています。',
+                err_reason_server: '受信側コンピュータがファイルの保存に失敗しました。ディスクがいっぱいか、書き込み権限がない可能性があります。',
+                err_reason_default: '原因不明のエラーが発生し、転送を完了できませんでした。'
             },
             ko: {
                 title: '이 기기로 파일 전송',
@@ -336,7 +352,13 @@
                 text_placeholder: '여기에 텍스트를 직접 입력하거나 스크린샷 또는 파일을 붙여넣으십시오',
                 btn_transfer: '전송 시작',
                 btn_transferring: '전송 중...',
-                err_failed: '전송에 실패했습니다. 이 페이지를 열어두고 다시 시도하십시오.'
+                err_failed: '전송에 실패했습니다. 이 페이지를 열어두고 다시 시도하십시오.',
+                fail_header: '전송 실패',
+                btn_retry: '돌아가서 다시 시도',
+                err_reason_network: '네트워크 연결이 끊어졌습니다. 두 기기가 모두 동일한 Wi-Fi(LAN)에 연결되어 있고 수신 컴퓨터에서 EQT가 실행 중인지 확인하십시오.',
+                err_reason_too_large: '파일이 너무 커서 전송 제한을 초과합니다.',
+                err_reason_server: '수신 컴퓨터에서 파일을 저장하지 못했습니다. 디스크가 가득 찼거나 쓰기 권한이 없을 수 있습니다.',
+                err_reason_default: '알 수 없는 오류가 발생하여 전송을 완료할 수 없습니다.'
             },
             es: {
                 title: 'Enviar archivos a este dispositivo',
@@ -350,7 +372,13 @@
                 text_placeholder: 'Escriba texto directamente aquí, o pegue capturas de pantalla o archivos',
                 btn_transfer: 'Iniciar transferencia',
                 btn_transferring: 'Transfiriendo...',
-                err_failed: 'Error de transferencia. Mantenga esta página abierta e inténtelo de nuevo.'
+                err_failed: 'Error de transferencia. Mantenga esta página abierta e inténtelo de nuevo.',
+                fail_header: 'Error de transferencia',
+                btn_retry: 'Volver y reintentar',
+                err_reason_network: 'Conexión de red interrumpida. Asegúrese de que ambos dispositivos estén conectados a la misma red Wi-Fi (LAN) y de que EQT se esté ejecutando en el ordenador receptor.',
+                err_reason_too_large: 'El archivo es demasiado grande y supera el límite de transferencia.',
+                err_reason_server: 'El ordenador receptor no pudo guardar el archivo. Es posible que el disco esté lleno o que no tenga permisos de escritura.',
+                err_reason_default: 'Ocurrió un error desconocido y no se pudo completar la transferencia.'
             },
             de: {
                 title: 'Dateien an dieses Gerät senden',
@@ -364,7 +392,35 @@
                 text_placeholder: 'Geben Sie hier Text direkt ein, oder fügen Sie Screenshots oder Dateien ein',
                 btn_transfer: 'Übertragung starten',
                 btn_transferring: 'Übertrage...',
-                err_failed: 'Übertragung fehlgeschlagen. Bitte lassen Sie diese Seite geöffnet und versuchen Sie es erneut.'
+                err_failed: 'Übertragung fehlgeschlagen. Bitte lassen Sie diese Seite geöffnet und versuchen Sie es erneut.',
+                fail_header: 'Übertragung fehlgeschlagen',
+                btn_retry: 'Zurück & erneut versuchen',
+                err_reason_network: 'Netzwerkverbindung unterbrochen. Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi (LAN) verbunden sind und EQT auf dem Empfängercomputer ausgeführt wird.',
+                err_reason_too_large: 'Die Datei ist zu groß und überschreitet das Übertragungslimit.',
+                err_reason_server: 'Der Empfängercomputer konnte die Datei nicht speichern. Möglicherweise ist die Festplatte voll oder die Schreibberechtigung wurde verweigert.',
+                err_reason_default: 'Ein unbekannter Fehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.'
+            },
+            fr: {
+                title: 'Envoyer des fichiers vers cet appareil',
+                subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
+                composer: 'Éditeur de texte',
+                composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
+                add_files: 'Ajouter des fichiers',
+                file_name_label: 'Nom du fichier texte',
+                file_name_placeholder: 'Nom de fichier facultatif (laisser vide pour génération automatique)',
+                text_label: 'Contenu du texte',
+                text_placeholder: 'Saisissez du texte directement ici, o coller des captures d\'écran ou des fichiers',
+                btn_transfer: 'Démarrer le transfert',
+                btn_transferring: 'Transfert en cours...',
+                err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.',
+                fail_header: 'Échec du transfert',
+                btn_retry: 'Retourner & réessayer',
+                err_reason_network: 'Connexion réseau interrompue. Veuillez vous assurer que les dos appareils sont connectés au même réseau Wi-Fi (LAN) et que EQT est en cours d\'exécution sur l\'ordinateur destinataire.',
+                err_reason_too_large: 'Le fichier est trop volumineux et dépasse la limite de transfert.',
+                err_reason_server: 'L\'ordinateur destinataire n\'a pas réussi à enregistrer le fichier. Le disque est peut-être plein ou l\'autorisation d\'écriture a été refusée.',
+                err_reason_default: 'Une erreur inconnue est survenue et le transfert n\'a pas pu être complété.'
+            }
+        };te lassen Sie diese Seite geöffnet und versuchen Sie es erneut.'
             },
             fr: {
                 title: 'Envoyer des fichiers vers cet appareil',
@@ -460,8 +516,14 @@
             }
         }
 
+        var isPaid = {{.IsPaid}};
+        var licenseTier = '{{.LicenseTier}}';
+        var usedSeconds = {{.UsedSeconds}};
+        var clockTampered = {{.ClockTampered}};
+        var isPlusMode = (isPaid && !clockTampered) || (usedSeconds < 300);
+
         var uploadForm = document.getElementById('upload-form');
-        var pastedFiles = [];
+        var accumulatedFiles = [];
         var draftKey = 'eqt-upload-draft:' + window.location.pathname;
         var submitButton = document.getElementById('submit');
         var titleInput = document.getElementById('plaintext-title');
@@ -521,57 +583,101 @@
             saveDraft();
         }
 
-        function appendPastedFile(blob, index) {
-            if (!blob) { return; }
-            pastedFiles.push(blob);
-
-            var fileWrapper = document.createElement('div');
-            fileWrapper.className = 'pasted-file-wrapper';
-
-            if (blob.type && blob.type.indexOf('image/') === 0) {
-                var img = document.createElement('img');
-                img.src = URL.createObjectURL(blob);
-                img.alt = blob.name || 'Pasted image';
-                fileWrapper.appendChild(img);
-            } else {
-                var fileInfo = document.createElement('div');
-                fileInfo.className = 'file-info';
-
-                var fileIcon = document.createElement('span');
-                fileIcon.className = 'file-icon';
-                fileIcon.innerHTML = '&#128196;';
-
-                var fileName = document.createElement('span');
-                fileName.className = 'file-name';
-                fileName.textContent = blob.name || ('Pasted File ' + (index + 1));
-
-                fileInfo.appendChild(fileIcon);
-                fileInfo.appendChild(fileName);
-                fileWrapper.appendChild(fileInfo);
+        function addFileToAccumulated(file) {
+            var isImg = file.type && file.type.indexOf('image/') === 0;
+            var previewUrl = '';
+            if (isImg) {
+                previewUrl = URL.createObjectURL(file);
             }
-
-            pastedFileContainer.appendChild(fileWrapper);
+            accumulatedFiles.push({
+                file: file,
+                name: file.name || 'file_' + (accumulatedFiles.length + 1),
+                isImage: isImg,
+                previewUrl: previewUrl
+            });
         }
 
-        function renderSelectedFiles() {
+        function clearAccumulatedFiles() {
+            for (var i = 0; i < accumulatedFiles.length; i++) {
+                if (accumulatedFiles[i].previewUrl) {
+                    URL.revokeObjectURL(accumulatedFiles[i].previewUrl);
+                }
+            }
+            accumulatedFiles = [];
+        }
+
+        function renderFiles() {
             selectedFileContainer.innerHTML = '';
-            if (!fileInput.files || !fileInput.files.length) { return; }
-            for (var i = 0; i < fileInput.files.length; i++) {
-                var file = fileInput.files[i];
-                var fileWrapper = document.createElement('div');
-                fileWrapper.className = 'pasted-file-wrapper';
-                var fileInfo = document.createElement('div');
-                fileInfo.className = 'file-info';
-                var fileIcon = document.createElement('span');
-                fileIcon.className = 'file-icon';
-                fileIcon.innerHTML = '&#128196;';
-                var fileName = document.createElement('span');
-                fileName.className = 'file-name';
-                fileName.textContent = file.name;
-                fileInfo.appendChild(fileIcon);
-                fileInfo.appendChild(fileName);
-                fileWrapper.appendChild(fileInfo);
-                selectedFileContainer.appendChild(fileWrapper);
+            pastedFileContainer.innerHTML = ''; // Not used as everything is rendered in selectedFileContainer
+            
+            for (var i = 0; i < accumulatedFiles.length; i++) {
+                (function(index) {
+                    var item = accumulatedFiles[index];
+                    var fileWrapper = document.createElement('div');
+                    fileWrapper.className = 'pasted-file-wrapper';
+                    fileWrapper.style.display = 'flex';
+                    fileWrapper.style.alignItems = 'center';
+                    fileWrapper.style.justifyContent = 'space-between';
+                    fileWrapper.style.gap = '10px';
+                    
+                    var leftArea = document.createElement('div');
+                    leftArea.style.flex = '1';
+                    leftArea.style.minWidth = '0';
+                    
+                    if (item.isImage) {
+                        var img = document.createElement('img');
+                        img.src = item.previewUrl;
+                        img.alt = item.name;
+                        img.style.maxWidth = '100px';
+                        img.style.maxHeight = '100px';
+                        img.style.borderRadius = '4px';
+                        leftArea.appendChild(img);
+                    } else {
+                        var fileInfo = document.createElement('div');
+                        fileInfo.className = 'file-info';
+                        
+                        var fileIcon = document.createElement('span');
+                        fileIcon.className = 'file-icon';
+                        fileIcon.innerHTML = '&#128196;';
+                        
+                        var fileName = document.createElement('span');
+                        fileName.className = 'file-name';
+                        fileName.textContent = item.name;
+                        
+                        fileInfo.appendChild(fileIcon);
+                        fileInfo.appendChild(fileName);
+                        leftArea.appendChild(fileInfo);
+                    }
+                    
+                    fileWrapper.appendChild(leftArea);
+                    
+                    if (isPlusMode) {
+                        var deleteBtn = document.createElement('button');
+                        deleteBtn.type = 'button';
+                        deleteBtn.innerHTML = '&times;';
+                        deleteBtn.style.background = 'none';
+                        deleteBtn.style.border = 'none';
+                        deleteBtn.style.color = 'var(--danger)';
+                        deleteBtn.style.fontSize = '22px';
+                        deleteBtn.style.cursor = 'pointer';
+                        deleteBtn.style.padding = '0 8px';
+                        deleteBtn.style.display = 'inline-flex';
+                        deleteBtn.style.alignItems = 'center';
+                        deleteBtn.style.justifyContent = 'center';
+                        
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            if (item.previewUrl) {
+                                URL.revokeObjectURL(item.previewUrl);
+                            }
+                            accumulatedFiles.splice(index, 1);
+                            renderFiles();
+                        });
+                        fileWrapper.appendChild(deleteBtn);
+                    }
+                    
+                    selectedFileContainer.appendChild(fileWrapper);
+                })(i);
             }
         }
 
@@ -606,6 +712,37 @@
             textArea.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
+        function renderUploadFailedPage(reason) {
+            var displayReason = reason || t('err_reason_default');
+            var badgeText = clockTampered ? 'CLOCK ERROR' : (licenseTier ? licenseTier : 'FREE');
+            var badgeClass = clockTampered ? 'clock-error' : '';
+            
+            var failHtml = `
+            <main style="width: min(100%, 480px); padding: 40px 20px; text-align: center; margin: 0 auto;">
+                <img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo" style="display: block; height: auto; max-width: 140px; margin: 0 auto 32px;">
+                
+                <div class="status-card" style="background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 32px 24px; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.04); margin-bottom: 24px; position: relative;">
+                    <span class="license-badge ${badgeClass}" style="position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 4px; line-height: 1.2; letter-spacing: 0.05em; background: var(--accent); color: #fff;">
+                        ${badgeText}
+                    </span>
+                    <div class="fail-badge" style="width: 64px; height: 64px; border-radius: 50%; background: #fef3f2; border: 2px solid #fee4e2; color: #d92d20; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(217, 45, 32, 0.08);">✕</div>
+                    <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 800; color: var(--text-primary);">${t('fail_header')}</h1>
+                    <p class="summary" style="margin: 0 0 24px; color: var(--muted); font-size: 15px; line-height: 1.5;">
+                        ${displayReason}
+                    </p>
+                    <button id="retry-btn" class="btn" style="width: 100%; border-radius: 6px; font: inherit; font-weight: 800; min-height: 42px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; border: 0; cursor: pointer;">
+                        ${t('btn_retry')}
+                    </button>
+                </div>
+            </main>
+            `;
+            
+            document.body.innerHTML = failHtml;
+            document.getElementById('retry-btn').addEventListener('click', function() {
+                window.location.reload();
+            });
+        }
+
         textArea.addEventListener('paste', function(e) {
             var clipboardData = e.clipboardData || window.clipboardData;
             var files = readClipboardFiles(clipboardData);
@@ -615,9 +752,13 @@
             if (pastedText) {
                 insertTextAtCursor(pastedText);
             }
-            for (var i = 0; i < files.length; i++) {
-                appendPastedFile(files[i], i);
+            if (!isPlusMode) {
+                clearAccumulatedFiles();
             }
+            for (var i = 0; i < files.length; i++) {
+                addFileToAccumulated(files[i]);
+            }
+            renderFiles();
             saveDraft();
         });
 
@@ -626,9 +767,11 @@
             errorBox.textContent = '';
             submitButton.value = t('btn_transferring');
             submitButton.disabled = true;
+            
             var formData = new FormData(uploadForm);
+            formData.delete('files'); // remove raw files from input to avoid duplicates
+            
             var textInput = document.getElementById('plaintext-text');
-
             if (titleInput.value || textInput.value) {
                 var currentDate = new Date().toJSON().slice(0, 19).replace(/[-T:]/g, '_');
                 var filename = titleInput.value || ('eqt-text-file-' + currentDate);
@@ -636,9 +779,9 @@
                 formData.append('textFile', blob, filename + '.txt');
             }
 
-            for (var i = 0; i < pastedFiles.length; i++) {
-                var file = pastedFiles[i];
-                var fileName = file.name || ('pasted_file_' + i);
+            for (var i = 0; i < accumulatedFiles.length; i++) {
+                var file = accumulatedFiles[i].file;
+                var fileName = accumulatedFiles[i].name;
                 formData.append('files', file, fileName);
             }
 
@@ -647,13 +790,18 @@
                 body: formData
             }).then(function(response) {
                 if (!response.ok) {
-                    throw new Error('Upload failed');
+                    if (response.status === 413) {
+                        throw new Error('TOO_LARGE');
+                    } else if (response.status === 500) {
+                        throw new Error('SERVER_ERROR');
+                    } else {
+                        throw new Error('DEFAULT');
+                    }
                 }
                 return response.text();
             }).then(function(html) {
                 clearDraft();
-                pastedFiles = [];
-                pastedFileContainer.innerHTML = '';
+                clearAccumulatedFiles();
                 var parser = new DOMParser();
                 var nextDoc = parser.parseFromString(html, 'text/html');
                 document.title = nextDoc.title || document.title;
@@ -670,10 +818,16 @@
                     newScript.appendChild(document.createTextNode(oldScript.innerHTML));
                     oldScript.parentNode.replaceChild(newScript, oldScript);
                 }
-            }).catch(function() {
-                errorBox.textContent = t('err_failed');
-                submitButton.value = t('btn_transfer');
-                submitButton.disabled = false;
+            }).catch(function(err) {
+                var reasonKey = 'err_reason_network';
+                if (err.message === 'TOO_LARGE') {
+                    reasonKey = 'err_reason_too_large';
+                } else if (err.message === 'SERVER_ERROR') {
+                    reasonKey = 'err_reason_server';
+                } else if (err.message === 'DEFAULT') {
+                    reasonKey = 'err_reason_default';
+                }
+                renderUploadFailedPage(t(reasonKey));
             });
         });
 
@@ -690,15 +844,28 @@
 
         titleInput.addEventListener('input', updateDraftState);
         textArea.addEventListener('input', updateDraftState);
-        fileInput.addEventListener('change', renderSelectedFiles);
+        
+        fileInput.addEventListener('change', function() {
+            if (!fileInput.files || !fileInput.files.length) { return; }
+            if (!isPlusMode) {
+                clearAccumulatedFiles();
+            }
+            for (var i = 0; i < fileInput.files.length; i++) {
+                addFileToAccumulated(fileInput.files[i]);
+            }
+            fileInput.value = ''; // clear value so change event triggers again for the same file
+            renderFiles();
+        });
+
         window.addEventListener('beforeunload', function(e) {
-            if (!titleInput.value.trim() && !textArea.value.trim() && !pastedFiles.length) {
+            if (!titleInput.value.trim() && !textArea.value.trim() && !accumulatedFiles.length) {
                 return;
             }
             e.preventDefault();
             e.returnValue = '';
             return '';
         });
+
         restoreDraft();
         applyLanguage();
         resizeTextArea();

@@ -105,7 +105,7 @@ func TestFormatWindowsDesktopIntegrationStatusInstalled(t *testing.T) {
 	for _, want := range []string{
 		"Windows desktop integration status",
 		`- current executable: C:\tools\eqt.exe`,
-		"- Share with eqt (file): installed",
+		"- EQT Send (file): installed",
 		"- Send to > Share with eqt: installed",
 		"- eqt launcher: installed",
 		"- Desktop agent runtime: not running",
@@ -181,7 +181,7 @@ func TestFormatWindowsDesktopIntegrationStatusNeedsRepair(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"- Share with eqt (file): needs repair",
+		"- EQT Send (file): needs repair",
 		`expected: "C:\tools\eqt.exe" "share" "%1"`,
 		"repair: run `eqt desktop install`",
 		"- summary: 5 installed, 1 needs repair, 0 not installed",

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -444,11 +445,45 @@ func (a *App) openExternal(rawURL string, allowed map[string]bool) error {
 	return nil
 }
 
+func convertCrossPlatformPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		// Convert WSL path /mnt/c/... to C:\...
+		re := regexp.MustCompile(`^/mnt/([a-zA-Z])(?:/(.*))?$`)
+		if m := re.FindStringSubmatch(path); m != nil {
+			drive := strings.ToUpper(m[1])
+			rest := m[2]
+			if rest == "" {
+				return drive + ":\\"
+			}
+			return drive + ":\\" + strings.ReplaceAll(rest, "/", "\\")
+		}
+		return filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
+	} else {
+		// Convert Windows path C:\... to /mnt/c/...
+		re := regexp.MustCompile(`^([a-zA-Z]):(?:[\\/](.*))?$`)
+		if m := re.FindStringSubmatch(path); m != nil {
+			drive := strings.ToLower(m[1])
+			rest := m[2]
+			if rest == "" {
+				return "/mnt/" + drive
+			}
+			return "/mnt/" + drive + "/" + strings.ReplaceAll(rest, "\\", "/")
+		}
+	}
+	return path
+}
+
 func (a *App) OpenPath(path string) error {
-	a.logInfo(fmt.Sprintf("[GUI] OpenPath called with path: %s", path))
+	a.logInfo(fmt.Sprintf("[GUI] OpenPath called with raw path: %s", path))
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
+
+	path = convertCrossPlatformPath(path)
+	a.logInfo(fmt.Sprintf("[GUI] OpenPath translated path: %s", path))
 
 	// Clean and resolve to absolute path if relative
 	cleaned := filepath.Clean(path)
@@ -506,10 +541,13 @@ func (a *App) OpenPath(path string) error {
 }
 
 func (a *App) OpenFile(path string) error {
-	a.logInfo(fmt.Sprintf("[GUI] OpenFile called with path: %s", path))
+	a.logInfo(fmt.Sprintf("[GUI] OpenFile called with raw path: %s", path))
 	if path == "" {
 		return fmt.Errorf("path is empty")
 	}
+
+	path = convertCrossPlatformPath(path)
+	a.logInfo(fmt.Sprintf("[GUI] OpenFile translated path: %s", path))
 
 	// Clean and resolve to absolute path if relative
 	cleaned := filepath.Clean(path)
@@ -852,7 +890,7 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath)
+		cmd := exec.Command("explorer.exe", winPath)
 		util.HideCommand(cmd)
 		return cmd, nil
 	case "darwin":
