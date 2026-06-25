@@ -94,10 +94,17 @@ func VerifyUpdateSignature(fileBytes []byte, sigBytes []byte) bool {
 	return verified
 }
 
+func getUpdateURL() string {
+	if envURL := os.Getenv("EQT_UPDATE_URL"); envURL != "" {
+		return envURL
+	}
+	return "https://eqt.net.im/update-metadata.json"
+}
+
 // CheckForUpdates queries the update server for a newer version matching the OS/Arch.
 // If isDesktop is true, it looks for "eqt-desktop-*" assets. Otherwise "eqt-cli-*".
 func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error) {
-	apiURL := fmt.Sprintf("%s/api/v1/update/check", getLicenseServer())
+	apiURL := getUpdateURL()
 	Log.Debugf("CheckForUpdates: initiated. isDesktop: %v, currentVersion: %s, url: %s", isDesktop, currentVersion, apiURL)
 	
 	client := &http.Client{Timeout: 10 * time.Second}

@@ -32,7 +32,11 @@ func main() {
 	}
 	hash := hasher.Sum(nil)
 
-	seedBytes, err := hex.DecodeString(testPrivateKeySeedHex)
+	seedHex := os.Getenv("UPDATE_SIGNING_PRIVATE_KEY")
+	if seedHex == "" {
+		seedHex = testPrivateKeySeedHex
+	}
+	seedBytes, err := hex.DecodeString(seedHex)
 	if err != nil {
 		fmt.Printf("Error decoding private key seed: %v\n", err)
 		os.Exit(1)

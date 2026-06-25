@@ -36,20 +36,13 @@ jobs:
         shell: bash
         run: |
           go run scripts/generate-update-sig/main.go out/eqt-desktop-windows-amd64.exe
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: out/*
-      - name: Upload to Cloudflare R2
-        if: secrets.R2_ACCESS_KEY_ID != ''
-        shell: bash
-        run: |
-          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/${{ github.ref_name }}/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/latest/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-windows-artifacts
+          path: out/*
 
   release-wails-linux:
     name: Release Linux GUI
@@ -78,16 +71,53 @@ jobs:
           mkdir -p out
           cd desktop/gui/build/bin
           tar -czf "$GITHUB_WORKSPACE/out/eqt-desktop-linux-amd64.tar.gz" eqt-desktop
-      - uses: softprops/action-gh-release@v2
+      - name: Generate Update Signature
+        run: |
+          go run scripts/generate-update-sig/main.go out/eqt-desktop-linux-amd64.tar.gz
+        env:
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-linux-artifacts
+          path: out/*
+
+  deploy:
+    name: Deploy to GitHub Release & Cloudflare Pages
+    needs: [release-wails-windows, release-wails-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: temp-artifacts
+      - name: Consolidate artifacts
+        run: |
+          mkdir -p out
+          find temp-artifacts -type f -exec cp {} out/ \;
+          ls -R out
+      - name: Generate static update-metadata.json
+        run: |
+          go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out website/update-metadata.json
+      - name: Copy download assets to website static folder
+        run: |
+          mkdir -p website/downloads/latest
+          mkdir -p website/downloads/${{ github.ref_name }}
+          cp -r out/* website/downloads/latest/
+          cp -r out/* website/downloads/${{ github.ref_name }}/
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           files: out/*
-      - name: Upload to Cloudflare R2
-        if: secrets.R2_ACCESS_KEY_ID != ''
+      - name: Deploy static site to Cloudflare Pages
+        if: secrets.CLOUDFLARE_API_TOKEN != ''
         run: |
-          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/${{ github.ref_name }}/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/latest/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          npx wrangler pages deploy website --project-name=eqt-website
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}

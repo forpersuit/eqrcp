@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -88,7 +87,7 @@ func TestCheckForUpdates(t *testing.T) {
 
 	// Mock server returning the updates metadata
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/update/check" {
+		if r.URL.Path != "/update-metadata.json" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -97,14 +96,14 @@ func TestCheckForUpdates(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Redirect EQT license/update server destination
-	origServerEnv := os.Getenv("EQT_LICENSE_SERVER")
-	_ = os.Setenv("EQT_LICENSE_SERVER", server.URL)
+	// Redirect EQT update server destination
+	origUpdateURLEnv := os.Getenv("EQT_UPDATE_URL")
+	_ = os.Setenv("EQT_UPDATE_URL", server.URL+"/update-metadata.json")
 	defer func() {
-		if origServerEnv == "" {
-			_ = os.Unsetenv("EQT_LICENSE_SERVER")
+		if origUpdateURLEnv == "" {
+			_ = os.Unsetenv("EQT_UPDATE_URL")
 		} else {
-			_ = os.Setenv("EQT_LICENSE_SERVER", origServerEnv)
+			_ = os.Setenv("EQT_UPDATE_URL", origUpdateURLEnv)
 		}
 	}()
 
@@ -235,19 +234,19 @@ func TestDownloadUpdate(t *testing.T) {
 }
 
 func TestProductionUpdateFlow(t *testing.T) {
-	// Ensure we are using the real production license server
-	origServerEnv := os.Getenv("EQT_LICENSE_SERVER")
-	_ = os.Unsetenv("EQT_LICENSE_SERVER")
+	// Ensure we are using the real production update URL
+	origUpdateURLEnv := os.Getenv("EQT_UPDATE_URL")
+	_ = os.Unsetenv("EQT_UPDATE_URL")
 	t.Cleanup(func() {
-		if origServerEnv != "" {
-			_ = os.Setenv("EQT_LICENSE_SERVER", origServerEnv)
+		if origUpdateURLEnv != "" {
+			_ = os.Setenv("EQT_UPDATE_URL", origUpdateURLEnv)
 		}
 	})
 
-	t.Logf("Checking updates from production server: %s", getLicenseServer())
+	t.Logf("Checking updates from production server: %s", getUpdateURL())
 
 	// 1. Get raw metadata response from production server
-	apiURL := fmt.Sprintf("%s/api/v1/update/check", getLicenseServer())
+	apiURL := getUpdateURL()
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(apiURL)
 	if err != nil {

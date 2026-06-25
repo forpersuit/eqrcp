@@ -1711,9 +1711,8 @@ func TestDesktopAgentUpdateEndpoints(t *testing.T) {
 		},
 	}
 
-	// 1. Mock Update Release Server
 	updateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/v1/update/check" {
+		if r.URL.Path == "/update-metadata.json" {
 			w.Header().Set("Content-Type", "application/json")
 			// Make absolute URL for download
 			resp := mockResponse
@@ -1738,13 +1737,13 @@ func TestDesktopAgentUpdateEndpoints(t *testing.T) {
 	defer updateServer.Close()
 
 	// Redirect Update client location to our mock updateServer
-	origServerEnv := os.Getenv("EQT_LICENSE_SERVER")
-	_ = os.Setenv("EQT_LICENSE_SERVER", updateServer.URL)
+	origUpdateURLEnv := os.Getenv("EQT_UPDATE_URL")
+	_ = os.Setenv("EQT_UPDATE_URL", updateServer.URL+"/update-metadata.json")
 	t.Cleanup(func() {
-		if origServerEnv == "" {
-			_ = os.Unsetenv("EQT_LICENSE_SERVER")
+		if origUpdateURLEnv == "" {
+			_ = os.Unsetenv("EQT_UPDATE_URL")
 		} else {
-			_ = os.Setenv("EQT_LICENSE_SERVER", origServerEnv)
+			_ = os.Setenv("EQT_UPDATE_URL", origUpdateURLEnv)
 		}
 	})
 
