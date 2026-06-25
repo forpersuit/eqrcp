@@ -1160,7 +1160,7 @@ function renderHistory(history) {
     }
     return `<ol class="history">${history.slice(0, 8).map((task) => {
         const taskFolder = getTaskFolder(task);
-        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
+        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
         return `
         <li>
             <div class="history-item-left">
@@ -1287,7 +1287,7 @@ function bindPanelEvents() {
                 state.settings.viewportDebug = true;
             }
             await saveSettingsData();
-            state.notice = state.settings.devMode ? 'Developer Mode enabled!' : 'Developer Mode disabled.';
+            state.notice = state.settings.devMode ? t('dev_mode_enabled') : t('dev_mode_disabled');
             render();
             openPanel('about');
         } else {
@@ -1303,7 +1303,7 @@ function bindPanelEvents() {
         if (!state.settings) state.settings = {};
         state.settings.debugLog = Boolean(event.currentTarget.checked);
         await saveSettingsData();
-        state.notice = state.settings.debugLog ? 'Debug logs enabled.' : 'Debug logs disabled.';
+        state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
         render();
         openPanel('about');
     });
@@ -1312,7 +1312,7 @@ function bindPanelEvents() {
         if (!state.settings) state.settings = {};
         state.settings.viewportDebug = Boolean(event.currentTarget.checked);
         await saveSettingsData();
-        state.notice = state.settings.viewportDebug ? 'Viewport debug box enabled.' : 'Viewport debug box disabled.';
+        state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
         render();
         openPanel('about');
     });
@@ -1351,7 +1351,7 @@ function bindPanelEvents() {
         state.settings.debugLog = false;
         state.settings.viewportDebug = false;
         await saveSettingsData();
-        state.notice = 'Developer Mode disabled.';
+        state.notice = t('dev_mode_disabled');
         render();
         openPanel('about');
     });
@@ -1498,7 +1498,7 @@ async function startShare() {
         await saveSettingsData();
         state.status = await Share(state.sharePaths);
         state.sharePaths = [];
-        state.notice = 'Share task started.';
+        state.notice = t('share_task_started');
         render();
     });
 }
@@ -1507,7 +1507,7 @@ async function startReceive() {
     await run(async () => {
         await saveSettingsData();
         state.status = await Receive(state.receiveDir);
-        state.notice = 'Receive task started.';
+        state.notice = t('receive_task_started');
         render();
     });
 }
@@ -1559,7 +1559,7 @@ async function openChatSaveDirectory() {
         const dir = state.chatSaveDir || await ChatSaveDirectory();
         state.chatSaveDir = dir;
         await OpenPath(dir);
-        state.notice = `Opened ${dir}`;
+        state.notice = t('notice_opened_dir', { dir });
         render();
     }, {busy: false});
 }
@@ -1627,7 +1627,34 @@ function showToast(message) {
     }, 3000);
 }
 
+function recalculateUpdateTexts() {
+    if (!state.updateStage || state.updateStage === 'idle') {
+        state.updateStatusText = '';
+        state.updateBtnText = '';
+        return;
+    }
+    const checkRes = state.updateCheckRes;
+    const version = checkRes?.version || '';
+    if (state.updateStage === 'checking') {
+        state.updateStatusText = t('checking_updates');
+        state.updateBtnText = t('btn_checking');
+    } else if (state.updateStage === 'available') {
+        state.updateStatusText = t('version_available', { version });
+        state.updateBtnText = t('btn_download_now');
+    } else if (state.updateStage === 'ready') {
+        state.updateStatusText = t('update_ready_restart', { version });
+        state.updateBtnText = t('btn_install_restart');
+    } else if (state.updateStage === 'downloading') {
+        state.updateStatusText = t('btn_downloading');
+        state.updateBtnText = t('btn_downloading');
+    } else if (state.updateStage === 'installing') {
+        state.updateStatusText = t('installing_updates');
+        state.updateBtnText = t('btn_installing');
+    }
+}
+
 function applyLanguageChange(newLang) {
+    recalculateUpdateTexts();
     const frame = document.querySelector('#chat-iframe');
     if (frame) {
         const payload = {
@@ -1661,9 +1688,9 @@ async function saveSettings() {
         await saveSettingsData();
         if (state.mode === 'chat') {
             syncPanelSurface();
-            showToast('Settings saved.');
+            showToast(t('settings_saved'));
         } else {
-            state.notice = 'Settings saved.';
+            state.notice = t('settings_saved');
         }
         applyLanguageChange(state.settings?.lang || 'zh');
     });
@@ -1882,7 +1909,7 @@ function updateIntegrationRow(kind) {
 async function stopCurrent() {
     await run(async () => {
         await StopCurrent();
-        state.notice = 'Current task stopped.';
+        state.notice = t('task_stopped');
         await loadStatusData();
     });
 }
@@ -1890,7 +1917,7 @@ async function stopCurrent() {
 async function stopChat() {
     await run(async () => {
         await StopChat();
-        state.notice = 'Chat stopped.';
+        state.notice = t('chat_stopped');
         await loadStatusData();
     });
 }
@@ -1898,7 +1925,7 @@ async function stopChat() {
 async function clearHistory() {
     await run(async () => {
         await ClearHistory();
-        state.notice = 'History cleared.';
+        state.notice = t('history_cleared');
         await loadStatusData();
     });
 }
@@ -1907,7 +1934,7 @@ async function repeatTask(event) {
     await run(async () => {
         const id = Number(event.currentTarget.dataset.taskId);
         state.status = await RepeatTask(id);
-        state.notice = `Task #${id} repeated.`;
+        state.notice = t('task_repeated', { id });
         render();
     });
 }
@@ -2309,14 +2336,14 @@ function handleTrayCommand(command) {
     if (command === 'share') {
         setMode('share');
         state.activePanel = '';
-        state.notice = 'Ready to share.';
+        state.notice = t('ready_to_share');
         render();
         return;
     }
     if (command === 'receive') {
         setMode('receive');
         state.activePanel = '';
-        state.notice = 'Ready to receive.';
+        state.notice = t('ready_to_receive');
         render();
         return;
     }
