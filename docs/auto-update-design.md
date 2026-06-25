@@ -327,5 +327,49 @@ sequenceDiagram
 3. 模拟新版本下载完成就绪。
 4. **互斥避让验证**：Fara 验证客户端在**传输活跃期间**不会执行任何替换和退出行为。
 5. 当文件传输完毕（空闲状态），或者 Fara 模拟在托盘中右键点击 `Quit` 时：
-   - 验证客户端调用 `killLingeringProcesses` 强杀所有 `eqt.exe` 后台进程，释放文件锁定；
-   - 执行静默替换，并在下一次启动时顺利将版本迁移至最新，且保留原本的离线证书与聊天数据。
+    - 验证客户端调用 `killLingeringProcesses` 强杀所有 `eqt.exe` 后台进程，释放文件锁定；
+    - 执行静默替换，并在下一次启动时顺利将版本迁移至最新，且保留原本的离线证书与聊天数据。
+
+---
+
+## 6. 更新服务器分流与域名职责隔离 (Domain & Subdomain Separation)
+
+为了提高系统的容灾能力、确保缓存控制的最佳性能，并将高带宽的大文件下载流量与日常的业务 API/网页介绍流量彻底解耦，系统将更新下载域名与主域名进行了物理隔离。
+
+### 6.1 域名职责划分
+
+* **主域名 (`eqt.net.im` / `www.eqt.net.im`)**：
+  * **职责**：专门用于承载 EQT 官网主页、多语言功能说明、合规性政策。
+  * **托管源**：Cloudflare Pages 静态节点。
+  * **缓存特征**：较短的缓存周期（如 `max-age=0, must-revalidate`），确保网页内容修改后能快速刷新呈现给用户。
+* **分发下载域名 (`download.eqt.net.im`)**：
+  * **职责**：专门用于分发 `update-metadata.json` 更新元数据，以及所有客户端的二进制包及验签文件（如 `*.exe`, `*.tar.gz`, `*.sig`）。
+  * **托管源**：初期绑定至 Cloudflare Pages 静态服务。由于实现了域名解耦，未来只需更改 DNS 解析，即可在对客户端完全透明的情况下，无感地迁移到 **Cloudflare R2（零流出资费对象存储）** 或自建的高速大带宽 CDN 边缘上。
+  * **缓存特征**：
+    * `/update-metadata.json`：设为零缓存，确保客户端检查版本能获取秒级实时推送。
+    * `/downloads/*` 包资产：设为永久强缓存 (`max-age=31536000, immutable`)，减轻源站负载并提升边缘响应速度。
+* **有状态业务 API 域名 (`api.eqt.net.im`)**：
+  * **职责**：专门处理离线激活、许可证兑换与指纹校验等有状态接口，指向 Cloudflare Workers，不承担任何静态大文件分发，确保接口的高安全性和低延时。
+
+### 6.2 跨域与强缓存配置 (`_headers` 规范)
+
+对于托管在 Pages 或 CDN 上的静态分发内容，必须显式在 `website/_headers` 中声明如下规则，以确保跨域安全（CORS）与极速加载性能：
+
+```
+# 元数据控制
+/update-metadata.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=0, must-revalidate
+
+# 软件包与数字签名分发
+/downloads/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=31536000, immutable
+```
+
+### 6.3 GitHub CI/CD 中的 tag-release 部署优化限制 (Wrangler Branch Parameters)
+
+每当通过发布 tag（如 `v*`）触发工作流自动构建时，Actions checkout 出的分支往往处于 Detached HEAD 状态。
+* **默认缺陷**：Wrangler 自动检测分支名称为 tag 名（例如 `v1.7.3`），这会导致部署被映射为 Preview（预览），主域名不会生效。
+* **修正规范**：在自动部署步骤中，必须显示追加 `--branch=master` 参数（即 `npx wrangler pages deploy website --project-name=eqt --branch=master`），强行指示 Cloudflare 将此构建提升为 Production，确保生产环境主域名和子域名能同步被物理刷新。
+
