@@ -78,7 +78,7 @@ let chatQRPulseTimer = null;
 let chatUsageTimer = null;
 const autoSavedAttachments = new Set();
 const app = document.querySelector('#app');
-const portHelpText = 'Port 0 chooses an available port automatically. Use a fixed port only when firewall rules, bookmarks, or device workflows need a stable address.';
+const getPortHelpText = () => t('port_help_text');
 
 function triggerChatQRPulse() {
     if (state.chatQRPromptDismissed) {
@@ -346,7 +346,7 @@ function renderShareTransfer(task) {
             <div class="transfer-head">
                 <div>
                     <div class="eyebrow">${t('share_active')}</div>
-                    <h2>${escapeHTML(task.transferState || task.state || t('waiting'))}</h2>
+                    <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
                 </div>
                 <button class="danger inline stop-current-action">${t('stop')}</button>
             </div>
@@ -670,7 +670,7 @@ function renderSettingsPanel() {
                     </div>
                     <div class="avatar-setting-row">
                         <span class="avatar-preview">${escapeHTML(chatAvatarPreview)}</span>
-                        <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="Emoji or initials" />
+                        <input id="settings-chat-avatar" maxlength="8" value="${escapeAttr(chatAvatar)}" placeholder="${escapeAttr(t('chat_avatar_placeholder'))}" />
                     </div>
                 </div>
                 <div class="setting-row">
@@ -741,10 +741,10 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong class="setting-label-with-help" data-help="${escapeAttr(portHelpText)}" tabindex="0">${t('port_title')} <span aria-hidden="true">?</span></strong>
+                            <strong class="setting-label-with-help" data-help="${escapeAttr(getPortHelpText())}" tabindex="0">${t('port_title')} <span aria-hidden="true">?</span></strong>
                             <span>${t('port_desc')}</span>
                         </div>
-                        <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(portHelpText)}" />
+                        <input id="settings-port" type="number" min="0" max="65535" value="${Number(state.settings.port || 0)}" data-help="${escapeAttr(getPortHelpText())}" />
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
@@ -788,13 +788,13 @@ function renderChatQuotaPill() {
 
 function renderStatusBadge(status) {
     if (!status) {
-        return '<span class="setting-status muted">checking</span>';
+        return `<span class="setting-status muted">${t('setting_checking')}</span>`;
     }
     if (status.supported === false) {
-        return '<span class="setting-status muted">unsupported</span>';
+        return `<span class="setting-status muted">${t('setting_unsupported')}</span>`;
     }
     if (status.needsRepair) {
-        return '<span class="setting-status warning">repair</span>';
+        return `<span class="setting-status warning">${t('setting_repair')}</span>`;
     }
     return '';
 }
@@ -1166,7 +1166,7 @@ function renderHistory(history) {
             <div class="history-item-left">
                 <div class="history-title-row">
                     <strong class="history-title">${escapeHTML(actionText)} #${task.id}</strong>
-                    <span class="history-status-icon" title="${escapeAttr(task.state)}${task.transferState ? ` / ${escapeAttr(task.transferState)}` : ''}">
+                    <span class="history-status-icon" title="${escapeAttr(getTranslatedState(task.state))}${task.transferState ? ` / ${escapeAttr(getTranslatedState(task.transferState))}` : ''}">
                         ${getStatusIcon(task)}
                     </span>
                     ${taskFolder ? `
@@ -2737,12 +2737,12 @@ function shareItemStatus(task, path) {
     const current = shortName(task.transferCurrent || '');
     if (current && current === shortName(path)) {
         const percent = task.transferPercent || 0;
-        return percent ? `${percent}%` : 'Active';
+        return percent ? `${percent}%` : t('active');
     }
     if (task.transferState === 'waiting') {
-        return 'Waiting';
+        return t('waiting');
     }
-    return 'Locked';
+    return t('locked');
 }
 
 function titleCase(value) {
