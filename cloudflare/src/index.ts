@@ -4,6 +4,7 @@ export interface Env {
   ADMIN_SECRET?: string;       // Secret header to allow manually generating licenses
   GITHUB_TOKEN?: string;       // Optional token to prevent GitHub Rate Limit
   GITHUB_REPO?: string;        // Optional repository path, default 'forpersuit/eqrcp'
+  R2_PUBLIC_URL?: string;      // Optional public CDN url for R2 assets download redirection
 }
 
 // Helper to convert hex string to Uint8Array
@@ -275,15 +276,23 @@ export default {
 
         const release: any = await ghRes.json();
         
+        const r2PublicUrl = env.R2_PUBLIC_URL;
         const result = {
           version: release.tag_name,
           published_at: release.published_at,
           changelog: release.body || "",
-          assets: (release.assets || []).map((asset: any) => ({
-            name: asset.name,
-            download_url: asset.browser_download_url,
-            size: asset.size
-          }))
+          assets: (release.assets || []).map((asset: any) => {
+            let downloadUrl = asset.browser_download_url;
+            if (r2PublicUrl) {
+              const base = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl;
+              downloadUrl = `${base}/downloads/${release.tag_name}/${asset.name}`;
+            }
+            return {
+              name: asset.name,
+              download_url: downloadUrl,
+              size: asset.size
+            };
+          })
         };
 
         response = new Response(JSON.stringify(result), {

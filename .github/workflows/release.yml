@@ -40,6 +40,16 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: out/*
+      - name: Upload to Cloudflare R2
+        if: secrets.R2_ACCESS_KEY_ID != ''
+        shell: bash
+        run: |
+          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/${{ github.ref_name }}/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/latest/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
 
   release-wails-linux:
     name: Release Linux GUI
@@ -72,3 +82,12 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: out/*
+      - name: Upload to Cloudflare R2
+        if: secrets.R2_ACCESS_KEY_ID != ''
+        run: |
+          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/${{ github.ref_name }}/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          aws s3 cp out/ s3://${{ secrets.R2_BUCKET_NAME }}/downloads/latest/ --recursive --endpoint-url https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
