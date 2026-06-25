@@ -24,7 +24,7 @@ type FileInfo struct {
 
 func main() {
 	var files []FileInfo
-	filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -38,6 +38,10 @@ func main() {
 		files = append(files, FileInfo{Path: path, Lines: lines})
 		return nil
 	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error walking files: %v\n", err)
+		os.Exit(1)
+	}
 
 	sort.Slice(files, func(i, j int) bool {
 		return fileOrder(files[i].Path) < fileOrder(files[j].Path)

@@ -140,7 +140,7 @@ func getNetworkTimeOrStartFetch() time.Time {
 		netTimeIsChecking = false
 		netTimeLastCheck = time.Now()
 		if err == nil {
-			netTimeOffset = netTime.Sub(time.Now())
+			netTimeOffset = time.Until(netTime)
 			netTimeCached = true
 		}
 	}()

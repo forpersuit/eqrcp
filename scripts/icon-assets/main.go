@@ -150,7 +150,8 @@ func writeICO(path string, src image.Image, sizes []int) {
 		if entry.size == 256 {
 			width = 0
 		}
-		file.Write([]byte{width, width, 0, 0})
+		_, err := file.Write([]byte{width, width, 0, 0})
+		must(err)
 		must(binary.Write(file, binary.LittleEndian, uint16(1)))
 		must(binary.Write(file, binary.LittleEndian, uint16(32)))
 		must(binary.Write(file, binary.LittleEndian, uint32(len(entry.data))))

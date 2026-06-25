@@ -22,7 +22,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	os.Chdir(projectRoot)
+	if err := os.Chdir(projectRoot); err != nil {
+		fmt.Fprintf(os.Stderr, "Error changing to project root: %v\n", err)
+		os.Exit(1)
+	}
 
 	openFlag := false
 	for _, arg := range os.Args[1:] {

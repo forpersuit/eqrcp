@@ -389,22 +389,19 @@ func (s *Server) Chat() error {
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				if session.isTerminal() {
-					return
-				}
-				session.mu.Lock()
-				clientCount := len(session.clients)
-				session.mu.Unlock()
-				if clientCount > 0 {
-					usage, limitReached := limiterInstance.IncrementUsage(2)
-					if limitReached && !usage.IsPaid {
-						session.mu.Lock()
-						session.notifyLocked()
-						session.mu.Unlock()
-					}
+		for range ticker.C {
+			if session.isTerminal() {
+				return
+			}
+			session.mu.Lock()
+			clientCount := len(session.clients)
+			session.mu.Unlock()
+			if clientCount > 0 {
+				usage, limitReached := limiterInstance.IncrementUsage(2)
+				if limitReached && !usage.IsPaid {
+					session.mu.Lock()
+					session.notifyLocked()
+					session.mu.Unlock()
 				}
 			}
 		}
