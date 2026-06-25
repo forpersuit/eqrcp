@@ -252,7 +252,7 @@ h2 {
 
 .workspace {
     min-height: 0;
-    overflow: hidden;
+    overflow: auto;
     padding: 22px;
 }
 
@@ -260,6 +260,7 @@ h2 {
 .workspace:has(.chat-panel),
 .workspace:has(.chat-start) {
     padding: 0;
+    overflow: hidden;
 }
 
 .workspace:has(.chat-start) {
@@ -1037,6 +1038,71 @@ dd {
 
 .transfer-head h2 {
     font-size: 24px;
+}
+
+.qr-collapsed-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f6f8f3;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 16px;
+    gap: 16px;
+}
+
+.qr-collapsed-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--ink);
+}
+
+.qr-collapsed-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9ca3af;
+    display: inline-block;
+}
+
+.status-indicator.transferring,
+.status-indicator.running,
+.status-indicator.active {
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: indicator-blink 1.5s infinite ease-in-out;
+}
+
+.status-indicator.completed,
+.status-indicator.done {
+    background: var(--accent-strong);
+}
+
+.status-indicator.failed,
+.status-indicator.error {
+    background: #ef4444;
+}
+
+.qr-collapsed-url {
+    color: var(--muted);
+    font-family: monospace;
+    background: #eef2eb;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+@keyframes indicator-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
 
 .qr-hero {

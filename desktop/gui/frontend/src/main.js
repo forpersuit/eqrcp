@@ -74,6 +74,7 @@ function getLicenseDisplayName(license) {
 }
 let agentEvents = null;
 let confirmSwitchResolve = null;
+let qrExpandedManual = null;
 
 function showConfirmSwitchDialog() {
     return new Promise((resolve) => {
@@ -363,6 +364,34 @@ function renderShareTransfer(task) {
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const paths = task.paths || [];
+
+    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
+    const shouldCollapse = isSharedOrReceived;
+    const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+    const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+
+    const qrBanner = `
+        <div class="qr-collapsed-banner">
+            <div class="qr-collapsed-info">
+                <span class="qr-collapsed-status">
+                    <span class="status-indicator ${task.transferState || 'waiting'}"></span>
+                    <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
+                </span>
+                ${task.transferTarget ? `
+                    <span class="qr-collapsed-device">
+                        📱 ${t('remote')}: <strong>${escapeHTML(task.transferTarget)}</strong>
+                    </span>
+                ` : ''}
+                ${task.pageUrl ? `
+                    <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
+                ` : ''}
+            </div>
+            <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 28px; border-radius: 6px;">
+                ${collapseText}
+            </button>
+        </div>
+    `;
+
     return `
         <div class="transfer-stage">
             <div class="transfer-head">
@@ -372,12 +401,16 @@ function renderShareTransfer(task) {
                 </div>
                 <button class="danger inline stop-current-action">${t('stop')}</button>
             </div>
-            ${qrImage ? `
-                <div class="qr-hero">
+            
+            ${qrBanner}
+            
+            ${isQRExpanded && qrImage ? `
+                <div class="qr-hero" style="margin-top: 12px;">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                     <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
-            ` : `<div class="empty-state transfer-empty">${t('waiting_qr')}</div>`}
+            ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            
             <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl class="transfer-details">
                 <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
@@ -434,6 +467,34 @@ function renderReceiveTransfer(task) {
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const files = task.savedFiles || [];
+
+    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
+    const shouldCollapse = isSharedOrReceived;
+    const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+    const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+
+    const qrBanner = `
+        <div class="qr-collapsed-banner">
+            <div class="qr-collapsed-info">
+                <span class="qr-collapsed-status">
+                    <span class="status-indicator ${task.transferState || 'waiting'}"></span>
+                    <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
+                </span>
+                ${task.transferTarget ? `
+                    <span class="qr-collapsed-device">
+                        📱 ${t('remote')}: <strong>${escapeHTML(task.transferTarget)}</strong>
+                    </span>
+                ` : ''}
+                ${task.pageUrl ? `
+                    <span class="qr-collapsed-url">${escapeHTML(task.pageUrl)}</span>
+                ` : ''}
+            </div>
+            <button class="ghost toggle-qr-expand-action" style="padding: 6px 12px; font-size: 12px; min-height: 28px; border-radius: 6px;">
+                ${collapseText}
+            </button>
+        </div>
+    `;
+
     return `
         <div class="transfer-stage">
             <div class="transfer-head">
@@ -443,29 +504,49 @@ function renderReceiveTransfer(task) {
                 </div>
                 <button class="danger inline stop-current-action">${t('stop')}</button>
             </div>
-            ${qrImage ? `
-                <div class="qr-hero">
+            
+            ${qrBanner}
+            
+            ${isQRExpanded && qrImage ? `
+                <div class="qr-hero" style="margin-top: 12px;">
                     <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                     <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
                 </div>
-            ` : `<div class="empty-state transfer-empty">${t('waiting_qr')}</div>`}
+            ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            
             <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
             <dl class="transfer-details">
                 <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || t('waiting'))}</dd>
                 <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
                 <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
             </dl>
+            
             ${files.length > 0 ? `
                 <div class="locked-list">
                     <strong>${t('saved_files')}</strong>
-                    <ul class="path-list locked">${files.map((file) => `
-                        <li>
-                            <div>
-                                <strong>${escapeHTML(shortName(file))}</strong>
-                                <span>${escapeHTML(file)}</span>
-                            </div>
-                        </li>
-                    `).join('')}</ul>
+                    <ul class="path-list locked">${files.map((file) => {
+                        const name = shortName(file);
+                        const dir = getContainingFolder(file);
+                        const openFileTooltip = t('open_file_title', { file: name });
+                        return `
+                            <li>
+                                <div>
+                                    <strong>${escapeHTML(name)}</strong>
+                                    <span>${escapeHTML(file)}</span>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
+                                        ${openFileIcon()}
+                                    </button>
+                                    ${dir ? `
+                                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
+                                            ${openFolderIcon()}
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </li>
+                        `;
+                    }).join('')}</ul>
                 </div>
             ` : ''}
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
@@ -1334,6 +1415,10 @@ function renderHistory(history) {
 }
 
 function bindEvents() {
+    document.querySelector('.toggle-qr-expand-action')?.addEventListener('click', () => {
+        qrExpandedManual = !qrExpandedManual;
+        render();
+    });
     document.querySelectorAll('[data-mode]').forEach((button) => {
         button.addEventListener('click', async () => {
             const targetMode = button.dataset.mode;
@@ -2606,6 +2691,9 @@ function applyStatusData(nextStatus) {
     const prevStatusState = state.status?.state || 'idle';
 
     state.status = nextStatus;
+    if (!nextStatus?.current && !nextStatus?.chat) {
+        qrExpandedManual = null;
+    }
     reconcileChatQRState(state.status);
 
     const nextChatUrl = activeChatPageURL();
