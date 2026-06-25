@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html class="dark scroll-smooth" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Privacy Policy - EQT (Easy QR Transfer)</title>
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#0b1326",
+                        "surface": "#0b1326",
+                        "surface-variant": "#2d3449",
+                        "primary": "#ddb7ff",
+                        "secondary": "#5de6ff",
+                        "on-surface": "#dae2fd",
+                        "on-surface-variant": "#cfc2d6",
+                        "outline": "#988d9f",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-md">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
+            <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
+                <span>EQT</span>
+            </a>
+            <a class="flex items-center gap-1 text-sm text-secondary hover:underline" href="/">
+                <span class="material-symbols-outlined text-base">arrow_back</span> Back to Home
+            </a>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow max-w-4xl mx-auto px-6 py-12 w-full">
+        <div class="glass-panel rounded-2xl p-8 md:p-12 space-y-8">
+            <div class="border-b border-white/10 pb-6">
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2">Privacy Policy / 隐私政策</h1>
+                <p class="text-on-surface-variant text-sm">Last updated: June 25, 2026</p>
+            </div>
+
+            <!-- English version -->
+            <section class="space-y-6">
+                <h2 class="text-xl font-semibold text-primary border-l-4 border-primary pl-3">1. English Version</h2>
+                <div class="space-y-4 text-on-surface-variant text-sm leading-relaxed">
+                    <p>At EQT (Easy QR Transfer), accessible from eqt.net.im, one of our main priorities is the privacy of our visitors and users. This Privacy Policy document contains types of information that is collected and recorded by EQT and how we use it.</p>
+                    
+                    <h3 class="text-white font-medium text-base mt-4">Local Network Operation (No Cloud Storage)</h3>
+                    <p>EQT is designed as a peer-to-peer (P2P) local network file transfer utility. All file transfers and communications between your devices occur strictly within your local area network (LAN). Your files and messages are transferred directly from one device to another and are <strong>never uploaded to any external servers, databases, or cloud environments</strong>.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">Licensing & Device Fingerprinting</h3>
+                    <p>For activation of Plus licenses, EQT communicates with our serverless DRM API located at Cloudflare to verify license validity. This check transmits a non-reversible cryptographic hash of your hardware fingerprint to ensure license limits are respected. This data does not contain any personally identifiable information (PII) and is stored securely in our databases.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">Cookies</h3>
+                    <p>This website uses cookies to store visitor language preferences. We do not use tracking or advertising cookies.</p>
+                </div>
+            </section>
+
+            <hr class="border-white/10" />
+
+            <!-- Chinese version -->
+            <section class="space-y-6">
+                <h2 class="text-xl font-semibold text-secondary border-l-4 border-secondary pl-3">2. 中文版本</h2>
+                <div class="space-y-4 text-on-surface-variant text-sm leading-relaxed">
+                    <p>在 EQT (Easy QR Transfer)（可通过 eqt.net.im 访问），我们非常重视用户的隐私。本隐私政策详细说明了 EQT 收集和记录的信息类型以及我们的使用方式。</p>
+                    
+                    <h3 class="text-white font-medium text-base mt-4">本地局域网物理运行（零云端存储）</h3>
+                    <p>EQT 是一款纯粹的局域网点对点（P2P）文件传输与聊天工具。您的所有文件传输和即时通信均完全限制在您的本地局域网（LAN）内部。您的文件与聊天记录直接在发送设备与接收设备之间流动，<strong>绝对不会上传到任何外部服务器、第三方数据库或云端存储介质中</strong>。</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">软件授权与设备指纹</h3>
+                    <p>当您激活专业版（Plus）授权时，客户端将与我们在 Cloudflare 上的许可证 API 服务通信以验证有效性。此过程将提交经过不可逆加密（Hash）的设备特征指纹，用以比对授权限制。该数据不包含任何可识别个人身份的信息，且将被安全存储。</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">Cookie 声明</h3>
+                    <p>本官网仅使用轻量级 Cookie 来持久化保存您所选择的页面语言偏好，不包含任何第三方广告或行为追踪 Cookie。</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-6 bg-background border-t border-white/10 text-center text-xs text-on-surface-variant">
+        <p>© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+    </footer>
+</body>
+</html>
