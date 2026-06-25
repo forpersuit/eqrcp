@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -68,6 +69,12 @@ func desktopLogFilePath() string {
 }
 
 func main() {
+	// 如果是 Wails 绑定生成工具的临时执行，强制走 GUI 模式以通过 wails.Run 正常生成绑定并退出
+	if strings.Contains(filepath.Base(os.Args[0]), "wailsbindings") {
+		startWailsGUI()
+		return
+	}
+
 	args := os.Args[1:]
 
 	// 1. 如果有显式的命令行子命令（如 send, receive 等），强制走 CLI 模式
