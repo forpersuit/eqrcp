@@ -36,6 +36,7 @@ import {
     StartupStatus,
     StopChat,
     StopCurrent,
+    Confirm,
 } from '../wailsjs/go/main/App';
 
 window.onerror = function(message, source, lineno, colno, error) {
@@ -213,13 +214,25 @@ function render() {
         savedScrollTop = existingModal.scrollTop;
     }
 
+    const activeShare = activeShareTask();
+    const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+    const activeChat = activeChatTask();
+    let runningMode = null;
+    if (activeShare) {
+        runningMode = 'share';
+    } else if (activeRecv) {
+        runningMode = 'receive';
+    } else if (activeChat) {
+        runningMode = 'chat';
+    }
+
     app.innerHTML = `
         <main class="shell">
             <header class="topbar">
                 <nav class="mode-switch" aria-label="Transfer modes">
-                    <button class="${state.mode === 'share' ? 'active' : ''}" data-mode="share">${t('share')}</button>
-                    <button class="${state.mode === 'receive' ? 'active' : ''}" data-mode="receive">${t('receive')}</button>
-                    <button class="${state.mode === 'chat' ? 'active' : ''}" data-mode="chat">${t('chat')}</button>
+                    <button class="${state.mode === 'share' ? 'active' : (runningMode && runningMode !== 'share' ? 'disabled-mode' : '')}" data-mode="share">${t('share')}</button>
+                    <button class="${state.mode === 'receive' ? 'active' : (runningMode && runningMode !== 'receive' ? 'disabled-mode' : '')}" data-mode="receive">${t('receive')}</button>
+                    <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
                     ${!(state.license && state.license.tier) ? `
@@ -1246,8 +1259,40 @@ function renderHistory(history) {
 
 function bindEvents() {
     document.querySelectorAll('[data-mode]').forEach((button) => {
-        button.addEventListener('click', () => {
-            setMode(button.dataset.mode);
+        button.addEventListener('click', async () => {
+            const targetMode = button.dataset.mode;
+            if (state.mode === targetMode) {
+                return;
+            }
+
+            const activeShare = activeShareTask();
+            const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+            const activeChat = activeChatTask();
+            const activeTask = activeShare || activeRecv || activeChat;
+
+            if (activeTask) {
+                try {
+                    const confirmed = await Confirm(
+                        t('confirm_switch_title'),
+                        t('confirm_switch_mode'),
+                        t('btn_confirm'),
+                        t('btn_cancel')
+                    );
+                    if (!confirmed) {
+                        return;
+                    }
+                    if (activeChat) {
+                        await StopChat();
+                    } else {
+                        await StopCurrent();
+                    }
+                } catch (e) {
+                    console.error('Failed to stop current active task on mode switch:', e);
+                    return;
+                }
+            }
+
+            setMode(targetMode);
             clearMessages();
             render();
         });
@@ -2564,7 +2609,35 @@ function connectAgentEvents() {
 }
 
 
-function handleFileDrop(paths) {
+async function handleFileDrop(paths) {
+    if (state.mode !== 'share') {
+        const activeShare = activeShareTask();
+        const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+        const activeChat = activeChatTask();
+        const activeTask = activeShare || activeRecv || activeChat;
+
+        if (activeTask) {
+            try {
+                const confirmed = await Confirm(
+                    t('confirm_switch_title'),
+                    t('confirm_switch_mode'),
+                    t('btn_confirm'),
+                    t('btn_cancel')
+                );
+                if (!confirmed) {
+                    return;
+                }
+                if (activeChat) {
+                    await StopChat();
+                } else {
+                    await StopCurrent();
+                }
+            } catch (e) {
+                console.error('Failed to stop current active task on file drop:', e);
+                return;
+            }
+        }
+    }
     setMode('share');
     addSharePaths(paths || []);
 }

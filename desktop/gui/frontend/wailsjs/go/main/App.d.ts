@@ -16,6 +16,8 @@ export function CheckForUpdates():Promise<main.GUIUpdateCheckResult>;
 
 export function ClearHistory():Promise<void>;
 
+export function Confirm(arg1:string,arg2:string,arg3:string,arg4:string):Promise<boolean>;
+
 export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
 
 export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;

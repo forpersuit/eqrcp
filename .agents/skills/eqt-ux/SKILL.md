@@ -56,4 +56,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **超额回退**：在 `isPlusMode` 为 `false` 时，禁用累加和删除功能。即每次选择文件都将先清空数组（覆盖添加），且不渲染任何删除按钮。
 
 
-
+## Wails App Modal and Drag-Drop Guidelines (Wails原生确认弹窗与拖拽最佳实践)
+- **原生二次确认框 (Native Confirmation Dialogs)**:
+  - 在需要用户强确认的操作（如切换运行模式）时，严禁使用浏览器原生 `confirm()`。应当在 Go 端通过 `wailsruntime.MessageDialog` 封装一个 RPC 方法（例如 `Confirm`），由 JS 异步调用以呈现操作系统原生的对话框，避免网页弹窗打断与卡死，提升应用的原生质感。
+- **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
+  - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部的子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
+  - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
