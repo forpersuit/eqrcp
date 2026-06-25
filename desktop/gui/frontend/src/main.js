@@ -261,6 +261,7 @@ function render() {
         }
     }
 
+    updateChatQRPulseButton();
     pulseChatFrameQR();
 }
 
