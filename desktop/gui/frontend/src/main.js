@@ -412,7 +412,7 @@ function renderChat() {
                     <div class="eyebrow">${t('session_mode')}</div>
                     <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
-                <button class="primary" id="start-chat" ${state.busy || exhausted ? 'disabled' : ''}>${chatStartButtonText()}</button>
+                <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${chatStartButtonText()}</button>
             </div>
         `;
     }
