@@ -758,14 +758,14 @@ func New(cfg *config.Config) (*Server, error) {
 		// Anti-bypass limit checks for free users who exceeded 5 free transfers limit
 		if !usage.IsPaid && usage.UsedTransfers >= 5 {
 			if info, err := os.Stat(app.body.Path); err == nil && info.Size() > 50*1024*1024 {
-				http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
+				http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 				app.setStatus("failed", "File size exceeds 50MB limit.")
 				app.recordStatus()
 				app.signalStop()
 				return
 			}
 			if len(app.body.Items) > 5 {
-				http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
+				http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 				app.setStatus("failed", "File count exceeds 5 files limit.")
 				app.recordStatus()
 				app.signalStop()
@@ -947,7 +947,7 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				if quotaExceededAtStart {
 					if len(transferredFiles) >= 5 {
-						http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
+						http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 						app.setStatus("failed", "File count exceeds 5 files limit.")
 						app.recordStatus()
 						app.signalStop()
@@ -1024,7 +1024,7 @@ func New(cfg *config.Config) (*Server, error) {
 					currentFileWritten += int64(n)
 					if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
 						out.Close()
-						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Please upgrade.", http.StatusRequestEntityTooLarge)
+						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
 						app.setStatus("failed", "File size exceeds 50MB limit.")
 						app.recordStatus()
 						app.signalStop()
