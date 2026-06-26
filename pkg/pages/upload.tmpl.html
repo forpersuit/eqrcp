@@ -326,7 +326,9 @@
                 err_reason_network: '网络连接中断。请检查接收端电脑和此设备是否连接到同一个 Wi-Fi (局域网)，或确认接收端未关闭。',
                 err_reason_too_large: '传输的文件太大，超出了接收端或系统的传输限制。',
                 err_reason_server: '接收端写入文件失败。可能磁盘空间不足或无写入权限。',
-                err_reason_default: '发生未知错误，导致文件传输未能成功完成。'
+                err_reason_default: '发生未知错误，导致文件传输未能成功完成。',
+                err_free_limit_files: '免费额度已用完，单次最多只能传输 5 个文件。',
+                err_free_limit_size: '免费额度已用完，单文件最大只能 50MB。'
             },
             en: {
                 title: 'Send from this device',
@@ -346,7 +348,9 @@
                 err_reason_network: 'Network connection interrupted. Please ensure both devices are connected to the same Wi-Fi (LAN), and EQT is running on the receiving computer.',
                 err_reason_too_large: 'The file is too large and exceeds the transfer limit.',
                 err_reason_server: 'The receiving computer failed to save the file. Disk might be full or write permission denied.',
-                err_reason_default: 'An unknown error occurred, and the transfer could not be completed.'
+                err_reason_default: 'An unknown error occurred, and the transfer could not be completed.',
+                err_free_limit_files: 'Free tier exceeded. Max 5 files per transfer.',
+                err_free_limit_size: 'Free tier exceeded. Max 50MB per file.'
             },
             ja: {
                 title: 'このデバイスから送信',
@@ -366,7 +370,9 @@
                 err_reason_network: 'ネットワーク接続が切断されました。両方のデバイスが同じWi-Fi（LAN）に接続されていること、および受信側コンピュータでEQTが実行されていることを確認してください。',
                 err_reason_too_large: 'ファイルが大きすぎるため、転送制限を超えています。',
                 err_reason_server: '受信側コンピュータがファイルの保存に失敗しました。ディスクがいっぱいか、書き込み権限がない可能性があります。',
-                err_reason_default: '原因不明のエラーが発生し、転送を完了できませんでした。'
+                err_reason_default: '原因不明のエラーが発生し、転送を完了できませんでした。',
+                err_free_limit_files: '無料枠を超えました。1回の転送につき最大5ファイルまでです。',
+                err_free_limit_size: '無料枠を超えました。1ファイルにつき最大50MBまでです。'
             },
             ko: {
                 title: '이 기기에서 전송',
@@ -386,7 +392,9 @@
                 err_reason_network: '네트워크 연결이 끊어졌습니다. 두 기기가 모두 동일한 Wi-Fi(LAN)에 연결되어 있고 수신 컴퓨터에서 EQT가 실행 중인지 확인하십시오.',
                 err_reason_too_large: '파일이 너무 커서 전송 제한을 초과합니다.',
                 err_reason_server: '수신 컴퓨터에서 파일을 저장하지 못했습니다. 디스크가 가득 찼거나 쓰기 권한이 없을 수 있습니다.',
-                err_reason_default: '알 수 없는 오류가 발생하여 전송을 완료할 수 없습니다.'
+                err_reason_default: '알 수 없는 오류가 발생하여 전송을 완료할 수 없습니다.',
+                err_free_limit_files: '무료 용량을 초과했습니다. 전송당 최대 5개 파일까지 가능합니다.',
+                err_free_limit_size: '무료 용량을 초과했습니다. 파일당 최대 50MB까지 가능합니다.'
             },
             es: {
                 title: 'Enviar desde este dispositivo',
@@ -406,7 +414,9 @@
                 err_reason_network: 'Conexión de red interrumpida. Asegúrese de que ambos dispositivos estén conectados a la misma red Wi-Fi (LAN) y de que EQT se esté ejecutando en el ordenador receptor.',
                 err_reason_too_large: 'El archivo es demasiado grande y supera el límite de transferencia.',
                 err_reason_server: 'El ordenador receptor no pudo guardar el archivo. Es posible que el disco esté lleno o que no tenga permisos de escritura.',
-                err_reason_default: 'Ocurrió un error desconocido y no se pudo completar la transferencia.'
+                err_reason_default: 'Ocurrió un error desconocido y no se pudo completar la transferencia.',
+                err_free_limit_files: 'Límite de nivel gratuito excedido. Máximo 5 archivos por transferencia.',
+                err_free_limit_size: 'Límite de nivel gratuito excedido. Máximo 50MB por archivo.'
             },
             de: {
                 title: 'Von diesem Gerät senden',
@@ -426,7 +436,9 @@
                 err_reason_network: 'Netzwerkverbindung unterbrochen. Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi (LAN) verbunden sind und EQT auf dem Empfängercomputer ausgeführt wird.',
                 err_reason_too_large: 'Die Datei ist zu groß und überschreitet das Übertragungslimit.',
                 err_reason_server: 'Der Empfängercomputer konnte die Datei nicht speichern. Möglicherweise ist die Festplatte voll oder die Schreibberechtigung wurde verweigert.',
-                err_reason_default: 'Ein unbekannter Fehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.'
+                err_reason_default: 'Ein unbekannter Fehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.',
+                err_free_limit_files: 'Limit für kostenlose Version überschritten. Maximal 5 Dateien pro Übertragung.',
+                err_free_limit_size: 'Limit für kostenlose Version überschritten. Maximal 50MB pro Datei.'
             },
             fr: {
                 title: 'Envoyer depuis cet appareil',
@@ -446,7 +458,9 @@
                 err_reason_network: 'Connexion réseau interrompue. Veuillez vous assurer que les dos appareils sont connectés au même réseau Wi-Fi (LAN) et que EQT est en cours d\'exécution sur l\'ordinateur destinataire.',
                 err_reason_too_large: 'Le fichier est trop volumineux et dépasse la limite de transfert.',
                 err_reason_server: 'L\'ordinateur destinataire n\'a pas réussi à enregistrer le fichier. Le disque est peut-être plein ou l\'autorisation d\'écriture a été refusée.',
-                err_reason_default: 'Une erreur inconnue est survenue et le transfert n\'a pas pu être complété.'
+                err_reason_default: 'Une erreur inconnue est survenue et le transfert n\'a pas pu être complété.',
+                err_free_limit_files: 'Limite de l\'offre gratuite dépassée. Maximum 5 fichiers par transfert.',
+                err_free_limit_size: 'Limite de l\'offre gratuite dépassée. Maximum 50 Mo par fichier.'
             }
         };
 
@@ -595,7 +609,31 @@
             saveDraft();
         }
 
+        function showLimitNotification(msg) {
+            if (!errorBox) return;
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+            if (window.limitNotificationTimer) {
+                clearTimeout(window.limitNotificationTimer);
+            }
+            window.limitNotificationTimer = setTimeout(function() {
+                if (errorBox.textContent === msg) {
+                    errorBox.textContent = '';
+                }
+            }, 5000);
+        }
+
         function addFileToAccumulated(file) {
+            if (!isPlusMode) {
+                if (accumulatedFiles.length >= 5) {
+                    showLimitNotification(t('err_free_limit_files'));
+                    return false;
+                }
+                if (file.size > 50 * 1024 * 1024) {
+                    showLimitNotification(t('err_free_limit_size'));
+                    return false;
+                }
+            }
             var isImg = file.type && file.type.indexOf('image/') === 0;
             var previewUrl = '';
             if (isImg) {
@@ -607,6 +645,7 @@
                 isImage: isImg,
                 previewUrl: previewUrl
             });
+            return true;
         }
 
         function clearAccumulatedFiles() {
@@ -764,9 +803,6 @@
             if (pastedText) {
                 insertTextAtCursor(pastedText);
             }
-            if (!isPlusMode) {
-                clearAccumulatedFiles();
-            }
             for (var i = 0; i < files.length; i++) {
                 addFileToAccumulated(files[i]);
             }
@@ -859,9 +895,6 @@
         
         fileInput.addEventListener('change', function() {
             if (!fileInput.files || !fileInput.files.length) { return; }
-            if (!isPlusMode) {
-                clearAccumulatedFiles();
-            }
             for (var i = 0; i < fileInput.files.length; i++) {
                 addFileToAccumulated(fileInput.files[i]);
             }
