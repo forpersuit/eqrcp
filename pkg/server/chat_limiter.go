@@ -267,6 +267,14 @@ func getMockUsageForAcceptance() *ChatUsage {
 			ClockTampered: false,
 			LicenseTier:   "",
 		}
+	case "free_exceeded_share":
+		return &ChatUsage{
+			Date:          time.Now().Format("2006-01-02"),
+			UsedSeconds:   600,
+			IsPaid:        false,
+			ClockTampered: false,
+			LicenseTier:   "",
+		}
 	}
 	return nil
 }

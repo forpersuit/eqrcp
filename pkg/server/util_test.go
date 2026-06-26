@@ -1145,3 +1145,206 @@ func TestChatMessagesSnapshotIgnoresLastEventIDQuery(t *testing.T) {
 		t.Fatalf("recovered %d messages, want 4", len(recoveredMessages))
 	}
 }
+
+type monitoringReader struct {
+	r     io.Reader
+	count int
+	limit int
+	fn    func()
+}
+
+func (mr *monitoringReader) Read(p []byte) (n int, err error) {
+	n, err = mr.r.Read(p)
+	mr.count += n
+	if mr.count >= mr.limit && mr.fn != nil {
+		mr.fn()
+		mr.fn = nil // only trigger once
+	}
+	return n, err
+}
+
+func TestReceiveLimitsExceededCount(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
+	t.Setenv("EQT_MOCK_STATUS", "free_exceeded_share")
+
+	dir := t.TempDir()
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "test-receive-limits-count",
+		KeepAlive: false,
+		Output:    dir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+
+	if err := server.ReceiveTo(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	var uploadBody bytes.Buffer
+	writer := multipart.NewWriter(&uploadBody)
+	for i := 1; i <= 6; i++ {
+		part, err := writer.CreateFormFile("files", fmt.Sprintf("file%d.txt", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write([]byte(fmt.Sprintf("content%d", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, server.ReceiveURL, &uploadBody)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	server.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected status code %d (Forbidden), got %d; body = %q", http.StatusForbidden, w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "File count exceeds 5 files free limit") {
+		t.Fatalf("expected error message to contain limit description, got: %q", w.Body.String())
+	}
+}
+
+func TestReceiveLimitsExceededSize(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
+	t.Setenv("EQT_MOCK_STATUS", "free_exceeded_share")
+
+	dir := t.TempDir()
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "test-receive-limits-size",
+		KeepAlive: false,
+		Output:    dir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+
+	if err := server.ReceiveTo(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+
+	go func() {
+		defer pw.Close()
+		defer writer.Close()
+		part, err := writer.CreateFormFile("files", "hugefile.bin")
+		if err != nil {
+			return
+		}
+		chunk := make([]byte, 1024*1024)
+		for i := 0; i < 51; i++ {
+			if _, err := part.Write(chunk); err != nil {
+				return
+			}
+		}
+	}()
+
+	req := httptest.NewRequest(http.MethodPost, server.ReceiveURL, pr)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	server.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status code %d (RequestEntityTooLarge), got %d; body = %q", http.StatusRequestEntityTooLarge, w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "File size exceeds 50MB free limit") {
+		t.Fatalf("expected error message to contain limit description, got: %q", w.Body.String())
+	}
+}
+
+func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
+	t.Setenv("EQT_MOCK_STATUS", "")
+
+	limiterInstance.mu.Lock()
+	limiterInstance.cachedUsage = ChatUsage{
+		Date:        time.Now().Format("2006-01-02"),
+		UsedSeconds: 120,
+		IsPaid:      false,
+	}
+	limiterInstance.hasCached = true
+	limiterInstance.mu.Unlock()
+
+	dir := t.TempDir()
+	server, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "test-receive-completion",
+		KeepAlive: false,
+		Output:    dir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+
+	if err := server.ReceiveTo(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	var uploadBody bytes.Buffer
+	writer := multipart.NewWriter(&uploadBody)
+	for i := 1; i <= 6; i++ {
+		part, err := writer.CreateFormFile("files", fmt.Sprintf("file%d.txt", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write([]byte(fmt.Sprintf("content%d", i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	wrappedReader := &monitoringReader{
+		r:     &uploadBody,
+		limit: 50,
+		fn: func() {
+			limiterInstance.mu.Lock()
+			limiterInstance.cachedUsage.UsedSeconds = 610
+			limiterInstance.mu.Unlock()
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodPost, server.ReceiveURL, wrappedReader)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	w := httptest.NewRecorder()
+
+	server.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status code %d (OK) since started under limit, got %d; body = %q", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var txtCount int
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "file") && strings.HasSuffix(entry.Name(), ".txt") {
+			txtCount++
+		}
+	}
+	if txtCount != 6 {
+		t.Fatalf("expected 6 files to be written successfully, got %d", txtCount)
+	}
+}

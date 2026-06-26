@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"eqt/cmd"
+	"eqt/pkg/server"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
 	"fmt"
@@ -244,12 +245,58 @@ func (a *App) AgentStatus() (AgentStatus, error) {
 	return a.agent.snapshotLocked(), nil
 }
 
+func validateSharePathsForFreeTier(paths []string) error {
+	var totalFiles int
+	var checkPath func(string) error
+	checkPath = func(p string) error {
+		info, err := os.Stat(p)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			entries, err := os.ReadDir(p)
+			if err != nil {
+				return err
+			}
+			for _, entry := range entries {
+				err := checkPath(filepath.Join(p, entry.Name()))
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			totalFiles++
+			if totalFiles > 5 {
+				return fmt.Errorf("file count exceeds 5 files free limit under 10m quota")
+			}
+			if info.Size() > 50*1024*1024 {
+				return fmt.Errorf("file %s size (%d MB) exceeds 50MB free limit under 10m quota", info.Name(), info.Size()/(1024*1024))
+			}
+		}
+		return nil
+	}
+
+	for _, p := range paths {
+		if err := checkPath(p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *App) Share(paths []string) (AgentStatus, error) {
 	if len(paths) == 0 {
 		return AgentStatus{}, fmt.Errorf("choose at least one file or folder")
 	}
 	if a.agent == nil {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	isPaid := server.GetPaidStatus()
+	usedSeconds := server.GetUsedSeconds()
+	if !isPaid && usedSeconds >= 600 {
+		if err := validateSharePathsForFreeTier(paths); err != nil {
+			return AgentStatus{}, err
+		}
 	}
 	return a.agent.pushTask(AgentTask{Action: "share", Paths: paths})
 }

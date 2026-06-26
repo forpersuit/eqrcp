@@ -35,6 +35,12 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - **鲁棒降级**：读取主配置文件 `chat_usage.json` 失败或解析 JSON 损坏时，程序必须自动尝试解密读取隐藏备份文件 `.eqt_sys_state`，最大限度保障计时的准确与防破解安全性。
   - 对 `.lic` 证书的读取和解析（`GetLocalLicenseInfo`）应在首次读取后进行持久内存缓存，在发生激活（Online Activation）或重置（Reset）时手动更新该缓存，避免常规状态轮询下不断解析文件并进行设备硬件指纹获取与验签运算。
 - **测试兼容模式**：在单元测试或 mock 状态下（`os.Getenv("EQT_TESTING") == "true"`），若本地没有 `.lic` 文件，必须自动降级到传统模式，支持模拟付费判定，不可在测试环境中强求真实公私钥签名，以免破坏基础 CI。
+- **Share/Receive 模式防规避与防呆拦截机制**：
+  - **无物理时限中断**：为了保障用户体验连贯性，在 10 分钟（600秒）限额内，如果某次传输任务（如移动端上传 POST 或桌面端 Share）在启动那一刻 `usedSeconds < 600`，本次传输必须被允许无限制传输完毕，不得强行调用 `signalStop()` 在中途物理切断。
+  - **下一次任务额度拦截**：下一次新任务启动时，若 `usedSeconds >= 600` 且未付费：
+    - **桌面端 Share 启动拦截**：在 `Share()` API 启动时，递归检查待分享文件的总路径。若文件个数超过 5 个或单个文件大于 50MB，则直接返回 error 阻断服务启动。
+    - **移动端上传拦截**：在 POST `/receive/...` 请求入口处锁死 `quotaExceededAtStart`。若其为 `true`：在 Multipart 循环中，若已写入文件达到 5 个时拒绝后续接收并报错 403 阻断；在 Chunk 级文件写入 IO 循环中，若单个文件写入累计超过 50MB（52,428,800字节），即刻强行关闭文件、报错 413 退出并触发 `signalStop()`。
+    - **单元测试保障**：为该防规避设计编写单元测试（包括文件数超限、单文件超限、开始低额度中途超额无缝传输完），保护相关边界不被后续回归破坏。
 
 ---
 

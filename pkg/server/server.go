@@ -721,13 +721,7 @@ func New(cfg *config.Config) (*Server, error) {
 				if state == "transferring" {
 					usage := limiterInstance.GetStatus()
 					if !usage.IsPaid {
-						usage, _ = limiterInstance.IncrementUsage(1)
-						if usage.UsedSeconds >= 600 {
-							app.setStatus("stopped", "Free limit reached (10m).")
-							app.recordStatus()
-							app.signalStop()
-							return
-						}
+						_, _ = limiterInstance.IncrementUsage(1)
 					}
 				}
 			}
@@ -742,14 +736,6 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create handlers
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
-		usage := limiterInstance.GetStatus()
-		if !usage.IsPaid && usage.UsedSeconds >= 600 {
-			http.Error(w, "Free tier limit reached (10m). Please upgrade.", http.StatusForbidden)
-			app.setStatus("stopped", "Free limit reached (10m).")
-			app.recordStatus()
-			app.signalStop()
-			return
-		}
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
@@ -872,14 +858,8 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		switch r.Method {
 		case "POST":
-			usage := limiterInstance.GetStatus()
-			if !usage.IsPaid && usage.UsedSeconds >= 600 {
-				http.Error(w, "Free tier limit reached (10m). Please upgrade.", http.StatusForbidden)
-				app.setStatus("stopped", "Free limit reached (10m).")
-				app.recordStatus()
-				app.signalStop()
-				return
-			}
+			startUsage := limiterInstance.GetStatus()
+			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedSeconds >= 600
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
 				status.BytesDone = 0
@@ -924,6 +904,15 @@ func New(cfg *config.Config) (*Server, error) {
 				if part.FileName() == "" {
 					continue
 				}
+				if quotaExceededAtStart {
+					if len(transferredFiles) >= 5 {
+						http.Error(w, "File count exceeds 5 files free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+						app.setStatus("failed", "File count exceeds 5 files limit.")
+						app.recordStatus()
+						app.signalStop()
+						return
+					}
+				}
 				// Prepare the destination
 				out, fileName, err := createUniqueFile(app.outputDir, filepath.Base(part.FileName()), filenames)
 				if err != nil {
@@ -948,6 +937,7 @@ func New(cfg *config.Config) (*Server, error) {
 				progressBar.Prefix(out.Name())
 				progressBar.Start()
 				buf := make([]byte, 32*1024)
+				var currentFileWritten int64
 				for {
 					// Read a chunk
 					n, err := part.Read(buf)
@@ -986,6 +976,15 @@ func New(cfg *config.Config) (*Server, error) {
 						out.Close()
 						// Send signal to server to shutdown
 						app.setStatus("failed", "Unable to write file to disk.")
+						app.recordStatus()
+						app.signalStop()
+						return
+					}
+					currentFileWritten += int64(n)
+					if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
+						out.Close()
+						http.Error(w, "File size exceeds 50MB free limit under 10m quota. Please upgrade.", http.StatusRequestEntityTooLarge)
+						app.setStatus("failed", "File size exceeds 50MB limit.")
 						app.recordStatus()
 						app.signalStop()
 						return
