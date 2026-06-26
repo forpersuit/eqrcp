@@ -88,9 +88,10 @@ type AgentStatus struct {
 	LicenseTier      string       `json:"licenseTier"`
 	MaxDevices       int          `json:"maxDevices"`
 	ActivatedDevices int          `json:"activatedDevices"`
-	UsedSeconds      int          `json:"usedSeconds"`
-	UsedTransfers    int          `json:"usedTransfers"`
-	LicenseExpiresAt string       `json:"licenseExpiresAt,omitempty"`
+	UsedSeconds          int          `json:"usedSeconds"`
+	UsedTransfers        int          `json:"usedTransfers"`
+	UsedReceiveTransfers int          `json:"usedReceiveTransfers"`
+	LicenseExpiresAt     string       `json:"licenseExpiresAt,omitempty"`
 }
 
 type DesktopSettings struct {
@@ -816,8 +817,10 @@ func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 	server.SetUsedSeconds(seconds)
 	if seconds == 0 {
 		server.SetUsedTransfers(0)
+		server.SetUsedReceiveTransfers(0)
 	} else {
 		server.SetUsedTransfers(5)
+		server.SetUsedReceiveTransfers(5)
 	}
 	return a.agent.snapshotLocked(), nil
 }

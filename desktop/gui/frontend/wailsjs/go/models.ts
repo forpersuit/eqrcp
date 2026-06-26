@@ -91,6 +91,7 @@ export namespace main {
 	    activatedDevices: number;
 	    usedSeconds: number;
 	    usedTransfers: number;
+	    usedReceiveTransfers: number;
 	    licenseExpiresAt?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -114,6 +115,7 @@ export namespace main {
 	        this.activatedDevices = source["activatedDevices"];
 	        this.usedSeconds = source["usedSeconds"];
 	        this.usedTransfers = source["usedTransfers"];
+	        this.usedReceiveTransfers = source["usedReceiveTransfers"];
 	        this.licenseExpiresAt = source["licenseExpiresAt"];
 	    }
 	

@@ -15,15 +15,16 @@ import (
 
 // ChatUsage holds the daily usage statistics and premium license tracking.
 type ChatUsage struct {
-	Date          string `json:"date"`
-	UsedSeconds   int    `json:"usedSeconds"`
-	UsedTransfers int    `json:"usedTransfers"` // Daily transfers count
-	IsPaid        bool   `json:"isPaid"`
-	LastTime      int64  `json:"lastTime"`      // Last running timestamp in seconds
-	RedeemedAt    string `json:"redeemedAt"`    // ISO format activation time
-	CodeDate      string `json:"codeDate"`      // Code issue date or "LIFETIME"
-	ClockTampered bool   `json:"clockTampered"` // Locked if clock rollback is detected
-	LicenseTier   string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
+	Date                 string `json:"date"`
+	UsedSeconds          int    `json:"usedSeconds"`
+	UsedTransfers        int    `json:"usedTransfers"` // Daily transfers count (Share)
+	UsedReceiveTransfers int    `json:"usedReceiveTransfers"` // Daily Receive transfers count
+	IsPaid               bool   `json:"isPaid"`
+	LastTime             int64  `json:"lastTime"`      // Last running timestamp in seconds
+	RedeemedAt           string `json:"redeemedAt"`    // ISO format activation time
+	CodeDate             string `json:"codeDate"`      // Code issue date or "LIFETIME"
+	ClockTampered        bool   `json:"clockTampered"` // Locked if clock rollback is detected
+	LicenseTier          string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
 }
 
 
@@ -262,21 +263,23 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "free_exceeded":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
-			UsedSeconds:   300,
-			UsedTransfers: 5,
-			IsPaid:        false,
-			ClockTampered: false,
-			LicenseTier:   "",
+			Date:                 time.Now().Format("2006-01-02"),
+			UsedSeconds:          300,
+			UsedTransfers:        5,
+			UsedReceiveTransfers: 5,
+			IsPaid:               false,
+			ClockTampered:        false,
+			LicenseTier:          "",
 		}
 	case "free_exceeded_share":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
-			UsedSeconds:   600,
-			UsedTransfers: 5,
-			IsPaid:        false,
-			ClockTampered: false,
-			LicenseTier:   "",
+			Date:                 time.Now().Format("2006-01-02"),
+			UsedSeconds:          600,
+			UsedTransfers:        5,
+			UsedReceiveTransfers: 5,
+			IsPaid:               false,
+			ClockTampered:        false,
+			LicenseTier:          "",
 		}
 	}
 	return nil
@@ -332,6 +335,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		usage.Date = today
 		usage.UsedSeconds = 0
 		usage.UsedTransfers = 0
+		usage.UsedReceiveTransfers = 0
 		dateChanged = true
 	}
 
@@ -522,4 +526,45 @@ func IncrementUsedTransfers(count int) {
 func SetUsedTransfers(transfers int) {
 	limiterInstance.SetUsedTransfers(transfers)
 }
+
+// IncrementReceiveTransfers adds count to daily used receive transfers if not paid.
+func (l *ChatLimiter) IncrementReceiveTransfers(count int) (ChatUsage, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	if usage.IsPaid {
+		return usage, false
+	}
+
+	usage.UsedReceiveTransfers += count
+	l.saveUsageLocked(usage)
+
+	limitReached := usage.UsedReceiveTransfers >= 5
+	return usage, limitReached
+}
+
+// SetUsedReceiveTransfers updates the daily used receive transfers.
+func (l *ChatLimiter) SetUsedReceiveTransfers(transfers int) ChatUsage {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	usage.UsedReceiveTransfers = transfers
+	l.saveUsageLocked(usage)
+	return usage
+}
+
+func GetUsedReceiveTransfers() int {
+	return limiterInstance.GetStatus().UsedReceiveTransfers
+}
+
+func IncrementUsedReceiveTransfers(count int) {
+	_, _ = limiterInstance.IncrementReceiveTransfers(count)
+}
+
+func SetUsedReceiveTransfers(transfers int) {
+	limiterInstance.SetUsedReceiveTransfers(transfers)
+}
+
 

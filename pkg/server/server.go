@@ -862,7 +862,7 @@ func New(cfg *config.Config) (*Server, error) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":        "ok",
 				"isPaid":        usage.IsPaid,
-				"usedTransfers": usage.UsedTransfers,
+				"usedTransfers": usage.UsedReceiveTransfers,
 			})
 			return
 		}
@@ -880,7 +880,7 @@ func New(cfg *config.Config) (*Server, error) {
 			Route:         "/receive/" + path,
 			IsPaid:        usage.IsPaid,
 			LicenseTier:   usage.LicenseTier,
-			UsedTransfers: usage.UsedTransfers,
+			UsedTransfers: usage.UsedReceiveTransfers,
 			ClockTampered: usage.ClockTampered,
 		}
 		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
@@ -891,7 +891,7 @@ func New(cfg *config.Config) (*Server, error) {
 		switch r.Method {
 		case "POST":
 			startUsage := limiterInstance.GetStatus()
-			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedTransfers >= 5
+			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
 			app.statusMu.Lock()
 			alreadyCounted := app.transferCounted
 			if !alreadyCounted {
@@ -899,7 +899,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.statusMu.Unlock()
 			if !alreadyCounted && !startUsage.IsPaid {
-				IncrementUsedTransfers(1)
+				IncrementUsedReceiveTransfers(1)
 			}
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
