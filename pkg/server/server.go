@@ -852,11 +852,8 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		status := app.getStatus()
 		if progressWriter.err != nil || (r.Header.Get("Range") == "" && transferIncomplete(status.BytesDone, expectedBytes)) {
-			app.setStatus("stopped", "Transfer interrupted before completion.")
+			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
-			if !cfg.KeepAlive {
-				go app.signalStopAfterStatusGrace()
-			}
 			return
 		}
 		app.setStatus("completed", "Transfer completed.")
@@ -1100,7 +1097,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Wait for all wg to be done, then send shutdown signal
 	go func() {
 		waitgroup.Wait()
-		if cfg.KeepAlive || !app.expectParallelRequests {
+		if cfg.KeepAlive || app.expectParallelRequests {
 			return
 		}
 		app.signalStopAfterStatusGrace()
