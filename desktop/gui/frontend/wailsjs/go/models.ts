@@ -90,6 +90,7 @@ export namespace main {
 	    maxDevices: number;
 	    activatedDevices: number;
 	    usedSeconds: number;
+	    usedTransfers: number;
 	    licenseExpiresAt?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -112,6 +113,7 @@ export namespace main {
 	        this.maxDevices = source["maxDevices"];
 	        this.activatedDevices = source["activatedDevices"];
 	        this.usedSeconds = source["usedSeconds"];
+	        this.usedTransfers = source["usedTransfers"];
 	        this.licenseExpiresAt = source["licenseExpiresAt"];
 	    }
 	

@@ -195,7 +195,7 @@ func TestUploadLangRendering(t *testing.T) {
 		Lang          string
 		IsPaid        bool
 		LicenseTier   string
-		UsedSeconds   int
+		UsedTransfers int
 		ClockTampered bool
 	}{
 		Route: "/receive/test",
@@ -228,7 +228,7 @@ func TestReceivePageRendering(t *testing.T) {
 		Lang          string
 		IsPaid        bool
 		LicenseTier   string
-		UsedSeconds   int
+		UsedTransfers int
 		ClockTampered bool
 	}{
 		Route: "/receive/testtoken",
@@ -784,7 +784,7 @@ func TestDonePageListsTransferredFiles(t *testing.T) {
 		Count         int
 		IsPaid        bool
 		LicenseTier   string
-		UsedSeconds   int
+		UsedTransfers int
 		ClockTampered bool
 	}{
 		File:  `C:\Downloads\one.txt, C:\Downloads\two file.txt`,
@@ -1296,9 +1296,9 @@ func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
 
 	limiterInstance.mu.Lock()
 	limiterInstance.cachedUsage = ChatUsage{
-		Date:        time.Now().Format("2006-01-02"),
-		UsedSeconds: 120,
-		IsPaid:      false,
+		Date:          time.Now().Format("2006-01-02"),
+		UsedTransfers: 2,
+		IsPaid:        false,
 	}
 	limiterInstance.hasCached = true
 	limiterInstance.mu.Unlock()
@@ -1341,7 +1341,7 @@ func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
 		limit: 50,
 		fn: func() {
 			limiterInstance.mu.Lock()
-			limiterInstance.cachedUsage.UsedSeconds = 610
+			limiterInstance.cachedUsage.UsedTransfers = 6
 			limiterInstance.mu.Unlock()
 		},
 	}

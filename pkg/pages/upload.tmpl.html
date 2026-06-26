@@ -544,9 +544,9 @@
 
         var isPaid = {{.IsPaid}};
         var licenseTier = '{{.LicenseTier}}';
-        var usedSeconds = {{.UsedSeconds}};
+        var usedTransfers = {{.UsedTransfers}};
         var clockTampered = {{.ClockTampered}};
-        var isPlusMode = (isPaid && !clockTampered) || (usedSeconds < 600);
+        var isPlusMode = (isPaid && !clockTampered) || (usedTransfers < 5);
 
         var uploadForm = document.getElementById('upload-form');
         var accumulatedFiles = [];
@@ -915,61 +915,12 @@
         applyLanguage();
         resizeTextArea();
 
-        // Plus countdown logic for Free tier
+        // Plus limit logic for Free tier
         var countdownEl = document.getElementById('plus-countdown');
-        if (!isPaid && !clockTampered && isPlusMode) {
-            var remainingSeconds = Math.max(0, 600 - usedSeconds);
-            if (remainingSeconds > 0) {
-                countdownEl.style.display = 'block';
-                
-                function formatTime(sec) {
-                    var m = Math.floor(sec / 60);
-                    var s = sec % 60;
-                    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
-                }
-                
-                countdownEl.textContent = formatTime(remainingSeconds);
-                
-                var timerId = setInterval(function() {
-                    remainingSeconds--;
-                    usedSeconds = 600 - remainingSeconds;
-                    if (remainingSeconds <= 0) {
-                        clearInterval(timerId);
-                        isPlusMode = false;
-                        countdownEl.style.display = 'none';
-                        renderFiles(); // Refresh files list to remove delete buttons
-                    } else {
-                        countdownEl.textContent = formatTime(remainingSeconds);
-                    }
-                }, 1000);
-
-                var pingIntervalId = setInterval(function() {
-                    if (!isPlusMode) {
-                        clearInterval(pingIntervalId);
-                        return;
-                    }
-                    fetch(window.location.pathname + '?ping=1', { method: 'POST' })
-                        .then(function(res) { return res.json(); })
-                        .then(function(data) {
-                            if (data && data.usedSeconds !== undefined) {
-                                usedSeconds = data.usedSeconds;
-                                remainingSeconds = Math.max(0, 600 - usedSeconds);
-                                if (remainingSeconds <= 0) {
-                                    isPlusMode = false;
-                                    clearInterval(pingIntervalId);
-                                    clearInterval(timerId);
-                                    countdownEl.style.display = 'none';
-                                    renderFiles();
-                                } else {
-                                    countdownEl.textContent = formatTime(remainingSeconds);
-                                }
-                            }
-                        })
-                        .catch(function(e) {
-                            // ignore ping errors
-                        });
-                }, 1000);
-            }
+        if (!isPaid && !clockTampered) {
+            var remaining = Math.max(0, 5 - usedTransfers);
+            countdownEl.style.display = 'block';
+            countdownEl.textContent = 'Free transfers left: ' + remaining;
         }
     </script>
 </body>

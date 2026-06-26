@@ -67,6 +67,7 @@ type Server struct {
 	// expectParallelRequests is set to true when eqt sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
+	transferCounted        bool
 }
 
 type transferStatus struct {
@@ -705,28 +706,7 @@ func New(cfg *config.Config) (*Server, error) {
 		<-sig
 		app.signalStop()
 	}()
-	// Start background free-tier usage ticker
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-app.stopChannel:
-				return
-			case <-ticker.C:
-				app.statusMu.Lock()
-				state := app.status.State
-				app.statusMu.Unlock()
 
-				if state == "transferring" {
-					usage := limiterInstance.GetStatus()
-					if !usage.IsPaid {
-						_, _ = limiterInstance.IncrementUsage(1)
-					}
-				}
-			}
-		}
-	}()
 	// The handler adds and removes from the sync.WaitGroup
 	// When the group is zero all requests are completed
 	// and the server is shutdown
@@ -752,7 +732,7 @@ func New(cfg *config.Config) (*Server, error) {
 				Lang          string
 				IsPaid        bool
 				LicenseTier   string
-				UsedSeconds   int
+				UsedTransfers int
 				ClockTampered bool
 			}{
 				Route:         "/send/" + path,
@@ -761,7 +741,7 @@ func New(cfg *config.Config) (*Server, error) {
 				Count:         len(app.body.Items),
 				IsPaid:        usage.IsPaid,
 				LicenseTier:   usage.LicenseTier,
-				UsedSeconds:   usage.UsedSeconds,
+				UsedTransfers: usage.UsedTransfers,
 				ClockTampered: usage.ClockTampered,
 			}
 			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
@@ -775,22 +755,31 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			return
 		}
-		// Anti-bypass limit checks for free users who exceeded 10-minute limit
-		if !usage.IsPaid && usage.UsedSeconds >= 600 {
+		// Anti-bypass limit checks for free users who exceeded 5 free transfers limit
+		if !usage.IsPaid && usage.UsedTransfers >= 5 {
 			if info, err := os.Stat(app.body.Path); err == nil && info.Size() > 50*1024*1024 {
-				http.Error(w, "File size exceeds 50MB free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+				http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
 				app.setStatus("failed", "File size exceeds 50MB limit.")
 				app.recordStatus()
 				app.signalStop()
 				return
 			}
 			if len(app.body.Items) > 5 {
-				http.Error(w, "File count exceeds 5 files free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+				http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
 				app.setStatus("failed", "File count exceeds 5 files limit.")
 				app.recordStatus()
 				app.signalStop()
 				return
 			}
+		}
+		app.statusMu.Lock()
+		alreadyCounted := app.transferCounted
+		if !alreadyCounted {
+			app.transferCounted = true
+		}
+		app.statusMu.Unlock()
+		if !alreadyCounted && !usage.IsPaid {
+			IncrementUsedTransfers(1)
 		}
 		app.setStatus("transferring", "Sending file to connected device.")
 		app.updateStatus(func(status *transferStatus) {
@@ -869,15 +858,11 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		usage := limiterInstance.GetStatus()
 		if r.URL.Query().Get("ping") != "" {
-			var pingSecs int
-			if _, err := fmt.Sscanf(r.URL.Query().Get("ping"), "%d", &pingSecs); err == nil && pingSecs > 0 {
-				usage, _ = limiterInstance.IncrementUsage(pingSecs)
-			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"status":      "ok",
-				"isPaid":      usage.IsPaid,
-				"usedSeconds": usage.UsedSeconds,
+				"status":        "ok",
+				"isPaid":        usage.IsPaid,
+				"usedTransfers": usage.UsedTransfers,
 			})
 			return
 		}
@@ -889,13 +874,13 @@ func New(cfg *config.Config) (*Server, error) {
 			Lang          string
 			IsPaid        bool
 			LicenseTier   string
-			UsedSeconds   int
+			UsedTransfers int
 			ClockTampered bool
 		}{
 			Route:         "/receive/" + path,
 			IsPaid:        usage.IsPaid,
 			LicenseTier:   usage.LicenseTier,
-			UsedSeconds:   usage.UsedSeconds,
+			UsedTransfers: usage.UsedTransfers,
 			ClockTampered: usage.ClockTampered,
 		}
 		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
@@ -906,7 +891,16 @@ func New(cfg *config.Config) (*Server, error) {
 		switch r.Method {
 		case "POST":
 			startUsage := limiterInstance.GetStatus()
-			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedSeconds >= 600
+			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedTransfers >= 5
+			app.statusMu.Lock()
+			alreadyCounted := app.transferCounted
+			if !alreadyCounted {
+				app.transferCounted = true
+			}
+			app.statusMu.Unlock()
+			if !alreadyCounted && !startUsage.IsPaid {
+				IncrementUsedTransfers(1)
+			}
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
 				status.BytesDone = 0
@@ -953,7 +947,7 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				if quotaExceededAtStart {
 					if len(transferredFiles) >= 5 {
-						http.Error(w, "File count exceeds 5 files free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+						http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Please upgrade.", http.StatusForbidden)
 						app.setStatus("failed", "File count exceeds 5 files limit.")
 						app.recordStatus()
 						app.signalStop()
@@ -1030,7 +1024,7 @@ func New(cfg *config.Config) (*Server, error) {
 					currentFileWritten += int64(n)
 					if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
 						out.Close()
-						http.Error(w, "File size exceeds 50MB free limit under 10m quota. Please upgrade.", http.StatusRequestEntityTooLarge)
+						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Please upgrade.", http.StatusRequestEntityTooLarge)
 						app.setStatus("failed", "File size exceeds 50MB limit.")
 						app.recordStatus()
 						app.signalStop()

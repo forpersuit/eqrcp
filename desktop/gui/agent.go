@@ -85,6 +85,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		MaxDevices:       maxDev,
 		ActivatedDevices: actDev,
 		UsedSeconds:      server.GetUsedSeconds(),
+		UsedTransfers:    server.GetUsedTransfers(),
 		LicenseExpiresAt: expiresAt,
 	}
 	if agent.busy {

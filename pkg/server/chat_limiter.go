@@ -17,6 +17,7 @@ import (
 type ChatUsage struct {
 	Date          string `json:"date"`
 	UsedSeconds   int    `json:"usedSeconds"`
+	UsedTransfers int    `json:"usedTransfers"` // Daily transfers count
 	IsPaid        bool   `json:"isPaid"`
 	LastTime      int64  `json:"lastTime"`      // Last running timestamp in seconds
 	RedeemedAt    string `json:"redeemedAt"`    // ISO format activation time
@@ -263,6 +264,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		return &ChatUsage{
 			Date:          time.Now().Format("2006-01-02"),
 			UsedSeconds:   300,
+			UsedTransfers: 5,
 			IsPaid:        false,
 			ClockTampered: false,
 			LicenseTier:   "",
@@ -271,6 +273,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		return &ChatUsage{
 			Date:          time.Now().Format("2006-01-02"),
 			UsedSeconds:   600,
+			UsedTransfers: 5,
 			IsPaid:        false,
 			ClockTampered: false,
 			LicenseTier:   "",
@@ -328,6 +331,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if !readOk || usage.Date != today {
 		usage.Date = today
 		usage.UsedSeconds = 0
+		usage.UsedTransfers = 0
 		dateChanged = true
 	}
 
@@ -477,5 +481,45 @@ func (l *ChatLimiter) SetUsedSeconds(seconds int) ChatUsage {
 // SetUsedSeconds updates the daily used seconds globally.
 func SetUsedSeconds(seconds int) {
 	limiterInstance.SetUsedSeconds(seconds)
+}
+
+// IncrementTransfers adds count to daily used transfers if not paid.
+func (l *ChatLimiter) IncrementTransfers(count int) (ChatUsage, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	if usage.IsPaid {
+		return usage, false
+	}
+
+	usage.UsedTransfers += count
+	l.saveUsageLocked(usage)
+
+	limitReached := usage.UsedTransfers >= 5
+	return usage, limitReached
+}
+
+// SetUsedTransfers updates the daily used transfers.
+func (l *ChatLimiter) SetUsedTransfers(transfers int) ChatUsage {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	usage.UsedTransfers = transfers
+	l.saveUsageLocked(usage)
+	return usage
+}
+
+func GetUsedTransfers() int {
+	return limiterInstance.GetStatus().UsedTransfers
+}
+
+func IncrementUsedTransfers(count int) {
+	_, _ = limiterInstance.IncrementTransfers(count)
+}
+
+func SetUsedTransfers(transfers int) {
+	limiterInstance.SetUsedTransfers(transfers)
 }
 

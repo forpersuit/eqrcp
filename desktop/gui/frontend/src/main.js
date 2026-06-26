@@ -318,13 +318,8 @@ function renderShare() {
         </li>
     `).join('');
     const isPaid = state.status?.isPaid;
-    const usedSecs = state.status?.usedSeconds || 0;
-    const remaining = Math.max(0, 600 - usedSecs);
-    const formatRemaining = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
+    const usedTransfers = state.status?.usedTransfers || 0;
+    const remaining = Math.max(0, 5 - usedTransfers);
 
     const hasItems = state.sharePaths.length > 0;
     return `
@@ -344,7 +339,7 @@ function renderShare() {
                 <div style="display: flex; align-items: center; gap: 8px;">
                     ${(!isPaid) ? `
                         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em;">
-                            free ulimited: ${formatRemaining(remaining)}
+                            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
                         </div>
                     ` : ''}
                 </div>
@@ -389,18 +384,12 @@ function renderShareTransfer(task) {
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
     const isPaid = state.status?.isPaid;
-    const usedSecs = state.status?.usedSeconds || 0;
-    const remaining = Math.max(0, 600 - usedSecs);
-    
-    const formatRemaining = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
+    const usedTransfers = state.status?.usedTransfers || 0;
+    const remaining = Math.max(0, 5 - usedTransfers);
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; margin-top: 4px;">
-            free ulimited: ${formatRemaining(remaining)}
+            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
     ` : '';
 
@@ -503,18 +492,12 @@ function renderReceiveTransfer(task) {
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
     const isPaid = state.status?.isPaid;
-    const usedSecs = state.status?.usedSeconds || 0;
-    const remaining = Math.max(0, 600 - usedSecs);
-    
-    const formatRemaining = (sec) => {
-        const m = Math.floor(sec / 60);
-        const s = sec % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
+    const usedTransfers = state.status?.usedTransfers || 0;
+    const remaining = Math.max(0, 5 - usedTransfers);
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; margin-top: 4px;">
-            free ulimited: ${formatRemaining(remaining)}
+            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
     ` : '';
 

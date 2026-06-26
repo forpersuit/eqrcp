@@ -89,6 +89,7 @@ type AgentStatus struct {
 	MaxDevices       int          `json:"maxDevices"`
 	ActivatedDevices int          `json:"activatedDevices"`
 	UsedSeconds      int          `json:"usedSeconds"`
+	UsedTransfers    int          `json:"usedTransfers"`
 	LicenseExpiresAt string       `json:"licenseExpiresAt,omitempty"`
 }
 
@@ -293,8 +294,8 @@ func (a *App) Share(paths []string) (AgentStatus, error) {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
 	isPaid := server.GetPaidStatus()
-	usedSeconds := server.GetUsedSeconds()
-	if !isPaid && usedSeconds >= 600 {
+	usedTransfers := server.GetUsedTransfers()
+	if !isPaid && usedTransfers >= 5 {
 		if err := validateSharePathsForFreeTier(paths); err != nil {
 			return AgentStatus{}, err
 		}
@@ -813,6 +814,11 @@ func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
 	server.SetUsedSeconds(seconds)
+	if seconds == 0 {
+		server.SetUsedTransfers(0)
+	} else {
+		server.SetUsedTransfers(5)
+	}
 	return a.agent.snapshotLocked(), nil
 }
 
