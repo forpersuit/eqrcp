@@ -449,3 +449,9 @@ func GetCodeDate() string {
 func GetClockTamperedStatus() bool {
 	return limiterInstance.GetStatus().ClockTampered
 }
+
+// GetUsedSeconds returns the current daily chat usage seconds.
+func GetUsedSeconds() int {
+	return limiterInstance.GetStatus().UsedSeconds
+}
+

@@ -82,6 +82,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		LicenseTier:      server.GetLicenseTier(),
 		MaxDevices:       maxDev,
 		ActivatedDevices: actDev,
+		UsedSeconds:      server.GetUsedSeconds(),
 	}
 	if agent.busy {
 		response.State = "busy"

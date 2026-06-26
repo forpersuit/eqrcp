@@ -370,17 +370,19 @@ function renderShareTransfer(task) {
     const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
-    const qrBanner = !isQRExpanded ? `
-        <div class="qr-collapsed-banner">
-            <div class="qr-collapsed-info">
-                <span class="qr-collapsed-status">
-                    <span class="status-indicator ${task.transferState || 'waiting'}"></span>
-                    <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
-                </span>
-                ${task.pageUrl ? `
-                    <span class="qr-collapsed-url">🔗 ${escapeHTML(task.pageUrl)}</span>
-                ` : ''}
-            </div>
+    const isPaid = state.status?.isPaid;
+    const usedSecs = state.status?.usedSeconds || 0;
+    const remaining = Math.max(0, 300 - usedSecs);
+    
+    const formatRemaining = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
+        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); margin-top: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+            ⏱️ ${t('remaining_time') || '剩余时间'}: ${formatRemaining(remaining)}
         </div>
     ` : '';
 
@@ -390,6 +392,7 @@ function renderShareTransfer(task) {
                 <div>
                     <div class="eyebrow">${t('share_active')}</div>
                     <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
+                    ${countdownHtml}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
@@ -398,8 +401,6 @@ function renderShareTransfer(task) {
                     </button>
                 </div>
             </div>
-            
-            ${qrBanner}
             
             ${isQRExpanded && qrImage ? `
                 <div class="qr-hero">
@@ -483,17 +484,19 @@ function renderReceiveTransfer(task) {
     const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
-    const qrBanner = !isQRExpanded ? `
-        <div class="qr-collapsed-banner">
-            <div class="qr-collapsed-info">
-                <span class="qr-collapsed-status">
-                    <span class="status-indicator ${task.transferState || 'waiting'}"></span>
-                    <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
-                </span>
-                ${task.pageUrl ? `
-                    <span class="qr-collapsed-url">🔗 ${escapeHTML(task.pageUrl)}</span>
-                ` : ''}
-            </div>
+    const isPaid = state.status?.isPaid;
+    const usedSecs = state.status?.usedSeconds || 0;
+    const remaining = Math.max(0, 300 - usedSecs);
+    
+    const formatRemaining = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
+        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); margin-top: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+            ⏱️ ${t('remaining_time') || '剩余时间'}: ${formatRemaining(remaining)}
         </div>
     ` : '';
 
@@ -503,6 +506,7 @@ function renderReceiveTransfer(task) {
                 <div>
                     <div class="eyebrow">${t('receive_active')}</div>
                     <h2>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</h2>
+                    ${countdownHtml}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
@@ -511,8 +515,6 @@ function renderReceiveTransfer(task) {
                     </button>
                 </div>
             </div>
-            
-            ${qrBanner}
             
             ${isQRExpanded && qrImage ? `
                 <div class="qr-hero">
@@ -1888,7 +1890,6 @@ async function openChatSaveDirectory() {
         const dir = state.chatSaveDir || await ChatSaveDirectory();
         state.chatSaveDir = dir;
         await OpenPath(dir);
-        state.notice = t('notice_opened_dir', { dir });
         render();
     }, {busy: false});
 }
@@ -3688,7 +3689,7 @@ document.addEventListener('click', (event) => {
     }
 
     const pathLink = event.target.closest('.path-link');
-    if (pathLink) {
+    if (pathLink && pathLink.id !== 'open-chat-save') {
         const path = pathLink.dataset.openPath;
         if (path) {
             run(async () => {

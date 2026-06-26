@@ -705,6 +705,34 @@ func New(cfg *config.Config) (*Server, error) {
 		<-sig
 		app.signalStop()
 	}()
+	// Start background free-tier usage ticker
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-app.stopChannel:
+				return
+			case <-ticker.C:
+				app.statusMu.Lock()
+				state := app.status.State
+				app.statusMu.Unlock()
+
+				if state == "transferring" {
+					usage := limiterInstance.GetStatus()
+					if !usage.IsPaid {
+						_, limitReached := limiterInstance.IncrementUsage(1)
+						if limitReached {
+							app.setStatus("stopped", "Free limit reached (5m).")
+							app.recordStatus()
+							app.signalStop()
+							return
+						}
+					}
+				}
+			}
+		}
+	}()
 	// The handler adds and removes from the sync.WaitGroup
 	// When the group is zero all requests are completed
 	// and the server is shutdown
@@ -714,6 +742,14 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create handlers
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		usage := limiterInstance.GetStatus()
+		if !usage.IsPaid && usage.UsedSeconds >= 300 {
+			http.Error(w, "Free tier limit reached (5m). Please upgrade.", http.StatusForbidden)
+			app.setStatus("stopped", "Free limit reached (5m).")
+			app.recordStatus()
+			app.signalStop()
+			return
+		}
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
@@ -836,6 +872,14 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		switch r.Method {
 		case "POST":
+			usage := limiterInstance.GetStatus()
+			if !usage.IsPaid && usage.UsedSeconds >= 300 {
+				http.Error(w, "Free tier limit reached (5m). Please upgrade.", http.StatusForbidden)
+				app.setStatus("stopped", "Free limit reached (5m).")
+				app.recordStatus()
+				app.signalStop()
+				return
+			}
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
 				status.BytesDone = 0

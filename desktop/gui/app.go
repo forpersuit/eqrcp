@@ -74,19 +74,20 @@ type TaskRecord struct {
 }
 
 type AgentStatus struct {
-	State          string       `json:"state"`
-	Current        *TaskRecord  `json:"current,omitempty"`
-	Chat           *TaskRecord  `json:"chat,omitempty"`
-	Queued         int          `json:"queued"`
-	History        []TaskRecord `json:"history,omitempty"`
-	LastError      string       `json:"lastError,omitempty"`
-	Version        string       `json:"version"`
-	AgentStartedAt time.Time    `json:"agentStartedAt"`
+	State            string       `json:"state"`
+	Current          *TaskRecord  `json:"current,omitempty"`
+	Chat             *TaskRecord  `json:"chat,omitempty"`
+	Queued           int          `json:"queued"`
+	History          []TaskRecord `json:"history,omitempty"`
+	LastError        string       `json:"lastError,omitempty"`
+	Version          string       `json:"version"`
+	AgentStartedAt   time.Time    `json:"agentStartedAt"`
 	ClockTampered    bool         `json:"clockTampered"`
 	IsPaid           bool         `json:"isPaid"`
 	LicenseTier      string       `json:"licenseTier"`
 	MaxDevices       int          `json:"maxDevices"`
 	ActivatedDevices int          `json:"activatedDevices"`
+	UsedSeconds      int          `json:"usedSeconds"`
 }
 
 type DesktopSettings struct {
