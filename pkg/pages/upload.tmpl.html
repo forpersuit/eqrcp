@@ -532,7 +532,7 @@
         var licenseTier = '{{.LicenseTier}}';
         var usedSeconds = {{.UsedSeconds}};
         var clockTampered = {{.ClockTampered}};
-        var isPlusMode = (isPaid && !clockTampered) || (usedSeconds < 300);
+        var isPlusMode = (isPaid && !clockTampered) || (usedSeconds < 600);
 
         var uploadForm = document.getElementById('upload-form');
         var accumulatedFiles = [];
@@ -885,7 +885,7 @@
         // Plus countdown logic for Free tier
         var countdownEl = document.getElementById('plus-countdown');
         if (!isPaid && !clockTampered && isPlusMode) {
-            var remainingSeconds = Math.max(0, 300 - usedSeconds);
+            var remainingSeconds = Math.max(0, 600 - usedSeconds);
             if (remainingSeconds > 0) {
                 countdownEl.style.display = 'block';
                 
@@ -899,7 +899,7 @@
                 
                 var timerId = setInterval(function() {
                     remainingSeconds--;
-                    usedSeconds = 300 - remainingSeconds;
+                    usedSeconds = 600 - remainingSeconds;
                     if (remainingSeconds <= 0) {
                         clearInterval(timerId);
                         isPlusMode = false;
@@ -920,7 +920,7 @@
                         .then(function(data) {
                             if (data && data.usedSeconds !== undefined) {
                                 usedSeconds = data.usedSeconds;
-                                remainingSeconds = Math.max(0, 300 - usedSeconds);
+                                remainingSeconds = Math.max(0, 600 - usedSeconds);
                                 if (remainingSeconds <= 0) {
                                     isPlusMode = false;
                                     clearInterval(pingIntervalId);

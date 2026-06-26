@@ -372,7 +372,7 @@ function renderShareTransfer(task) {
 
     const isPaid = state.status?.isPaid;
     const usedSecs = state.status?.usedSeconds || 0;
-    const remaining = Math.max(0, 300 - usedSecs);
+    const remaining = Math.max(0, 600 - usedSecs);
     
     const formatRemaining = (sec) => {
         const m = Math.floor(sec / 60);
@@ -486,7 +486,7 @@ function renderReceiveTransfer(task) {
 
     const isPaid = state.status?.isPaid;
     const usedSecs = state.status?.usedSeconds || 0;
-    const remaining = Math.max(0, 300 - usedSecs);
+    const remaining = Math.max(0, 600 - usedSecs);
     
     const formatRemaining = (sec) => {
         const m = Math.floor(sec / 60);
@@ -1101,6 +1101,9 @@ function renderAboutPanel() {
                 </div>
                 <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
                     💡 <strong>${t('plan_binding_note')}</strong>：${t('plan_binding_note_desc')}
+                </div>
+                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
+                    🎁 <strong>${t('free_tier_rules')}</strong>：${t('free_tier_rules_desc')}
                 </div>
             </div>
         </div>

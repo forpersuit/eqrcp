@@ -721,9 +721,9 @@ func New(cfg *config.Config) (*Server, error) {
 				if state == "transferring" {
 					usage := limiterInstance.GetStatus()
 					if !usage.IsPaid {
-						_, limitReached := limiterInstance.IncrementUsage(1)
-						if limitReached {
-							app.setStatus("stopped", "Free limit reached (5m).")
+						usage, _ = limiterInstance.IncrementUsage(1)
+						if usage.UsedSeconds >= 600 {
+							app.setStatus("stopped", "Free limit reached (10m).")
 							app.recordStatus()
 							app.signalStop()
 							return
@@ -743,9 +743,9 @@ func New(cfg *config.Config) (*Server, error) {
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		usage := limiterInstance.GetStatus()
-		if !usage.IsPaid && usage.UsedSeconds >= 300 {
-			http.Error(w, "Free tier limit reached (5m). Please upgrade.", http.StatusForbidden)
-			app.setStatus("stopped", "Free limit reached (5m).")
+		if !usage.IsPaid && usage.UsedSeconds >= 600 {
+			http.Error(w, "Free tier limit reached (10m). Please upgrade.", http.StatusForbidden)
+			app.setStatus("stopped", "Free limit reached (10m).")
 			app.recordStatus()
 			app.signalStop()
 			return
@@ -873,9 +873,9 @@ func New(cfg *config.Config) (*Server, error) {
 		switch r.Method {
 		case "POST":
 			usage := limiterInstance.GetStatus()
-			if !usage.IsPaid && usage.UsedSeconds >= 300 {
-				http.Error(w, "Free tier limit reached (5m). Please upgrade.", http.StatusForbidden)
-				app.setStatus("stopped", "Free limit reached (5m).")
+			if !usage.IsPaid && usage.UsedSeconds >= 600 {
+				http.Error(w, "Free tier limit reached (10m). Please upgrade.", http.StatusForbidden)
+				app.setStatus("stopped", "Free limit reached (10m).")
 				app.recordStatus()
 				app.signalStop()
 				return
