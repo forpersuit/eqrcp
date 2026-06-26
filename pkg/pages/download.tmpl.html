@@ -97,15 +97,10 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
         }
 
-        .status-badge.pending {
+        .status-badge.ready {
             background: #f3f4f6;
-            border: 2px dashed var(--text-muted);
-            color: var(--text-secondary);
-            animation: rotate-spinner 2s linear infinite;
-        }
-
-        @keyframes rotate-spinner {
-            100% { transform: rotate(360deg); }
+            border: 2px solid var(--text-muted);
+            color: var(--accent);
         }
 
         .status-badge.success {
@@ -170,6 +165,21 @@
             font-size: 14px;
             line-height: 1.4;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            transition: background 0.15s ease;
+        }
+
+        .file-fallback:hover {
+            background: #f9fafb;
+        }
+
+        .file-item-row {
+            transition: background 0.15s ease;
+        }
+        .file-item-row:hover {
+            background: #f9fafb;
+        }
+        .file-item-row:last-child {
+            border-bottom: none !important;
         }
 
         .file-icon {
@@ -197,7 +207,7 @@
             text-align: center;
             transition: background 0.15s ease;
             box-shadow: 0 2px 4px rgba(15, 118, 110, 0.08);
-            margin-top: 16px;
+            margin-top: 8px;
         }
 
         .btn:hover {
@@ -252,11 +262,11 @@
                 {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
             </span>
             
-            <div id="status-icon-pending" class="status-badge pending">⌛</div>
+            <div id="status-icon-pending" class="status-badge ready">📥</div>
             <div id="status-icon-success" class="status-badge success" style="display: none;">✓</div>
 
-            <h1 id="header-text" data-i18n="header">Preparing to Receive File</h1>
-            <p id="summary-text" class="summary" data-i18n="wait_tips">Preparing download, please wait...</p>
+            <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
+            <p id="summary-text" class="summary" data-i18n="wait_tips">Please click the button below to start downloading.</p>
 
             {{if not .IsPaid}}
             <div class="wifi-warning-box">
@@ -266,13 +276,31 @@
             {{end}}
 
             <p class="section-title" data-i18n="saved_file">File to Receive</p>
-            <div class="file-fallback">
-                <span class="file-icon">📄</span>
-                <span id="file-name-text" class="file-name">{{.File}}</span>
+            
+            <div id="files-list-container" style="text-align: left; margin-bottom: 20px;">
+                {{if gt .Count 1}}
+                    <div style="border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                        {{range $index, $element := .Files}}
+                            <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line); cursor: pointer;" onclick="triggerDownload()">
+                                <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
+                                    <span style="font-size: 16px; flex-shrink: 0; color: var(--text-secondary);">📄</span>
+                                    <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
+                                </div>
+                                <span style="font-size: 14px; color: var(--accent); font-weight: 700; flex-shrink: 0;">↓</span>
+                            </div>
+                        {{end}}
+                    </div>
+                {{else}}
+                    <div class="file-fallback" style="cursor: pointer;" onclick="triggerDownload()">
+                        <span class="file-icon">📄</span>
+                        <span id="file-name-text" class="file-name">{{.File}}</span>
+                        <span style="font-size: 14px; color: var(--accent); font-weight: 700; flex-shrink: 0;">↓</span>
+                    </div>
+                {{end}}
             </div>
 
-            <div id="manual-btn-row" style="display: none;">
-                <button type="button" class="btn" id="btn-manual-download" data-i18n="btn_manual">Manual Download / Redownload</button>
+            <div id="action-btn-row">
+                <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
             </div>
         </div>
 
@@ -295,77 +323,91 @@
         var pageTranslations = {
             zh: {
                 title: '接收文件 - EQT',
-                header: '准备接收文件',
-                wait_tips: '正在准备下载，请稍候...',
+                header: '文件已准备就绪',
+                wait_tips: '请点击下方按钮或文件项开始下载文件。',
                 wifi_tips: '请确保手机与电脑连接至同一个 Wi-Fi / 局域网。',
                 success_header: '已触发文件下载',
-                success_tips: '传输已成功启动！文件正保存到您的下载中。',
+                success_tips: '传输已成功启动！请检查您的浏览器下载进度。',
+                btn_download: '开始下载',
+                btn_download_all: '下载全部 (ZIP)',
                 btn_manual: '手动下载 / 重新下载',
                 saved_file: '待接收文件',
                 close_hint: '下载成功后，您现在可以关闭此页面了。'
             },
             en: {
                 title: 'Receive File - EQT',
-                header: 'Preparing to Receive File',
-                wait_tips: 'Preparing download, please wait...',
+                header: 'File Ready for Download',
+                wait_tips: 'Please click the button or file items below to start downloading.',
                 wifi_tips: 'Please make sure both devices are on the same Wi-Fi / LAN.',
                 success_header: 'Download Started',
-                success_tips: 'Transfer triggered successfully! The file is being saved to your downloads.',
+                success_tips: 'Transfer triggered successfully! Please check your browser\'s download progress.',
+                btn_download: 'Start Download',
+                btn_download_all: 'Download All (ZIP)',
                 btn_manual: 'Manual Download / Redownload',
                 saved_file: 'File to Receive',
                 close_hint: 'Once successfully completed, you can close this page.'
             },
             ja: {
                 title: 'ファイル受信 - EQT',
-                header: 'ファイル受信の準備中',
-                wait_tips: 'ダウンロードを準備しています。しばらくお待ちください...',
+                header: 'ダウンロードの準備完了',
+                wait_tips: '下のボタンまたはファイル項目をクリックしてダウンロードを開始してください。',
                 wifi_tips: '両方のデバイスが同じ Wi-Fi / LAN に接続されていることを確認してください。',
                 success_header: 'ダウンロードが開始されました',
-                success_tips: '転送が正常に開始されました！ファイルはダウンロードフォルダーに保存されています。',
+                success_tips: '転送が正常に開始されました！ブラウザのダウンロード履歴を確認してください。',
+                btn_download: 'ダウンロード開始',
+                btn_download_all: 'すべてダウンロード (ZIP)',
                 btn_manual: '手動ダウンロード / 再ダウンロード',
-                saved_file: '受信するファイル',
+                saved_file: '受信する文件',
                 close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。'
             },
             ko: {
                 title: '파일 받기 - EQT',
-                header: '파일 받기 준비 중',
-                wait_tips: '다운로드를 준비하는 중입니다. 잠시만 기다려주세요...',
+                header: '다운로드 준비 완료',
+                wait_tips: '아래 버튼이나 파일 항목을 클릭하여 다운로드를 시작하십시오.',
                 wifi_tips: '두 기기가 모두 동일한 Wi-Fi / LAN에 연결되어 있는지 확인하십시오.',
                 success_header: '다운로드 시작됨',
-                success_tips: '전송이 성공적으로 시작되었습니다! 파일이 다운로드 폴더에 저장되는 중입니다.',
+                success_tips: '전송이 성공적으로 시작되었습니다! 브라우저 다운로드 진행 상황을 확인하세요.',
+                btn_download: '다운로드 시작',
+                btn_download_all: '전체 다운로드 (ZIP)',
                 btn_manual: '수동 다운로드 / 재다운로드',
                 saved_file: '받을 파일',
                 close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.'
             },
             es: {
                 title: 'Recibir Archivo - EQT',
-                header: 'Preparando para Recibir Archivo',
-                wait_tips: 'Preparando la descarga, por favor espere...',
+                header: 'Archivo listo para descargar',
+                wait_tips: 'Haga clic en el botón o en los elementos de archivo de abajo para descargar.',
                 wifi_tips: 'Asegúrese de que ambos dispositivos estén conectados a la misma red Wi-Fi / LAN.',
                 success_header: 'Descarga Iniciada',
-                success_tips: '¡Transferencia iniciada correctamente! El archivo se está guardando en sus descargas.',
+                success_tips: '¡Transferencia iniciada correctamente! Compruebe el progreso de descarga de su navegador.',
+                btn_download: 'Iniciar descarga',
+                btn_download_all: 'Descargar todo (ZIP)',
                 btn_manual: 'Descarga Manual / Volver a descargar',
                 saved_file: 'Archivo a Recibir',
                 close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.'
             },
             de: {
-                title: 'Datei empfangen - EQT',
-                header: 'Empfang wird vorbereitet',
-                wait_tips: 'Download wird vorbereitet, bitte warten...',
+                title: 'Datei bereit zum Herunterladen',
+                header: 'Datei bereit zum Herunterladen',
+                wait_tips: 'Klicken Sie auf die Schaltfläche oder die Dateielemente unten, um den Download zu starten.',
                 wifi_tips: 'Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi / LAN verbunden sind.',
                 success_header: 'Download gestartet',
-                success_tips: 'Übertragung erfolgreich gestartet! Die Datei wird unter Ihren Downloads gespeichert.',
+                success_tips: 'Übertragung erfolgreich gestartet! Bitte überprüfen Sie den Download-Verlauf Ihres Browsers.',
+                btn_download: 'Herunterladen starten',
+                btn_download_all: 'Alle herunterladen (ZIP)',
                 btn_manual: 'Manuell herunterladen / Erneut versuchen',
                 saved_file: 'Zu empfangende Datei',
                 close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.'
             },
             fr: {
                 title: 'Recevoir le Fichier - EQT',
-                header: 'Préparation de la réception',
-                wait_tips: 'Préparation du téléchargement, veuillez patienter...',
+                header: 'Fichier prêt pour le téléchargement',
+                wait_tips: 'Veuillez cliquer sur le bouton ou sur les fichiers ci-dessous pour télécharger.',
                 wifi_tips: 'Veuillez vous assurer que les deux appareils sont connectés au même réseau Wi-Fi / LAN.',
                 success_header: 'Téléchargement Lancé',
-                success_tips: 'Transfert lancé avec succès ! Le fichier est en cours d\'enregistrement dans vos téléchargements.',
+                success_tips: 'Transfert lancé avec succès ! Veuillez vérifier la progression du téléchargement de votre navigateur.',
+                btn_download: 'Lancer le téléchargement',
+                btn_download_all: 'Tout télécharger (ZIP)',
                 btn_manual: 'Téléchargement manuel / Relancer',
                 saved_file: 'Fichier à recevoir',
                 close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.'
@@ -400,6 +442,8 @@
             currentLang = userLang;
         }
 
+        var downloadTriggered = false;
+
         function applyLanguage() {
             var dict = pageTranslations[currentLang] || pageTranslations['en'];
             
@@ -421,8 +465,15 @@
             var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
             if (savedFileTitle) savedFileTitle.textContent = dict.saved_file;
             
-            var btnManualEl = document.getElementById('btn-manual-download');
-            if (btnManualEl) btnManualEl.textContent = dict.btn_manual;
+            var btnActionEl = document.getElementById('btn-action-download');
+            if (btnActionEl) {
+                if (!downloadTriggered) {
+                    var count = {{.Count}};
+                    btnActionEl.textContent = count > 1 ? (dict.btn_download_all || 'Download All (ZIP)') : (dict.btn_download || 'Start Download');
+                } else {
+                    btnActionEl.textContent = dict.btn_manual || 'Manual Download / Redownload';
+                }
+            }
 
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) hintEl.textContent = dict.close_hint;
@@ -451,16 +502,17 @@
             });
         }
 
-        var downloadTriggered = false;
         function triggerDownload() {
-            if (downloadTriggered) return;
+            if (downloadTriggered) {
+                window.location.href = window.location.pathname + '?download=1';
+                return;
+            }
             downloadTriggered = true;
             
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'inline-flex';
             document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
             document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
-            document.getElementById('manual-btn-row').style.display = 'block';
             applyLanguage();
             
             var iframe = document.createElement('iframe');
@@ -471,12 +523,6 @@
                 document.body.removeChild(iframe);
             }, 3000);
         }
-        
-        setTimeout(triggerDownload, 1000);
-        
-        document.getElementById('btn-manual-download').addEventListener('click', function() {
-            window.location.href = window.location.pathname + '?download=1';
-        });
     </script>
 </body>
 </html>

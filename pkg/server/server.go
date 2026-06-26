@@ -757,7 +757,8 @@ func New(cfg *config.Config) (*Server, error) {
 			}{
 				Route:         "/send/" + path,
 				File:          app.body.Filename,
-				Count:         1,
+				Files:         app.body.Items,
+				Count:         len(app.body.Items),
 				IsPaid:        usage.IsPaid,
 				LicenseTier:   usage.LicenseTier,
 				UsedSeconds:   usage.UsedSeconds,

@@ -1918,7 +1918,7 @@ async function startShare() {
         await saveSettingsData();
         state.status = await Share(state.sharePaths);
         state.sharePaths = [];
-        state.notice = t('share_task_started');
+        state.notice = '';
         render();
     });
 }
@@ -1927,7 +1927,7 @@ async function startReceive() {
     await run(async () => {
         await saveSettingsData();
         state.status = await Receive(state.receiveDir);
-        state.notice = t('receive_task_started');
+        state.notice = '';
         render();
     });
 }
@@ -2920,14 +2920,14 @@ function handleTrayCommand(command) {
     if (command === 'share') {
         setMode('share');
         state.activePanel = '';
-        state.notice = t('ready_to_share');
+        state.notice = '';
         render();
         return;
     }
     if (command === 'receive') {
         setMode('receive');
         state.activePanel = '';
-        state.notice = t('ready_to_receive');
+        state.notice = '';
         render();
         return;
     }
