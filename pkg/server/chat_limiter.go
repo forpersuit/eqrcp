@@ -463,3 +463,19 @@ func GetUsedSeconds() int {
 	return limiterInstance.GetStatus().UsedSeconds
 }
 
+// SetUsedSeconds updates the daily used seconds.
+func (l *ChatLimiter) SetUsedSeconds(seconds int) ChatUsage {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	usage.UsedSeconds = seconds
+	l.saveUsageLocked(usage)
+	return usage
+}
+
+// SetUsedSeconds updates the daily used seconds globally.
+func SetUsedSeconds(seconds int) {
+	limiterInstance.SetUsedSeconds(seconds)
+}
+

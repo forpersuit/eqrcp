@@ -317,6 +317,15 @@ function renderShare() {
             <button class="icon-button remove-path" data-path-index="${index}" title="${t('remove')}">x</button>
         </li>
     `).join('');
+    const isPaid = state.status?.isPaid;
+    const usedSecs = state.status?.usedSeconds || 0;
+    const remaining = Math.max(0, 600 - usedSecs);
+    const formatRemaining = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
     const hasItems = state.sharePaths.length > 0;
     return `
         <div class="dropzone">
@@ -331,9 +340,18 @@ function renderShare() {
         </div>
         ${hasItems ? `
             <ul class="path-list">${items}</ul>
-            <div class="primary-row">
-                <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
-                <button class="ghost" id="clear-share">${t('clear')}</button>
+            <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${(!isPaid) ? `
+                        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                            ⏱️ ${t('remaining_time') || 'Remaining'}: ${formatRemaining(remaining)}
+                        </div>
+                    ` : ''}
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
+                    <button class="ghost" id="clear-share">${t('clear')}</button>
+                </div>
             </div>
         ` : ''}
     `;
@@ -1027,7 +1045,41 @@ function renderAboutPanel() {
     const info = state.appInfo || {};
     const license = state.license || loadLicense();
     let plan = license?.tier ? `${getLicenseDisplayName(license)} ${t('running')}` : t('free_quota');
-    let planDetail = license?.redeemedAt ? `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}` : chatQuotaText();
+    const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
+    let expiryText = '';
+    if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a') {
+        const expiryDate = new Date(expiresAt);
+        const now = new Date();
+        const diffMs = expiryDate - now;
+        if (diffMs <= 0) {
+            expiryText = t('license_expired');
+        } else {
+            const diffSecs = Math.floor(diffMs / 1000);
+            if (diffSecs < 60) {
+                expiryText = t('license_expires_in_secs', { secs: diffSecs });
+            } else if (diffSecs < 3600) {
+                const mins = Math.floor(diffSecs / 60);
+                const secs = diffSecs % 60;
+                expiryText = t('license_expires_in_mins', { mins: mins, secs: secs });
+            } else if (diffSecs < 86400) {
+                const hrs = Math.floor(diffSecs / 3600);
+                expiryText = t('license_expires_in_hours', { hours: hrs });
+            } else {
+                const days = Math.ceil(diffSecs / 86400);
+                expiryText = t('license_expires_in_days', { days: days });
+            }
+        }
+    }
+
+    let planDetail = '';
+    if (license?.redeemedAt) {
+        planDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
+        if (expiryText) {
+            planDetail += ` (${expiryText})`;
+        }
+    } else {
+        planDetail = chatQuotaText();
+    }
     
     let warningBox = '';
     const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
@@ -1072,6 +1124,10 @@ function renderAboutPanel() {
                     <div style="display: flex; gap: 8px; margin-top: 6px;">
                         <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_file')}</button>
                         <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_dir')}</button>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="ghost" id="dev-reset-quota" style="flex: 1; padding: 4px 8px; font-size: 11px; color: var(--accent); border-color: var(--accent);">${t('dev_reset_quota') || '重置每日计时'}</button>
+                        <button class="ghost" id="dev-max-quota" style="flex: 1; padding: 4px 8px; font-size: 11px; color: var(--danger); border-color: var(--danger);">${t('dev_max_quota') || '快速达到10分钟'}</button>
                     </div>
                     <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
                         ${t('btn_exit_dev_mode')}
@@ -1666,6 +1722,30 @@ function bindPanelEvents() {
                 state.error = 'Failed to open log directory: ' + error;
                 render();
             }
+        }
+    });
+
+    document.querySelector('#dev-reset-quota')?.addEventListener('click', async () => {
+        try {
+            state.status = await DevSetUsedSeconds(0);
+            state.notice = t('dev_quota_reset_success') || '已重置每日计时为 0s';
+            render();
+            openPanel('about');
+        } catch (error) {
+            state.error = 'Failed to reset quota: ' + error;
+            render();
+        }
+    });
+
+    document.querySelector('#dev-max-quota')?.addEventListener('click', async () => {
+        try {
+            state.status = await DevSetUsedSeconds(600);
+            state.notice = t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)';
+            render();
+            openPanel('about');
+        } catch (error) {
+            state.error = 'Failed to max quota: ' + error;
+            render();
         }
     });
 

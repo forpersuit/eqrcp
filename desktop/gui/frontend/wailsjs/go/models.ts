@@ -90,6 +90,7 @@ export namespace main {
 	    maxDevices: number;
 	    activatedDevices: number;
 	    usedSeconds: number;
+	    licenseExpiresAt?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentStatus(source);
@@ -111,6 +112,7 @@ export namespace main {
 	        this.maxDevices = source["maxDevices"];
 	        this.activatedDevices = source["activatedDevices"];
 	        this.usedSeconds = source["usedSeconds"];
+	        this.licenseExpiresAt = source["licenseExpiresAt"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

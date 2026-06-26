@@ -2,6 +2,11 @@ import { state } from './state.js';
 
 const translations = {
     zh: {
+        license_expired: '已到期',
+        license_expires_in_secs: '还有 {secs} 秒到期',
+        license_expires_in_mins: '还有 {mins} 分 {secs} 秒到期',
+        license_expires_in_hours: '还有 {hours} 小时到期',
+        license_expires_in_days: '还有 {days} 天到期',
         about: '关于 EQT',
         about_title: '关于 EQT',
         active: '活跃',
@@ -252,6 +257,11 @@ const translations = {
         redeem_reset_hint: '想要在这台设备上撤销/重置此付费激活授权？',
 },
     en: {
+        license_expired: 'expired',
+        license_expires_in_secs: '{secs}s left before expiry',
+        license_expires_in_mins: '{mins}m {secs}s left before expiry',
+        license_expires_in_hours: '{hours}h left before expiry',
+        license_expires_in_days: '{days}d left before expiry',
         about: 'About EQT',
         about_title: 'About EQT',
         active: 'Active',
@@ -502,6 +512,11 @@ const translations = {
         working: 'Working...',
 },
     ja: {
+        license_expired: '期限切れ',
+        license_expires_in_secs: '有効期限まであと {secs} 秒',
+        license_expires_in_mins: '有効期限まであと {mins} 分 {secs} 秒',
+        license_expires_in_hours: '有効期限まであと {hours} 時間',
+        license_expires_in_days: '有効期限まであと {days} 日',
         about: 'EQTについて',
         about_title: 'EQTについて',
         active: 'アクティブ',
@@ -749,6 +764,11 @@ const translations = {
         working: '処理中...',
 },
     ko: {
+        license_expired: '만료됨',
+        license_expires_in_secs: '만료까지 {secs}초 남음',
+        license_expires_in_mins: '만료까지 {mins}분 {secs}초 남음',
+        license_expires_in_hours: '만료까지 {hours}시간 남음',
+        license_expires_in_days: '만료까지 {days}일 남음',
         about: 'EQT 정보',
         about_title: 'EQT 정보',
         active: '활성',
@@ -996,6 +1016,11 @@ const translations = {
         working: '처리 중...',
 },
     es: {
+        license_expired: 'expirado',
+        license_expires_in_secs: 'quedan {secs}s antes de la expiración',
+        license_expires_in_mins: 'quedan {mins}m {secs}s antes de la expiración',
+        license_expires_in_hours: 'quedan {hours}h antes de la expiración',
+        license_expires_in_days: 'quedan {days}d antes de la expiración',
         about: 'Acerca de EQT',
         about_title: 'Acerca de EQT',
         active: 'Activo',
@@ -1243,6 +1268,11 @@ const translations = {
         working: 'Procesando...',
 },
     de: {
+        license_expired: 'abgelaufen',
+        license_expires_in_secs: 'noch {secs}s bis zum Ablauf',
+        license_expires_in_mins: 'noch {mins}m {secs}s bis zum Ablauf',
+        license_expires_in_hours: 'noch {hours}h bis zum Ablauf',
+        license_expires_in_days: 'noch {days}d bis zum Ablauf',
         about: 'Über EQT',
         about_title: 'Über EQT',
         active: 'Aktiv',
@@ -1490,6 +1520,11 @@ const translations = {
         working: 'Verarbeitung...',
 },
     fr: {
+        license_expired: 'expiré',
+        license_expires_in_secs: '{secs}s restantes avant l\'expiration',
+        license_expires_in_mins: '{mins}m {secs}s restantes avant l\'expiration',
+        license_expires_in_hours: '{hours}h restantes avant l\'expiration',
+        license_expires_in_days: '{days}d restantes avant l\'expiration',
         about: 'À propos de EQT',
         about_title: 'À propos de EQT',
         active: 'Actif',

@@ -65,9 +65,11 @@ func defaultDesktopAgentHistoryPath() string {
 func (agent *desktopAgent) snapshotLocked() AgentStatus {
 	var maxDev int
 	var actDev int
+	var expiresAt string
 	if cert, ok := server.GetLocalLicenseInfo(); ok {
 		maxDev = cert.MaxDevices
 		actDev = cert.ActivatedDevices
+		expiresAt = cert.ExpiresAt
 	}
 
 	response := AgentStatus{
@@ -83,6 +85,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		MaxDevices:       maxDev,
 		ActivatedDevices: actDev,
 		UsedSeconds:      server.GetUsedSeconds(),
+		LicenseExpiresAt: expiresAt,
 	}
 	if agent.busy {
 		response.State = "busy"

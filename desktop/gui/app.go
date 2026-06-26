@@ -89,6 +89,7 @@ type AgentStatus struct {
 	MaxDevices       int          `json:"maxDevices"`
 	ActivatedDevices int          `json:"activatedDevices"`
 	UsedSeconds      int          `json:"usedSeconds"`
+	LicenseExpiresAt string       `json:"licenseExpiresAt,omitempty"`
 }
 
 type DesktopSettings struct {
@@ -804,6 +805,15 @@ func (a *App) ResetLicense() error {
 	}
 	a.agent.resetLicense()
 	return nil
+}
+
+func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
+	a.logInfo(fmt.Sprintf("[GUI] DevSetUsedSeconds called with %d", seconds))
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	server.SetUsedSeconds(seconds)
+	return a.agent.snapshotLocked(), nil
 }
 
 func findEqtCLI() (string, error) {

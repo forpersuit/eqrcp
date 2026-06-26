@@ -30,6 +30,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function DevSetUsedSeconds(arg1) {
+  return window['go']['main']['App']['DevSetUsedSeconds'](arg1);
+}
+
 export function DownloadChatAttachment(arg1, arg2) {
   return window['go']['main']['App']['DownloadChatAttachment'](arg1, arg2);
 }
