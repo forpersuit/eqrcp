@@ -22,6 +22,11 @@ var Upload string
 //go:embed done.tmpl.html
 var Done string
 
+// Download page
+//
+//go:embed download.tmpl.html
+var Download string
+
 // LogoMark is the browser-page product mark.
 //
 //go:embed assets/eqt-logo-mark.png

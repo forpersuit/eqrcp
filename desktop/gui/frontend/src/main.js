@@ -343,8 +343,8 @@ function renderShare() {
             <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     ${(!isPaid) ? `
-                        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-                            ⏱️ ${t('remaining_time') || 'Remaining'}: ${formatRemaining(remaining)}
+                        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em;">
+                            free ulimited: ${formatRemaining(remaining)}
                         </div>
                     ` : ''}
                 </div>
@@ -399,8 +399,8 @@ function renderShareTransfer(task) {
     };
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
-        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); margin-top: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-            ⏱️ ${t('remaining_time') || '剩余时间'}: ${formatRemaining(remaining)}
+        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; margin-top: 4px;">
+            free ulimited: ${formatRemaining(remaining)}
         </div>
     ` : '';
 
@@ -513,8 +513,8 @@ function renderReceiveTransfer(task) {
     };
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
-        <div class="quota-countdown" style="font-size: 13px; color: var(--danger); margin-top: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
-            ⏱️ ${t('remaining_time') || '剩余时间'}: ${formatRemaining(remaining)}
+        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 2px 6px; border-radius: 4px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; margin-top: 4px;">
+            free ulimited: ${formatRemaining(remaining)}
         </div>
     ` : '';
 

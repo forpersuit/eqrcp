@@ -702,6 +702,28 @@ func TestCompletedOneShotSendReturnsGoneForLaterBrowser(t *testing.T) {
 	}
 	response.Body.Close()
 
+	// Simulate the iframe triggering the actual file download
+	iframeRequest, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	iframeRequest.Header.Set("User-Agent", "Mozilla test")
+	iframeResponse, err := http.DefaultClient.Do(iframeRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iframeResponse.StatusCode != http.StatusOK {
+		t.Fatalf("iframe download status = %d, want %d", iframeResponse.StatusCode, http.StatusOK)
+	}
+	iframeBody, err := io.ReadAll(iframeResponse.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	iframeResponse.Body.Close()
+	if string(iframeBody) != "hello" {
+		t.Fatalf("iframe download body = %q, want %q", string(iframeBody), "hello")
+	}
+
 	request, err = http.NewRequest(http.MethodGet, server.SendURL, nil)
 	if err != nil {
 		t.Fatal(err)

@@ -736,9 +736,58 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create handlers
 	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		usage := limiterInstance.GetStatus()
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
+				return
+			}
+		}
+		if r.Method == http.MethodGet && r.URL.Query().Get("download") == "" {
+			htmlVariables := struct {
+				Route         string
+				File          string
+				Files         []string
+				Count         int
+				Lang          string
+				IsPaid        bool
+				LicenseTier   string
+				UsedSeconds   int
+				ClockTampered bool
+			}{
+				Route:         "/send/" + path,
+				File:          app.body.Filename,
+				Count:         1,
+				IsPaid:        usage.IsPaid,
+				LicenseTier:   usage.LicenseTier,
+				UsedSeconds:   usage.UsedSeconds,
+				ClockTampered: usage.ClockTampered,
+			}
+			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
+				htmlVariables.Lang = cookie.Value
+			} else {
+				htmlVariables.Lang = app.Lang
+			}
+			if err := serveTemplate("download", pages.Download, w, htmlVariables); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Template error: %v\n", err)
+			}
+			return
+		}
+		// Anti-bypass limit checks for free users who exceeded 10-minute limit
+		if !usage.IsPaid && usage.UsedSeconds >= 600 {
+			if info, err := os.Stat(app.body.Path); err == nil && info.Size() > 50*1024*1024 {
+				http.Error(w, "File size exceeds 50MB free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+				app.setStatus("failed", "File size exceeds 50MB limit.")
+				app.recordStatus()
+				app.signalStop()
+				return
+			}
+			if len(app.body.Items) > 5 {
+				http.Error(w, "File count exceeds 5 files free limit under 10m quota. Please upgrade.", http.StatusForbidden)
+				app.setStatus("failed", "File count exceeds 5 files limit.")
+				app.recordStatus()
+				app.signalStop()
 				return
 			}
 		}
