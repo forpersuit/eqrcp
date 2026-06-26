@@ -338,8 +338,8 @@ function renderShare() {
             <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     ${(!isPaid) ? `
-                        <div class="quota-countdown" style="font-size: 9px; font-weight: 700; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; border-radius: 6px; background: rgba(180, 35, 24, 0.04); text-align: center; text-transform: uppercase; line-height: 1.15; letter-spacing: 0.05em; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px;">
-                            ${remaining > 0 ? `left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">${remaining}</span>` : `limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>`}
+                        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap;">
+                            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
                         </div>
                     ` : ''}
                 </div>
@@ -388,8 +388,8 @@ function renderShareTransfer(task) {
     const remaining = Math.max(0, 5 - usedTransfers);
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
-        <div class="quota-countdown" style="font-size: 9px; font-weight: 700; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; border-radius: 6px; background: rgba(180, 35, 24, 0.04); text-align: center; text-transform: uppercase; line-height: 1.15; letter-spacing: 0.05em; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px; margin-top: 6px;">
-            ${remaining > 0 ? `left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">${remaining}</span>` : `limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>`}
+        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
+            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
     ` : '';
 
@@ -496,8 +496,8 @@ function renderReceiveTransfer(task) {
     const remaining = Math.max(0, 5 - usedReceiveTransfers);
 
     const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
-        <div class="quota-countdown" style="font-size: 9px; font-weight: 700; color: var(--danger); border: 1px solid var(--danger); padding: 4px 10px; border-radius: 6px; background: rgba(180, 35, 24, 0.04); text-align: center; text-transform: uppercase; line-height: 1.15; letter-spacing: 0.05em; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 60px; margin-top: 6px;">
-            ${remaining > 0 ? `left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">${remaining}</span>` : `limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>`}
+        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
+            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
     ` : '';
 
