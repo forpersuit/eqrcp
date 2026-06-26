@@ -377,11 +377,6 @@ function renderShareTransfer(task) {
                     <span class="status-indicator ${task.transferState || 'waiting'}"></span>
                     <strong>${escapeHTML(getTranslatedState(task.transferState || task.state || 'waiting'))}</strong>
                 </span>
-                ${task.transferTarget && task.transferState !== 'waiting' ? `
-                    <span class="qr-collapsed-device">
-                        📱 ${t('remote')}: <strong>${escapeHTML(task.transferTarget)}</strong>
-                    </span>
-                ` : ''}
                 ${task.pageUrl ? `
                     <span class="qr-collapsed-url">🔗 ${escapeHTML(task.pageUrl)}</span>
                 ` : ''}
@@ -413,23 +408,36 @@ function renderShareTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            ${task.transferState !== 'waiting' ? `
-                <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-                <div class="transfer-bytes-info" style="font-size: 13px; color: var(--text-muted); margin-top: 6px; text-align: right;">
-                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
-                </div>
-            ` : ''}
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
-                <ul class="path-list locked">${paths.map((path) => `
+                <ul class="path-list locked">${paths.map((path) => {
+                    const isCurrent = shortName(task.transferCurrent || '') === shortName(path);
+                    const isTransferring = task.transferState === 'transferring';
+                    const percent = task.transferPercent || 0;
+                    return `
                     <li>
-                        <div>
-                            <strong>${escapeHTML(shortName(path))}</strong>
-                            <span>${escapeHTML(path)}</span>
+                        <div style="width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                                <div>
+                                    <strong>${escapeHTML(shortName(path))}</strong>
+                                    <span>${escapeHTML(path)}</span>
+                                </div>
+                                <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong);">
+                                    ${escapeHTML(shareItemStatus(task, path))}
+                                </span>
+                            </div>
+                            ${isCurrent && isTransferring ? `
+                                <div class="progress item-progress" style="height: 6px; margin-top: 8px; border-radius: 3px; background: var(--line); overflow: hidden; position: relative;">
+                                    <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; text-align: right;">
+                                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                                </div>
+                            ` : ''}
                         </div>
-                        <span class="item-status">${escapeHTML(shareItemStatus(task, path))}</span>
                     </li>
-                `).join('')}</ul>
+                    `;
+                }).join('')}</ul>
             </div>
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>

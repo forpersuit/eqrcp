@@ -870,7 +870,7 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("cmd", "/c", "start", "", winPath)
+		cmd := exec.Command("explorer.exe", winPath)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -880,10 +880,10 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 			if err == nil {
 				winPath := strings.TrimSpace(string(out))
 				if winPath != "" {
-					return exec.Command("cmd.exe", "/c", "start", "", winPath), nil
+					return exec.Command("explorer.exe", winPath), nil
 				}
 			}
-			return exec.Command("cmd.exe", "/c", "start", "", path), nil
+			return exec.Command("explorer.exe", path), nil
 		}
 		return exec.Command("xdg-open", path), nil
 	default:
@@ -895,7 +895,7 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("cmd", "/c", "start", "", winPath)
+		cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -905,10 +905,10 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 			if err == nil {
 				winPath := strings.TrimSpace(string(out))
 				if winPath != "" {
-					return exec.Command("cmd.exe", "/c", "start", "", winPath), nil
+					return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", winPath), nil
 				}
 			}
-			return exec.Command("cmd.exe", "/c", "start", "", path), nil
+			return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path), nil
 		}
 		return exec.Command("xdg-open", path), nil
 	default:

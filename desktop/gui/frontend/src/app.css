@@ -234,7 +234,7 @@ h2 {
 .layout {
     display: grid;
     gap: 22px;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) 320px;
     height: calc(100vh - 112px);
     min-height: 0;
 }
