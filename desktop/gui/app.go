@@ -528,6 +528,12 @@ func (a *App) OpenPath(path string) error {
 	}
 
 	a.logInfo(fmt.Sprintf("[GUI] OpenPath resolved target directory: %s", target))
+	
+	info, err = os.Stat(target)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("directory does not exist: %s", target)
+	}
+
 	cmd, err := openPathCommand(target)
 	if err != nil {
 		a.logError(fmt.Sprintf("[GUI] OpenPath: failed to create command: %v", err))
@@ -864,8 +870,7 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("explorer.exe", winPath)
-		util.HideCommand(cmd)
+		cmd := exec.Command("cmd", "/c", "start", "", winPath)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -875,10 +880,10 @@ func openPathCommand(path string) (*exec.Cmd, error) {
 			if err == nil {
 				winPath := strings.TrimSpace(string(out))
 				if winPath != "" {
-					return exec.Command("explorer.exe", winPath), nil
+					return exec.Command("cmd.exe", "/c", "start", "", winPath), nil
 				}
 			}
-			return exec.Command("explorer.exe", path), nil
+			return exec.Command("cmd.exe", "/c", "start", "", path), nil
 		}
 		return exec.Command("xdg-open", path), nil
 	default:
@@ -890,8 +895,7 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 	switch runtime.GOOS {
 	case "windows":
 		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
-		cmd := exec.Command("explorer.exe", winPath)
-		util.HideCommand(cmd)
+		cmd := exec.Command("cmd", "/c", "start", "", winPath)
 		return cmd, nil
 	case "darwin":
 		return exec.Command("open", path), nil
@@ -901,10 +905,10 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 			if err == nil {
 				winPath := strings.TrimSpace(string(out))
 				if winPath != "" {
-					return exec.Command("explorer.exe", winPath), nil
+					return exec.Command("cmd.exe", "/c", "start", "", winPath), nil
 				}
 			}
-			return exec.Command("explorer.exe", path), nil
+			return exec.Command("cmd.exe", "/c", "start", "", path), nil
 		}
 		return exec.Command("xdg-open", path), nil
 	default:
