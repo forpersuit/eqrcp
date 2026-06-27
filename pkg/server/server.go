@@ -90,6 +90,7 @@ type transferStatus struct {
 	ArchiveName     string   `json:"archiveName,omitempty"`
 	Items           []string `json:"items,omitempty"`
 	DownloadedItems []int    `json:"downloadedItems,omitempty"`
+	ItemClientStats []string `json:"itemClientStats,omitempty"`
 	Current         string   `json:"current,omitempty"`
 	Message         string   `json:"message"`
 	BytesDone       int64    `json:"bytesDone"`
@@ -138,6 +139,7 @@ type TransferStatusSnapshot struct {
 	Percent     int
 	SavedFiles  []string
 	Version     string
+	ItemClientStats []string
 }
 
 // ReceiveTo sets the output directory
@@ -375,14 +377,63 @@ func (s *Server) setStatus(state string, message string) {
 
 func (s *Server) getStatus() transferStatus {
 	s.statusMu.Lock()
-	defer s.statusMu.Unlock()
-	return cloneTransferStatus(s.status)
+	status := cloneTransferStatus(s.status)
+	s.statusMu.Unlock()
+
+	status.ItemClientStats = s.getItemClientStats()
+	return status
 }
 
 func (s *Server) getStatusWithSeq() (transferStatus, int64) {
 	s.statusMu.Lock()
-	defer s.statusMu.Unlock()
-	return cloneTransferStatus(s.status), s.statusSeq
+	status := cloneTransferStatus(s.status)
+	seq := s.statusSeq
+	s.statusMu.Unlock()
+
+	status.ItemClientStats = s.getItemClientStats()
+	return status, seq
+}
+
+func (s *Server) getItemClientStats() []string {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	totalItems := len(s.body.Paths)
+	if totalItems == 0 {
+		return nil
+	}
+
+	deviceCount := len(s.clientLastSeen)
+	stats := make([]string, totalItems)
+	for i := 0; i < totalItems; i++ {
+		finishedCount := 0
+		targetPath := s.body.Paths[i]
+
+		for clientID := range s.clientLastSeen {
+			progress, ok := s.clientProgress[clientID]
+			if ok {
+				clientBytes := progress[i]
+				var size int64
+				s.expectedBytesMu.Lock()
+				if s.expectedBytes != nil {
+					size = s.expectedBytes[i]
+				}
+				s.expectedBytesMu.Unlock()
+
+				if size <= 0 {
+					if info, err := os.Stat(targetPath); err == nil {
+						size = info.Size()
+					}
+				}
+
+				if size > 0 && clientBytes >= size {
+					finishedCount++
+				}
+			}
+		}
+		stats[i] = fmt.Sprintf("%d/%d", finishedCount, deviceCount)
+	}
+	return stats
 }
 
 func (s *Server) terminalStatus() (transferStatus, bool) {
@@ -544,6 +595,7 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 	status.SavedFiles = append([]string(nil), status.SavedFiles...)
 	status.Items = append([]string(nil), status.Items...)
 	status.DownloadedItems = append([]int(nil), status.DownloadedItems...)
+	status.ItemClientStats = append([]string(nil), status.ItemClientStats...)
 	status.Version = version.String()
 	return status
 }
@@ -564,6 +616,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		Percent:     status.Percent,
 		SavedFiles:  append([]string(nil), status.SavedFiles...),
 		Version:     status.Version,
+		ItemClientStats: append([]string(nil), status.ItemClientStats...),
 	}
 }
 

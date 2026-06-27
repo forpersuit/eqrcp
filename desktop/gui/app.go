@@ -64,6 +64,7 @@ type TaskRecord struct {
 	BytesDone           int64      `json:"bytesDone,omitempty"`
 	BytesTotal          int64      `json:"bytesTotal,omitempty"`
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	TransferItemClientStats []string   `json:"itemClientStats,omitempty"`
 	ChatState           string     `json:"chatState,omitempty"`
 	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
 	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`

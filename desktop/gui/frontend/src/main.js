@@ -430,21 +430,27 @@ function renderShareTransfer(task) {
             
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
-                <ul class="path-list locked">${paths.map((path) => {
+                <ul class="path-list locked">${paths.map((path, index) => {
                     const isCurrent = shortName(task.transferCurrent || '') === shortName(path);
                     const isTransferring = task.transferState === 'transferring';
                     const percent = task.transferPercent || 0;
+                    const deviceStatsText = (task.itemClientStats && task.itemClientStats[index]) ? task.itemClientStats[index] : '0/0';
                     return `
                     <li>
                         <div style="width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                                <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;">
+                                <div style="flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                     <strong>${escapeHTML(shortName(path))}</strong>
-                                    <span>${escapeHTML(path)}</span>
+                                    <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
                                 </div>
-                                <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong);">
-                                    ${escapeHTML(shareItemStatus(task, path))}
-                                </span>
+                                <div class="item-client-stats" style="flex: 1; text-align: center; font-size: 13px; font-weight: 700; color: var(--text-secondary);" title="下载设备数">
+                                    ${escapeHTML(deviceStatsText)}
+                                </div>
+                                <div style="flex: 1; text-align: right;">
+                                    <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong);">
+                                        ${escapeHTML(shareItemStatus(task, path))}
+                                    </span>
+                                </div>
                             </div>
                             ${isCurrent && isTransferring ? `
                                 <div class="progress item-progress" style="height: 6px; margin-top: 8px; border-radius: 3px; background: var(--line); overflow: hidden; position: relative;">
