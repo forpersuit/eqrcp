@@ -917,6 +917,17 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 
+		// Reset accumulated bytes if it is a fresh download request (from start of file)
+		rangeHeader := r.Header.Get("Range")
+		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
+			app.downloadedBytesMu.Lock()
+			if app.downloadedBytes == nil {
+				app.downloadedBytes = make(map[int]int64)
+			}
+			app.downloadedBytes[currentIndex] = 0
+			app.downloadedBytesMu.Unlock()
+		}
+
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
@@ -945,7 +956,18 @@ func New(cfg *config.Config) (*Server, error) {
 		itemWritten := app.downloadedBytes[currentIndex]
 		app.downloadedBytesMu.Unlock()
 
-		if progressWriter.err != nil || itemWritten < expectedBytes {
+		if progressWriter.err != nil {
+			// Clear accumulated progress immediately on transfer errors/cancellations
+			app.downloadedBytesMu.Lock()
+			app.downloadedBytes[currentIndex] = 0
+			app.downloadedBytesMu.Unlock()
+
+			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
+			app.recordStatus()
+			return
+		}
+
+		if itemWritten < expectedBytes {
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
 			return
