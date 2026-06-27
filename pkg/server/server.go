@@ -1159,25 +1159,6 @@ func New(cfg *config.Config) (*Server, error) {
 		usage := limiterInstance.GetStatus()
 		app.initFirstTransferFlag()
 
-		if r.Method == http.MethodGet && r.URL.Query().Get("limit") != "" {
-			htmlVariables := struct {
-				Route string
-				Lang  string
-			}{
-				Route: "/send/" + path,
-			}
-			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
-				htmlVariables.Lang = cookie.Value
-			} else {
-				htmlVariables.Lang = app.Lang
-			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if err := serveTemplate("limit", pages.Limit, w, htmlVariables); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				log.Printf("Template error: %v\n", err)
-			}
-			return
-		}
 
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
@@ -1243,21 +1224,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 		clientID := app.getClientID(r, w)
 		if app.isClientLimitExceeded(clientID) {
-			htmlVariables := struct {
-				Route string
-				Lang  string
-			}{
-				Route: "/send/" + path,
-			}
-			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
-				htmlVariables.Lang = cookie.Value
-			} else {
-				htmlVariables.Lang = app.Lang
-			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if err := serveTemplate("limit", pages.Limit, w, htmlVariables); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
+			http.Error(w, "Device limit exceeded. Upgrade to Plus/Pro at https://eqt.net.im to unlock.", http.StatusForbidden)
 			return
 		}
 
