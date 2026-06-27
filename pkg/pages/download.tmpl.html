@@ -517,6 +517,15 @@
             }
         };
 
+        function getOrGenerateClientId() {
+            var id = window.localStorage.getItem('eqt_client_id');
+            if (!id) {
+                id = 'cli_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+                window.localStorage.setItem('eqt_client_id', id);
+            }
+            return id;
+        }
+
         function getCookie(name) {
             var value = "; " + document.cookie;
             var parts = value.split("; " + name + "=");
@@ -588,7 +597,7 @@
         function applyRandomTheme() {
             var pathParts = window.location.pathname.split('/');
             var lastPart = pathParts[pathParts.length - 1] || 'default';
-            var clientId = getCookie('eqt_client_id') || '';
+            var clientId = getOrGenerateClientId();
             var mixStr = lastPart + '_' + clientId;
             var hash = 0;
             for (var i = 0; i < mixStr.length; i++) {
@@ -716,7 +725,7 @@
             
             var iframe = document.createElement('iframe');
             iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1';
+            iframe.src = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
             document.body.appendChild(iframe);
             setTimeout(function() {
                 document.body.removeChild(iframe);
@@ -733,7 +742,7 @@
             
             var iframe = document.createElement('iframe');
             iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1&item=' + index;
+            iframe.src = window.location.pathname + '?download=1&item=' + index + '&client_id=' + getOrGenerateClientId();
             document.body.appendChild(iframe);
             setTimeout(function() {
                 document.body.removeChild(iframe);
@@ -757,7 +766,7 @@
                     setTimeout(function() {
                         var iframe = document.createElement('iframe');
                         iframe.style.display = 'none';
-                        iframe.src = window.location.pathname + '?download=1&item=' + idx;
+                        iframe.src = window.location.pathname + '?download=1&item=' + idx + '&client_id=' + getOrGenerateClientId();
                         document.body.appendChild(iframe);
                         setTimeout(function() {
                             document.body.removeChild(iframe);
@@ -776,7 +785,7 @@
             var errorCount = 0;
             var intervalId = setInterval(function() {
                 var xhr = new XMLHttpRequest();
-                xhr.open('GET', window.location.pathname + '/status', true);
+                xhr.open('GET', window.location.pathname + '/status?client_id=' + getOrGenerateClientId(), true);
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
                         if (xhr.status === 200) {

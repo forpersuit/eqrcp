@@ -120,6 +120,7 @@ func cloneTaskRecords(records []TaskRecord) []TaskRecord {
 func cloneTaskRecord(record TaskRecord) TaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
 	record.SavedFiles = append([]string(nil), record.SavedFiles...)
+	record.TransferItemClientStats = append([]string(nil), record.TransferItemClientStats...)
 	return record
 }
 

@@ -643,9 +643,15 @@ func (s *Server) markItemDownloaded(index int) bool {
 	if s.downloadedItems == nil {
 		s.downloadedItems = make(map[int]bool)
 	}
-	s.downloadedItems[index] = true
-	count := len(s.downloadedItems)
 	total := len(s.body.Paths)
+	if index == -1 {
+		for idx := 0; idx < total; idx++ {
+			s.downloadedItems[idx] = true
+		}
+	} else {
+		s.downloadedItems[index] = true
+	}
+	count := len(s.downloadedItems)
 
 	// Collect currently downloaded items indices
 	var items []int
@@ -746,6 +752,17 @@ func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) 
 }
 
 func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
+	if qID := r.URL.Query().Get("client_id"); qID != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "eqt_client_id",
+			Value:    qID,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   3600,
+		})
+		return qID
+	}
 	cookie, err := r.Cookie("eqt_client_id")
 	if err == nil && cookie.Value != "" {
 		return cookie.Value
@@ -1185,14 +1202,22 @@ func New(cfg *config.Config) (*Server, error) {
 
 		// Reset accumulated bytes if it is a fresh download request (from start of file)
 		rangeHeader := r.Header.Get("Range")
+		isZipDownload := isMultiFile && itemIndexStr == ""
 		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
 			app.downloadedBytesMu.Lock()
 			if app.downloadedBytes == nil {
 				app.downloadedBytes = make(map[int]int64)
 			}
-			app.downloadedBytes[currentIndex] = 0
+			if isZipDownload {
+				for idx := 0; idx < len(app.body.Paths); idx++ {
+					app.downloadedBytes[idx] = 0
+					app.resetClientDownloadedBytes(clientID, idx)
+				}
+			} else {
+				app.downloadedBytes[currentIndex] = 0
+				app.resetClientDownloadedBytes(clientID, currentIndex)
+			}
 			app.downloadedBytesMu.Unlock()
-			app.resetClientDownloadedBytes(clientID, currentIndex)
 		}
 
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
@@ -1200,7 +1225,13 @@ func New(cfg *config.Config) (*Server, error) {
 		if app.expectedBytes == nil {
 			app.expectedBytes = make(map[int]int64)
 		}
-		app.expectedBytes[currentIndex] = expectedBytes
+		if isZipDownload {
+			for idx := 0; idx < len(app.body.Paths); idx++ {
+				app.expectedBytes[idx] = expectedBytes
+			}
+		} else {
+			app.expectedBytes[currentIndex] = expectedBytes
+		}
 		app.expectedBytesMu.Unlock()
 
 		progressWriter := &progressResponseWriter{
@@ -1217,9 +1248,16 @@ func New(cfg *config.Config) (*Server, error) {
 				if app.downloadedBytes == nil {
 					app.downloadedBytes = make(map[int]int64)
 				}
-				app.downloadedBytes[currentIndex] += written
+				if isZipDownload {
+					for idx := 0; idx < len(app.body.Paths); idx++ {
+						app.downloadedBytes[idx] += written
+						app.addClientDownloadedBytes(clientID, idx, written)
+					}
+				} else {
+					app.downloadedBytes[currentIndex] += written
+					app.addClientDownloadedBytes(clientID, currentIndex, written)
+				}
 				app.downloadedBytesMu.Unlock()
-				app.addClientDownloadedBytes(clientID, currentIndex, written)
 			},
 		}
 		http.ServeFile(progressWriter, r, servePath)
@@ -1234,9 +1272,16 @@ func New(cfg *config.Config) (*Server, error) {
 		if progressWriter.err != nil {
 			// Clear accumulated progress immediately on transfer errors/cancellations
 			app.downloadedBytesMu.Lock()
-			app.downloadedBytes[currentIndex] = 0
+			if isZipDownload {
+				for idx := 0; idx < len(app.body.Paths); idx++ {
+					app.downloadedBytes[idx] = 0
+					app.resetClientDownloadedBytes(clientID, idx)
+				}
+			} else {
+				app.downloadedBytes[currentIndex] = 0
+				app.resetClientDownloadedBytes(clientID, currentIndex)
+			}
 			app.downloadedBytesMu.Unlock()
-			app.resetClientDownloadedBytes(clientID, currentIndex)
 
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
@@ -1251,11 +1296,15 @@ func New(cfg *config.Config) (*Server, error) {
 
 		allDownloaded := false
 
-		if isMultiFile && itemIndexStr != "" {
-			allDownloaded = app.markItemDownloaded(currentIndex)
+		if isMultiFile {
+			if isZipDownload {
+				allDownloaded = app.markItemDownloaded(-1)
+			} else if itemIndexStr != "" {
+				allDownloaded = app.markItemDownloaded(currentIndex)
+			}
 		}
 
-		if !isMultiFile || allDownloaded || itemIndexStr == "" {
+		if !isMultiFile || allDownloaded {
 			app.setStatus("completed", "Transfer completed.")
 			app.recordStatus()
 			if isMultiFile && !app.KeepAlive {
