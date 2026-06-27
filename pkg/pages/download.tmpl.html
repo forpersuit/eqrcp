@@ -214,6 +214,15 @@
             background: #0d5e58;
         }
 
+        .btn.btn-danger {
+            background: var(--danger);
+            box-shadow: 0 2px 4px rgba(180, 35, 24, 0.08);
+        }
+
+        .btn.btn-danger:hover {
+            background: #911b13;
+        }
+
         .hint {
             position: absolute;
             bottom: 32px;
@@ -299,8 +308,9 @@
                 {{end}}
             </div>
 
-            <div id="action-btn-row">
+            <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
                 <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
+                <button type="button" class="btn btn-danger" id="btn-action-stop" onclick="stopSharing()"></button>
             </div>
         </div>
 
@@ -331,6 +341,9 @@
                 btn_download: '开始下载',
                 btn_download_all: '下载全部 (ZIP)',
                 btn_manual: '手动下载 / 重新下载',
+                btn_stop: '停止共享',
+                stopped_header: '服务已停止',
+                stopped_tips: '传输服务已手动关闭。您可以关闭此页面了。',
                 saved_file: '待接收文件',
                 close_hint: '下载成功后，您现在可以关闭此页面了。'
             },
@@ -344,6 +357,9 @@
                 btn_download: 'Start Download',
                 btn_download_all: 'Download All (ZIP)',
                 btn_manual: 'Manual Download / Redownload',
+                btn_stop: 'Stop Sharing',
+                stopped_header: 'Service Stopped',
+                stopped_tips: 'The transfer service has been stopped manually. You can close this page now.',
                 saved_file: 'File to Receive',
                 close_hint: 'Once successfully completed, you can close this page.'
             },
@@ -357,6 +373,9 @@
                 btn_download: 'ダウンロード開始',
                 btn_download_all: 'すべてダウンロード (ZIP)',
                 btn_manual: '手動ダウンロード / 再ダウンロード',
+                btn_stop: '共有を停止',
+                stopped_header: 'サービス停止',
+                stopped_tips: '転送サービスは手動で停止されました。このページを閉じても大丈夫です。',
                 saved_file: '受信する文件',
                 close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。'
             },
@@ -370,6 +389,9 @@
                 btn_download: '다운로드 시작',
                 btn_download_all: '전체 다운로드 (ZIP)',
                 btn_manual: '수동 다운로드 / 재다운로드',
+                btn_stop: '공유 중지',
+                stopped_header: '서비스 중지됨',
+                stopped_tips: '전송 서비스가 수동으로 중지되었습니다. 이 페이지를 닫으셔도 됩니다.',
                 saved_file: '받을 파일',
                 close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.'
             },
@@ -383,6 +405,9 @@
                 btn_download: 'Iniciar descarga',
                 btn_download_all: 'Descargar todo (ZIP)',
                 btn_manual: 'Descarga Manual / Volver a descargar',
+                btn_stop: 'Detener Compartido',
+                stopped_header: 'Servicio Detenido',
+                stopped_tips: 'El servicio de transferencia se ha detenido manualmente. Puede cerrar esta página ahora.',
                 saved_file: 'Archivo a Recibir',
                 close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.'
             },
@@ -396,6 +421,9 @@
                 btn_download: 'Herunterladen starten',
                 btn_download_all: 'Alle herunterladen (ZIP)',
                 btn_manual: 'Manuell herunterladen / Erneut versuchen',
+                btn_stop: 'Freigabe beenden',
+                stopped_header: 'Dienst beendet',
+                stopped_tips: 'Der Übertragungsdienst wurde manuell beendet. Sie können diese Seite jetzt schließen.',
                 saved_file: 'Zu empfangende Datei',
                 close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.'
             },
@@ -409,6 +437,9 @@
                 btn_download: 'Lancer le téléchargement',
                 btn_download_all: 'Tout télécharger (ZIP)',
                 btn_manual: 'Téléchargement manuel / Relancer',
+                btn_stop: 'Arrêter le Partage',
+                stopped_header: 'Service Arrêté',
+                stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
                 saved_file: 'Fichier à recevoir',
                 close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.'
             }
@@ -477,6 +508,11 @@
 
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) hintEl.textContent = dict.close_hint;
+
+            var btnStopEl = document.getElementById('btn-action-stop');
+            if (btnStopEl) {
+                btnStopEl.textContent = dict.btn_stop || 'Stop Sharing';
+            }
             
             document.title = dict.title;
             
@@ -538,6 +574,42 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+        }
+
+        function stopSharing() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', window.location.pathname + '?stop=1', true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    document.getElementById('status-icon-pending').style.display = 'none';
+                    document.getElementById('status-icon-success').style.display = 'none';
+                    
+                    var badge = document.getElementById('status-icon-stopped');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.id = 'status-icon-stopped';
+                        badge.className = 'status-badge ready';
+                        badge.style.borderColor = 'var(--danger-border)';
+                        badge.style.color = 'var(--danger)';
+                        badge.textContent = '✕';
+                        var parent = document.getElementById('status-icon-pending').parentNode;
+                        parent.insertBefore(badge, document.getElementById('status-icon-pending'));
+                    } else {
+                        badge.style.display = 'inline-flex';
+                    }
+
+                    document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
+                    document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
+                    
+                    var btnAction = document.getElementById('btn-action-download');
+                    if (btnAction) btnAction.style.display = 'none';
+                    var btnStop = document.getElementById('btn-action-stop');
+                    if (btnStop) btnStop.style.display = 'none';
+                    
+                    applyLanguage();
+                }
+            };
+            xhr.send();
         }
     </script>
 </body>

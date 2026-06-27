@@ -715,8 +715,18 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
-	// Send handler (sends file to caller)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("stop") != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"ok"}`))
+			app.setStatus("stopped", "Transfer stopped by user.")
+			app.recordStatus()
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				app.signalStop()
+			}()
+			return
+		}
 		usage := limiterInstance.GetStatus()
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
@@ -830,7 +840,8 @@ func New(cfg *config.Config) (*Server, error) {
 			status.BytesDone = 0
 			status.BytesTotal = expectedBytes
 		})
-		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") {
+		isItemDownload := r.URL.Query().Get("item") != ""
+		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") && !isItemDownload {
 			if cookie.Value == "" {
 				initCookie.Do(func() {
 					value, err := util.GetSessionID()
