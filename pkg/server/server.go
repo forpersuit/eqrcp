@@ -216,9 +216,21 @@ func (s *Server) ServeQR(url string) error {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		s.registerClientActivity(r, w)
+		clientID := s.registerClientActivity(r, w)
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(s.getStatus()); err != nil {
+		
+		status := s.getStatus()
+		if s.isClientFinished(clientID) {
+			status.State = "completed"
+			status.Message = "Transfer completed."
+			var allItems []int
+			for idx := 0; idx < len(s.body.Paths); idx++ {
+				allItems = append(allItems, idx)
+			}
+			status.DownloadedItems = allItems
+		}
+		
+		if err := json.NewEncoder(w).Encode(status); err != nil {
 			log.Println(err)
 		}
 	}
@@ -726,6 +738,44 @@ func (s *Server) resetClientDownloadedBytes(clientID string, itemIndex int) {
 		s.clientProgress[clientID] = make(map[int]int64)
 	}
 	s.clientProgress[clientID][itemIndex] = 0
+}
+
+func (s *Server) isClientFinished(clientID string) bool {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	totalItems := len(s.body.Paths)
+	if totalItems == 0 {
+		return false
+	}
+
+	progress, ok := s.clientProgress[clientID]
+	if !ok {
+		return false
+	}
+
+	completedForClient := 0
+	for i := 0; i < totalItems; i++ {
+		clientBytes := progress[i]
+		var size int64
+		s.expectedBytesMu.Lock()
+		if s.expectedBytes != nil {
+			size = s.expectedBytes[i]
+		}
+		s.expectedBytesMu.Unlock()
+
+		if size <= 0 {
+			targetPath := s.body.Paths[i]
+			if info, err := os.Stat(targetPath); err == nil {
+				size = info.Size()
+			}
+		}
+
+		if size > 0 && clientBytes >= size {
+			completedForClient++
+		}
+	}
+	return completedForClient >= totalItems
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive

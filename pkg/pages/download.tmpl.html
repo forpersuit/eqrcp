@@ -588,9 +588,11 @@
         function applyRandomTheme() {
             var pathParts = window.location.pathname.split('/');
             var lastPart = pathParts[pathParts.length - 1] || 'default';
+            var clientId = getCookie('eqt_client_id') || '';
+            var mixStr = lastPart + '_' + clientId;
             var hash = 0;
-            for (var i = 0; i < lastPart.length; i++) {
-                hash = ((hash << 5) - hash + lastPart.charCodeAt(i)) | 0;
+            for (var i = 0; i < mixStr.length; i++) {
+                hash = ((hash << 5) - hash + mixStr.charCodeAt(i)) | 0;
             }
             var seed = (Math.abs(hash) % 1000) + 1;
             var t = generateSenderColor(seed);
