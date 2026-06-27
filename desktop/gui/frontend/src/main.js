@@ -333,22 +333,20 @@ function renderShare() {
                 <button type="button" id="choose-folder" class="secondary">${t('select_folder')}</button>
             </div>
         </div>
-        ${hasItems ? `
-            <ul class="path-list">${items}</ul>
-            <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    ${(!isPaid) ? `
-                        <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap;">
-                            ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
-                        </div>
-                    ` : ''}
-                </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <button class="primary" id="start-share" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
-                    <button class="ghost" id="clear-share">${t('clear')}</button>
-                </div>
+        ${hasItems ? `<ul class="path-list">${items}</ul>` : ''}
+        <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                ${(!isPaid) ? `
+                    <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap;">
+                        ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
+                    </div>
+                ` : ''}
             </div>
-        ` : ''}
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="primary" id="start-share" ${state.busy || !hasItems ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
+                <button class="ghost" id="clear-share" ${!hasItems ? 'disabled' : ''}>${t('clear')}</button>
+            </div>
+        </div>
     `;
 }
 
@@ -475,7 +473,7 @@ function renderReceive() {
             </div>
         </div>
         <div class="primary-row">
-            <button class="primary" id="start-receive" ${state.busy ? 'disabled' : ''}>${state.busy ? t('working') : t('start_receive')}</button>
+            <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''}>${state.busy ? t('working') : t('start_receive')}</button>
             <button class="ghost" id="save-receive-dir">${t('save_dir')}</button>
         </div>
     `;
@@ -1530,6 +1528,13 @@ function bindEvents() {
     document.querySelector('#start-share')?.addEventListener('click', startShare);
     document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
+    document.querySelector('#receive-dir')?.addEventListener('input', (e) => {
+        state.receiveDir = e.target.value;
+        const startBtn = document.querySelector('#start-receive');
+        if (startBtn) {
+            startBtn.disabled = state.busy || !e.target.value.trim();
+        }
+    });
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
     document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
     bindPanelEvents();

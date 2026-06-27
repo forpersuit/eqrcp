@@ -23,7 +23,9 @@
 .shell::-webkit-scrollbar,
 .side::-webkit-scrollbar,
 .diagnostics::-webkit-scrollbar {
-    display: none;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .topbar {
@@ -273,12 +275,19 @@ h2 {
     display: grid;
     gap: 16px;
     min-height: 0;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: none;
+    -ms-overflow-style: none;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .panel {
+    box-sizing: border-box;
+    overflow: hidden;
     padding: 18px;
+    width: 100%;
 }
 
 .panel-head {

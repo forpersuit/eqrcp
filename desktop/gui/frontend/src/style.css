@@ -2,10 +2,14 @@ html {
     background: #f5f7f4;
     color: #18211f;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    height: 100%;
+    overflow: hidden;
 }
 
 body {
     margin: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 button,
