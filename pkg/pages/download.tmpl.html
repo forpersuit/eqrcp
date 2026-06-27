@@ -329,7 +329,7 @@
                                     <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                    <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;">↓</span>
+                                    <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
                                     <span style="font-size: 12px; color: var(--text-secondary); min-width: 60px; text-align: right;">{{index $.Sizes $index}}</span>
                                 </div>
                             </div>
@@ -340,7 +340,7 @@
                         <span class="file-icon">📄</span>
                         <span id="file-name-text" class="file-name">{{.File}}</span>
                         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                            <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;">↓</span>
+                            <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
                             <span style="font-size: 12px; color: var(--text-secondary);">{{.FileSize}}</span>
                         </div>
                     </div>
@@ -594,14 +594,14 @@
             }
             var seed = (Math.abs(hash) % 1000) + 1;
             var t = generateSenderColor(seed);
-            var root = document.documentElement;
-            root.style.setProperty('--accent', t.border);
-            root.style.setProperty('--accent-strong', t.text);
-            root.style.setProperty('--accent-rgb', hexToRgb(t.border));
-            root.style.setProperty('--accent-light', t.bg);
-            root.style.setProperty('--accent-border', t.border + '2b');
-            root.style.setProperty('--accent-icon', t.border);
-            root.style.setProperty('--bg', t.bg);
+            
+            var badges = document.querySelectorAll('.license-badge');
+            badges.forEach(function(badge) {
+                if (!badge.classList.contains('clock-error')) {
+                    badge.style.backgroundColor = t.border;
+                    badge.style.color = '#ffffff';
+                }
+            });
         }
 
         var currentLang = 'en';
