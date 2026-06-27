@@ -934,6 +934,9 @@
             };
             xhr.send();
         }
+
+        // Auto start status polling on page load to register client activity immediately
+        startStatusPolling();
     </script>
 </body>
 </html>
