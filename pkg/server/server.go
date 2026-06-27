@@ -841,7 +841,8 @@ func New(cfg *config.Config) (*Server, error) {
 			status.BytesTotal = expectedBytes
 		})
 		isItemDownload := r.URL.Query().Get("item") != ""
-		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") && !isItemDownload {
+		isMultiFile := len(app.body.Paths) > 1
+		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") && !isItemDownload && !isMultiFile {
 			if cookie.Value == "" {
 				initCookie.Do(func() {
 					value, err := util.GetSessionID()
