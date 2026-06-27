@@ -769,8 +769,6 @@
 
             var fileItems = document.querySelectorAll('.file-item-row');
             fileItems.forEach(function(item) {
-                item.removeAttribute('onclick');
-                item.style.cursor = 'default';
                 var arrow = item.querySelector('.status-marker');
                 if (arrow) {
                     arrow.style.color = 'var(--accent-icon)';
@@ -780,8 +778,6 @@
             
             var singleFile = document.querySelector('.file-fallback');
             if (singleFile) {
-                singleFile.removeAttribute('onclick');
-                singleFile.style.cursor = 'default';
                 var arrow = singleFile.querySelector('.status-marker');
                 if (arrow) {
                     arrow.style.color = 'var(--accent-icon)';
