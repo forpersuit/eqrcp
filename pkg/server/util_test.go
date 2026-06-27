@@ -1488,3 +1488,147 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 		}
 	}
 }
+
+func TestSendMultiDeviceDownloadIsolation(t *testing.T) {
+	tempDir := t.TempDir()
+	file1 := filepath.Join(tempDir, "one.txt")
+	file2 := filepath.Join(tempDir, "two.txt")
+	_ = os.WriteFile(file1, []byte("hello one"), 0644)
+	_ = os.WriteFile(file2, []byte("hello two"), 0644)
+
+	cfg := &config.Config{
+		Interface: "any",
+		Port:      0,
+		KeepAlive: false,
+	}
+	server, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+	server.SetStatusGracePeriod(time.Second)
+
+	payload, err := body.FromArgs([]string{file1, file2}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Send(payload)
+
+	// 1. 模拟设备 A (client_id=deviceA) 首次连接并状态查询，激活设备
+	reqStatusA, _ := http.NewRequest(http.MethodGet, server.SendURL+"/status?client_id=deviceA", nil)
+	respStatusA, err := http.DefaultClient.Do(reqStatusA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respStatusA.Body.Close()
+
+	// 2. 模拟设备 B (client_id=deviceB) 首次连接并状态查询，激活设备
+	reqStatusB, _ := http.NewRequest(http.MethodGet, server.SendURL+"/status?client_id=deviceB", nil)
+	respStatusB, err := http.DefaultClient.Do(reqStatusB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respStatusB.Body.Close()
+
+	// 3. 模拟设备 A 下载完第一个文件 (item=0)
+	reqDownA0, _ := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=0&client_id=deviceA", nil)
+	respDownA0, err := http.DefaultClient.Do(reqDownA0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.ReadAll(respDownA0.Body)
+	respDownA0.Body.Close()
+
+	// 4. 模拟设备 A 下载完第二个文件 (item=1) -> 设备 A 下载全部完成！
+	reqDownA1, _ := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=1&client_id=deviceA", nil)
+	respDownA1, err := http.DefaultClient.Do(reqDownA1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.ReadAll(respDownA1.Body)
+	respDownA1.Body.Close()
+
+	// 5. 验证设备 A 发送状态查询时，返回的 State 是否已经为 completed
+	reqCheckA, _ := http.NewRequest(http.MethodGet, server.SendURL+"/status?client_id=deviceA", nil)
+	respCheckA, err := http.DefaultClient.Do(reqCheckA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statusA transferStatus
+	bodyBytesA, err := io.ReadAll(respCheckA.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respCheckA.Body.Close()
+	t.Logf("Response body A: %s", string(bodyBytesA))
+	err = json.Unmarshal(bodyBytesA, &statusA)
+	if err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if statusA.State != "completed" {
+		t.Fatalf("Device A state = %q, want completed", statusA.State)
+	}
+
+	// 6. 验证设备 B 发送状态查询时，返回的 State 是否依然是 transferring！且 DownloadedItems 不应该包含 A 下载的文件！
+	reqCheckB, _ := http.NewRequest(http.MethodGet, server.SendURL+"/status?client_id=deviceB", nil)
+	respCheckB, err := http.DefaultClient.Do(reqCheckB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statusB transferStatus
+	bodyBytesB, _ := io.ReadAll(respCheckB.Body)
+	respCheckB.Body.Close()
+	_ = json.Unmarshal(bodyBytesB, &statusB)
+
+	if statusB.State == "completed" {
+		t.Fatalf("Device B state = completed, want NOT completed")
+	}
+	if len(statusB.DownloadedItems) > 0 {
+		t.Fatalf("Device B downloadedItems count = %d, want 0", len(statusB.DownloadedItems))
+	}
+
+	// 7. 模拟设备 B 下载完第 0 个文件
+	reqDownB0, _ := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=0&client_id=deviceB", nil)
+	respDownB0, _ := http.DefaultClient.Do(reqDownB0)
+	_, _ = io.ReadAll(respDownB0.Body)
+	respDownB0.Body.Close()
+
+	// 再次验证设备 B 的 status.DownloadedItems 刚好为 [0]！
+	reqCheckB2, _ := http.NewRequest(http.MethodGet, server.SendURL+"/status?client_id=deviceB", nil)
+	respCheckB2, err := http.DefaultClient.Do(reqCheckB2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var statusB2 transferStatus
+	bodyBytesB2, _ := io.ReadAll(respCheckB2.Body)
+	respCheckB2.Body.Close()
+	_ = json.Unmarshal(bodyBytesB2, &statusB2)
+	if len(statusB2.DownloadedItems) != 1 || statusB2.DownloadedItems[0] != 0 {
+		t.Fatalf("Device B2 downloadedItems = %v, want [0]", statusB2.DownloadedItems)
+	}
+
+	// 8. 模拟设备 B 下载完第二个文件 (item=1) -> 设备 B 也全部完成！
+	reqDownB1, _ := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=1&client_id=deviceB", nil)
+	respDownB1, err := http.DefaultClient.Do(reqDownB1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.ReadAll(respDownB1.Body)
+	respDownB1.Body.Close()
+
+	// 9. 等待 grace period 之后，验证服务器是否自动关闭！
+	time.Sleep(1200 * time.Millisecond)
+
+	finalRequest, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalResponse, err := http.DefaultClient.Do(finalRequest)
+	if err == nil {
+		defer finalResponse.Body.Close()
+		if finalResponse.StatusCode != http.StatusGone {
+			t.Fatalf("server still running after all devices downloaded all items! status = %d", finalResponse.StatusCode)
+		}
+	}
+}

@@ -213,33 +213,10 @@ func (s *Server) ServeQR(url string) error {
 			log.Println(err)
 		}
 	})
-	statusHandler := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		clientID := s.registerClientActivity(r, w)
-		w.Header().Set("Content-Type", "application/json")
-		
-		status := s.getStatus()
-		if s.isClientFinished(clientID) {
-			status.State = "completed"
-			status.Message = "Transfer completed."
-			var allItems []int
-			for idx := 0; idx < len(s.body.Paths); idx++ {
-				allItems = append(allItems, idx)
-			}
-			status.DownloadedItems = allItems
-		}
-		
-		if err := json.NewEncoder(w).Encode(status); err != nil {
-			log.Println(err)
-		}
-	}
 	if transferURL, err := urlpkg.Parse(url); err == nil && transferURL.Path != "" {
-		s.mux.HandleFunc(strings.TrimRight(transferURL.Path, "/")+"/status", statusHandler)
+		s.mux.HandleFunc(strings.TrimRight(transferURL.Path, "/")+"/status", s.statusHandler)
 	}
-	s.mux.HandleFunc(statusPath, statusHandler)
+	s.mux.HandleFunc(statusPath, s.statusHandler)
 	s.mux.HandleFunc(eventsPath, func(w http.ResponseWriter, r *http.Request) {
 		s.handleStatusEvents(w, r)
 	})
@@ -558,6 +535,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.statusMu.Lock()
 	update(&s.status)
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
+	s.status.ItemClientStats = s.getItemClientStats()
 	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
@@ -848,6 +826,64 @@ func (s *Server) isClientFinished(clientID string) bool {
 	return completedForClient >= totalItems
 }
 
+func (s *Server) getClientDownloadedItems(clientID string) []int {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	totalItems := len(s.body.Paths)
+	if totalItems == 0 {
+		return nil
+	}
+
+	progress, ok := s.clientProgress[clientID]
+	if !ok {
+		return nil
+	}
+
+	var items []int
+	for i := 0; i < totalItems; i++ {
+		clientBytes := progress[i]
+		var size int64
+		s.expectedBytesMu.Lock()
+		if s.expectedBytes != nil {
+			size = s.expectedBytes[i]
+		}
+		s.expectedBytesMu.Unlock()
+
+		if size <= 0 {
+			targetPath := s.body.Paths[i]
+			if info, err := os.Stat(targetPath); err == nil {
+				size = info.Size()
+			}
+		}
+
+		if size > 0 && clientBytes >= size {
+			items = append(items, i)
+		}
+	}
+	return items
+}
+
+func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	clientID := s.registerClientActivity(r, w)
+	w.Header().Set("Content-Type", "application/json")
+
+	status := s.getStatus()
+	status.DownloadedItems = s.getClientDownloadedItems(clientID)
+	if s.isClientFinished(clientID) {
+		status.State = "completed"
+		status.Message = "Transfer completed."
+	}
+
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Println(err)
+	}
+}
+
 // Wait for transfer to be completed, it waits forever if kept awlive
 func (s *Server) Wait() error {
 	<-s.stopChannel
@@ -1009,6 +1045,7 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
+	mux.HandleFunc("/send/"+path+"/status", app.statusHandler)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
 			w.Header().Set("Content-Type", "application/json")
