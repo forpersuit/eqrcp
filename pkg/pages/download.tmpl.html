@@ -281,7 +281,7 @@
                 {{if gt .Count 1}}
                     <div style="border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                         {{range $index, $element := .Files}}
-                            <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line); cursor: pointer;" onclick="triggerDownload()">
+                            <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line); cursor: pointer;" onclick="triggerDownloadItem({{$index}})">
                                 <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
                                     <span style="font-size: 16px; flex-shrink: 0; color: var(--text-secondary);">📄</span>
                                     <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
@@ -518,6 +518,22 @@
             var iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             iframe.src = window.location.pathname + '?download=1';
+            document.body.appendChild(iframe);
+            setTimeout(function() {
+                document.body.removeChild(iframe);
+            }, 3000);
+        }
+
+        function triggerDownloadItem(index) {
+            document.getElementById('status-icon-pending').style.display = 'none';
+            document.getElementById('status-icon-success').style.display = 'inline-flex';
+            document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
+            document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
+            applyLanguage();
+            
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = window.location.pathname + '?download=1&item=' + index;
             document.body.appendChild(iframe);
             setTimeout(function() {
                 document.body.removeChild(iframe);

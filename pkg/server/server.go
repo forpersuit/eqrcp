@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -755,9 +756,50 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			return
 		}
+		servePath := app.body.Path
+		downloadName := app.body.Filename
+		var tempZipToRemove string
+
+		itemIndexStr := r.URL.Query().Get("item")
+		if itemIndexStr != "" {
+			index, err := strconv.Atoi(itemIndexStr)
+			if err != nil || index < 0 || index >= len(app.body.Paths) {
+				http.Error(w, "invalid item index", http.StatusBadRequest)
+				return
+			}
+			targetPath := app.body.Paths[index]
+			fileInfo, err := os.Stat(targetPath)
+			if err != nil {
+				http.Error(w, "item not found", http.StatusNotFound)
+				return
+			}
+			if fileInfo.IsDir() {
+				tempZip, err := util.ZipFiles([]string{targetPath})
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				servePath = tempZip
+				downloadName = strings.TrimSuffix(filepath.Base(targetPath), string(filepath.Separator)) + ".zip"
+				tempZipToRemove = tempZip
+			} else {
+				servePath = targetPath
+				downloadName = filepath.Base(targetPath)
+			}
+		}
+
+		if tempZipToRemove != "" {
+			defer os.Remove(tempZipToRemove)
+		}
+
+		var expectedBytes int64
+		if info, err := os.Stat(servePath); err == nil {
+			expectedBytes = info.Size()
+		}
+
 		// Anti-bypass limit checks for free users who exceeded 5 free transfers limit
 		if !usage.IsPaid && usage.UsedTransfers >= 5 {
-			if info, err := os.Stat(app.body.Path); err == nil && info.Size() > 50*1024*1024 {
+			if expectedBytes > 50*1024*1024 {
 				http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 				app.setStatus("failed", "File size exceeds 50MB limit.")
 				app.recordStatus()
@@ -772,6 +814,7 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 		}
+
 		app.statusMu.Lock()
 		alreadyCounted := app.transferCounted
 		if !alreadyCounted {
@@ -783,11 +826,9 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.setStatus("transferring", "Sending file to connected device.")
 		app.updateStatus(func(status *transferStatus) {
-			status.Current = app.body.Filename
+			status.Current = downloadName
 			status.BytesDone = 0
-			if info, err := os.Stat(app.body.Path); err == nil {
-				status.BytesTotal = info.Size()
-			}
+			status.BytesTotal = expectedBytes
 		})
 		if !cfg.KeepAlive && strings.HasPrefix(r.Header.Get("User-Agent"), "Mozilla") {
 			if cookie.Value == "" {
@@ -822,8 +863,7 @@ func New(cfg *config.Config) (*Server, error) {
 			// Remove connection from the waitgroup when done
 			defer waitgroup.Done()
 		}
-		w.Header().Set("Content-Disposition", contentDisposition(app.body.Filename))
-		expectedBytes := app.getStatus().BytesTotal
+		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
 			onWrite: func(written int64) {
@@ -835,7 +875,7 @@ func New(cfg *config.Config) (*Server, error) {
 				})
 			},
 		}
-		http.ServeFile(progressWriter, r, app.body.Path)
+		http.ServeFile(progressWriter, r, servePath)
 		if r.Method == http.MethodHead {
 			return
 		}

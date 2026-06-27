@@ -16,6 +16,7 @@ type Body struct {
 	DeleteAfterTransfer bool
 	Archive             bool
 	Items               []string
+	Paths               []string
 }
 
 var zipTimestamp = func() time.Time {
@@ -34,7 +35,11 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 	hasDir := false
 	// Check if content exists
 	for _, arg := range args {
-		file, err := os.Stat(arg)
+		absPath, err := filepath.Abs(arg)
+		if err != nil {
+			absPath = arg
+		}
+		file, err := os.Stat(absPath)
 		if err != nil {
 			return Body{}, err
 		}
@@ -43,7 +48,7 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 			shouldzip = true
 			hasDir = true
 		}
-		files = append(files, arg)
+		files = append(files, absPath)
 	}
 	// Prepare the content
 	// TODO: Research cleaner code
@@ -55,7 +60,7 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 		}
 		content = zip
 	} else {
-		content = args[0]
+		content = files[0]
 	}
 	filename := filepath.Base(content)
 	if shouldzip {
@@ -67,6 +72,7 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 		DeleteAfterTransfer: shouldzip,
 		Archive:             shouldzip,
 		Items:               displayItems(args),
+		Paths:               files,
 	}, nil
 }
 

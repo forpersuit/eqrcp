@@ -34,6 +34,9 @@ func TestFromArgsSingleFile(t *testing.T) {
 	if len(got.Items) != 1 || got.Items[0] != "note.txt" {
 		t.Fatalf("FromArgs() Items = %#v, want note.txt", got.Items)
 	}
+	if len(got.Paths) != 1 || got.Paths[0] != file {
+		t.Fatalf("FromArgs() Paths = %#v, want %#v", got.Paths, []string{file})
+	}
 }
 
 func TestFromArgsDirectoryZipName(t *testing.T) {
@@ -66,6 +69,10 @@ func TestFromArgsDirectoryZipName(t *testing.T) {
 	}
 	if len(got.Items) != 1 || got.Items[0] != "photos" {
 		t.Fatalf("FromArgs() Items = %#v, want photos", got.Items)
+	}
+	wantPath, _ := filepath.Abs(nested)
+	if len(got.Paths) != 1 || got.Paths[0] != wantPath {
+		t.Fatalf("FromArgs() Paths = %#v, want %#v", got.Paths, []string{wantPath})
 	}
 }
 
@@ -100,6 +107,11 @@ func TestFromArgsMultipleFilesZipName(t *testing.T) {
 	}
 	if strings.Join(got.Items, ",") != "first file.txt,second file.txt" {
 		t.Fatalf("FromArgs() Items = %#v", got.Items)
+	}
+	firstAbs, _ := filepath.Abs(first)
+	secondAbs, _ := filepath.Abs(second)
+	if len(got.Paths) != 2 || got.Paths[0] != firstAbs || got.Paths[1] != secondAbs {
+		t.Fatalf("FromArgs() Paths = %#v, want %#v", got.Paths, []string{firstAbs, secondAbs})
 	}
 }
 
