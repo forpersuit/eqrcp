@@ -69,6 +69,9 @@ type Server struct {
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
 	transferCounted        bool
+	downloadedItems        map[int]bool
+	downloadedItemsMu      sync.Mutex
+	KeepAlive              bool
 }
 
 type transferStatus struct {
@@ -560,6 +563,20 @@ func (s *Server) signalStopAfterStatusGrace() {
 	s.signalStop()
 }
 
+func (s *Server) markItemDownloaded(index int) {
+	s.downloadedItemsMu.Lock()
+	if s.downloadedItems == nil {
+		s.downloadedItems = make(map[int]bool)
+	}
+	s.downloadedItems[index] = true
+	allDownloaded := len(s.downloadedItems) >= len(s.body.Paths)
+	s.downloadedItemsMu.Unlock()
+
+	if allDownloaded && !s.KeepAlive {
+		go s.signalStopAfterStatusGrace()
+	}
+}
+
 // Wait for transfer to be completed, it waits forever if kept awlive
 func (s *Server) Wait() error {
 	<-s.stopChannel
@@ -612,6 +629,8 @@ func New(cfg *config.Config) (*Server, error) {
 
 	app := &Server{}
 	app.Lang = cfg.Lang
+	app.KeepAlive = cfg.KeepAlive
+	app.downloadedItems = make(map[int]bool)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
 	bind, err := util.GetInterfaceAddress(cfg.Interface)
@@ -899,6 +918,17 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.setStatus("completed", "Transfer completed.")
 		app.recordStatus()
+
+		if itemIndexStr != "" {
+			index, err := strconv.Atoi(itemIndexStr)
+			if err == nil && index >= 0 && index < len(app.body.Paths) {
+				app.markItemDownloaded(index)
+			}
+		} else {
+			if len(app.body.Paths) > 1 && !app.KeepAlive {
+				go app.signalStopAfterStatusGrace()
+			}
+		}
 	})
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {
