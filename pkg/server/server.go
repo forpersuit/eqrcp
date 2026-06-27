@@ -770,10 +770,31 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 		if r.Method == http.MethodGet && r.URL.Query().Get("download") == "" {
+			var sizes []string
+			var fileSize string
+			for _, p := range app.body.Paths {
+				var sizeStr string
+				if fi, err := os.Stat(p); err == nil {
+					if fi.IsDir() {
+						sizeStr = "Directory"
+					} else {
+						sizeStr = formatByteSize(fi.Size())
+					}
+				} else {
+					sizeStr = "-"
+				}
+				sizes = append(sizes, sizeStr)
+			}
+			if len(app.body.Paths) == 1 {
+				fileSize = sizes[0]
+			}
+
 			htmlVariables := struct {
 				Route         string
 				File          string
 				Files         []string
+				Sizes         []string
+				FileSize      string
 				Count         int
 				Lang          string
 				IsPaid        bool
@@ -784,6 +805,8 @@ func New(cfg *config.Config) (*Server, error) {
 				Route:         "/send/" + path,
 				File:          app.body.Filename,
 				Files:         app.body.Items,
+				Sizes:         sizes,
+				FileSize:      fileSize,
 				Count:         len(app.body.Items),
 				IsPaid:        usage.IsPaid,
 				LicenseTier:   usage.LicenseTier,
@@ -1285,4 +1308,18 @@ func openBrowser(url string) error {
 		err = fmt.Errorf("failed to open browser on platform: %s", runtime.GOOS)
 	}
 	return err
+}
+
+func formatByteSize(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	f := float64(bytes)
+	idx := 0
+	for f >= 1024 && idx < len(units) {
+		f /= 1024
+		idx++
+	}
+	return fmt.Sprintf("%.1f %s", f, units[idx-1])
 }
