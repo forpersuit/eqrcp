@@ -531,6 +531,79 @@
             document.cookie = name + "=" + encodeURIComponent(val) + ";" + expires + ";path=/";
         }
 
+        function hslToHex(h, s, l) {
+            s /= 100;
+            l /= 100;
+            var c = (1 - Math.abs(2 * l - 1)) * s;
+            var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            var m = l - c / 2;
+            var r = 0, g = 0, b = 0;
+            if (0 <= h && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (60 <= h && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (120 <= h && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (180 <= h && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (240 <= h && h < 300) {
+                r = x; g = 0; b = c;
+            } else if (300 <= h && h < 360) {
+                r = c; g = 0; b = x;
+            }
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+            return '#' + [r, g, b].map(function(val) {
+                var hex = val.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+        function seededUnit(seed, salt) {
+            var x = Math.sin(seed * 12.9898 + salt * 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+        function generateSenderColor(themeIndex) {
+            if (themeIndex === 0) {
+                return {
+                    bg: '#edf7f1',
+                    border: '#2f9e73',
+                    text: '#14533f'
+                };
+            }
+            var hue = seededUnit(themeIndex, 1) * 360;
+            var saturation = 50 + seededUnit(themeIndex, 2) * 18;
+            var bg = hslToHex(hue, 22, 93);
+            var border = hslToHex(hue, saturation, 48);
+            var text = hslToHex(hue, saturation + 10, 25);
+            return { bg: bg, border: border, text: text };
+        }
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? 
+                parseInt(result[1], 16) + ',' + 
+                parseInt(result[2], 16) + ',' + 
+                parseInt(result[3], 16) : null;
+        }
+        function applyRandomTheme() {
+            var pathParts = window.location.pathname.split('/');
+            var lastPart = pathParts[pathParts.length - 1] || 'default';
+            var hash = 0;
+            for (var i = 0; i < lastPart.length; i++) {
+                hash = ((hash << 5) - hash + lastPart.charCodeAt(i)) | 0;
+            }
+            var seed = (Math.abs(hash) % 1000) + 1;
+            var t = generateSenderColor(seed);
+            var root = document.documentElement;
+            root.style.setProperty('--accent', t.border);
+            root.style.setProperty('--accent-strong', t.text);
+            root.style.setProperty('--accent-rgb', hexToRgb(t.border));
+            root.style.setProperty('--accent-light', t.bg);
+            root.style.setProperty('--accent-border', t.border + '2b');
+            root.style.setProperty('--accent-icon', t.border);
+            root.style.setProperty('--bg', t.bg);
+        }
+
         var currentLang = 'en';
         var savedLang = window.localStorage.getItem('eqt_lang') || window.localStorage.getItem('eqt-page-lang');
         var cfCookie = getCookie('eqt-lang');
@@ -606,6 +679,7 @@
         }
 
         applyLanguage();
+        applyRandomTheme();
 
         var langSelect = document.getElementById('page-lang-select');
         if (langSelect) {
@@ -624,7 +698,17 @@
         var downloadTriggered = false;
         var totalCount = {{.Count}};
 
+        function hideDownloadButtons() {
+            var btnZip = document.getElementById('btn-action-download-zip');
+            if (btnZip) btnZip.style.display = 'none';
+            var btnAll = document.getElementById('btn-action-download-all');
+            if (btnAll) btnAll.style.display = 'none';
+            var btnSingle = document.getElementById('btn-action-download');
+            if (btnSingle) btnSingle.style.display = 'none';
+        }
+
         function triggerDownload() {
+            hideDownloadButtons();
             startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1';
@@ -646,8 +730,9 @@
                 document.body.removeChild(iframe);
             }, 3000);
         }
-
+ 
         function triggerDownloadItem(index) {
+            hideDownloadButtons();
             startStatusPolling();
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'inline-flex';
@@ -663,8 +748,9 @@
                 document.body.removeChild(iframe);
             }, 3000);
         }
-
+ 
         function triggerDownloadAllIndividual() {
+            hideDownloadButtons();
             var count = {{.Count}};
             
             document.getElementById('status-icon-pending').style.display = 'none';
@@ -674,7 +760,7 @@
             applyLanguage();
             
             startStatusPolling();
-
+ 
             var delay = 0;
             for (var i = 0; i < count; i++) {
                 (function(idx) {
