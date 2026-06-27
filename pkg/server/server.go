@@ -563,7 +563,7 @@ func (s *Server) signalStopAfterStatusGrace() {
 	s.signalStop()
 }
 
-func (s *Server) markItemDownloaded(index int) {
+func (s *Server) markItemDownloaded(index int) bool {
 	s.downloadedItemsMu.Lock()
 	if s.downloadedItems == nil {
 		s.downloadedItems = make(map[int]bool)
@@ -571,10 +571,7 @@ func (s *Server) markItemDownloaded(index int) {
 	s.downloadedItems[index] = true
 	allDownloaded := len(s.downloadedItems) >= len(s.body.Paths)
 	s.downloadedItemsMu.Unlock()
-
-	if allDownloaded && !s.KeepAlive {
-		go s.signalStopAfterStatusGrace()
-	}
+	return allDownloaded
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
@@ -916,18 +913,25 @@ func New(cfg *config.Config) (*Server, error) {
 			app.recordStatus()
 			return
 		}
-		app.setStatus("completed", "Transfer completed.")
-		app.recordStatus()
 
-		if itemIndexStr != "" {
+		allDownloaded := false
+
+		if isMultiFile && itemIndexStr != "" {
 			index, err := strconv.Atoi(itemIndexStr)
 			if err == nil && index >= 0 && index < len(app.body.Paths) {
-				app.markItemDownloaded(index)
+				allDownloaded = app.markItemDownloaded(index)
 			}
-		} else {
-			if len(app.body.Paths) > 1 && !app.KeepAlive {
+		}
+
+		if !isMultiFile || allDownloaded || itemIndexStr == "" {
+			app.setStatus("completed", "Transfer completed.")
+			app.recordStatus()
+			if isMultiFile && !app.KeepAlive {
 				go app.signalStopAfterStatusGrace()
 			}
+		} else {
+			app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
+			app.recordStatus()
 		}
 	})
 	// Upload handler (serves the upload page)

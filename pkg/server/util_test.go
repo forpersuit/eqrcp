@@ -1370,3 +1370,121 @@ func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
 		t.Fatalf("expected 6 files to be written successfully, got %d", txtCount)
 	}
 }
+
+func TestSendMultiFileDownloadSuccessive(t *testing.T) {
+	tempDir := t.TempDir()
+	file1 := filepath.Join(tempDir, "one.txt")
+	file2 := filepath.Join(tempDir, "two.txt")
+	_ = os.WriteFile(file1, []byte("hello one"), 0644)
+	_ = os.WriteFile(file2, []byte("hello two"), 0644)
+
+	cfg := &config.Config{
+		Interface: "any",
+		Port:      0,
+		KeepAlive: false,
+	}
+	server, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Shutdown()
+	server.SetStatusGracePeriod(time.Second)
+
+	// Use FromArgs to construct payload with Paths filled
+	payload, err := body.FromArgs([]string{file1, file2}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Send(payload)
+
+	// First GET to render download page
+	request, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("User-Agent", "Mozilla test")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("page load status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	response.Body.Close()
+
+	// Download item 0
+	item0Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item0Request.Header.Set("User-Agent", "Mozilla test")
+	item0Response, err := http.DefaultClient.Do(item0Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item0Response.StatusCode != http.StatusOK {
+		t.Fatalf("item0 download status = %d, want %d", item0Response.StatusCode, http.StatusOK)
+	}
+	item0Body, err := io.ReadAll(item0Response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item0Response.Body.Close()
+	if string(item0Body) != "hello one" {
+		t.Fatalf("item0 body = %q, want %q", string(item0Body), "hello one")
+	}
+
+	// Verify server is still running
+	checkRequest, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRequest.Header.Set("User-Agent", "Mozilla test")
+	checkResponse, err := http.DefaultClient.Do(checkRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkResponse.StatusCode != http.StatusOK {
+		t.Fatalf("server stopped after item0 download? status = %d, want %d", checkResponse.StatusCode, http.StatusOK)
+	}
+	checkResponse.Body.Close()
+
+	// Download item 1
+	item1Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item1Request.Header.Set("User-Agent", "Mozilla test")
+	item1Response, err := http.DefaultClient.Do(item1Request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item1Response.StatusCode != http.StatusOK {
+		t.Fatalf("item1 download status = %d, want %d", item1Response.StatusCode, http.StatusOK)
+	}
+	item1Body, err := io.ReadAll(item1Response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item1Response.Body.Close()
+	if string(item1Body) != "hello two" {
+		t.Fatalf("item1 body = %q, want %q", string(item1Body), "hello two")
+	}
+
+	// Wait for grace period (1.2s)
+	time.Sleep(1200 * time.Millisecond)
+
+	// Make final request, server should be stopped
+	finalRequest, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalRequest.Header.Set("User-Agent", "Mozilla test")
+	finalResponse, err := http.DefaultClient.Do(finalRequest)
+	if err == nil {
+		defer finalResponse.Body.Close()
+		if finalResponse.StatusCode != http.StatusGone {
+			t.Fatalf("server still running after downloading all items! status = %d", finalResponse.StatusCode)
+		}
+	}
+}
