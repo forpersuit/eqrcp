@@ -22,6 +22,8 @@ export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
 
 export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;
 
+export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>>;
+
 export function InstallUpdate(arg1:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;
@@ -69,3 +71,5 @@ export function StartupStatus():Promise<main.DesktopIntegrationStatus>;
 export function StopChat():Promise<void>;
 
 export function StopCurrent():Promise<void>;
+
+export function ValidateFreeTier(arg1:Array<string>):Promise<string>;

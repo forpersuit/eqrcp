@@ -414,6 +414,9 @@ function renderShareTransfer(task) {
                     ${countdownHtml}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
+                    <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-right: 4px; display: flex; align-items: center;">
+                        ${t('devices_count')}: ${task.transferDeviceCount || 0}
+                    </div>
                     <button class="danger inline stop-current-action">${t('stop')}</button>
                     <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
                         ${qrIcon()}
@@ -442,9 +445,6 @@ function renderShareTransfer(task) {
                                 <div style="flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                     <strong>${escapeHTML(shortName(path))}</strong>
                                     <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
-                                </div>
-                                <div class="item-client-stats" style="flex: 1; text-align: center; font-size: 13px; font-weight: 700; color: var(--text-secondary);" title="下载设备数">
-                                    ${escapeHTML(deviceStatsText)}
                                 </div>
                                 <div style="flex: 1; text-align: right;">
                                     <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong);">

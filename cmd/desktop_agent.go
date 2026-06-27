@@ -69,6 +69,7 @@ type desktopAgentTaskRecord struct {
 	BytesDone           int64      `json:"bytesDone,omitempty"`
 	BytesTotal          int64      `json:"bytesTotal,omitempty"`
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
+	TransferDeviceCount int        `json:"transferDeviceCount,omitempty"`
 	ChatState           string     `json:"chatState,omitempty"`
 	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
 	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`
@@ -1290,6 +1291,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.BytesDone = status.BytesDone
 	agent.current.BytesTotal = status.BytesTotal
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
+	agent.current.TransferDeviceCount = status.TransferDeviceCount
 	if isTerminalDesktopTransferState(status.State) && agent.current.State == "running" {
 		agent.current.State = status.State
 		finishedAt := time.Now()

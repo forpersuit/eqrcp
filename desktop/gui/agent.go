@@ -643,6 +643,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.BytesTotal = status.BytesTotal
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
 	agent.current.TransferItemClientStats = append([]string(nil), status.ItemClientStats...)
+	agent.current.TransferDeviceCount = status.TransferDeviceCount
 	if isTerminalDesktopTransferState(status.State) && agent.current.State == "running" {
 		agent.current.State = status.State
 		finishedAt := time.Now()

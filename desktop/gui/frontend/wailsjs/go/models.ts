@@ -15,6 +15,8 @@ export namespace main {
 	    bytesDone?: number;
 	    bytesTotal?: number;
 	    savedFiles?: string[];
+	    itemClientStats?: string[];
+	    transferDeviceCount?: number;
 	    chatState?: string;
 	    chatMessageCount?: number;
 	    chatDeviceCount?: number;
@@ -46,6 +48,8 @@ export namespace main {
 	        this.bytesDone = source["bytesDone"];
 	        this.bytesTotal = source["bytesTotal"];
 	        this.savedFiles = source["savedFiles"];
+	        this.itemClientStats = source["itemClientStats"];
+	        this.transferDeviceCount = source["transferDeviceCount"];
 	        this.chatState = source["chatState"];
 	        this.chatMessageCount = source["chatMessageCount"];
 	        this.chatDeviceCount = source["chatDeviceCount"];
@@ -262,6 +266,24 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class GUIFileInfo {
+	    path: string;
+	    name: string;
+	    size: string;
+	    sizeBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GUIFileInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.size = source["size"];
+	        this.sizeBytes = source["sizeBytes"];
+	    }
 	}
 	export class GUIUpdateCheckResult {
 	    new_version_available: boolean;

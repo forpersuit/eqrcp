@@ -83,22 +83,23 @@ type Server struct {
 }
 
 type transferStatus struct {
-	State           string   `json:"state"`
-	Mode            string   `json:"mode,omitempty"`
-	Title           string   `json:"title,omitempty"`
-	Target          string   `json:"target,omitempty"`
-	Archive         bool     `json:"archive,omitempty"`
-	ArchiveName     string   `json:"archiveName,omitempty"`
-	Items           []string `json:"items,omitempty"`
-	DownloadedItems []int    `json:"downloadedItems,omitempty"`
-	ItemClientStats []string `json:"itemClientStats,omitempty"`
-	Current         string   `json:"current,omitempty"`
-	Message         string   `json:"message"`
-	BytesDone       int64    `json:"bytesDone"`
-	BytesTotal      int64    `json:"bytesTotal"`
-	Percent         int      `json:"percent"`
-	SavedFiles      []string `json:"savedFiles,omitempty"`
-	Version         string   `json:"version,omitempty"`
+	State               string   `json:"state"`
+	Mode                string   `json:"mode,omitempty"`
+	Title               string   `json:"title,omitempty"`
+	Target              string   `json:"target,omitempty"`
+	Archive             bool     `json:"archive,omitempty"`
+	ArchiveName         string   `json:"archiveName,omitempty"`
+	Items               []string `json:"items,omitempty"`
+	DownloadedItems     []int    `json:"downloadedItems,omitempty"`
+	ItemClientStats     []string `json:"itemClientStats,omitempty"`
+	Current             string   `json:"current,omitempty"`
+	Message             string   `json:"message"`
+	BytesDone           int64    `json:"bytesDone"`
+	BytesTotal          int64    `json:"bytesTotal"`
+	Percent             int      `json:"percent"`
+	SavedFiles          []string `json:"savedFiles,omitempty"`
+	Version             string   `json:"version,omitempty"`
+	TransferDeviceCount int      `json:"transferDeviceCount,omitempty"`
 }
 
 type transferStatusRecord struct {
@@ -141,6 +142,7 @@ type TransferStatusSnapshot struct {
 	SavedFiles  []string
 	Version     string
 	ItemClientStats []string
+	TransferDeviceCount int
 }
 
 // ReceiveTo sets the output directory
@@ -359,6 +361,7 @@ func (s *Server) getStatus() transferStatus {
 	s.statusMu.Unlock()
 
 	status.ItemClientStats = s.getItemClientStats()
+	status.TransferDeviceCount = s.getConnectedDevicesCount()
 	return status
 }
 
@@ -369,6 +372,7 @@ func (s *Server) getStatusWithSeq() (transferStatus, int64) {
 	s.statusMu.Unlock()
 
 	status.ItemClientStats = s.getItemClientStats()
+	status.TransferDeviceCount = s.getConnectedDevicesCount()
 	return status, seq
 }
 
@@ -420,6 +424,20 @@ func (s *Server) getItemClientStats() []string {
 		stats[i] = fmt.Sprintf("%d/%d", finishedCount, deviceCount)
 	}
 	return stats
+}
+
+func (s *Server) getConnectedDevicesCount() int {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	count := 0
+	now := time.Now()
+	for _, lastSeen := range s.clientLastSeen {
+		if now.Sub(lastSeen) <= 8*time.Second {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Server) terminalStatus() (transferStatus, bool) {
@@ -545,6 +563,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	update(&s.status)
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
 	s.status.ItemClientStats = s.getItemClientStats()
+	s.status.TransferDeviceCount = s.getConnectedDevicesCount()
 	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
@@ -604,6 +623,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		SavedFiles:  append([]string(nil), status.SavedFiles...),
 		Version:     status.Version,
 		ItemClientStats: append([]string(nil), status.ItemClientStats...),
+		TransferDeviceCount: status.TransferDeviceCount,
 	}
 }
 
@@ -730,11 +750,16 @@ func (s *Server) isAllActiveClientsFinished() bool {
 func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) string {
 	clientID := s.getClientID(r, w)
 	s.clientMutex.Lock()
-	defer s.clientMutex.Unlock()
 	if s.clientLastSeen == nil {
 		s.clientLastSeen = make(map[string]time.Time)
 	}
+	_, existed := s.clientLastSeen[clientID]
 	s.clientLastSeen[clientID] = time.Now()
+	s.clientMutex.Unlock()
+
+	if !existed {
+		s.updateStatus(func(status *transferStatus) {})
+	}
 	return clientID
 }
 

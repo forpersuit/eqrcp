@@ -42,6 +42,10 @@ export function DownloadUpdate(arg1) {
   return window['go']['main']['App']['DownloadUpdate'](arg1);
 }
 
+export function GetFileInfos(arg1) {
+  return window['go']['main']['App']['GetFileInfos'](arg1);
+}
+
 export function InstallUpdate(arg1) {
   return window['go']['main']['App']['InstallUpdate'](arg1);
 }
@@ -136,4 +140,8 @@ export function StopChat() {
 
 export function StopCurrent() {
   return window['go']['main']['App']['StopCurrent']();
+}
+
+export function ValidateFreeTier(arg1) {
+  return window['go']['main']['App']['ValidateFreeTier'](arg1);
 }
