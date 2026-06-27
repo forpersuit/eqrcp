@@ -79,6 +79,7 @@ type Server struct {
 	clientProgress         map[string]map[int]int64
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
+	registeredRoutes       map[string]bool
 }
 
 type transferStatus struct {
@@ -214,9 +215,9 @@ func (s *Server) ServeQR(url string) error {
 		}
 	})
 	if transferURL, err := urlpkg.Parse(url); err == nil && transferURL.Path != "" {
-		s.mux.HandleFunc(strings.TrimRight(transferURL.Path, "/")+"/status", s.statusHandler)
+		s.registerRoute(strings.TrimRight(transferURL.Path, "/")+"/status", s.statusHandler)
 	}
-	s.mux.HandleFunc(statusPath, s.statusHandler)
+	s.registerRoute(statusPath, s.statusHandler)
 	s.mux.HandleFunc(eventsPath, func(w http.ResponseWriter, r *http.Request) {
 		s.handleStatusEvents(w, r)
 	})
@@ -893,6 +894,20 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) registerRoute(pattern string, handler http.HandlerFunc) {
+	s.clientMutex.Lock()
+	if s.registeredRoutes == nil {
+		s.registeredRoutes = make(map[string]bool)
+	}
+	if s.registeredRoutes[pattern] {
+		s.clientMutex.Unlock()
+		return
+	}
+	s.registeredRoutes[pattern] = true
+	s.clientMutex.Unlock()
+	s.mux.HandleFunc(pattern, handler)
+}
+
 // Wait for transfer to be completed, it waits forever if kept awlive
 func (s *Server) Wait() error {
 	<-s.stopChannel
@@ -1054,7 +1069,7 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
-	mux.HandleFunc("/send/"+path+"/status", app.statusHandler)
+	app.registerRoute("/send/"+path+"/status", app.statusHandler)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
 			w.Header().Set("Content-Type", "application/json")
