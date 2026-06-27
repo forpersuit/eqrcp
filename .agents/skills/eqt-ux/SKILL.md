@@ -60,5 +60,18 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **原生二次确认框 (Native Confirmation Dialogs)**:
   - 在需要用户强确认的操作（如切换运行模式）时，严禁使用浏览器原生 `confirm()`。应当在 Go 端通过 `wailsruntime.MessageDialog` 封装一个 RPC 方法（例如 `Confirm`），由 JS 异步调用以呈现操作系统原生的对话框，避免网页弹窗打断与卡死，提升应用的原生质感。
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
-  - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部的子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
+  - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部 of 子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
   - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
+
+## 移动端就地超限拦截与动态解锁规范 (Mobile Device-Limit Handling & Live Recovery)
+- **避免直接重定向 (Avoid Direct Redirection)**：当并发连接或使用额度超限时，移动端网页严禁直接使用 `window.location.href` 重定向到独立的静态错误页，这会导致页面脱离心跳状态，失去与后端的“热解锁”联系。
+- **就地状态拦截与防抖渲染 (In-place Interception & Debounced UI Toggle)**：
+  - 轮询心跳（如 `/status`）探测到 `limit_exceeded` 状态时，应在本地就地切换 UI。
+  - 声明防抖状态标识（如 `isLimitUIActive`）限制多余的 DOM 刷新操作。
+  - 在 `showLimitExceededUI()` 中将页面切换为超限警告视图：用警告徽章（⚠️）替换当前状态，隐藏常规下载按钮，动态展示升级引导，并将文件列表项加上 `pointer-events: none; opacity: 0.5;` 视觉与点击锁死。
+- **心跳保活与自动解锁回暖 (Polling Keepalive & Live Unlock)**：
+  - 拦截限制期间，网页轮询心跳不得被杀死（不能 `clearInterval`）。
+  - 当其他活跃设备离开或停止从而释放额度时，超限设备的心跳拉取到最新正常状态，立即自动触发 `restoreNormalUI()`：将警告图标、隐藏的常规动作按钮、文件列表的可点击性、多语言提示热还原为正常，实现免刷新的动态自动功能解锁。
+- **后端双重物理卡关 (Backend Double Guarding)**：
+  - 除了状态轮询，后端在接收物理下载 GET 请求（如 `?download=1` 物理文件拉取）时，也必须对当前 `clientID` 做出超限判定，并在超限时直接拦截，向客户端发出 `403 Forbidden` 标准错误响应，防止绕过网页端逻辑物理盗载。
+
