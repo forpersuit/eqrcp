@@ -689,6 +689,13 @@
                                             }
                                         }
                                     });
+
+                                    // Double check: if verified downloaded items count equals total files count, trigger completion immediately
+                                    if (status.downloadedItems.length >= count) {
+                                        clearInterval(intervalId);
+                                        showCompletedUI();
+                                        return;
+                                    }
                                 }
 
                                 if (status.state === 'completed') {
@@ -701,7 +708,7 @@
                             showCompletedUI();
                         } else {
                             errorCount++;
-                            if (errorCount >= 3) {
+                            if (errorCount >= 1) {
                                 clearInterval(intervalId);
                                 showCompletedUI();
                             }
@@ -710,7 +717,7 @@
                 };
                 xhr.onerror = function() {
                     errorCount++;
-                    if (errorCount >= 3) {
+                    if (errorCount >= 1) {
                         clearInterval(intervalId);
                         showCompletedUI();
                     }
