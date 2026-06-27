@@ -14,6 +14,7 @@ import (
 	wailslogger "github.com/wailsapp/wails/v2/pkg/logger"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"golang.org/x/term"
 
 	"eqt/cmd"
@@ -163,6 +164,9 @@ func startWailsGUI() {
 		MinWidth:          900,
 		MinHeight:         640,
 		HideWindowOnClose: false,
+		Windows: &windows.Options{
+			ZoomFactor:        1.0,
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 			// Inject CSP that allows the chat iframe (served by the local agent

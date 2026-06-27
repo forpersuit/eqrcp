@@ -434,7 +434,7 @@ function renderShareTransfer(task) {
                     const isCurrent = shortName(task.transferCurrent || '') === shortName(path);
                     const isTransferring = task.transferState === 'transferring';
                     const percent = task.transferPercent || 0;
-                    const deviceStatsText = (task.itemClientStats && task.itemClientStats[index]) ? task.itemClientStats[index] : '0/0';
+                    const deviceStatsText = (task.transferItemClientStats && task.transferItemClientStats[index]) ? task.transferItemClientStats[index] : '0/0';
                     return `
                     <li>
                         <div style="width: 100%;">

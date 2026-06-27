@@ -384,13 +384,18 @@ func (s *Server) getItemClientStats() []string {
 		return nil
 	}
 
-	deviceCount := len(s.clientLastSeen)
 	stats := make([]string, totalItems)
+	now := time.Now()
 	for i := 0; i < totalItems; i++ {
 		finishedCount := 0
+		deviceCount := 0
 		targetPath := s.body.Paths[i]
 
-		for clientID := range s.clientLastSeen {
+		for clientID, lastSeen := range s.clientLastSeen {
+			if now.Sub(lastSeen) > 6*time.Second {
+				continue
+			}
+			deviceCount++
 			progress, ok := s.clientProgress[clientID]
 			if ok {
 				clientBytes := progress[i]
