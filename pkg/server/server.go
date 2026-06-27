@@ -71,6 +71,8 @@ type Server struct {
 	transferCounted        bool
 	downloadedItems        map[int]bool
 	downloadedItemsMu      sync.Mutex
+	downloadedBytes        map[int]int64
+	downloadedBytesMu      sync.Mutex
 	KeepAlive              bool
 }
 
@@ -644,6 +646,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.Lang = cfg.Lang
 	app.KeepAlive = cfg.KeepAlive
 	app.downloadedItems = make(map[int]bool)
+	app.downloadedBytes = make(map[int]int64)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
 	bind, err := util.GetInterfaceAddress(cfg.Interface)
@@ -907,6 +910,13 @@ func New(cfg *config.Config) (*Server, error) {
 			// Remove connection from the waitgroup when done
 			defer waitgroup.Done()
 		}
+		currentIndex := 0
+		if isMultiFile && itemIndexStr != "" {
+			if idx, err := strconv.Atoi(itemIndexStr); err == nil {
+				currentIndex = idx
+			}
+		}
+
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
@@ -917,14 +927,25 @@ func New(cfg *config.Config) (*Server, error) {
 						status.BytesDone = status.BytesTotal
 					}
 				})
+				// Track cumulative bytes specifically for this item index
+				app.downloadedBytesMu.Lock()
+				if app.downloadedBytes == nil {
+					app.downloadedBytes = make(map[int]int64)
+				}
+				app.downloadedBytes[currentIndex] += written
+				app.downloadedBytesMu.Unlock()
 			},
 		}
 		http.ServeFile(progressWriter, r, servePath)
 		if r.Method == http.MethodHead {
 			return
 		}
-		status := app.getStatus()
-		if progressWriter.err != nil || (r.Header.Get("Range") == "" && transferIncomplete(status.BytesDone, expectedBytes)) {
+
+		app.downloadedBytesMu.Lock()
+		itemWritten := app.downloadedBytes[currentIndex]
+		app.downloadedBytesMu.Unlock()
+
+		if progressWriter.err != nil || itemWritten < expectedBytes {
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
 			return
@@ -933,10 +954,7 @@ func New(cfg *config.Config) (*Server, error) {
 		allDownloaded := false
 
 		if isMultiFile && itemIndexStr != "" {
-			index, err := strconv.Atoi(itemIndexStr)
-			if err == nil && index >= 0 && index < len(app.body.Paths) {
-				allDownloaded = app.markItemDownloaded(index)
-			}
+			allDownloaded = app.markItemDownloaded(currentIndex)
 		}
 
 		if !isMultiFile || allDownloaded || itemIndexStr == "" {
