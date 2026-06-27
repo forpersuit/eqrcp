@@ -13,10 +13,12 @@
             --text-primary: #111827;
             --text-secondary: #4b5563;
             --text-muted: #9ca3af;
-            --accent: #0f766e;
-            --accent-light: #f0fdf4;
-            --accent-border: #bbf7d0;
-            --accent-icon: #16a34a;
+            --accent: #156f5a;
+            --accent-strong: #0d4e42;
+            --accent-rgb: 21,111,90;
+            --accent-light: rgba(21,111,90, 0.06);
+            --accent-border: rgba(21,111,90, 0.16);
+            --accent-icon: #156f5a;
             --line: #e5e7eb;
             --danger: #b42318;
             --danger-light: #fef3f2;
@@ -173,13 +175,33 @@
         }
 
         .file-item-row {
-            transition: background 0.15s ease;
+            transition: background 0.15s ease, color 0.15s ease;
         }
         .file-item-row:hover {
             background: #f9fafb;
         }
         .file-item-row:last-child {
             border-bottom: none !important;
+        }
+        .file-item-row.transferred {
+            background-color: rgba(var(--accent-rgb, 21,111,90), 0.08) !important;
+            color: var(--accent-strong) !important;
+        }
+        .file-item-row.transferred span {
+            color: var(--accent-strong) !important;
+        }
+        .file-item-row.transferred .status-marker {
+            color: var(--accent) !important;
+        }
+        .file-fallback.transferred {
+            background-color: rgba(var(--accent-rgb, 21,111,90), 0.08) !important;
+            color: var(--accent-strong) !important;
+        }
+        .file-fallback.transferred span {
+            color: var(--accent-strong) !important;
+        }
+        .file-fallback.transferred .status-marker {
+            color: var(--accent) !important;
         }
 
         .file-icon {
@@ -327,8 +349,8 @@
 
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
                 {{if gt .Count 1}}
-                    <button type="button" class="btn" id="btn-action-download-all" onclick="triggerDownloadAllIndividual()"></button>
-                    <button type="button" class="btn btn-secondary" id="btn-action-download-zip" onclick="triggerDownload()"></button>
+                    <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()"></button>
+                    <button type="button" class="btn btn-secondary" id="btn-action-download-all" onclick="triggerDownloadAllIndividual()"></button>
                 {{else}}
                     <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
                 {{end}}
@@ -361,7 +383,7 @@
                 success_header: '已触发文件下载',
                 success_tips: '传输已成功启动！请检查您的浏览器下载进度。',
                 btn_download: '开始下载',
-                btn_download_all: '全部下载',
+                btn_download_all: '全部下载 (体验)',
                 btn_download_all_zip: '全部下载 (ZIP)',
                 btn_manual: '手动下载 / 重新下载',
                 btn_stop: '停止共享',
@@ -381,7 +403,7 @@
                 success_header: 'Download Started',
                 success_tips: 'Transfer triggered successfully! Please check your browser\'s download progress.',
                 btn_download: 'Start Download',
-                btn_download_all: 'Download All',
+                btn_download_all: 'Download All (Beta)',
                 btn_download_all_zip: 'Download All (ZIP)',
                 btn_manual: 'Manual Download / Redownload',
                 btn_stop: 'Stop Sharing',
@@ -401,7 +423,7 @@
                 success_header: 'ダウンロードが開始されました',
                 success_tips: '転送が正常に開始されました！ブラウザのダウンロード履歴を確認してください。',
                 btn_download: 'ダウンロード開始',
-                btn_download_all: 'すべてダウンロード',
+                btn_download_all: 'すべてダウンロード (体験)',
                 btn_download_all_zip: 'すべてダウンロード (ZIP)',
                 btn_manual: '手動ダウンロード / 再ダウンロード',
                 btn_stop: '共有を停止',
@@ -686,18 +708,18 @@
                             try {
                                 var status = JSON.parse(xhr.responseText);
                                 
-                                // Update checkmarks based on server verified download completion
+                                // Update highlights based on server verified download completion
                                 if (status.downloadedItems && status.downloadedItems.length > 0) {
                                     var fileRows = document.querySelectorAll('.file-item-row');
                                     status.downloadedItems.forEach(function(idx) {
                                         if (fileRows && fileRows[idx]) {
-                                            var arrow = fileRows[idx].querySelector('.status-marker');
-                                            if (arrow) {
-                                                arrow.style.color = 'var(--accent-icon)';
-                                                arrow.textContent = '✓';
-                                            }
+                                            fileRows[idx].classList.add('transferred');
                                         }
                                     });
+                                    var fallback = document.querySelector('.file-fallback');
+                                    if (fallback && status.downloadedItems.indexOf(0) !== -1) {
+                                        fallback.classList.add('transferred');
+                                    }
 
                                     // Double check: if verified downloaded items count equals total files count, trigger completion immediately
                                     if (status.downloadedItems.length >= totalCount) {
@@ -769,20 +791,12 @@
 
             var fileItems = document.querySelectorAll('.file-item-row');
             fileItems.forEach(function(item) {
-                var arrow = item.querySelector('.status-marker');
-                if (arrow) {
-                    arrow.style.color = 'var(--accent-icon)';
-                    arrow.textContent = '✓';
-                }
+                item.classList.add('transferred');
             });
             
             var singleFile = document.querySelector('.file-fallback');
             if (singleFile) {
-                var arrow = singleFile.querySelector('.status-marker');
-                if (arrow) {
-                    arrow.style.color = 'var(--accent-icon)';
-                    arrow.textContent = '✓';
-                }
+                singleFile.classList.add('transferred');
             }
 
             var warningBox = document.querySelector('.wifi-warning-box');
