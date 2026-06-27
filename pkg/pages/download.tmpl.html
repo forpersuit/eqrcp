@@ -614,6 +614,15 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                var arrow = singleFile.querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+            }
         }
 
         function triggerDownloadItem(index) {
@@ -631,6 +640,15 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+
+            var fileRows = document.querySelectorAll('.file-item-row');
+            if (fileRows && fileRows[index]) {
+                var arrow = fileRows[index].querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+            }
         }
 
         function triggerDownloadAllIndividual() {
@@ -655,6 +673,15 @@
                         setTimeout(function() {
                             document.body.removeChild(iframe);
                         }, 3000);
+
+                        var fileRows = document.querySelectorAll('.file-item-row');
+                        if (fileRows && fileRows[idx]) {
+                            var arrow = fileRows[idx].querySelector('span[style*="color: var(--accent)"]');
+                            if (arrow) {
+                                arrow.style.color = 'var(--accent-icon)';
+                                arrow.textContent = '✓';
+                            }
+                        }
                     }, delay);
                 })(i);
                 delay += 400;
@@ -666,12 +693,14 @@
             if (pollingStarted) return;
             pollingStarted = true;
             
+            var errorCount = 0;
             var intervalId = setInterval(function() {
                 var xhr = new XMLHttpRequest();
                 xhr.open('GET', window.location.pathname + '/status', true);
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
                         if (xhr.status === 200) {
+                            errorCount = 0;
                             try {
                                 var status = JSON.parse(xhr.responseText);
                                 if (status.state === 'completed') {
@@ -682,7 +711,20 @@
                         } else if (xhr.status === 410) {
                             clearInterval(intervalId);
                             showCompletedUI();
+                        } else {
+                            errorCount++;
+                            if (errorCount >= 3) {
+                                clearInterval(intervalId);
+                                showCompletedUI();
+                            }
                         }
+                    }
+                };
+                xhr.onerror = function() {
+                    errorCount++;
+                    if (errorCount >= 3) {
+                        clearInterval(intervalId);
+                        showCompletedUI();
                     }
                 };
                 xhr.send();
