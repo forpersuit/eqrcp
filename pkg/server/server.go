@@ -80,6 +80,8 @@ type Server struct {
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
 	registeredRoutes       map[string]bool
+	initFirstTransferOnce sync.Once
+	isFirstDailyTransfer  bool
 }
 
 type transferStatus struct {
@@ -440,6 +442,42 @@ func (s *Server) getConnectedDevicesCount() int {
 	return count
 }
 
+func (s *Server) initFirstTransferFlag() {
+	s.initFirstTransferOnce.Do(func() {
+		s.isFirstDailyTransfer = (GetUsedTransfers() == 0)
+	})
+}
+
+func (s *Server) isClientLimitExceeded(clientID string) bool {
+	if limiterInstance.GetStatus().IsPaid {
+		return false
+	}
+	s.initFirstTransferFlag()
+	if s.isFirstDailyTransfer {
+		return false
+	}
+	if clientID == "" {
+		return false
+	}
+
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	now := time.Now()
+	if lastSeen, ok := s.clientLastSeen[clientID]; ok && now.Sub(lastSeen) <= 8*time.Second {
+		return false
+	}
+
+	activeCount := 0
+	for cid, lastSeen := range s.clientLastSeen {
+		if cid != clientID && now.Sub(lastSeen) <= 8*time.Second {
+			activeCount++
+		}
+	}
+
+	return activeCount >= 2
+}
+
 func (s *Server) terminalStatus() (transferStatus, bool) {
 	status := s.getStatus()
 	return status, isTerminalTransferState(status.State)
@@ -749,6 +787,9 @@ func (s *Server) isAllActiveClientsFinished() bool {
 
 func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) string {
 	clientID := s.getClientID(r, w)
+	if s.isClientLimitExceeded(clientID) {
+		return clientID
+	}
 	s.clientMutex.Lock()
 	if s.clientLastSeen == nil {
 		s.clientLastSeen = make(map[string]time.Time)
@@ -914,7 +955,10 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	status := s.getStatus()
 	status.DownloadedItems = s.getClientDownloadedItems(clientID)
-	if s.isClientFinished(clientID) {
+	if s.isClientLimitExceeded(clientID) {
+		status.State = "limit_exceeded"
+		status.Message = "Device limit exceeded."
+	} else if s.isClientFinished(clientID) {
 		status.State = "completed"
 		status.Message = "Transfer completed."
 	}
@@ -1113,6 +1157,28 @@ func New(cfg *config.Config) (*Server, error) {
 			return
 		}
 		usage := limiterInstance.GetStatus()
+		app.initFirstTransferFlag()
+
+		if r.Method == http.MethodGet && r.URL.Query().Get("limit") != "" {
+			htmlVariables := struct {
+				Route string
+				Lang  string
+			}{
+				Route: "/send/" + path,
+			}
+			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
+				htmlVariables.Lang = cookie.Value
+			} else {
+				htmlVariables.Lang = app.Lang
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := serveTemplate("limit", pages.Limit, w, htmlVariables); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Template error: %v\n", err)
+			}
+			return
+		}
+
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
 				writeTerminalTransfer(w, status)
@@ -1174,6 +1240,27 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			return
 		}
+
+		clientID := app.getClientID(r, w)
+		if app.isClientLimitExceeded(clientID) {
+			htmlVariables := struct {
+				Route string
+				Lang  string
+			}{
+				Route: "/send/" + path,
+			}
+			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
+				htmlVariables.Lang = cookie.Value
+			} else {
+				htmlVariables.Lang = app.Lang
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if err := serveTemplate("limit", pages.Limit, w, htmlVariables); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+
 		servePath := app.body.Path
 		downloadName := app.body.Filename
 		var tempZipToRemove string
@@ -1283,7 +1370,7 @@ func New(cfg *config.Config) (*Server, error) {
 			// Remove connection from the waitgroup when done
 			defer waitgroup.Done()
 		}
-		clientID := app.getClientID(r, w)
+		clientID = app.getClientID(r, w)
 		currentIndex := 0
 		if isMultiFile && itemIndexStr != "" {
 			if idx, err := strconv.Atoi(itemIndexStr); err == nil {

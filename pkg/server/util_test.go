@@ -1632,3 +1632,101 @@ func TestSendMultiDeviceDownloadIsolation(t *testing.T) {
 		}
 	}
 }
+
+func TestDeviceLimitExceededFreeTier(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
+	SetUsedTransfers(0)
+	limiterInstance.SetPaidDetails(false, "", "", "")
+
+	dir := t.TempDir()
+	file := filepath.Join(dir, "doc.txt")
+	_ = os.WriteFile(file, []byte("test content"), 0644)
+
+	server1, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "task1",
+		KeepAlive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server1.Shutdown()
+	server1.Send(body.Body{Path: file, Filename: "doc.txt"})
+
+	clientID_A := "cli_A"
+	clientID_B := "cli_B"
+	clientID_C := "cli_C"
+
+	server1.initFirstTransferFlag()
+	if !server1.isFirstDailyTransfer {
+		t.Fatalf("first transfer task should have isFirstDailyTransfer = true")
+	}
+
+	if server1.isClientLimitExceeded(clientID_A) {
+		t.Fatal("device A should not be limited in first transfer")
+	}
+	if server1.isClientLimitExceeded(clientID_B) {
+		t.Fatal("device B should not be limited in first transfer")
+	}
+	if server1.isClientLimitExceeded(clientID_C) {
+		t.Fatal("device C should not be limited in first transfer")
+	}
+
+	reqDownA, _ := http.NewRequest(http.MethodGet, server1.SendURL+"?download=1&client_id=cli_A", nil)
+	respDownA, err := http.DefaultClient.Do(reqDownA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.ReadAll(respDownA.Body)
+	respDownA.Body.Close()
+
+	if GetUsedTransfers() != 1 {
+		t.Fatalf("used transfers = %d, want 1", GetUsedTransfers())
+	}
+
+	server2, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "task2",
+		KeepAlive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server2.Shutdown()
+	server2.Send(body.Body{Path: file, Filename: "doc.txt"})
+
+	server2.initFirstTransferFlag()
+	if server2.isFirstDailyTransfer {
+		t.Fatalf("second transfer task should have isFirstDailyTransfer = false")
+	}
+
+	if server2.isClientLimitExceeded(clientID_A) {
+		t.Fatal("device A should be allowed as 1st device")
+	}
+	server2.clientMutex.Lock()
+	server2.clientLastSeen[clientID_A] = time.Now()
+	server2.clientMutex.Unlock()
+
+	if server2.isClientLimitExceeded(clientID_B) {
+		t.Fatal("device B should be allowed as 2nd device")
+	}
+	server2.clientMutex.Lock()
+	server2.clientLastSeen[clientID_B] = time.Now()
+	server2.clientMutex.Unlock()
+
+	if !server2.isClientLimitExceeded(clientID_C) {
+		t.Fatal("device C should be limited in second transfer as 3rd device")
+	}
+
+	server2.clientMutex.Lock()
+	server2.clientLastSeen[clientID_A] = time.Now().Add(-10 * time.Second)
+	server2.clientMutex.Unlock()
+
+	if server2.isClientLimitExceeded(clientID_C) {
+		t.Fatal("device C should be allowed after device A becomes inactive")
+	}
+}

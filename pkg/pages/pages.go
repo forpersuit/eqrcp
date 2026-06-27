@@ -27,6 +27,11 @@ var Done string
 //go:embed download.tmpl.html
 var Download string
 
+// Limit page
+//
+//go:embed limit.tmpl.html
+var Limit string
+
 // LogoMark is the browser-page product mark.
 //
 //go:embed assets/eqt-logo-mark.png
