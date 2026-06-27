@@ -777,13 +777,14 @@
             }
         }
 
+        var intervalId = null;
         var pollingStarted = false;
         function startStatusPolling() {
             if (pollingStarted) return;
             pollingStarted = true;
             
             var errorCount = 0;
-            var intervalId = setInterval(function() {
+            intervalId = setInterval(function() {
                 var xhr = new XMLHttpRequest();
                 xhr.open('GET', window.location.pathname + '/status?client_id=' + getOrGenerateClientId(), true);
                 xhr.onreadystatechange = function() {
@@ -902,37 +903,36 @@
         }
 
         function stopSharing() {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', window.location.pathname + '?stop=1', true);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    document.getElementById('status-icon-pending').style.display = 'none';
-                    document.getElementById('status-icon-success').style.display = 'none';
-                    
-                    var badge = document.getElementById('status-icon-stopped');
-                    if (!badge) {
-                        badge = document.createElement('div');
-                        badge.id = 'status-icon-stopped';
-                        badge.className = 'status-badge ready';
-                        badge.style.borderColor = 'var(--danger-border)';
-                        badge.style.color = 'var(--danger)';
-                        badge.textContent = '✕';
-                        var parent = document.getElementById('status-icon-pending').parentNode;
-                        parent.insertBefore(badge, document.getElementById('status-icon-pending'));
-                    } else {
-                        badge.style.display = 'inline-flex';
-                    }
+            // 1. Stop status polling to release backend active device count
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
 
-                    document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
-                    document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
-                    
-                    var btnRow = document.getElementById('action-btn-row');
-                    if (btnRow) btnRow.style.display = 'none';
-                    
-                    applyLanguage();
-                }
-            };
-            xhr.send();
+            // 2. Change the interface to stopped final view, hiding action buttons
+            document.getElementById('status-icon-pending').style.display = 'none';
+            document.getElementById('status-icon-success').style.display = 'none';
+            
+            var badge = document.getElementById('status-icon-stopped');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'status-icon-stopped';
+                badge.className = 'status-badge ready';
+                badge.style.borderColor = 'var(--danger-border)';
+                badge.style.color = 'var(--danger)';
+                badge.textContent = '✕';
+                var parent = document.getElementById('status-icon-pending').parentNode;
+                parent.insertBefore(badge, document.getElementById('status-icon-pending'));
+            } else {
+                badge.style.display = 'inline-flex';
+            }
+
+            document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
+            document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
+            
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) btnRow.style.display = 'none';
+            
+            applyLanguage();
         }
 
         // Auto start status polling on page load to register client activity immediately
