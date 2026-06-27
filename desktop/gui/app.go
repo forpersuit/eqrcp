@@ -735,6 +735,71 @@ func (a *App) SelectReceiveDirectory() (string, error) {
 	})
 }
 
+type GUIFileInfo struct {
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	Size      string `json:"size"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
+
+func (a *App) GetFileInfos(paths []string) ([]GUIFileInfo, error) {
+	var result []GUIFileInfo
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		
+		var sizeBytes int64
+		if fi.IsDir() {
+			_ = filepath.Walk(p, func(_ string, info os.FileInfo, walkErr error) error {
+				if walkErr == nil && !info.IsDir() {
+					sizeBytes += info.Size()
+				}
+				return nil
+			})
+		} else {
+			sizeBytes = fi.Size()
+		}
+		
+		var sizeStr string
+		if sizeBytes < 1024 {
+			sizeStr = fmt.Sprintf("%d B", sizeBytes)
+		} else {
+			units := []string{"KB", "MB", "GB", "TB"}
+			f := float64(sizeBytes)
+			idx := 0
+			for f >= 1024 && idx < len(units) {
+				f /= 1024
+				idx++
+			}
+			sizeStr = fmt.Sprintf("%.1f %s", f, units[idx-1])
+		}
+		
+		result = append(result, GUIFileInfo{
+			Path:      p,
+			Name:      filepath.Base(p),
+			Size:      sizeStr,
+			SizeBytes: sizeBytes,
+		})
+	}
+	return result, nil
+}
+
+func (a *App) ValidateFreeTier(paths []string) string {
+	isPaid := server.GetPaidStatus()
+	usedTransfers := server.GetUsedTransfers()
+	if !isPaid && usedTransfers >= 5 {
+		if err := validateSharePathsForFreeTier(paths); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
+}
+
 func (a *App) AppInfo() AppInfo {
 	info := AppInfo{
 		Product:     "EQT",

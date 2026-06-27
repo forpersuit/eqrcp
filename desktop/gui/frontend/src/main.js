@@ -24,6 +24,8 @@ import {
     SaveChatAttachmentAs,
     SaveSettings,
     SelectFiles,
+    GetFileInfos,
+    ValidateFreeTier,
     SelectReceiveDirectory,
     SelectShareDirectory,
     RightClickIntegrationStatus,
@@ -308,15 +310,20 @@ function renderShare() {
     if (activeTask) {
         return renderShareTransfer(activeTask);
     }
-    const items = state.sharePaths.map((path, index) => `
-        <li>
-            <div>
-                <strong>${escapeHTML(shortName(path))}</strong>
-                <span>${escapeHTML(path)}</span>
-            </div>
-            <button class="icon-button remove-path" data-path-index="${index}" title="${t('remove')}">x</button>
-        </li>
-    `).join('');
+    const items = state.sharePaths.map((item, index) => {
+        const path = typeof item === 'string' ? item : item.path;
+        const name = typeof item === 'string' ? shortName(item) : item.name;
+        const size = typeof item === 'string' ? '' : item.size;
+        return `
+            <li>
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 12px; overflow: hidden;">
+                    <strong style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text-primary); font-size: 13px; max-width: 280px;" title="${escapeHTML(name)}">${escapeHTML(name)}</strong>
+                    <span class="file-size-badge" style="font-size: 12px; color: var(--text-secondary); margin-left: auto; margin-right: 8px; flex-shrink: 0; font-weight: 500;">${escapeHTML(size)}</span>
+                </div>
+                <button class="icon-button remove-path" data-path-index="${index}" title="${t('remove')}">x</button>
+            </li>
+        `;
+    }).join('');
     const isPaid = state.status?.isPaid;
     const usedTransfers = state.status?.usedTransfers || 0;
     const remaining = Math.max(0, 5 - usedTransfers);
@@ -333,6 +340,12 @@ function renderShare() {
                 <button type="button" id="choose-folder" class="secondary">${t('select_folder')}</button>
             </div>
         </div>
+        ${state.shareLimitNotice ? `
+            <div class="share-limit-notice" style="color: var(--danger); font-size: 12px; font-weight: 700; text-align: left; margin: 12px 0; background: rgba(180, 35, 24, 0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--danger); line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
+                <span>⚠️</span>
+                <span>${escapeHTML(state.shareLimitNotice)}</span>
+            </div>
+        ` : ''}
         ${hasItems ? `<ul class="path-list">${items}</ul>` : ''}
         <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px;">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -343,7 +356,7 @@ function renderShare() {
                 ` : ''}
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
-                <button class="primary" id="start-share" ${state.busy || !hasItems ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
+                <button class="primary" id="start-share" ${state.busy || !hasItems || state.shareLimitNotice ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
                 <button class="ghost" id="clear-share" ${!hasItems ? 'disabled' : ''}>${t('clear')}</button>
             </div>
         </div>
@@ -1519,6 +1532,7 @@ function bindEvents() {
     document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
     document.querySelector('#clear-share')?.addEventListener('click', () => {
         state.sharePaths = [];
+        state.shareLimitNotice = '';
         clearMessages();
         render();
     });
@@ -1904,8 +1918,10 @@ async function chooseReceiveDirectory() {
 async function startShare() {
     await run(async () => {
         await saveSettingsData();
-        state.status = await Share(state.sharePaths);
+        const paths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+        state.status = await Share(paths);
         state.sharePaths = [];
+        state.shareLimitNotice = '';
         state.notice = '';
         render();
     });
@@ -2827,18 +2843,51 @@ function renderBusy() {
     }
 }
 
-function removePath(event) {
+async function removePath(event) {
     const index = Number(event.currentTarget.dataset.pathIndex);
     state.sharePaths = state.sharePaths.filter((_, itemIndex) => itemIndex !== index);
     clearMessages();
+    
+    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+    try {
+        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+    } catch (e) {
+        state.shareLimitNotice = '';
+    }
+    
     render();
 }
 
-function addSharePaths(paths) {
-    const next = new Set(state.sharePaths);
-    paths.filter(Boolean).forEach((path) => next.add(path));
-    state.sharePaths = [...next];
+async function addSharePaths(paths) {
+    if (!paths || paths.length === 0) return;
+    try {
+        const infos = await GetFileInfos(paths.filter(Boolean));
+        if (infos && infos.length > 0) {
+            const currentMap = new Map();
+            state.sharePaths.forEach(item => {
+                const p = typeof item === 'string' ? item : item.path;
+                currentMap.set(p, typeof item === 'string' ? { path: p, name: shortName(p), size: '' } : item);
+            });
+            infos.forEach(item => currentMap.set(item.path, item));
+            state.sharePaths = Array.from(currentMap.values());
+        }
+    } catch (e) {
+        console.error('[addSharePaths] Failed to get file infos:', e);
+        const currentPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+        const next = new Set(currentPaths);
+        paths.filter(Boolean).forEach(p => next.add(p));
+        state.sharePaths = Array.from(next).map(p => ({ path: p, name: shortName(p), size: '' }));
+    }
+    
     clearMessages();
+    
+    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+    try {
+        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+    } catch (e) {
+        state.shareLimitNotice = '';
+    }
+    
     render();
 }
 
