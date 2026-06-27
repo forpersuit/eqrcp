@@ -375,6 +375,9 @@ func (s *Server) getItemClientStats() []string {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	if s.body.Paths == nil {
+		return nil
+	}
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return nil
@@ -792,6 +795,9 @@ func (s *Server) isClientFinished(clientID string) bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	if s.body.Paths == nil {
+		return false
+	}
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return false
@@ -830,6 +836,9 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	if s.body.Paths == nil {
+		return nil
+	}
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return nil
