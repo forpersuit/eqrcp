@@ -698,17 +698,7 @@
         var downloadTriggered = false;
         var totalCount = {{.Count}};
 
-        function hideDownloadButtons() {
-            var btnZip = document.getElementById('btn-action-download-zip');
-            if (btnZip) btnZip.style.display = 'none';
-            var btnAll = document.getElementById('btn-action-download-all');
-            if (btnAll) btnAll.style.display = 'none';
-            var btnSingle = document.getElementById('btn-action-download');
-            if (btnSingle) btnSingle.style.display = 'none';
-        }
-
         function triggerDownload() {
-            hideDownloadButtons();
             startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1';
@@ -730,9 +720,8 @@
                 document.body.removeChild(iframe);
             }, 3000);
         }
- 
+  
         function triggerDownloadItem(index) {
-            hideDownloadButtons();
             startStatusPolling();
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'inline-flex';
@@ -748,9 +737,8 @@
                 document.body.removeChild(iframe);
             }, 3000);
         }
- 
+  
         function triggerDownloadAllIndividual() {
-            hideDownloadButtons();
             var count = {{.Count}};
             
             document.getElementById('status-icon-pending').style.display = 'none';
@@ -760,7 +748,7 @@
             applyLanguage();
             
             startStatusPolling();
- 
+  
             var delay = 0;
             for (var i = 0; i < count; i++) {
                 (function(idx) {
@@ -878,11 +866,15 @@
             var fileItems = document.querySelectorAll('.file-item-row');
             fileItems.forEach(function(item) {
                 item.classList.add('transferred');
+                item.removeAttribute('onclick');
+                item.style.cursor = 'default';
             });
             
             var singleFile = document.querySelector('.file-fallback');
             if (singleFile) {
                 singleFile.classList.add('transferred');
+                singleFile.removeAttribute('onclick');
+                singleFile.style.cursor = 'default';
             }
 
             var warningBox = document.querySelector('.wifi-warning-box');
@@ -923,10 +915,8 @@
                     document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
                     document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
                     
-                    var btnAction = document.getElementById('btn-action-download');
-                    if (btnAction) btnAction.style.display = 'none';
-                    var btnStop = document.getElementById('btn-action-stop');
-                    if (btnStop) btnStop.style.display = 'none';
+                    var btnRow = document.getElementById('action-btn-row');
+                    if (btnRow) btnRow.style.display = 'none';
                     
                     applyLanguage();
                 }
