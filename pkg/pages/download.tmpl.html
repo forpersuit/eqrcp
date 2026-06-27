@@ -223,6 +223,17 @@
             background: #911b13;
         }
 
+        .btn.btn-secondary {
+            background: #e2f1ed;
+            color: var(--accent);
+            box-shadow: 0 2px 4px rgba(15, 118, 110, 0.04);
+            border: 1px solid var(--accent-border);
+        }
+
+        .btn.btn-secondary:hover {
+            background: #cbece3;
+        }
+
         .hint {
             position: absolute;
             bottom: 32px;
@@ -309,7 +320,12 @@
             </div>
 
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
-                <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
+                {{if gt .Count 1}}
+                    <button type="button" class="btn" id="btn-action-download-all" onclick="triggerDownloadAllIndividual()"></button>
+                    <button type="button" class="btn btn-secondary" id="btn-action-download-zip" onclick="triggerDownload()"></button>
+                {{else}}
+                    <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
+                {{end}}
                 <button type="button" class="btn btn-danger" id="btn-action-stop" onclick="stopSharing()"></button>
             </div>
         </div>
@@ -339,13 +355,17 @@
                 success_header: '已触发文件下载',
                 success_tips: '传输已成功启动！请检查您的浏览器下载进度。',
                 btn_download: '开始下载',
-                btn_download_all: '下载全部 (ZIP)',
+                btn_download_all: '全部下载',
+                btn_download_all_zip: '全部下载 (ZIP)',
                 btn_manual: '手动下载 / 重新下载',
                 btn_stop: '停止共享',
                 stopped_header: '服务已停止',
                 stopped_tips: '传输服务已手动关闭。您可以关闭此页面了。',
                 saved_file: '待接收文件',
-                close_hint: '下载成功后，您现在可以关闭此页面了。'
+                close_hint: '下载成功后，您现在可以关闭此页面了。',
+                success_summary_single: '1 个文件已成功下载。',
+                success_summary_multiple: '{count} 个文件已成功下载。',
+                success_tips_all: '传输已成功完成。您现在可以关闭此页面了。'
             },
             en: {
                 title: 'Receive File - EQT',
@@ -355,13 +375,17 @@
                 success_header: 'Download Started',
                 success_tips: 'Transfer triggered successfully! Please check your browser\'s download progress.',
                 btn_download: 'Start Download',
-                btn_download_all: 'Download All (ZIP)',
+                btn_download_all: 'Download All',
+                btn_download_all_zip: 'Download All (ZIP)',
                 btn_manual: 'Manual Download / Redownload',
                 btn_stop: 'Stop Sharing',
                 stopped_header: 'Service Stopped',
                 stopped_tips: 'The transfer service has been stopped manually. You can close this page now.',
                 saved_file: 'File to Receive',
-                close_hint: 'Once successfully completed, you can close this page.'
+                close_hint: 'Once successfully completed, you can close this page.',
+                success_summary_single: '1 file has been downloaded successfully.',
+                success_summary_multiple: '{count} files have been downloaded successfully.',
+                success_tips_all: 'The transfer has completed successfully. You can close this page now.'
             },
             ja: {
                 title: 'ファイル受信 - EQT',
@@ -371,13 +395,17 @@
                 success_header: 'ダウンロードが開始されました',
                 success_tips: '転送が正常に開始されました！ブラウザのダウンロード履歴を確認してください。',
                 btn_download: 'ダウンロード開始',
-                btn_download_all: 'すべてダウンロード (ZIP)',
+                btn_download_all: 'すべてダウンロード',
+                btn_download_all_zip: 'すべてダウンロード (ZIP)',
                 btn_manual: '手動ダウンロード / 再ダウンロード',
                 btn_stop: '共有を停止',
                 stopped_header: 'サービス停止',
                 stopped_tips: '転送サービスは手動で停止されました。このページを閉じても大丈夫です。',
-                saved_file: '受信する文件',
-                close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。'
+                saved_file: '受信するファイル',
+                close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。',
+                success_summary_single: '1 個のファイルが正常にダウンロードされました。',
+                success_summary_multiple: '{count} 個のファイルが正常にダウンロードされました。',
+                success_tips_all: '転送が正常に完了しました。このページを閉じても大丈夫です。'
             },
             ko: {
                 title: '파일 받기 - EQT',
@@ -387,13 +415,17 @@
                 success_header: '다운로드 시작됨',
                 success_tips: '전송이 성공적으로 시작되었습니다! 브라우저 다운로드 진행 상황을 확인하세요.',
                 btn_download: '다운로드 시작',
-                btn_download_all: '전체 다운로드 (ZIP)',
+                btn_download_all: '전체 다운로드',
+                btn_download_all_zip: '전체 다운로드 (ZIP)',
                 btn_manual: '수동 다운로드 / 재다운로드',
                 btn_stop: '공유 중지',
                 stopped_header: '서비스 중지됨',
                 stopped_tips: '전송 서비스가 수동으로 중지되었습니다. 이 페이지를 닫으셔도 됩니다.',
                 saved_file: '받을 파일',
-                close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.'
+                close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.',
+                success_summary_single: '1개의 파일이 성공적으로 다운로드되었습니다.',
+                success_summary_multiple: '{count}개의 파일이 성공적으로 다운로드되었습니다.',
+                success_tips_all: '전송이 성공적으로 완료되었습니다. 이 페이지를 닫으셔도 됩니다.'
             },
             es: {
                 title: 'Recibir Archivo - EQT',
@@ -403,13 +435,17 @@
                 success_header: 'Descarga Iniciada',
                 success_tips: '¡Transferencia iniciada correctamente! Compruebe el progreso de descarga de su navegador.',
                 btn_download: 'Iniciar descarga',
-                btn_download_all: 'Descargar todo (ZIP)',
+                btn_download_all: 'Descargar todo',
+                btn_download_all_zip: 'Descargar todo (ZIP)',
                 btn_manual: 'Descarga Manual / Volver a descargar',
                 btn_stop: 'Detener Compartido',
                 stopped_header: 'Servicio Detenido',
                 stopped_tips: 'El servicio de transferencia se ha detenido manualmente. Puede cerrar esta página ahora.',
                 saved_file: 'Archivo a Recibir',
-                close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.'
+                close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.',
+                success_summary_single: '1 archivo se ha descargado correctamente.',
+                success_summary_multiple: '{count} archivos se han descargado correctamente.',
+                success_tips_all: 'La transferencia se ha completado con éxito. Ya puede cerrar esta página.'
             },
             de: {
                 title: 'Datei bereit zum Herunterladen',
@@ -419,13 +455,17 @@
                 success_header: 'Download gestartet',
                 success_tips: 'Übertragung erfolgreich gestartet! Bitte überprüfen Sie den Download-Verlauf Ihres Browsers.',
                 btn_download: 'Herunterladen starten',
-                btn_download_all: 'Alle herunterladen (ZIP)',
+                btn_download_all: 'Alle herunterladen',
+                btn_download_all_zip: 'Alle herunterladen (ZIP)',
                 btn_manual: 'Manuell herunterladen / Erneut versuchen',
                 btn_stop: 'Freigabe beenden',
                 stopped_header: 'Dienst beendet',
                 stopped_tips: 'Der Übertragungsdienst wurde manuell beendet. Sie können diese Seite jetzt schließen.',
                 saved_file: 'Zu empfangende Datei',
-                close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.'
+                close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.',
+                success_summary_single: '1 Datei wurde erfolgreich heruntergeladen.',
+                success_summary_multiple: '{count} Dateien wurden erfolgreich heruntergeladen.',
+                success_tips_all: 'Die Übertragung wurde erfolgreich abgeschlossen. Sie können diese Seite jetzt schließen.'
             },
             fr: {
                 title: 'Recevoir le Fichier - EQT',
@@ -435,13 +475,17 @@
                 success_header: 'Téléchargement Lancé',
                 success_tips: 'Transfert lancé avec succès ! Veuillez vérifier la progression du téléchargement de votre navigateur.',
                 btn_download: 'Lancer le téléchargement',
-                btn_download_all: 'Tout télécharger (ZIP)',
+                btn_download_all: 'Tout télécharger',
+                btn_download_all_zip: 'Tout télécharger (ZIP)',
                 btn_manual: 'Téléchargement manuel / Relancer',
                 btn_stop: 'Arrêter le Partage',
                 stopped_header: 'Service Arrêté',
                 stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
                 saved_file: 'Fichier à recevoir',
-                close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.'
+                close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
+                success_summary_single: '1 fichier a été téléchargé avec succès.',
+                success_summary_multiple: '{count} fichiers ont été téléchargés avec succès.',
+                success_tips_all: 'Le transfert s\'est terminé avec succès. Vous pouvez fermer cette page maintenant.'
             }
         };
 
@@ -496,13 +540,24 @@
             var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
             if (savedFileTitle) savedFileTitle.textContent = dict.saved_file;
             
-            var btnActionEl = document.getElementById('btn-action-download');
-            if (btnActionEl) {
-                if (!downloadTriggered) {
-                    var count = {{.Count}};
-                    btnActionEl.textContent = count > 1 ? (dict.btn_download_all || 'Download All (ZIP)') : (dict.btn_download || 'Start Download');
-                } else {
-                    btnActionEl.textContent = dict.btn_manual || 'Manual Download / Redownload';
+            var count = {{.Count}};
+            if (count > 1) {
+                var btnDownloadAllEl = document.getElementById('btn-action-download-all');
+                if (btnDownloadAllEl) {
+                    btnDownloadAllEl.textContent = dict.btn_download_all || 'Download All';
+                }
+                var btnDownloadZipEl = document.getElementById('btn-action-download-zip');
+                if (btnDownloadZipEl) {
+                    btnDownloadZipEl.textContent = dict.btn_download_all_zip || 'Download All (ZIP)';
+                }
+            } else {
+                var btnActionEl = document.getElementById('btn-action-download');
+                if (btnActionEl) {
+                    if (!downloadTriggered) {
+                        btnActionEl.textContent = dict.btn_download || 'Start Download';
+                    } else {
+                        btnActionEl.textContent = dict.btn_manual || 'Manual Download / Redownload';
+                    }
                 }
             }
 
@@ -539,6 +594,7 @@
         }
 
         function triggerDownload() {
+            startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1';
                 return;
@@ -561,6 +617,7 @@
         }
 
         function triggerDownloadItem(index) {
+            startStatusPolling();
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'inline-flex';
             document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
@@ -574,6 +631,129 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+        }
+
+        function triggerDownloadAllIndividual() {
+            var count = {{.Count}};
+            
+            document.getElementById('status-icon-pending').style.display = 'none';
+            document.getElementById('status-icon-success').style.display = 'inline-flex';
+            document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
+            document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
+            applyLanguage();
+            
+            startStatusPolling();
+
+            var delay = 0;
+            for (var i = 0; i < count; i++) {
+                (function(idx) {
+                    setTimeout(function() {
+                        var iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        iframe.src = window.location.pathname + '?download=1&item=' + idx;
+                        document.body.appendChild(iframe);
+                        setTimeout(function() {
+                            document.body.removeChild(iframe);
+                        }, 3000);
+                    }, delay);
+                })(i);
+                delay += 400;
+            }
+        }
+
+        var pollingStarted = false;
+        function startStatusPolling() {
+            if (pollingStarted) return;
+            pollingStarted = true;
+            
+            var intervalId = setInterval(function() {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', window.location.pathname + '/status', true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var status = JSON.parse(xhr.responseText);
+                                if (status.state === 'completed') {
+                                    clearInterval(intervalId);
+                                    showCompletedUI();
+                                }
+                            } catch(e) {}
+                        } else if (xhr.status === 410) {
+                            clearInterval(intervalId);
+                            showCompletedUI();
+                        }
+                    }
+                };
+                xhr.send();
+            }, 1200);
+        }
+
+        function showCompletedUI() {
+            document.getElementById('status-icon-pending').style.display = 'none';
+            var successIcon = document.getElementById('status-icon-success');
+            if (successIcon) {
+                successIcon.className = 'status-badge success';
+                successIcon.style.display = 'inline-flex';
+                successIcon.textContent = '✓';
+            }
+            
+            var stoppedIcon = document.getElementById('status-icon-stopped');
+            if (stoppedIcon) stoppedIcon.style.display = 'none';
+
+            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+            
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) {
+                headerEl.removeAttribute('data-i18n');
+                headerEl.textContent = dict.success_header || 'Transfer Complete';
+            }
+            
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) {
+                summaryEl.removeAttribute('data-i18n');
+                var count = {{.Count}};
+                if (count === 1) {
+                    summaryEl.textContent = dict.success_summary_single || '1 file has been downloaded successfully.';
+                } else {
+                    var tmpl = dict.success_summary_multiple || '{count} files have been downloaded successfully.';
+                    summaryEl.textContent = tmpl.replace('{count}', count);
+                }
+            }
+
+            var fileItems = document.querySelectorAll('.file-item-row');
+            fileItems.forEach(function(item) {
+                item.removeAttribute('onclick');
+                item.style.cursor = 'default';
+                var arrow = item.querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+            });
+            
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                singleFile.removeAttribute('onclick');
+                singleFile.style.cursor = 'default';
+                var arrow = singleFile.querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+            }
+
+            var warningBox = document.querySelector('.wifi-warning-box');
+            if (warningBox) warningBox.style.display = 'none';
+
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) btnRow.style.display = 'none';
+
+            var hintEl = document.querySelector('[data-i18n="close_hint"]');
+            if (hintEl) {
+                hintEl.removeAttribute('data-i18n');
+                hintEl.textContent = dict.success_tips_all || 'The transfer has completed successfully. You can close this page now.';
+            }
         }
 
         function stopSharing() {
