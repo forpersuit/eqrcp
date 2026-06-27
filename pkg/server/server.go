@@ -74,6 +74,11 @@ type Server struct {
 	downloadedBytes        map[int]int64
 	downloadedBytesMu      sync.Mutex
 	KeepAlive              bool
+	clientMutex            sync.Mutex
+	clientLastSeen         map[string]time.Time
+	clientProgress         map[string]map[int]int64
+	expectedBytesMu        sync.Mutex
+	expectedBytes          map[int]int64
 }
 
 type transferStatus struct {
@@ -211,6 +216,7 @@ func (s *Server) ServeQR(url string) error {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		s.registerClientActivity(r, w)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(s.getStatus()); err != nil {
 			log.Println(err)
@@ -589,7 +595,137 @@ func (s *Server) markItemDownloaded(index int) bool {
 		status.DownloadedItems = items
 	})
 
-	return count >= total
+	s.clientMutex.Lock()
+	activeCount := 0
+	now := time.Now()
+	for _, lastSeen := range s.clientLastSeen {
+		if now.Sub(lastSeen) <= 8*time.Second {
+			activeCount++
+		}
+	}
+	s.clientMutex.Unlock()
+
+	if activeCount <= 1 {
+		return count >= total
+	}
+
+	return s.isAllActiveClientsFinished()
+}
+
+func (s *Server) isAllActiveClientsFinished() bool {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	if len(s.clientLastSeen) == 0 {
+		return false
+	}
+
+	now := time.Now()
+	activeCount := 0
+	finishedCount := 0
+
+	totalItems := len(s.body.Paths)
+	if totalItems == 0 {
+		return true
+	}
+
+	for clientID, lastSeen := range s.clientLastSeen {
+		if now.Sub(lastSeen) <= 8*time.Second {
+			activeCount++
+
+			completedForClient := 0
+			if progress, ok := s.clientProgress[clientID]; ok {
+				for i := 0; i < totalItems; i++ {
+					clientBytes := progress[i]
+					var size int64
+					s.expectedBytesMu.Lock()
+					if s.expectedBytes != nil {
+						size = s.expectedBytes[i]
+					}
+					s.expectedBytesMu.Unlock()
+
+					if size <= 0 {
+						targetPath := s.body.Paths[i]
+						if info, err := os.Stat(targetPath); err == nil {
+							size = info.Size()
+						}
+					}
+
+					if size > 0 && clientBytes >= size {
+						completedForClient++
+					}
+				}
+			}
+
+			if completedForClient >= totalItems {
+				finishedCount++
+			}
+		}
+	}
+
+	if activeCount > 0 && finishedCount == activeCount {
+		return true
+	}
+	return false
+}
+
+func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) string {
+	clientID := s.getClientID(r, w)
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientLastSeen == nil {
+		s.clientLastSeen = make(map[string]time.Time)
+	}
+	s.clientLastSeen[clientID] = time.Now()
+	return clientID
+}
+
+func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
+	cookie, err := r.Cookie("eqt_client_id")
+	if err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	randStr, randErr := util.GetRandomURLPath()
+	var suffix string
+	if randErr == nil {
+		suffix = randStr
+	} else {
+		suffix = "fallback"
+	}
+	newID := fmt.Sprintf("cli_%d_%s", time.Now().UnixNano(), suffix)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "eqt_client_id",
+		Value:    newID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   3600,
+	})
+	return newID
+}
+
+func (s *Server) addClientDownloadedBytes(clientID string, itemIndex int, written int64) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientProgress == nil {
+		s.clientProgress = make(map[string]map[int]int64)
+	}
+	if s.clientProgress[clientID] == nil {
+		s.clientProgress[clientID] = make(map[int]int64)
+	}
+	s.clientProgress[clientID][itemIndex] += written
+}
+
+func (s *Server) resetClientDownloadedBytes(clientID string, itemIndex int) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientProgress == nil {
+		s.clientProgress = make(map[string]map[int]int64)
+	}
+	if s.clientProgress[clientID] == nil {
+		s.clientProgress[clientID] = make(map[int]int64)
+	}
+	s.clientProgress[clientID][itemIndex] = 0
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
@@ -647,6 +783,9 @@ func New(cfg *config.Config) (*Server, error) {
 	app.KeepAlive = cfg.KeepAlive
 	app.downloadedItems = make(map[int]bool)
 	app.downloadedBytes = make(map[int]int64)
+	app.clientLastSeen = make(map[string]time.Time)
+	app.clientProgress = make(map[string]map[int]int64)
+	app.expectedBytes = make(map[int]int64)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
 	bind, err := util.GetInterfaceAddress(cfg.Interface)
@@ -933,6 +1072,7 @@ func New(cfg *config.Config) (*Server, error) {
 			// Remove connection from the waitgroup when done
 			defer waitgroup.Done()
 		}
+		clientID := app.getClientID(r, w)
 		currentIndex := 0
 		if isMultiFile && itemIndexStr != "" {
 			if idx, err := strconv.Atoi(itemIndexStr); err == nil {
@@ -949,9 +1089,17 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.downloadedBytes[currentIndex] = 0
 			app.downloadedBytesMu.Unlock()
+			app.resetClientDownloadedBytes(clientID, currentIndex)
 		}
 
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
+		app.expectedBytesMu.Lock()
+		if app.expectedBytes == nil {
+			app.expectedBytes = make(map[int]int64)
+		}
+		app.expectedBytes[currentIndex] = expectedBytes
+		app.expectedBytesMu.Unlock()
+
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
 			onWrite: func(written int64) {
@@ -968,6 +1116,7 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				app.downloadedBytes[currentIndex] += written
 				app.downloadedBytesMu.Unlock()
+				app.addClientDownloadedBytes(clientID, currentIndex, written)
 			},
 		}
 		http.ServeFile(progressWriter, r, servePath)
@@ -984,6 +1133,7 @@ func New(cfg *config.Config) (*Server, error) {
 			app.downloadedBytesMu.Lock()
 			app.downloadedBytes[currentIndex] = 0
 			app.downloadedBytesMu.Unlock()
+			app.resetClientDownloadedBytes(clientID, currentIndex)
 
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
