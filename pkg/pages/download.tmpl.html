@@ -593,8 +593,45 @@
             });
         }
 
+        var completedItems = {};
+        var totalCount = {{.Count}};
+
+        function markItemCompleted(index) {
+            completedItems[index] = true;
+            
+            // 局部打勾变绿
+            var fileRows = document.querySelectorAll('.file-item-row');
+            if (fileRows && fileRows[index]) {
+                var arrow = fileRows[index].querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+                fileRows[index].removeAttribute('onclick');
+                fileRows[index].style.cursor = 'default';
+            }
+
+            checkAllCompleted();
+        }
+
+        function checkAllCompleted() {
+            var completedCount = Object.keys(completedItems).length;
+            if (completedCount >= totalCount) {
+                // 所有项目都已经触发下载，延迟1.5秒后切到完成界面并静默关闭后端服务
+                setTimeout(function() {
+                    showCompletedUI();
+                    silentStopServer();
+                }, 1500);
+            }
+        }
+
+        function silentStopServer() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', window.location.pathname + '?stop=1', true);
+            xhr.send();
+        }
+
         function triggerDownload() {
-            startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1';
                 return;
@@ -614,10 +651,26 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                var arrow = singleFile.querySelector('span[style*="color: var(--accent)"]');
+                if (arrow) {
+                    arrow.style.color = 'var(--accent-icon)';
+                    arrow.textContent = '✓';
+                }
+                singleFile.removeAttribute('onclick');
+                singleFile.style.cursor = 'default';
+            }
+
+            // 单个或ZIP包下载，触发后1.8秒自动置为完成界面并停止服务
+            setTimeout(function() {
+                showCompletedUI();
+                silentStopServer();
+            }, 1800);
         }
 
         function triggerDownloadItem(index) {
-            startStatusPolling();
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'inline-flex';
             document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
@@ -631,6 +684,9 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
+
+            // 前端标记此项已完成并触发判定
+            markItemCompleted(index);
         }
 
         function triggerDownloadAllIndividual() {
@@ -642,8 +698,6 @@
             document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
             applyLanguage();
             
-            startStatusPolling();
-
             var delay = 0;
             for (var i = 0; i < count; i++) {
                 (function(idx) {
@@ -655,75 +709,13 @@
                         setTimeout(function() {
                             document.body.removeChild(iframe);
                         }, 3000);
+
+                        // 前端逐个触发标记并打勾
+                        markItemCompleted(idx);
                     }, delay);
                 })(i);
                 delay += 400;
             }
-        }
-
-        var pollingStarted = false;
-        function startStatusPolling() {
-            if (pollingStarted) return;
-            pollingStarted = true;
-            
-            var errorCount = 0;
-            var intervalId = setInterval(function() {
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', window.location.pathname + '/status', true);
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            errorCount = 0;
-                            try {
-                                var status = JSON.parse(xhr.responseText);
-                                
-                                // Update checkmarks based on server verified download completion
-                                if (status.downloadedItems && status.downloadedItems.length > 0) {
-                                    var fileRows = document.querySelectorAll('.file-item-row');
-                                    status.downloadedItems.forEach(function(idx) {
-                                        if (fileRows && fileRows[idx]) {
-                                            var arrow = fileRows[idx].querySelector('span[style*="color: var(--accent)"]');
-                                            if (arrow) {
-                                                arrow.style.color = 'var(--accent-icon)';
-                                                arrow.textContent = '✓';
-                                            }
-                                        }
-                                    });
-
-                                    // Double check: if verified downloaded items count equals total files count, trigger completion immediately
-                                    if (status.downloadedItems.length >= count) {
-                                        clearInterval(intervalId);
-                                        showCompletedUI();
-                                        return;
-                                    }
-                                }
-
-                                if (status.state === 'completed') {
-                                    clearInterval(intervalId);
-                                    showCompletedUI();
-                                }
-                            } catch(e) {}
-                        } else if (xhr.status === 410) {
-                            clearInterval(intervalId);
-                            showCompletedUI();
-                        } else {
-                            errorCount++;
-                            if (errorCount >= 1) {
-                                clearInterval(intervalId);
-                                showCompletedUI();
-                            }
-                        }
-                    }
-                };
-                xhr.onerror = function() {
-                    errorCount++;
-                    if (errorCount >= 1) {
-                        clearInterval(intervalId);
-                        showCompletedUI();
-                    }
-                };
-                xhr.send();
-            }, 1200);
         }
 
         function showCompletedUI() {
