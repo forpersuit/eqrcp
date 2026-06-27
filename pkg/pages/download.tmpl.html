@@ -779,6 +779,7 @@
 
         var intervalId = null;
         var pollingStarted = false;
+        var isCompleted = false;
         function startStatusPolling() {
             if (pollingStarted) return;
             pollingStarted = true;
@@ -809,15 +810,19 @@
 
                                     // Double check: if verified downloaded items count equals total files count, trigger completion immediately
                                     if (status.downloadedItems.length >= totalCount) {
-                                        clearInterval(intervalId);
-                                        showCompletedUI();
+                                        if (!isCompleted) {
+                                            isCompleted = true;
+                                            showCompletedUI();
+                                        }
                                         return;
                                     }
                                 }
 
                                 if (status.state === 'completed') {
-                                    clearInterval(intervalId);
-                                    showCompletedUI();
+                                    if (!isCompleted) {
+                                        isCompleted = true;
+                                        showCompletedUI();
+                                    }
                                 }
                             } catch(e) {}
                         } else if (xhr.status === 410) {

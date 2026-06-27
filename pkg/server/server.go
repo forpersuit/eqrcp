@@ -1393,12 +1393,14 @@ func New(cfg *config.Config) (*Server, error) {
 			} else if itemIndexStr != "" {
 				allDownloaded = app.markItemDownloaded(currentIndex)
 			}
+		} else {
+			allDownloaded = app.markItemDownloaded(0)
 		}
 
-		if !isMultiFile || allDownloaded {
+		if allDownloaded {
 			app.setStatus("completed", "Transfer completed.")
 			app.recordStatus()
-			if isMultiFile && !app.KeepAlive {
+			if !app.KeepAlive {
 				go app.signalStopAfterStatusGrace()
 			}
 		} else {
