@@ -614,15 +614,6 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
-
-            var singleFile = document.querySelector('.file-fallback');
-            if (singleFile) {
-                var arrow = singleFile.querySelector('span[style*="color: var(--accent)"]');
-                if (arrow) {
-                    arrow.style.color = 'var(--accent-icon)';
-                    arrow.textContent = '✓';
-                }
-            }
         }
 
         function triggerDownloadItem(index) {
@@ -640,15 +631,6 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
-
-            var fileRows = document.querySelectorAll('.file-item-row');
-            if (fileRows && fileRows[index]) {
-                var arrow = fileRows[index].querySelector('span[style*="color: var(--accent)"]');
-                if (arrow) {
-                    arrow.style.color = 'var(--accent-icon)';
-                    arrow.textContent = '✓';
-                }
-            }
         }
 
         function triggerDownloadAllIndividual() {
@@ -673,15 +655,6 @@
                         setTimeout(function() {
                             document.body.removeChild(iframe);
                         }, 3000);
-
-                        var fileRows = document.querySelectorAll('.file-item-row');
-                        if (fileRows && fileRows[idx]) {
-                            var arrow = fileRows[idx].querySelector('span[style*="color: var(--accent)"]');
-                            if (arrow) {
-                                arrow.style.color = 'var(--accent-icon)';
-                                arrow.textContent = '✓';
-                            }
-                        }
                     }, delay);
                 })(i);
                 delay += 400;
@@ -703,6 +676,21 @@
                             errorCount = 0;
                             try {
                                 var status = JSON.parse(xhr.responseText);
+                                
+                                // Update checkmarks based on server verified download completion
+                                if (status.downloadedItems && status.downloadedItems.length > 0) {
+                                    var fileRows = document.querySelectorAll('.file-item-row');
+                                    status.downloadedItems.forEach(function(idx) {
+                                        if (fileRows && fileRows[idx]) {
+                                            var arrow = fileRows[idx].querySelector('span[style*="color: var(--accent)"]');
+                                            if (arrow) {
+                                                arrow.style.color = 'var(--accent-icon)';
+                                                arrow.textContent = '✓';
+                                            }
+                                        }
+                                    });
+                                }
+
                                 if (status.state === 'completed') {
                                     clearInterval(intervalId);
                                     showCompletedUI();

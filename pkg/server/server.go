@@ -75,20 +75,21 @@ type Server struct {
 }
 
 type transferStatus struct {
-	State       string   `json:"state"`
-	Mode        string   `json:"mode,omitempty"`
-	Title       string   `json:"title,omitempty"`
-	Target      string   `json:"target,omitempty"`
-	Archive     bool     `json:"archive,omitempty"`
-	ArchiveName string   `json:"archiveName,omitempty"`
-	Items       []string `json:"items,omitempty"`
-	Current     string   `json:"current,omitempty"`
-	Message     string   `json:"message"`
-	BytesDone   int64    `json:"bytesDone"`
-	BytesTotal  int64    `json:"bytesTotal"`
-	Percent     int      `json:"percent"`
-	SavedFiles  []string `json:"savedFiles,omitempty"`
-	Version     string   `json:"version,omitempty"`
+	State           string   `json:"state"`
+	Mode            string   `json:"mode,omitempty"`
+	Title           string   `json:"title,omitempty"`
+	Target          string   `json:"target,omitempty"`
+	Archive         bool     `json:"archive,omitempty"`
+	ArchiveName     string   `json:"archiveName,omitempty"`
+	Items           []string `json:"items,omitempty"`
+	DownloadedItems []int    `json:"downloadedItems,omitempty"`
+	Current         string   `json:"current,omitempty"`
+	Message         string   `json:"message"`
+	BytesDone       int64    `json:"bytesDone"`
+	BytesTotal      int64    `json:"bytesTotal"`
+	Percent         int      `json:"percent"`
+	SavedFiles      []string `json:"savedFiles,omitempty"`
+	Version         string   `json:"version,omitempty"`
 }
 
 type transferStatusRecord struct {
@@ -522,6 +523,7 @@ func (s *Server) recordStatus() {
 func cloneTransferStatus(status transferStatus) transferStatus {
 	status.SavedFiles = append([]string(nil), status.SavedFiles...)
 	status.Items = append([]string(nil), status.Items...)
+	status.DownloadedItems = append([]int(nil), status.DownloadedItems...)
 	status.Version = version.String()
 	return status
 }
@@ -569,9 +571,23 @@ func (s *Server) markItemDownloaded(index int) bool {
 		s.downloadedItems = make(map[int]bool)
 	}
 	s.downloadedItems[index] = true
-	allDownloaded := len(s.downloadedItems) >= len(s.body.Paths)
+	count := len(s.downloadedItems)
+	total := len(s.body.Paths)
+
+	// Collect currently downloaded items indices
+	var items []int
+	for idx, val := range s.downloadedItems {
+		if val {
+			items = append(items, idx)
+		}
+	}
 	s.downloadedItemsMu.Unlock()
-	return allDownloaded
+
+	s.updateStatus(func(status *transferStatus) {
+		status.DownloadedItems = items
+	})
+
+	return count >= total
 }
 
 // Wait for transfer to be completed, it waits forever if kept awlive
