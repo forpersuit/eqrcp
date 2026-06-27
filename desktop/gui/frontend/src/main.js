@@ -56,7 +56,8 @@ window.onunhandledrejection = function(event) {
     }
 };
 
-
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 const chatDailyFreeMs = 5 * 60 * 1000;
@@ -330,10 +331,10 @@ function renderShare() {
 
     const hasItems = state.sharePaths.length > 0;
     return `
-        <div class="dropzone">
-            <div class="drop-target" style="--wails-drop-target: drop">
-                <div class="drop-title">${t('drag_drop_tips')}</div>
-                <div class="drop-subtitle">${hasItems ? `${state.sharePaths.length} ${t('items_ready')}` : t('or_click_to')}</div>
+        <div class="dropzone" style="--wails-drop-target: drop">
+            <div class="drop-target" style="pointer-events: none;">
+                <div class="drop-title" style="pointer-events: none;">${t('drag_drop_tips')}</div>
+                <div class="drop-subtitle" style="pointer-events: none;">${hasItems ? `${state.sharePaths.length} ${t('items_ready')}` : t('or_click_to')}</div>
             </div>
             <div class="actions">
                 <button type="button" id="choose-files">${t('select_files')}</button>
