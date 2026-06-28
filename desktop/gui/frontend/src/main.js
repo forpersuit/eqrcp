@@ -389,6 +389,7 @@ function renderShareTransfer(task) {
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const paths = task.paths || [];
+    const isArchive = !!task.transferArchiveName;
 
     const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
     const shouldCollapse = isSharedOrReceived;
@@ -431,6 +432,23 @@ function renderShareTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
+            ${isArchive && task.transferState === 'transferring' ? `
+                <div class="locked-list" style="margin-bottom: 12px; border-color: var(--accent-border);">
+                    <div style="padding: 12px; background: var(--accent-light); border-radius: 8px; border: 1.2px solid var(--accent-border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="color: var(--accent-strong); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">📦 ${escapeHTML(task.transferArchiveName)}</strong>
+                            <span style="font-size: 12px; font-weight: 800; color: var(--accent-strong);">${percent}%</span>
+                        </div>
+                        <div class="progress" style="height: 6px; margin: 8px 0 6px 0; border-radius: 3px; background: var(--line); overflow: hidden; position: relative;">
+                            <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
+                            ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
                 <ul class="path-list locked">${paths.map((path, index) => {
