@@ -319,17 +319,6 @@
 
             <p class="section-title" data-i18n="saved_file">File to Receive</p>
             
-            <div id="download-progress-container" style="display: none; margin-bottom: 20px; text-align: left;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px;">
-                    <span id="download-progress-title" style="font-weight: 700; color: var(--accent);">Downloading...</span>
-                    <span id="download-progress-percent" style="font-weight: 800; color: var(--accent);">0%</span>
-                </div>
-                <div style="background: #e5e7eb; border-radius: 999px; height: 8px; overflow: hidden; position: relative;">
-                    <div id="download-progress-bar" style="background: var(--accent); height: 100%; width: 0%; transition: width 150ms ease;"></div>
-                </div>
-                <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); text-align: right; margin-top: 4px;">0 B / 0 B</div>
-            </div>
-            
             <div id="files-list-container" style="text-align: left; margin-bottom: 20px;">
                 {{if gt .Count 1}}
                     <div style="border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
@@ -816,22 +805,6 @@
                                     }
                                 }
 
-                                // Update progress bar
-                                var progressContainer = document.getElementById('download-progress-container');
-                                if (progressContainer) {
-                                    if (status.state === 'transferring') {
-                                        progressContainer.style.display = 'block';
-                                        var pct = status.percent || 0;
-                                        document.getElementById('download-progress-percent').textContent = pct + '%';
-                                        document.getElementById('download-progress-bar').style.width = pct + '%';
-                                        
-                                        var doneStr = formatBytes(status.bytesDone || 0);
-                                        var totalStr = formatBytes(status.bytesTotal || 0);
-                                        document.getElementById('download-progress-bytes').textContent = doneStr + ' / ' + totalStr;
-                                    } else {
-                                        progressContainer.style.display = 'none';
-                                    }
-                                }
 
                                 // Update highlights based on server verified download completion
                                 if (status.downloadedItems && status.downloadedItems.length > 0) {
@@ -887,11 +860,6 @@
         }
 
         function showCompletedUI() {
-            var progressContainer = document.getElementById('download-progress-container');
-            if (progressContainer) {
-                progressContainer.style.display = 'none';
-            }
-
             document.getElementById('status-icon-pending').style.display = 'none';
             var successIcon = document.getElementById('status-icon-success');
             if (successIcon) {

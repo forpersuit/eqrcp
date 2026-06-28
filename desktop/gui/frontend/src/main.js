@@ -38,6 +38,7 @@ import {
     StartupStatus,
     StopChat,
     StopCurrent,
+    SetAutoStop,
 } from '../wailsjs/go/main/App';
 
 window.onerror = function(message, source, lineno, colno, error) {
