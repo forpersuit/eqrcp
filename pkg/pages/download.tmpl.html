@@ -350,7 +350,6 @@
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
                 {{if gt .Count 1}}
                     <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()"></button>
-                    <button type="button" class="btn btn-secondary" id="btn-action-download-all" onclick="triggerDownloadAllIndividual()"></button>
                 {{else}}
                     <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
                 {{end}}
@@ -675,10 +674,6 @@
             
             var count = {{.Count}};
             if (count > 1) {
-                var btnDownloadAllEl = document.getElementById('btn-action-download-all');
-                if (btnDownloadAllEl) {
-                    btnDownloadAllEl.textContent = dict.btn_download_all || 'Download All';
-                }
                 var btnDownloadZipEl = document.getElementById('btn-action-download-zip');
                 if (btnDownloadZipEl) {
                     btnDownloadZipEl.textContent = dict.btn_download_all_zip || 'Download All (ZIP)';
@@ -733,7 +728,7 @@
         function triggerDownload() {
             startStatusPolling();
             if (downloadTriggered) {
-                window.location.href = window.location.pathname + '?download=1';
+                window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
                 return;
             }
             downloadTriggered = true;
@@ -768,34 +763,6 @@
             setTimeout(function() {
                 document.body.removeChild(iframe);
             }, 3000);
-        }
-  
-        function triggerDownloadAllIndividual() {
-            var count = {{.Count}};
-            
-            document.getElementById('status-icon-pending').style.display = 'none';
-            document.getElementById('status-icon-success').style.display = 'inline-flex';
-            document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
-            document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
-            applyLanguage();
-            
-            startStatusPolling();
-  
-            var delay = 0;
-            for (var i = 0; i < count; i++) {
-                (function(idx) {
-                    setTimeout(function() {
-                        var iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.src = window.location.pathname + '?download=1&item=' + idx + '&client_id=' + getOrGenerateClientId();
-                        document.body.appendChild(iframe);
-                        setTimeout(function() {
-                            document.body.removeChild(iframe);
-                        }, 3000);
-                    }, delay);
-                })(i);
-                delay += 400;
-            }
         }
 
         var intervalId = null;
