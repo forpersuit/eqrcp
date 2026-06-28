@@ -929,11 +929,19 @@ function renderPanel() {
         about: t('about_title'),
         feedback: t('feedback'),
         'confirm-switch': t('confirm_switch_title'),
+        'plan-comparison': t('plan_desc_title'),
     }[state.activePanel] || '';
     const isConfirm = state.activePanel === 'confirm-switch';
+    const isPlanComp = state.activePanel === 'plan-comparison';
+    let modalStyle = '';
+    if (isConfirm) {
+        modalStyle = 'style="max-width: 420px; width: min(420px, 100%);"';
+    } else if (isPlanComp) {
+        modalStyle = 'style="max-width: 780px; width: min(780px, 100%);"';
+    }
     return `
         <div class="overlay" role="presentation">
-            <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}" ${isConfirm ? 'style="max-width: 420px; width: min(420px, 100%);"' : ''}>
+            <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}" ${modalStyle}>
                 <div class="modal-head">
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
@@ -944,6 +952,7 @@ function renderPanel() {
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
+                ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
             </section>
@@ -1350,34 +1359,6 @@ function renderAboutPanel() {
         `;
     }
 
-    let planPopover = `
-        <div class="popover-backdrop" id="close-plan-popover-bg"></div>
-        <div class="plan-popover">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
-                <strong style="color: var(--accent-strong); font-size: 14px; display: flex; align-items: center; gap: 4px;">
-                    ${t('plan_desc_title')}
-                </strong>
-                <button class="tool-button" id="close-plan-popover" title="${t('close')}" aria-label="${t('close')}" style="border: none; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px; line-height: 1; display: flex; align-items: center; justify-content: center;">&times;</button>
-            </div>
-            <div style="font-size: 13px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; text-align: left;">
-                <div>
-                    <strong style="color: var(--ink);">${t('plan_plus_annual')}</strong>
-                    ${t('plan_plus_annual_desc')}
-                </div>
-                <div>
-                    <strong style="color: var(--ink);">${t('plan_plus_lifetime')}</strong>
-                    ${t('plan_plus_lifetime_desc')}
-                </div>
-                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
-                    💡 <strong>${t('plan_binding_note')}</strong>：${t('plan_binding_note_desc')}
-                </div>
-                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; color: var(--muted); line-height: 1.5;">
-                    🎁 <strong>${t('free_tier_rules')}</strong>：${t('free_tier_rules_desc')}
-                </div>
-            </div>
-        </div>
-    `;
-
     return `
         <div class="about-panel">
             ${warningBox}
@@ -1409,7 +1390,101 @@ function renderAboutPanel() {
                 <dt>${t('legal') || 'Legal'}</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             ${devSection}
-            ${planPopover}
+        </div>
+    `;
+}
+
+function renderPlanComparisonPanel() {
+    const checkGreen = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#28a948" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    const xRed = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fc0035" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
+    return `
+        <div class="plan-comparison-panel" style="max-height: calc(100vh - 150px); overflow-y: auto; padding: 4px; box-sizing: border-box;">
+            <div class="plan-cards-container" style="display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom: 20px;">
+                <!-- 体验卡片 -->
+                <div class="plan-card" style="border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--bg); display: flex; flex-direction: column; text-align: left; transition: all 0.2s ease;">
+                    <div style="margin-bottom: 12px;">
+                        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em;">Free</span>
+                        <h3 style="font-size: 20px; margin: 4px 0; font-weight: 700; color: var(--ink);">${t('free_quota') || '体验版'}</h3>
+                        <p style="font-size: 12px; color: var(--muted); margin: 6px 0 12px; min-height: 32px;">${t('free_tier_desc') || '每日体验 EQT Chat 的基础传输额度。'}</p>
+                        <div style="font-size: 24px; font-weight: 800; color: var(--ink); margin-bottom: 16px;">¥0 <span style="font-size: 13px; font-weight: 400; color: var(--muted);">${t('lifetime') || '永久'}</span></div>
+                    </div>
+                    <ul style="list-style: none; padding: 0; margin: 0 0 20px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_chat_free') || '每日 Chat 体验时长限制：10分钟'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--muted);">
+                            ${xRed} <span>${t('plan_feature_limit_warning') || '体验超时后需等待明日重置额度'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_lan_transfer') || '局域网极速文件传输 (不限大小)'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_drag_and_drop') || '支持拖拽发送、历史保存、文件夹选择'}</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- PLUS 年付卡片 -->
+                <div class="plan-card featured" style="border: 2px solid var(--accent); border-radius: 12px; padding: 20px; background: var(--bg); display: flex; flex-direction: column; text-align: left; position: relative; box-shadow: 0 8px 30px rgba(47, 158, 115, 0.06); transition: all 0.2s ease;">
+                    <div style="position: absolute; top: -11px; right: 16px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Popular</div>
+                    <div style="margin-bottom: 12px;">
+                        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em;">Premium</span>
+                        <h3 style="font-size: 20px; margin: 4px 0; font-weight: 700; color: var(--ink);">PLUS</h3>
+                        <p style="font-size: 12px; color: var(--muted); margin: 6px 0 12px; min-height: 32px;">${t('plan_plus_annual_desc_short') || '按年订阅激活，解锁无限制的高频协同交互体验。'}</p>
+                        <div style="font-size: 24px; font-weight: 800; color: var(--accent); margin-bottom: 16px;">PLUS <span style="font-size: 13px; font-weight: 400; color: var(--muted);">/ ${t('year') || '年'}</span></div>
+                    </div>
+                    <ul style="list-style: none; padding: 0; margin: 0 0 20px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <strong>${t('plan_feature_chat_unlimit') || '无限量 Chat 时间（绝不限额）'}</strong>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_unlimit_transfer') || '高并发无限度极速发送与接收文件'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_device_bind') || '绑定当前主板与系统指纹，稳定可靠'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_clock_check') || '本地密码学独立验签，杜绝篡改降级'}</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- PLUS U 永久卡片 -->
+                <div class="plan-card" style="border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--bg); display: flex; flex-direction: column; text-align: left; transition: all 0.2s ease;">
+                    <div style="margin-bottom: 12px;">
+                        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em;">Ultimate</span>
+                        <h3 style="font-size: 20px; margin: 4px 0; font-weight: 700; color: var(--ink);">PLUS U</h3>
+                        <p style="font-size: 12px; color: var(--muted); margin: 6px 0 12px; min-height: 32px;">${t('plan_plus_lifetime_desc_short') || '一次购买，永久有效。尽享未来所有新版本特权。'}</p>
+                        <div style="font-size: 24px; font-weight: 800; color: var(--ink); margin-bottom: 16px;">PLUS U <span style="font-size: 13px; font-weight: 400; color: var(--muted);">${t('lifetime') || '永久'}</span></div>
+                    </div>
+                    <ul style="list-style: none; padding: 0; margin: 0 0 20px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <strong>${t('plan_feature_lifetime_active') || '终身永久有效（无到期顾虑）'}</strong>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_future_upgrade') || '终身免费主板授权升级与迁移支持'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_chat_unlimit') || '无限量 Chat 时间（绝不限额）'}</span>
+                        </li>
+                        <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
+                            ${checkGreen} <span>${t('plan_feature_support') || '尊享专属技术支持通道'}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 说明与跳转部分 -->
+            <div style="background: var(--wash); border-radius: 8px; padding: 12px 16px; font-size: 12px; color: var(--muted); line-height: 1.6; text-align: left; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px;">
+                <div>💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
+                <div>🎁 <strong>${t('free_tier_rules') || '额度与刷新'}</strong>：${t('free_tier_rules_desc')}</div>
+            </div>
+            
+            <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                <button class="ghost" id="plan-back-to-about" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_about') || '返回关于'}</button>
+                <button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>
+            </div>
         </div>
     `;
 }
@@ -1877,18 +1952,18 @@ function bindPanelEvents() {
         document.getElementById('cancel-reset-license')?.focus();
     }
     document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
-        document.querySelector('.plan-popover')?.classList.toggle('visible');
-        document.querySelector('.popover-backdrop')?.classList.toggle('visible');
+        state.activePanel = 'plan-comparison';
+        render();
     });
     document.querySelector('#refresh-license-btn')?.addEventListener('click', triggerManualRefresh);
 
-    document.querySelector('#close-plan-popover')?.addEventListener('click', () => {
-        document.querySelector('.plan-popover')?.classList.remove('visible');
-        document.querySelector('.popover-backdrop')?.classList.remove('visible');
+    document.querySelector('#plan-back-to-about')?.addEventListener('click', () => {
+        state.activePanel = 'about';
+        render();
     });
-    document.querySelector('#close-plan-popover-bg')?.addEventListener('click', () => {
-        document.querySelector('.plan-popover')?.classList.remove('visible');
-        document.querySelector('.popover-backdrop')?.classList.remove('visible');
+    document.querySelector('#plan-go-redeem')?.addEventListener('click', () => {
+        state.activePanel = 'redeem';
+        render();
     });
 
     // About logo click helper for dev mode
@@ -2062,7 +2137,11 @@ function closePanel() {
         confirmSwitchResolve(false);
         confirmSwitchResolve = null;
     }
-    state.activePanel = '';
+    if (state.activePanel === 'plan-comparison') {
+        state.activePanel = 'about';
+    } else {
+        state.activePanel = '';
+    }
     state.confirmResetPending = false;
     state.showEmojiPicker = false;
     render();
