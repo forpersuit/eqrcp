@@ -836,16 +836,10 @@ func (s *Server) markItemDownloaded(index int) bool {
 	})
 
 	s.clientMutex.Lock()
-	activeCount := 0
-	now := time.Now()
-	for _, lastSeen := range s.clientLastSeen {
-		if now.Sub(lastSeen) <= 8*time.Second {
-			activeCount++
-		}
-	}
+	totalClients := len(s.clientLastSeen)
 	s.clientMutex.Unlock()
 
-	if activeCount <= 1 {
+	if totalClients == 0 {
 		return count >= total
 	}
 
@@ -856,56 +850,69 @@ func (s *Server) isAllActiveClientsFinished() bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
-	if len(s.clientLastSeen) == 0 {
+	totalClients := len(s.clientLastSeen)
+	if totalClients == 0 {
 		return false
 	}
-
-	now := time.Now()
-	activeCount := 0
-	finishedCount := 0
 
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return true
 	}
 
+	now := time.Now()
+	activeCount := 0
+	finishedActiveCount := 0
+	finishedTotalCount := 0
+
 	for clientID, lastSeen := range s.clientLastSeen {
-		if now.Sub(lastSeen) <= 8*time.Second {
+		isActive := now.Sub(lastSeen) <= 8*time.Second
+		if isActive {
 			activeCount++
+		}
 
-			completedForClient := 0
-			if progress, ok := s.clientProgress[clientID]; ok {
-				for i := 0; i < totalItems; i++ {
-					clientBytes := progress[i]
-					var size int64
-					s.expectedBytesMu.Lock()
-					if s.expectedBytes != nil {
-						size = s.expectedBytes[i]
-					}
-					s.expectedBytesMu.Unlock()
+		completedForClient := 0
+		if progress, ok := s.clientProgress[clientID]; ok {
+			for i := 0; i < totalItems; i++ {
+				clientBytes := progress[i]
+				var size int64
+				s.expectedBytesMu.Lock()
+				if s.expectedBytes != nil {
+					size = s.expectedBytes[i]
+				}
+				s.expectedBytesMu.Unlock()
 
-					if size <= 0 {
-						targetPath := s.body.Paths[i]
-						if info, err := os.Stat(targetPath); err == nil {
-							size = info.Size()
-						}
-					}
-
-					if size > 0 && clientBytes >= size {
-						completedForClient++
+				if size <= 0 {
+					targetPath := s.body.Paths[i]
+					if info, err := os.Stat(targetPath); err == nil {
+						size = info.Size()
 					}
 				}
-			}
 
-			if completedForClient >= totalItems {
-				finishedCount++
+				if size > 0 && clientBytes >= size {
+					completedForClient++
+				}
+			}
+		}
+
+		if completedForClient >= totalItems {
+			finishedTotalCount++
+			if isActive {
+				finishedActiveCount++
 			}
 		}
 	}
 
-	if activeCount > 0 && finishedCount == activeCount {
+	// Case 1: All ever-connected clients have completed their downloads.
+	if finishedTotalCount == totalClients {
 		return true
 	}
+
+	// Case 2: There are active clients, and all of them have completed their downloads.
+	if activeCount > 0 && finishedActiveCount == activeCount {
+		return true
+	}
+
 	return false
 }
 

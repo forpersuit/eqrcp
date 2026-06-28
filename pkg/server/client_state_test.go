@@ -335,3 +335,53 @@ func TestMultiDeviceAutoStopRules(t *testing.T) {
 	}
 }
 
+func TestAutoStopWhenAllInactiveButFinished(t *testing.T) {
+	stopChan := make(chan bool, 1)
+
+	s := &Server{
+		clientStates:   make(map[string]*ClientTransferStateInfo),
+		clientProgress: make(map[string]map[int]int64),
+		expectedBytes:  make(map[int]int64),
+		clientLastSeen: make(map[string]time.Time),
+		autoStop:       false,
+		body: body.Body{
+			Paths: []string{"testfile.txt"},
+		},
+		stopChannel: stopChan,
+	}
+
+	// 1. Register two clients
+	cliA := "cli_A"
+	cliB := "cli_B"
+	// Set last seen to 10 seconds ago (inactive)
+	s.clientLastSeen[cliA] = time.Now().Add(-10 * time.Second)
+	s.clientLastSeen[cliB] = time.Now().Add(-10 * time.Second)
+	s.clientStates[cliA] = &ClientTransferStateInfo{}
+	s.clientStates[cliB] = &ClientTransferStateInfo{}
+	s.clientProgress[cliA] = make(map[int]int64)
+	s.clientProgress[cliB] = make(map[int]int64)
+	s.expectedBytes[0] = 500
+
+	// 2. Both completed downloading
+	s.clientProgress[cliA][0] = 500
+	s.clientProgress[cliB][0] = 500
+
+	// 3. Trigger SetAutoStop(true). Since all devices are completed but inactive, it should trigger stop.
+	s.SetAutoStop(true)
+
+	select {
+	case <-stopChan:
+		// Success
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for auto-stop shutdown signal after toggling SetAutoStop when all clients finished but inactive")
+	}
+
+	s.statusMu.Lock()
+	state := s.status.State
+	s.statusMu.Unlock()
+	if state != "completed" {
+		t.Errorf("global server status state = %q, want \"completed\"", state)
+	}
+}
+
+

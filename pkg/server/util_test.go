@@ -1398,7 +1398,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	server.Send(payload)
 
 	// First GET to render download page
-	request, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	request, err := http.NewRequest(http.MethodGet, server.SendURL+"?client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1413,7 +1413,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	response.Body.Close()
 
 	// Download item 0
-	item0Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=0", nil)
+	item0Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=0&client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1435,7 +1435,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	}
 
 	// Verify server is still running
-	checkRequest, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	checkRequest, err := http.NewRequest(http.MethodGet, server.SendURL+"?client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1450,7 +1450,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	checkResponse.Body.Close()
 
 	// Download item 1
-	item1Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=1", nil)
+	item1Request, err := http.NewRequest(http.MethodGet, server.SendURL+"?download=1&item=1&client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1475,7 +1475,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	time.Sleep(1200 * time.Millisecond)
 
 	// Make final request, server should be stopped
-	finalRequest, err := http.NewRequest(http.MethodGet, server.SendURL, nil)
+	finalRequest, err := http.NewRequest(http.MethodGet, server.SendURL+"?client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
