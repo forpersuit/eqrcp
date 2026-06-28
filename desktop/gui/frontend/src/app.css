@@ -241,7 +241,8 @@ h2 {
     min-height: 0;
 }
 
-.layout.chat-layout {
+.layout.chat-layout,
+.layout.no-history-layout {
     grid-template-columns: minmax(0, 1fr);
 }
 

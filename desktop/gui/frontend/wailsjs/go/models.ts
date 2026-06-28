@@ -226,6 +226,7 @@ export namespace main {
 	    lastUpdateCheckTime: number;
 	    updateCheckIntervalHours: number;
 	    lang: string;
+	    showHistory: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -251,6 +252,7 @@ export namespace main {
 	        this.lastUpdateCheckTime = source["lastUpdateCheckTime"];
 	        this.updateCheckIntervalHours = source["updateCheckIntervalHours"];
 	        this.lang = source["lang"];
+	        this.showHistory = source["showHistory"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

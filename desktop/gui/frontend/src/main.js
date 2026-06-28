@@ -312,7 +312,7 @@ function render() {
                 </div>
             </header>
 
-            <section class="layout ${state.mode === 'chat' ? 'chat-layout' : ''}">
+            <section class="layout ${state.mode === 'chat' ? 'chat-layout' : ''} ${state.settings?.showHistory === false ? 'no-history-layout' : ''}">
                 <div class="workspace">
                     ${renderWorkspace()}
                     ${state.notice ? `<div class="notice success">${escapeHTML(state.notice)}</div>` : ''}
@@ -431,7 +431,7 @@ function renderShare() {
 }
 
 function renderSide() {
-    if (state.mode === 'chat') {
+    if (state.mode === 'chat' || state.settings?.showHistory === false) {
         return '';
     }
     const history = state.status?.history || [];
@@ -1128,6 +1128,15 @@ function renderSettingsPanel() {
                         <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>${t('keep_tray')}</option>
                         <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>${t('quit_app')}</option>
                     </select>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('show_history_title')}</strong>
+                        <span>${t('show_history_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-show-history', state.settings?.showHistory !== false)}
+                    </div>
                 </div>
             </section>
 
@@ -2444,6 +2453,7 @@ function syncSettingsFromDOM() {
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
     const updateInterval = document.querySelector('#settings-update-interval');
     const lang = document.querySelector('#settings-lang');
+    const showHistory = document.querySelector('#settings-show-history');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -2458,6 +2468,7 @@ function syncSettingsFromDOM() {
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
     if (lang) state.settings.lang = lang.value;
+    if (showHistory) state.settings.showHistory = showHistory.checked;
 
 
     state.receiveDir = state.settings.output || '';
@@ -2713,7 +2724,8 @@ function bindSettingsControls() {
         '#settings-close-behavior',
         '#settings-auto-update-mode',
         '#settings-update-interval',
-        '#settings-lang'
+        '#settings-lang',
+        '#settings-show-history'
     ];
     inputs.forEach(selector => {
         const el = document.querySelector(selector);

@@ -117,6 +117,7 @@ type DesktopSettings struct {
 	LastUpdateCheckTime      int64             `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int               `json:"updateCheckIntervalHours"`
 	Lang                     string            `json:"lang"`
+	ShowHistory              bool              `json:"showHistory"`
 }
 
 type InterfaceOption struct {

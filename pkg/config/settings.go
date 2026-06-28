@@ -32,6 +32,7 @@ type DesktopSettings struct {
 	LastUpdateCheckTime      int64            `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int              `json:"updateCheckIntervalHours"`
 	Lang             string                   `json:"lang"`
+	ShowHistory      bool                     `json:"showHistory"`
 }
 
 const (
@@ -117,6 +118,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("lang") {
 		lang = v.GetString("lang")
 	}
+	showHistory := true
+	if v.IsSet("showHistory") {
+		showHistory = v.GetBool("showHistory")
+	}
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
@@ -137,6 +142,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		LastUpdateCheckTime:      lastUpdateCheckTime,
 		UpdateCheckIntervalHours: updateCheckIntervalHours,
 		Lang:                     lang,
+		ShowHistory:              showHistory,
 	}, nil
 }
 
@@ -191,6 +197,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
 	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
 	v.Set("lang", settings.Lang)
+	v.Set("showHistory", settings.ShowHistory)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}

@@ -281,6 +281,8 @@ const translations = {
         waiting_qr: '正在等待生成二维码...',
         window_settings: '窗口选项',
         window_settings_desc: '设置关闭 EQT 主窗口时的软件行为。',
+        show_history_title: '显示最近传输历史',
+        show_history_desc: '控制是否在主界面右侧显示最近传输历史记录。',
         working: '正在处理...',
         reset_confirm_title: '确认重置激活状态？',
         reset_confirm_desc: '重置后，本设备将恢复为免费版套餐，受传输额度限制。',
@@ -569,6 +571,8 @@ const translations = {
         waiting_qr: 'Waiting for QR...',
         window_settings: 'Window',
         window_settings_desc: 'What happens when the EQT window is closed.',
+        show_history_title: 'Show Recent History',
+        show_history_desc: 'Control whether to show the recent transfer history on the right side of the main interface.',
         working: 'Working...',
 },
     ja: {
@@ -831,6 +835,8 @@ const translations = {
         waiting_qr: 'QRコード生成を待機中...',
         window_settings: 'ウィンドウ',
         window_settings_desc: 'EQTウィンドウを閉じたときの動作を設定します。',
+        show_history_title: '最近の履歴を表示',
+        show_history_desc: 'メイン画面の右側に最近の送信履歴を表示するかどうかを制御します。',
         working: '処理中...',
 },
     ko: {
@@ -1093,6 +1099,8 @@ const translations = {
         waiting_qr: 'QR 생성 대기 중...',
         window_settings: '창 설정',
         window_settings_desc: 'EQT 창을 닫을 때의 소프트웨어 동작 설정.',
+        show_history_title: '최근 기록 표시',
+        show_history_desc: '메인 인터페이스 우측에 최근 전송 기록을 표시할지 여부를 설정합니다。',
         working: '처리 중...',
 },
     es: {
@@ -1355,6 +1363,8 @@ const translations = {
         waiting_qr: 'Esperando código QR...',
         window_settings: 'Ventana',
         window_settings_desc: 'Qué sucede cuando se cierra la ventana de EQT.',
+        show_history_title: 'Mostrar historial reciente',
+        show_history_desc: 'Controlar si se muestra el historial de transferencias recientes en el lado derecho de la interfaz principal.',
         working: 'Procesando...',
 },
     de: {
@@ -1617,6 +1627,8 @@ const translations = {
         waiting_qr: 'Warten auf QR-Code...',
         window_settings: 'Fenster',
         window_settings_desc: 'Was passiert, wenn das EQT-Fenster geschlossen wird.',
+        show_history_title: 'Letzten Verlauf anzeigen',
+        show_history_desc: 'Steuert, ob der Verlauf der letzten Übertragungen auf der rechten Seite der Hauptoberfläche angezeigt wird.',
         working: 'Verarbeitung...',
 },
     fr: {
@@ -1878,6 +1890,8 @@ const translations = {
         waiting_qr: 'En attente du code QR...',
         window_settings: 'Fenêtre',
         window_settings_desc: 'Ce qui se passe lorsque la fenêtre EQT est fermée.',
+        show_history_title: 'Afficher l\'historique récent',
+        show_history_desc: 'Contrôler si l\'historique des transferts récents s\'affiche sur le côté droit de l\'interface principale.',
         working: 'Traitement...',
 }
 };
