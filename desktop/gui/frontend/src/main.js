@@ -1069,7 +1069,7 @@ function renderSettingsPanel() {
                         <div class="avatar-preview-wrapper">
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
-                        <div class="avatar-inputs-stack" style="position: relative; z-index: 15;">
+                        <div class="avatar-inputs-stack" style="position: relative; z-index: 9;">
                             <div class="avatar-actions">
                                 <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
                                 <button type="button" id="btn-emoji-more" class="avatar-action-btn">${t('btn_emoji') || 'Emoji'}</button>

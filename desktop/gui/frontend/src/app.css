@@ -2282,6 +2282,7 @@ dd {
                 0 16px 24px -8px rgba(0, 0, 0, 0.06); /* Geist Popover shadow */
     z-index: 9999;
     width: 260px;
+    max-width: calc(100vw - 40px);
     backdrop-filter: blur(8px);
     box-sizing: border-box;
 }

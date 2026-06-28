@@ -300,6 +300,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		LastUpdateCheckTime:      s.LastUpdateCheckTime,
 		UpdateCheckIntervalHours: s.UpdateCheckIntervalHours,
 		Lang:                     s.Lang,
+		ShowHistory:              s.ShowHistory,
 	}
 }
 
@@ -331,6 +332,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		LastUpdateCheckTime:      s.LastUpdateCheckTime,
 		UpdateCheckIntervalHours: s.UpdateCheckIntervalHours,
 		Lang:                     s.Lang,
+		ShowHistory:              s.ShowHistory,
 	}
 }
 
