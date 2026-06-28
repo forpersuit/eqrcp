@@ -1077,20 +1077,41 @@ function renderSettingsPanel() {
                                     <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
                                 ` : ''}
                             </div>
-                            ${state.showEmojiPicker ? `
-                                <div class="emoji-picker-popover" id="emoji-picker-popover">
-                                    <div class="emoji-picker-grid">
-                                        ${['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','🔥','⚡️','🎉','❤️','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗','💡','🔑','🔒','⚙️','🛡️','📡','📟','🤖','👽','👻','😈','🤡','💩','👀','🧠','👄','✍️','🤝','👏','🙌','🔥','💎','🍎','🍓','🍩','☕️','🍻','✈️','🚲','🚂','🔔','📣'].map(emoji => `
-                                            <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
-                                        `).join('')}
+                            ${state.showEmojiPicker ? (() => {
+                                const recentEmojis = (() => {
+                                    try {
+                                        const val = localStorage.getItem('eqt_recent_emojis');
+                                        if (val) return JSON.parse(val);
+                                    } catch (e) {}
+                                    return ['🚀','😎','💻','👍','🌟','🎨','🔥','❤️'];
+                                })();
+                                const allEmojis = ['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','⚡️','🎉','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗','💡','🔑','🔒','⚙️','🛡️','📡','📟','🤖','👽','👻','😈','🤡','💩','👀','🧠','👄','✍️','💎','🍎','🍓','🍩','☕️','🍻','✈️','🚲','🚂','🔔','📣'];
+                                return `
+                                    <div class="emoji-picker-popover" id="emoji-picker-popover">
+                                        <div class="emoji-picker-scroll-area">
+                                            ${recentEmojis.length > 0 ? `
+                                                <div class="emoji-picker-section-title">${t('emoji_picker_recent') || '最近使用'}</div>
+                                                <div class="emoji-picker-grid">
+                                                    ${recentEmojis.map(emoji => `
+                                                        <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                                    `).join('')}
+                                                </div>
+                                            ` : ''}
+                                            <div class="emoji-picker-section-title" style="margin-top: 6px;">${t('emoji_picker_all') || '推荐表情'}</div>
+                                            <div class="emoji-picker-grid">
+                                                ${allEmojis.map(emoji => `
+                                                    <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        <div class="emoji-picker-divider"></div>
+                                        <div class="emoji-picker-custom-row">
+                                            <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || '自定义...')}" maxlength="8" />
+                                            <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || '确定'}</button>
+                                        </div>
                                     </div>
-                                    <div class="emoji-picker-divider"></div>
-                                    <div class="emoji-picker-custom-row">
-                                        <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || '自定义...')}" maxlength="8" />
-                                        <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || '确定'}</button>
-                                    </div>
-                                </div>
-                            ` : ''}
+                                `;
+                            })() : ''}
                         </div>
                     </div>
                 </div>
@@ -2657,6 +2678,16 @@ function bindSettingsControls() {
             event.stopPropagation();
             const emojiVal = event.currentTarget.dataset.emoji;
             if (state.settings && emojiVal) {
+                try {
+                    let recent = [];
+                    const val = localStorage.getItem('eqt_recent_emojis');
+                    if (val) recent = JSON.parse(val);
+                    recent = recent.filter(e => e !== emojiVal);
+                    recent.unshift(emojiVal);
+                    recent = recent.slice(0, 8);
+                    localStorage.setItem('eqt_recent_emojis', JSON.stringify(recent));
+                } catch (e) {}
+
                 state.settings.chatAvatar = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
@@ -2689,6 +2720,16 @@ function bindSettingsControls() {
             const rawVal = inputEl.value.trim();
             const emojiVal = cleanChatAvatar(rawVal);
             if (emojiVal) {
+                try {
+                    let recent = [];
+                    const val = localStorage.getItem('eqt_recent_emojis');
+                    if (val) recent = JSON.parse(val);
+                    recent = recent.filter(e => e !== emojiVal);
+                    recent.unshift(emojiVal);
+                    recent = recent.slice(0, 8);
+                    localStorage.setItem('eqt_recent_emojis', JSON.stringify(recent));
+                } catch (e) {}
+
                 state.settings.chatAvatar = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();

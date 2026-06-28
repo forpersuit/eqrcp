@@ -2273,67 +2273,117 @@ dd {
     gap: 8px;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 10px;
-    box-shadow: 0 10px 32px rgba(24, 33, 31, 0.18);
+    border-radius: 12px; /* Geist rounded.md */
+    padding: 12px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02), 
+                0 4px 8px -4px rgba(0, 0, 0, 0.04), 
+                0 16px 24px -8px rgba(0, 0, 0, 0.06); /* Geist Popover shadow */
     z-index: 9999;
-    width: 240px;
+    width: 260px;
     backdrop-filter: blur(8px);
+    box-sizing: border-box;
+}
+.emoji-picker-scroll-area {
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.emoji-picker-scroll-area::-webkit-scrollbar {
+    width: 4px;
+}
+.emoji-picker-scroll-area::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 999px;
+}
+.emoji-picker-scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+.emoji-picker-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 2px;
+    user-select: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 .emoji-picker-grid {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(7, 1fr); /* 260px 宽度下 7 列更宽裕 */
     gap: 6px;
 }
 .emoji-picker-divider {
     height: 1px;
     background: var(--line);
-    margin: 2px 0;
+    margin: 4px 0;
 }
 .emoji-picker-custom-row {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
 }
 #emoji-picker-custom-input {
     flex: 1;
-    height: 28px;
-    padding: 0 8px;
+    height: 32px;
+    padding: 0 10px;
     border: 1px solid var(--line);
-    border-radius: 4px;
-    font-size: 13px;
-    background: var(--bg);
-    color: var(--text);
+    border-radius: 6px; /* Geist rounded.sm */
+    font-size: 12px;
+    background: var(--panel);
+    color: var(--ink);
     outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
 }
 #emoji-picker-custom-input:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
 }
 #btn-emoji-picker-custom-submit {
-    height: 28px;
-    padding: 0 10px;
+    height: 32px;
+    padding: 0 12px;
     font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px; /* Geist rounded.sm */
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin: 0;
-    line-height: 26px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+#btn-emoji-picker-custom-submit:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
 }
 .emoji-picker-item {
     background: transparent;
     border: 0;
     font-size: 18px;
-    padding: 6px;
+    width: 28px;
+    height: 28px;
     cursor: pointer;
     border-radius: 6px;
-    transition: background 0.15s, transform 0.1s;
+    transition: background 0.1s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    box-sizing: border-box;
 }
 .emoji-picker-item:hover {
     background: var(--wash);
-    transform: scale(1.15);
 }
 .emoji-picker-item:active {
-    transform: scale(0.95);
+    background: var(--line);
 }
 
 /* ── Redeem Submit Button Styling ── */
