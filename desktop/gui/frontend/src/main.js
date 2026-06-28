@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { t, getSystemLocale } from './i18n.js';
+import { allEmojis, culturalEmojis, getCategoryLocalizedName } from './emojis.js';
 import './style.css';
 import './app.css';
 import faviconURL from './assets/images/favicon.png';
@@ -1085,7 +1086,12 @@ function renderSettingsPanel() {
                                     } catch (e) {}
                                     return ['🚀','😎','💻','👍','🌟','🎨','🔥','❤️'];
                                 })();
-                                const allEmojis = ['🚀','😎','💻','👍','🌟','🎨','🐶','🐱','🦊','🐻','🐼','🦁','🐮','🐷','🐵','🐣','🦄','🌈','⚡️','🎉','✨','🎮','🎵','🍔','🍉','🍕','🍺','🌍','🏠','🚗','💡','🔑','🔒','⚙️','🛡️','📡','📟','🤖','👽','👻','😈','🤡','💩','👀','🧠','👄','✍️','💎','🍎','🍓','🍩','☕️','🍻','✈️','🚲','🚂','🔔','📣'];
+                                const currentLang = state.settings?.lang || 'en';
+                                const cultureKeys = Object.keys(culturalEmojis);
+                                const sortedKeys = [
+                                    currentLang,
+                                    ...cultureKeys.filter(k => k !== currentLang)
+                                ].filter(k => culturalEmojis[k]);
                                 return `
                                     <div class="emoji-picker-popover" id="emoji-picker-popover">
                                         <div class="emoji-picker-scroll-area">
@@ -1097,7 +1103,21 @@ function renderSettingsPanel() {
                                                     `).join('')}
                                                 </div>
                                             ` : ''}
-                                            <div class="emoji-picker-section-title" style="margin-top: 6px;">${t('emoji_picker_all') || '推荐表情'}</div>
+                                            
+                                            ${sortedKeys.map(k => {
+                                                const group = culturalEmojis[k];
+                                                const localizedName = getCategoryLocalizedName(k, currentLang);
+                                                return `
+                                                    <div class="emoji-picker-section-title" style="margin-top: 6px;">${escapeHTML(localizedName)}</div>
+                                                    <div class="emoji-picker-grid">
+                                                        ${group.emojis.map(emoji => `
+                                                            <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                                        `).join('')}
+                                                    </div>
+                                                `;
+                                            }).join('')}
+
+                                            <div class="emoji-picker-section-title" style="margin-top: 6px;">${t('emoji_picker_other') || '其他推荐'}</div>
                                             <div class="emoji-picker-grid">
                                                 ${allEmojis.map(emoji => `
                                                     <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
