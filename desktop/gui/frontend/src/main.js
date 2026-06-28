@@ -300,8 +300,12 @@ function render() {
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
                     ` : ''}
-                    <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}">
+                    <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}" style="position: relative;">
                         <span class="menu-icon">${settingsIcon()}</span>
+                        ${state.settings?.autoUpdateMode !== 'off' && (
+                            (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
+                            ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
+                        ) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                     </button>
                     <button class="menu-button" id="open-about" title="${t('about')}" aria-label="${t('about')}">
                         <span class="menu-icon">${aboutIcon()}</span>
