@@ -75,3 +75,14 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **后端双重物理卡关 (Backend Double Guarding)**：
   - 除了状态轮询，后端在接收物理下载 GET 请求（如 `?download=1` 物理文件拉取）时，也必须对当前 `clientID` 做出超限判定，并在超限时直接拦截，向客户端发出 `403 Forbidden` 标准错误响应，防止绕过网页端逻辑物理盗载。
 
+
+## 移动端多文件非 ZIP 批量下载局限与串行队列规范 (Mobile Multi-file Non-ZIP Download Constraints)
+- **多文件下载缺陷**：移动端浏览器（特别是 iOS Safari 及微信内嵌 WebView）有严格的防静默多文件下载拦截策略。使用批量 `setTimeout` 异步并发创建 `iframe` 会导致：
+  1. 触发浏览器拦截弹窗，甚至导致后面的文件下载被静默丢弃。
+  2. 高并发网络争抢，可能触发后端 Socket 写入异常重置（连接归零）机制，导致进度不断清零，陷入死锁。
+- **串行队列化优化规则**：
+  - **串行队列**：在进行非 ZIP 全部下载时，应当使用**串行下载队列**代替固定的 `setTimeout` 并发。在触发第 1 个文件下载后，通过心跳轮询状态；当前端收到第 1 个文件被标记为 `transferred`（确认下载成功）时，再自动触发第 2 个文件的下载。
+  - **超长列表保护**：当传输文件数量过多（例如超过 10 个）时，在前端应强引导或置灰非 ZIP 下载按钮，引导用户使用单次打包的 **全部下载 (ZIP)**。
+  - **参数一致性**：隐藏的下载 `iframe` 其 `src` 必须通过 URL 显式拼装本地 `client_id`，防止被沙箱隐私隔离策略拦截 Cookie 从而误触发 Free 模式下的设备超限。
+
+
