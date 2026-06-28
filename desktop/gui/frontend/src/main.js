@@ -396,6 +396,7 @@ function renderShare() {
     const remaining = Math.max(0, 5 - usedTransfers);
 
     const hasItems = state.sharePaths.length > 0;
+    const isStartShareEnabled = !state.busy && hasItems && !state.shareLimitNotice;
     return `
         <div class="dropzone" style="--wails-drop-target: drop">
             <div class="drop-target" style="pointer-events: none;">
@@ -416,7 +417,7 @@ function renderShare() {
         ${hasItems ? `<ul class="path-list">${items}</ul>` : ''}
         <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-                ${(!isPaid) ? `
+                ${(!isPaid && (remaining > 0 || isStartShareEnabled)) ? `
                     <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap;">
                         ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
                     </div>
