@@ -1411,13 +1411,13 @@ function renderPlanComparisonPanel() {
                     </div>
                     <ul style="list-style: none; padding: 0; margin: 0 0 20px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
-                            ${checkGreen} <span>${t('plan_feature_chat_free') || 'Chat 协同限制：每日免费额度耗尽后锁死消息发送'}</span>
+                            ${checkGreen} <span>${t('plan_feature_chat_free') || 'Chat 模式限制：每日 5 分钟满速。超额后限速 100 KB/s，且单文件限 2MB'}</span>
                         </li>
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
-                            ${checkGreen} <span>${t('plan_feature_share_receive_free') || '分享与接收限制：每日超额 5 次后，单次限发 5 文件，单文件限 50MB'}</span>
+                            ${checkGreen} <span>${t('plan_feature_share_free') || 'Share 电脑发送限制：每日免费 5 次。超额后单次限发 5 文件，总大小限 50MB'}</span>
                         </li>
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
-                            ${checkGreen} <span>${t('plan_feature_lan_transfer') || '局域网极速文件传输 (未超额前不限大小与个数)'}</span>
+                            ${checkGreen} <span>${t('plan_feature_receive_free') || 'Receive 移动端上传限制：每日免费 5 次。超额后单次限传 5 文件，单文件限 50MB'}</span>
                         </li>
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
                             ${checkGreen} <span>${t('plan_feature_drag_and_drop') || '支持拖拽发送、历史保存、文件夹选择'}</span>
