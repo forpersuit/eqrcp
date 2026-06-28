@@ -235,3 +235,103 @@ func TestSetAutoStopLiveTrigger(t *testing.T) {
 		t.Errorf("global server status state = %q, want \"completed\"", state)
 	}
 }
+
+func TestMultiDeviceAutoStopRules(t *testing.T) {
+	stopChan := make(chan bool, 1)
+
+	s := &Server{
+		clientStates:   make(map[string]*ClientTransferStateInfo),
+		clientProgress: make(map[string]map[int]int64),
+		expectedBytes:  make(map[int]int64),
+		clientLastSeen: make(map[string]time.Time),
+		autoStop:       true,
+		body: body.Body{
+			Paths: []string{"testfile.txt"},
+		},
+		stopChannel: stopChan,
+	}
+
+	// 1. Register two active clients
+	cliA := "cli_A"
+	cliB := "cli_B"
+	s.clientLastSeen[cliA] = time.Now()
+	s.clientLastSeen[cliB] = time.Now()
+	s.clientStates[cliA] = &ClientTransferStateInfo{}
+	s.clientStates[cliB] = &ClientTransferStateInfo{}
+	s.clientProgress[cliA] = make(map[int]int64)
+	s.clientProgress[cliB] = make(map[int]int64)
+	s.expectedBytes[0] = 500
+
+	// 2. Client A finishes downloading.
+	s.clientProgress[cliA][0] = 500
+	
+	// Single client finished in multiple clients setting must NOT close channel
+	if s.isClientFinished(cliA) {
+		s.updateClientStatus(cliA, nil, func(state *ClientTransferStateInfo) {
+			state.State = "completed"
+		})
+		
+		// Simulated ServeFile completion logic
+		allDownloaded := s.isAllActiveClientsFinished()
+		if allDownloaded {
+			s.statusMu.Lock()
+			autoStop := s.autoStop
+			s.statusMu.Unlock()
+			if autoStop {
+				s.setStatus("completed", "Transfer completed.")
+				go s.signalStop()
+			}
+		}
+	}
+
+	// Verify channel remains open
+	select {
+	case <-stopChan:
+		t.Error("stopChannel received signal prematurely when only client A completed")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: channel remains active
+	}
+
+	// Verify server state is NOT completed
+	s.statusMu.Lock()
+	state1 := s.status.State
+	s.statusMu.Unlock()
+	if state1 == "completed" {
+		t.Error("server status state changed to completed prematurely")
+	}
+
+	// 3. Client B also finishes downloading (meaning all active clients finished).
+	s.clientProgress[cliB][0] = 500
+	if s.isClientFinished(cliB) {
+		s.updateClientStatus(cliB, nil, func(state *ClientTransferStateInfo) {
+			state.State = "completed"
+		})
+
+		allDownloaded := s.isAllActiveClientsFinished()
+		if allDownloaded {
+			s.statusMu.Lock()
+			autoStop := s.autoStop
+			s.statusMu.Unlock()
+			if autoStop {
+				s.setStatus("completed", "Transfer completed.")
+				go s.signalStop()
+			}
+		}
+	}
+
+	// Verify channel is closed successfully now
+	select {
+	case <-stopChan:
+		// Success: all devices finished, channel closed
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for auto-stop signal after all devices finished")
+	}
+
+	s.statusMu.Lock()
+	state2 := s.status.State
+	s.statusMu.Unlock()
+	if state2 != "completed" {
+		t.Errorf("server state = %q, want \"completed\" after all clients finished", state2)
+	}
+}
+

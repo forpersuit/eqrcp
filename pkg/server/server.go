@@ -104,22 +104,8 @@ func (s *Server) SetAutoStop(enabled bool) {
 	s.statusMu.Unlock()
 
 	if enabled {
-		s.clientMutex.Lock()
-		var clientIDs []string
-		for clientID := range s.clientLastSeen {
-			clientIDs = append(clientIDs, clientID)
-		}
-		s.clientMutex.Unlock()
-
-		hasFinishedClient := false
-		for _, clientID := range clientIDs {
-			if s.isClientFinished(clientID) {
-				hasFinishedClient = true
-				break
-			}
-		}
-
-		if hasFinishedClient {
+		// 打开开关意味着在所有设备都传输完成后，关闭服务
+		if s.isAllActiveClientsFinished() {
 			s.statusMu.Lock()
 			s.status.State = "completed"
 			s.status.Message = "Transfer completed."
@@ -1784,14 +1770,6 @@ func New(cfg *config.Config) (*Server, error) {
 				state.Percent = 100
 				state.Message = "Transfer completed."
 			})
-			app.statusMu.Lock()
-			autoStop := app.autoStop
-			app.statusMu.Unlock()
-			if autoStop {
-				app.setStatus("completed", "Transfer completed.")
-				app.recordStatus()
-				go app.signalStopAfterStatusGrace()
-			}
 		}
 
 		if allDownloaded {
@@ -1801,13 +1779,17 @@ func New(cfg *config.Config) (*Server, error) {
 				state.Percent = 100
 				state.Message = "Transfer completed."
 			})
-			app.setStatus("completed", "Transfer completed.")
-			app.recordStatus()
 			app.statusMu.Lock()
 			autoStop := app.autoStop
 			app.statusMu.Unlock()
-			if !app.KeepAlive || autoStop {
+			if autoStop || !app.KeepAlive {
+				app.setStatus("completed", "Transfer completed.")
+				app.recordStatus()
 				go app.signalStopAfterStatusGrace()
+			} else {
+				// Keep alive when autoStop is disabled, status stays in waiting
+				app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
+				app.recordStatus()
 			}
 		} else {
 			app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
