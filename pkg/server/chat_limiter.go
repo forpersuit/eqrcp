@@ -39,13 +39,6 @@ type ChatLimiter struct {
 
 var limiterInstance = &ChatLimiter{}
 
-func init() {
-	// 启动时默默检测本地激活证书以及时钟状态
-	limiterInstance.mu.Lock()
-	limiterInstance.loadUsageLocked()
-	limiterInstance.mu.Unlock()
-}
-
 
 func getChatUsageFilePath() string {
 	return filepath.Join(config.DefaultConfigDir(), "chat_usage.json")

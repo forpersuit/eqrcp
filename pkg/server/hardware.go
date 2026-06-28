@@ -198,8 +198,8 @@ var (
 func PrecomputeDeviceFingerprints() {
 	go func() {
 		fingerprintMu.Lock()
-		defer fingerprintMu.Unlock()
 		if hasCached {
+			fingerprintMu.Unlock()
 			return
 		}
 
@@ -215,6 +215,10 @@ func PrecomputeDeviceFingerprints() {
 		cachedCPU = <-cpuChan
 		cachedDisk = <-diskChan
 		hasCached = true
+		fingerprintMu.Unlock()
+
+		// 默默在后台触发本地证书校验，完全避免主线程阻塞
+		VerifyLocalLicense()
 	}()
 }
 

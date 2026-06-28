@@ -11,12 +11,11 @@
 ### 1.1 后端默默检测逻辑
 Go 后端（`pkg/server/chat_limiter.go`）是付费状态判定的最权威来源。其通过以下几种时机触发检测：
 
-1. **包加载启动时（首次默默检测）**：
-   在 `server` 包被加载时（无论客户端以命令行 CLI 还是桌面 GUI 模式启动），其包的 `init()` 方法会自动调用 `limiterInstance.loadUsageLocked()`。它会默默读取本地配置文件，并触发证书有效性的第一次核心校验：
-   - 检查系统时钟是否被篡改（防回拨）。
-   - 读取并加载本地 `.lic`（数字证书）文件。
-   - 验证证书的 Ed25519 签名、3选2加权硬件指纹、以及证书是否过期。
-   - 将验证后的付费状态及 Tier 信息（`IsPaid`, `LicenseTier`, `CodeDate`）缓存到内存中，同时持久化到状态文件中。
+1. **程序启动后异步检测（首次默默检测）**：
+   在 `cmd/eqt/main.go`（CLI 入口）和 `desktop/gui/main.go`（GUI 入口）的 `main()` 函数第一行，会立刻调用 `server.PrecomputeDeviceFingerprints()`。
+   该方法完全异步启动后台协程：
+   - 在后台并发地利用 powershell/wmic/linux sysfs 预计算并缓存设备的三项加权硬件指纹。这彻底避免了在包加载阶段同步执行慢速 shell 命令引起的启动阻塞，也完全消除了因 Windows 子系统尚未就绪导致子进程运行时短暂“黑窗口闪现”的问题。
+   - 当指纹预计算和缓存完成后，后台协程自动触发本地数字证书的默默校验（`VerifyLocalLicense()`）。这会读取本地 `.lic` 文件并校验签名、是否过期、系统时钟防回拨等，将权威校验状态存储到内存并写入 `chat_usage.json` 中，确保 GUI 启动秒开、检测全程无感。
 2. **兑换激活时（兑换后检测）**：
    用户在前端输入兑换码，触发 Go 端调用 `ActivateLicenseOnline`。在连接 Cloudflare 验证通过并下发签名的 `.lic` 文件到本地后，主动触发一次 `SetPaidStatus(true, ...)` 将状态立即刷新。
 3. **日常状态轮询与查询时**：

@@ -70,6 +70,9 @@ func desktopLogFilePath() string {
 }
 
 func main() {
+	// 启动时在后台开始预计算硬件指纹并默默校验本地证书，完全非阻塞，防窗口闪烁
+	server.PrecomputeDeviceFingerprints()
+
 	// 如果是 Wails 绑定生成工具的临时执行，强制走 GUI 模式以通过 wails.Run 正常生成绑定并退出
 	if strings.Contains(filepath.Base(os.Args[0]), "wailsbindings") {
 		startWailsGUI()
