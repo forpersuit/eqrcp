@@ -412,7 +412,6 @@ function renderSide() {
 
 function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
-    const paths = task.paths || [];
 
     const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
     const shouldCollapse = isSharedOrReceived;
@@ -428,44 +427,6 @@ function renderShareTransfer(task) {
             ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
     ` : '';
-
-    // 渲染设备进度列表
-    let deviceProgressHtml = '';
-    const clients = task.clientStates ? Object.values(task.clientStates) : [];
-    if (clients.length > 0) {
-        const showLimit = 3;
-        const isExpanded = !!state.devicesExpanded;
-        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
-
-        const listItems = displayClients.map(client => {
-            const devName = client.deviceName || 'Device';
-            const stateText = getTranslatedState(client.state || 'waiting');
-            return `
-                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; gap: 12px;">
-                    <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
-                    <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
-                </li>
-            `;
-        }).join('');
-
-        const expandButton = (clients.length > showLimit) ? `
-            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
-                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
-            </button>
-        ` : '';
-
-        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 150px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
-
-        deviceProgressHtml = `
-            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
-                <div class="devices-scroll-container" style="${scrollStyle}">
-                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
-                </div>
-                ${expandButton}
-            </div>
-        `;
-    }
 
     return `
         <div class="transfer-stage">
@@ -502,33 +463,142 @@ function renderShareTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            ${deviceProgressHtml}
+            <div id="devices-progress-wrapper">${renderDeviceProgressHtml(task)}</div>
 
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
-                <ul class="path-list locked">${paths.map((path, index) => {
-                    return `
-                    <li>
-                        <div style="width: 100%; box-sizing: border-box;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;">
-                                <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
-                                    <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(shortName(path))}</strong>
-                                    <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
-                                </div>
-                                <div style="flex: 0 0 auto; text-align: right; min-width: 0;">
-                                    <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong); white-space: nowrap;">
-                                        ${escapeHTML(shareItemStatus(task, path))}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-                    `;
-                }).join('')}</ul>
+                <ul class="path-list locked" id="share-locked-path-list">${renderShareLockedPathsHtml(task)}</ul>
             </div>
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>
     `;
+}
+
+function renderDeviceProgressHtml(task) {
+    let deviceProgressHtml = '';
+    const clients = task.clientStates ? Object.values(task.clientStates) : [];
+    if (clients.length > 0) {
+        const showLimit = 3;
+        const isExpanded = !!state.devicesExpanded;
+        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
+
+        const listItems = displayClients.map(client => {
+            const devName = client.deviceName || 'Device';
+            const stateText = getTranslatedState(client.state || 'waiting');
+            return `
+                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; gap: 12px;">
+                    <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
+                    <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
+                </li>
+            `;
+        }).join('');
+
+        const expandButton = (clients.length > showLimit) ? `
+            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
+                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
+            </button>
+        ` : '';
+
+        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 150px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
+
+        deviceProgressHtml = `
+            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <div class="devices-scroll-container" style="${scrollStyle}">
+                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
+                </div>
+                ${expandButton}
+            </div>
+        `;
+    }
+    return deviceProgressHtml;
+}
+
+function renderShareLockedPathsHtml(task) {
+    const paths = task.paths || [];
+    return paths.map((path, index) => {
+        return `
+        <li>
+            <div style="width: 100%; box-sizing: border-box; min-width: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-width: 0;">
+                    <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                        <div class="filename-scroll-container">
+                            <strong title="${escapeAttr(shortName(path))}">${escapeHTML(shortName(path))}</strong>
+                        </div>
+                        <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
+                    </div>
+                    <div style="flex: 0 0 auto; text-align: right; min-width: 0; margin-left: 8px;">
+                        <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong); white-space: nowrap;">
+                            ${escapeHTML(shareItemStatus(task, path))}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </li>
+        `;
+    }).join('');
+}
+
+function updateShareTransferActiveUI(task) {
+    // 1. 传输状态文字
+    const statusH2 = document.querySelector('.transfer-stage .transfer-head h2');
+    if (statusH2) {
+        statusH2.textContent = getTranslatedState(task.transferState || task.state || 'waiting');
+    }
+
+    // 2. 设备数
+    const countEl = document.getElementById('current-devices-count');
+    if (countEl) {
+        countEl.textContent = task.transferDeviceCount || 0;
+    }
+
+    // 3. 自动结束开关
+    const switchEl = document.getElementById('auto-stop-switch');
+    if (switchEl) {
+        switchEl.checked = !!task.transferAutoStop;
+    }
+
+    // 4. 设备进度列表局部更新
+    const devicesWrapper = document.getElementById('devices-progress-wrapper');
+    if (devicesWrapper) {
+        devicesWrapper.innerHTML = renderDeviceProgressHtml(task);
+    }
+
+    // 5. 锁定文件状态局部更新
+    const pathList = document.getElementById('share-locked-path-list');
+    if (pathList) {
+        pathList.innerHTML = renderShareLockedPathsHtml(task);
+    }
+
+    // 6. 更新 quota 倒计时 (如果有的话)
+    const quotaCountdown = document.querySelector('.transfer-stage .quota-countdown');
+    const isPaid = state.status?.isPaid;
+    const usedTransfers = state.status?.usedTransfers || 0;
+    const remaining = Math.max(0, 5 - usedTransfers);
+    const shouldShowCountdown = (!isPaid && task.transferState !== 'waiting');
+    
+    if (shouldShowCountdown) {
+        const text = remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`;
+        if (quotaCountdown) {
+            quotaCountdown.textContent = text;
+        } else {
+            // 如果本来没有但现在有了，在 H2 后插入
+            const headerDiv = document.querySelector('.transfer-stage .transfer-head > div');
+            if (headerDiv) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = `
+                    <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
+                        ${text}
+                    </div>
+                `;
+                headerDiv.appendChild(tempDiv.firstElementChild);
+            }
+        }
+    } else {
+        if (quotaCountdown) {
+            quotaCountdown.remove();
+        }
+    }
 }
 
 function activeReceiveTask() {
@@ -2974,6 +3044,13 @@ function connectAgentEvents() {
                 return;
             }
             if (state.activePanel) {
+                return;
+            }
+            // 如果处于 share 模式下的 activeTask 传输界面，直接进行局部渲染更新，从而避免全局 render 导致 tooltip 气泡闪烁
+            const transferStage = document.querySelector('.transfer-stage');
+            const activeTask = activeShareTask();
+            if (transferStage && activeTask && state.mode === 'share') {
+                updateShareTransferActiveUI(activeTask);
                 return;
             }
             render();

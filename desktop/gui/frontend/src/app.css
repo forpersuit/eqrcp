@@ -2357,4 +2357,43 @@ dd {
     50% { transform: translateY(-2px); }
 }
 
+/* ── Filename Scroll Marquee ── */
+.filename-scroll-container {
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
+    position: relative;
+    height: 1.3em;
+}
+
+.filename-scroll-container strong {
+    position: absolute;
+    left: 0;
+    top: 0;
+    min-width: 100%;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.filename-scroll-container:hover strong {
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+    animation: filename-scroll-marquee 8s linear infinite alternate;
+}
+
+@keyframes filename-scroll-marquee {
+    0% {
+        left: 0%;
+        transform: translate3d(0, 0, 0);
+    }
+    100% {
+        left: 100%;
+        transform: translate3d(-100%, 0, 0);
+    }
+}
+
 
