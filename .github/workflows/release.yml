@@ -44,47 +44,9 @@ jobs:
           name: wails-windows-artifacts
           path: out/*
 
-  release-wails-linux:
-    name: Release Linux GUI
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: desktop/gui/frontend/package-lock.json
-      - name: Install Wails system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-      - name: Build Wails (linux/amd64)
-        working-directory: desktop/gui
-        run: wails build -clean -tags webkit2_41
-      - name: Stage artifacts
-        run: |
-          mkdir -p out
-          cd desktop/gui/build/bin
-          tar -czf "$GITHUB_WORKSPACE/out/eqt-desktop-linux-amd64.tar.gz" eqt-desktop
-      - name: Generate Update Signature
-        run: |
-          go run scripts/generate-update-sig/main.go out/eqt-desktop-linux-amd64.tar.gz
-        env:
-          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
-      - name: Upload Linux Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: wails-linux-artifacts
-          path: out/*
-
   deploy:
     name: Deploy to GitHub Release & Cloudflare Pages
-    needs: [release-wails-windows, release-wails-linux]
+    needs: [release-wails-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

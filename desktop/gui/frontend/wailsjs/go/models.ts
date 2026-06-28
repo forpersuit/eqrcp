@@ -225,6 +225,7 @@ export namespace main {
 	    updateChannel: string;
 	    lastUpdateCheckTime: number;
 	    updateCheckIntervalHours: number;
+	    lastSuccessfulVersion: string;
 	    lang: string;
 	    showHistory: boolean;
 	
@@ -251,6 +252,7 @@ export namespace main {
 	        this.updateChannel = source["updateChannel"];
 	        this.lastUpdateCheckTime = source["lastUpdateCheckTime"];
 	        this.updateCheckIntervalHours = source["updateCheckIntervalHours"];
+	        this.lastSuccessfulVersion = source["lastSuccessfulVersion"];
 	        this.lang = source["lang"];
 	        this.showHistory = source["showHistory"];
 	    }
