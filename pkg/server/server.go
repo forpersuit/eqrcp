@@ -36,13 +36,14 @@ const maxUploadBytes int64 = 10 << 30
 const defaultStatusGracePeriod = 15 * time.Second
 const maxTransferHistory = 20
 
-type clientTransferState struct {
+type ClientTransferStateInfo struct {
 	State      string `json:"state"`
 	BytesDone  int64  `json:"bytesDone"`
 	BytesTotal int64  `json:"bytesTotal"`
 	Percent    int    `json:"percent"`
 	Current    string `json:"current,omitempty"`
 	Message    string `json:"message"`
+	DeviceName string `json:"deviceName,omitempty"`
 }
 
 // Server is the server
@@ -87,7 +88,7 @@ type Server struct {
 	clientMutex            sync.Mutex
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
-	clientStates           map[string]*clientTransferState
+	clientStates           map[string]*ClientTransferStateInfo
 	clientStatesMu         sync.Mutex
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
@@ -134,6 +135,7 @@ type transferStatus struct {
 	Version             string   `json:"version,omitempty"`
 	TransferDeviceCount int      `json:"transferDeviceCount,omitempty"`
 	AutoStop            bool     `json:"autoStop,omitempty"`
+	ClientStates        map[string]*ClientTransferStateInfo `json:"clientStates,omitempty"`
 }
 
 type transferStatusRecord struct {
@@ -178,6 +180,7 @@ type TransferStatusSnapshot struct {
 	ItemClientStats []string
 	TransferDeviceCount int
 	AutoStop            bool
+	ClientStates        map[string]*ClientTransferStateInfo
 }
 
 // ReceiveTo sets the output directory
@@ -397,6 +400,7 @@ func (s *Server) getStatus() transferStatus {
 
 	status.ItemClientStats = s.getItemClientStats()
 	status.TransferDeviceCount = s.getConnectedDevicesCount()
+	status.ClientStates = s.copyClientStates()
 	return status
 }
 
@@ -408,6 +412,7 @@ func (s *Server) getStatusWithSeq() (transferStatus, int64) {
 
 	status.ItemClientStats = s.getItemClientStats()
 	status.TransferDeviceCount = s.getConnectedDevicesCount()
+	status.ClientStates = s.copyClientStates()
 	return status, seq
 }
 
@@ -724,28 +729,63 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 	status.DownloadedItems = append([]int(nil), status.DownloadedItems...)
 	status.ItemClientStats = append([]string(nil), status.ItemClientStats...)
 	status.Version = version.String()
+	if status.ClientStates != nil {
+		m := make(map[string]*ClientTransferStateInfo)
+		for k, v := range status.ClientStates {
+			if v != nil {
+				m[k] = &ClientTransferStateInfo{
+					State:      v.State,
+					BytesDone:  v.BytesDone,
+					BytesTotal: v.BytesTotal,
+					Percent:    v.Percent,
+					Current:    v.Current,
+					Message:    v.Message,
+					DeviceName: v.DeviceName,
+				}
+			}
+		}
+		status.ClientStates = m
+	}
 	return status
 }
 
 func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
+	var clientStates map[string]*ClientTransferStateInfo
+	if status.ClientStates != nil {
+		clientStates = make(map[string]*ClientTransferStateInfo)
+		for k, v := range status.ClientStates {
+			if v != nil {
+				clientStates[k] = &ClientTransferStateInfo{
+					State:      v.State,
+					BytesDone:  v.BytesDone,
+					BytesTotal: v.BytesTotal,
+					Percent:    v.Percent,
+					Current:    v.Current,
+					Message:    v.Message,
+					DeviceName: v.DeviceName,
+				}
+			}
+		}
+	}
 	return TransferStatusSnapshot{
-		State:       status.State,
-		Mode:        status.Mode,
-		Title:       status.Title,
-		Target:      status.Target,
-		Archive:     status.Archive,
-		ArchiveName: status.ArchiveName,
-		Items:       append([]string(nil), status.Items...),
-		Current:     status.Current,
-		Message:     status.Message,
-		BytesDone:   status.BytesDone,
-		BytesTotal:  status.BytesTotal,
-		Percent:     status.Percent,
-		SavedFiles:  append([]string(nil), status.SavedFiles...),
-		Version:     status.Version,
-		ItemClientStats: append([]string(nil), status.ItemClientStats...),
+		State:               status.State,
+		Mode:                status.Mode,
+		Title:               status.Title,
+		Target:              status.Target,
+		Archive:             status.Archive,
+		ArchiveName:         status.ArchiveName,
+		Items:               append([]string(nil), status.Items...),
+		Current:             status.Current,
+		Message:             status.Message,
+		BytesDone:           status.BytesDone,
+		BytesTotal:          status.BytesTotal,
+		Percent:             status.Percent,
+		SavedFiles:          append([]string(nil), status.SavedFiles...),
+		Version:             status.Version,
+		ItemClientStats:     append([]string(nil), status.ItemClientStats...),
 		TransferDeviceCount: status.TransferDeviceCount,
-		AutoStop:    status.AutoStop,
+		AutoStop:            status.AutoStop,
+		ClientStates:        clientStates,
 	}
 }
 
@@ -923,33 +963,88 @@ func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
 	return newID
 }
 
-func (s *Server) updateClientStatus(clientID string, update func(*clientTransferState)) {
+func parseDeviceName(ua string) string {
+	if strings.Contains(ua, "iPhone") {
+		return "iPhone"
+	}
+	if strings.Contains(ua, "iPad") {
+		return "iPad"
+	}
+	if strings.Contains(ua, "Android") {
+		return "Android"
+	}
+	if strings.Contains(ua, "Macintosh") {
+		return "Mac"
+	}
+	if strings.Contains(ua, "Windows") {
+		return "Windows"
+	}
+	if strings.Contains(ua, "Linux") {
+		return "Linux"
+	}
+	return "Mobile Device"
+}
+
+func (s *Server) updateClientStatus(clientID string, r *http.Request, update func(*ClientTransferStateInfo)) {
 	s.clientStatesMu.Lock()
 	defer s.clientStatesMu.Unlock()
 
 	state, ok := s.clientStates[clientID]
 	if !ok {
-		state = &clientTransferState{
+		state = &ClientTransferStateInfo{
 			State:   "waiting",
 			Message: "Waiting for transfer to start.",
 		}
 		s.clientStates[clientID] = state
 	}
+	if state.DeviceName == "" && r != nil {
+		ua := r.Header.Get("User-Agent")
+		devType := parseDeviceName(ua)
+		suffix := ""
+		if len(clientID) > 4 {
+			suffix = " (" + clientID[len(clientID)-4:] + ")"
+		}
+		state.DeviceName = devType + suffix
+	}
 	update(state)
 }
 
-func (s *Server) getClientStatus(clientID string) clientTransferState {
+func (s *Server) getClientStatus(clientID string) ClientTransferStateInfo {
 	s.clientStatesMu.Lock()
 	defer s.clientStatesMu.Unlock()
 
 	state, ok := s.clientStates[clientID]
 	if !ok {
-		return clientTransferState{
+		return ClientTransferStateInfo{
 			State:   "waiting",
 			Message: "Waiting for transfer to start.",
 		}
 	}
 	return *state
+}
+
+func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
+	s.clientStatesMu.Lock()
+	defer s.clientStatesMu.Unlock()
+
+	if len(s.clientStates) == 0 {
+		return nil
+	}
+	m := make(map[string]*ClientTransferStateInfo)
+	for k, v := range s.clientStates {
+		if v != nil {
+			m[k] = &ClientTransferStateInfo{
+				State:      v.State,
+				BytesDone:  v.BytesDone,
+				BytesTotal: v.BytesTotal,
+				Percent:    v.Percent,
+				Current:    v.Current,
+				Message:    v.Message,
+				DeviceName: v.DeviceName,
+			}
+		}
+	}
+	return m
 }
 
 func (s *Server) addClientDownloadedBytes(clientID string, itemIndex int, written int64) {
@@ -1232,7 +1327,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.downloadedBytes = make(map[int]int64)
 	app.clientLastSeen = make(map[string]time.Time)
 	app.clientProgress = make(map[string]map[int]int64)
-	app.clientStates = make(map[string]*clientTransferState)
+	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.expectedBytes = make(map[int]int64)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
@@ -1558,7 +1653,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.downloadedBytesMu.Unlock()
 
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "transferring"
 				state.Current = downloadName
 				state.BytesDone = 0
@@ -1567,7 +1662,7 @@ func New(cfg *config.Config) (*Server, error) {
 				state.Message = "Sending file to connected device."
 			})
 		} else {
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "transferring"
 				state.Current = downloadName
 				state.BytesTotal = expectedBytes
@@ -1599,7 +1694,7 @@ func New(cfg *config.Config) (*Server, error) {
 						status.BytesDone = status.BytesTotal
 					}
 				})
-				app.updateClientStatus(clientID, func(state *clientTransferState) {
+				app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 					state.BytesDone += written
 					if state.BytesTotal > 0 && state.BytesDone > state.BytesTotal {
 						state.BytesDone = state.BytesTotal
@@ -1646,7 +1741,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.downloadedBytesMu.Unlock()
 
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
 				state.BytesDone = 0
 				state.Percent = 0
@@ -1658,7 +1753,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if itemWritten < expectedBytes {
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
 				state.BytesDone = 0
 				state.Percent = 0
@@ -1682,7 +1777,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if app.isClientFinished(clientID) {
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "completed"
 				state.BytesDone = state.BytesTotal
 				state.Percent = 100
@@ -1691,7 +1786,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if allDownloaded {
-			app.updateClientStatus(clientID, func(state *clientTransferState) {
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "completed"
 				state.BytesDone = state.BytesTotal
 				state.Percent = 100

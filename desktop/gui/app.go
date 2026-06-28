@@ -67,6 +67,7 @@ type TaskRecord struct {
 	TransferItemClientStats []string   `json:"itemClientStats,omitempty"`
 	TransferDeviceCount int        `json:"transferDeviceCount,omitempty"`
 	TransferAutoStop    bool       `json:"transferAutoStop,omitempty"`
+	TransferClientStates map[string]*server.ClientTransferStateInfo `json:"clientStates,omitempty"`
 	ChatState           string     `json:"chatState,omitempty"`
 	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
 	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`

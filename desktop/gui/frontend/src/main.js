@@ -229,7 +229,8 @@ function render() {
         '.sidebar-history',
         '.locked-list',
         '.file-list-view',
-        '.transfer-stage'
+        '.transfer-stage',
+        '.devices-scroll-container'
     ];
     scrollableSelectors.forEach(selector => {
         const el = document.querySelector(selector);
@@ -429,6 +430,76 @@ function renderShareTransfer(task) {
         </div>
     ` : '';
 
+    // 实时计算累加下载速度
+    const now = Date.now();
+    if (state.lastBytesDone === undefined) {
+        state.lastBytesDone = 0;
+        state.lastProgressTime = 0;
+        state.currentSpeed = 0;
+    }
+    if (state.lastProgressTime > 0 && now > state.lastProgressTime) {
+        const timeDiff = (now - state.lastProgressTime) / 1000;
+        const bytesDiff = task.bytesDone - state.lastBytesDone;
+        if (bytesDiff >= 0 && timeDiff > 0.2) {
+            const speed = bytesDiff / timeDiff;
+            state.currentSpeed = state.currentSpeed * 0.6 + speed * 0.4;
+            state.lastBytesDone = task.bytesDone;
+            state.lastProgressTime = now;
+        }
+    } else {
+        state.lastBytesDone = task.bytesDone;
+        state.lastProgressTime = now;
+        state.currentSpeed = 0;
+    }
+
+    const speedStr = (state.currentSpeed > 0 && task.transferState === 'transferring') ? ` (${formatBytes(state.currentSpeed)}/s)` : '';
+
+    // 渲染设备进度列表
+    let deviceProgressHtml = '';
+    const clients = task.clientStates ? Object.values(task.clientStates) : [];
+    if (clients.length > 0) {
+        const showLimit = 3;
+        const isExpanded = !!state.devicesExpanded;
+        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
+
+        const listItems = displayClients.map(client => {
+            const devName = client.deviceName || 'Device';
+            const pct = client.percent || 0;
+            const stateText = client.state === 'transferring' ? `${pct}%` : getTranslatedState(client.state || 'waiting');
+            return `
+                <li style="display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600;">
+                        <span style="color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
+                        <span style="color: var(--accent-strong); font-weight: 800;">${escapeHTML(stateText)}</span>
+                    </div>
+                    ${client.state === 'transferring' ? `
+                        <div class="progress" style="height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; margin-top: 4px;">
+                            <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, pct))}%"></span>
+                        </div>
+                    ` : ''}
+                </li>
+            `;
+        }).join('');
+
+        const expandButton = (clients.length > showLimit) ? `
+            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
+                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
+            </button>
+        ` : '';
+
+        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 150px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
+
+        deviceProgressHtml = `
+            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <div class="devices-scroll-container" style="${scrollStyle}">
+                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
+                </div>
+                ${expandButton}
+            </div>
+        `;
+    }
+
     return `
         <div class="transfer-stage">
             <div class="transfer-head">
@@ -450,7 +521,7 @@ function renderShareTransfer(task) {
                     👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.transferDeviceCount || 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
-                    <span class="has-tooltip" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
+                    <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
                         ${state.settings?.lang === 'zh' ? '自动结束' : 'Auto Stop'}
                     </span>
                     ${renderSwitch('auto-stop-switch', task.transferAutoStop)}
@@ -475,11 +546,13 @@ function renderShareTransfer(task) {
                             <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
-                            ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                            ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}${speedStr}
                         </div>
                     </div>
                 </div>
             ` : ''}
+
+            ${deviceProgressHtml}
 
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
@@ -507,7 +580,7 @@ function renderShareTransfer(task) {
                                     <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
                                 </div>
                                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; text-align: right;">
-                                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
+                                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}${speedStr}
                                 </div>
                             ` : ''}
                         </div>
@@ -1537,6 +1610,12 @@ function bindEvents() {
     document.querySelector('.toggle-qr-expand-action')?.addEventListener('click', () => {
         qrExpandedManual = !qrExpandedManual;
         render();
+    });
+    document.querySelectorAll('.toggle-devices-expand').forEach(btn => {
+        btn.addEventListener('click', () => {
+            state.devicesExpanded = !state.devicesExpanded;
+            render();
+        });
     });
     document.querySelectorAll('[data-mode]').forEach((button) => {
         button.addEventListener('click', async () => {

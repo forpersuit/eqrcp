@@ -254,7 +254,8 @@ h2 {
 
 .workspace {
     min-height: 0;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 22px;
 }
 
@@ -1882,6 +1883,30 @@ dd {
 .has-tooltip:hover::after {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+}
+
+/* Tooltip bottom-left position */
+.has-tooltip-bottom-left::before {
+    bottom: auto !important;
+    top: calc(100% + 6px) !important;
+    left: auto !important;
+    right: 0 !important;
+    transform: translateY(-4px) !important;
+    white-space: normal !important;
+    width: 220px !important;
+    text-align: left !important;
+}
+.has-tooltip-bottom-left::after {
+    bottom: auto !important;
+    top: calc(100% + 1px) !important;
+    left: auto !important;
+    right: 12px !important;
+    transform: translateY(-4px) !important;
+    border-color: transparent transparent var(--ink, #1f2d23) transparent !important;
+}
+.has-tooltip-bottom-left:hover::before,
+.has-tooltip-bottom-left:hover::after {
+    transform: translateY(0) !important;
 }
 
 
