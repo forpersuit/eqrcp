@@ -567,6 +567,39 @@ func (s *Server) isClientLimitExceeded(clientID string) bool {
 	return activeCount >= 2
 }
 
+func (s *Server) isReceiveClientLimitExceeded(clientID string) bool {
+	usage := limiterInstance.GetStatus()
+	if usage.IsPaid {
+		return false
+	}
+	if clientID == "" {
+		return false
+	}
+
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	now := time.Now()
+	if lastSeen, ok := s.clientLastSeen[clientID]; ok && now.Sub(lastSeen) <= 8*time.Second {
+		return false
+	}
+
+	activeCount := 0
+	for cid, lastSeen := range s.clientLastSeen {
+		if cid != clientID && now.Sub(lastSeen) <= 8*time.Second {
+			activeCount++
+		}
+	}
+
+	quotaExceeded := usage.UsedReceiveTransfers >= 5
+
+	if quotaExceeded {
+		return activeCount >= 1
+	}
+
+	return activeCount >= 2
+}
+
 func (s *Server) terminalStatus() (transferStatus, bool) {
 	status := s.getStatus()
 	return status, isTerminalTransferState(status.State)
@@ -1876,6 +1909,12 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 		}
+		clientID := app.getClientID(r, w)
+		if app.isReceiveClientLimitExceeded(clientID) {
+			http.Error(w, "Device limit exceeded. Only 1 device is allowed for transfers under free quota exceeded state. Upgrade to Plus/Pro to unlock.", http.StatusForbidden)
+			return
+		}
+		app.registerClientActivity(r, w)
 		usage := limiterInstance.GetStatus()
 		if r.URL.Query().Get("ping") != "" {
 			w.Header().Set("Content-Type", "application/json")

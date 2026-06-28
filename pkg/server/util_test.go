@@ -1730,3 +1730,69 @@ func TestDeviceLimitExceededFreeTier(t *testing.T) {
 		t.Fatal("device C should be allowed after device A becomes inactive")
 	}
 }
+
+func TestIsReceiveClientLimitExceeded(t *testing.T) {
+	// Create temporary directory for server
+	dir, err := os.MkdirTemp("", "eqrcp-test-receive-limit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	srv, err := New(&config.Config{
+		Interface: "any",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		Path:      "receive-limit-test",
+		KeepAlive: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Shutdown()
+	if err := srv.ReceiveTo(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	clientID_A := "client_A"
+	clientID_B := "client_B"
+
+	// 1. Set UsedReceiveTransfers to 0 (Not exceeded free quota)
+	SetUsedReceiveTransfers(0)
+
+	// In this state, it behaves like normal limit: activeCount >= 2 is exceeded
+	if srv.isReceiveClientLimitExceeded(clientID_A) {
+		t.Fatal("device A should not be limited when activeCount is 0 (quota not exceeded)")
+	}
+	srv.clientMutex.Lock()
+	srv.clientLastSeen[clientID_A] = time.Now()
+	srv.clientMutex.Unlock()
+
+	if srv.isReceiveClientLimitExceeded(clientID_B) {
+		t.Fatal("device B should not be limited when activeCount is 1 (quota not exceeded)")
+	}
+
+	// 2. Set UsedReceiveTransfers to 5 (Exceeded free quota)
+	SetUsedReceiveTransfers(5)
+
+	// Now since quota is exceeded, activeCount >= 1 is exceeded.
+	// device A (which is already active) should be allowed (it's the 1 allowed active client)
+	if srv.isReceiveClientLimitExceeded(clientID_A) {
+		t.Fatal("device A should not be limited as it is already the active device")
+	}
+
+	// device B should be limited because device A is active (activeCount == 1 >= 1)
+	if !srv.isReceiveClientLimitExceeded(clientID_B) {
+		t.Fatal("device B should be limited as device A is already active (quota exceeded)")
+	}
+
+	// Make device A inactive
+	srv.clientMutex.Lock()
+	srv.clientLastSeen[clientID_A] = time.Now().Add(-10 * time.Second)
+	srv.clientMutex.Unlock()
+
+	// device B should now be allowed (activeCount == 0 < 1)
+	if srv.isReceiveClientLimitExceeded(clientID_B) {
+		t.Fatal("device B should not be limited after device A becomes inactive")
+	}
+}
