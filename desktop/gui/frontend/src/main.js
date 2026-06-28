@@ -1230,7 +1230,16 @@ function integrationStatusText(status, fallback) {
 function renderAboutPanel() {
     const info = state.appInfo || {};
     const license = state.license || loadLicense();
-    let plan = license?.tier ? `${getLicenseDisplayName(license)} ${t('running')}` : t('free_quota');
+    let plan = '';
+    if (license?.tier) {
+        if (license.tier === 'PLUS' && (license.codeDate === 'LIFETIME' || state.status?.licenseExpiresAt === 'LIFETIME')) {
+            plan = 'PLUS U';
+        } else {
+            plan = license.tier.toUpperCase();
+        }
+    } else {
+        plan = t('free_quota');
+    }
     const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
     let expiryText = '';
     if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a') {
@@ -1257,14 +1266,28 @@ function renderAboutPanel() {
         }
     }
 
-    let planDetail = '';
+    let redeemDetail = '';
+    let expiryDetail = '';
     if (license?.redeemedAt) {
-        planDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
-        if (expiryText) {
-            planDetail += ` (${expiryText})`;
+        redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
+        let expVal = '';
+        if (expiresAt === 'LIFETIME') {
+            expVal = t('lifetime') || '永久';
+        } else if (expiresAt) {
+            try {
+                expVal = new Date(expiresAt).toLocaleDateString();
+            } catch {
+                expVal = expiresAt;
+            }
+        }
+        if (expVal) {
+            expiryDetail = `${t('expiry_label') || '有效期'}：${expVal}`;
+            if (expiryText) {
+                expiryDetail += ` (${expiryText})`;
+            }
         }
     } else {
-        planDetail = chatQuotaText();
+        redeemDetail = chatQuotaText();
     }
     
     let warningBox = '';
@@ -1272,7 +1295,8 @@ function renderAboutPanel() {
     if (state.status) {
         if (state.status.clockTampered) {
             plan = t('paid_locked_clock');
-            planDetail = t('locked_rollback');
+            redeemDetail = t('locked_rollback');
+            expiryDetail = '';
             warningBox = `
                 <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                     <strong>⚠️ ${t('locked_rollback')}：</strong>
@@ -1280,12 +1304,13 @@ function renderAboutPanel() {
                 </div>
             `;
         } else if (license?.tier && !isPaid) {
-            plan = `${getLicenseDisplayName(license)} ${t('license_locked_limit')}`;
-            planDetail = t('license_locked_server');
+            plan = `${license.tier.toUpperCase()} ${t('license_locked_limit')}`;
+            redeemDetail = t('license_locked_server');
+            expiryDetail = '';
             warningBox = `
                 <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                     <strong>⚠️ ${t('license_verify_failed')}</strong>
-                    ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
+                    ${t('license_verify_failed_desc', { tier: license.tier.toUpperCase() })}
                 </div>
             `;
         }
@@ -1360,21 +1385,21 @@ function renderAboutPanel() {
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
                     <div class="about-plan-left">
-                        <span>${t('plan_label')}</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;">
+                            ${t('plan_label')}
+                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''}>
+                                <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
+                            </button>
+                        </span>
                         <strong>${escapeHTML(plan)}</strong>
-                        <small>${escapeHTML(planDetail)}</small>
+                        <small>${escapeHTML(redeemDetail)}</small>
+                        ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
                     </div>
                     <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
                         <span class="plan-info-icon-wrapper" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}">
                             <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
                         </span>
                     </button>
-                    <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;" ${state.isRefreshingLicense ? 'disabled' : ''}>
-                        <span class="plan-info-icon-wrapper" data-tooltip="Refresh activation status">
-                            <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
-                        </span>
-                    </button>
-
                 </div>
             </div>
             <dl>

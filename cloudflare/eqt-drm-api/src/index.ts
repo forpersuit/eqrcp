@@ -131,9 +131,48 @@ export default {
           ).run();
         }
 
+        // Calculate dynamic expiration if the device has other active and unexpired license activations
+        let remainingMs = 0;
+        const nowMs = Date.now();
+        
+        // Find existing activations for this device fingerprint
+        const activeDevices = await env.DB.prepare(`
+          SELECT l.expires_at FROM activations a
+          JOIN licenses l ON a.license_code = l.license_code
+          WHERE (a.uuid_hash = ? OR a.cpu_hash = ? OR a.disk_hash = ?)
+            AND l.license_code != ?
+            AND l.status = 'active'
+        `).bind(uuid_hash || "", cpu_hash || "", disk_hash || "", license_code).all<any>();
+
+        if (activeDevices.results && activeDevices.results.length > 0) {
+          for (const item of activeDevices.results) {
+            if (item.expires_at === "LIFETIME") {
+              remainingMs = -1; // Already has a lifetime license, no need to accumulate
+              break;
+            }
+            if (item.expires_at) {
+              const expTime = new Date(item.expires_at).getTime();
+              if (expTime > nowMs) {
+                const diff = expTime - nowMs;
+                if (diff > remainingMs) {
+                  remainingMs = diff;
+                }
+              }
+            }
+          }
+        }
+
+        let finalExpiresAt = license.expires_at || "LIFETIME";
+        if (finalExpiresAt !== "LIFETIME" && remainingMs > 0) {
+          const newExpDate = new Date(finalExpiresAt);
+          // Accumulate the remaining time of the old license
+          const finalDate = new Date(newExpDate.getTime() + remainingMs);
+          finalExpiresAt = finalDate.toISOString();
+        }
+
         // Generate license signature
         // Formulate the raw payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices
-        const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${license.expires_at || "LIFETIME"}|${license.max_devices}`;
+        const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${finalExpiresAt}|${license.max_devices}`;
         const encoder = new TextEncoder();
         const payloadData = encoder.encode(payloadStr);
 
@@ -174,7 +213,7 @@ export default {
           uuid_hash: uuid_hash || "",
           cpu_hash: cpu_hash || "",
           disk_hash: disk_hash || "",
-          expires_at: license.expires_at || "LIFETIME",
+          expires_at: finalExpiresAt,
           max_devices: license.max_devices,
           activated_devices: activatedCount,
           signature: signatureHex
