@@ -886,6 +886,19 @@ func (a *App) ResetLicense() error {
 	return nil
 }
 
+func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
+	a.logInfo("[GUI] RefreshLicenseStatus called")
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	server.VerifyLocalLicense()
+	a.agent.mu.Lock()
+	status := a.agent.snapshotLocked()
+	a.agent.mu.Unlock()
+	return status, nil
+}
+
+
 func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 	a.logInfo(fmt.Sprintf("[GUI] DevSetUsedSeconds called with %d", seconds))
 	if a.agent == nil {

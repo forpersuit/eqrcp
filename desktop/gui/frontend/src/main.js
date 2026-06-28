@@ -36,6 +36,7 @@ import {
     SetPaidStatus,
     ActivateLicense,
     ResetLicense,
+    RefreshLicenseStatus,
     StartupStatus,
     StopChat,
     StopCurrent,
@@ -293,7 +294,7 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    ${!(state.license && state.license.tier) ? `
+                    ${!hasPaidLicense() ? `
                         <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
@@ -1267,25 +1268,27 @@ function renderAboutPanel() {
     }
     
     let warningBox = '';
-    const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
-    if (state.status?.clockTampered) {
-        plan = t('paid_locked_clock');
-        planDetail = t('locked_rollback');
-        warningBox = `
-            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ ${t('locked_rollback')}：</strong>
-                ${t('locked_rollback_desc')}
-            </div>
-        `;
-    } else if (license?.tier && !isPaid) {
-        plan = `${getLicenseDisplayName(license)} ${t('license_locked_limit')}`;
-        planDetail = t('license_locked_server');
-        warningBox = `
-            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ ${t('license_verify_failed')}</strong>
-                ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
-            </div>
-        `;
+    const isPaid = hasPaidLicense();
+    if (state.status) {
+        if (state.status.clockTampered) {
+            plan = t('paid_locked_clock');
+            planDetail = t('locked_rollback');
+            warningBox = `
+                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                    <strong>⚠️ ${t('locked_rollback')}：</strong>
+                    ${t('locked_rollback_desc')}
+                </div>
+            `;
+        } else if (license?.tier && !isPaid) {
+            plan = `${getLicenseDisplayName(license)} ${t('license_locked_limit')}`;
+            planDetail = t('license_locked_server');
+            warningBox = `
+                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                    <strong>⚠️ ${t('license_verify_failed')}</strong>
+                    ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
+                </div>
+            `;
+        }
     }
     
     let devSection = '';
@@ -1366,6 +1369,12 @@ function renderAboutPanel() {
                             <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
                         </span>
                     </button>
+                    <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;" ${state.isRefreshingLicense ? 'disabled' : ''}>
+                        <span class="plan-info-icon-wrapper" data-tooltip="Refresh activation status">
+                            <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
+                        </span>
+                    </button>
+
                 </div>
             </div>
             <dl>
@@ -1394,26 +1403,31 @@ function ensureFavicon() {
 
 function renderRedeemPanel() {
     const license = state.license || loadLicense();
-    let active = license?.tier ? t('redeem_active_tier', { tier: getLicenseDisplayName(license) }) : t('redeem_no_paid_plan');
+    let active = t('redeem_no_paid_plan');
+    if (hasPaidLicense()) {
+        active = t('redeem_active_tier', { tier: getLicenseDisplayName(license) });
+    }
     
     let warningBox = '';
-    const isPaid = state.status?.isPaid !== undefined ? state.status.isPaid : (license?.tier ? true : false);
-    if (state.status?.clockTampered) {
-        active = t('paid_locked_clock');
-        warningBox = `
-            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ ${t('locked_rollback')}：</strong>
-                ${t('locked_rollback_desc')}
-            </div>
-        `;
-    } else if (license?.tier && !isPaid) {
-        active = t('license_locked_limit');
-        warningBox = `
-            <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                <strong>⚠️ ${t('license_verify_failed')}</strong>
-                ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
-            </div>
-        `;
+    const isPaid = hasPaidLicense();
+    if (state.status) {
+        if (state.status.clockTampered) {
+            active = t('paid_locked_clock');
+            warningBox = `
+                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                    <strong>⚠️ ${t('locked_rollback')}：</strong>
+                    ${t('locked_rollback_desc')}
+                </div>
+            `;
+        } else if (license?.tier && !isPaid) {
+            active = t('license_locked_limit');
+            warningBox = `
+                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
+                    <strong>⚠️ ${t('license_verify_failed')}</strong>
+                    ${t('license_verify_failed_desc', { tier: getLicenseDisplayName(license) })}
+                </div>
+            `;
+        }
     }
 
     let resetSection = '';
@@ -1842,6 +1856,8 @@ function bindPanelEvents() {
         document.querySelector('.plan-popover')?.classList.toggle('visible');
         document.querySelector('.popover-backdrop')?.classList.toggle('visible');
     });
+    document.querySelector('#refresh-license-btn')?.addEventListener('click', triggerManualRefresh);
+
     document.querySelector('#close-plan-popover')?.addEventListener('click', () => {
         document.querySelector('.plan-popover')?.classList.remove('visible');
         document.querySelector('.popover-backdrop')?.classList.remove('visible');
@@ -3464,6 +3480,35 @@ function resetLicense() {
         if (button) button.disabled = false;
     });
 }
+
+let lastRefreshTime = 0;
+function triggerManualRefresh() {
+    const now = Date.now();
+    const isOnline = navigator.onLine;
+    const minInterval = isOnline ? 30000 : 3000;
+    
+    if (now - lastRefreshTime < minInterval) {
+        const waitSec = Math.ceil((minInterval - (now - lastRefreshTime)) / 1000);
+        showToast(t('refresh_too_fast', { sec: waitSec }) || `Refresh too frequent. Please wait ${waitSec}s.`);
+        return;
+    }
+    
+    state.isRefreshingLicense = true;
+    render();
+    
+    RefreshLicenseStatus().then(async function(status) {
+        lastRefreshTime = Date.now();
+        state.status = status;
+        showToast(t('refresh_success') || 'License status refreshed successfully.');
+    }).catch(function(e) {
+        lastRefreshTime = Date.now();
+        showToast(e || 'Failed to refresh status.');
+    }).finally(function() {
+        state.isRefreshingLicense = false;
+        render();
+    });
+}
+
 
 function validateRedeemCode(code) {
     const parts = code.split('-');

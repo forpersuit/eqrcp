@@ -74,6 +74,10 @@ export function Receive(arg1) {
   return window['go']['main']['App']['Receive'](arg1);
 }
 
+export function RefreshLicenseStatus() {
+  return window['go']['main']['App']['RefreshLicenseStatus']();
+}
+
 export function RepeatTask(arg1) {
   return window['go']['main']['App']['RepeatTask'](arg1);
 }

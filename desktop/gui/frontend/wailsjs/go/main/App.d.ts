@@ -38,6 +38,8 @@ export function ReadSettings():Promise<main.DesktopSettings>;
 
 export function Receive(arg1:string):Promise<main.AgentStatus>;
 
+export function RefreshLicenseStatus():Promise<main.AgentStatus>;
+
 export function RepeatTask(arg1:number):Promise<main.AgentStatus>;
 
 export function ResetLicense():Promise<void>;
