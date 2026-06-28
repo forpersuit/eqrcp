@@ -3431,13 +3431,15 @@ function chatSessionKey(task) {
 function shareItemStatus(task, path) {
     const current = shortName(task.transferCurrent || '');
     if (current && current === shortName(path)) {
-        const percent = task.transferPercent || 0;
-        return percent ? `${percent}%` : t('active');
+        if (task.transferState === 'transferring') {
+            return t('running') || '运行中';
+        }
+        return t('active') || '活跃';
     }
     if (task.transferState === 'waiting') {
-        return t('waiting');
+        return t('waiting') || '等待中';
     }
-    return t('locked');
+    return t('locked') || '未开始';
 }
 
 function titleCase(value) {

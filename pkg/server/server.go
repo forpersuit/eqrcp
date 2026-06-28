@@ -104,8 +104,22 @@ func (s *Server) SetAutoStop(enabled bool) {
 	s.statusMu.Unlock()
 
 	if enabled {
-		// If all downloads are already finished, check if we should shut down immediately
-		if s.isAllActiveClientsFinished() {
+		s.clientMutex.Lock()
+		var clientIDs []string
+		for clientID := range s.clientLastSeen {
+			clientIDs = append(clientIDs, clientID)
+		}
+		s.clientMutex.Unlock()
+
+		hasFinishedClient := false
+		for _, clientID := range clientIDs {
+			if s.isClientFinished(clientID) {
+				hasFinishedClient = true
+				break
+			}
+		}
+
+		if hasFinishedClient {
 			s.statusMu.Lock()
 			s.status.State = "completed"
 			s.status.Message = "Transfer completed."

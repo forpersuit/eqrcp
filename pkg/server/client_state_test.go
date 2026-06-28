@@ -184,3 +184,54 @@ func TestSingleDeviceAutoStopTrigger(t *testing.T) {
 		t.Errorf("DeviceName = %q, want \"iPhone (stop)\"", clientStatus.DeviceName)
 	}
 }
+
+func TestSetAutoStopLiveTrigger(t *testing.T) {
+	stopChan := make(chan bool, 1)
+
+	s := &Server{
+		clientStates:   make(map[string]*ClientTransferStateInfo),
+		clientProgress: make(map[string]map[int]int64),
+		expectedBytes:  make(map[int]int64),
+		clientLastSeen: make(map[string]time.Time),
+		autoStop:       false,
+		body: body.Body{
+			Paths: []string{"testfile.txt"},
+		},
+		stopChannel: stopChan,
+	}
+
+	clientID := "cli_live_test"
+	s.clientLastSeen[clientID] = time.Now()
+	s.clientStates[clientID] = &ClientTransferStateInfo{}
+	s.clientProgress[clientID] = make(map[int]int64)
+	s.expectedBytes[0] = 500
+
+	// 1. Simulate complete download
+	s.clientProgress[clientID][0] = 500
+
+	// 2. SetAutoStop is false, so calling it should NOT trigger stop
+	s.SetAutoStop(false)
+	select {
+	case <-stopChan:
+		t.Error("stopChannel received signal even though autoStop is false")
+	case <-time.After(100 * time.Millisecond):
+		// Expected
+	}
+
+	// 3. Now toggling SetAutoStop to true. Since download is completed, this should immediately trigger shutdown.
+	s.SetAutoStop(true)
+
+	select {
+	case <-stopChan:
+		// Success
+	case <-time.After(2 * time.Second):
+		t.Error("timeout waiting for live auto-stop shutdown signal after SetAutoStop(true)")
+	}
+
+	s.statusMu.Lock()
+	state := s.status.State
+	s.statusMu.Unlock()
+	if state != "completed" {
+		t.Errorf("global server status state = %q, want \"completed\"", state)
+	}
+}
