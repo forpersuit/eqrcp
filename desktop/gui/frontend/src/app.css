@@ -1937,31 +1937,21 @@ dd {
 
 @media (max-width: 960px) {
     .shell {
-        padding: 18px;
+        padding: 16px;
     }
 
     .layout {
         gap: 16px;
         grid-template-columns: 1fr;
-    }
-
-    .shell {
-        height: auto;
-        min-height: 100dvh;
-        overflow: visible;
-    }
-
-    .shell:has(.chat-layout) {
-        height: 100vh;
-        min-height: 0;
-        overflow: hidden;
-        padding: 14px;
-    }
-
-    .layout {
-        height: auto;
+        height: calc(100dvh - 84px);
         min-height: 0;
         align-content: start;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+
+    .layout::-webkit-scrollbar {
+        display: none;
     }
 
     .workspace {
@@ -2031,7 +2021,7 @@ dd {
     }
 
     .layout.chat-layout {
-        height: calc(100dvh - 80px);
+        height: calc(100dvh - 84px);
         overflow: hidden;
     }
 
