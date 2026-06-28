@@ -1070,73 +1070,31 @@ function renderSettingsPanel() {
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
                         <div class="avatar-inputs-stack" style="position: relative; z-index: 15;">
-                            <div class="avatar-input-row">
-                                <div class="avatar-input-group">
-                                    <input type="text" id="settings-chat-avatar" 
-                                           value="${chatAvatar.startsWith('data:image/') ? '' : escapeAttr(chatAvatar)}" 
-                                           placeholder="${chatAvatar.startsWith('data:image/') ? (t('avatar_image_uploaded') || '已上传自定义图片') : (escapeAttr(t('chat_avatar_placeholder') || '输入 Emoji 或文字...'))}" 
-                                           maxlength="8" 
-                                           ${chatAvatar.startsWith('data:image/') ? 'disabled' : ''} />
-                                    <button type="button" id="btn-emoji-more" class="avatar-input-addon" title="${t('btn_emoji') || 'Emoji'}">😀</button>
-                                </div>
-                                <div class="avatar-actions">
-                                    <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
-                                    <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
-                                    ${chatAvatar.startsWith('data:image/') ? `
-                                        <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
-                                    ` : ''}
-                                </div>
+                            <div class="avatar-actions">
+                                <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
+                                <button type="button" id="btn-emoji-more" class="avatar-action-btn">${t('btn_emoji') || 'Emoji'}</button>
+                                <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
+                                ${chatAvatar.startsWith('data:image/') ? `
+                                    <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
+                                ` : ''}
                             </div>
                             ${state.showEmojiPicker ? (() => {
-                                const recentEmojis = (() => {
-                                    try {
-                                        const val = localStorage.getItem('eqt_recent_emojis');
-                                        if (val) return JSON.parse(val);
-                                    } catch (e) {}
-                                    return ['🚀','😎','💻','👍','🌟','🎨','🔥','❤️'];
-                                })();
-                                const currentLang = state.settings?.lang || 'en';
-                                const cultureKeys = Object.keys(culturalEmojis);
-                                const sortedKeys = [
-                                    currentLang,
-                                    ...cultureKeys.filter(k => k !== currentLang)
-                                ].filter(k => culturalEmojis[k]);
+                                const allCulturalEmojis = Object.values(culturalEmojis).flatMap(g => g.emojis);
+                                const combined = [...allCulturalEmojis, ...allEmojis];
+                                const uniqueEmojis = Array.from(new Set(combined));
                                 return `
                                     <div class="emoji-picker-popover" id="emoji-picker-popover">
-                                        <div class="emoji-picker-scroll-area">
-                                            ${recentEmojis.length > 0 ? `
-                                                <div class="emoji-picker-section-title">${t('emoji_picker_recent') || '最近使用'}</div>
-                                                <div class="emoji-picker-grid">
-                                                    ${recentEmojis.map(emoji => `
-                                                        <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
-                                                    `).join('')}
-                                                </div>
-                                            ` : ''}
-                                            
-                                            ${sortedKeys.map(k => {
-                                                const group = culturalEmojis[k];
-                                                const localizedName = getCategoryLocalizedName(k, currentLang);
-                                                return `
-                                                    <div class="emoji-picker-section-title" style="margin-top: 6px;">${escapeHTML(localizedName)}</div>
-                                                    <div class="emoji-picker-grid">
-                                                        ${group.emojis.map(emoji => `
-                                                            <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
-                                                        `).join('')}
-                                                    </div>
-                                                `;
-                                            }).join('')}
-
-                                            <div class="emoji-picker-section-title" style="margin-top: 6px;">${t('emoji_picker_other') || '其他推荐'}</div>
-                                            <div class="emoji-picker-grid">
-                                                ${allEmojis.map(emoji => `
-                                                    <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                        <div class="emoji-picker-divider"></div>
                                         <div class="emoji-picker-custom-row">
                                             <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || '自定义...')}" maxlength="8" />
                                             <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || '确定'}</button>
+                                        </div>
+                                        <div class="emoji-picker-divider"></div>
+                                        <div class="emoji-picker-scroll-area">
+                                            <div class="emoji-picker-grid">
+                                                ${uniqueEmojis.map(emoji => `
+                                                    <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                                `).join('')}
+                                            </div>
                                         </div>
                                     </div>
                                 `;
@@ -2707,16 +2665,6 @@ function bindSettingsControls() {
             event.stopPropagation();
             const emojiVal = event.currentTarget.dataset.emoji;
             if (state.settings && emojiVal) {
-                try {
-                    let recent = [];
-                    const val = localStorage.getItem('eqt_recent_emojis');
-                    if (val) recent = JSON.parse(val);
-                    recent = recent.filter(e => e !== emojiVal);
-                    recent.unshift(emojiVal);
-                    recent = recent.slice(0, 8);
-                    localStorage.setItem('eqt_recent_emojis', JSON.stringify(recent));
-                } catch (e) {}
-
                 state.settings.chatAvatar = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
@@ -2749,16 +2697,6 @@ function bindSettingsControls() {
             const rawVal = inputEl.value.trim();
             const emojiVal = cleanChatAvatar(rawVal);
             if (emojiVal) {
-                try {
-                    let recent = [];
-                    const val = localStorage.getItem('eqt_recent_emojis');
-                    if (val) recent = JSON.parse(val);
-                    recent = recent.filter(e => e !== emojiVal);
-                    recent.unshift(emojiVal);
-                    recent = recent.slice(0, 8);
-                    localStorage.setItem('eqt_recent_emojis', JSON.stringify(recent));
-                } catch (e) {}
-
                 state.settings.chatAvatar = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
