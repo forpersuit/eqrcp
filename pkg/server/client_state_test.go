@@ -189,11 +189,12 @@ func TestSetAutoStopLiveTrigger(t *testing.T) {
 	stopChan := make(chan bool, 1)
 
 	s := &Server{
-		clientStates:   make(map[string]*ClientTransferStateInfo),
-		clientProgress: make(map[string]map[int]int64),
-		expectedBytes:  make(map[int]int64),
-		clientLastSeen: make(map[string]time.Time),
-		autoStop:       false,
+		clientStates:           make(map[string]*ClientTransferStateInfo),
+		clientProgress:         make(map[string]map[int]int64),
+		expectedBytes:          make(map[int]int64),
+		clientLastSeen:         make(map[string]time.Time),
+		autoStopIgnoredClients: make(map[string]bool),
+		autoStop:               false,
 		body: body.Body{
 			Paths: []string{"testfile.txt"},
 		},
@@ -218,14 +219,50 @@ func TestSetAutoStopLiveTrigger(t *testing.T) {
 		// Expected
 	}
 
-	// 3. Now toggling SetAutoStop to true. Since download is completed, this should immediately trigger shutdown.
+	// 3. Now toggling SetAutoStop to true.
+	// Since download was completed before SetAutoStop(true) was toggled, this client should be IGNORED
+	// and it should NOT trigger immediate shutdown.
 	s.SetAutoStop(true)
 
 	select {
 	case <-stopChan:
-		// Success
+		t.Error("stopChannel received signal even though the completed client should be ignored")
+	case <-time.After(150 * time.Millisecond):
+		// Expected: no immediate stop signal
+	}
+
+	// 4. Now simulate a NEW client completing download. This should trigger shutdown.
+	newClientID := "cli_live_test_new"
+	s.clientMutex.Lock()
+	s.clientLastSeen[newClientID] = time.Now()
+	s.clientStates[newClientID] = &ClientTransferStateInfo{}
+	s.clientProgress[newClientID] = make(map[int]int64)
+	s.clientMutex.Unlock()
+
+	s.clientProgress[newClientID][0] = 500
+
+	if s.isClientFinished(newClientID) {
+		s.updateClientStatus(newClientID, nil, func(state *ClientTransferStateInfo) {
+			state.State = "completed"
+		})
+
+		allDownloaded := s.isAllActiveClientsFinished()
+		if allDownloaded {
+			s.statusMu.Lock()
+			autoStop := s.autoStop
+			s.statusMu.Unlock()
+			if autoStop {
+				s.setStatus("completed", "Transfer completed.")
+				go s.signalStop()
+			}
+		}
+	}
+
+	select {
+	case <-stopChan:
+		// Success: new client triggered shutdown
 	case <-time.After(2 * time.Second):
-		t.Error("timeout waiting for live auto-stop shutdown signal after SetAutoStop(true)")
+		t.Error("timeout waiting for new client auto-stop shutdown signal")
 	}
 
 	s.statusMu.Lock()
@@ -339,11 +376,12 @@ func TestAutoStopWhenAllInactiveButFinished(t *testing.T) {
 	stopChan := make(chan bool, 1)
 
 	s := &Server{
-		clientStates:   make(map[string]*ClientTransferStateInfo),
-		clientProgress: make(map[string]map[int]int64),
-		expectedBytes:  make(map[int]int64),
-		clientLastSeen: make(map[string]time.Time),
-		autoStop:       false,
+		clientStates:           make(map[string]*ClientTransferStateInfo),
+		clientProgress:         make(map[string]map[int]int64),
+		expectedBytes:          make(map[int]int64),
+		clientLastSeen:         make(map[string]time.Time),
+		autoStopIgnoredClients: make(map[string]bool),
+		autoStop:               false,
 		body: body.Body{
 			Paths: []string{"testfile.txt"},
 		},
@@ -366,14 +404,48 @@ func TestAutoStopWhenAllInactiveButFinished(t *testing.T) {
 	s.clientProgress[cliA][0] = 500
 	s.clientProgress[cliB][0] = 500
 
-	// 3. Trigger SetAutoStop(true). Since all devices are completed but inactive, it should trigger stop.
+	// 3. Trigger SetAutoStop(true). Since they were already completed, they should be ignored, and no stop signal should fire.
 	s.SetAutoStop(true)
+
+	select {
+	case <-stopChan:
+		t.Error("stopChannel received signal even though all completed clients should be ignored at SetAutoStop(true) toggle-on")
+	case <-time.After(150 * time.Millisecond):
+		// Expected: no immediate stop signal
+	}
+
+	// 4. Register a new client cliC and complete its download. This should trigger shutdown.
+	cliC := "cli_C"
+	s.clientMutex.Lock()
+	s.clientLastSeen[cliC] = time.Now()
+	s.clientStates[cliC] = &ClientTransferStateInfo{}
+	s.clientProgress[cliC] = make(map[int]int64)
+	s.clientMutex.Unlock()
+
+	s.clientProgress[cliC][0] = 500
+
+	if s.isClientFinished(cliC) {
+		s.updateClientStatus(cliC, nil, func(state *ClientTransferStateInfo) {
+			state.State = "completed"
+		})
+
+		allDownloaded := s.isAllActiveClientsFinished()
+		if allDownloaded {
+			s.statusMu.Lock()
+			autoStop := s.autoStop
+			s.statusMu.Unlock()
+			if autoStop {
+				s.setStatus("completed", "Transfer completed.")
+				go s.signalStop()
+			}
+		}
+	}
 
 	select {
 	case <-stopChan:
 		// Success
 	case <-time.After(2 * time.Second):
-		t.Error("timeout waiting for auto-stop shutdown signal after toggling SetAutoStop when all clients finished but inactive")
+		t.Error("timeout waiting for new client auto-stop shutdown signal")
 	}
 
 	s.statusMu.Lock()

@@ -85,6 +85,7 @@ type Server struct {
 	downloadedBytesMu      sync.Mutex
 	KeepAlive              bool
 	autoStop               bool
+	autoStopIgnoredClients map[string]bool
 	clientMutex            sync.Mutex
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
@@ -104,6 +105,48 @@ func (s *Server) SetAutoStop(enabled bool) {
 	s.statusMu.Unlock()
 
 	if enabled {
+		s.clientMutex.Lock()
+		if s.autoStopIgnoredClients == nil {
+			s.autoStopIgnoredClients = make(map[string]bool)
+		} else {
+			for k := range s.autoStopIgnoredClients {
+				delete(s.autoStopIgnoredClients, k)
+			}
+		}
+
+		totalItems := len(s.body.Paths)
+		if totalItems > 0 {
+			for clientID := range s.clientLastSeen {
+				completedForClient := 0
+				if progress, ok := s.clientProgress[clientID]; ok {
+					for i := 0; i < totalItems; i++ {
+						clientBytes := progress[i]
+						var size int64
+						s.expectedBytesMu.Lock()
+						if s.expectedBytes != nil {
+							size = s.expectedBytes[i]
+						}
+						s.expectedBytesMu.Unlock()
+
+						if size <= 0 {
+							targetPath := s.body.Paths[i]
+							if info, err := os.Stat(targetPath); err == nil {
+								size = info.Size()
+							}
+						}
+
+						if size > 0 && clientBytes >= size {
+							completedForClient++
+						}
+					}
+				}
+				if completedForClient >= totalItems {
+					s.autoStopIgnoredClients[clientID] = true
+				}
+			}
+		}
+		s.clientMutex.Unlock()
+
 		// 打开开关意味着在所有设备都传输完成后，关闭服务
 		if s.isAllActiveClientsFinished() {
 			s.statusMu.Lock()
@@ -113,6 +156,14 @@ func (s *Server) SetAutoStop(enabled bool) {
 			s.recordStatus()
 			go s.signalStopAfterStatusGrace()
 		}
+	} else {
+		s.clientMutex.Lock()
+		if s.autoStopIgnoredClients != nil {
+			for k := range s.autoStopIgnoredClients {
+				delete(s.autoStopIgnoredClients, k)
+			}
+		}
+		s.clientMutex.Unlock()
 	}
 }
 
@@ -850,7 +901,13 @@ func (s *Server) isAllActiveClientsFinished() bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
-	totalClients := len(s.clientLastSeen)
+	totalClients := 0
+	for clientID := range s.clientLastSeen {
+		if s.autoStop && s.autoStopIgnoredClients[clientID] {
+			continue
+		}
+		totalClients++
+	}
 	if totalClients == 0 {
 		return false
 	}
@@ -866,6 +923,9 @@ func (s *Server) isAllActiveClientsFinished() bool {
 	finishedTotalCount := 0
 
 	for clientID, lastSeen := range s.clientLastSeen {
+		if s.autoStop && s.autoStopIgnoredClients[clientID] {
+			continue
+		}
 		isActive := now.Sub(lastSeen) <= 8*time.Second
 		if isActive {
 			activeCount++
@@ -1333,6 +1393,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.downloadedItems = make(map[int]bool)
 	app.downloadedBytes = make(map[int]int64)
 	app.clientLastSeen = make(map[string]time.Time)
+	app.autoStopIgnoredClients = make(map[string]bool)
 	app.clientProgress = make(map[string]map[int]int64)
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.expectedBytes = make(map[int]int64)
