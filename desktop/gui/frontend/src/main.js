@@ -1417,7 +1417,7 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <span>${t('plan_feature_share_free') || 'Share 电脑发送限制：每日免费 5 次。超额后单次限发 5 文件，总大小限 50MB'}</span>
                         </li>
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
-                            ${checkGreen} <span>${t('plan_feature_receive_free') || 'Receive 移动端上传限制：每日免费 5 次。超额后单次限传 5 文件，单文件限 50MB'}</span>
+                            ${checkGreen} <span>${t('plan_feature_receive_free') || 'Receive 移动端上传限制：每日免费 5 次。超额后仅允许 1 台设备连接，且移动端限选 5 文件、单文件限 50MB'}</span>
                         </li>
                         <li style="display: flex; gap: 8px; align-items: flex-start; color: var(--ink);">
                             ${checkGreen} <span>${t('plan_feature_drag_and_drop') || '支持拖拽发送、历史保存、文件夹选择'}</span>
