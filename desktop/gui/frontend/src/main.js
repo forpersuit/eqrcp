@@ -495,12 +495,14 @@ function renderShareTransfer(task) {
                 </div>
             </div>
             
-            ${isQRExpanded && qrImage ? `
-                <div class="qr-hero">
-                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                </div>
-            ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            <div id="share-qr-wrapper">
+                ${isQRExpanded && qrImage ? `
+                    <div class="qr-hero">
+                        <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                        <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                    </div>
+                ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            </div>
             
             <div id="devices-progress-wrapper">${renderDeviceProgressHtml(task)}</div>
 
@@ -636,6 +638,26 @@ function updateShareTransferActiveUI(task) {
     } else {
         if (quotaCountdown) {
             quotaCountdown.remove();
+        }
+    }
+
+    // 7. 更新二维码区域，避免局部刷新时丢失二维码
+    const qrWrapper = document.getElementById('share-qr-wrapper');
+    if (qrWrapper) {
+        const qrImage = qrImageURL(task.pageUrl);
+        const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
+        const shouldCollapse = isSharedOrReceived;
+        const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+        
+        const newQrHtml = isQRExpanded && qrImage ? `
+            <div class="qr-hero">
+                <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+            </div>
+        ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
+        
+        if (qrWrapper.innerHTML.trim() !== newQrHtml.trim()) {
+            qrWrapper.innerHTML = newQrHtml;
         }
     }
 }

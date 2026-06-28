@@ -381,6 +381,7 @@ h2 {
     list-style: none;
     margin: 18px 0 0;
     padding: 0;
+    min-width: 0;
 }
 
 .path-list li,
@@ -391,6 +392,7 @@ h2 {
     justify-content: space-between;
     padding: 11px 0;
     text-align: left;
+    min-width: 0;
 }
 
 .path-list.locked {
@@ -1038,6 +1040,7 @@ dd {
 .transfer-stage {
     display: grid;
     gap: 16px;
+    min-width: 0;
 }
 
 .transfer-head {
@@ -1160,6 +1163,7 @@ dd {
 .locked-list {
     display: grid;
     gap: 4px;
+    min-width: 0;
 }
 
 .item-status {
