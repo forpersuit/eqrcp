@@ -3377,8 +3377,16 @@ function chatStartButtonText() {
 }
 
 function hasPaidLicense() {
-    return Boolean(state.license?.tier && licenseTiers[state.license.tier]);
+    const license = state.license || loadLicense();
+    if (!license || !license.tier || !licenseTiers[license.tier]) {
+        return false;
+    }
+    if (state.status) {
+        return Boolean(state.status.isPaid && !state.status.clockTampered);
+    }
+    return true;
 }
+
 
 function loadLicense() {
     try {
