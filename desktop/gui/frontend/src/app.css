@@ -1123,7 +1123,6 @@ dd {
     display: grid;
     gap: 14px;
     justify-items: center;
-    min-height: 300px;
     padding: 18px;
 }
 
@@ -1131,11 +1130,13 @@ dd {
     background: white;
     border: 1px solid var(--line);
     border-radius: 6px;
-    height: min(320px, 46vw);
+    height: auto;
+    max-height: 280px;
     image-rendering: pixelated;
     object-fit: contain;
     padding: 10px;
-    width: min(320px, 46vw);
+    width: 100%;
+    max-width: 280px;
 }
 
 .transfer-progress {

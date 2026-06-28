@@ -18,6 +18,7 @@ export namespace main {
 	    itemClientStats?: string[];
 	    transferDeviceCount?: number;
 	    transferAutoStop?: boolean;
+	    clientStates?: Record<string, server.ClientTransferStateInfo>;
 	    chatState?: string;
 	    chatMessageCount?: number;
 	    chatDeviceCount?: number;
@@ -52,6 +53,7 @@ export namespace main {
 	        this.itemClientStats = source["itemClientStats"];
 	        this.transferDeviceCount = source["transferDeviceCount"];
 	        this.transferAutoStop = source["transferAutoStop"];
+	        this.clientStates = this.convertValues(source["clientStates"], server.ClientTransferStateInfo, true);
 	        this.chatState = source["chatState"];
 	        this.chatMessageCount = source["chatMessageCount"];
 	        this.chatDeviceCount = source["chatDeviceCount"];
@@ -312,6 +314,35 @@ export namespace main {
 	    }
 	}
 	
+
+}
+
+export namespace server {
+	
+	export class ClientTransferStateInfo {
+	    state: string;
+	    bytesDone: number;
+	    bytesTotal: number;
+	    percent: number;
+	    current?: string;
+	    message: string;
+	    deviceName?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientTransferStateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.bytesDone = source["bytesDone"];
+	        this.bytesTotal = source["bytesTotal"];
+	        this.percent = source["percent"];
+	        this.current = source["current"];
+	        this.message = source["message"];
+	        this.deviceName = source["deviceName"];
+	    }
+	}
 
 }
 

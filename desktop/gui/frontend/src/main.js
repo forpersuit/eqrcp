@@ -410,10 +410,8 @@ function renderSide() {
 }
 
 function renderShareTransfer(task) {
-    const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const paths = task.paths || [];
-    const isArchive = !!task.transferArchiveName;
 
     const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
     const shouldCollapse = isSharedOrReceived;
@@ -430,30 +428,6 @@ function renderShareTransfer(task) {
         </div>
     ` : '';
 
-    // 实时计算累加下载速度
-    const now = Date.now();
-    if (state.lastBytesDone === undefined) {
-        state.lastBytesDone = 0;
-        state.lastProgressTime = 0;
-        state.currentSpeed = 0;
-    }
-    if (state.lastProgressTime > 0 && now > state.lastProgressTime) {
-        const timeDiff = (now - state.lastProgressTime) / 1000;
-        const bytesDiff = task.bytesDone - state.lastBytesDone;
-        if (bytesDiff >= 0 && timeDiff > 0.2) {
-            const speed = bytesDiff / timeDiff;
-            state.currentSpeed = state.currentSpeed * 0.6 + speed * 0.4;
-            state.lastBytesDone = task.bytesDone;
-            state.lastProgressTime = now;
-        }
-    } else {
-        state.lastBytesDone = task.bytesDone;
-        state.lastProgressTime = now;
-        state.currentSpeed = 0;
-    }
-
-    const speedStr = (state.currentSpeed > 0 && task.transferState === 'transferring') ? ` (${formatBytes(state.currentSpeed)}/s)` : '';
-
     // 渲染设备进度列表
     let deviceProgressHtml = '';
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
@@ -464,19 +438,11 @@ function renderShareTransfer(task) {
 
         const listItems = displayClients.map(client => {
             const devName = client.deviceName || 'Device';
-            const pct = client.percent || 0;
-            const stateText = client.state === 'transferring' ? `${pct}%` : getTranslatedState(client.state || 'waiting');
+            const stateText = getTranslatedState(client.state || 'waiting');
             return `
-                <li style="display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600;">
-                        <span style="color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
-                        <span style="color: var(--accent-strong); font-weight: 800;">${escapeHTML(stateText)}</span>
-                    </div>
-                    ${client.state === 'transferring' ? `
-                        <div class="progress" style="height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; margin-top: 4px;">
-                            <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, pct))}%"></span>
-                        </div>
-                    ` : ''}
+                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; gap: 12px;">
+                    <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
+                    <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
                 </li>
             `;
         }).join('');
@@ -535,54 +501,25 @@ function renderShareTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            ${isArchive && task.transferState === 'transferring' ? `
-                <div style="margin-bottom: 12px; box-sizing: border-box; width: 100%;">
-                    <div style="padding: 12px; background: var(--accent-light); border-radius: 8px; border: 1.2px solid var(--accent-border); box-sizing: border-box; width: 100%;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <strong style="color: var(--accent-strong); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">📦 ${escapeHTML(task.transferArchiveName)}</strong>
-                            <span style="font-size: 12px; font-weight: 800; color: var(--accent-strong);">${percent}%</span>
-                        </div>
-                        <div class="progress" style="height: 6px; margin: 8px 0 6px 0; border-radius: 3px; background: var(--line); overflow: hidden; position: relative;">
-                            <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
-                        </div>
-                        <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
-                            ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}${speedStr}
-                        </div>
-                    </div>
-                </div>
-            ` : ''}
-
             ${deviceProgressHtml}
 
             <div class="locked-list">
                 <strong>${t('locked_list')}</strong>
                 <ul class="path-list locked">${paths.map((path, index) => {
-                    const isCurrent = shortName(task.transferCurrent || '') === shortName(path);
-                    const isTransferring = task.transferState === 'transferring';
-                    const percent = task.transferPercent || 0;
-                    const deviceStatsText = (task.transferItemClientStats && task.transferItemClientStats[index]) ? task.transferItemClientStats[index] : '0/0';
                     return `
                     <li>
-                        <div style="width: 100%;">
+                        <div style="width: 100%; box-sizing: border-box;">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;">
-                                <div style="flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    <strong>${escapeHTML(shortName(path))}</strong>
+                                <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                                    <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(shortName(path))}</strong>
                                     <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
                                 </div>
-                                <div style="flex: 1; text-align: right;">
-                                    <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong);">
+                                <div style="flex: 0 0 auto; text-align: right; min-width: 0;">
+                                    <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong); white-space: nowrap;">
                                         ${escapeHTML(shareItemStatus(task, path))}
                                     </span>
                                 </div>
                             </div>
-                            ${isCurrent && isTransferring ? `
-                                <div class="progress item-progress" style="height: 6px; margin-top: 8px; border-radius: 3px; background: var(--line); overflow: hidden; position: relative;">
-                                    <span style="display: block; height: 100%; background: var(--accent-strong); width: ${Math.max(0, Math.min(100, percent))}%"></span>
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; text-align: right;">
-                                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}${speedStr}
-                                </div>
-                            ` : ''}
                         </div>
                     </li>
                     `;
@@ -623,7 +560,6 @@ function renderReceive() {
 }
 
 function renderReceiveTransfer(task) {
-    const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const files = task.savedFiles || [];
 
@@ -665,13 +601,6 @@ function renderReceiveTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            ${task.transferState !== 'waiting' ? `
-                <div class="progress transfer-progress"><span style="width:${Math.max(0, Math.min(100, percent))}%"></span></div>
-                <div class="transfer-bytes-info" style="font-size: 13px; color: var(--text-muted); margin-top: 6px; text-align: right;">
-                    ${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}
-                </div>
-            ` : ''}
-            
             ${files.length > 0 ? `
                 <div class="locked-list">
                     <strong>${t('saved_files')}</strong>
@@ -681,11 +610,11 @@ function renderReceiveTransfer(task) {
                         const openFileTooltip = t('open_file_title', { file: name });
                         return `
                             <li>
-                                <div>
-                                    <strong>${escapeHTML(name)}</strong>
-                                    <span>${escapeHTML(file)}</span>
+                                <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                                    <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(name)}</strong>
+                                    <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(file)}</span>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center;">
+                                <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
                                     <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
                                         ${openFileIcon()}
                                     </button>

@@ -1688,19 +1688,6 @@ func New(cfg *config.Config) (*Server, error) {
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
 			onWrite: func(written int64) {
-				app.updateStatus(func(status *transferStatus) {
-					status.BytesDone += written
-					if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
-						status.BytesDone = status.BytesTotal
-					}
-				})
-				app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
-					state.BytesDone += written
-					if state.BytesTotal > 0 && state.BytesDone > state.BytesTotal {
-						state.BytesDone = state.BytesTotal
-					}
-					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
-				})
 				// Track cumulative bytes specifically for this item index
 				app.downloadedBytesMu.Lock()
 				if app.downloadedBytes == nil {
@@ -1783,6 +1770,14 @@ func New(cfg *config.Config) (*Server, error) {
 				state.Percent = 100
 				state.Message = "Transfer completed."
 			})
+			app.statusMu.Lock()
+			autoStop := app.autoStop
+			app.statusMu.Unlock()
+			if autoStop {
+				app.setStatus("completed", "Transfer completed.")
+				app.recordStatus()
+				go app.signalStopAfterStatusGrace()
+			}
 		}
 
 		if allDownloaded {
