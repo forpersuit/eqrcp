@@ -1537,7 +1537,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"status":"ok"}`))
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
 			app.setStatus("stopped", "Transfer stopped by user.")
 			app.recordStatus()
 			go func() {
