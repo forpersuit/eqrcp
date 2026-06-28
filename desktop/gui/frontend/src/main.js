@@ -5,6 +5,7 @@ import './app.css';
 import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
+import morphdom from './vendor/morphdom.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -40,6 +41,37 @@ import {
     StopCurrent,
     SetAutoStop,
 } from '../wailsjs/go/main/App';
+
+// Prevent duplicate event listener registration on reused DOM elements due to morphdom patching
+(function() {
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    const originalRemoveEventListener = EventTarget.prototype.removeEventListener;
+
+    EventTarget.prototype.addEventListener = function(type, listener, options) {
+        this._listeners = this._listeners || [];
+        const listenerStr = listener.toString();
+        const existingIdx = this._listeners.findIndex(l => l.type === type && l.listenerStr === listenerStr);
+
+        if (existingIdx !== -1) {
+            const old = this._listeners[existingIdx];
+            originalRemoveEventListener.call(this, type, old.listener, options);
+            this._listeners.splice(existingIdx, 1);
+        }
+
+        this._listeners.push({ type, listener, listenerStr });
+        originalAddEventListener.call(this, type, listener, options);
+    };
+
+    EventTarget.prototype.removeEventListener = function(type, listener, options) {
+        if (this._listeners) {
+            const idx = this._listeners.findIndex(l => l.type === type && l.listener === listener);
+            if (idx !== -1) {
+                this._listeners.splice(idx, 1);
+            }
+        }
+        originalRemoveEventListener.call(this, type, listener, options);
+    };
+})();
 
 window.onerror = function(message, source, lineno, colno, error) {
     const errText = `[JS Error] ${message} at ${source}:${lineno}:${colno}`;
@@ -252,7 +284,7 @@ function render() {
         runningMode = 'chat';
     }
 
-    app.innerHTML = `
+    const newHTML = `
         <main class="shell">
             <header class="topbar">
                 <nav class="mode-switch" aria-label="Transfer modes">
@@ -288,8 +320,15 @@ function render() {
             </section>
             ${renderPanel()}
         </main>
-    `;
-    bindEvents();
+    `.trim();
+
+    if (!app.firstElementChild) {
+        app.innerHTML = newHTML;
+        bindEvents();
+    } else {
+        morphdom(app.firstElementChild, newHTML);
+        bindEvents();
+    }
 
     // 恢复各滚动区域的滚动位置
     scrollableSelectors.forEach(selector => {
@@ -2008,7 +2047,7 @@ function syncPanelSurface() {
         return;
     }
     if (existing) {
-        existing.replaceWith(overlay);
+        morphdom(existing, overlay);
         
         // 还原滚动位置到新的 modal 上
         const newModalEl = overlay.querySelector('.modal');
