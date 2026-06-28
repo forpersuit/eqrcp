@@ -36,6 +36,15 @@ const maxUploadBytes int64 = 10 << 30
 const defaultStatusGracePeriod = 15 * time.Second
 const maxTransferHistory = 20
 
+type clientTransferState struct {
+	State      string `json:"state"`
+	BytesDone  int64  `json:"bytesDone"`
+	BytesTotal int64  `json:"bytesTotal"`
+	Percent    int    `json:"percent"`
+	Current    string `json:"current,omitempty"`
+	Message    string `json:"message"`
+}
+
 // Server is the server
 type Server struct {
 	BaseURL string
@@ -78,6 +87,8 @@ type Server struct {
 	clientMutex            sync.Mutex
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
+	clientStates           map[string]*clientTransferState
+	clientStatesMu         sync.Mutex
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
 	registeredRoutes       map[string]bool
@@ -539,6 +550,7 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	clientID := s.registerClientActivity(r, w)
 	lastSeq := int64(-1)
 	send := func() bool {
 		status, seq := s.getStatusWithSeq()
@@ -546,6 +558,37 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 			return true
 		}
 		lastSeq = seq
+
+		status.DownloadedItems = s.getClientDownloadedItems(clientID)
+		if !isTerminalTransferState(status.State) {
+			cState := s.getClientStatus(clientID)
+			if cState.State != "waiting" {
+				status.State = cState.State
+				status.BytesDone = cState.BytesDone
+				status.BytesTotal = cState.BytesTotal
+				status.Percent = cState.Percent
+				status.Current = cState.Current
+				status.Message = cState.Message
+			} else {
+				if s.isClientFinished(clientID) {
+					status.State = "completed"
+					status.BytesDone = status.BytesTotal
+					status.Percent = 100
+					status.Message = "Transfer completed."
+				} else {
+					status.State = "waiting"
+					status.BytesDone = 0
+					status.Percent = 0
+					status.Message = "Waiting for transfer to start."
+				}
+			}
+		}
+
+		if s.isClientLimitExceeded(clientID) {
+			status.State = "limit_exceeded"
+			status.Message = "Device limit exceeded."
+		}
+
 		if _, err := fmt.Fprint(w, "data: "); err != nil {
 			return false
 		}
@@ -621,6 +664,23 @@ func (s *Server) getServiceStatus() serviceStatus {
 func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.statusMu.Lock()
 	update(&s.status)
+
+	// 动态计算基于活跃客户端的全局进度
+	activeClients := s.getActiveClients()
+	if len(activeClients) > 0 {
+		var totalBytesDone int64
+		var totalBytesTotal int64
+		for _, cid := range activeClients {
+			done, tot := s.getClientDownloadedAndTotal(cid)
+			totalBytesDone += done
+			totalBytesTotal += tot
+		}
+		if totalBytesTotal > 0 {
+			s.status.BytesDone = totalBytesDone
+			s.status.BytesTotal = totalBytesTotal
+		}
+	}
+
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
 	s.status.ItemClientStats = s.getItemClientStats()
 	s.status.TransferDeviceCount = s.getConnectedDevicesCount()
@@ -863,6 +923,35 @@ func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
 	return newID
 }
 
+func (s *Server) updateClientStatus(clientID string, update func(*clientTransferState)) {
+	s.clientStatesMu.Lock()
+	defer s.clientStatesMu.Unlock()
+
+	state, ok := s.clientStates[clientID]
+	if !ok {
+		state = &clientTransferState{
+			State:   "waiting",
+			Message: "Waiting for transfer to start.",
+		}
+		s.clientStates[clientID] = state
+	}
+	update(state)
+}
+
+func (s *Server) getClientStatus(clientID string) clientTransferState {
+	s.clientStatesMu.Lock()
+	defer s.clientStatesMu.Unlock()
+
+	state, ok := s.clientStates[clientID]
+	if !ok {
+		return clientTransferState{
+			State:   "waiting",
+			Message: "Waiting for transfer to start.",
+		}
+	}
+	return *state
+}
+
 func (s *Server) addClientDownloadedBytes(clientID string, itemIndex int, written int64) {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
@@ -969,6 +1058,64 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 	return items
 }
 
+func (s *Server) getActiveClients() []string {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	var active []string
+	now := time.Now()
+	for clientID, lastSeen := range s.clientLastSeen {
+		if now.Sub(lastSeen) <= 8*time.Second {
+			active = append(active, clientID)
+		}
+	}
+	return active
+}
+
+func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+
+	if s.body.Paths == nil {
+		return 0, 0
+	}
+	totalItems := len(s.body.Paths)
+	if totalItems == 0 {
+		return 0, 0
+	}
+
+	progress, ok := s.clientProgress[clientID]
+	var downloaded int64
+	var total int64
+
+	for i := 0; i < totalItems; i++ {
+		var size int64
+		s.expectedBytesMu.Lock()
+		if s.expectedBytes != nil {
+			size = s.expectedBytes[i]
+		}
+		s.expectedBytesMu.Unlock()
+
+		if size <= 0 {
+			targetPath := s.body.Paths[i]
+			if info, err := os.Stat(targetPath); err == nil {
+				size = info.Size()
+			}
+		}
+		total += size
+
+		if ok {
+			clientBytes := progress[i]
+			if clientBytes > size {
+				clientBytes = size
+			}
+			downloaded += clientBytes
+		}
+	}
+
+	return downloaded, total
+}
+
 func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -979,12 +1126,34 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	status := s.getStatus()
 	status.DownloadedItems = s.getClientDownloadedItems(clientID)
+
+	if !isTerminalTransferState(status.State) {
+		cState := s.getClientStatus(clientID)
+		if cState.State != "waiting" {
+			status.State = cState.State
+			status.BytesDone = cState.BytesDone
+			status.BytesTotal = cState.BytesTotal
+			status.Percent = cState.Percent
+			status.Current = cState.Current
+			status.Message = cState.Message
+		} else {
+			if s.isClientFinished(clientID) {
+				status.State = "completed"
+				status.BytesDone = status.BytesTotal
+				status.Percent = 100
+				status.Message = "Transfer completed."
+			} else {
+				status.State = "waiting"
+				status.BytesDone = 0
+				status.Percent = 0
+				status.Message = "Waiting for transfer to start."
+			}
+		}
+	}
+
 	if s.isClientLimitExceeded(clientID) {
 		status.State = "limit_exceeded"
 		status.Message = "Device limit exceeded."
-	} else if s.isClientFinished(clientID) {
-		status.State = "completed"
-		status.Message = "Transfer completed."
 	}
 
 	if err := json.NewEncoder(w).Encode(status); err != nil {
@@ -1063,6 +1232,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.downloadedBytes = make(map[int]int64)
 	app.clientLastSeen = make(map[string]time.Time)
 	app.clientProgress = make(map[string]map[int]int64)
+	app.clientStates = make(map[string]*clientTransferState)
 	app.expectedBytes = make(map[int]int64)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
@@ -1387,6 +1557,23 @@ func New(cfg *config.Config) (*Server, error) {
 				app.resetClientDownloadedBytes(clientID, currentIndex)
 			}
 			app.downloadedBytesMu.Unlock()
+
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "transferring"
+				state.Current = downloadName
+				state.BytesDone = 0
+				state.BytesTotal = expectedBytes
+				state.Percent = 0
+				state.Message = "Sending file to connected device."
+			})
+		} else {
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "transferring"
+				state.Current = downloadName
+				state.BytesTotal = expectedBytes
+				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+				state.Message = "Sending file to connected device."
+			})
 		}
 
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
@@ -1411,6 +1598,13 @@ func New(cfg *config.Config) (*Server, error) {
 					if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
 						status.BytesDone = status.BytesTotal
 					}
+				})
+				app.updateClientStatus(clientID, func(state *clientTransferState) {
+					state.BytesDone += written
+					if state.BytesTotal > 0 && state.BytesDone > state.BytesTotal {
+						state.BytesDone = state.BytesTotal
+					}
+					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				})
 				// Track cumulative bytes specifically for this item index
 				app.downloadedBytesMu.Lock()
@@ -1452,12 +1646,24 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.downloadedBytesMu.Unlock()
 
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "waiting"
+				state.BytesDone = 0
+				state.Percent = 0
+				state.Message = "Transfer interrupted. Waiting for retry..."
+			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
 			return
 		}
 
 		if itemWritten < expectedBytes {
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "waiting"
+				state.BytesDone = 0
+				state.Percent = 0
+				state.Message = "Transfer interrupted. Waiting for retry..."
+			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
 			return
@@ -1475,7 +1681,22 @@ func New(cfg *config.Config) (*Server, error) {
 			allDownloaded = app.markItemDownloaded(0)
 		}
 
+		if app.isClientFinished(clientID) {
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "completed"
+				state.BytesDone = state.BytesTotal
+				state.Percent = 100
+				state.Message = "Transfer completed."
+			})
+		}
+
 		if allDownloaded {
+			app.updateClientStatus(clientID, func(state *clientTransferState) {
+				state.State = "completed"
+				state.BytesDone = state.BytesTotal
+				state.Percent = 100
+				state.Message = "Transfer completed."
+			})
 			app.setStatus("completed", "Transfer completed.")
 			app.recordStatus()
 			app.statusMu.Lock()

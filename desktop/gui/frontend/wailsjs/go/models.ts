@@ -17,6 +17,7 @@ export namespace main {
 	    savedFiles?: string[];
 	    itemClientStats?: string[];
 	    transferDeviceCount?: number;
+	    transferAutoStop?: boolean;
 	    chatState?: string;
 	    chatMessageCount?: number;
 	    chatDeviceCount?: number;
@@ -50,6 +51,7 @@ export namespace main {
 	        this.savedFiles = source["savedFiles"];
 	        this.itemClientStats = source["itemClientStats"];
 	        this.transferDeviceCount = source["transferDeviceCount"];
+	        this.transferAutoStop = source["transferAutoStop"];
 	        this.chatState = source["chatState"];
 	        this.chatMessageCount = source["chatMessageCount"];
 	        this.chatDeviceCount = source["chatDeviceCount"];

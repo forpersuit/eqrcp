@@ -220,12 +220,23 @@ function render() {
     LogInfo('[Antigravity Debug] render() called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     ensureFavicon();
 
-    // 记录旧 modal 的滚动位置，防止全局重绘时弹窗回退到顶部
-    let savedScrollTop = 0;
-    const existingModal = document.querySelector('.overlay .modal');
-    if (existingModal) {
-        savedScrollTop = existingModal.scrollTop;
-    }
+    // 记录旧各滚动区域的滚动位置，防止全局重绘时回退到顶部
+    const scrollPositions = {};
+    const scrollableSelectors = [
+        '.overlay .modal',
+        '.workspace',
+        '.path-list',
+        '.sidebar-history',
+        '.locked-list',
+        '.file-list-view',
+        '.transfer-stage'
+    ];
+    scrollableSelectors.forEach(selector => {
+        const el = document.querySelector(selector);
+        if (el) {
+            scrollPositions[selector] = el.scrollTop;
+        }
+    });
 
     const activeShare = activeShareTask();
     const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
@@ -278,7 +289,19 @@ function render() {
     `;
     bindEvents();
 
-    // 还原滚动位置到新的 modal 上
+    // 恢复各滚动区域的滚动位置
+    scrollableSelectors.forEach(selector => {
+        const pos = scrollPositions[selector];
+        if (pos !== undefined && pos > 0) {
+            const el = document.querySelector(selector);
+            if (el) {
+                el.scrollTop = pos;
+            }
+        }
+    });
+
+    // 额外防抖还原滚动位置到新的 modal 上
+    let savedScrollTop = scrollPositions['.overlay .modal'] || 0;
     if (savedScrollTop > 0) {
         const newModalEl = document.querySelector('.overlay .modal');
         if (newModalEl) {
