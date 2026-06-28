@@ -1504,6 +1504,10 @@ func New(cfg *config.Config) (*Server, error) {
 			} else {
 				htmlVariables.Lang = app.Lang
 			}
+			clientID := app.getClientID(r, w)
+			for idx := 0; idx < len(app.body.Paths); idx++ {
+				app.resetClientDownloadedBytes(clientID, idx)
+			}
 			if err := serveTemplate("download", pages.Download, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				log.Printf("Template error: %v\n", err)
