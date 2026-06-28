@@ -1403,11 +1403,10 @@ function renderAboutPanel() {
                 </div>
             </div>
             <dl>
-                <dt>Product</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
-                <dt>Version</dt><dd>${escapeHTML(info.version || 'Unknown')}</dd>
-                <dt>Platform</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
-                <dt>CLI</dt><dd>${escapeHTML(info.cliPath || 'Not found yet')}</dd>
-                <dt>Legal</dt><dd>MIT license. Forked from qrcp.</dd>
+                <dt>${t('product') || 'Product'}</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
+                <dt>${t('version') || 'Version'}</dt><dd>${escapeHTML(info.version || 'Unknown')}</dd>
+                <dt>${t('platform') || 'Platform'}</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
+                <dt>${t('legal') || 'Legal'}</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             ${devSection}
             ${planPopover}
@@ -3691,7 +3690,7 @@ function messageTime(value) {
 }
 
 function refreshIcon() {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4.2L4 9"></path><path d="M4 4v5h5"></path><path d="M4 13a8 8 0 0 0 14.8 4.2L20 15"></path><path d="M20 20v-5h-5"></path></svg>';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>';
 }
 
 function stopIcon() {

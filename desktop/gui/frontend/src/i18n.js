@@ -3,6 +3,10 @@ import { state } from './state.js';
 const translations = {
     zh: {
         license_expired: '已到期',
+        product: '产品',
+        version: '版本',
+        platform: '平台',
+        legal: '授权',
         license_expires_in_secs: '还有 {secs} 秒到期',
         license_expires_in_mins: '还有 {mins} 分 {secs} 秒到期',
         license_expires_in_hours: '还有 {hours} 小时到期',
@@ -265,6 +269,10 @@ const translations = {
 },
     en: {
         license_expired: 'expired',
+        product: 'Product',
+        version: 'Version',
+        platform: 'Platform',
+        legal: 'Legal',
         license_expires_in_secs: '{secs}s left before expiry',
         license_expires_in_mins: '{mins}m {secs}s left before expiry',
         license_expires_in_hours: '{hours}h left before expiry',
@@ -527,6 +535,10 @@ const translations = {
 },
     ja: {
         license_expired: '期限切れ',
+        product: '製品',
+        version: 'バージョン',
+        platform: 'プラットフォーム',
+        legal: 'ライセンス',
         license_expires_in_secs: '有効期限まであと {secs} 秒',
         license_expires_in_mins: '有効期限まであと {mins} 分 {secs} 秒',
         license_expires_in_hours: '有効期限まであと {hours} 時間',
@@ -780,6 +792,10 @@ const translations = {
 },
     ko: {
         license_expired: '만료됨',
+        product: '제품',
+        version: '버전',
+        platform: '플랫폼',
+        legal: '라이선스',
         license_expires_in_secs: '만료까지 {secs}초 남음',
         license_expires_in_mins: '만료까지 {mins}분 {secs}초 남음',
         license_expires_in_hours: '만료까지 {hours}시간 남음',
@@ -1033,6 +1049,10 @@ const translations = {
 },
     es: {
         license_expired: 'expirado',
+        product: 'Producto',
+        version: 'Versión',
+        platform: 'Plataforma',
+        legal: 'Licencia',
         license_expires_in_secs: 'quedan {secs}s antes de la expiración',
         license_expires_in_mins: 'quedan {mins}m {secs}s antes de la expiración',
         license_expires_in_hours: 'quedan {hours}h antes de la expiración',
@@ -1286,6 +1306,10 @@ const translations = {
 },
     de: {
         license_expired: 'abgelaufen',
+        product: 'Produkt',
+        version: 'Version',
+        platform: 'Plattform',
+        legal: 'Lizenz',
         license_expires_in_secs: 'noch {secs}s bis zum Ablauf',
         license_expires_in_mins: 'noch {mins}m {secs}s bis zum Ablauf',
         license_expires_in_hours: 'noch {hours}h bis zum Ablauf',
@@ -1539,6 +1563,10 @@ const translations = {
 },
     fr: {
         license_expired: 'expiré',
+        product: 'Produit',
+        version: 'Version',
+        platform: 'Plate-forme',
+        legal: 'Licence',
         license_expires_in_secs: '{secs}s restantes avant l\'expiration',
         license_expires_in_mins: '{mins}m {secs}s restantes avant l\'expiration',
         license_expires_in_hours: '{hours}h restantes avant l\'expiration',
