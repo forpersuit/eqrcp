@@ -415,13 +415,22 @@ function renderShareTransfer(task) {
                     ${countdownHtml}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-right: 4px; display: flex; align-items: center;">
-                        ${t('devices_count')}: ${task.transferDeviceCount || 0}
-                    </div>
                     <button class="danger inline stop-current-action">${t('stop')}</button>
                     <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
                         ${qrIcon()}
                     </button>
+                </div>
+            </div>
+            
+            <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
+                <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.transferDeviceCount || 0}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+                    <span class="has-tooltip" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
+                        ${state.settings?.lang === 'zh' ? '自动结束' : 'Auto Stop'}
+                    </span>
+                    ${renderSwitch('auto-stop-switch', task.transferAutoStop)}
                 </div>
             </div>
             
@@ -433,8 +442,8 @@ function renderShareTransfer(task) {
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
             ${isArchive && task.transferState === 'transferring' ? `
-                <div class="locked-list" style="margin-bottom: 12px; border-color: var(--accent-border);">
-                    <div style="padding: 12px; background: var(--accent-light); border-radius: 8px; border: 1.2px solid var(--accent-border);">
+                <div style="margin-bottom: 12px; box-sizing: border-box; width: 100%;">
+                    <div style="padding: 12px; background: var(--accent-light); border-radius: 8px; border: 1.2px solid var(--accent-border); box-sizing: border-box; width: 100%;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <strong style="color: var(--accent-strong); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">📦 ${escapeHTML(task.transferArchiveName)}</strong>
                             <span style="font-size: 12px; font-weight: 800; color: var(--accent-strong);">${percent}%</span>
@@ -3853,5 +3862,18 @@ document.addEventListener('click', (event) => {
             }, {busy: false});
         }
         return;
+    }
+});
+
+// Register a global event delegation for the auto-stop switch change
+document.addEventListener('change', async (event) => {
+    const autoStopSwitch = event.target.closest('#auto-stop-switch');
+    if (autoStopSwitch) {
+        const enabled = autoStopSwitch.checked;
+        await run(async () => {
+            const status = await SetAutoStop(enabled);
+            state.status = status;
+            syncPanelSurface();
+        }, { busy: false });
     }
 });

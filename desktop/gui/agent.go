@@ -644,6 +644,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.SavedFiles = append([]string(nil), status.SavedFiles...)
 	agent.current.TransferItemClientStats = append([]string(nil), status.ItemClientStats...)
 	agent.current.TransferDeviceCount = status.TransferDeviceCount
+	agent.current.TransferAutoStop = status.AutoStop
 	if isTerminalDesktopTransferState(status.State) && agent.current.State == "running" {
 		agent.current.State = status.State
 		finishedAt := time.Now()
@@ -663,6 +664,15 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		return
 	}
 	agent.touchLocked()
+}
+
+func (agent *desktopAgent) SetAutoStop(enabled bool) {
+	agent.mu.Lock()
+	srv := agent.activeServer
+	agent.mu.Unlock()
+	if srv != nil {
+		srv.SetAutoStop(enabled)
+	}
 }
 
 func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatusSnapshot) {

@@ -74,6 +74,7 @@ type Server struct {
 	downloadedBytes        map[int]int64
 	downloadedBytesMu      sync.Mutex
 	KeepAlive              bool
+	autoStop               bool
 	clientMutex            sync.Mutex
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
@@ -82,6 +83,25 @@ type Server struct {
 	registeredRoutes       map[string]bool
 	initFirstTransferOnce sync.Once
 	isFirstDailyTransfer  bool
+}
+
+// SetAutoStop enables or disables automatic server shutdown when all devices finish downloading.
+func (s *Server) SetAutoStop(enabled bool) {
+	s.statusMu.Lock()
+	s.autoStop = enabled
+	s.statusMu.Unlock()
+
+	if enabled {
+		// If all downloads are already finished, check if we should shut down immediately
+		if s.isAllActiveClientsFinished() {
+			s.statusMu.Lock()
+			s.status.State = "completed"
+			s.status.Message = "Transfer completed."
+			s.statusMu.Unlock()
+			s.recordStatus()
+			go s.signalStopAfterStatusGrace()
+		}
+	}
 }
 
 type transferStatus struct {
@@ -102,6 +122,7 @@ type transferStatus struct {
 	SavedFiles          []string `json:"savedFiles,omitempty"`
 	Version             string   `json:"version,omitempty"`
 	TransferDeviceCount int      `json:"transferDeviceCount,omitempty"`
+	AutoStop            bool     `json:"autoStop,omitempty"`
 }
 
 type transferStatusRecord struct {
@@ -145,6 +166,7 @@ type TransferStatusSnapshot struct {
 	Version     string
 	ItemClientStats []string
 	TransferDeviceCount int
+	AutoStop            bool
 }
 
 // ReceiveTo sets the output directory
@@ -602,6 +624,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	s.status.Percent = transferPercent(s.status.BytesDone, s.status.BytesTotal)
 	s.status.ItemClientStats = s.getItemClientStats()
 	s.status.TransferDeviceCount = s.getConnectedDevicesCount()
+	s.status.AutoStop = s.autoStop
 	s.statusSeq++
 	status := cloneTransferStatus(s.status)
 	hook := s.statusHook
@@ -662,6 +685,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		Version:     status.Version,
 		ItemClientStats: append([]string(nil), status.ItemClientStats...),
 		TransferDeviceCount: status.TransferDeviceCount,
+		AutoStop:    status.AutoStop,
 	}
 }
 
@@ -1454,7 +1478,10 @@ func New(cfg *config.Config) (*Server, error) {
 		if allDownloaded {
 			app.setStatus("completed", "Transfer completed.")
 			app.recordStatus()
-			if !app.KeepAlive {
+			app.statusMu.Lock()
+			autoStop := app.autoStop
+			app.statusMu.Unlock()
+			if !app.KeepAlive || autoStop {
 				go app.signalStopAfterStatusGrace()
 			}
 		} else {
@@ -1721,6 +1748,20 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 	}()
+	// Start background ticker to periodically refresh status and devices count (every 3 seconds)
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-app.stopChannel:
+				return
+			case <-ticker.C:
+				app.updateStatus(func(status *transferStatus) {})
+			}
+		}
+	}()
+
 	app.instance = httpserver
 	return app, nil
 }

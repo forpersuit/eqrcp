@@ -1837,7 +1837,8 @@ dd {
 }
 
 /* Hover Tooltip */
-.plan-info-icon-wrapper::before {
+.plan-info-icon-wrapper::before,
+.has-tooltip::before {
     content: attr(data-tooltip);
     position: absolute;
     bottom: 125%;
@@ -1859,7 +1860,8 @@ dd {
 }
 
 /* Tooltip arrow */
-.plan-info-icon-wrapper::after {
+.plan-info-icon-wrapper::after,
+.has-tooltip::after {
     content: '';
     position: absolute;
     bottom: 110%;
@@ -1875,7 +1877,9 @@ dd {
 }
 
 .plan-info-icon-wrapper:hover::before,
-.plan-info-icon-wrapper:hover::after {
+.plan-info-icon-wrapper:hover::after,
+.has-tooltip:hover::before,
+.has-tooltip:hover::after {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }

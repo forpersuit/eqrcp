@@ -66,6 +66,7 @@ type TaskRecord struct {
 	SavedFiles          []string   `json:"savedFiles,omitempty"`
 	TransferItemClientStats []string   `json:"itemClientStats,omitempty"`
 	TransferDeviceCount int        `json:"transferDeviceCount,omitempty"`
+	TransferAutoStop    bool       `json:"transferAutoStop,omitempty"`
 	ChatState           string     `json:"chatState,omitempty"`
 	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
 	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`
@@ -441,6 +442,14 @@ func (a *App) StopCurrent() error {
 		return fmt.Errorf("no task currently running to stop")
 	}
 	return nil
+}
+
+func (a *App) SetAutoStop(enabled bool) (AgentStatus, error) {
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	a.agent.SetAutoStop(enabled)
+	return a.AgentStatus()
 }
 
 func (a *App) StopChat() error {
