@@ -1070,13 +1070,22 @@ function renderSettingsPanel() {
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
                         <div class="avatar-inputs-stack" style="position: relative; z-index: 15;">
-                            <div class="avatar-actions">
-                                <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
-                                <button type="button" id="btn-emoji-more" class="avatar-action-btn">${t('btn_emoji') || 'Emoji'}</button>
-                                <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
-                                ${chatAvatar.startsWith('data:image/') ? `
-                                    <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
-                                ` : ''}
+                            <div class="avatar-input-row">
+                                <div class="avatar-input-group">
+                                    <input type="text" id="settings-chat-avatar" 
+                                           value="${chatAvatar.startsWith('data:image/') ? '' : escapeAttr(chatAvatar)}" 
+                                           placeholder="${chatAvatar.startsWith('data:image/') ? (t('avatar_image_uploaded') || '已上传自定义图片') : (escapeAttr(t('chat_avatar_placeholder') || '输入 Emoji 或文字...'))}" 
+                                           maxlength="8" 
+                                           ${chatAvatar.startsWith('data:image/') ? 'disabled' : ''} />
+                                    <button type="button" id="btn-emoji-more" class="avatar-input-addon" title="${t('btn_emoji') || 'Emoji'}">😀</button>
+                                </div>
+                                <div class="avatar-actions">
+                                    <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
+                                    <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
+                                    ${chatAvatar.startsWith('data:image/') ? `
+                                        <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
+                                    ` : ''}
+                                </div>
                             </div>
                             ${state.showEmojiPicker ? (() => {
                                 const recentEmojis = (() => {
