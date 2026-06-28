@@ -40,4 +40,5 @@ export const state = {
     isEditingChatSender: false,
     confirmResetPending: false,
     showEmojiPicker: false,
+    updateBackoffCount: 0,
 };

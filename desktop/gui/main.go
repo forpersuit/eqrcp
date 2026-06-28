@@ -18,7 +18,11 @@ import (
 	"golang.org/x/term"
 
 	"eqt/cmd"
+	"eqt/pkg/application"
+	"eqt/pkg/config"
 	"eqt/pkg/server"
+	"eqt/pkg/version"
+	"os/exec"
 )
 
 //go:embed all:frontend/dist
@@ -140,15 +144,86 @@ func runGUIOrCLI() bool {
 	return hasDisplay && !isTerminal
 }
 
+func checkAndPerformDisasterRollback(fileLogger *FileLogger) bool {
+	exePath, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	exeOldPath := exePath + ".old"
+
+	// 如果不存在 .old 文件，说明当前并非处于可升级回滚状态，直接跳过
+	if _, err := os.Stat(exeOldPath); err != nil {
+		return false
+	}
+
+	settingsApp := application.New()
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	if err != nil {
+		return false
+	}
+
+	currentVer := version.Version()
+	// 如果配置中不存在 LastSuccessfulVersion（旧配置兼容）或者两者一致，无需回滚
+	if settings.LastSuccessfulVersion == "" || settings.LastSuccessfulVersion == currentVer {
+		return false
+	}
+
+	// 如果 EQT_AFTER_UPDATE 环境变量为 "1"，代表是刚刚完成二进制替换并拉起的，属于正常升级测试启动阶段
+	if os.Getenv("EQT_AFTER_UPDATE") == "1" {
+		if fileLogger != nil {
+			fileLogger.Info("EQT is starting up for the first time after update. Allowing initialization check.")
+		}
+		return false
+	}
+
+	// 触发回滚灾难恢复逻辑：发生了升级后闪退/崩溃等异常（环境变量消失，但 .old 依然在，且版本号与成功记录不一致）
+	if fileLogger != nil {
+		fileLogger.Info(fmt.Sprintf("Disaster detected! Current version %s failed to start. Rolling back to %s...", currentVer, settings.LastSuccessfulVersion))
+	}
+
+	// 1. 将当前的损坏二进制重命名暂存
+	brokenPath := exePath + ".broken"
+	_ = os.Remove(brokenPath)
+	_ = os.Rename(exePath, brokenPath)
+
+	// 2. 还原旧版备份二进制
+	if err := os.Rename(exeOldPath, exePath); err != nil {
+		if fileLogger != nil {
+			fileLogger.Info(fmt.Sprintf("Disaster rollback failed - cannot restore backup exe: %v", err))
+		}
+		return false
+	}
+
+	// 3. 重新拉起旧版本进程
+	cmd := exec.Command(exePath, os.Args[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Start(); err != nil {
+		if fileLogger != nil {
+			fileLogger.Info(fmt.Sprintf("Disaster rollback failed - failed to restart restored exe: %v", err))
+		}
+		return false
+	}
+
+	if fileLogger != nil {
+		fileLogger.Info("Disaster rollback completed successfully. Exiting current broken instance.")
+	}
+	os.Exit(0)
+	return true
+}
+
 func startWailsGUI() {
 	logPath := desktopLogFilePath()
 	fileLogger := NewFileLogger(logPath)
 	defer fileLogger.Close()
 
 	fileLogger.Info("EQT GUI Starting...")
-	
-	// Clean lingering old executables from update replacement (Windows only)
-	server.CleanLingeringOldExecutables()
+
+	// Perform disaster rollback check FIRST before applying offline updates or cleaning files
+	if checkAndPerformDisasterRollback(fileLogger) {
+		return
+	}
 
 	// Apply pending offline update if exists, then restart
 	if server.ApplyOfflineUpdateIfExists() {

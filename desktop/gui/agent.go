@@ -299,6 +299,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		UpdateChannel:            s.UpdateChannel,
 		LastUpdateCheckTime:      s.LastUpdateCheckTime,
 		UpdateCheckIntervalHours: s.UpdateCheckIntervalHours,
+		LastSuccessfulVersion:    s.LastSuccessfulVersion,
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 	}
@@ -331,6 +332,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		UpdateChannel:            s.UpdateChannel,
 		LastUpdateCheckTime:      s.LastUpdateCheckTime,
 		UpdateCheckIntervalHours: s.UpdateCheckIntervalHours,
+		LastSuccessfulVersion:    s.LastSuccessfulVersion,
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 	}
@@ -905,6 +907,13 @@ func (agent *desktopAgent) checkForUpdates() (GUIUpdateCheckResult, error) {
 	if err != nil {
 		return GUIUpdateCheckResult{}, err
 	}
+	
+	// CheckForUpdates succeeded, save LastUpdateCheckTime
+	if s, err := agent.readSettings(); err == nil {
+		s.LastUpdateCheckTime = time.Now().Unix()
+		_, _ = agent.writeSettings(s)
+	}
+
 	return GUIUpdateCheckResult{
 		NewVersionAvailable: res.NewVersionAvailable,
 		Version:             res.Version,

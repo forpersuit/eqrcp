@@ -371,7 +371,7 @@ func InstallAndRestart(assetName string) error {
 	cmd := exec.Command(exePath, os.Args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "EQT_AFTER_UPDATE=1")
 
 	if err := cmd.Start(); err != nil {
 		Log.Errorf("InstallAndRestart: failed to spawn new process: %v", err)
@@ -506,7 +506,7 @@ func ApplyOfflineUpdateIfExists() bool {
 	cmd := exec.Command(exePath, os.Args[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "EQT_AFTER_UPDATE=1")
 
 	if err := cmd.Start(); err != nil {
 		Log.Errorf("ApplyOfflineUpdateIfExists: failed to restart: %v", err)

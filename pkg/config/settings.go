@@ -31,6 +31,7 @@ type DesktopSettings struct {
 	UpdateChannel    string                   `json:"updateChannel"`
 	LastUpdateCheckTime      int64            `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int              `json:"updateCheckIntervalHours"`
+	LastSuccessfulVersion    string           `json:"lastSuccessfulVersion"`
 	Lang             string                   `json:"lang"`
 	ShowHistory      bool                     `json:"showHistory"`
 }
@@ -114,6 +115,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("updateCheckIntervalHours") {
 		updateCheckIntervalHours = v.GetInt("updateCheckIntervalHours")
 	}
+	lastSuccessfulVersion := ""
+	if v.IsSet("lastSuccessfulVersion") {
+		lastSuccessfulVersion = v.GetString("lastSuccessfulVersion")
+	}
 	lang := "zh"
 	if v.IsSet("lang") {
 		lang = v.GetString("lang")
@@ -141,6 +146,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		UpdateChannel:            updateChannel,
 		LastUpdateCheckTime:      lastUpdateCheckTime,
 		UpdateCheckIntervalHours: updateCheckIntervalHours,
+		LastSuccessfulVersion:    lastSuccessfulVersion,
 		Lang:                     lang,
 		ShowHistory:              showHistory,
 	}, nil
@@ -196,6 +202,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
 	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
 	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
+	v.Set("lastSuccessfulVersion", settings.LastSuccessfulVersion)
 	v.Set("lang", settings.Lang)
 	v.Set("showHistory", settings.ShowHistory)
 	if err := v.WriteConfig(); err != nil {

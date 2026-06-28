@@ -3980,14 +3980,44 @@ EventsOn('eqt:tray-command', handleTrayCommand);
 window.addEventListener('beforeunload', stopChatUsage);
 
 async function runAutoUpdateCheck() {
+    // 每次执行完毕，必须调度下一次轮询，以确保无论发生什么，每 15 分钟后都会重新进行状态检查
+    const reschedule = () => {
+        window.setTimeout(runAutoUpdateCheck, 900000); // 15 分钟轮询一次
+    };
+
     const mode = state.settings?.autoUpdateMode || 'download';
     if (mode === 'off') {
         console.log('[AutoUpdate] Auto update mode is off, skipping check.');
+        reschedule();
         return;
     }
 
     if (state.updateStage !== 'idle') {
         console.log('[AutoUpdate] Update state is busy:', state.updateStage);
+        reschedule();
+        return;
+    }
+
+    // 1. 获取时间戳限制与节流校验
+    const lastCheck = state.settings?.lastUpdateCheckTime || 0;
+    const intervalHours = state.settings?.updateCheckIntervalHours || 24;
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // 2. 指数退避重试间隔计算
+    // 基础退避时间为 1 小时 (3600秒)，指数计算：Base * 2^(backoffCount - 1)
+    // 最大退避时间限制为 24 小时
+    let currentIntervalSec = intervalHours * 3600;
+    if (state.updateBackoffCount > 0) {
+        const backoffHours = Math.min(24, Math.pow(2, state.updateBackoffCount - 1));
+        currentIntervalSec = backoffHours * 3600;
+        console.log(`[AutoUpdate] Network backoff active. Level: ${state.updateBackoffCount}, current interval: ${backoffHours}h`);
+    }
+
+    const elapsed = nowSec - lastCheck;
+    if (elapsed < currentIntervalSec) {
+        const remainingMin = Math.ceil((currentIntervalSec - elapsed) / 60);
+        console.log(`[AutoUpdate] Throttle active. Next check allowed in ${remainingMin} minutes.`);
+        reschedule();
         return;
     }
 
@@ -4000,10 +4030,19 @@ async function runAutoUpdateCheck() {
         const checkRes = await window.go.main.App.CheckForUpdates();
         state.updateCheckRes = checkRes;
 
+        // 成功通信，重置指数退避等级
+        state.updateBackoffCount = 0;
+
+        // 同步刷新本地内存配置的 LastUpdateCheckTime
+        if (state.settings) {
+            state.settings.lastUpdateCheckTime = nowSec;
+        }
+
         if (!checkRes || !checkRes.new_version_available) {
             state.updateStage = 'idle';
             state.updateStatusText = t('up_to_date');
             syncManualUpdateCheckUI();
+            reschedule();
             return;
         }
 
@@ -4023,6 +4062,7 @@ async function runAutoUpdateCheck() {
                 state.updateStage = 'available';
                 state.updateStatusText = t('postponed_transfer', { version: checkRes.version });
                 syncManualUpdateCheckUI();
+                reschedule();
                 return;
             }
             await triggerDownloadUpdate();
@@ -4035,11 +4075,17 @@ async function runAutoUpdateCheck() {
                 }
             }
         }
+        reschedule();
     } catch (err) {
         state.updateStage = 'idle';
         state.updateStatusText = t('auto_check_failed', { err: cleanLocalAddressError(err) });
         syncManualUpdateCheckUI();
         console.error('[AutoUpdate] Auto update check failed:', err);
+
+        // 递增退避等级，上限 5（对应最大 2^4 = 16 小时）
+        state.updateBackoffCount = Math.min(5, (state.updateBackoffCount || 0) + 1);
+        console.log(`[AutoUpdate] Increased backoff level to ${state.updateBackoffCount}`);
+        reschedule();
     }
 }
 

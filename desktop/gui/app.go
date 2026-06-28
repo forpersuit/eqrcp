@@ -116,6 +116,7 @@ type DesktopSettings struct {
 	UpdateChannel            string            `json:"updateChannel"`
 	LastUpdateCheckTime      int64             `json:"lastUpdateCheckTime"`
 	UpdateCheckIntervalHours int               `json:"updateCheckIntervalHours"`
+	LastSuccessfulVersion    string            `json:"lastSuccessfulVersion"`
 	Lang                     string            `json:"lang"`
 	ShowHistory              bool              `json:"showHistory"`
 }
@@ -161,6 +162,25 @@ func (a *App) startup(ctx context.Context) {
 		if err := a.agent.loadHistory(); err != nil {
 			wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
 		}
+	}()
+
+	// 启动成功，延迟 5 秒后更新 LastSuccessfulVersion 并清理旧的备份文件
+	go func() {
+		time.Sleep(5 * time.Second)
+		settings, err := a.agent.readSettings()
+		if err == nil {
+			currentVer := version.Version()
+			if settings.LastSuccessfulVersion != currentVer {
+				settings.LastSuccessfulVersion = currentVer
+				if _, err := a.agent.writeSettings(settings); err != nil {
+					wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to save LastSuccessfulVersion: %v", err))
+				} else {
+					wailsruntime.LogInfo(ctx, fmt.Sprintf("[GUI] Successfully verified and saved LastSuccessfulVersion to %s", currentVer))
+				}
+			}
+		}
+		// 清理旧包
+		server.CleanLingeringOldExecutables()
 	}()
 }
 
