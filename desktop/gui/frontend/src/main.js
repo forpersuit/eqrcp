@@ -2738,6 +2738,14 @@ function bindSettingsControls() {
             el.addEventListener('change', async () => {
                 syncSettingsFromDOM();
                 await handleAutoSaveSettings();
+                if (selector === '#settings-auto-update-mode') {
+                    const mode = el.value;
+                    if (mode && mode !== 'off') {
+                        state.settings.lastUpdateCheckTime = 0;
+                        await handleAutoSaveSettings();
+                        runAutoUpdateCheck(true);
+                    }
+                }
             });
             el.addEventListener('input', syncSettingsFromDOM);
         }
@@ -3983,10 +3991,10 @@ EventsOn('eqt:tray-command', handleTrayCommand);
 
 window.addEventListener('beforeunload', stopChatUsage);
 
-async function runAutoUpdateCheck() {
+async function runAutoUpdateCheck(force = false) {
     // 每次执行完毕，必须调度下一次轮询，以确保无论发生什么，每 15 分钟后都会重新进行状态检查
     const reschedule = () => {
-        window.setTimeout(runAutoUpdateCheck, 900000); // 15 分钟轮询一次
+        window.setTimeout(() => runAutoUpdateCheck(false), 900000); // 15 分钟轮询一次
     };
 
     const mode = state.settings?.autoUpdateMode || 'download';
@@ -4018,7 +4026,7 @@ async function runAutoUpdateCheck() {
     }
 
     const elapsed = nowSec - lastCheck;
-    if (elapsed < currentIntervalSec) {
+    if (!force && elapsed < currentIntervalSec) {
         const remainingMin = Math.ceil((currentIntervalSec - elapsed) / 60);
         console.log(`[AutoUpdate] Throttle active. Next check allowed in ${remainingMin} minutes.`);
         reschedule();
@@ -4220,7 +4228,7 @@ loadChatUsage();
 render();
 loadSettings().then(() => {
     connectAgentEvents();
-    window.setTimeout(runAutoUpdateCheck, 5000);
+    window.setTimeout(() => runAutoUpdateCheck(true), 5000);
 });
 
 // Register one-time global event delegations for opening history files & folders
