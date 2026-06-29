@@ -105,16 +105,31 @@ graph TD
 由于 GitHub 对匿名 API 请求有每小时 60 次的限制（Rate Limit）：
 - **限制探测频次**：客户端本地严格通过配置中的 `LastUpdateCheckTime` 限制每日仅在后台探测一次，除非用户手动点击“检查更新”。
 - **指数退避重试**：遇到网络异常或 `403 Rate Limit Exceeded` 时，下一次后台自动探测的时间间隔将呈指数级增加（1h -> 2h -> 4h -> 24h），严禁高频轮询。
-- **未来迁移预留**：客户端设计 `UpdateServerType` 配置（`github` 或 `custom`）。未来当迁移到自建服务器时，将 `UpdateServerType` 改为 `custom`，并将请求地址重写为自建的元数据接口（如自建 `/api/v1/update/check` 接口），客户端无需重构核心下载和替换逻辑。
-
-### 2.2 下载阶段 (Asynchronous Downloading)
-- **并发与限速**：下载任务在独立的低优先级 goroutine 中执行，确保不抢占用户进行文件分享或聊天的局域网带宽。
-- **断点续传**：下载器支持 HTTP `Range` 请求，如果遇到网络波动异常中断，在重试时会从已下载的字节处继续下载，避免重复消耗流量。
-- **状态通知**：如果是 `download` 模式，前端设置界面应展示“正在后台下载新版本...”的进度条，但不可弹窗干扰用户的日常使用。
-
-### 2.3 安全校验阶段 (Cryptographic Verification) — 关键防御
-由于更新机制具有执行本地二进制代码的最高权限，极易成为黑客攻击的目标。必须通过以下三重手段进行安全防御：
-1. **防降级攻击 (Anti-Downgrade)**：客户端必须校验元数据中的新版本号是否语义化大于（`>`）当前版本。拒绝执行任何等于或低于当前版本的“更新”请求，防止中间人通过重放旧版本元数据利用已知的旧版本漏洞。
+- **未来迁移预留**：客户端设计 `UpdateServerType` 配置（`github` 或 `custom`）。未来当迁移到自建服务器时，将 `UpdateServerType` 改为 `custom`，并将请求1. **Windows 平台编译构建**：在 GitHub Actions 流水线中，为了提高生产编译效率并专注于已被全面测试的桌面客户端交付，精简移除了 Linux 与 macOS 编译任务，仅执行 Windows x64 下的 Wails GUI 编译，输出 `eqt-desktop-windows-amd64.exe` 制品。
+2. **生成 SHA-256 校验和**：
+   计算编译出的 Windows 客户端文件的 SHA-256 哈希值，用于在元数据中声明。
+3. **安全加签**：读取保存在 GitHub Repository Secrets 中的 Ed25519 私钥（`UPDATE_SIGNING_PRIVATE_KEY`），对生成的每个二进制资产包执行加密签名，生成配套的签名值文件（如 `eqt-desktop-windows-amd64.exe.sig`），其内容是 128 字符的十六进制编码签名。
+4. **生成版本元数据元组 (`update-metadata.json`)**：
+   调用专属的元数据生成器，动态拼装版本号和下载路径：
+   ```json
+   {
+     "version": "v1.7.94",
+     "published_at": "2026-06-28T15:51:45Z",
+     "changelog": "EQT v1.7.94 release updates.",
+     "assets": [
+       {
+         "name": "eqt-desktop-windows-amd64.exe",
+         "download_url": "https://download.eqt.net.im/downloads/v1.7.94/eqt-desktop-windows-amd64.exe",
+         "size": 17351680
+       },
+       {
+         "name": "eqt-desktop-windows-amd64.exe.sig",
+         "download_url": "https://download.eqt.net.im/downloads/v1.7.94/eqt-desktop-windows-amd64.exe.sig",
+         "size": 128
+       }
+     ]
+   }
+   ```任何等于或低于当前版本的“更新”请求，防止中间人通过重放旧版本元数据利用已知的旧版本漏洞。
 2. **SHA-256 完整性校验**：下载完成后，计算本地临时文件的 SHA-256 哈希值，与元数据中的 `sha256` 字段比对，确保文件在传输中未损坏。
 3. **Ed25519 非对称秘钥验签 (Cryptographic Signatures)**：
    - 客户端内置公钥（可复用授权校验中使用的 Ed25519 公钥，或单独使用一个更新公钥）。
@@ -348,6 +363,10 @@ sequenceDiagram
   * **缓存特征**：
     * `/update-metadata.json`：设为零缓存，确保客户端检查版本能获取秒级实时推送。
     * `/downloads/*` 包资产：设为永久强缓存 (`max-age=31536000, immutable`)，减轻源站负载并提升边缘响应速度。
+      > [!IMPORTANT]
+      > **强缓存与 Cache-Busting 规避设计**：
+      > 由于开启了 `immutable` 强缓存，若多个版本的程序包共用同一个固定的 URL 路径（例如 `/downloads/latest/eqt-desktop-windows-amd64.exe`），会导致客户端在升级时下载到 CDN 边缘缓存的旧文件，从而发生 Ed25519 签名验证失败的异常。
+      > **最新执行机制**：系统已全面转向“版本号目录隔离”的 Cache-Busting 设计。生成的 `update-metadata.json` 中 `download_url` 将动态拼装为包含版本号的专属路径（如 `/downloads/v1.7.94/eqt-desktop-windows-amd64.exe`）。由于每次发布新版本其 URL 中的版本号均不相同，完美实现了 CDN 缓存失效，且不破坏后续用户下载时的边缘强缓存收益。
 * **有状态授权校验域名 (`lic.eqt.net.im`)**：
   * **职责**：专门处理离线激活、许可证兑换与指纹校验等有状态接口，指向 Cloudflare Workers，不承担任何静态大文件分发，确保接口的高安全性和低延时。
 

@@ -2452,5 +2452,31 @@ dd {
     animation: spin 1s linear infinite;
 }
 
+.feedback-image-uploader {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
 
+#btn-select-image {
+    border: 1px dashed var(--line);
+    background: var(--wash);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
 
+#btn-select-image:hover {
+    border-color: var(--accent-strong);
+    background: rgba(142, 178, 169, 0.08); /* Curated theme color fallback */
+    color: var(--text);
+}

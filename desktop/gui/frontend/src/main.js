@@ -1603,6 +1603,7 @@ function renderFeedbackPanel() {
     return `
         <div class="feedback-panel">
             ${state.feedbackNotice ? `<div class="notice success compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackNotice)}</div>` : ''}
+            ${state.feedbackError ? `<div class="notice error compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackError)}</div>` : ''}
             <label>${t('feedback_category')}</label>
             <select id="feedback-category">
                 <option value="bug">${t('feedback_bug')}</option>
@@ -1616,6 +1617,19 @@ function renderFeedbackPanel() {
             <input id="feedback-contact" type="email" placeholder="${t('feedback_optional')}" />
             <label>${t('feedback_message')}</label>
             <textarea id="feedback-message" rows="5" placeholder="${t('feedback_placeholder')}"></textarea>
+            
+            <label>${t('feedback_image')}</label>
+            <div class="feedback-image-uploader">
+                <input id="feedback-image-input" type="file" accept="image/*" style="display:none;" />
+                <button class="ghost" id="btn-select-image" type="button">
+                    <span style="font-size: 15px; margin-right: 6px;">📷</span> ${t('btn_select_image')}
+                </button>
+                <div id="feedback-image-preview-container" style="${state.feedbackImageBase64 ? 'display:block;' : 'display:none;'} margin-top: 8px; position: relative; width: fit-content;">
+                    <img id="feedback-image-preview" src="${state.feedbackImageBase64 || ''}" style="max-width: 100%; max-height: 120px; border-radius: 6px; border: 1px solid var(--line);" />
+                    <button id="btn-clear-image" type="button" style="position: absolute; top: -6px; right: -6px; background: var(--bg); border: 1px solid var(--line); border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text);">✕</button>
+                </div>
+            </div>
+
             <label class="check">
                 <input id="feedback-diagnostics" type="checkbox" checked />
                 ${t('feedback_include_diag')}
@@ -1623,7 +1637,9 @@ function renderFeedbackPanel() {
             <div class="feedback-note">${t('feedback_diag_note')}</div>
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
-                <button class="primary" id="send-feedback" ${state.feedbackSent ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">${state.feedbackSent ? t('btn_draft_opened') : t('btn_open_email_draft')}</button>
+                <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
+                    ${state.isSendingFeedback ? t('btn_sending_feedback') : t('btn_send_feedback_now')}
+                </button>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
         </div>
@@ -1950,6 +1966,48 @@ function bindPanelEvents() {
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
+
+    // Feedback image uploader events
+    const imageInput = document.querySelector('#feedback-image-input');
+    const selectImageBtn = document.querySelector('#btn-select-image');
+    const clearImageBtn = document.querySelector('#btn-clear-image');
+    const previewContainer = document.querySelector('#feedback-image-preview-container');
+    const previewImg = document.querySelector('#feedback-image-preview');
+
+    selectImageBtn?.addEventListener('click', () => {
+        imageInput?.click();
+    });
+
+    imageInput?.addEventListener('change', async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const result = await compressImageToWebP(file);
+            state.feedbackImageBase64 = result.dataUrl;
+            state.feedbackImageFormat = result.format;
+            
+            if (previewImg) previewImg.src = result.dataUrl;
+            if (previewContainer) previewContainer.style.display = 'block';
+            state.feedbackError = '';
+            // Render to update potential error displays without losing inputs since fields aren't data-bound to state
+            const noticeEl = document.querySelector('.feedback-panel .notice.error');
+            if (noticeEl) noticeEl.remove();
+        } catch (err) {
+            console.error('Failed to compress image:', err);
+            state.feedbackError = '图片压缩失败: ' + err.message;
+            render();
+            openPanel('feedback');
+        }
+    });
+
+    clearImageBtn?.addEventListener('click', () => {
+        state.feedbackImageBase64 = null;
+        state.feedbackImageFormat = null;
+        if (imageInput) imageInput.value = '';
+        if (previewContainer) previewContainer.style.display = 'none';
+        if (previewImg) previewImg.src = '';
+    });
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', () => {
         state.confirmResetPending = true;
@@ -3013,18 +3071,73 @@ async function openExternal(event) {
 
 async function sendFeedback(event) {
     await run(async () => {
-        const feedback = collectFeedback();
-        const mailto = feedbackMailto(feedback.body, feedback.category);
-        await OpenExternal(mailto || event.currentTarget.dataset.mailto);
-        
-        state.feedbackNotice = t('feedback_draft_opened_notice');
-        state.feedbackSent = true;
-        render();
-        
-        window.setTimeout(() => {
-            state.feedbackSent = false;
+        const message = document.querySelector('#feedback-message')?.value.trim() || '';
+        const category = document.querySelector('#feedback-category')?.value || 'other';
+        const contact = document.querySelector('#feedback-contact')?.value.trim() || '';
+        const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
+
+        if (!message) {
+            state.feedbackError = '请输入反馈内容';
             render();
-        }, 3000);
+            openPanel('feedback');
+            return;
+        }
+
+        state.isSendingFeedback = true;
+        state.feedbackError = null;
+        state.feedbackNotice = null;
+        render();
+        openPanel('feedback');
+
+        const diagnostics = includeDiagnostics ? buildDiagnostics() : '';
+        const fullMessage = includeDiagnostics 
+            ? `${message}\n\n[Diagnostics]\n${diagnostics}`
+            : message;
+
+        const payload = {
+            category,
+            contact,
+            message: fullMessage,
+            timestamp: new Date().toISOString(),
+            imageData: state.feedbackImageBase64 || null,
+            imageFormat: state.feedbackImageFormat || null,
+            clientInfo: {
+                version: state.status?.version || 'unknown',
+                os: state.appInfo ? `${state.appInfo.os}/${state.appInfo.arch}` : 'unknown'
+            }
+        };
+
+        try {
+            const response = await fetch('https://feedback.eqt.net.im/goal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errText}`);
+            }
+
+            // Success!
+            state.feedbackNotice = t('feedback_success');
+            state.feedbackImageBase64 = null;
+            state.feedbackImageFormat = null;
+            
+            render();
+            openPanel('feedback');
+        } catch (err) {
+            console.error('Failed to submit feedback to Worker:', err);
+            state.feedbackError = t('feedback_failed') + ` (${err.message})`;
+            render();
+            openPanel('feedback');
+        } finally {
+            state.isSendingFeedback = false;
+            render();
+            openPanel('feedback');
+        }
     }, {busy: false});
 }
 
@@ -4277,3 +4390,45 @@ document.addEventListener('change', async (event) => {
         }, { busy: false });
     }
 });
+
+function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 1200) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth || height > maxHeight) {
+                    if (width > height) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    } else {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                let dataUrl = canvas.toDataURL('image/webp', quality);
+                let format = 'image/webp';
+                if (!dataUrl.startsWith('data:image/webp')) {
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    format = 'image/jpeg';
+                }
+                resolve({ dataUrl, format });
+            };
+            img.onerror = () => reject(new Error('Failed to load image'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+    });
+}
