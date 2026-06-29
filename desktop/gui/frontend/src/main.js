@@ -42,6 +42,7 @@ import {
     StopChat,
     StopCurrent,
     SetAutoStop,
+    SubmitFeedback,
 } from '../wailsjs/go/main/App';
 
 // Prevent duplicate event listener registration on reused DOM elements due to morphdom patching
