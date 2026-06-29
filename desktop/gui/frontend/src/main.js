@@ -3127,7 +3127,7 @@ async function sendFeedback(event) {
             openPanel('feedback');
         } catch (err) {
             console.error('Failed to submit feedback to Worker:', err);
-            state.feedbackError = t('feedback_failed') + ` (${err.message})`;
+            state.feedbackError = t('feedback_failed') + ` (${err.message || err})`;
             render();
             openPanel('feedback');
         } finally {

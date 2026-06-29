@@ -232,6 +232,7 @@ func startWailsGUI() {
 
 	// Create an instance of the app structure
 	app := NewApp()
+	app.logger = fileLogger
 	tray := newTrayController(app)
 
 	// Create application with options
