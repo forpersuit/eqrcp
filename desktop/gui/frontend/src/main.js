@@ -3108,18 +3108,14 @@ async function sendFeedback(event) {
         };
 
         try {
-            const response = await fetch('https://feedback.eqt.net.im/goal', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Server returned ${response.status}: ${errText}`);
-            }
+            // Call the Go backend method exported via Wails bindings to avoid CORS issues and enable detailed logs.
+            await SubmitFeedback(
+                category,
+                contact,
+                fullMessage,
+                state.feedbackImageBase64 || '',
+                state.feedbackImageFormat || ''
+            );
 
             // Success!
             state.feedbackNotice = t('feedback_success');

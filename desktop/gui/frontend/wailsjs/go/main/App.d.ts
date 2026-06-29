@@ -76,4 +76,6 @@ export function StopChat():Promise<void>;
 
 export function StopCurrent():Promise<void>;
 
+export function SubmitFeedback(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+
 export function ValidateFreeTier(arg1:Array<string>):Promise<string>;

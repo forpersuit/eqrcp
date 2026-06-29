@@ -150,6 +150,10 @@ export function StopCurrent() {
   return window['go']['main']['App']['StopCurrent']();
 }
 
+export function SubmitFeedback(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SubmitFeedback'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function ValidateFreeTier(arg1) {
   return window['go']['main']['App']['ValidateFreeTier'](arg1);
 }

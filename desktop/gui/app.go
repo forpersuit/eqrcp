@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"eqt/cmd"
 	"eqt/pkg/server"
 	"eqt/pkg/util"
@@ -1204,5 +1206,96 @@ func desktopAgentPortFilePath() string {
 	}
 	return filepath.Join(dir, "eqt", "agent.port")
 }
+
+type FeedbackPayload struct {
+	Category    string             `json:"category"`
+	Contact     string             `json:"contact"`
+	Message     string             `json:"message"`
+	Timestamp   string             `json:"timestamp"`
+	ImageData   string             `json:"imageData,omitempty"`
+	ImageFormat string             `json:"imageFormat,omitempty"`
+	ClientInfo  FeedbackClientInfo `json:"clientInfo"`
+}
+
+type FeedbackClientInfo struct {
+	Version string `json:"version"`
+	OS      string `json:"os"`
+}
+
+// SubmitFeedback submits feedback to the Cloudflare Worker API.
+// It is called by the frontend via Wails bindings to avoid CORS issues and log request details.
+func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat string) (string, error) {
+	if a.logger != nil {
+		a.logger.Info(fmt.Sprintf("[Feedback] Submitting feedback: category=%s, contact=%s, messageLength=%d, hasImage=%t", category, contact, len(message), imageData != ""))
+	}
+
+	payload := FeedbackPayload{
+		Category:    category,
+		Contact:     contact,
+		Message:     message,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+		ImageData:   imageData,
+		ImageFormat: imageFormat,
+		ClientInfo: FeedbackClientInfo{
+			Version: version.Version(),
+			OS:      fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		},
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		if a.logger != nil {
+			a.logger.Error(fmt.Sprintf("[Feedback] Failed to marshal feedback payload: %v", err))
+		}
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://feedback.eqt.net.im/goal", bytes.NewBuffer(jsonData))
+	if err != nil {
+		if a.logger != nil {
+			a.logger.Error(fmt.Sprintf("[Feedback] Failed to create HTTP request: %v", err))
+		}
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	startTime := time.Now()
+	resp, err := a.client.Do(req)
+	if err != nil {
+		if a.logger != nil {
+			a.logger.Error(fmt.Sprintf("[Feedback] HTTP POST request failed after %v: %v", time.Since(startTime), err))
+		}
+		return "", fmt.Errorf("network request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		if a.logger != nil {
+			a.logger.Error(fmt.Sprintf("[Feedback] Server returned status %d after %v. Response: %s", resp.StatusCode, time.Since(startTime), string(respBody)))
+		}
+		return "", fmt.Errorf("server error (%d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		Status   string `json:"status"`
+		ImageURL string `json:"imageUrl,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		if a.logger != nil {
+			a.logger.Error(fmt.Sprintf("[Feedback] Failed to unmarshal server response: %v. Raw response: %s", err, string(respBody)))
+		}
+		return "", fmt.Errorf("invalid server response: %w", err)
+	}
+
+	if a.logger != nil {
+		a.logger.Info(fmt.Sprintf("[Feedback] Feedback submitted successfully in %v. ImageURL: %s", time.Since(startTime), result.ImageURL))
+	}
+
+	return result.ImageURL, nil
+}
+
 
 
