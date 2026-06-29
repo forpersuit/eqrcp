@@ -26,9 +26,9 @@ description: Guides EQT developer mode configurations, log system structures, lo
 为了避免无谓的磁盘占用，同时保证崩溃后可追溯：
 - **日志文件机制**：桌面端日志（`desktop.log`）路径由 `desktopLogFilePath()` 指明，标准日志和调试信息直接落盘在用户缓存目录下，消除由于进程跨界带来的重定向混乱。
 - **文件命名与路径**：
-  - **Windows**：落盘在 `%LOCALAPPDATA%/eqt/agent-*.log` 下。
-  - **Linux / WSL**：落盘在 `~/.cache/eqt/agent-*.log` 下。
-- **动态清理**：通常使用临时文件名（`agent-*.log`），开发调试时需直接前往上述目录并根据修改时间对齐最新生成的文件。
+  - **Windows**：主桌面端日志落盘在 `%LOCALAPPDATA%/eqt/desktop.log` 中，各会话的代理运行日志落盘在 `%LOCALAPPDATA%/eqt/agent-*.log` 下。
+  - **Linux / WSL**：主运行日志落盘在 `~/.cache/eqt/desktop.log` 中，各会话代理运行日志落盘在 `~/.cache/eqt/agent-*.log` 下。
+- **动态清理与快速检索**：主进程日志会追加记录在 `desktop.log` 中。开发调试时，在终端运行 `tail -f ~/.cache/eqt/desktop.log`（WSL/Linux）或在 Windows 下监控对应文件，可获得第一手 Wails/Go 与 WebView 内的 runtime 异常交互。
 
 ### 2.2 日志记录特征
 在 `DevMode` 或 `DebugLog` 激活时，日志具备以下追溯特点：

@@ -92,6 +92,50 @@ window.onunhandledrejection = function(event) {
     }
 };
 
+let reportedErrorsCount = 0;
+const reportedErrorsSet = new Set();
+
+function reportRuntimeErrorToBot(message, stack) {
+    if (reportedErrorsCount >= 5) {
+        return; // Limit error report count per session to avoid flood
+    }
+    const errKey = `${message}:${stack}`;
+    if (reportedErrorsSet.has(errKey)) {
+        return; // Prevent duplicate reports
+    }
+    reportedErrorsSet.add(errKey);
+    reportedErrorsCount++;
+
+    const diagnostics = typeof buildDiagnostics === 'function' ? buildDiagnostics() : '';
+    const fullMessage = `[Runtime Error]\n\nMessage: ${message}\n\nStack: ${stack || 'no-stack'}\n\n[Diagnostics]\n${diagnostics}`;
+
+    try {
+        if (typeof SubmitFeedback === 'function') {
+            SubmitFeedback(
+                'runtime_error',
+                'telemetry',
+                fullMessage,
+                '', // No image
+                ''
+            ).catch(err => console.error('Silent error reporting failed:', err));
+        }
+    } catch (e) {
+        console.error('Failed to trigger SubmitFeedback for telemetry:', e);
+    }
+}
+
+window.addEventListener('error', (event) => {
+    const errorMsg = event.message || event.error?.message || 'Unknown Error';
+    const errorStack = event.error?.stack || '';
+    reportRuntimeErrorToBot(errorMsg, errorStack);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    const errorMsg = event.reason?.message || String(event.reason || 'Unhandled Promise Rejection');
+    const errorStack = event.reason?.stack || '';
+    reportRuntimeErrorToBot(errorMsg, errorStack);
+});
+
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());
 
@@ -1615,9 +1659,9 @@ function renderFeedbackPanel() {
                 <option value="other">${t('feedback_other')}</option>
             </select>
             <label>${t('feedback_contact')}</label>
-            <input id="feedback-contact" type="email" placeholder="${t('feedback_optional')}" />
+            <input id="feedback-contact" type="email" placeholder="${t('feedback_optional')}" value="${escapeAttr(state.feedbackContact || '')}" />
             <label>${t('feedback_message')}</label>
-            <textarea id="feedback-message" rows="5" placeholder="${t('feedback_placeholder')}"></textarea>
+            <textarea id="feedback-message" rows="5" placeholder="${t('feedback_placeholder')}">${escapeHTML(state.feedbackMessage || '')}</textarea>
             
             <label>${t('feedback_image')}</label>
             <div class="feedback-image-uploader">
@@ -1639,7 +1683,7 @@ function renderFeedbackPanel() {
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
                 <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
-                    ${state.isSendingFeedback ? t('btn_sending_feedback') : t('btn_send_feedback_now')}
+                    ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? '✓ 发送成功' : (state.feedbackSendResult === 'failed' ? '✗ 发送失败，请重试' : t('btn_send_feedback_now')))}
                 </button>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
@@ -2005,9 +2049,33 @@ function bindPanelEvents() {
     clearImageBtn?.addEventListener('click', () => {
         state.feedbackImageBase64 = null;
         state.feedbackImageFormat = null;
+        state.feedbackSendResult = '';
         if (imageInput) imageInput.value = '';
         if (previewContainer) previewContainer.style.display = 'none';
         if (previewImg) previewImg.src = '';
+    });
+
+    const fbMessage = document.querySelector('#feedback-message');
+    fbMessage?.addEventListener('input', (e) => {
+        state.feedbackMessage = e.target.value;
+        state.feedbackSendResult = '';
+        state.feedbackError = null;
+        state.feedbackNotice = null;
+    });
+
+    const fbContact = document.querySelector('#feedback-contact');
+    fbContact?.addEventListener('input', (e) => {
+        state.feedbackContact = e.target.value;
+        state.feedbackSendResult = '';
+        state.feedbackError = null;
+        state.feedbackNotice = null;
+    });
+
+    const fbCategory = document.querySelector('#feedback-category');
+    fbCategory?.addEventListener('change', () => {
+        state.feedbackSendResult = '';
+        state.feedbackError = null;
+        state.feedbackNotice = null;
     });
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', () => {
@@ -2210,6 +2278,15 @@ function closePanel() {
     if (confirmSwitchResolve) {
         confirmSwitchResolve(false);
         confirmSwitchResolve = null;
+    }
+    if (state.activePanel === 'feedback') {
+        state.feedbackMessage = '';
+        state.feedbackContact = '';
+        state.feedbackImageBase64 = null;
+        state.feedbackImageFormat = null;
+        state.feedbackNotice = '';
+        state.feedbackError = '';
+        state.feedbackSendResult = '';
     }
     if (state.activePanel === 'plan-comparison') {
         state.activePanel = 'about';
@@ -3071,78 +3148,72 @@ async function openExternal(event) {
 }
 
 async function sendFeedback(event) {
-    await run(async () => {
-        const message = document.querySelector('#feedback-message')?.value.trim() || '';
-        const category = document.querySelector('#feedback-category')?.value || 'other';
-        const contact = document.querySelector('#feedback-contact')?.value.trim() || '';
-        const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
+    const message = document.querySelector('#feedback-message')?.value.trim() || '';
+    const category = document.querySelector('#feedback-category')?.value || 'other';
+    const contact = document.querySelector('#feedback-contact')?.value.trim() || '';
+    const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
 
-        if (!message) {
-            state.feedbackError = '请输入反馈内容';
-            render();
-            openPanel('feedback');
-            return;
-        }
-
-        state.isSendingFeedback = true;
-        state.feedbackError = null;
-        state.feedbackNotice = null;
+    if (!message) {
+        state.feedbackError = '请输入反馈内容';
+        state.feedbackSendResult = 'failed';
         render();
         openPanel('feedback');
+        return;
+    }
 
-        const diagnostics = includeDiagnostics ? buildDiagnostics() : '';
-        const fullMessage = includeDiagnostics 
-            ? `${message}\n\n[Diagnostics]\n${diagnostics}`
-            : message;
+    state.isSendingFeedback = true;
+    state.feedbackError = null;
+    state.feedbackNotice = null;
+    state.feedbackSendResult = '';
+    render();
+    openPanel('feedback');
 
-        const payload = {
+    const diagnostics = includeDiagnostics ? buildDiagnostics() : '';
+    const fullMessage = includeDiagnostics 
+        ? `${message}\n\n[Diagnostics]\n${diagnostics}`
+        : message;
+
+    try {
+        // Call the Go backend method exported via Wails bindings to avoid CORS issues and enable detailed logs.
+        await SubmitFeedback(
             category,
             contact,
-            message: fullMessage,
-            timestamp: new Date().toISOString(),
-            imageData: state.feedbackImageBase64 || null,
-            imageFormat: state.feedbackImageFormat || null,
-            clientInfo: {
-                version: state.status?.version || 'unknown',
-                os: state.appInfo ? `${state.appInfo.os}/${state.appInfo.arch}` : 'unknown'
-            }
-        };
+            fullMessage,
+            state.feedbackImageBase64 || '',
+            state.feedbackImageFormat || ''
+        );
 
-        try {
-            // Call the Go backend method exported via Wails bindings to avoid CORS issues and enable detailed logs.
-            await SubmitFeedback(
-                category,
-                contact,
-                fullMessage,
-                state.feedbackImageBase64 || '',
-                state.feedbackImageFormat || ''
-            );
-
-            // Success!
-            state.feedbackNotice = t('feedback_success');
-            state.feedbackImageBase64 = null;
-            state.feedbackImageFormat = null;
-            
-            render();
-            openPanel('feedback');
-        } catch (err) {
-            console.error('Failed to submit feedback to Worker:', err);
-            state.feedbackError = t('feedback_failed') + ` (${err.message || err})`;
-            render();
-            openPanel('feedback');
-        } finally {
-            state.isSendingFeedback = false;
-            render();
-            openPanel('feedback');
-        }
-    }, {busy: false});
+        // Success!
+        state.feedbackNotice = t('feedback_success');
+        state.feedbackSendResult = 'success';
+        state.feedbackMessage = '';
+        state.feedbackContact = '';
+        state.feedbackImageBase64 = null;
+        state.feedbackImageFormat = null;
+        
+        // Clear actual DOM values as well
+        const msgEl = document.querySelector('#feedback-message');
+        if (msgEl) msgEl.value = '';
+        const contactEl = document.querySelector('#feedback-contact');
+        if (contactEl) contactEl.value = '';
+    } catch (err) {
+        console.error('Failed to submit feedback to Worker:', err);
+        state.feedbackError = t('feedback_failed') + ` (${err.message || err})`;
+        state.feedbackSendResult = 'failed';
+    } finally {
+        state.isSendingFeedback = false;
+        render();
+        openPanel('feedback');
+    }
 }
 
 async function copyFeedback(event) {
-    await run(async () => {
+    const button = event.currentTarget;
+    if (!button) return;
+
+    try {
         const feedback = collectFeedback();
         await ClipboardSetText(feedback.body);
-        const button = event.currentTarget;
         const original = button.textContent;
         button.textContent = 'Copied';
         button.disabled = true;
@@ -3150,7 +3221,12 @@ async function copyFeedback(event) {
             button.textContent = original;
             button.disabled = false;
         }, 1600);
-    }, {busy: false});
+    } catch (err) {
+        console.error('Failed to copy feedback:', err);
+        state.feedbackError = `复制失败: ${err.message || err}`;
+        render();
+        openPanel('feedback');
+    }
 }
 
 async function refreshStatus(shouldRender = true) {
