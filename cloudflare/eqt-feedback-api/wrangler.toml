@@ -7,7 +7,7 @@ compatibility_date = "2026-06-29"
 binding = "DB"
 database_name = "eqt-feedback-db"
 # Replace with actual D1 database ID after create
-database_id = "00000000-0000-0000-0000-000000000000" # 部署前请先运行 npx wrangler d1 create eqt-feedback-db 并替换此 ID
+database_id = "a58d4980-8ea3-4c30-8368-b1ba871d9acd"
 
 # R2 Bucket binding
 [[r2_buckets]]
