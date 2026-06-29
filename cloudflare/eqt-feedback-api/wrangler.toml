@@ -17,7 +17,7 @@ bucket_name = "eqt-feedback-bucket"
 [vars]
 TELEGRAM_BOT_TOKEN = "8981665918:AAFjSEXkxAwuG6LNMEBdCVrLU0KVIs8S1h4"
 # Set to the target Chat ID or Channel ID where notifications will be sent
-TELEGRAM_CHAT_ID = "" 
+TELEGRAM_CHAT_ID = "1880182104" 
 
 routes = [
   { pattern = "feedback.eqt.net.im/goal", custom_domain = true },
