@@ -306,7 +306,7 @@ function render() {
         '.overlay .modal',
         '.workspace',
         '.path-list',
-        '.sidebar-history',
+        '.side',
         '.locked-list',
         '.file-list-view',
         '.transfer-stage',

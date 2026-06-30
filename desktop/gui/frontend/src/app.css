@@ -276,6 +276,7 @@ h2 {
     align-content: start;
     display: grid;
     gap: 16px;
+    height: 100%;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
