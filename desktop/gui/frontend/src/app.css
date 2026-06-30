@@ -28,17 +28,17 @@
 }
 
 /* 自定义侧边栏滚动条，避免 WebView2 因 display:none 而彻底禁用滚轮事件 */
-.side::-webkit-scrollbar {
+.history::-webkit-scrollbar {
     width: 6px;
 }
-.side::-webkit-scrollbar-track {
+.history::-webkit-scrollbar-track {
     background: transparent;
 }
-.side::-webkit-scrollbar-thumb {
+.history::-webkit-scrollbar-thumb {
     background: var(--line);
     border-radius: 3px;
 }
-.side::-webkit-scrollbar-thumb:hover {
+.history::-webkit-scrollbar-thumb:hover {
     background: var(--muted);
 }
 
@@ -293,9 +293,7 @@ h2 {
     height: calc(100vh - 112px);
     max-height: calc(100vh - 112px);
     min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: thin;
+    overflow: hidden;
     width: 100%;
     box-sizing: border-box;
 }
@@ -305,6 +303,9 @@ h2 {
     overflow: hidden;
     padding: 18px;
     width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .panel-head {
@@ -398,6 +399,14 @@ h2 {
     margin: 18px 0 0;
     padding: 0;
     min-width: 0;
+}
+
+.history {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
 }
 
 .path-list li,
@@ -1977,6 +1986,15 @@ dd {
         height: auto;
         max-height: none;
         min-height: 0;
+    }
+
+    .side .panel {
+        height: auto;
+    }
+
+    .history {
+        overflow-y: visible;
+        flex: none;
     }
 
     .topbar {
