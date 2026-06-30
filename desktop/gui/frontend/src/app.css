@@ -21,11 +21,25 @@
 }
 
 .shell::-webkit-scrollbar,
-.side::-webkit-scrollbar,
 .diagnostics::-webkit-scrollbar {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
+}
+
+/* 自定义侧边栏滚动条，避免 WebView2 因 display:none 而彻底禁用滚轮事件 */
+.side::-webkit-scrollbar {
+    width: 6px;
+}
+.side::-webkit-scrollbar-track {
+    background: transparent;
+}
+.side::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+}
+.side::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
 }
 
 .topbar {
@@ -273,15 +287,15 @@ h2 {
 }
 
 .side {
-    align-content: start;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
     height: 100%;
+    max-height: 100%;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: thin;
     width: 100%;
     box-sizing: border-box;
 }
