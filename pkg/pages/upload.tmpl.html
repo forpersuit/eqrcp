@@ -624,26 +624,21 @@
         }
 
         function addFileToAccumulated(file) {
-            if (!isPlusMode) {
-                if (accumulatedFiles.length >= 5) {
-                    showLimitNotification(t('err_free_limit_files'));
-                    return false;
-                }
-                if (file.size > 50 * 1024 * 1024) {
-                    showLimitNotification(t('err_free_limit_size'));
-                    return false;
-                }
-            }
             var isImg = file.type && file.type.indexOf('image/') === 0;
             var previewUrl = '';
             if (isImg) {
                 previewUrl = URL.createObjectURL(file);
             }
+            
+            // 是否单文件大小超限 (免费模式 且 超过 50MB)
+            var isOversized = !isPlusMode && (file.size > 50 * 1024 * 1024);
+
             accumulatedFiles.push({
                 file: file,
                 name: file.name || 'file_' + (accumulatedFiles.length + 1),
                 isImage: isImg,
-                previewUrl: previewUrl
+                previewUrl: previewUrl,
+                isOversized: isOversized
             });
             return true;
         }
@@ -661,6 +656,9 @@
             selectedFileContainer.innerHTML = '';
             pastedFileContainer.innerHTML = ''; // Not used as everything is rendered in selectedFileContainer
             
+            var hasOversizedFile = false;
+            var isCountExceeded = !isPlusMode && (accumulatedFiles.length > 5);
+            
             for (var i = 0; i < accumulatedFiles.length; i++) {
                 (function(index) {
                     var item = accumulatedFiles[index];
@@ -671,18 +669,60 @@
                     fileWrapper.style.justifyContent = 'space-between';
                     fileWrapper.style.gap = '10px';
                     
+                    var isItemCountExceeded = !isPlusMode && (index >= 5);
+                    var isItemOversized = item.isOversized;
+                    
+                    if (isItemOversized || isItemCountExceeded) {
+                        fileWrapper.style.border = '1px dashed var(--danger)';
+                        fileWrapper.style.background = 'rgba(180, 35, 24, 0.02)';
+                    }
+                    
                     var leftArea = document.createElement('div');
                     leftArea.style.flex = '1';
                     leftArea.style.minWidth = '0';
                     
                     if (item.isImage) {
+                        var imgContainer = document.createElement('div');
+                        imgContainer.style.display = 'flex';
+                        imgContainer.style.alignItems = 'center';
+                        imgContainer.style.gap = '12px';
+                        
                         var img = document.createElement('img');
                         img.src = item.previewUrl;
                         img.alt = item.name;
-                        img.style.maxWidth = '100px';
-                        img.style.maxHeight = '100px';
+                        img.style.maxWidth = '80px';
+                        img.style.maxHeight = '80px';
                         img.style.borderRadius = '4px';
-                        leftArea.appendChild(img);
+                        imgContainer.appendChild(img);
+                        
+                        var alertContainer = document.createElement('div');
+                        alertContainer.style.display = 'flex';
+                        alertContainer.style.flexDirection = 'column';
+                        alertContainer.style.gap = '4px';
+                        
+                        var imgName = document.createElement('span');
+                        imgName.className = 'file-name';
+                        imgName.textContent = item.name;
+                        alertContainer.appendChild(imgName);
+                        
+                        if (isItemOversized) {
+                            var sizeAlert = document.createElement('span');
+                            sizeAlert.style.color = 'var(--danger)';
+                            sizeAlert.style.fontSize = '12px';
+                            sizeAlert.style.fontWeight = 'bold';
+                            sizeAlert.textContent = t('err_free_limit_size');
+                            alertContainer.appendChild(sizeAlert);
+                        }
+                        if (isItemCountExceeded) {
+                            var countAlert = document.createElement('span');
+                            countAlert.style.color = 'var(--danger)';
+                            countAlert.style.fontSize = '12px';
+                            countAlert.style.fontWeight = 'bold';
+                            countAlert.textContent = t('err_free_limit_files');
+                            alertContainer.appendChild(countAlert);
+                        }
+                        imgContainer.appendChild(alertContainer);
+                        leftArea.appendChild(imgContainer);
                     } else {
                         var fileInfo = document.createElement('div');
                         fileInfo.className = 'file-info';
@@ -691,44 +731,95 @@
                         fileIcon.className = 'file-icon';
                         fileIcon.innerHTML = '&#128196;';
                         
+                        var textContainer = document.createElement('div');
+                        textContainer.style.display = 'flex';
+                        textContainer.style.flexDirection = 'column';
+                        textContainer.style.gap = '2px';
+                        
                         var fileName = document.createElement('span');
                         fileName.className = 'file-name';
                         fileName.textContent = item.name;
+                        textContainer.appendChild(fileName);
+                        
+                        if (isItemOversized) {
+                            var sizeAlert = document.createElement('span');
+                            sizeAlert.style.color = 'var(--danger)';
+                            sizeAlert.style.fontSize = '12px';
+                            sizeAlert.style.fontWeight = 'bold';
+                            sizeAlert.textContent = t('err_free_limit_size');
+                            textContainer.appendChild(sizeAlert);
+                        }
+                        if (isItemCountExceeded) {
+                            var countAlert = document.createElement('span');
+                            countAlert.style.color = 'var(--danger)';
+                            countAlert.style.fontSize = '12px';
+                            countAlert.style.fontWeight = 'bold';
+                            countAlert.textContent = t('err_free_limit_files');
+                            textContainer.appendChild(countAlert);
+                        }
                         
                         fileInfo.appendChild(fileIcon);
-                        fileInfo.appendChild(fileName);
+                        fileInfo.appendChild(textContainer);
                         leftArea.appendChild(fileInfo);
                     }
                     
                     fileWrapper.appendChild(leftArea);
                     
-                    if (isPlusMode) {
-                        var deleteBtn = document.createElement('button');
-                        deleteBtn.type = 'button';
-                        deleteBtn.innerHTML = '&times;';
-                        deleteBtn.style.background = 'none';
-                        deleteBtn.style.border = 'none';
-                        deleteBtn.style.color = 'var(--danger)';
-                        deleteBtn.style.fontSize = '22px';
-                        deleteBtn.style.cursor = 'pointer';
-                        deleteBtn.style.padding = '0 8px';
-                        deleteBtn.style.display = 'inline-flex';
-                        deleteBtn.style.alignItems = 'center';
-                        deleteBtn.style.justifyContent = 'center';
-                        
-                        deleteBtn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            if (item.previewUrl) {
-                                URL.revokeObjectURL(item.previewUrl);
-                            }
-                            accumulatedFiles.splice(index, 1);
-                            renderFiles();
-                        });
-                        fileWrapper.appendChild(deleteBtn);
-                    }
+                    // 无论是否是 isPlusMode，都显示删除按钮，以便用户可以移除超限文件
+                    var deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.innerHTML = '&times;';
+                    deleteBtn.style.background = 'none';
+                    deleteBtn.style.border = 'none';
+                    deleteBtn.style.color = 'var(--danger)';
+                    deleteBtn.style.fontSize = '22px';
+                    deleteBtn.style.cursor = 'pointer';
+                    deleteBtn.style.padding = '0 8px';
+                    deleteBtn.style.display = 'inline-flex';
+                    deleteBtn.style.alignItems = 'center';
+                    deleteBtn.style.justifyContent = 'center';
+                    
+                    deleteBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (item.previewUrl) {
+                            URL.revokeObjectURL(item.previewUrl);
+                        }
+                        accumulatedFiles.splice(index, 1);
+                        renderFiles();
+                    });
+                    fileWrapper.appendChild(deleteBtn);
                     
                     selectedFileContainer.appendChild(fileWrapper);
+                    
+                    if (item.isOversized) {
+                        hasOversizedFile = true;
+                    }
                 })(i);
+            }
+            
+            // 校验整体是否超限并控制按钮与提示
+            var isSizeExceeded = !isPlusMode && hasOversizedFile;
+            
+            if (isCountExceeded || isSizeExceeded) {
+                submitButton.disabled = true;
+                submitButton.style.opacity = '0.5';
+                submitButton.style.cursor = 'not-allowed';
+                
+                var errorMsg = '';
+                if (isCountExceeded && isSizeExceeded) {
+                    errorMsg = t('err_free_limit_files') + ' | ' + t('err_free_limit_size');
+                } else if (isCountExceeded) {
+                    errorMsg = t('err_free_limit_files');
+                } else {
+                    errorMsg = t('err_free_limit_size');
+                }
+                errorBox.textContent = errorMsg;
+                errorBox.style.display = 'block';
+            } else {
+                submitButton.disabled = false;
+                submitButton.style.opacity = '1';
+                submitButton.style.cursor = 'pointer';
+                errorBox.textContent = '';
             }
         }
 
@@ -838,13 +929,11 @@
                 body: formData
             }).then(function(response) {
                 if (!response.ok) {
-                    if (response.status === 413) {
-                        throw new Error('TOO_LARGE');
-                    } else if (response.status === 500) {
-                        throw new Error('SERVER_ERROR');
-                    } else {
-                        throw new Error('DEFAULT');
-                    }
+                    return response.text().then(function(text) {
+                        var errObj = new Error(text || 'DEFAULT');
+                        errObj.status = response.status;
+                        throw errObj;
+                    });
                 }
                 return response.text();
             }).then(function(html) {
@@ -867,15 +956,20 @@
                     oldScript.parentNode.replaceChild(newScript, oldScript);
                 }
             }).catch(function(err) {
-                var reasonKey = 'err_reason_network';
-                if (err.message === 'TOO_LARGE') {
-                    reasonKey = 'err_reason_too_large';
-                } else if (err.message === 'SERVER_ERROR') {
-                    reasonKey = 'err_reason_server';
-                } else if (err.message === 'DEFAULT') {
-                    reasonKey = 'err_reason_default';
+                var reason = '';
+                if (err.status === 413) {
+                    reason = t('err_reason_too_large') + (err.message ? ' (' + err.message + ')' : '');
+                } else if (err.status === 403) {
+                    // 后端超额限制会返回 403 并在 body 里包含详细原因，直接将其作为错误内容呈现
+                    reason = err.message || t('err_reason_default');
+                } else if (err.status === 500) {
+                    reason = t('err_reason_server') + (err.message ? ' (' + err.message + ')' : '');
+                } else if (err.status) {
+                    reason = t('err_reason_default') + ' (' + err.message + ')';
+                } else {
+                    reason = t('err_reason_network');
                 }
-                renderUploadFailedPage(t(reasonKey));
+                renderUploadFailedPage(reason);
             });
         });
 
