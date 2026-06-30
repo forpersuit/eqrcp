@@ -322,13 +322,13 @@
                 btn_transferring: '正在传输...',
                 err_failed: '传输失败，请保持此页面打开并重试。',
                 fail_header: '传输失败',
-                btn_retry: '返回重试',
-                err_reason_network: '网络连接中断。请检查接收端电脑和此设备是否连接到同一个 Wi-Fi (局域网)，或确认接收端未关闭。',
-                err_reason_too_large: '传输的文件太大，超出了接收端或系统的传输限制。',
-                err_reason_server: '接收端写入文件失败。可能磁盘空间不足或无写入权限。',
-                err_reason_default: '发生未知错误，导致文件传输未能成功完成。',
-                err_free_limit_files: '免费额度已用完，单次最多只能传输 5 个文件。购买 Plus 即可解锁无限制传输。',
-                err_free_limit_size: '免费额度已用完，单文件最大只能 50MB。购买 Plus 即可解锁无限制传输。'
+                          err_free_limit_files: '免费额度已用完，单次最多只能传输 5 个文件。购买 Plus 即可解锁无限制传输。',
+                err_free_limit_size: '免费额度已用完，单文件最大只能 50MB。购买 Plus 即可解锁无限制传输。',
+                err_free_limit_files_short: '超出 5 个文件限制',
+                err_free_limit_size_short: '超出 50MB 大小限制',
+                err_free_limit_both_global: '免费额度已用完：超出单次 5 个文件且存在文件超出 50MB 限制。请升级至 Plus 解锁。',
+                err_free_limit_files_global: '免费额度已用完：超出单次 5 个文件传输限制。请升级至 Plus 解锁。',
+                err_free_limit_size_global: '免费额度已用完：存在文件超出 50MB 大小限制。请升级至 Plus 解锁。'
             },
             en: {
                 title: 'Send from this device',
@@ -350,16 +350,21 @@
                 err_reason_server: 'The receiving computer failed to save the file. Disk might be full or write permission denied.',
                 err_reason_default: 'An unknown error occurred, and the transfer could not be completed.',
                 err_free_limit_files: 'Free tier exceeded. Max 5 files per transfer. Upgrade to Plus to unlock unlimited transfers.',
-                err_free_limit_size: 'Free tier exceeded. Max 50MB per file. Upgrade to Plus to unlock unlimited transfers.'
+                err_free_limit_size: 'Free tier exceeded. Max 50MB per file. Upgrade to Plus to unlock unlimited transfers.',
+                err_free_limit_files_short: 'Exceeds 5-file limit',
+                err_free_limit_size_short: 'Exceeds 50MB size limit',
+                err_free_limit_both_global: 'Free tier exceeded: Exceeded 5 files limit and 50MB size limit. Upgrade to Plus to unlock.',
+                err_free_limit_files_global: 'Free tier exceeded: Exceeded 5 files limit per transfer. Upgrade to Plus to unlock.',
+                err_free_limit_size_global: 'Free tier exceeded: File size exceeds 50MB limit. Upgrade to Plus to unlock.'
             },
             ja: {
                 title: 'このデバイスから送信',
-                subtitle: 'ファイルを追加、スクリーンショットを貼り付け、またはテキストを直接入力できます。EQT が受信側のコンピュータに自動的に保存します。',
+                subtitle: 'ファイルを追加、スクリーンショットを貼り付け、またはテキストを直接入力できます。EQT が受信側のコンピュータに自动的に保存します。',
                 composer: 'テキストエディタ',
                 composer_hint: '入力されたテキストは .txt ファイルとして保存されます。改行は Shift+Enter を押してください。',
                 add_files: 'ファイルを追加',
                 file_name_label: 'テキストファイル名',
-                file_name_placeholder: '任意のファイル名（空欄の場合は自動生成）',
+                file_name_placeholder: '任意のファイル名（空欄の場合は自动生成）',
                 text_label: 'テキスト内容',
                 text_placeholder: 'ここにテキストを直接入力するか、スクリーンショットやファイルを貼り付けます',
                 btn_transfer: '転送開始',
@@ -372,7 +377,12 @@
                 err_reason_server: '受信側コンピュータがファイルの保存に失敗しました。ディスクがいっぱいか、書き込み権限がない可能性があります。',
                 err_reason_default: '原因不明のエラーが発生し、転送を完了できませんでした。',
                 err_free_limit_files: '無料枠を超えました。1回の転送につき最大5ファイルまでです。Plusプランを購入して無制限転送のロックを解除。',
-                err_free_limit_size: '無料枠を超えました。1ファイルにつき最大50MBまでです。Plusプランを購入して無制限転送のロックを解除。'
+                err_free_limit_size: '無料枠を超えました。1ファイルにつき最大50MBまでです。Plusプランを購入して無制限転送のロックを解除。',
+                err_free_limit_files_short: '5ファイル制限超過',
+                err_free_limit_size_short: '50MB制限超過',
+                err_free_limit_both_global: '無料枠超過：5ファイル制限および50MBサイズ制限を超えています。Plusプランを購入して解除。',
+                err_free_limit_files_global: '無料枠超過：1回あたり最大5ファイル制限を超えています。Plusプランを購入して解除。',
+                err_free_limit_size_global: '無料枠超過：50MBサイズ制限を超えるファイルがあります。Plusプランを購入して解除。'
             },
             ko: {
                 title: '이 기기에서 전송',
@@ -394,7 +404,12 @@
                 err_reason_server: '수신 컴퓨터에서 파일을 저장하지 못했습니다. 디스크가 가득 찼거나 쓰기 권한이 없을 수 있습니다.',
                 err_reason_default: '알 수 없는 오류가 발생하여 전송을 완료할 수 없습니다.',
                 err_free_limit_files: '무료 용량을 초과했습니다. 전송당 최대 5개 파일까지 가능합니다. Plus 라이선스를 구매하여 제한을 해제하십시오.',
-                err_free_limit_size: '무료 용량을 초과했습니다. 파일당 최대 50MB까지 가능합니다. Plus 라이선스를 구매하여 제한을 해제하십시오.'
+                err_free_limit_size: '무료 용량을 초과했습니다. 파일당 최대 50MB까지 가능합니다. Plus 라이선스를 구매하여 제한을 해제하십시오.',
+                err_free_limit_files_short: '5개 파일 제한 초과',
+                err_free_limit_size_short: '50MB 용량 제한 초과',
+                err_free_limit_both_global: '무료 용량 초과: 5개 파일 및 50MB 용량 제한을 초과했습니다. Plus를 구매하여 제한을 해제하십시오.',
+                err_free_limit_files_global: '무료 용량 초과: 전송당 최대 5개 파일 제한을 초과했습니다. Plus를 구매하여 제한을 해제하십시오.',
+                err_free_limit_size_global: '무료 용량 초과: 50MB 용량 제한을 초과하는 파일이 존재합니다. Plus를 구매하여 제한을 해제하십시오.'
             },
             es: {
                 title: 'Enviar desde este dispositivo',
@@ -416,7 +431,12 @@
                 err_reason_server: 'El ordenador receptor no pudo guardar el archivo. Es posible que el disco esté lleno o que no tenga permisos de escritura.',
                 err_reason_default: 'Ocurrió un error desconocido y no se pudo completar la transferencia.',
                 err_free_limit_files: 'Límite de nivel gratuito excedido. Máximo 5 archivos por transferencia. Compre Plus para desbloquear transferencias ilimitadas.',
-                err_free_limit_size: 'Límite de nivel gratuito excedido. Máximo 50MB por archivo. Compre Plus para desbloquear transferencias ilimitadas.'
+                err_free_limit_size: 'Límite de nivel gratuito excedido. Máximo 50MB por archivo. Compre Plus para desbloquear transferencias ilimitadas.',
+                err_free_limit_files_short: 'Supera límite de 5 archivos',
+                err_free_limit_size_short: 'Supera límite de 50MB',
+                err_free_limit_both_global: 'Límite gratuito excedido: Supera 5 archivos y límite de 50MB. Compre Plus para desbloquear.',
+                err_free_limit_files_global: 'Límite gratuito excedido: Supera el límite de 5 archivos por transferencia. Compre Plus para desbloquear.',
+                err_free_limit_size_global: 'Límite gratuito excedido: Hay archivos que superan el límite de 50MB. Compre Plus para desbloquear.'
             },
             de: {
                 title: 'Von diesem Gerät senden',
@@ -437,6 +457,40 @@
                 err_reason_too_large: 'Die Datei ist zu groß und überschreitet das Übertragungslimit.',
                 err_reason_server: 'Der Empfängercomputer konnte die Datei nicht speichern. Möglicherweise ist die Festplatte voll oder die Schreibberechtigung wurde verweigert.',
                 err_reason_default: 'Ein unbekannter Fehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.',
+                err_free_limit_files: 'Limit für kostenlose Version überschritten. Maximal 5 Dateien pro Übertragung. Kaufen Sie Plus, um unbegrenzte Übertragungen freizuschalten.',
+                err_free_limit_size: 'Limit für kostenlose Version überschritten. Maximal 50MB pro Datei. Kaufen Sie Plus, um unbegrenzte Übertragungen freizuschalten.',
+                err_free_limit_files_short: 'Limit von 5 Dateien überschritten',
+                err_free_limit_size_short: 'Limit von 50MB überschritten',
+                err_free_limit_both_global: 'Kostenloses Limit überschritten: 5 Dateien und 50MB Limit überschritten. Kaufen Sie Plus zum Freischalten.',
+                err_free_limit_files_global: 'Kostenloses Limit überschritten: Limit von 5 Dateien pro Übertragung überschritten. Kaufen Sie Plus zum Freischalten.',
+                err_free_limit_size_global: 'Kostenloses Limit überschritten: Datei überschreitet das 50MB-Limit. Kaufen Sie Plus zum Freischalten.'
+            },
+            fr: {
+                title: 'Envoyer depuis cet appareil',
+                subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
+                composer: 'Éditeur de texte',
+                composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
+                add_files: 'Ajouter des fichiers',
+                file_name_label: 'Nom du fichier texte',
+                file_name_placeholder: 'Nom de fichier facultatif (laisser vide pour génération automatique)',
+                text_label: 'Contenu du texte',
+                text_placeholder: 'Saisissez du texte directement ici, o coller des captures d\'écran ou des fichiers',
+                btn_transfer: 'Démarrer le transfert',
+                btn_transferring: 'Transfert en cours...',
+                err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.',
+                fail_header: 'Échec du transfert',
+                btn_retry: 'Retourner & réessayer',
+                err_reason_network: 'Connexion réseau interrompue. Veuillez vous assurer que les dos appareils sont connectés au même réseau Wi-Fi (LAN) et que EQT est en cours d\'exécution sur l\'ordinateur destinataire.',
+                err_reason_too_large: 'Le fichier est trop volumineux et dépasse la limite de transfert.',
+                err_reason_server: 'L\'ordinateur destinataire n\'a pas réussi à enregistrer le fichier. Le disque est peut-être plein ou l\'autorisation d\'écriture a été refusée.',
+                err_reason_default: 'Une erreur inconnue est survenue et le transfert n\'a pas pu être complété.',
+                err_free_limit_files: 'Limite de l\'offre gratuite dépassée. Maximum 5 fichiers par transfert. Achetez Plus pour débloquer les transferts illimités.',
+                err_free_limit_size: 'Limite de l\'offre gratuite dépassée. Maximum 50 Mo par fichier. Achetez Plus pour débloquer les transferts illimités.',
+                err_free_limit_files_short: 'Dépasse la limite de 5 fichiers',
+                err_free_limit_size_short: 'Dépasse la limite de 50 Mo',
+                err_free_limit_both_global: 'Offre gratuite dépassée : Dépasse 5 fichiers et limite de 50 Mo. Achetez Plus pour débloquer.',
+                err_free_limit_files_global: 'Offre gratuite dépassée : Limite de 5 fichiers par transfert dépassée. Achetez Plus pour débloquer.',
+                err_free_limit_size_global: 'Offre gratuite dépassée : Fichier dépasse la limite de 50 Mo. Achetez Plus pour débloquer.'ehler ist aufgetreten und die Übertragung konnte nicht abgeschlossen werden.',
                 err_free_limit_files: 'Limit für kostenlose Version überschritten. Maximal 5 Dateien pro Übertragung. Kaufen Sie Plus, um unbegrenzte Übertragungen freizuschalten.',
                 err_free_limit_size: 'Limit für kostenlose Version überschritten. Maximal 50MB pro Datei. Kaufen Sie Plus, um unbegrenzte Übertragungen freizuschalten.'
             },
@@ -710,7 +764,7 @@
                             sizeAlert.style.color = 'var(--danger)';
                             sizeAlert.style.fontSize = '12px';
                             sizeAlert.style.fontWeight = 'bold';
-                            sizeAlert.textContent = t('err_free_limit_size');
+                            sizeAlert.textContent = t('err_free_limit_size_short');
                             alertContainer.appendChild(sizeAlert);
                         }
                         if (isItemCountExceeded) {
@@ -718,7 +772,7 @@
                             countAlert.style.color = 'var(--danger)';
                             countAlert.style.fontSize = '12px';
                             countAlert.style.fontWeight = 'bold';
-                            countAlert.textContent = t('err_free_limit_files');
+                            countAlert.textContent = t('err_free_limit_files_short');
                             alertContainer.appendChild(countAlert);
                         }
                         imgContainer.appendChild(alertContainer);
@@ -746,7 +800,7 @@
                             sizeAlert.style.color = 'var(--danger)';
                             sizeAlert.style.fontSize = '12px';
                             sizeAlert.style.fontWeight = 'bold';
-                            sizeAlert.textContent = t('err_free_limit_size');
+                            sizeAlert.textContent = t('err_free_limit_size_short');
                             textContainer.appendChild(sizeAlert);
                         }
                         if (isItemCountExceeded) {
@@ -754,7 +808,7 @@
                             countAlert.style.color = 'var(--danger)';
                             countAlert.style.fontSize = '12px';
                             countAlert.style.fontWeight = 'bold';
-                            countAlert.textContent = t('err_free_limit_files');
+                            countAlert.textContent = t('err_free_limit_files_short');
                             textContainer.appendChild(countAlert);
                         }
                         
@@ -807,11 +861,11 @@
                 
                 var errorMsg = '';
                 if (isCountExceeded && isSizeExceeded) {
-                    errorMsg = t('err_free_limit_files') + ' | ' + t('err_free_limit_size');
+                    errorMsg = t('err_free_limit_both_global');
                 } else if (isCountExceeded) {
-                    errorMsg = t('err_free_limit_files');
+                    errorMsg = t('err_free_limit_files_global');
                 } else {
-                    errorMsg = t('err_free_limit_size');
+                    errorMsg = t('err_free_limit_size_global');
                 }
                 errorBox.textContent = errorMsg;
                 errorBox.style.display = 'block';
