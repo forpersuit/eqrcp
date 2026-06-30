@@ -7,6 +7,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import morphdom from './vendor/morphdom.js';
+import { renderSide } from './components/history.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -480,26 +481,7 @@ function renderShare() {
     `;
 }
 
-function renderSide() {
-    if (state.mode === 'chat' || state.settings?.showHistory === false) {
-        return '';
-    }
-    const history = state.status?.history || [];
-    return `
-        <aside class="side">
-            <div class="panel">
-                <div class="panel-head">
-                    <h2>${t('recent_history')}</h2>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="ghost" id="refresh" style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('refresh')}</button>
-                        <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'} style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('clear')}</button>
-                    </div>
-                </div>
-                ${renderHistory(history)}
-            </div>
-        </aside>
-    `;
-}
+
 
 function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
@@ -1790,71 +1772,7 @@ function getTaskFolder(task) {
     return '';
 }
 
-function renderHistoryFiles(task) {
-    let files = [];
-    if (task.action === 'receive') {
-        files = task.savedFiles || [];
-        if (files.length === 0) {
-            files = task.paths || [];
-        }
-    } else {
-        files = task.paths || [];
-    }
 
-    if (files.length === 0) {
-        return `<div class="history-empty-files">${t('no_files')}</div>`;
-    }
-
-    return `<div class="history-files-list">
-        ${files.map((file) => {
-            const name = shortName(file);
-            const openFileTooltip = t('open_file_title', { file: name });
-            return `
-                <div class="history-file-row">
-                    <div class="history-filename-wrapper">
-                        <span class="file-icon-mini">📄</span>
-                        <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
-                    </div>
-                    <div class="history-file-actions">
-                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
-                            ${openFileIcon()}
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('')}
-    </div>`;
-}
-
-function renderHistory(history) {
-    if (!history.length) {
-        return `<div class="empty-state">${t('no_tasks')}</div>`;
-    }
-    return `<ol class="history">${history.slice(0, 8).map((task) => {
-        const taskFolder = getTaskFolder(task);
-        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
-        return `
-        <li>
-            <div class="history-item-left">
-                <div class="history-title-row">
-                    <strong class="history-title">${escapeHTML(actionText)} #${task.id}</strong>
-                    <span class="history-status-icon" title="${escapeAttr(getTranslatedState(task.state))}${task.transferState ? ` / ${escapeAttr(getTranslatedState(task.transferState))}` : ''}">
-                        ${getStatusIcon(task)}
-                    </span>
-                    ${taskFolder ? `
-                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(taskFolder)}" title="${escapeAttr(t('open_folder_title'))}" style="margin-left: 8px;">
-                            ${openFolderIcon()}
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-            <div class="history-item-right">
-                ${renderHistoryFiles(task)}
-            </div>
-        </li>
-        `;
-    }).join('')}</ol>`;
-}
 
 function bindEvents() {
     document.querySelector('.toggle-qr-expand-action')?.addEventListener('click', () => {
