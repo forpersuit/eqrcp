@@ -806,19 +806,15 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	// 动态计算基于活跃客户端的全局进度
 	if s.status.Mode == "send" {
 		s.clientMutex.Lock()
-		var cids []string
-		for cid := range s.clientProgress {
-			cids = append(cids, cid)
-		}
-		s.clientMutex.Unlock()
-
 		var maxDone int64
-		for _, cid := range cids {
-			done, _ := s.getClientDownloadedAndTotal(cid)
-			if done > maxDone {
-				maxDone = done
+		for _, state := range s.clientStates {
+			if state != nil {
+				if state.BytesDone > maxDone {
+					maxDone = state.BytesDone
+				}
 			}
 		}
+		s.clientMutex.Unlock()
 
 		if maxDone > s.status.BytesDone {
 			s.status.BytesDone = maxDone
@@ -1926,7 +1922,12 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 
 				// 计算当前 client 的总已下载字节
-				clientDone, _ := app.getClientDownloadedAndTotal(clientID)
+				var clientDone int64
+				if isZipDownload {
+					clientDone = rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
+				} else {
+					clientDone, _ = app.getClientDownloadedAndTotal(clientID)
+				}
 
 				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
 				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
