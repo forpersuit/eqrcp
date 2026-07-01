@@ -321,7 +321,7 @@ function render() {
     });
 
     const activeShare = activeShareTask();
-    const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+    const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
     const activeChat = activeChatTask();
     let runningMode = null;
     if (activeShare) {
@@ -1832,7 +1832,7 @@ function bindEvents() {
             }
 
             const activeShare = activeShareTask();
-            const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+            const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
             const activeChat = activeChatTask();
             const activeTask = activeShare || activeRecv || activeChat;
 
@@ -3414,7 +3414,7 @@ function connectAgentEvents() {
 async function handleFileDrop(paths) {
     if (state.mode !== 'share') {
         const activeShare = activeShareTask();
-        const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTerminal(state.status.current) ? state.status.current : null;
+        const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
         const activeChat = activeChatTask();
         const activeTask = activeShare || activeRecv || activeChat;
 
@@ -3813,9 +3813,13 @@ function isTerminal(task) {
     return ['completed', 'stopped', 'failed', 'replaced'].includes(task.transferState || task.state);
 }
 
+function isTaskClosed(task) {
+    return ['stopped', 'replaced'].includes(task.transferState || task.state);
+}
+
 function activeShareTask() {
     const task = state.status?.current;
-    if (!task || task.action !== 'share' || isTerminal(task)) {
+    if (!task || task.action !== 'share' || isTaskClosed(task)) {
         return null;
     }
     return task;
@@ -3823,7 +3827,7 @@ function activeShareTask() {
 
 function activeChatTask() {
     const task = state.status?.chat || state.status?.current;
-    if (!task || task.action !== 'chat' || isTerminal(task)) {
+    if (!task || task.action !== 'chat' || isTaskClosed(task)) {
         return null;
     }
     return task;
@@ -3846,7 +3850,7 @@ function canKeepChatFrame(previousChatURL) {
 
 function reconcileChatQRState(status) {
     const task = status?.chat || status?.current;
-    if (!task || task.action !== 'chat' || isTerminal(task)) {
+    if (!task || task.action !== 'chat' || isTaskClosed(task)) {
         state.activeChatTaskId = 0;
         state.activeChatSessionKey = '';
         state.chatQRPulseArmed = false;

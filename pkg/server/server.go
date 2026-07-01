@@ -1738,10 +1738,11 @@ func New(cfg *config.Config) (*Server, error) {
 			defer os.Remove(tempZipToRemove)
 		}
 
-		var expectedBytes int64
+		var totalBytes int64
 		if info, err := os.Stat(servePath); err == nil {
-			expectedBytes = info.Size()
+			totalBytes = info.Size()
 		}
+		expectedBytes := totalBytes
 
 		// Anti-bypass limit checks for free users who exceeded 5 free transfers limit
 		if !usage.IsPaid && usage.UsedTransfers >= 5 {

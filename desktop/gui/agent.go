@@ -121,6 +121,24 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
 	record.SavedFiles = append([]string(nil), record.SavedFiles...)
 	record.TransferItemClientStats = append([]string(nil), record.TransferItemClientStats...)
+	
+	if record.TransferClientStates != nil {
+		cloned := make(map[string]*server.ClientTransferStateInfo)
+		for k, v := range record.TransferClientStates {
+			if v != nil {
+				cloned[k] = &server.ClientTransferStateInfo{
+					State:      v.State,
+					BytesDone:  v.BytesDone,
+					BytesTotal: v.BytesTotal,
+					Percent:    v.Percent,
+					Current:    v.Current,
+					Message:    v.Message,
+					DeviceName: v.DeviceName,
+				}
+			}
+		}
+		record.TransferClientStates = cloned
+	}
 	return record
 }
 
