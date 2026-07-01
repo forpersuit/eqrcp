@@ -44,6 +44,7 @@ import {
     StopCurrent,
     SetAutoStop,
     SubmitFeedback,
+    DevSetUsedSeconds,
 } from '../wailsjs/go/main/App';
 
 // Prevent duplicate event listener registration on reused DOM elements due to morphdom patching
