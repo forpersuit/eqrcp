@@ -574,7 +574,7 @@ function renderDeviceProgressHtml(task) {
             const bytesTotal = formatSize(client.bytesTotal);
             const sizeProgressText = client.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
 
-            const showProgress = (client.state === 'transferring' || client.state === 'completed' || client.state === 'waiting') && client.bytesTotal > 0;
+            const showProgress = (((client.state === 'transferring' || client.state === 'waiting') && (client.bytesDone || 0) > 0) || client.state === 'completed') && client.bytesTotal > 0;
             const progressSectionHtml = showProgress ? `
                 <div style="width: 100%; margin-top: 6px; box-sizing: border-box;">
                     <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-secondary); margin-bottom: 3px; font-weight: 500;">
@@ -582,7 +582,7 @@ function renderDeviceProgressHtml(task) {
                         <span style="font-weight: 700; color: var(--accent-strong);">${percent}%</span>
                     </div>
                     <div style="width: 100%; height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; overflow: hidden; position: relative;">
-                        <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s ease;"></div>
+                        <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2px;"></div>
                     </div>
                 </div>
             ` : '';

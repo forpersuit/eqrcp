@@ -808,7 +808,8 @@
                                 // Update download progress bar UI
                                 var progressContainer = document.getElementById('download-progress-container');
                                 if (progressContainer) {
-                                    if ((status.state === 'transferring' || status.state === 'completed' || status.state === 'waiting') && status.bytesTotal > 0) {
+                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting') && (status.bytesDone || 0) > 0) || status.state === 'completed';
+                                     if (showProgress && status.bytesTotal > 0) {
                                         progressContainer.style.display = 'block';
                                         
                                         var percent = status.percent || 0;
