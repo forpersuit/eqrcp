@@ -96,6 +96,8 @@ type Server struct {
 	registeredRoutes       map[string]bool
 	initFirstTransferOnce sync.Once
 	isFirstDailyTransfer  bool
+	lastHookTime          time.Time
+	lastHookTimeMu        sync.Mutex
 }
 
 // SetAutoStop enables or disables automatic server shutdown when all devices finish downloading.
@@ -867,10 +869,28 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		SavedFiles:          append([]string(nil), status.SavedFiles...),
 		Version:             status.Version,
 		ItemClientStats:     append([]string(nil), status.ItemClientStats...),
-		TransferDeviceCount: status.TransferDeviceCount,
-		AutoStop:            status.AutoStop,
 		ClientStates:        clientStates,
 	}
+}
+
+func (s *Server) triggerStatusHookThrottled() {
+	s.lastHookTimeMu.Lock()
+	now := time.Now()
+	if now.Sub(s.lastHookTime) < 200*time.Millisecond {
+		s.lastHookTimeMu.Unlock()
+		return
+	}
+	s.lastHookTime = now
+	s.lastHookTimeMu.Unlock()
+
+	// Capture latest complete snapshot (including clientStates)
+	status := s.getStatus()
+	s.statusMu.Lock()
+	hook := s.statusHook
+	s.notifyStatusSubscribersLocked()
+	s.statusMu.Unlock()
+
+	notifyTransferStatusHook(hook, status)
 }
 
 func notifyTransferStatusHook(hook func(TransferStatusSnapshot), status transferStatus) {
@@ -1826,6 +1846,9 @@ func New(cfg *config.Config) (*Server, error) {
 					state.BytesDone = currentDone
 					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				})
+
+				// Send throttled progress updates to Wails GUI clients
+				app.triggerStatusHookThrottled()
 			},
 		}
 		http.ServeFile(progressWriter, r, servePath)
