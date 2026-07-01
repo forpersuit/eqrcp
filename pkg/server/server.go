@@ -824,6 +824,12 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	hook := s.statusHook
 	s.notifyStatusSubscribersLocked()
 	s.statusMu.Unlock()
+
+	// Populate clientStates and details to snapshot before invoking Hook to keep records visible on GUI
+	status.ClientStates = s.copyClientStates()
+	status.TransferDeviceCount = s.getConnectedDevicesCount()
+	status.ItemClientStats = s.getItemClientStats()
+
 	notifyTransferStatusHook(hook, status)
 }
 
