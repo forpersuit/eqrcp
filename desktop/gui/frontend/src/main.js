@@ -589,15 +589,24 @@ function renderDeviceProgressHtml(task) {
                 <div style="flex: 1; margin: 0 10px; border-bottom: 1.2px dashed var(--line); min-width: 60px;"></div>
             `;
 
+            let stateBadgeHtml = '';
+            if (client.state === 'completed') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('completed') || 'Completed')}">✓</span>`;
+            } else if (client.state === 'failed') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 900;" title="${escapeAttr(client.message || t('failed') || 'Failed')}">✕</span>`;
+            } else if (client.state === 'waiting') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--text-secondary); font-size: 8px; font-weight: 900;" title="${escapeAttr(t('waiting') || 'Waiting')}">⌛</span>`;
+            } else {
+                stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
+            }
+
             return `
                 <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
                     <span style="color: var(--text-primary); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">${escapeHTML(displayName)}</span>
                     ${progressSectionHtml}
                     <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
                         ${showProgress ? `<span style="font-size: 9px; color: var(--text-secondary); font-weight: 500;">${escapeHTML(sizeProgressText)}</span>` : ''}
-                        <span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">
-                            ${client.state === 'completed' ? (t('deviceStateCompleted') || '完成') : `${percent}%`}
-                        </span>
+                        ${stateBadgeHtml}
                     </div>
                 </li>
             `;

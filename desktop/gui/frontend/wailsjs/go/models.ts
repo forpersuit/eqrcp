@@ -324,6 +324,7 @@ export namespace main {
 export namespace server {
 	
 	export class ClientTransferStateInfo {
+	    clientID?: string;
 	    state: string;
 	    bytesDone: number;
 	    bytesTotal: number;
@@ -338,6 +339,7 @@ export namespace server {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clientID = source["clientID"];
 	        this.state = source["state"];
 	        this.bytesDone = source["bytesDone"];
 	        this.bytesTotal = source["bytesTotal"];
