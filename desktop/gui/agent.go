@@ -168,10 +168,23 @@ func (agent *desktopAgent) addHistoryLocked(record TaskRecord) {
 		}
 	}
 
-	agent.history = append([]TaskRecord{record}, agent.history...)
-	if len(agent.history) > desktopAgentMaxHistory {
-		agent.history = agent.history[:desktopAgentMaxHistory]
+	foundIndex := -1
+	for i, r := range agent.history {
+		if r.ID == record.ID {
+			foundIndex = i
+			break
+		}
 	}
+
+	if foundIndex >= 0 {
+		agent.history[foundIndex] = record
+	} else {
+		agent.history = append([]TaskRecord{record}, agent.history...)
+		if len(agent.history) > desktopAgentMaxHistory {
+			agent.history = agent.history[:desktopAgentMaxHistory]
+		}
+	}
+
 	if err := saveDesktopAgentHistory(agent.historyPath, agent.history); err != nil {
 		agent.lastError = fmt.Sprintf("unable to save desktop agent history: %v", err)
 	}
@@ -226,7 +239,8 @@ func loadDesktopAgentHistory(path string) ([]TaskRecord, error) {
 	}
 	var store desktopAgentHistoryStore
 	if err := json.Unmarshal(data, &store); err != nil {
-		return nil, err
+		// Ignore json unmarshal errors to allow self-healing of corrupted history files
+		return nil, nil
 	}
 	// Force resolve all paths loaded from disk to absolute paths
 	for i := range store.History {

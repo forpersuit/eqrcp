@@ -892,6 +892,58 @@ func TestDesktopAgentPersistsHistory(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentHistoryDeDuplicate(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history_dedup.json")
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	
+	// Add same task multiple times with updates
+	agent.mu.Lock()
+	agent.addHistoryLocked(desktopAgentTaskRecord{
+		ID:        10,
+		Action:    "share",
+		State:     "running",
+		StartedAt: time.Now(),
+	})
+	agent.addHistoryLocked(desktopAgentTaskRecord{
+		ID:        10,
+		Action:    "share",
+		State:     "completed",
+		StartedAt: time.Now(),
+	})
+	agent.mu.Unlock()
+
+	status := agent.snapshot()
+	if len(status.History) != 1 {
+		t.Fatalf("History length = %d, want 1 (deduplicated)", len(status.History))
+	}
+	if status.History[0].State != "completed" {
+		t.Fatalf("History[0].State = %q, want completed", status.History[0].State)
+	}
+}
+
+func TestDesktopAgentHistoryCorruptedSelfHealing(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history_corrupt.json")
+	
+	// Write invalid JSON content
+	if err := os.WriteFile(historyPath, []byte("{invalid json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := newDesktopAgent(application.Flags{})
+	agent.historyPath = historyPath
+	
+	// loadHistory should tolerate corrupted file and not fail, just treating it as empty
+	if err := agent.loadHistory(); err != nil {
+		t.Fatalf("loadHistory returned error for corrupted file: %v", err)
+	}
+
+	status := agent.snapshot()
+	if len(status.History) != 0 {
+		t.Fatalf("History length = %d, want 0 after self-healing", len(status.History))
+	}
+}
+
 func TestDesktopAgentCommandArgs(t *testing.T) {
 	if err := desktopAgentCommandArgs(desktopAgentCmd, nil); err != nil {
 		t.Fatalf("desktopAgentCommandArgs(nil) error = %v", err)
