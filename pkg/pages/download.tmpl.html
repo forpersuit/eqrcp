@@ -312,7 +312,7 @@
             
             <!-- Device ID badge -->
             <div id="device-id-badge" style="display: none; font-size: 11px; color: var(--text-secondary); background: rgba(0,0,0,0.03); border: 1px dashed var(--line); border-radius: 6px; padding: 4px 8px; margin: -10px auto 14px auto; align-items: center; gap: 4px; font-weight: 600; width: fit-content; box-sizing: border-box;">
-                <span>🆔 Device ID:</span>
+                <span>📱 Device:</span>
                 <span id="device-id-value" style="font-family: monospace; font-weight: 700; color: var(--text-primary);"></span>
             </div>
 
@@ -807,7 +807,8 @@
                 var valEl = document.getElementById('device-id-value');
                 if (badgeEl && valEl) {
                     badgeEl.style.display = 'inline-flex';
-                    valEl.innerText = initId;
+                    var shortId = initId.length > 4 ? initId.substring(initId.length - 4) : initId;
+                    valEl.innerText = 'Device (' + shortId + ')';
                 }
             }
 
@@ -828,7 +829,9 @@
                                     var valEl = document.getElementById('device-id-value');
                                     if (badgeEl && valEl) {
                                         badgeEl.style.display = 'inline-flex';
-                                        valEl.innerText = status.clientID;
+                                        var shortId = status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : status.clientID;
+                                        var devName = status.deviceName || 'Device';
+                                        valEl.innerText = devName + ' (' + shortId + ')';
                                     }
                                 }
                                 
@@ -838,17 +841,18 @@
                                      var showProgress = ((status.state === 'transferring' || status.state === 'waiting') && (status.bytesDone || 0) > 0) || status.state === 'completed';
                                      if (showProgress && status.bytesTotal > 0) {
                                         progressContainer.style.display = 'block';
-                                        
+                                         
                                         var percent = status.percent || 0;
                                         document.getElementById('download-progress-fill').style.width = percent + '%';
                                         document.getElementById('download-progress-percent').innerText = percent + '%';
-                                        
+                                         
                                         var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
                                         document.getElementById('download-progress-bytes').innerText = bytesText;
-                                        
+                                         
                                         var statusText = 'Downloading...';
                                         if (status.state === 'completed') {
-                                            statusText = 'Download completed.';
+                                            var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
+                                            statusText = 'ID: ' + shortId;
                                         } else if (status.state === 'waiting') {
                                             statusText = 'Interrupted, waiting for resume...';
                                         }

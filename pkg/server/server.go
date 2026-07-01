@@ -173,6 +173,7 @@ func (s *Server) SetAutoStop(enabled bool) {
 
 type transferStatus struct {
 	ClientID            string   `json:"clientID,omitempty"`
+	DeviceName          string   `json:"deviceName,omitempty"`
 	State               string   `json:"state"`
 	Mode                string   `json:"mode,omitempty"`
 	Title               string   `json:"title,omitempty"`
@@ -1477,6 +1478,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 				status.Message = "Waiting for transfer to start."
 			}
 		}
+		status.DeviceName = cState.DeviceName
 	}
 
 	if s.isClientLimitExceeded(clientID) {
