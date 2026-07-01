@@ -1850,7 +1850,6 @@ func New(cfg *config.Config) (*Server, error) {
 			return
 		}
 
-
 		allDownloaded := false
 
 		if isMultiFile {

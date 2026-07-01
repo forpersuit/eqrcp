@@ -310,6 +310,19 @@
             <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
             <p id="summary-text" class="summary" data-i18n="wait_tips">Please click the button below to start downloading.</p>
 
+            <!-- Download Progress Bar Section -->
+            <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">
+                    <span id="download-progress-status">Downloading...</span>
+                    <span id="download-progress-percent">0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; position: relative;">
+                    <div id="download-progress-fill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.2s ease;"></div>
+                </div>
+                <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
+            </div>
+
+
             {{if not .IsPaid}}
             <div class="wifi-warning-box">
                 <span>⚠️</span>
@@ -792,6 +805,31 @@
                             try {
                                 var status = JSON.parse(xhr.responseText);
                                 
+                                // Update download progress bar UI
+                                var progressContainer = document.getElementById('download-progress-container');
+                                if (progressContainer) {
+                                    if ((status.state === 'transferring' || status.state === 'completed' || status.state === 'waiting') && status.bytesTotal > 0) {
+                                        progressContainer.style.display = 'block';
+                                        
+                                        var percent = status.percent || 0;
+                                        document.getElementById('download-progress-fill').style.width = percent + '%';
+                                        document.getElementById('download-progress-percent').innerText = percent + '%';
+                                        
+                                        var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
+                                        document.getElementById('download-progress-bytes').innerText = bytesText;
+                                        
+                                        var statusText = 'Downloading...';
+                                        if (status.state === 'completed') {
+                                            statusText = 'Download completed.';
+                                        } else if (status.state === 'waiting') {
+                                            statusText = 'Interrupted, waiting for resume...';
+                                        }
+                                        document.getElementById('download-progress-status').innerText = statusText;
+                                    } else {
+                                        progressContainer.style.display = 'none';
+                                    }
+                                }
+
                                 if (status.state === 'limit_exceeded') {
                                     if (!isLimitUIActive) {
                                         isLimitUIActive = true;
@@ -860,6 +898,13 @@
         }
 
         function showCompletedUI() {
+            setTimeout(function() {
+                var progressContainer = document.getElementById('download-progress-container');
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+            }, 2000);
+
             document.getElementById('status-icon-pending').style.display = 'none';
             var successIcon = document.getElementById('status-icon-success');
             if (successIcon) {

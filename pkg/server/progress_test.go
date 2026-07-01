@@ -2,8 +2,14 @@ package server
 
 import (
 	"eqt/pkg/body"
+	"eqt/pkg/config"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestParseRangeHeader(t *testing.T) {
@@ -182,4 +188,147 @@ func TestResumableProgressFlow(t *testing.T) {
 	if state.State != "completed" || state.BytesDone != 10000 || state.Percent != 100 {
 		t.Errorf("At completion, State = %q, BytesDone = %d, Percent = %d; want \"completed\", 10000, 100", state.State, state.BytesDone, state.Percent)
 	}
+}
+
+func TestServerResumableMultiDeviceIntegration(t *testing.T) {
+	// 1. 创建测试目录，自动探测 /mnt/e/developer/results
+	testDir := "/mnt/e/developer/results"
+	if _, err := os.Stat(testDir); err != nil {
+		testDir = t.TempDir()
+	}
+
+	// 准备测试文件 (单文件与多文件)
+	singleFile := filepath.Join(testDir, "test_resumable_single.bin")
+	_ = os.WriteFile(singleFile, make([]byte, 1024*1024), 0644) // 1MB 零字节文件
+
+	file1 := filepath.Join(testDir, "test_file1.txt")
+	file2 := filepath.Join(testDir, "test_file2.txt")
+	_ = os.WriteFile(file1, []byte("resumable file 1 content"), 0644)
+	_ = os.WriteFile(file2, []byte("resumable file 2 content"), 0644)
+
+	// ==========================================
+	// 场景一：单文件下载模式下的多设备进度隔离与断点续传
+	// ==========================================
+	t.Run("SingleFileDownload", func(t *testing.T) {
+		cfg := &config.Config{
+			Interface: "any",
+			Port:      0,
+			KeepAlive: true,
+		}
+		app, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := body.FromArgs([]string{singleFile}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		app.Send(payload)
+		defer app.Shutdown()
+
+		assertClientStatus := func(clientID string, wantBytes int64, wantState string) {
+			t.Helper()
+			var lastState ClientTransferStateInfo
+			for start := time.Now(); time.Since(start) < 1*time.Second; time.Sleep(10 * time.Millisecond) {
+				lastState = app.getClientStatus(clientID)
+				if lastState.BytesDone == wantBytes && lastState.State == wantState {
+					return
+				}
+			}
+			t.Errorf("Client %s status mismatch. Got BytesDone=%d, State=%s; want BytesDone=%d, State=%s",
+				clientID, lastState.BytesDone, lastState.State, wantBytes, wantState)
+		}
+
+		// 模拟设备 A (client_id=device_A) 发起断点下载：下载前 200KB 字节后主动关闭连接
+		reqDownA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_A", nil)
+		reqDownA.Header.Set("Range", "bytes=0-204799") // 只请求前 200KB 字节
+		respDownA, err := http.DefaultClient.Do(reqDownA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodyA, _ := io.ReadAll(respDownA.Body)
+		respDownA.Body.Close()
+		t.Logf("Device A First Download Status: %s, Body Length: %d", respDownA.Status, len(bodyA))
+
+		// 模拟设备 B (client_id=device_B) 发起全量下载
+		reqDownB, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_B", nil)
+		respDownB, err := http.DefaultClient.Do(reqDownB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodyB, _ := io.ReadAll(respDownB.Body)
+		respDownB.Body.Close()
+		t.Logf("Device B Download Status: %s, Body Length: %d", respDownB.Status, len(bodyB))
+
+		// 检查 Device A 进度（应停留在 204800 字节，状态为 waiting，没有发生回滚清零）
+		assertClientStatus("device_A", 204800, "waiting")
+
+		// 检查 Device B 进度（应为 1048576 字节且已完成）
+		assertClientStatus("device_B", 1048576, "completed")
+
+		// 模拟设备 A 网络恢复，继续下载剩余的 800KB
+		reqResumeA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_A", nil)
+		reqResumeA.Header.Set("Range", "bytes=204800-")
+		respResumeA, err := http.DefaultClient.Do(reqResumeA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bodyResumeA, _ := io.ReadAll(respResumeA.Body)
+		respResumeA.Body.Close()
+		t.Logf("Device A Resume Download Status: %s, Body Length: %d", respResumeA.Status, len(bodyResumeA))
+
+		// 验证设备 A 最终也应顺利完成下载
+		assertClientStatus("device_A", 1048576, "completed")
+	})
+
+	// ==========================================
+	// 场景二：多文件打包下载模式下的多设备进度隔离与断点续传
+	// ==========================================
+	t.Run("MultiFileZipDownload", func(t *testing.T) {
+		cfg := &config.Config{
+			Interface: "any",
+			Port:      0,
+			KeepAlive: true,
+		}
+		app, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err := body.FromArgs([]string{file1, file2}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		app.Send(payload)
+		defer app.Shutdown()
+
+		// 模拟设备 A (client_id=device_A_zip) 下载第一个分片
+		reqDownA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&item=0&client_id=device_A_zip", nil)
+		respDownA, err := http.DefaultClient.Do(reqDownA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.ReadAll(respDownA.Body)
+		respDownA.Body.Close()
+
+		// 模拟设备 B (client_id=device_B_zip) 下载第二个分片
+		reqDownB, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&item=1&client_id=device_B_zip", nil)
+		respDownB, err := http.DefaultClient.Do(reqDownB)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.ReadAll(respDownB.Body)
+		respDownB.Body.Close()
+
+		// 验证 Device A 拥有其独立的已下载项（应只含有索引 0）
+		itemsA := app.getClientDownloadedItems("device_A_zip")
+		if len(itemsA) != 1 || itemsA[0] != 0 {
+			t.Errorf("Device A downloaded items mismatch, got %v, want [0]", itemsA)
+		}
+
+		// 验证 Device B 拥有其独立的已下载项（应只含有索引 1）
+		itemsB := app.getClientDownloadedItems("device_B_zip")
+		if len(itemsB) != 1 || itemsB[0] != 1 {
+			t.Errorf("Device B downloaded items mismatch, got %v, want [1]", itemsB)
+		}
+	})
 }

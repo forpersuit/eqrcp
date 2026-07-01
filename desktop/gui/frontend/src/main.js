@@ -560,10 +560,40 @@ function renderDeviceProgressHtml(task) {
         const listItems = displayClients.map(client => {
             const devName = client.deviceName || 'Device';
             const stateText = getTranslatedState(client.state || 'waiting');
+            const percent = client.percent || 0;
+
+            const formatSize = (bytes) => {
+                if (!bytes) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+            };
+
+            const bytesDone = formatSize(client.bytesDone);
+            const bytesTotal = formatSize(client.bytesTotal);
+            const sizeProgressText = client.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
+
+            const showProgress = (client.state === 'transferring' || client.state === 'completed' || client.state === 'waiting') && client.bytesTotal > 0;
+            const progressSectionHtml = showProgress ? `
+                <div style="width: 100%; margin-top: 6px; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-secondary); margin-bottom: 3px; font-weight: 500;">
+                        <span>${escapeHTML(sizeProgressText)}</span>
+                        <span style="font-weight: 700; color: var(--accent-strong);">${percent}%</span>
+                    </div>
+                    <div style="width: 100%; height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; overflow: hidden; position: relative;">
+                        <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s ease;"></div>
+                    </div>
+                </div>
+            ` : '';
+
             return `
-                <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; gap: 12px;">
-                    <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
-                    <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
+                <li style="display: flex; flex-direction: column; padding: 10px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); align-items: stretch; list-style: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px;">
+                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
+                        <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
+                    </div>
+                    ${progressSectionHtml}
                 </li>
             `;
         }).join('');
