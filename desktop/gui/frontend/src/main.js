@@ -559,6 +559,12 @@ function renderDeviceProgressHtml(task) {
 
         const listItems = displayClients.map(client => {
             const devName = client.deviceName || 'Device';
+            const clientID = client.clientID || '';
+            let displayName = devName;
+            if (!displayName.includes('(') && clientID) {
+                const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                displayName = `${displayName} (${shortId})`;
+            }
             const stateText = getTranslatedState(client.state || 'waiting');
             const percent = client.percent || 0;
 
@@ -585,7 +591,7 @@ function renderDeviceProgressHtml(task) {
 
             return `
                 <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
-                    <span style="color: var(--text-primary); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%;" title="${escapeHTML(devName)}">${escapeHTML(devName)}</span>
+                    <span style="color: var(--text-primary); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">${escapeHTML(displayName)}</span>
                     ${progressSectionHtml}
                     <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
                         ${showProgress ? `<span style="font-size: 9px; color: var(--text-secondary); font-weight: 500;">${escapeHTML(sizeProgressText)}</span>` : ''}

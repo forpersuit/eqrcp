@@ -37,6 +37,7 @@ const defaultStatusGracePeriod = 15 * time.Second
 const maxTransferHistory = 20
 
 type ClientTransferStateInfo struct {
+	ClientID   string `json:"clientID,omitempty"`
 	State      string `json:"state"`
 	BytesDone  int64  `json:"bytesDone"`
 	BytesTotal int64  `json:"bytesTotal"`
@@ -170,6 +171,7 @@ func (s *Server) SetAutoStop(enabled bool) {
 }
 
 type transferStatus struct {
+	ClientID            string   `json:"clientID,omitempty"`
 	State               string   `json:"state"`
 	Mode                string   `json:"mode,omitempty"`
 	Title               string   `json:"title,omitempty"`
@@ -869,6 +871,7 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 		for k, v := range status.ClientStates {
 			if v != nil {
 				m[k] = &ClientTransferStateInfo{
+					ClientID:   v.ClientID,
 					State:      v.State,
 					BytesDone:  v.BytesDone,
 					BytesTotal: v.BytesTotal,
@@ -1161,11 +1164,13 @@ func (s *Server) updateClientStatus(clientID string, r *http.Request, update fun
 	state, ok := s.clientStates[clientID]
 	if !ok {
 		state = &ClientTransferStateInfo{
-			State:   "waiting",
-			Message: "Waiting for transfer to start.",
+			ClientID: clientID,
+			State:    "waiting",
+			Message:  "Waiting for transfer to start.",
 		}
 		s.clientStates[clientID] = state
 	}
+	state.ClientID = clientID
 	if state.DeviceName == "" && r != nil {
 		ua := r.Header.Get("User-Agent")
 		devType := parseDeviceName(ua)
@@ -1185,8 +1190,9 @@ func (s *Server) getClientStatus(clientID string) ClientTransferStateInfo {
 	state, ok := s.clientStates[clientID]
 	if !ok {
 		return ClientTransferStateInfo{
-			State:   "waiting",
-			Message: "Waiting for transfer to start.",
+			ClientID: clientID,
+			State:    "waiting",
+			Message:  "Waiting for transfer to start.",
 		}
 	}
 	return *state
@@ -1203,6 +1209,7 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 	for k, v := range s.clientStates {
 		if v != nil {
 			m[k] = &ClientTransferStateInfo{
+				ClientID:   v.ClientID,
 				State:      v.State,
 				BytesDone:  v.BytesDone,
 				BytesTotal: v.BytesTotal,
@@ -1402,6 +1409,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	status := s.getStatus()
+	status.ClientID = clientID
 	status.DownloadedItems = s.getClientDownloadedItems(clientID)
 
 	if !isTerminalTransferState(status.State) {

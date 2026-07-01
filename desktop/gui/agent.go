@@ -127,6 +127,7 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 		for k, v := range record.TransferClientStates {
 			if v != nil {
 				cloned[k] = &server.ClientTransferStateInfo{
+					ClientID:   v.ClientID,
 					State:      v.State,
 					BytesDone:  v.BytesDone,
 					BytesTotal: v.BytesTotal,
@@ -685,6 +686,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	for k, v := range status.ClientStates {
 		if v != nil {
 			agent.current.TransferClientStates[k] = &server.ClientTransferStateInfo{
+				ClientID:   v.ClientID,
 				State:      v.State,
 				BytesDone:  v.BytesDone,
 				BytesTotal: v.BytesTotal,

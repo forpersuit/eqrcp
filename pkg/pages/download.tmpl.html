@@ -309,6 +309,12 @@
 
             <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
             <p id="summary-text" class="summary" data-i18n="wait_tips">Please click the button below to start downloading.</p>
+            
+            <!-- Device ID badge -->
+            <div id="device-id-badge" style="display: none; font-size: 11px; color: var(--text-secondary); background: rgba(0,0,0,0.03); border: 1px dashed var(--line); border-radius: 6px; padding: 4px 8px; margin: -10px auto 14px auto; align-items: center; gap: 4px; font-weight: 600; width: fit-content; box-sizing: border-box;">
+                <span>🆔 Device ID:</span>
+                <span id="device-id-value" style="font-family: monospace; font-weight: 700; color: var(--text-primary);"></span>
+            </div>
 
             <!-- Download Progress Bar Section -->
             <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
@@ -794,6 +800,17 @@
             if (pollingStarted) return;
             pollingStarted = true;
             
+            // Set initial Client ID on load
+            var initId = getOrGenerateClientId();
+            if (initId) {
+                var badgeEl = document.getElementById('device-id-badge');
+                var valEl = document.getElementById('device-id-value');
+                if (badgeEl && valEl) {
+                    badgeEl.style.display = 'inline-flex';
+                    valEl.innerText = initId;
+                }
+            }
+
             var consecutiveErrors = 0;
             intervalId = setInterval(function() {
                 var xhr = new XMLHttpRequest();
@@ -804,6 +821,16 @@
                             consecutiveErrors = 0;
                             try {
                                 var status = JSON.parse(xhr.responseText);
+                                
+                                // Update Client ID if returned by server
+                                if (status.clientID) {
+                                    var badgeEl = document.getElementById('device-id-badge');
+                                    var valEl = document.getElementById('device-id-value');
+                                    if (badgeEl && valEl) {
+                                        badgeEl.style.display = 'inline-flex';
+                                        valEl.innerText = status.clientID;
+                                    }
+                                }
                                 
                                 // Update download progress bar UI
                                 var progressContainer = document.getElementById('download-progress-container');
