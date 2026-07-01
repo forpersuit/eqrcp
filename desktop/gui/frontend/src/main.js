@@ -2157,6 +2157,12 @@ function bindPanelEvents() {
     document.querySelector('#dev-reset-quota')?.addEventListener('click', async () => {
         try {
             state.status = await DevSetUsedSeconds(0);
+            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+            try {
+                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+            } catch (e) {
+                state.shareLimitNotice = '';
+            }
             state.notice = t('dev_quota_reset_success') || '已重置每日计时为 0s';
             render();
             openPanel('about');
@@ -2169,6 +2175,12 @@ function bindPanelEvents() {
     document.querySelector('#dev-max-quota')?.addEventListener('click', async () => {
         try {
             state.status = await DevSetUsedSeconds(600);
+            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+            try {
+                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+            } catch (e) {
+                state.shareLimitNotice = '';
+            }
             state.notice = t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)';
             render();
             openPanel('about');
