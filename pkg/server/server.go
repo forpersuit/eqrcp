@@ -1171,6 +1171,19 @@ func (s *Server) resetClientDownloadedBytes(clientID string, itemIndex int) {
 	s.clientProgress[clientID][itemIndex] = 0
 }
 
+func (s *Server) setClientDownloadedBytes(clientID string, itemIndex int, val int64) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientProgress == nil {
+		s.clientProgress = make(map[string]map[int]int64)
+	}
+	if s.clientProgress[clientID] == nil {
+		s.clientProgress[clientID] = make(map[int]int64)
+	}
+	s.clientProgress[clientID][itemIndex] = val
+}
+
+
 func (s *Server) isClientFinished(clientID string) bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
@@ -1739,42 +1752,34 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 
-		// Reset accumulated bytes if it is a fresh download request (from start of file)
-		rangeHeader := r.Header.Get("Range")
+		// Parse starting byte offset from Range header (0 if fresh request or not set)
+		rangeInfo := ParseRangeHeader(r)
 		isZipDownload := isMultiFile && itemIndexStr == ""
-		if rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
-			app.downloadedBytesMu.Lock()
-			if app.downloadedBytes == nil {
-				app.downloadedBytes = make(map[int]int64)
-			}
-			if isZipDownload {
-				for idx := 0; idx < len(app.body.Paths); idx++ {
-					app.downloadedBytes[idx] = 0
-					app.resetClientDownloadedBytes(clientID, idx)
-				}
-			} else {
-				app.downloadedBytes[currentIndex] = 0
-				app.resetClientDownloadedBytes(clientID, currentIndex)
-			}
-			app.downloadedBytesMu.Unlock()
 
-			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
-				state.State = "transferring"
-				state.Current = downloadName
-				state.BytesDone = 0
-				state.BytesTotal = expectedBytes
-				state.Percent = 0
-				state.Message = "Sending file to connected device."
-			})
-		} else {
-			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
-				state.State = "transferring"
-				state.Current = downloadName
-				state.BytesTotal = expectedBytes
-				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
-				state.Message = "Sending file to connected device."
-			})
+		app.downloadedBytesMu.Lock()
+		if app.downloadedBytes == nil {
+			app.downloadedBytes = make(map[int]int64)
 		}
+		if isZipDownload {
+			for idx := 0; idx < len(app.body.Paths); idx++ {
+				app.downloadedBytes[idx] = rangeInfo.StartByte
+				app.setClientDownloadedBytes(clientID, idx, rangeInfo.StartByte)
+			}
+		} else {
+			app.downloadedBytes[currentIndex] = rangeInfo.StartByte
+			app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
+		}
+		app.downloadedBytesMu.Unlock()
+
+		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+			state.State = "transferring"
+			state.Current = downloadName
+			state.BytesDone = rangeInfo.StartByte
+			state.BytesTotal = expectedBytes
+			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+			state.Message = "Sending file to connected device."
+		})
+
 
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		app.expectedBytesMu.Lock()
@@ -1820,23 +1825,11 @@ func New(cfg *config.Config) (*Server, error) {
 		app.downloadedBytesMu.Unlock()
 
 		if progressWriter.err != nil {
-			// Clear accumulated progress immediately on transfer errors/cancellations
-			app.downloadedBytesMu.Lock()
-			if isZipDownload {
-				for idx := 0; idx < len(app.body.Paths); idx++ {
-					app.downloadedBytes[idx] = 0
-					app.resetClientDownloadedBytes(clientID, idx)
-				}
-			} else {
-				app.downloadedBytes[currentIndex] = 0
-				app.resetClientDownloadedBytes(clientID, currentIndex)
-			}
-			app.downloadedBytesMu.Unlock()
-
+			// Retain current progress to support resume, mark state as waiting
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = 0
-				state.Percent = 0
+				state.BytesDone = itemWritten
+				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
@@ -1845,16 +1838,18 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if itemWritten < expectedBytes {
+			// Retain current progress, mark state as waiting
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = 0
-				state.Percent = 0
+				state.BytesDone = itemWritten
+				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
 			app.recordStatus()
 			return
 		}
+
 
 		allDownloaded := false
 
