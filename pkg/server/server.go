@@ -324,6 +324,11 @@ func (s *Server) Send(p body.Body) {
 		status.BytesTotal = total
 		status.Percent = 0
 	})
+
+	usage := limiterInstance.GetStatus()
+	if !usage.IsPaid {
+		IncrementUsedTransfers(1)
+	}
 }
 
 // ServeQR creates handlers for serving the QR code control page.
@@ -588,8 +593,7 @@ func (s *Server) isClientLimitExceeded(clientID string) bool {
 	if limiterInstance.GetStatus().IsPaid {
 		return false
 	}
-	s.initFirstTransferFlag()
-	if s.isFirstDailyTransfer {
+	if GetUsedTransfers() < 5 {
 		return false
 	}
 	if clientID == "" {
@@ -619,6 +623,9 @@ func (s *Server) isReceiveClientLimitExceeded(clientID string) bool {
 	if usage.IsPaid {
 		return false
 	}
+	if usage.UsedReceiveTransfers < 5 {
+		return false
+	}
 	if clientID == "" {
 		return false
 	}
@@ -638,13 +645,7 @@ func (s *Server) isReceiveClientLimitExceeded(clientID string) bool {
 		}
 	}
 
-	quotaExceeded := usage.UsedReceiveTransfers >= 5
-
-	if quotaExceeded {
-		return activeCount >= 1
-	}
-
-	return activeCount >= 2
+	return activeCount >= 1
 }
 
 func (s *Server) terminalStatus() (transferStatus, bool) {
@@ -1782,9 +1783,6 @@ func New(cfg *config.Config) (*Server, error) {
 			app.transferCounted = true
 		}
 		app.statusMu.Unlock()
-		if !alreadyCounted && !usage.IsPaid {
-			IncrementUsedTransfers(1)
-		}
 		app.setStatus("transferring", "Sending file to connected device.")
 		app.updateStatus(func(status *transferStatus) {
 			status.Current = downloadName

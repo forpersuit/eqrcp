@@ -1659,9 +1659,8 @@ func TestDeviceLimitExceededFreeTier(t *testing.T) {
 	clientID_B := "cli_B"
 	clientID_C := "cli_C"
 
-	server1.initFirstTransferFlag()
-	if !server1.isFirstDailyTransfer {
-		t.Fatalf("first transfer task should have isFirstDailyTransfer = true")
+	if GetUsedTransfers() != 1 {
+		t.Fatalf("used transfers = %d, want 1", GetUsedTransfers())
 	}
 
 	if server1.isClientLimitExceeded(clientID_A) {
@@ -1674,17 +1673,8 @@ func TestDeviceLimitExceededFreeTier(t *testing.T) {
 		t.Fatal("device C should not be limited in first transfer")
 	}
 
-	reqDownA, _ := http.NewRequest(http.MethodGet, server1.SendURL+"?download=1&client_id=cli_A", nil)
-	respDownA, err := http.DefaultClient.Do(reqDownA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = io.ReadAll(respDownA.Body)
-	respDownA.Body.Close()
-
-	if GetUsedTransfers() != 1 {
-		t.Fatalf("used transfers = %d, want 1", GetUsedTransfers())
-	}
+	// SetUsedTransfers to 5 to simulate quota exceeded state
+	SetUsedTransfers(5)
 
 	server2, err := New(&config.Config{
 		Interface: "any",
@@ -1698,11 +1688,6 @@ func TestDeviceLimitExceededFreeTier(t *testing.T) {
 	}
 	defer server2.Shutdown()
 	server2.Send(body.Body{Path: file, Filename: "doc.txt"})
-
-	server2.initFirstTransferFlag()
-	if server2.isFirstDailyTransfer {
-		t.Fatalf("second transfer task should have isFirstDailyTransfer = false")
-	}
 
 	if server2.isClientLimitExceeded(clientID_A) {
 		t.Fatal("device A should be allowed as 1st device")
@@ -1732,6 +1717,7 @@ func TestDeviceLimitExceededFreeTier(t *testing.T) {
 }
 
 func TestIsReceiveClientLimitExceeded(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	// Create temporary directory for server
 	dir, err := os.MkdirTemp("", "eqrcp-test-receive-limit")
 	if err != nil {
@@ -1760,20 +1746,31 @@ func TestIsReceiveClientLimitExceeded(t *testing.T) {
 	// 1. Set UsedReceiveTransfers to 0 (Not exceeded free quota)
 	SetUsedReceiveTransfers(0)
 
-	// In this state, it behaves like normal limit: activeCount >= 2 is exceeded
+	// In this state, there are NO limits (it should never exceed)
 	if srv.isReceiveClientLimitExceeded(clientID_A) {
-		t.Fatal("device A should not be limited when activeCount is 0 (quota not exceeded)")
+		t.Fatal("device A should not be limited when quota not exceeded")
 	}
 	srv.clientMutex.Lock()
 	srv.clientLastSeen[clientID_A] = time.Now()
 	srv.clientMutex.Unlock()
 
 	if srv.isReceiveClientLimitExceeded(clientID_B) {
-		t.Fatal("device B should not be limited when activeCount is 1 (quota not exceeded)")
+		t.Fatal("device B should not be limited when quota not exceeded")
+	}
+	srv.clientMutex.Lock()
+	srv.clientLastSeen[clientID_B] = time.Now()
+	srv.clientMutex.Unlock()
+
+	clientID_C := "client_C"
+	if srv.isReceiveClientLimitExceeded(clientID_C) {
+		t.Fatal("device C should not be limited when quota not exceeded")
 	}
 
 	// 2. Set UsedReceiveTransfers to 5 (Exceeded free quota)
 	SetUsedReceiveTransfers(5)
+	srv.clientMutex.Lock()
+	delete(srv.clientLastSeen, clientID_B)
+	srv.clientMutex.Unlock()
 
 	// Now since quota is exceeded, activeCount >= 1 is exceeded.
 	// device A (which is already active) should be allowed (it's the 1 allowed active client)
