@@ -250,6 +250,25 @@ func (s *Server) ReceiveTo(dir string) error {
 	if !fileinfo.IsDir() {
 		return fmt.Errorf("%s is not a valid directory", output)
 	}
+
+	// Reset client-tracking data structures for the new task session
+	s.clientStatesMu.Lock()
+	s.clientStates = make(map[string]*ClientTransferStateInfo)
+	s.clientStatesMu.Unlock()
+
+	s.clientMutex.Lock()
+	s.clientLastSeen = make(map[string]time.Time)
+	s.clientProgress = make(map[string]map[int]int64)
+	s.clientMutex.Unlock()
+
+	s.downloadedItemsMu.Lock()
+	s.downloadedItems = make(map[int]bool)
+	s.downloadedItemsMu.Unlock()
+
+	s.downloadedBytesMu.Lock()
+	s.downloadedBytes = make(map[int]int64)
+	s.downloadedBytesMu.Unlock()
+
 	s.outputDir = output
 	s.updateStatus(func(status *transferStatus) {
 		status.Mode = "receive"
@@ -262,6 +281,24 @@ func (s *Server) ReceiveTo(dir string) error {
 
 // Send adds a handler for sending the file
 func (s *Server) Send(p body.Body) {
+	// Reset client-tracking data structures for the new task session
+	s.clientStatesMu.Lock()
+	s.clientStates = make(map[string]*ClientTransferStateInfo)
+	s.clientStatesMu.Unlock()
+
+	s.clientMutex.Lock()
+	s.clientLastSeen = make(map[string]time.Time)
+	s.clientProgress = make(map[string]map[int]int64)
+	s.clientMutex.Unlock()
+
+	s.downloadedItemsMu.Lock()
+	s.downloadedItems = make(map[int]bool)
+	s.downloadedItemsMu.Unlock()
+
+	s.downloadedBytesMu.Lock()
+	s.downloadedBytes = make(map[int]int64)
+	s.downloadedBytesMu.Unlock()
+
 	s.body = p
 	s.expectParallelRequests = true
 	total := int64(0)
@@ -1801,11 +1838,12 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.downloadedBytesMu.Unlock()
 
+		clientDownloaded, clientTotal := app.getClientDownloadedAndTotal(clientID)
 		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 			state.State = "transferring"
 			state.Current = downloadName
-			state.BytesDone = rangeInfo.StartByte
-			state.BytesTotal = expectedBytes
+			state.BytesDone = clientDownloaded
+			state.BytesTotal = clientTotal
 			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 			state.Message = "Sending file to connected device."
 		})
@@ -1833,23 +1871,22 @@ func New(cfg *config.Config) (*Server, error) {
 				if app.downloadedBytes == nil {
 					app.downloadedBytes = make(map[int]int64)
 				}
-				var currentDone int64
 				if isZipDownload {
 					for idx := 0; idx < len(app.body.Paths); idx++ {
 						app.downloadedBytes[idx] += written
 						app.addClientDownloadedBytes(clientID, idx, written)
 					}
-					currentDone = app.downloadedBytes[0]
 				} else {
 					app.downloadedBytes[currentIndex] += written
 					app.addClientDownloadedBytes(clientID, currentIndex, written)
-					currentDone = app.downloadedBytes[currentIndex]
 				}
 				app.downloadedBytesMu.Unlock()
 
 				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
+				clientDownloaded, clientTotal := app.getClientDownloadedAndTotal(clientID)
 				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
-					state.BytesDone = currentDone
+					state.BytesDone = clientDownloaded
+					state.BytesTotal = clientTotal
 					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				})
 
@@ -1868,9 +1905,11 @@ func New(cfg *config.Config) (*Server, error) {
 
 		if progressWriter.err != nil {
 			// Retain current progress to support resume, mark state as waiting
+			clientDownloaded, clientTotal := app.getClientDownloadedAndTotal(clientID)
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = itemWritten
+				state.BytesDone = clientDownloaded
+				state.BytesTotal = clientTotal
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
@@ -1881,9 +1920,11 @@ func New(cfg *config.Config) (*Server, error) {
 
 		if itemWritten < expectedBytes {
 			// Retain current progress, mark state as waiting
+			clientDownloaded, clientTotal := app.getClientDownloadedAndTotal(clientID)
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = itemWritten
+				state.BytesDone = clientDownloaded
+				state.BytesTotal = clientTotal
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
