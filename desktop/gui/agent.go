@@ -467,14 +467,22 @@ func (agent *desktopAgent) execute(task AgentTask, id int) {
 				agent.current.State = "completed"
 			}
 		}
-		agent.addHistoryLocked(*agent.current)
-		agent.notifyRecordLocked(*agent.current)
-		delete(agent.notified, agent.current.ID)
-		agent.busy = false
-		agent.current = nil
-		agent.activeStop = nil
-		agent.startNextLocked()
-		agent.touchLocked()
+		
+		record := *agent.current
+		agent.addHistoryLocked(record)
+		agent.notifyRecordLocked(record)
+
+		if agent.current.State == "stopped" || agent.current.State == "replaced" {
+			delete(agent.notified, agent.current.ID)
+			agent.busy = false
+			agent.current = nil
+			agent.activeStop = nil
+			agent.startNextLocked()
+			agent.touchLocked()
+		} else {
+			agent.activeStop = nil
+			agent.touchLocked()
+		}
 	}
 }
 
@@ -578,12 +586,18 @@ func (agent *desktopAgent) repeatTask(id int) (AgentStatus, error) {
 }
 
 func (agent *desktopAgent) replaceActiveLocked(state string) {
-	if agent.current != nil && agent.current.State == "running" {
+	if agent.current != nil {
 		agent.current.State = state
 		finishedAt := time.Now()
 		agent.current.FinishedAt = &finishedAt
 	}
 	if agent.activeStop == nil {
+		if agent.current != nil && (state == "stopped" || state == "replaced") {
+			delete(agent.notified, agent.current.ID)
+			agent.busy = false
+			agent.current = nil
+			agent.startNextLocked()
+		}
 		return
 	}
 	stop := agent.activeStop
@@ -669,7 +683,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		agent.current.FinishedAt = &finishedAt
 	}
 	agent.notifyTransferStatusLocked(*agent.current)
-	if isTerminalDesktopTransferState(agent.current.State) {
+	if agent.current.State == "stopped" || agent.current.State == "replaced" {
 		record := *agent.current
 		agent.addHistoryLocked(record)
 		agent.notifyRecordLocked(record)
@@ -680,6 +694,10 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		agent.startNextLocked()
 		agent.touchLocked()
 		return
+	} else if agent.current.State == "completed" || agent.current.State == "failed" {
+		record := *agent.current
+		agent.addHistoryLocked(record)
+		agent.notifyRecordLocked(record)
 	}
 	agent.touchLocked()
 }

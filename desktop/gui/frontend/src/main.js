@@ -576,24 +576,23 @@ function renderDeviceProgressHtml(task) {
 
             const showProgress = (((client.state === 'transferring' || client.state === 'waiting') && (client.bytesDone || 0) > 0) || client.state === 'completed') && client.bytesTotal > 0;
             const progressSectionHtml = showProgress ? `
-                <div style="width: 100%; margin-top: 6px; box-sizing: border-box;">
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-secondary); margin-bottom: 3px; font-weight: 500;">
-                        <span>${escapeHTML(sizeProgressText)}</span>
-                        <span style="font-weight: 700; color: var(--accent-strong);">${percent}%</span>
-                    </div>
-                    <div style="width: 100%; height: 4px; background: rgba(0,0,0,0.06); border-radius: 2px; overflow: hidden; position: relative;">
-                        <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2px;"></div>
-                    </div>
+                <div style="flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; position: relative; margin: 0 10px; min-width: 60px;">
+                    <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 3px;"></div>
                 </div>
-            ` : '';
+            ` : `
+                <div style="flex: 1; margin: 0 10px; border-bottom: 1.2px dashed var(--line); min-width: 60px;"></div>
+            `;
 
             return `
-                <li style="display: flex; flex-direction: column; padding: 10px 12px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); align-items: stretch; list-style: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 12px;">
-                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">${escapeHTML(devName)}</span>
-                        <span style="color: var(--accent-strong); font-size: 12px; font-weight: 800; white-space: nowrap;">${escapeHTML(stateText)}</span>
-                    </div>
+                <li style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                    <span style="color: var(--text-primary); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%;" title="${escapeHTML(devName)}">${escapeHTML(devName)}</span>
                     ${progressSectionHtml}
+                    <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                        ${showProgress ? `<span style="font-size: 9px; color: var(--text-secondary); font-weight: 500;">${escapeHTML(sizeProgressText)}</span>` : ''}
+                        <span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">
+                            ${client.state === 'completed' ? (t('deviceStateCompleted') || '完成') : `${percent}%`}
+                        </span>
+                    </div>
                 </li>
             `;
         }).join('');
