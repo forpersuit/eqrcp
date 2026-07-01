@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"eqt/pkg/qr"
@@ -803,18 +804,59 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 	update(&s.status)
 
 	// 动态计算基于活跃客户端的全局进度
-	activeClients := s.getActiveClients()
-	if len(activeClients) > 0 {
-		var totalBytesDone int64
-		var totalBytesTotal int64
-		for _, cid := range activeClients {
-			done, tot := s.getClientDownloadedAndTotal(cid)
-			totalBytesDone += done
-			totalBytesTotal += tot
+	if s.status.Mode == "send" {
+		s.clientMutex.Lock()
+		var cids []string
+		for cid := range s.clientProgress {
+			cids = append(cids, cid)
 		}
-		if totalBytesTotal > 0 {
-			s.status.BytesDone = totalBytesDone
+		s.clientMutex.Unlock()
+
+		var maxDone int64
+		for _, cid := range cids {
+			done, _ := s.getClientDownloadedAndTotal(cid)
+			if done > maxDone {
+				maxDone = done
+			}
+		}
+
+		if maxDone > s.status.BytesDone {
+			s.status.BytesDone = maxDone
+		}
+
+		if s.status.BytesTotal <= 0 && s.body.Paths != nil {
+			var totalBytesTotal int64
+			for i := 0; i < len(s.body.Paths); i++ {
+				var size int64
+				s.expectedBytesMu.Lock()
+				if s.expectedBytes != nil {
+					size = s.expectedBytes[i]
+				}
+				s.expectedBytesMu.Unlock()
+				if size <= 0 {
+					targetPath := s.body.Paths[i]
+					if info, err := os.Stat(targetPath); err == nil {
+						size = info.Size()
+					}
+				}
+				totalBytesTotal += size
+			}
 			s.status.BytesTotal = totalBytesTotal
+		}
+	} else {
+		activeClients := s.getActiveClients()
+		if len(activeClients) > 0 {
+			var totalBytesDone int64
+			var totalBytesTotal int64
+			for _, cid := range activeClients {
+				done, tot := s.getClientDownloadedAndTotal(cid)
+				totalBytesDone += done
+				totalBytesTotal += tot
+			}
+			if totalBytesTotal > 0 {
+				s.status.BytesDone = totalBytesDone
+				s.status.BytesTotal = totalBytesTotal
+			}
 		}
 	}
 
@@ -1836,20 +1878,13 @@ func New(cfg *config.Config) (*Server, error) {
 		rangeInfo := ParseRangeHeader(r)
 		isZipDownload := isMultiFile && itemIndexStr == ""
 
-		app.downloadedBytesMu.Lock()
-		if app.downloadedBytes == nil {
-			app.downloadedBytes = make(map[int]int64)
-		}
 		if isZipDownload {
 			for idx := 0; idx < len(app.body.Paths); idx++ {
-				app.downloadedBytes[idx] = rangeInfo.StartByte
 				app.setClientDownloadedBytes(clientID, idx, rangeInfo.StartByte)
 			}
 		} else {
-			app.downloadedBytes[currentIndex] = rangeInfo.StartByte
 			app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
 		}
-		app.downloadedBytesMu.Unlock()
 
 		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 			state.State = "transferring"
@@ -1875,31 +1910,27 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.expectedBytesMu.Unlock()
 
+		var writtenInThisRequest int64
 		progressWriter := &progressResponseWriter{
 			ResponseWriter: w,
 			onWrite: func(written int64) {
-				// Track cumulative bytes specifically for this item index
-				app.downloadedBytesMu.Lock()
-				if app.downloadedBytes == nil {
-					app.downloadedBytes = make(map[int]int64)
-				}
-				var currentDone int64
+				atomic.AddInt64(&writtenInThisRequest, written)
+
+				// Track cumulative bytes specifically for this clientID and item index
 				if isZipDownload {
 					for idx := 0; idx < len(app.body.Paths); idx++ {
-						app.downloadedBytes[idx] += written
 						app.addClientDownloadedBytes(clientID, idx, written)
 					}
-					currentDone = app.downloadedBytes[0]
 				} else {
-					app.downloadedBytes[currentIndex] += written
 					app.addClientDownloadedBytes(clientID, currentIndex, written)
-					currentDone = app.downloadedBytes[currentIndex]
 				}
-				app.downloadedBytesMu.Unlock()
+
+				// 计算当前 client 的总已下载字节
+				clientDone, _ := app.getClientDownloadedAndTotal(clientID)
 
 				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
 				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
-					state.BytesDone = currentDone
+					state.BytesDone = clientDone
 					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				})
 
@@ -1912,9 +1943,7 @@ func New(cfg *config.Config) (*Server, error) {
 			return
 		}
 
-		app.downloadedBytesMu.Lock()
-		itemWritten := app.downloadedBytes[currentIndex]
-		app.downloadedBytesMu.Unlock()
+		itemWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
 
 		if progressWriter.err != nil {
 			// Retain current progress to support resume, mark state as waiting
