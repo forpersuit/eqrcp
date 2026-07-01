@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -150,6 +151,12 @@ func (s *Server) Chat() error {
 		os.RemoveAll(dir)
 		return err
 	}
+	var qrBuf bytes.Buffer
+	if err := png.Encode(&qrBuf, qrImg); err != nil {
+		os.RemoveAll(dir)
+		return err
+	}
+	qrBytes := qrBuf.Bytes()
 	s.statusMu.Lock()
 	s.chatDir = dir
 	s.chatSession = session
@@ -171,9 +178,8 @@ func (s *Server) Chat() error {
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
-		if err := png.Encode(w, qrImg); err != nil {
-			log.Println(err)
-		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(qrBytes)))
+		_, _ = w.Write(qrBytes)
 	})
 	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
 		if handleChatCORS(w, r, http.MethodGet) {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -347,11 +348,16 @@ func (s *Server) ServeQR(url string) error {
 	if err != nil {
 		return err
 	}
+	var qrBuf bytes.Buffer
+	if err := png.Encode(&qrBuf, qrImg); err != nil {
+		return err
+	}
+	qrBytes := qrBuf.Bytes()
+
 	s.mux.HandleFunc(imagePath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		if err := png.Encode(w, qrImg); err != nil {
-			log.Println(err)
-		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(qrBytes)))
+		_, _ = w.Write(qrBytes)
 	})
 	if transferURL, err := urlpkg.Parse(url); err == nil && transferURL.Path != "" {
 		s.registerRoute(strings.TrimRight(transferURL.Path, "/")+"/status", s.statusHandler)
