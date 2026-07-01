@@ -1341,6 +1341,9 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 			status.State = cState.State
 			status.BytesDone = cState.BytesDone
 			status.BytesTotal = cState.BytesTotal
+			if status.BytesTotal <= 0 {
+				status.BytesTotal = s.status.BytesTotal
+			}
 			status.Percent = cState.Percent
 			status.Current = cState.Current
 			status.Message = cState.Message
@@ -1353,6 +1356,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				status.State = "waiting"
 				status.BytesDone = 0
+				status.BytesTotal = s.status.BytesTotal
 				status.Percent = 0
 				status.Message = "Waiting for transfer to start."
 			}
@@ -1803,16 +1807,25 @@ func New(cfg *config.Config) (*Server, error) {
 				if app.downloadedBytes == nil {
 					app.downloadedBytes = make(map[int]int64)
 				}
+				var currentDone int64
 				if isZipDownload {
 					for idx := 0; idx < len(app.body.Paths); idx++ {
 						app.downloadedBytes[idx] += written
 						app.addClientDownloadedBytes(clientID, idx, written)
 					}
+					currentDone = app.downloadedBytes[0]
 				} else {
 					app.downloadedBytes[currentIndex] += written
 					app.addClientDownloadedBytes(clientID, currentIndex, written)
+					currentDone = app.downloadedBytes[currentIndex]
 				}
 				app.downloadedBytesMu.Unlock()
+
+				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
+				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
+					state.BytesDone = currentDone
+					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+				})
 			},
 		}
 		http.ServeFile(progressWriter, r, servePath)

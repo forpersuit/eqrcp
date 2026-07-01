@@ -615,6 +615,16 @@ function renderDeviceProgressHtml(task) {
                 ${expandButton}
             </div>
         `;
+    } else {
+        // Return a dotted placeholder area when no clients are downloading
+        deviceProgressHtml = `
+            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
+                    ${state.settings?.lang === 'zh' ? '暂无设备连接，开始下载后在此显示进度' : 'No devices connected. Progress will show here once downloading starts.'}
+                </div>
+            </div>
+        `;
     }
     return deviceProgressHtml;
 }
