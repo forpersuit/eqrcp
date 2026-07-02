@@ -987,26 +987,7 @@
                 addFilesLabel.style.opacity = '0.5';
             }
 
-            var clientID = '';
-            var cookies = document.cookie.split(';');
-            for (var cIdx = 0; cIdx < cookies.length; cIdx++) {
-                var pair = cookies[cIdx].trim().split('=');
-                var key = pair[0].trim();
-                if (key === 'eqt_client_id') {
-                    clientID = pair[1];
-                    break;
-                }
-            }
-            if (!clientID) {
-                for (var cIdx = 0; cIdx < cookies.length; cIdx++) {
-                    var pair = cookies[cIdx].trim().split('=');
-                    var key = pair[0].trim();
-                    if (key === 'eqt') {
-                        clientID = pair[1];
-                        break;
-                    }
-                }
-            }
+            var clientID = '{{.ClientID}}';
 
             function handleError(status, text) {
                 var reason = '';

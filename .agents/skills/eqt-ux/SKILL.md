@@ -98,3 +98,29 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - Track upload progress via `XMLHttpRequest`'s `upload.onprogress`.
   - Estimate sequential multipart upload progress using virtual boundaries scaled by a calculated factor (`e.total / totalFilesSize`).
   - Disable input elements and replace file delete buttons with SVG circular progress rings during active uploads, transitioning to a green ✓ on success and a red ✕ on failure.
+
+
+## Receive Mode E2E UI Simulation via Chrome MCP (9222)
+### Definition of Simulation Testing:
+In EQT, a physical UI simulation involves running the compiled backend Go server on a local port (e.g. `18081`), and using the `chrome-devtools-mcp` tools connected to Chrome on port `9222` to spin up two virtual devices:
+1. **The Desktop Receiver Viewer** (connecting to status APIs or rendering views).
+2. **The Mobile Sender Client** (navigating to `/receive/<token>` to emulate file drops and composer text submission).
+By automating page navigation, element clicking, text typing, and file selection in Chrome via MCP, we verify real-time layout changes, progress bar updates, multi-line list render states, and redirect-done page lists.
+
+### How to request Chrome MCP UI Validation:
+The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试验证 UI 并截图" or adding `/chrome-test` to their request instructions.
+
+### E2E UI Testing Step-by-Step Template:
+1. **Start Local Service**: Spawn `go run . receive --port 18081 --keep-alive` asynchronously and parse the terminal output to extract the random URL Token (e.g., `LXwihruqXqxPpm3XpDXNu5Bh`).
+2. **Initialize Sender Page**: In Chrome (9222), create a new tab using `new_page` and navigate to the upload page: `http://127.0.0.1:18081/receive/<token>`.
+3. **Interact and Upload**:
+   - Use `type_text` on `#plaintext-text` to write diagnostic testing text.
+   - Use `click` on `#submit` to trigger TUS/Multipart upload submission.
+4. **Capture Completed Card**:
+   - Wait for redirection to `?done=true`.
+   - Take a screenshot of the completed card page showing the list of files.
+   - Save the screenshot to the artifacts directory as `receive_done_screenshot.png`.
+5. **Verify GUI Status Feed**:
+   - Query `/send/<token>/status` via fetch or navigate to `/` to check the receiver viewport.
+   - Verify that the device progress block contains the device name (e.g. `"Linux (unknown)"` or similar parsed UA) and the details lists are correct.
+6. **Clean Up**: Terminate the background Go process.

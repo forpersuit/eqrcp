@@ -2367,6 +2367,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		htmlVariables := struct {
 			Route         string
+			ClientID      string
 			File          string
 			Files         []string
 			Count         int
@@ -2377,6 +2378,7 @@ func New(cfg *config.Config) (*Server, error) {
 			ClockTampered bool
 		}{
 			Route:         "/receive/" + path,
+			ClientID:      clientID,
 			IsPaid:        usage.IsPaid,
 			LicenseTier:   usage.LicenseTier,
 			UsedTransfers: usage.UsedReceiveTransfers,
