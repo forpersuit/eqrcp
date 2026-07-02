@@ -1185,6 +1185,15 @@
         applyLanguage();
         resizeTextArea();
 
+        // Start heartbeat to keep device connected state alive on receiver
+        function sendPing() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', window.location.pathname + '?ping=true', true);
+            xhr.send();
+        }
+        sendPing();
+        setInterval(sendPing, 4000);
+
         // Plus limit logic for Free tier
         var countdownEl = document.getElementById('plus-countdown');
         if (!isPaid && !clockTampered) {

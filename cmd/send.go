@@ -36,7 +36,7 @@ func sendCmdFunc(command *cobra.Command, args []string) error {
 	}
 	if app.Flags.Browser {
 		if err := srv.DisplayQR(srv.SendURL); err != nil {
-			return err
+			log.Print(fmt.Sprintf("Warning: failed to open browser automatically: %v", err))
 		}
 	}
 	if err := keyboard.Open(); err == nil {

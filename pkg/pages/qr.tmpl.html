@@ -340,6 +340,90 @@
                 width: 100%;
             }
         }
+        .device-card {
+            background: var(--surface-soft);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 12px;
+            display: grid;
+            gap: 10px;
+        }
+        .device-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--accent);
+        }
+        .device-status {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #eef2f7;
+            color: var(--idle);
+        }
+        .device-status.completed {
+            background: #eaf7ee;
+            color: var(--ok);
+        }
+        .device-status.transferring {
+            background: #eff6ff;
+            color: var(--accent);
+        }
+        .device-files-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 6px;
+            padding-left: 0;
+            list-style: none;
+        }
+        .device-file-item {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+        .device-file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .device-file-name {
+            font-weight: 600;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 60%;
+        }
+        .device-file-progress-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .device-file-bar-bg {
+            background: #e2e8f0;
+            border-radius: 999px;
+            height: 6px;
+            flex: 1;
+            overflow: hidden;
+        }
+        .device-file-bar-fill {
+            background: var(--accent);
+            height: 100%;
+            transition: width 150ms ease;
+            width: 0;
+        }
+        .device-file-percent {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--muted);
+            min-width: 32px;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -374,6 +458,10 @@
                 </div>
                 <div class="list-title" id="transfer-items-title"></div>
                 <ul class="saved-files" id="transfer-items"></ul>
+                <div id="devices-section" class="hidden">
+                    <div class="list-title" style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px;">Connected Devices:</div>
+                    <div id="devices-container" style="display: grid; gap: 14px; margin-top: 10px;"></div>
+                </div>
                 <div class="list-title" id="saved-files-title"></div>
                 <ul class="saved-files" id="saved-files"></ul>
             </section>
@@ -496,6 +584,105 @@
             document.getElementById('transfer-progress').style.width = percent + '%';
             renderList('transfer-items', 'transfer-items-title', itemListTitle(data), data.items || []);
             renderSavedFiles(data.savedFiles || []);
+            
+            // Render device states and files progress
+            var devicesSection = document.getElementById('devices-section');
+            var devicesContainer = document.getElementById('devices-container');
+            if (devicesSection && devicesContainer) {
+                var clientStates = data.clientStates || {};
+                var clientKeys = Object.keys(clientStates);
+                if (clientKeys.length > 0) {
+                    devicesSection.classList.remove('hidden');
+                    devicesContainer.innerHTML = '';
+                    clientKeys.forEach(function(clientId) {
+                        var client = clientStates[clientId];
+                        var deviceCard = document.createElement('div');
+                        deviceCard.className = 'device-card';
+                        
+                        var deviceHeader = document.createElement('div');
+                        deviceHeader.className = 'device-header';
+                        
+                        var nameSpan = document.createElement('span');
+                        nameSpan.textContent = client.deviceName || clientId;
+                        
+                        var statusBadge = document.createElement('span');
+                        var normalizedState = normalizeState(client.state);
+                        statusBadge.className = 'device-status ' + normalizedState;
+                        statusBadge.textContent = normalizedState.charAt(0).toUpperCase() + normalizedState.slice(1);
+                        
+                        deviceHeader.appendChild(nameSpan);
+                        deviceHeader.appendChild(statusBadge);
+                        deviceCard.appendChild(deviceHeader);
+                        
+                        if (client.files && client.files.length > 0) {
+                            var filesList = document.createElement('ul');
+                            filesList.className = 'device-files-list';
+                            
+                            client.files.forEach(function(file) {
+                                var fileItem = document.createElement('li');
+                                fileItem.className = 'device-file-item';
+                                
+                                var fileInfo = document.createElement('div');
+                                fileInfo.className = 'device-file-info';
+                                
+                                var fileName = document.createElement('span');
+                                fileName.className = 'device-file-name';
+                                fileName.textContent = file.name;
+                                fileName.title = file.name;
+                                
+                                var progressTextStr = progressText(file.bytesDone || 0, file.bytesTotal || 0, file.percent || 0);
+                                var fileProgressText = document.createElement('span');
+                                fileProgressText.style.fontSize = '11px';
+                                fileProgressText.style.color = 'var(--muted)';
+                                fileProgressText.textContent = progressTextStr;
+                                
+                                fileInfo.appendChild(fileName);
+                                fileInfo.appendChild(fileProgressText);
+                                fileItem.appendChild(fileInfo);
+                                
+                                var progressContainer = document.createElement('div');
+                                progressContainer.className = 'device-file-progress-container';
+                                
+                                var barBg = document.createElement('div');
+                                barBg.className = 'device-file-bar-bg';
+                                var barFill = document.createElement('div');
+                                barFill.className = 'device-file-bar-fill';
+                                barFill.style.width = (file.percent || 0) + '%';
+                                if (file.state === 'completed') {
+                                    barFill.style.background = 'var(--ok)';
+                                } else if (file.state === 'failed') {
+                                    barFill.style.background = 'var(--danger)';
+                                }
+                                barBg.appendChild(barFill);
+                                
+                                var percentText = document.createElement('span');
+                                percentText.className = 'device-file-percent';
+                                percentText.textContent = (file.percent || 0) + '%';
+                                
+                                progressContainer.appendChild(barBg);
+                                progressContainer.appendChild(percentText);
+                                fileItem.appendChild(progressContainer);
+                                
+                                filesList.appendChild(fileItem);
+                            });
+                            deviceCard.appendChild(filesList);
+                        } else {
+                            var overallProgress = document.createElement('div');
+                            overallProgress.style.fontSize = '12px';
+                            overallProgress.style.color = 'var(--muted)';
+                            overallProgress.style.marginTop = '6px';
+                            
+                            var progressTextStr = progressText(client.bytesDone || 0, client.bytesTotal || 0, client.percent || 0);
+                            overallProgress.textContent = progressTextStr ? ('Progress: ' + progressTextStr) : 'Connected, waiting for upload...';
+                            deviceCard.appendChild(overallProgress);
+                        }
+                        
+                        devicesContainer.appendChild(deviceCard);
+                    });
+                } else {
+                    devicesSection.classList.add('hidden');
+                }
+            }
             if (!renderingAgentRecord) {
                 probeAgentStatus(false);
             }
@@ -604,6 +791,7 @@
                     bytesTotal: record.bytesTotal || 0,
                     percent: record.transferPercent || 0,
                     savedFiles: record.savedFiles || [],
+                    clientStates: record.clientStates || {},
                     version: ''
                 });
             } finally {
