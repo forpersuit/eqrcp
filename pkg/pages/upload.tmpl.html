@@ -126,17 +126,6 @@
             border-radius: 6px;
             font: inherit;
         }
-        .form-control-file {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            border: 0;
-            opacity: 0;
-        }
         .form-control {
             background: #fff;
             border: 1px solid #cbd5e1;
@@ -251,6 +240,14 @@
             main {
                 padding: 16px 12px 28px;
             }
+            .composer-meta {
+                align-items: stretch;
+                flex-direction: column;
+            }
+            .composer-actions,
+            .btn {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -270,25 +267,24 @@
             </div>
         </header>
         <form id="upload-form" class="upload-composer">
-            <div class="composer-meta" style="margin-bottom: 16px;">
-                <div class="composer-actions" style="display: flex; gap: 12px; align-items: center; width: 100%; justify-content: center;">
-                    <button type="button" id="toggle-text-btn" class="btn btn-secondary" style="flex: 1; font-size: 14px; min-height: 44px; padding: 10px 16px; background: transparent; border: 1.5px solid var(--line); color: var(--text); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); transition: all 0.2s ease;">
-                        ✍️ <span data-i18n="toggle_text_show">Write Text</span>
-                    </button>
-                    <label for="files" class="btn btn-secondary" style="flex: 1; font-size: 14px; min-height: 44px; padding: 10px 16px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); margin-bottom: 0; text-align: center; line-height: 1.25; background: var(--accent); color: #fff;" data-i18n="add_files">Add files</label>
-                    <input class="form-control-file" type="file" id="files" name="files" multiple>
+            <div class="composer-meta">
+                <div>
+                    <strong class="label" data-i18n="composer">Composer</strong>
+                    <div class="hint" data-i18n="composer_hint">Text becomes a .txt file. Shift+Enter keeps a new line.</div>
+                </div>
+                <div class="composer-actions">
+                    <label for="files" class="btn btn-secondary" data-i18n="add_files">Add files</label>
+                    <input class="form-control-file" type="file" id="files" name="files" multiple hidden>
                 </div>
             </div>
             <div class="composer-grid">
-                <div id="text-editor-container" style="display: none; border-bottom: 1.2px solid var(--line); padding-bottom: 12px; margin-bottom: 4px;">
-                    <div style="margin-bottom: 12px;">
-                        <label for="plaintext-title" data-i18n="file_name_label">Text file name</label>
-                        <input class="form-control" id="plaintext-title" data-i18n-placeholder="file_name_placeholder" placeholder="Optional file name">
-                    </div>
-                    <div>
-                        <label for="plaintext-text" data-i18n="text_label">Text</label>
-                        <textarea class="form-control" id="plaintext-text" data-i18n-placeholder="text_placeholder" placeholder="Write text or paste files here"></textarea>
-                    </div>
+                <div>
+                    <label for="plaintext-title" data-i18n="file_name_label">Text file name</label>
+                    <input class="form-control" id="plaintext-title" data-i18n-placeholder="file_name_placeholder" placeholder="Optional file name">
+                </div>
+                <div>
+                    <label for="plaintext-text" data-i18n="text_label">Text</label>
+                    <textarea class="form-control" id="plaintext-text" data-i18n-placeholder="text_placeholder" placeholder="Write text or paste files here"></textarea>
                 </div>
                 <div id="selected-file-container"></div>
                 <div id="pasted-file-container"></div>
@@ -333,9 +329,7 @@
                 err_free_limit_size_short: '超出 50MB 大小限制',
                 err_free_limit_both_global: '免费额度已用完：超出单次 5 个文件且存在文件超出 50MB 限制。请升级至 Plus 解锁。',
                 err_free_limit_files_global: '免费额度已用完：超出单次 5 个文件传输限制。请升级至 Plus 解锁。',
-                err_free_limit_size_global: '免费额度已用完：存在文件超出 50MB 大小限制。请升级至 Plus 解锁。',
-                toggle_text_show: '输入文本',
-                toggle_text_hide: '隐藏文本'
+                err_free_limit_size_global: '免费额度已用完：存在文件超出 50MB 大小限制。请升级至 Plus 解锁。'
             },
             en: {
                 title: 'Send from this device',
@@ -362,9 +356,7 @@
                 err_free_limit_size_short: 'Exceeds 50MB size limit',
                 err_free_limit_both_global: 'Free tier exceeded: Exceeded 5 files limit and 50MB size limit. Upgrade to Plus to unlock.',
                 err_free_limit_files_global: 'Free tier exceeded: Exceeded 5 files limit per transfer. Upgrade to Plus to unlock.',
-                err_free_limit_size_global: 'Free tier exceeded: File size exceeds 50MB limit. Upgrade to Plus to unlock.',
-                toggle_text_show: 'Write Text',
-                toggle_text_hide: 'Hide Text'
+                err_free_limit_size_global: 'Free tier exceeded: File size exceeds 50MB limit. Upgrade to Plus to unlock.'
             },
             ja: {
                 title: 'このデバイスから送信',
@@ -391,9 +383,7 @@
                 err_free_limit_size_short: '50MB制限超過',
                 err_free_limit_both_global: '無料枠超過：5ファイル制限および50MBサイズ制限を超えています。Plusプランを購入して解除。',
                 err_free_limit_files_global: '無料枠超過：1回あたり最大5ファイル制限を超えています。Plusプランを購入して解除。',
-                err_free_limit_size_global: '無料枠超過：50MBサイズ制限を超えるファイルがあります。Plusプランを購入して解除。',
-                toggle_text_show: 'テキスト入力',
-                toggle_text_hide: 'テキスト非表示'
+                err_free_limit_size_global: '無料枠超過：50MBサイズ制限を超えるファイルがあります。Plusプランを購入して解除。'
             },
             ko: {
                 title: '이 기기에서 전송',
@@ -420,9 +410,7 @@
                 err_free_limit_size_short: '50MB 용량 제한 초과',
                 err_free_limit_both_global: '무료 용량 초과: 5개 파일 및 50MB 용량 제한을 초과했습니다. Plus를 구매하여 제한을 해제하십시오.',
                 err_free_limit_files_global: '무료 용량 초과: 전송당 최대 5개 파일 제한을 초과했습니다. Plus를 구매하여 제한을 해제하십시오.',
-                err_free_limit_size_global: '무료 용량 초과: 50MB 용량 제한을 초과하는 파일이 존재합니다. Plus를 구매하여 제한을 해제하십시오.',
-                toggle_text_show: '텍스트 입력',
-                toggle_text_hide: '텍스트 숨기기'
+                err_free_limit_size_global: '무료 용량 초과: 50MB 용량 제한을 초과하는 파일이 존재합니다. Plus를 구매하여 제한을 해제하십시오.'
             },
             es: {
                 title: 'Enviar desde este dispositivo',
@@ -449,9 +437,7 @@
                 err_free_limit_size_short: 'Supera límite de 50MB',
                 err_free_limit_both_global: 'Límite gratuito excedido: Supera 5 archivos y límite de 50MB. Compre Plus para desbloquear.',
                 err_free_limit_files_global: 'Límite gratuito excedido: Supera el límite de 5 archivos por transferencia. Compre Plus para desbloquear.',
-                err_free_limit_size_global: 'Límite gratuito excedido: Hay archivos que superan el límite de 50MB. Compre Plus para desbloquear.',
-                toggle_text_show: 'Escribir texto',
-                toggle_text_hide: 'Ocultar texto'
+                err_free_limit_size_global: 'Límite gratuito excedido: Hay archivos que superan el límite de 50MB. Compre Plus para desbloquear.'
             },
             de: {
                 title: 'Von diesem Gerät senden',
@@ -478,9 +464,7 @@
                 err_free_limit_size_short: 'Limit von 50MB überschritten',
                 err_free_limit_both_global: 'Kostenloses Limit überschritten: 5 Dateien und 50MB Limit überschritten. Kaufen Sie Plus zum Freischalten.',
                 err_free_limit_files_global: 'Kostenloses Limit überschritten: Limit von 5 Dateien pro Übertragung überschritten. Kaufen Sie Plus zum Freischalten.',
-                err_free_limit_size_global: 'Kostenloses Limit überschritten: Datei überschreitet das 50MB-Limit. Kaufen Sie Plus zum Freischalten.',
-                toggle_text_show: 'Text schreiben',
-                toggle_text_hide: 'Text ausblenden'
+                err_free_limit_size_global: 'Kostenloses Limit überschritten: Datei überschreitet das 50MB-Limit. Kaufen Sie Plus zum Freischalten.'
             },
             fr: {
                 title: 'Envoyer depuis cet appareil',
@@ -507,9 +491,7 @@
                 err_free_limit_size_short: 'Dépasse la limite de 50 Mo',
                 err_free_limit_both_global: 'Offre gratuite dépassée : Dépasse 5 fichiers et limite de 50 Mo. Achetez Plus pour débloquer.',
                 err_free_limit_files_global: 'Offre gratuite dépassée : Limite de 5 fichiers par transfert dépassée. Achetez Plus pour débloquer.',
-                err_free_limit_size_global: 'Offre gratuite dépassée : Fichier dépasse la limite de 50 Mo. Achetez Plus pour débloquer.',
-                toggle_text_show: 'Écrire texte',
-                toggle_text_hide: 'Masquer texte'
+                err_free_limit_size_global: 'Offre gratuite dépassée : Fichier dépasse la limite de 50 Mo. Achetez Plus pour débloquer.'
             }
         };
 
@@ -652,18 +634,6 @@
             if (!draft) { return; }
             titleInput.value = draft.title || '';
             textArea.value = draft.text || '';
-            if (titleInput.value.trim() || textArea.value.trim()) {
-                var textEditorContainer = document.getElementById('text-editor-container');
-                var toggleTextBtn = document.getElementById('toggle-text-btn');
-                if (textEditorContainer) {
-                    textEditorContainer.style.display = 'block';
-                }
-                if (toggleTextBtn) {
-                    toggleTextBtn.querySelector('span').textContent = t('toggle_text_hide');
-                    toggleTextBtn.style.borderColor = 'var(--accent)';
-                    toggleTextBtn.style.color = 'var(--accent)';
-                }
-            }
         }
 
         function resizeTextArea() {
@@ -694,11 +664,7 @@
             var isImg = file.type && file.type.indexOf('image/') === 0;
             var previewUrl = '';
             if (isImg) {
-                try {
-                    previewUrl = URL.createObjectURL(file);
-                } catch (e) {
-                    console.error("Failed to create object URL:", e);
-                }
+                previewUrl = URL.createObjectURL(file);
             }
             
             // 是否单文件大小超限 (免费模式 且 超过 50MB)
@@ -735,7 +701,6 @@
                     var item = accumulatedFiles[index];
                     var fileWrapper = document.createElement('div');
                     fileWrapper.className = 'pasted-file-wrapper';
-                    fileWrapper.setAttribute('data-index', index);
                     fileWrapper.style.display = 'flex';
                     fileWrapper.style.alignItems = 'center';
                     fileWrapper.style.justifyContent = 'space-between';
@@ -837,31 +802,29 @@
                     
                     fileWrapper.appendChild(leftArea);
                     
-                    // 只有是 isPlusMode 才显示删除按钮
-                    if (isPlusMode) {
-                        var deleteBtn = document.createElement('button');
-                        deleteBtn.type = 'button';
-                        deleteBtn.innerHTML = '&times;';
-                        deleteBtn.style.background = 'none';
-                        deleteBtn.style.border = 'none';
-                        deleteBtn.style.color = 'var(--danger)';
-                        deleteBtn.style.fontSize = '22px';
-                        deleteBtn.style.cursor = 'pointer';
-                        deleteBtn.style.padding = '0 8px';
-                        deleteBtn.style.display = 'inline-flex';
-                        deleteBtn.style.alignItems = 'center';
-                        deleteBtn.style.justifyContent = 'center';
-                        
-                        deleteBtn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            if (item.previewUrl) {
-                                URL.revokeObjectURL(item.previewUrl);
-                            }
-                            accumulatedFiles.splice(index, 1);
-                            renderFiles();
-                        });
-                        fileWrapper.appendChild(deleteBtn);
-                    }
+                    // 无论是否是 isPlusMode，都显示删除按钮，以便用户可以移除超限文件
+                    var deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.innerHTML = '&times;';
+                    deleteBtn.style.background = 'none';
+                    deleteBtn.style.border = 'none';
+                    deleteBtn.style.color = 'var(--danger)';
+                    deleteBtn.style.fontSize = '22px';
+                    deleteBtn.style.cursor = 'pointer';
+                    deleteBtn.style.padding = '0 8px';
+                    deleteBtn.style.display = 'inline-flex';
+                    deleteBtn.style.alignItems = 'center';
+                    deleteBtn.style.justifyContent = 'center';
+                    
+                    deleteBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (item.previewUrl) {
+                            URL.revokeObjectURL(item.previewUrl);
+                        }
+                        accumulatedFiles.splice(index, 1);
+                        renderFiles();
+                    });
+                    fileWrapper.appendChild(deleteBtn);
                     
                     selectedFileContainer.appendChild(fileWrapper);
                     
@@ -981,12 +944,9 @@
             submitButton.value = t('btn_transferring');
             submitButton.disabled = true;
             
-            var formData = new FormData(uploadForm);
-            formData.delete('files'); // remove raw files from input to avoid duplicates
-            
             var filesToUpload = [];
             var totalFilesSize = 0;
-
+            
             var textInput = document.getElementById('plaintext-text');
             if (titleInput.value || textInput.value) {
                 var currentDate = new Date().toJSON().slice(0, 19).replace(/[-T:]/g, '_');
@@ -1014,57 +974,13 @@
                 totalFilesSize += file.size;
             }
 
-            // Append metadata of files & sizes BEFORE the files themselves
-            var metadata = [];
-            for (var k = 0; k < filesToUpload.length; k++) {
-                metadata.push(encodeURIComponent(filesToUpload[k].name) + ":" + filesToUpload[k].size);
-            }
-            formData.append('fileMetadata', metadata.join(','));
-
-            // Append the actual file payloads
-            for (var k = 0; k < filesToUpload.length; k++) {
-                var item = filesToUpload[k];
-                if (item.type === 'text') {
-                    formData.append('textFile', item.blob, item.name);
-                } else {
-                    formData.append('files', item.file, item.name);
-                }
+            if (filesToUpload.length === 0) {
+                submitButton.disabled = false;
+                submitButton.value = t('btn_transfer');
+                return;
             }
 
-            // Hide delete buttons and show circular progress rings for files in selectedFileContainer
-            var fileWrappers = selectedFileContainer.querySelectorAll('.pasted-file-wrapper');
-            fileWrappers.forEach(function(wrapper) {
-                var deleteBtn = wrapper.querySelector('.delete-file-btn') || wrapper.querySelector('button');
-                if (deleteBtn) {
-                    deleteBtn.style.display = 'none';
-                }
-                
-                var index = parseInt(wrapper.getAttribute('data-index'), 10);
-                var ringContainer = document.createElement('div');
-                ringContainer.className = 'progress-ring-container';
-                ringContainer.style.display = 'inline-flex';
-                ringContainer.style.alignItems = 'center';
-                ringContainer.style.justifyContent = 'center';
-                ringContainer.style.position = 'relative';
-                ringContainer.style.width = '32px';
-                ringContainer.style.height = '32px';
-                ringContainer.style.flexShrink = '0';
-                ringContainer.innerHTML = `
-                    <svg width="32" height="32" viewBox="0 0 32 32">
-                        <circle cx="16" cy="16" r="13" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
-                        <circle class="ring-track" cx="16" cy="16" r="13" fill="none"
-                            stroke="#0f766e" stroke-width="2.5"
-                            stroke-dasharray="81.68"
-                            stroke-dashoffset="81.68"
-                            stroke-linecap="round"
-                            transform="rotate(-90 16 16)"
-                            style="transition: stroke-dashoffset 0.1s ease-in-out;"/>
-                    </svg>
-                    <span class="ring-label" style="position: absolute; font-size: 8px; font-weight: 800; color: var(--accent-strong);">0%</span>
-                `;
-                wrapper.appendChild(ringContainer);
-            });
-
+            // Disable inputs
             titleInput.disabled = true;
             textArea.disabled = true;
             fileInput.disabled = true;
@@ -1101,6 +1017,7 @@
             }
 
             var uploadIndex = 0;
+            var bytesUploadedMap = {};
             
             function startNextTusUpload() {
                 if (uploadIndex >= filesToUpload.length) {
@@ -1153,55 +1070,29 @@
                     },
                     onError: function(error) {
                         console.error("Tus upload error: ", error);
-                        if (item.type === 'file') {
-                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
-                            if (wrapper) {
-                                var ring = wrapper.querySelector('.progress-ring-container');
-                                if (ring) {
-                                    ring.innerHTML = `
-                                        <div style="width: 24px; height: 24px; border-radius: 50%; background: #fef3f2; border: 1.2px solid #fecaca; color: #b42318; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✕</div>
-                                    `;
-                                }
-                            }
-                        }
                         handleError(500, error.message);
                     },
                     onProgress: function(bytesSent, bytesTotal) {
-                        var percent = Math.round((bytesSent / bytesTotal) * 100);
-                        if (item.type === 'file') {
-                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
-                            if (wrapper) {
-                                var ring = wrapper.querySelector('.progress-ring-container');
-                                if (ring) {
-                                    var track = ring.querySelector('.ring-track');
-                                    var label = ring.querySelector('.ring-label');
-                                    var circumference = 81.68;
-                                    var offset = circumference * (1 - percent / 100);
-                                    if (track) track.style.strokeDashoffset = offset;
-                                    if (label) label.textContent = percent + '%';
-                                }
-                            }
+                        bytesUploadedMap[uploadIndex] = bytesSent;
+                        var totalUploaded = 0;
+                        for (var k = 0; k < filesToUpload.length; k++) {
+                            totalUploaded += (bytesUploadedMap[k] || 0);
                         }
+                        var globalPercent = Math.min(100, Math.round((totalUploaded / totalFilesSize) * 100));
+                        submitButton.value = t('btn_transferring') + ' (' + globalPercent + '%)';
                     },
                     onSuccess: function() {
-                        if (item.type === 'file') {
-                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
-                            if (wrapper) {
-                                var ring = wrapper.querySelector('.progress-ring-container');
-                                if (ring) {
-                                    ring.innerHTML = `
-                                        <div class="ring-done" style="width: 24px; height: 24px; border-radius: 50%; background: #d1fae5; border: 1.2px solid #a7f3d0; color: #065f46; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✓</div>
-                                    `;
-                                }
-                            }
-                        }
+                        bytesUploadedMap[uploadIndex] = item.size;
                         uploadIndex++;
                         startNextTusUpload();
                     }
                 });
 
                 upload.start();
-            });
+            }
+
+            startNextTusUpload();
+        });
 
         var langSelect = document.getElementById('page-lang-select');
         if (langSelect) {
@@ -1214,32 +1105,11 @@
             });
         }
 
-        var toggleTextBtn = document.getElementById('toggle-text-btn');
-        var textEditorContainer = document.getElementById('text-editor-container');
-        if (toggleTextBtn && textEditorContainer) {
-            toggleTextBtn.addEventListener('click', function() {
-                if (textEditorContainer.style.display === 'none' || textEditorContainer.style.display === '') {
-                    textEditorContainer.style.display = 'block';
-                    toggleTextBtn.querySelector('span').textContent = t('toggle_text_hide');
-                    toggleTextBtn.style.borderColor = 'var(--accent)';
-                    toggleTextBtn.style.color = 'var(--accent)';
-                } else {
-                    textEditorContainer.style.display = 'none';
-                    toggleTextBtn.querySelector('span').textContent = t('toggle_text_show');
-                    toggleTextBtn.style.borderColor = 'var(--line)';
-                    toggleTextBtn.style.color = 'var(--text)';
-                }
-            });
-        }
-
         titleInput.addEventListener('input', updateDraftState);
         textArea.addEventListener('input', updateDraftState);
         
         fileInput.addEventListener('change', function() {
             if (!fileInput.files || !fileInput.files.length) { return; }
-            if (!isPlusMode) {
-                clearAccumulatedFiles();
-            }
             for (var i = 0; i < fileInput.files.length; i++) {
                 addFileToAccumulated(fileInput.files[i]);
             }
