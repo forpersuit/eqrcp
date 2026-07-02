@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"image/png"
@@ -31,7 +32,9 @@ import (
 	"eqt/pkg/pages"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
-	"gopkg.in/cheggaaa/pb.v1"
+
+	"github.com/tus/tusd/v2/pkg/filestore"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
 const maxUploadBytes int64 = 10 << 30
@@ -102,6 +105,12 @@ type Server struct {
 	isFirstDailyTransfer  bool
 	lastHookTime          time.Time
 	lastHookTimeMu        sync.Mutex
+	tusHandler            *tusd.Handler
+	tusPath               string
+	tusUploadsDone        map[string]int64
+	tusUploadsTotal       map[string]int64
+	tusUploadClients      map[string]string
+	tusMu                 sync.Mutex
 }
 
 // SetAutoStop enables or disables automatic server shutdown when all devices finish downloading.
@@ -282,6 +291,213 @@ func (s *Server) ReceiveTo(dir string) error {
 		status.Target = output
 		status.Message = "Scan to upload files to this folder."
 	})
+
+	// Initialize Tus fields
+	s.tusMu.Lock()
+	s.tusUploadsDone = make(map[string]int64)
+	s.tusUploadsTotal = make(map[string]int64)
+	s.tusUploadClients = make(map[string]string)
+	s.tusMu.Unlock()
+
+	tusTmpDir := filepath.Join(output, ".tus-tmp")
+	_ = os.MkdirAll(tusTmpDir, 0755)
+
+	store := filestore.New(tusTmpDir)
+	composer := tusd.NewStoreComposer()
+	store.UseIn(composer)
+
+	handler, err := tusd.NewHandler(tusd.Config{
+		BasePath:               s.tusPath,
+		StoreComposer:          composer,
+		NotifyUploadProgress:   true,
+		NotifyCompleteUploads:  true,
+		UploadProgressInterval: 200 * time.Millisecond,
+	})
+	if err != nil {
+		return err
+	}
+	s.tusHandler = handler
+
+	// Go helper function for file copying on cross-device link failures
+	copyFile := func(src, dst string) error {
+		in, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.Create(dst)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+		_, err = io.Copy(out, in)
+		return err
+	}
+
+	// Listen to progress channel
+	go func() {
+		for event := range handler.UploadProgress {
+			clientID := event.Upload.MetaData["clientid"]
+			if clientID == "" {
+				clientID = "unknown"
+			}
+			origName := event.Upload.MetaData["filename"]
+			if origName == "" {
+				origName = "upload_" + event.Upload.ID
+			}
+
+			s.tusMu.Lock()
+			s.tusUploadClients[event.Upload.ID] = clientID
+			s.tusUploadsDone[event.Upload.ID] = event.Upload.Offset
+			s.tusUploadsTotal[event.Upload.ID] = event.Upload.Size
+
+			var clientDone int64
+			var clientTotal int64
+			for uid, cid := range s.tusUploadClients {
+				if cid == clientID {
+					clientDone += s.tusUploadsDone[uid]
+					clientTotal += s.tusUploadsTotal[uid]
+				}
+			}
+			s.tusMu.Unlock()
+
+			if tsStr, ok := event.Upload.MetaData["totalsize"]; ok {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err == nil && ts > 0 {
+					clientTotal = ts
+				}
+			}
+
+			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+				cs.State = "transferring"
+				cs.Current = origName
+				cs.BytesDone = clientDone
+				cs.BytesTotal = clientTotal
+				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+			})
+			s.updateStatus(func(status *transferStatus) {
+				status.BytesDone = clientDone
+				status.BytesTotal = clientTotal
+				status.Current = origName
+			})
+			s.triggerStatusHookThrottled()
+		}
+	}()
+
+	// Listen to complete channel
+	go func() {
+		for info := range handler.CompleteUploads {
+			origName := info.Upload.MetaData["filename"]
+			if origName == "" {
+				origName = "upload_" + info.Upload.ID
+			}
+			clientID := info.Upload.MetaData["clientid"]
+			if clientID == "" {
+				clientID = "unknown"
+			}
+
+			filenames, err := util.ReadFilenames(output)
+			if err != nil {
+				log.Printf("Tus complete: read filenames error: %v\n", err)
+				continue
+			}
+
+			out, fileName, err := createUniqueFile(output, filepath.Base(origName), filenames)
+			if err != nil {
+				log.Printf("Tus complete: createUniqueFile error: %v\n", err)
+				continue
+			}
+			_ = out.Close()
+
+			tmpPath := info.Upload.Storage["Path"]
+			if err := os.Rename(tmpPath, out.Name()); err != nil {
+				log.Printf("Tus complete: rename failed, fallback to copy: %v\n", err)
+				if err := copyFile(tmpPath, out.Name()); err != nil {
+					log.Printf("Tus complete: copy file error: %v\n", err)
+					continue
+				}
+				_ = os.Remove(tmpPath)
+			} else {
+				// Clean up info.Storage file after rename
+				_ = os.Remove(tmpPath)
+			}
+
+			s.tusMu.Lock()
+			s.tusUploadsDone[info.Upload.ID] = info.Upload.Size
+			s.tusUploadsTotal[info.Upload.ID] = info.Upload.Size
+
+			var clientDone int64
+			var clientTotal int64
+			for uid, cid := range s.tusUploadClients {
+				if cid == clientID {
+					clientDone += s.tusUploadsDone[uid]
+					clientTotal += s.tusUploadsTotal[uid]
+				}
+			}
+			s.tusMu.Unlock()
+
+			if tsStr, ok := info.Upload.MetaData["totalsize"]; ok {
+				if ts, err := strconv.ParseInt(tsStr, 10, 64); err == nil && ts > 0 {
+					clientTotal = ts
+				}
+			}
+
+			var savedCount int
+			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+				cs.SavedFiles = append(cs.SavedFiles, out.Name())
+				cs.State = "completed"
+				cs.BytesDone = clientDone
+				if clientTotal > 0 && cs.BytesDone > clientTotal {
+					cs.BytesDone = clientTotal
+				}
+				cs.BytesTotal = clientTotal
+				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+				cs.Message = fmt.Sprintf("Received %s", fileName)
+				savedCount = len(cs.SavedFiles)
+			})
+			s.updateStatus(func(status *transferStatus) {
+				status.SavedFiles = append(status.SavedFiles, out.Name())
+				status.BytesDone = clientDone
+				if clientTotal > 0 && status.BytesDone > clientTotal {
+					status.BytesDone = clientTotal
+				}
+				status.BytesTotal = clientTotal
+				status.Message = fmt.Sprintf("Received %s", fileName)
+			})
+			s.triggerStatusHookThrottled()
+
+			// Auto-stop check
+			totalFiles := 1
+			if tfStr, ok := info.Upload.MetaData["totalfiles"]; ok {
+				if tf, err := strconv.Atoi(tfStr); err == nil && tf > 0 {
+					totalFiles = tf
+				}
+			}
+
+			if savedCount >= totalFiles {
+				s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+					cs.State = "completed"
+					cs.BytesDone = cs.BytesTotal
+					cs.Percent = 100
+				})
+				s.statusMu.Lock()
+				autoStop := s.autoStop
+				s.statusMu.Unlock()
+				if autoStop || !s.KeepAlive {
+					s.setStatus("completed", "Transfer completed.")
+					s.updateStatus(func(status *transferStatus) {
+						if len(status.SavedFiles) == 1 {
+							status.Message = "Received 1 file."
+						} else {
+							status.Message = fmt.Sprintf("Received %d files.", len(status.SavedFiles))
+						}
+					})
+					s.recordStatus()
+					go s.signalStopAfterStatusGrace()
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
@@ -1697,6 +1913,8 @@ func New(cfg *config.Config) (*Server, error) {
 	waitgroup.Add(1)
 	var initCookie sync.Once
 	// Create handlers
+	app.tusPath = "/receive/" + path + "/tus/"
+	app.registerRoute(app.tusPath, app.handleTusUpload)
 	app.registerRoute("/send/"+path+"/status", app.statusHandler)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
@@ -2096,6 +2314,23 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		switch r.Method {
 		case "POST":
+			if r.URL.Query().Get("done") != "" {
+				var transferredFiles []string
+				app.clientStatesMu.Lock()
+				if cs, ok := app.clientStates[clientID]; ok && cs != nil {
+					transferredFiles = cs.SavedFiles
+				}
+				app.clientStatesMu.Unlock()
+
+				htmlVariables.File = strings.Join(transferredFiles, ", ")
+				htmlVariables.Files = transferredFiles
+				htmlVariables.Count = len(transferredFiles)
+				if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					log.Printf("Template error: %v\n", err)
+				}
+				return
+			}
 			startUsage := limiterInstance.GetStatus()
 			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
 			app.statusMu.Lock()
@@ -2125,59 +2360,34 @@ func New(cfg *config.Config) (*Server, error) {
 			app.triggerStatusHookThrottled()
 			filenames, err := util.ReadFilenames(app.outputDir)
 			if err != nil {
-				fmt.Fprintf(w, "Unable to read output directory: %v\n", err)
-				log.Printf("Unable to read output directory: %v\n", err)
-				app.setStatus("failed", "Unable to read output directory.")
-				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-					cs.State = "failed"
-					cs.Message = "Unable to read output directory."
-				})
-				app.triggerStatusHookThrottled()
-				app.recordStatus()
-				app.signalStop()
+				http.Error(w, "Unable to read output directory", http.StatusInternalServerError)
 				return
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 			reader, err := r.MultipartReader()
 			if err != nil {
-				fmt.Fprintf(w, "Upload error: %v\n", err)
-				log.Printf("Upload error: %v\n", err)
-				state := "failed"
-				message := "Upload failed."
-				if interruptedTransferError(err) || r.Context().Err() != nil {
-					state = "stopped"
-					message = "Upload interrupted before completion."
-				}
-				app.setStatus(state, message)
-				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-					cs.State = state
-					cs.Message = message
-				})
-				app.triggerStatusHookThrottled()
-				app.recordStatus()
-				app.signalStop()
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			transferredFiles := []string{}
-			var completedFilesBytes int64
 			fileSizes := make(map[string]int64)
-			progressBar := pb.New64(r.ContentLength)
-			progressBar.ShowCounters = false
 			for {
 				part, err := reader.NextPart()
 				if err == io.EOF {
 					break
 				}
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 				if part.FormName() == "fileMetadata" {
 					buf := new(strings.Builder)
 					if _, err := io.Copy(buf, part); err == nil {
 						pairs := strings.Split(buf.String(), ",")
-						var totalMetaSize int64
 						for _, pair := range pairs {
 							parts := strings.SplitN(pair, ":", 2)
 							if len(parts) == 2 {
 								if sz, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-									totalMetaSize += sz
 									if decodedName, err := urlpkg.QueryUnescape(parts[0]); err == nil {
 										fileSizes[decodedName] = sz
 									} else {
@@ -2186,129 +2396,38 @@ func New(cfg *config.Config) (*Server, error) {
 								}
 							}
 						}
-						if totalMetaSize > 0 {
-							app.updateStatus(func(status *transferStatus) {
-								status.BytesTotal = totalMetaSize
-							})
-							app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-								cs.BytesTotal = totalMetaSize
-							})
-						}
 					}
 					continue
 				}
-				// If part.FileName() is empty, skip this iteration.
 				if part.FileName() == "" {
 					continue
 				}
-				if quotaExceededAtStart {
-					if len(transferredFiles) >= 5 {
-						http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
-						app.setStatus("failed", "File count exceeds 5 files limit.")
-						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-							cs.State = "failed"
-							cs.Message = "File count exceeds 5 files limit."
-						})
-						app.triggerStatusHookThrottled()
-						app.recordStatus()
-						app.signalStop()
-						return
-					}
-				}
-				// Prepare the destination
-				out, fileName, err := createUniqueFile(app.outputDir, filepath.Base(part.FileName()), filenames)
-				if err != nil {
-					// Output to server
-					fmt.Fprintf(w, "Unable to create the file for writing: %s\n", err)
-					// Output to console
-					log.Printf("Unable to create the file for writing: %s\n", err)
-					// Send signal to server to shutdown
-					app.setStatus("failed", "Unable to create the file for writing.")
-					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-						cs.State = "failed"
-						cs.Message = "Unable to create the file for writing."
-					})
-					app.triggerStatusHookThrottled()
-					app.recordStatus()
-					app.signalStop()
+				if quotaExceededAtStart && len(transferredFiles) >= 5 {
+					http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
+					app.setStatus("failed", "File count exceeds 5 files limit.")
 					return
 				}
-				origName := filepath.Base(part.FileName())
-				fileSize := fileSizes[origName]
-
-				// Add name of new file
+				out, fileName, err := createUniqueFile(app.outputDir, filepath.Base(part.FileName()), filenames)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 				filenames = append(filenames, fileName)
-				// Write the content from POSTed file to the out
-				fmt.Println("Transferring file: ", out.Name())
-				app.updateStatus(func(status *transferStatus) {
-					status.Current = fileName
-					status.Message = "Receiving " + fileName + "."
-				})
-				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-					cs.State = "transferring"
-					cs.Current = fileName
-					cs.BytesDone = completedFilesBytes
-					if cs.BytesTotal <= 0 {
-						cs.BytesTotal = fileSize
-					}
-					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
-					cs.Message = "Receiving " + fileName + "."
-				})
-				app.triggerStatusHookThrottled()
-				progressBar.Prefix(out.Name())
-				progressBar.Start()
-				buf := make([]byte, 32*1024)
 				var currentFileWritten int64
+				buf := make([]byte, 32*1024)
 				for {
-					// Read a chunk
 					n, err := part.Read(buf)
-					if err != nil && err != io.EOF {
-						// Output to server
-						status := http.StatusInternalServerError
-						var maxBytesErr *http.MaxBytesError
-						if errors.As(err, &maxBytesErr) {
-							status = http.StatusRequestEntityTooLarge
-						}
-						http.Error(w, fmt.Sprintf("Unable to write file to disk: %v", err), status)
-						// Output to console
-						fmt.Printf("Unable to write file to disk: %v", err)
-						out.Close()
-						// Send signal to server to shutdown
-						state := "failed"
-						message := "Upload failed."
-						if interruptedTransferError(err) || r.Context().Err() != nil {
-							state = "stopped"
-							message = "Upload interrupted before completion."
-						}
-						app.setStatus(state, message)
-						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-							cs.State = state
-							cs.Message = message
-						})
-						app.triggerStatusHookThrottled()
-						app.recordStatus()
-						app.signalStop()
-						return
-					}
-					if n == 0 {
+					if err == io.EOF {
 						break
 					}
-					// Write a chunk
-					if _, err := out.Write(buf[:n]); err != nil {
-						// Output to server
-						fmt.Fprintf(w, "Unable to write file to disk: %v", err)
-						// Output to console
-						log.Printf("Unable to write file to disk: %v", err)
+					if err != nil {
 						out.Close()
-						// Send signal to server to shutdown
-						app.setStatus("failed", "Unable to write file to disk.")
-						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-							cs.State = "failed"
-							cs.Message = "Unable to write file to disk."
-						})
-						app.triggerStatusHookThrottled()
-						app.recordStatus()
-						app.signalStop()
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
+					if _, err := out.Write(buf[:n]); err != nil {
+						out.Close()
+						http.Error(w, err.Error(), http.StatusInternalServerError)
 						return
 					}
 					currentFileWritten += int64(n)
@@ -2316,70 +2435,26 @@ func New(cfg *config.Config) (*Server, error) {
 						out.Close()
 						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
 						app.setStatus("failed", "File size exceeds 50MB limit.")
-						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-							cs.State = "failed"
-							cs.Message = "File size exceeds 50MB limit."
-						})
-						app.triggerStatusHookThrottled()
-						app.recordStatus()
-						app.signalStop()
 						return
 					}
-					app.updateStatus(func(status *transferStatus) {
-						status.BytesDone += int64(n)
-						if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
-							status.BytesDone = status.BytesTotal
-						}
-					})
-					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-						cs.BytesDone = completedFilesBytes + currentFileWritten
-						if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
-							cs.BytesDone = cs.BytesTotal
-						}
-						cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
-					})
-					app.triggerStatusHookThrottled()
-					progressBar.Add(n)
 				}
-				if err := out.Close(); err != nil {
-					fmt.Fprintf(w, "Unable to close file: %v", err)
-					log.Printf("Unable to close file: %v", err)
-					app.setStatus("failed", "Unable to close file.")
-					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-						cs.State = "failed"
-						cs.Message = "Unable to close file."
-					})
-					app.triggerStatusHookThrottled()
-					app.recordStatus()
-					app.signalStop()
-					return
-				}
+				out.Close()
 				transferredFiles = append(transferredFiles, out.Name())
 				app.updateStatus(func(status *transferStatus) {
 					status.SavedFiles = append([]string(nil), transferredFiles...)
 				})
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.SavedFiles = append(cs.SavedFiles, out.Name())
-					cs.BytesDone = completedFilesBytes + fileSize
-					if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
-						cs.BytesDone = cs.BytesTotal
-					}
-					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+					cs.BytesDone = cs.BytesTotal
+					cs.Percent = 100
 				})
-				completedFilesBytes += fileSize
 				app.triggerStatusHookThrottled()
 			}
-			progressBar.FinishPrint("File transfer completed")
-			// Set the value of the variable to the actually transferred files
 			htmlVariables.File = strings.Join(transferredFiles, ", ")
 			htmlVariables.Files = transferredFiles
 			htmlVariables.Count = len(transferredFiles)
 			if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
-				log.Printf("Template error: %v\n", err)
-				app.setStatus("failed", "Unable to render completion page.")
-				app.recordStatus()
-				app.signalStop()
 				return
 			}
 			app.setStatus("completed", "Transfer completed.")
@@ -2470,6 +2545,64 @@ func registerBrandAssets(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(pages.Favicon)
 	})
+	mux.HandleFunc("/assets/tus.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.TusMinJS)
+	})
+}
+
+func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {
+	if s.tusHandler == nil {
+		http.Error(w, "tus not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	// Quota validation for Tus POST requests (Creation of upload resource)
+	if r.Method == http.MethodPost {
+		startUsage := limiterInstance.GetStatus()
+		quotaExceeded := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
+
+		if quotaExceeded {
+			// 1. Check file size via Upload-Length header
+			uploadLengthHeader := r.Header.Get("Upload-Length")
+			if uploadLengthHeader != "" {
+				if size, err := strconv.ParseInt(uploadLengthHeader, 10, 64); err == nil {
+					if size > 50*1024*1024 {
+						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
+						s.setStatus("failed", "File size exceeds 50MB limit.")
+						s.triggerStatusHookThrottled()
+						return
+					}
+				}
+			}
+
+			// 2. Check file count via Upload-Metadata header
+			metadataHeader := r.Header.Get("Upload-Metadata")
+			if metadataHeader != "" {
+				pairs := strings.Split(metadataHeader, ",")
+				for _, pair := range pairs {
+					parts := strings.Split(strings.TrimSpace(pair), " ")
+					if len(parts) == 2 {
+						if parts[0] == "totalfiles" {
+							if decodedBytes, err := base64.StdEncoding.DecodeString(parts[1]); err == nil {
+								if tf, err := strconv.Atoi(string(decodedBytes)); err == nil {
+									if tf > 5 {
+										http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
+										s.setStatus("failed", "File count exceeds 5 files limit.")
+										s.triggerStatusHookThrottled()
+										return
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	http.StripPrefix(s.tusPath, s.tusHandler).ServeHTTP(w, r)
 }
 
 // openBrowser navigates to a url using the default system browser

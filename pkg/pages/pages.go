@@ -42,3 +42,8 @@ var LogoHorizontal []byte
 //
 //go:embed assets/favicon.png
 var Favicon []byte
+
+// TusMinJS is the tus-js-client minified script.
+//
+//go:embed assets/tus.min.js
+var TusMinJS []byte

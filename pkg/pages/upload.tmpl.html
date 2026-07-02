@@ -306,6 +306,7 @@
             </select>
         </div>
     </main>
+    <script src="/assets/tus.min.js"></script>
     <script>
         var pageTranslations = {
             zh: {
@@ -1031,54 +1032,15 @@
                 addFilesLabel.style.opacity = '0.5';
             }
 
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '{{.Route}}');
-
-            xhr.upload.onprogress = function(e) {
-                if (!e.lengthComputable || e.total <= 0) return;
-                var loaded = e.loaded;
-                var total = e.total;
-                
-                // Calculate scale factor to account for multipart boundaries/headers
-                var scaleFactor = total / (totalFilesSize || 1);
-                if (scaleFactor < 1) scaleFactor = 1;
-                
-                var currentOffset = 0;
-                for (var j = 0; j < filesToUpload.length; j++) {
-                    var item = filesToUpload[j];
-                    var start = currentOffset;
-                    var end = currentOffset + item.size * scaleFactor;
-                    currentOffset = end;
-                    
-                    var percent = 0;
-                    if (loaded >= end) {
-                        percent = 100;
-                    } else if (loaded > start) {
-                        percent = Math.round((loaded - start) / (end - start) * 100);
-                    }
-                    
-                    if (item.type === 'file') {
-                        var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
-                        if (wrapper) {
-                            var ring = wrapper.querySelector('.progress-ring-container');
-                            if (ring) {
-                                var track = ring.querySelector('.ring-track');
-                                var label = ring.querySelector('.ring-label');
-                                var circumference = 81.68; // 2 * Math.PI * 13
-                                var offset = circumference * (1 - percent / 100);
-                                if (track) track.style.strokeDashoffset = offset;
-                                if (label) label.textContent = percent + '%';
-                                
-                                if (percent === 100 && !ring.querySelector('.ring-done')) {
-                                    ring.innerHTML = `
-                                        <div class="ring-done" style="width: 24px; height: 24px; border-radius: 50%; background: #d1fae5; border: 1.2px solid #a7f3d0; color: #065f46; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✓</div>
-                                    `;
-                                }
-                            }
-                        }
-                    }
+            var clientID = '';
+            var cookies = document.cookie.split(';');
+            for (var cIdx = 0; cIdx < cookies.length; cIdx++) {
+                var pair = cookies[cIdx].trim().split('=');
+                if (pair[0] === 'eqt') {
+                    clientID = pair[1];
+                    break;
                 }
-            };
+            }
 
             function handleError(status, text) {
                 var reason = '';
@@ -1096,67 +1058,108 @@
                 renderUploadFailedPage(reason);
             }
 
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    // Force complete all rings
-                    filesToUpload.forEach(function(item) {
+            var uploadIndex = 0;
+            
+            function startNextTusUpload() {
+                if (uploadIndex >= filesToUpload.length) {
+                    var doneXhr = new XMLHttpRequest();
+                    doneXhr.open('POST', '{{.Route}}?done=true');
+                    doneXhr.onload = function() {
+                        if (doneXhr.status >= 200 && doneXhr.status < 300) {
+                            clearDraft();
+                            clearAccumulatedFiles();
+                            
+                            var html = doneXhr.responseText;
+                            var parser = new DOMParser();
+                            var nextDoc = parser.parseFromString(html, 'text/html');
+                            document.title = nextDoc.title || document.title;
+                            document.head.innerHTML = nextDoc.head.innerHTML;
+                            document.body.innerHTML = nextDoc.body.innerHTML;
+                            var scripts = document.body.querySelectorAll('script');
+                            for (var sIdx = 0; sIdx < scripts.length; sIdx++) {
+                                var oldScript = scripts[sIdx];
+                                var newScript = document.createElement('script');
+                                for (var attrIdx = 0; attrIdx < oldScript.attributes.length; attrIdx++) {
+                                    var attr = oldScript.attributes[attrIdx];
+                                    newScript.setAttribute(attr.name, attr.value);
+                                }
+                                newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                                oldScript.parentNode.replaceChild(newScript, oldScript);
+                            }
+                        } else {
+                            handleError(doneXhr.status, doneXhr.responseText);
+                        }
+                    };
+                    doneXhr.onerror = function() {
+                        handleError(0, '');
+                    };
+                    doneXhr.send();
+                    return;
+                }
+
+                var item = filesToUpload[uploadIndex];
+                var uploadBlob = item.type === 'text' ? item.blob : item.file;
+                
+                var upload = new tus.Upload(uploadBlob, {
+                    endpoint: '{{.Route}}/tus/',
+                    retryDelays: [0, 1000, 3000, 5000, 10000],
+                    metadata: {
+                        filename: item.name,
+                        clientid: clientID,
+                        totalsize: totalFilesSize.toString(),
+                        totalfiles: filesToUpload.length.toString()
+                    },
+                    onError: function(error) {
+                        console.error("Tus upload error: ", error);
                         if (item.type === 'file') {
                             var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
                             if (wrapper) {
                                 var ring = wrapper.querySelector('.progress-ring-container');
-                                if (ring && !ring.querySelector('.ring-done')) {
+                                if (ring) {
+                                    ring.innerHTML = `
+                                        <div style="width: 24px; height: 24px; border-radius: 50%; background: #fef3f2; border: 1.2px solid #fecaca; color: #b42318; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✕</div>
+                                    `;
+                                }
+                            }
+                        }
+                        handleError(500, error.message);
+                    },
+                    onProgress: function(bytesSent, bytesTotal) {
+                        var percent = Math.round((bytesSent / bytesTotal) * 100);
+                        if (item.type === 'file') {
+                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
+                            if (wrapper) {
+                                var ring = wrapper.querySelector('.progress-ring-container');
+                                if (ring) {
+                                    var track = ring.querySelector('.ring-track');
+                                    var label = ring.querySelector('.ring-label');
+                                    var circumference = 81.68;
+                                    var offset = circumference * (1 - percent / 100);
+                                    if (track) track.style.strokeDashoffset = offset;
+                                    if (label) label.textContent = percent + '%';
+                                }
+                            }
+                        }
+                    },
+                    onSuccess: function() {
+                        if (item.type === 'file') {
+                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
+                            if (wrapper) {
+                                var ring = wrapper.querySelector('.progress-ring-container');
+                                if (ring) {
                                     ring.innerHTML = `
                                         <div class="ring-done" style="width: 24px; height: 24px; border-radius: 50%; background: #d1fae5; border: 1.2px solid #a7f3d0; color: #065f46; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✓</div>
                                     `;
                                 }
                             }
                         }
-                    });
-
-                    clearDraft();
-                    clearAccumulatedFiles();
-                    
-                    var html = xhr.responseText;
-                    var parser = new DOMParser();
-                    var nextDoc = parser.parseFromString(html, 'text/html');
-                    document.title = nextDoc.title || document.title;
-                    document.head.innerHTML = nextDoc.head.innerHTML;
-                    document.body.innerHTML = nextDoc.body.innerHTML;
-                    var scripts = document.body.querySelectorAll('script');
-                    for (var i = 0; i < scripts.length; i++) {
-                        var oldScript = scripts[i];
-                        var newScript = document.createElement('script');
-                        for (var j = 0; j < oldScript.attributes.length; j++) {
-                            var attr = oldScript.attributes[j];
-                            newScript.setAttribute(attr.name, attr.value);
-                        }
-                        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
-                    }
-                } else {
-                    handleError(xhr.status, xhr.responseText);
-                }
-            };
-
-            xhr.onerror = function() {
-                filesToUpload.forEach(function(item) {
-                    if (item.type === 'file') {
-                        var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
-                        if (wrapper) {
-                            var ring = wrapper.querySelector('.progress-ring-container');
-                            if (ring) {
-                                ring.innerHTML = `
-                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #fef3f2; border: 1.2px solid #fecaca; color: #b42318; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✕</div>
-                                `;
-                            }
-                        }
+                        uploadIndex++;
+                        startNextTusUpload();
                     }
                 });
-                handleError(0, '');
-            };
 
-            xhr.send(formData);
-        });
+                upload.start();
+            });
 
         var langSelect = document.getElementById('page-lang-select');
         if (langSelect) {
