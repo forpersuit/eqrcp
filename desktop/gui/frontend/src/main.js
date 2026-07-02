@@ -844,36 +844,6 @@ function renderReceiveTransfer(task) {
             
             <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
 
-            <div id="receive-saved-files-wrapper">
-                ${files.length > 0 ? `
-                    <div class="locked-list">
-                        <strong>${t('saved_files')}</strong>
-                        <ul class="path-list locked">${files.map((file) => {
-                            const name = shortName(file);
-                            const dir = getContainingFolder(file);
-                            const openFileTooltip = t('open_file_title', { file: name });
-                            return `
-                                <li>
-                                    <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
-                                        <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(name)}</strong>
-                                        <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(file)}</span>
-                                    </div>
-                                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
-                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
-                                            ${openFileIcon()}
-                                        </button>
-                                        ${dir ? `
-                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
-                                                ${openFolderIcon()}
-                                            </button>
-                                        ` : ''}
-                                    </div>
-                                </li>
-                            `;
-                        }).join('')}</ul>
-                    </div>
-                ` : ''}
-            </div>
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>
     `;
