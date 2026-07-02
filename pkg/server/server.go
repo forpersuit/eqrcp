@@ -422,6 +422,7 @@ func (s *Server) ReceiveTo(dir string) error {
 			}
 
 			s.tusMu.Lock()
+			s.tusUploadClients[info.Upload.ID] = clientID
 			s.tusUploadsDone[info.Upload.ID] = info.Upload.Size
 			s.tusUploadsTotal[info.Upload.ID] = info.Upload.Size
 
