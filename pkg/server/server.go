@@ -2153,12 +2153,32 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			transferredFiles := []string{}
+			fileSizes := make(map[string]int64)
 			progressBar := pb.New64(r.ContentLength)
 			progressBar.ShowCounters = false
 			for {
 				part, err := reader.NextPart()
 				if err == io.EOF {
 					break
+				}
+				if part.FormName() == "fileMetadata" {
+					buf := new(strings.Builder)
+					if _, err := io.Copy(buf, part); err == nil {
+						pairs := strings.Split(buf.String(), ",")
+						for _, pair := range pairs {
+							parts := strings.SplitN(pair, ":", 2)
+							if len(parts) == 2 {
+								if sz, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+									if decodedName, err := urlpkg.QueryUnescape(parts[0]); err == nil {
+										fileSizes[decodedName] = sz
+									} else {
+										fileSizes[parts[0]] = sz
+									}
+								}
+							}
+						}
+					}
+					continue
 				}
 				// If part.FileName() is empty, skip this iteration.
 				if part.FileName() == "" {
@@ -2196,6 +2216,9 @@ func New(cfg *config.Config) (*Server, error) {
 					app.signalStop()
 					return
 				}
+				origName := filepath.Base(part.FileName())
+				fileSize := fileSizes[origName]
+
 				// Add name of new file
 				filenames = append(filenames, fileName)
 				// Write the content from POSTed file to the out
@@ -2207,6 +2230,9 @@ func New(cfg *config.Config) (*Server, error) {
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.State = "transferring"
 					cs.Current = fileName
+					cs.BytesDone = 0
+					cs.BytesTotal = fileSize
+					cs.Percent = 0
 					cs.Message = "Receiving " + fileName + "."
 				})
 				app.triggerStatusHookThrottled()
@@ -2287,7 +2313,7 @@ func New(cfg *config.Config) (*Server, error) {
 						}
 					})
 					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-						cs.BytesDone += int64(n)
+						cs.BytesDone = currentFileWritten
 						if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
 							cs.BytesDone = cs.BytesTotal
 						}
@@ -2315,6 +2341,8 @@ func New(cfg *config.Config) (*Server, error) {
 				})
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.SavedFiles = append(cs.SavedFiles, out.Name())
+					cs.BytesDone = cs.BytesTotal
+					cs.Percent = 100
 				})
 				app.triggerStatusHookThrottled()
 			}

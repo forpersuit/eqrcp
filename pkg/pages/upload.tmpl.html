@@ -949,11 +949,11 @@
                 var currentDate = new Date().toJSON().slice(0, 19).replace(/[-T:]/g, '_');
                 var filename = titleInput.value || ('eqt-text-file-' + currentDate);
                 var blob = new Blob([textInput.value + '\n'], { type: 'text/plain' });
-                formData.append('textFile', blob, filename + '.txt');
                 filesToUpload.push({
                     type: 'text',
                     size: blob.size,
-                    name: filename + '.txt'
+                    name: filename + '.txt',
+                    blob: blob
                 });
                 totalFilesSize += blob.size;
             }
@@ -961,14 +961,31 @@
             for (var i = 0; i < accumulatedFiles.length; i++) {
                 var file = accumulatedFiles[i].file;
                 var fileName = accumulatedFiles[i].name;
-                formData.append('files', file, fileName);
                 filesToUpload.push({
                     type: 'file',
                     size: file.size,
                     name: fileName,
-                    index: i
+                    index: i,
+                    file: file
                 });
                 totalFilesSize += file.size;
+            }
+
+            // Append metadata of files & sizes BEFORE the files themselves
+            var metadata = [];
+            for (var k = 0; k < filesToUpload.length; k++) {
+                metadata.push(encodeURIComponent(filesToUpload[k].name) + ":" + filesToUpload[k].size);
+            }
+            formData.append('fileMetadata', metadata.join(','));
+
+            // Append the actual file payloads
+            for (var k = 0; k < filesToUpload.length; k++) {
+                var item = filesToUpload[k];
+                if (item.type === 'text') {
+                    formData.append('textFile', item.blob, item.name);
+                } else {
+                    formData.append('files', item.file, item.name);
+                }
             }
 
             // Hide delete buttons and show circular progress rings for files in selectedFileContainer
