@@ -699,6 +699,10 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.TransferClientStates = make(map[string]*server.ClientTransferStateInfo)
 	for k, v := range status.ClientStates {
 		if v != nil {
+			var savedFiles []string
+			if v.SavedFiles != nil {
+				savedFiles = append([]string(nil), v.SavedFiles...)
+			}
 			agent.current.TransferClientStates[k] = &server.ClientTransferStateInfo{
 				ClientID:   v.ClientID,
 				State:      v.State,
@@ -708,6 +712,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 				Current:    v.Current,
 				Message:    v.Message,
 				DeviceName: v.DeviceName,
+				SavedFiles: savedFiles,
 			}
 		}
 	}

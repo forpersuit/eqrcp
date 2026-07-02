@@ -2377,7 +2377,10 @@ func New(cfg *config.Config) (*Server, error) {
 			})
 			app.triggerStatusHookThrottled()
 			app.recordStatus()
-			if !cfg.KeepAlive {
+			app.statusMu.Lock()
+			autoStop := app.autoStop
+			app.statusMu.Unlock()
+			if autoStop || !cfg.KeepAlive {
 				go app.signalStopAfterStatusGrace()
 			}
 		case "GET":
