@@ -293,6 +293,26 @@
             outline: none;
             cursor: pointer;
         }
+        @keyframes pulse-success {
+            0% {
+                box-shadow: 0 0 0 0 rgba(21, 111, 90, 0.4);
+                background: var(--bg-hover);
+                border-color: var(--accent);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(21, 111, 90, 0.05);
+                background: rgba(21, 111, 90, 0.15);
+                border-color: var(--accent);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(21, 111, 90, 0);
+                background: var(--bg-hover);
+                border-color: var(--line);
+            }
+        }
+        .blink-completed {
+            animation: pulse-success 0.8s ease-in-out 3;
+        }
     </style>
 </head>
 <body>
@@ -311,7 +331,7 @@
             <p id="summary-text" class="summary" data-i18n="wait_tips">Please click the button below to start downloading.</p>
 
             <!-- Download Progress Bar Section -->
-            <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+            <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line); transition: all 0.3s ease;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">
                     <span id="download-progress-status">Downloading...</span>
                     <span id="download-progress-percent">0%</span>
@@ -320,6 +340,11 @@
                     <div id="download-progress-fill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.2s ease;"></div>
                 </div>
                 <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
+                <!-- 成功时显示的已下载文件面板 -->
+                <div id="downloaded-files-panel" style="display: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; text-align: left;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;" data-i18n="downloaded_files_title">Downloaded Files:</div>
+                    <div id="downloaded-files-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                </div>
             </div>
 
 
@@ -386,6 +411,18 @@
     </main>
 
     <script>
+        var filesList = [
+            {{range $index, $element := .Files}}
+            { name: "{{$element}}", index: {{$index}} },
+            {{end}}
+        ];
+
+        function canOpenDirectly(filename) {
+            var ext = filename.split('.').pop().toLowerCase();
+            var openableExts = ['pdf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mp3', 'html', 'htm', 'xml', 'json', 'md'];
+            return openableExts.indexOf(ext) !== -1;
+        }
+
         var pageTranslations = {
             zh: {
                 title: '接收文件 - EQT',
@@ -547,8 +584,44 @@
                 limit_header: 'Limite d\'appareils dépassée',
                 limit_tips: 'Selon les règles de la version gratuite, les transferts quotidiens suivants autorisent jusqu\'à 2 appareils. Une fois d\'autres déconnectés, cette page restaurera l\'accès au téléchargement.',
                 btn_upgrade: 'Mettre à niveau'
-            }
         };
+
+        // 补充多语言翻译条目
+        if (pageTranslations.zh) {
+            pageTranslations.zh.downloaded_files_title = '已下载文件：';
+            pageTranslations.zh.can_open = '可以点击打开';
+            pageTranslations.zh.cannot_open = '此格式无法直接打开，请在文件管理器中查看';
+        }
+        if (pageTranslations.en) {
+            pageTranslations.en.downloaded_files_title = 'Downloaded Files:';
+            pageTranslations.en.can_open = 'Click to open/preview';
+            pageTranslations.en.cannot_open = 'Cannot open directly. Please find it in file manager';
+        }
+        if (pageTranslations.ja) {
+            pageTranslations.ja.downloaded_files_title = 'ダウンロードしたファイル：';
+            pageTranslations.ja.can_open = 'クリックして開く/プレビュー';
+            pageTranslations.ja.cannot_open = '直接開くことはできません。ファイル管理アプリ等で確認してください';
+        }
+        if (pageTranslations.ko) {
+            pageTranslations.ko.downloaded_files_title = '다운로드된 파일:';
+            pageTranslations.ko.can_open = '클릭하여 열기/미리보기';
+            pageTranslations.ko.cannot_open = '직접 열 수 없습니다. 파일 관리자에서 확인하세요';
+        }
+        if (pageTranslations.es) {
+            pageTranslations.es.downloaded_files_title = 'Archivos descargados:';
+            pageTranslations.es.can_open = 'Haga clic para abrir';
+            pageTranslations.es.cannot_open = 'No se puede abrir directamente. Búsquelo en el administrador de archivos';
+        }
+        if (pageTranslations.de) {
+            pageTranslations.de.downloaded_files_title = 'Heruntergeladene Dateien:';
+            pageTranslations.de.can_open = 'Klicken zum Öffnen';
+            pageTranslations.de.cannot_open = 'Kann nicht direkt geöffnet werden. Bitte im Dateimanager suchen';
+        }
+        if (pageTranslations.fr) {
+            pageTranslations.fr.downloaded_files_title = 'Fichiers téléchargés:';
+            pageTranslations.fr.can_open = 'Cliquer pour ouvrir';
+            pageTranslations.fr.cannot_open = 'Impossible d\'ouvrir directement. Veuillez le retrouver dans le gestionnaire de fichiers';
+        }
 
         function getOrGenerateClientId() {
             var id = window.localStorage.getItem('eqt_client_id');
@@ -924,12 +997,73 @@
         }
 
         function showCompletedUI() {
-            setTimeout(function() {
-                var progressContainer = document.getElementById('download-progress-container');
+            var progressContainer = document.getElementById('download-progress-container');
+            if (isCompleted) {
                 if (progressContainer) {
-                    progressContainer.style.display = 'none';
+                    progressContainer.style.display = 'block';
+                    
+                    // 闪烁：为了能重复触发，先移除类再添加
+                    progressContainer.classList.remove('blink-completed');
+                    // 强行触发重绘以让动画生效
+                    void progressContainer.offsetWidth;
+                    progressContainer.classList.add('blink-completed');
+                    
+                    // 强设 100% 进度
+                    var fillEl = document.getElementById('download-progress-fill');
+                    if (fillEl) fillEl.style.width = '100%';
+                    var percentEl = document.getElementById('download-progress-percent');
+                    if (percentEl) percentEl.innerText = '100%';
+                    var statusEl = document.getElementById('download-progress-status');
+                    if (statusEl) {
+                        var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                        statusEl.innerText = dict.success_header || 'Transfer Complete';
+                    }
+                    
+                    // 显示下载的文件列表及可点击状态
+                    var panel = document.getElementById('downloaded-files-panel');
+                    var listContainer = document.getElementById('downloaded-files-list');
+                    if (panel && listContainer) {
+                        listContainer.innerHTML = '';
+                        filesList.forEach(function(file) {
+                            var fileUrl = '';
+                            if (filesList.length === 1) {
+                                fileUrl = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
+                            } else {
+                                fileUrl = window.location.pathname + '?download=1&item=' + file.index + '&client_id=' + getOrGenerateClientId();
+                            }
+                            
+                            var canOpen = canOpenDirectly(file.name);
+                            var itemDiv = document.createElement('div');
+                            itemDiv.style.fontSize = '13px';
+                            itemDiv.style.display = 'flex';
+                            itemDiv.style.flexDirection = 'column';
+                            itemDiv.style.gap = '2px';
+                            itemDiv.style.background = '#fff';
+                            itemDiv.style.padding = '8px';
+                            itemDiv.style.borderRadius = '6px';
+                            itemDiv.style.border = '1px solid var(--line)';
+                            itemDiv.style.marginTop = '4px';
+                            
+                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                            var openTip = canOpen ? (dict.can_open || 'Click to open') : (dict.cannot_open || 'Cannot open directly');
+                            var tipColor = canOpen ? 'var(--accent)' : 'var(--text-secondary)';
+                            
+                            var linkHtml = '<a href="' + fileUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline; font-weight: 600; word-break: break-all;">' + file.name + '</a>';
+                            var tipHtml = '<span style="font-size: 11px; color: ' + tipColor + '; font-weight: 500;">' + (canOpen ? '✓ ' : 'ℹ ') + openTip + '</span>';
+                            
+                            itemDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 6px;"><span>📄</span>' + linkHtml + '</div>' + tipHtml;
+                            listContainer.appendChild(itemDiv);
+                        });
+                        panel.style.display = 'block';
+                    }
                 }
-            }, 2000);
+            } else {
+                setTimeout(function() {
+                    if (progressContainer) {
+                        progressContainer.style.display = 'none';
+                    }
+                }, 2000);
+            }
 
             document.getElementById('status-icon-pending').style.display = 'none';
             var successIcon = document.getElementById('status-icon-success');
