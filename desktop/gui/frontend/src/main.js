@@ -496,7 +496,7 @@ function renderShareTransfer(task) {
     const usedTransfers = state.status?.usedTransfers || 0;
     const remaining = Math.max(0, 5 - usedTransfers);
 
-    const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
+    const countdownHtml = (!isPaid) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
             ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
@@ -793,7 +793,7 @@ function renderReceiveTransfer(task) {
     const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
     const remaining = Math.max(0, 5 - usedReceiveTransfers);
 
-    const countdownHtml = (!isPaid && task.transferState !== 'waiting') ? `
+    const countdownHtml = (!isPaid) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
             ${remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`}
         </div>
@@ -835,6 +835,37 @@ function renderReceiveTransfer(task) {
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
             <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
+
+            <div id="receive-saved-files-wrapper">
+                ${files.length > 0 ? `
+                    <div class="locked-list">
+                        <strong>${t('saved_files')}</strong>
+                        <ul class="path-list locked">${files.map((file) => {
+                            const name = shortName(file);
+                            const dir = getContainingFolder(file);
+                            const openFileTooltip = t('open_file_title', { file: name });
+                            return `
+                                <li>
+                                    <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                                        <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(name)}</strong>
+                                        <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(file)}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
+                                            ${openFileIcon()}
+                                        </button>
+                                        ${dir ? `
+                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
+                                                ${openFolderIcon()}
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </li>
+                            `;
+                        }).join('')}</ul>
+                    </div>
+                ` : ''}
+            </div>
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
         </div>
     `;
@@ -980,7 +1011,7 @@ function updateReceiveTransferActiveUI(task) {
     const isPaid = state.status?.isPaid;
     const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
     const remaining = Math.max(0, 5 - usedReceiveTransfers);
-    const shouldShowCountdown = (!isPaid && task.transferState !== 'waiting');
+    const shouldShowCountdown = !isPaid;
     
     if (shouldShowCountdown) {
         const text = remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`;
@@ -1000,6 +1031,43 @@ function updateReceiveTransferActiveUI(task) {
         }
     } else if (quotaCountdown) {
         quotaCountdown.remove();
+    }
+
+    const filesWrapper = document.getElementById('receive-saved-files-wrapper');
+    if (filesWrapper) {
+        const files = task.savedFiles || [];
+        if (files.length > 0) {
+            filesWrapper.innerHTML = `
+                <div class="locked-list">
+                    <strong>${t('saved_files')}</strong>
+                    <ul class="path-list locked">${files.map((file) => {
+                        const name = shortName(file);
+                        const dir = getContainingFolder(file);
+                        const openFileTooltip = t('open_file_title', { file: name });
+                        return `
+                            <li>
+                                <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                                    <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(name)}</strong>
+                                    <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(file)}</span>
+                                </div>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                                    <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
+                                        ${openFileIcon()}
+                                    </button>
+                                    ${dir ? `
+                                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
+                                            ${openFolderIcon()}
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </li>
+                        `;
+                    }).join('')}</ul>
+                </div>
+            `;
+        } else {
+            filesWrapper.innerHTML = '';
+        }
     }
 }
 

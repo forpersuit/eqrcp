@@ -251,14 +251,6 @@
             main {
                 padding: 16px 12px 28px;
             }
-            .composer-meta {
-                align-items: stretch;
-                flex-direction: column;
-            }
-            .composer-actions,
-            .btn {
-                width: 100%;
-            }
         }
     </style>
 </head>
@@ -278,16 +270,12 @@
             </div>
         </header>
         <form id="upload-form" class="upload-composer">
-            <div class="composer-meta">
-                <div>
-                    <strong class="label" data-i18n="composer">Composer</strong>
-                    <div class="hint" data-i18n="composer_hint">Text becomes a .txt file. Shift+Enter keeps a new line.</div>
-                </div>
-                <div class="composer-actions" style="display: flex; gap: 8px; align-items: center;">
-                    <button type="button" id="toggle-text-btn" class="btn btn-secondary" style="font-size: 13px; min-height: 38px; padding: 8px 12px; background: transparent; border: 1.5px solid var(--line); color: var(--text);">
+            <div class="composer-meta" style="margin-bottom: 16px;">
+                <div class="composer-actions" style="display: flex; gap: 12px; align-items: center; width: 100%; justify-content: center;">
+                    <button type="button" id="toggle-text-btn" class="btn btn-secondary" style="flex: 1; font-size: 14px; min-height: 44px; padding: 10px 16px; background: transparent; border: 1.5px solid var(--line); color: var(--text); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); transition: all 0.2s ease;">
                         ✍️ <span data-i18n="toggle_text_show">Write Text</span>
                     </button>
-                    <label for="files" class="btn btn-secondary" style="font-size: 13px; min-height: 38px; padding: 8px 12px;" data-i18n="add_files">Add files</label>
+                    <label for="files" class="btn btn-secondary" style="flex: 1; font-size: 14px; min-height: 44px; padding: 10px 16px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); margin-bottom: 0; text-align: center; line-height: 1.25; background: var(--accent); color: #fff;" data-i18n="add_files">Add files</label>
                     <input class="form-control-file" type="file" id="files" name="files" multiple>
                 </div>
             </div>
@@ -536,7 +524,13 @@
         };
         var serverLang = '{{.Lang}}';
         var currentLang = 'zh';
-        var userLang = (navigator.language || navigator.userLanguage || 'zh').toLowerCase().split('-')[0];
+        var userLang = 'zh';
+        try {
+            var rawLang = navigator.language || navigator.userLanguage || 'zh';
+            userLang = (rawLang && typeof rawLang === 'string') ? rawLang.toLowerCase().split('-')[0] : 'zh';
+        } catch (e) {
+            console.error("Language detection error:", e);
+        }
         if (supportedLangs[serverLang]) {
             currentLang = serverLang;
         } else if (supportedLangs[userLang]) {
@@ -700,7 +694,11 @@
             var isImg = file.type && file.type.indexOf('image/') === 0;
             var previewUrl = '';
             if (isImg) {
-                previewUrl = URL.createObjectURL(file);
+                try {
+                    previewUrl = URL.createObjectURL(file);
+                } catch (e) {
+                    console.error("Failed to create object URL:", e);
+                }
             }
             
             // 是否单文件大小超限 (免费模式 且 超过 50MB)
@@ -839,29 +837,31 @@
                     
                     fileWrapper.appendChild(leftArea);
                     
-                    // 无论是否是 isPlusMode，都显示删除按钮，以便用户可以移除超限文件
-                    var deleteBtn = document.createElement('button');
-                    deleteBtn.type = 'button';
-                    deleteBtn.innerHTML = '&times;';
-                    deleteBtn.style.background = 'none';
-                    deleteBtn.style.border = 'none';
-                    deleteBtn.style.color = 'var(--danger)';
-                    deleteBtn.style.fontSize = '22px';
-                    deleteBtn.style.cursor = 'pointer';
-                    deleteBtn.style.padding = '0 8px';
-                    deleteBtn.style.display = 'inline-flex';
-                    deleteBtn.style.alignItems = 'center';
-                    deleteBtn.style.justifyContent = 'center';
-                    
-                    deleteBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        if (item.previewUrl) {
-                            URL.revokeObjectURL(item.previewUrl);
-                        }
-                        accumulatedFiles.splice(index, 1);
-                        renderFiles();
-                    });
-                    fileWrapper.appendChild(deleteBtn);
+                    // 只有是 isPlusMode 才显示删除按钮
+                    if (isPlusMode) {
+                        var deleteBtn = document.createElement('button');
+                        deleteBtn.type = 'button';
+                        deleteBtn.innerHTML = '&times;';
+                        deleteBtn.style.background = 'none';
+                        deleteBtn.style.border = 'none';
+                        deleteBtn.style.color = 'var(--danger)';
+                        deleteBtn.style.fontSize = '22px';
+                        deleteBtn.style.cursor = 'pointer';
+                        deleteBtn.style.padding = '0 8px';
+                        deleteBtn.style.display = 'inline-flex';
+                        deleteBtn.style.alignItems = 'center';
+                        deleteBtn.style.justifyContent = 'center';
+                        
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            if (item.previewUrl) {
+                                URL.revokeObjectURL(item.previewUrl);
+                            }
+                            accumulatedFiles.splice(index, 1);
+                            renderFiles();
+                        });
+                        fileWrapper.appendChild(deleteBtn);
+                    }
                     
                     selectedFileContainer.appendChild(fileWrapper);
                     
@@ -1237,6 +1237,9 @@
         
         fileInput.addEventListener('change', function() {
             if (!fileInput.files || !fileInput.files.length) { return; }
+            if (!isPlusMode) {
+                clearAccumulatedFiles();
+            }
             for (var i = 0; i < fileInput.files.length; i++) {
                 addFileToAccumulated(fileInput.files[i]);
             }
