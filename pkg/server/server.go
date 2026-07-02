@@ -1420,12 +1420,18 @@ func (s *Server) getActiveClients() []string {
 }
 
 func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
+	if s.body.Paths == nil {
+		s.clientStatesMu.Lock()
+		defer s.clientStatesMu.Unlock()
+		if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+			return cs.BytesDone, cs.BytesTotal
+		}
+		return 0, 0
+	}
+
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
-	if s.body.Paths == nil {
-		return 0, 0
-	}
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return 0, 0
@@ -2153,6 +2159,7 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			transferredFiles := []string{}
+			var completedFilesBytes int64
 			fileSizes := make(map[string]int64)
 			progressBar := pb.New64(r.ContentLength)
 			progressBar.ShowCounters = false
@@ -2165,10 +2172,12 @@ func New(cfg *config.Config) (*Server, error) {
 					buf := new(strings.Builder)
 					if _, err := io.Copy(buf, part); err == nil {
 						pairs := strings.Split(buf.String(), ",")
+						var totalMetaSize int64
 						for _, pair := range pairs {
 							parts := strings.SplitN(pair, ":", 2)
 							if len(parts) == 2 {
 								if sz, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+									totalMetaSize += sz
 									if decodedName, err := urlpkg.QueryUnescape(parts[0]); err == nil {
 										fileSizes[decodedName] = sz
 									} else {
@@ -2176,6 +2185,14 @@ func New(cfg *config.Config) (*Server, error) {
 									}
 								}
 							}
+						}
+						if totalMetaSize > 0 {
+							app.updateStatus(func(status *transferStatus) {
+								status.BytesTotal = totalMetaSize
+							})
+							app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+								cs.BytesTotal = totalMetaSize
+							})
 						}
 					}
 					continue
@@ -2230,9 +2247,11 @@ func New(cfg *config.Config) (*Server, error) {
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.State = "transferring"
 					cs.Current = fileName
-					cs.BytesDone = 0
-					cs.BytesTotal = fileSize
-					cs.Percent = 0
+					cs.BytesDone = completedFilesBytes
+					if cs.BytesTotal <= 0 {
+						cs.BytesTotal = fileSize
+					}
+					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 					cs.Message = "Receiving " + fileName + "."
 				})
 				app.triggerStatusHookThrottled()
@@ -2313,7 +2332,7 @@ func New(cfg *config.Config) (*Server, error) {
 						}
 					})
 					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-						cs.BytesDone = currentFileWritten
+						cs.BytesDone = completedFilesBytes + currentFileWritten
 						if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
 							cs.BytesDone = cs.BytesTotal
 						}
@@ -2341,9 +2360,13 @@ func New(cfg *config.Config) (*Server, error) {
 				})
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.SavedFiles = append(cs.SavedFiles, out.Name())
-					cs.BytesDone = cs.BytesTotal
-					cs.Percent = 100
+					cs.BytesDone = completedFilesBytes + fileSize
+					if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
+						cs.BytesDone = cs.BytesTotal
+					}
+					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 				})
+				completedFilesBytes += fileSize
 				app.triggerStatusHookThrottled()
 			}
 			progressBar.FinishPrint("File transfer completed")
