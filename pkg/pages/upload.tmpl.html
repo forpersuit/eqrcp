@@ -289,8 +289,9 @@
                 <div id="selected-file-container"></div>
                 <div id="pasted-file-container"></div>
                 <div class="error" id="upload-error" aria-live="polite"></div>
-                <div class="submit-row">
+                <div class="submit-row" style="display: flex; align-items: center; justify-content: center; gap: 12px;">
                     <input class="btn" type="submit" id="submit" name="submit" data-i18n-value="btn_transfer" value="Transfer">
+                    <button class="btn" type="button" id="stop-btn" style="display: none; background: #e53e3e; color: #fff; border: none;" data-i18n="btn_stop">Stop</button>
                 </div>
             </div>
         </form>
@@ -321,6 +322,8 @@
                 text_placeholder: '在这里直接输入文字，或在此处粘贴截图或文件',
                 btn_transfer: '开始传输',
                 btn_transferring: '正在传输...',
+                btn_stop: '停止',
+                err_manually_stopped: '传输已被手动停止。',
                 err_failed: '传输失败，请保持此页面打开并重试。',
                 fail_header: '传输失败',
                           err_free_limit_files: '免费额度已用完，单次最多只能传输 5 个文件。购买 Plus 即可解锁无限制传输。',
@@ -343,6 +346,8 @@
                 text_placeholder: 'Write text or paste files here',
                 btn_transfer: 'Transfer',
                 btn_transferring: 'Transferring...',
+                btn_stop: 'Stop',
+                err_manually_stopped: 'Transfer was manually stopped.',
                 err_failed: 'Transfer failed. Keep this page open and try again.',
                 fail_header: 'Transfer Failed',
                 btn_retry: 'Go Back & Retry',
@@ -370,6 +375,8 @@
                 text_placeholder: 'ここにテキストを直接入力するか、スクリーンショットやファイルを貼り付けます',
                 btn_transfer: '転送開始',
                 btn_transferring: '転送中...',
+                btn_stop: '停止',
+                err_manually_stopped: '転送は手動で停止されました。',
                 err_failed: '転送に失敗しました。このページを開いたままにして再試行してください。',
                 fail_header: '転送に失敗しました',
                 btn_retry: '戻って再試行',
@@ -397,6 +404,8 @@
                 text_placeholder: '여기에 텍스트를 직접 입력하거나 스크린샷 또는 파일을 붙여넣으십시오',
                 btn_transfer: '전송 시작',
                 btn_transferring: '전송 중...',
+                btn_stop: '중지',
+                err_manually_stopped: '전송이 수동으로 중지되었습니다.',
                 err_failed: '전송에 실패했습니다. 이 페이지를 열어두고 다시 시도하십시오.',
                 fail_header: '전송 실패',
                 btn_retry: '돌아가서 다시 시도',
@@ -424,6 +433,8 @@
                 text_placeholder: 'Escriba texto directamente aquí, o pegue capturas de pantalla o archivos',
                 btn_transfer: 'Iniciar transferencia',
                 btn_transferring: 'Transfiriendo...',
+                btn_stop: 'Detener',
+                err_manually_stopped: 'La transferencia fue detenida manualmente.',
                 err_failed: 'Error de transferencia. Mantenga esta página abierta e inténtelo de nuevo.',
                 fail_header: 'Error de transferencia',
                 btn_retry: 'Volver y reintentar',
@@ -451,6 +462,8 @@
                 text_placeholder: 'Geben Sie hier Text direkt ein, oder fügen Sie Screenshots oder Dateien ein',
                 btn_transfer: 'Übertragung starten',
                 btn_transferring: 'Übertrage...',
+                btn_stop: 'Stoppen',
+                err_manually_stopped: 'Die Übertragung wurde manuell gestoppt.',
                 err_failed: 'Übertragung fehlgeschlagen. Bitte lassen Sie diese Seite geöffnet und versuchen Sie es erneut.',
                 fail_header: 'Übertragung fehlgeschlagen',
                 btn_retry: 'Zurück & erneut versuchen',
@@ -478,6 +491,8 @@
                 text_placeholder: 'Saisissez du texte directement ici, o coller des captures d\'écran ou des fichiers',
                 btn_transfer: 'Démarrer le transfert',
                 btn_transferring: 'Transfert en cours...',
+                btn_stop: 'Arrêter',
+                err_manually_stopped: 'Le transfert a été arrêté manuellement.',
                 err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.',
                 fail_header: 'Échec du transfert',
                 btn_retry: 'Retourner & réessayer',
@@ -595,6 +610,9 @@
         var selectedFileContainer = document.getElementById('selected-file-container');
         var pastedFileContainer = document.getElementById('pasted-file-container');
         var errorBox = document.getElementById('upload-error');
+        
+        var currentTusUpload = null;
+        var isUploadStopped = false;
 
         function readDraft() {
             try {
@@ -940,6 +958,12 @@
             errorBox.textContent = '';
             submitButton.value = t('btn_transferring');
             submitButton.disabled = true;
+
+            isUploadStopped = false;
+            var stopButton = document.getElementById('stop-btn');
+            if (stopButton) {
+                stopButton.style.display = 'inline-block';
+            }
             
             var filesToUpload = [];
             var totalFilesSize = 0;
@@ -990,6 +1014,10 @@
             var clientID = '{{.ClientID}}';
 
             function handleError(status, text) {
+                var stopButton = document.getElementById('stop-btn');
+                if (stopButton) {
+                    stopButton.style.display = 'none';
+                }
                 var reason = '';
                 if (status === 413) {
                     reason = t('err_reason_too_large') + (text ? ' (' + text + ')' : '');
@@ -1009,7 +1037,12 @@
             var bytesUploadedMap = {};
             
             function startNextTusUpload() {
+                if (isUploadStopped) { return; }
                 if (uploadIndex >= filesToUpload.length) {
+                    var stopButton = document.getElementById('stop-btn');
+                    if (stopButton) {
+                        stopButton.style.display = 'none';
+                    }
                     var doneXhr = new XMLHttpRequest();
                     doneXhr.open('POST', '{{.Route}}?done=true');
                     doneXhr.onload = function() {
@@ -1089,11 +1122,32 @@
                     }
                 });
 
+                currentTusUpload = upload;
                 upload.start();
             }
 
             startNextTusUpload();
         });
+
+        var stopButton = document.getElementById('stop-btn');
+        if (stopButton) {
+            stopButton.addEventListener('click', function() {
+                isUploadStopped = true;
+                if (currentTusUpload) {
+                    try {
+                        currentTusUpload.abort();
+                    } catch (e) {
+                        console.error("Failed to abort tus: ", e);
+                    }
+                }
+                var stopXhr = new XMLHttpRequest();
+                stopXhr.open('POST', '{{.Route}}?stop=true');
+                stopXhr.send();
+
+                stopButton.style.display = 'none';
+                renderUploadFailedPage(t('err_manually_stopped'));
+            });
+        }
 
         var langSelect = document.getElementById('page-lang-select');
         if (langSelect) {

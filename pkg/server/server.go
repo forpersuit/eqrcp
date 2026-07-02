@@ -2412,6 +2412,16 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				return
 			}
+			if r.URL.Query().Get("stop") != "" {
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.State = "failed"
+					cs.Message = "Transfer manually stopped by user."
+				})
+				app.triggerStatusHookThrottled()
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("stopped"))
+				return
+			}
 			startUsage := limiterInstance.GetStatus()
 			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
 			app.statusMu.Lock()
