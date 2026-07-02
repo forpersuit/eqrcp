@@ -135,7 +135,8 @@ async function runSimulation() {
             'Tus-Resumable': '1.0.0',
             'Upload-Length': sizeA.toString(),
             'Upload-Metadata': metaA,
-            'Cookie': `eqt=${clientA}`
+            'Cookie': `eqt_client_id=${clientA}`,
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'
         }
     });
     const locA = resA.headers.location;
@@ -152,7 +153,8 @@ async function runSimulation() {
             'Tus-Resumable': '1.0.0',
             'Upload-Length': sizeB.toString(),
             'Upload-Metadata': metaB,
-            'Cookie': `eqt=${clientB}`
+            'Cookie': `eqt_client_id=${clientB}`,
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X)'
         }
     });
     const locB = resB.headers.location;
@@ -172,7 +174,8 @@ async function runSimulation() {
             'Tus-Resumable': '1.0.0',
             'Upload-Offset': '0',
             'Content-Type': 'application/offset+octet-stream',
-            'Cookie': `eqt=${clientA}`
+            'Cookie': `eqt_client_id=${clientA}`,
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'
         }
     }, dataA);
     console.log("[Device A] small_a.txt data upload finished.");
@@ -189,7 +192,8 @@ async function runSimulation() {
             'Tus-Resumable': '1.0.0',
             'Upload-Offset': '0',
             'Content-Type': 'application/offset+octet-stream',
-            'Cookie': `eqt=${clientB}`
+            'Cookie': `eqt_client_id=${clientB}`,
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X)'
         }
     }, blockB1);
     console.log("[Device B] Network dropped intentionally.");
@@ -206,7 +210,8 @@ async function runSimulation() {
         method: 'HEAD',
         headers: {
             'Tus-Resumable': '1.0.0',
-            'Cookie': `eqt=${clientB}`
+            'Cookie': `eqt_client_id=${clientB}`,
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X)'
         }
     });
     const offsetB = parseInt(headRes.headers['upload-offset'], 10);
@@ -224,7 +229,8 @@ async function runSimulation() {
             'Tus-Resumable': '1.0.0',
             'Upload-Offset': offsetB.toString(),
             'Content-Type': 'application/offset+octet-stream',
-            'Cookie': `eqt=${clientB}`
+            'Cookie': `eqt_client_id=${clientB}`,
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X)'
         }
     }, blockB2);
     console.log("[Device B] large_b.bin upload finished.");
@@ -236,14 +242,14 @@ async function runSimulation() {
         port: PORT,
         path: `/receive/${receivePathToken}?done=true`,
         method: 'POST',
-        headers: { 'Cookie': `eqt=${clientA}` }
+        headers: { 'Cookie': `eqt_client_id=${clientA}` }
     });
     await makeRequest({
         hostname: '127.0.0.1',
         port: PORT,
         path: `/receive/${receivePathToken}?done=true`,
         method: 'POST',
-        headers: { 'Cookie': `eqt=${clientB}` }
+        headers: { 'Cookie': `eqt_client_id=${clientB}` }
     });
 
     // Stop status poller
@@ -276,7 +282,12 @@ async function runSimulation() {
         let logStr = `Global State: ${snap.state} | Active Devices: ${stateKeys.length}`;
         for (const cid of stateKeys) {
             const dev = snap.clientStates[cid];
-            logStr += `\n   -> [${cid}] file="${dev.current || 'Done'}" progress=${dev.bytesDone}/${dev.bytesTotal} (${dev.percent}%) state=${dev.state}`;
+            logStr += `\n   -> [${cid}] (DeviceName: ${dev.deviceName}) file="${dev.current || 'Done'}" progress=${dev.bytesDone}/${dev.bytesTotal} (${dev.percent}%) state=${dev.state}`;
+            if (dev.files && dev.files.length > 0) {
+                dev.files.forEach(f => {
+                    logStr += `\n      * File: ${f.name} (ID: ${f.fileID}) state=${f.state} progress=${f.bytesDone}/${f.bytesTotal} (${f.percent}%) path=${f.path || ''}`;
+                });
+            }
         }
         if (logStr !== lastLogged) {
             console.log(`[Time: ${new Date().toISOString().slice(11,19)}] ${logStr}`);

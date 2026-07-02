@@ -41,16 +41,27 @@ const maxUploadBytes int64 = 10 << 30
 const defaultStatusGracePeriod = 15 * time.Second
 const maxTransferHistory = 20
 
+type ClientFileTransferState struct {
+	FileID     string `json:"fileID"`
+	Name       string `json:"name"`
+	Path       string `json:"path,omitempty"` // Local path after completion
+	State      string `json:"state"`          // waiting, transferring, completed, failed
+	BytesDone  int64  `json:"bytesDone"`
+	BytesTotal int64  `json:"bytesTotal"`
+	Percent    int    `json:"percent"`
+}
+
 type ClientTransferStateInfo struct {
-	ClientID   string   `json:"clientID,omitempty"`
-	State      string   `json:"state"`
-	BytesDone  int64    `json:"bytesDone"`
-	BytesTotal int64    `json:"bytesTotal"`
-	Percent    int      `json:"percent"`
-	Current    string   `json:"current,omitempty"`
-	Message    string   `json:"message"`
-	DeviceName string   `json:"deviceName,omitempty"`
-	SavedFiles []string `json:"savedFiles,omitempty"`
+	ClientID   string                    `json:"clientID,omitempty"`
+	State      string                    `json:"state"`
+	BytesDone  int64                     `json:"bytesDone"`
+	BytesTotal int64                     `json:"bytesTotal"`
+	Percent    int                       `json:"percent"`
+	Current    string                    `json:"current,omitempty"`
+	Message    string                    `json:"message"`
+	DeviceName string                    `json:"deviceName,omitempty"`
+	SavedFiles []string                  `json:"savedFiles,omitempty"`
+	Files      []ClientFileTransferState `json:"files,omitempty"`
 }
 
 // Server is the server
@@ -373,6 +384,29 @@ func (s *Server) ReceiveTo(dir string) error {
 				cs.BytesDone = clientDone
 				cs.BytesTotal = clientTotal
 				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+
+				// Find and update ClientFileTransferState
+				found := false
+				for idx, fileState := range cs.Files {
+					if fileState.FileID == event.Upload.ID {
+						cs.Files[idx].BytesDone = event.Upload.Offset
+						cs.Files[idx].BytesTotal = event.Upload.Size
+						cs.Files[idx].Percent = transferPercent(event.Upload.Offset, event.Upload.Size)
+						cs.Files[idx].State = "transferring"
+						found = true
+						break
+					}
+				}
+				if !found {
+					cs.Files = append(cs.Files, ClientFileTransferState{
+						FileID:     event.Upload.ID,
+						Name:       origName,
+						State:      "transferring",
+						BytesDone:  event.Upload.Offset,
+						BytesTotal: event.Upload.Size,
+						Percent:    transferPercent(event.Upload.Offset, event.Upload.Size),
+					})
+				}
 			})
 			s.updateStatus(func(status *transferStatus) {
 				status.BytesDone = clientDone
@@ -454,6 +488,32 @@ func (s *Server) ReceiveTo(dir string) error {
 				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 				cs.Message = fmt.Sprintf("Received %s", fileName)
 				savedCount = len(cs.SavedFiles)
+
+				// Find and update ClientFileTransferState to completed
+				found := false
+				for idx, fileState := range cs.Files {
+					if fileState.FileID == info.Upload.ID {
+						cs.Files[idx].BytesDone = info.Upload.Size
+						cs.Files[idx].BytesTotal = info.Upload.Size
+						cs.Files[idx].Percent = 100
+						cs.Files[idx].State = "completed"
+						cs.Files[idx].Path = out.Name()
+						cs.Files[idx].Name = filepath.Base(out.Name())
+						found = true
+						break
+					}
+				}
+				if !found {
+					cs.Files = append(cs.Files, ClientFileTransferState{
+						FileID:     info.Upload.ID,
+						Name:       filepath.Base(out.Name()),
+						Path:       out.Name(),
+						State:      "completed",
+						BytesDone:  info.Upload.Size,
+						BytesTotal: info.Upload.Size,
+						Percent:    100,
+					})
+				}
 			})
 			s.updateStatus(func(status *transferStatus) {
 				status.SavedFiles = append(status.SavedFiles, out.Name())
@@ -479,6 +539,11 @@ func (s *Server) ReceiveTo(dir string) error {
 					cs.State = "completed"
 					cs.BytesDone = cs.BytesTotal
 					cs.Percent = 100
+					for idx := range cs.Files {
+						cs.Files[idx].State = "completed"
+						cs.Files[idx].Percent = 100
+						cs.Files[idx].BytesDone = cs.Files[idx].BytesTotal
+					}
 				})
 				s.statusMu.Lock()
 				autoStop := s.autoStop
@@ -1372,6 +1437,7 @@ func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) 
 	if !existed {
 		s.updateStatus(func(status *transferStatus) {})
 	}
+	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {})
 	return clientID
 }
 
@@ -1435,6 +1501,10 @@ func parseDeviceName(ua string) string {
 func (s *Server) updateClientStatus(clientID string, r *http.Request, update func(*ClientTransferStateInfo)) {
 	s.clientStatesMu.Lock()
 	defer s.clientStatesMu.Unlock()
+
+	if s.clientStates == nil {
+		s.clientStates = make(map[string]*ClientTransferStateInfo)
+	}
 
 	state, ok := s.clientStates[clientID]
 	if !ok {
@@ -2365,6 +2435,7 @@ func New(cfg *config.Config) (*Server, error) {
 				cs.Percent = 0
 				cs.Current = ""
 				cs.SavedFiles = nil
+				cs.Files = nil
 			})
 			app.triggerStatusHookThrottled()
 			filenames, err := util.ReadFilenames(app.outputDir)
@@ -2456,6 +2527,31 @@ func New(cfg *config.Config) (*Server, error) {
 					cs.SavedFiles = append(cs.SavedFiles, out.Name())
 					cs.BytesDone = cs.BytesTotal
 					cs.Percent = 100
+
+					fileName := filepath.Base(out.Name())
+					found := false
+					for idx, fileState := range cs.Files {
+						if fileState.Name == fileName || fileState.FileID == fileName {
+							cs.Files[idx].State = "completed"
+							cs.Files[idx].BytesDone = currentFileWritten
+							cs.Files[idx].BytesTotal = currentFileWritten
+							cs.Files[idx].Percent = 100
+							cs.Files[idx].Path = out.Name()
+							found = true
+							break
+						}
+					}
+					if !found {
+						cs.Files = append(cs.Files, ClientFileTransferState{
+							FileID:     fileName,
+							Name:       fileName,
+							Path:       out.Name(),
+							State:      "completed",
+							BytesDone:  currentFileWritten,
+							BytesTotal: currentFileWritten,
+							Percent:    100,
+						})
+					}
 				})
 				app.triggerStatusHookThrottled()
 			}
@@ -2485,6 +2581,11 @@ func New(cfg *config.Config) (*Server, error) {
 				cs.BytesDone = cs.BytesTotal
 				cs.Current = ""
 				cs.Message = "Transfer completed."
+				for idx := range cs.Files {
+					cs.Files[idx].State = "completed"
+					cs.Files[idx].Percent = 100
+					cs.Files[idx].BytesDone = cs.Files[idx].BytesTotal
+				}
 			})
 			app.triggerStatusHookThrottled()
 			app.recordStatus()
@@ -2570,6 +2671,9 @@ func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tus not initialized", http.StatusInternalServerError)
 		return
 	}
+
+	clientID := s.getClientID(r, w)
+	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {})
 
 	// Quota validation for Tus POST requests (Creation of upload resource)
 	if r.Method == http.MethodPost {

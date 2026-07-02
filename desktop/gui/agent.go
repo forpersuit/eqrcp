@@ -126,6 +126,11 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 		cloned := make(map[string]*server.ClientTransferStateInfo)
 		for k, v := range record.TransferClientStates {
 			if v != nil {
+				var files []server.ClientFileTransferState
+				if v.Files != nil {
+					files = make([]server.ClientFileTransferState, len(v.Files))
+					copy(files, v.Files)
+				}
 				cloned[k] = &server.ClientTransferStateInfo{
 					ClientID:   v.ClientID,
 					State:      v.State,
@@ -135,6 +140,7 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 					Current:    v.Current,
 					Message:    v.Message,
 					DeviceName: v.DeviceName,
+					Files:      files,
 				}
 			}
 		}
@@ -703,6 +709,11 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 			if v.SavedFiles != nil {
 				savedFiles = append([]string(nil), v.SavedFiles...)
 			}
+			var files []server.ClientFileTransferState
+			if v.Files != nil {
+				files = make([]server.ClientFileTransferState, len(v.Files))
+				copy(files, v.Files)
+			}
 			agent.current.TransferClientStates[k] = &server.ClientTransferStateInfo{
 				ClientID:   v.ClientID,
 				State:      v.State,
@@ -713,6 +724,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 				Message:    v.Message,
 				DeviceName: v.DeviceName,
 				SavedFiles: savedFiles,
+				Files:      files,
 			}
 		}
 	}

@@ -898,42 +898,109 @@ function renderReceiveDeviceProgressHtml(task) {
             const stateText = getTranslatedState(client.state || 'waiting');
             const percent = client.percent || 0;
             const currentFile = client.current || '';
-            const savedFiles = client.savedFiles || [];
+            const formatSize = (bytes) => {
+                if (!bytes) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+            };
 
-            const savedFilesHtml = savedFiles.map(file => {
-                const name = shortName(file);
-                const openFileTooltip = t('open_file_title', { file: name });
-                const dir = getContainingFolder(file);
-                return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
-                        <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeAttr(file)}">✓ ${escapeHTML(name)}</span>
-                        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
-                            <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                ${openFileIcon()}
-                            </button>
-                            ${dir ? `
-                                <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                    ${openFolderIcon()}
+            let filesHtml = '';
+            const files = client.files || [];
+            if (files.length > 0) {
+                filesHtml = files.map(file => {
+                    const name = file.name || 'File';
+                    const percent = file.percent || 0;
+                    const stateText = file.state || 'waiting';
+                    const path = file.path || '';
+                    const bytesDone = formatSize(file.bytesDone);
+                    const bytesTotal = formatSize(file.bytesTotal);
+                    const sizeProgressText = file.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
+
+                    if (stateText === 'completed') {
+                        const openFileTooltip = t('open_file_title', { file: name });
+                        const dir = path ? getContainingFolder(path) : '';
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
+                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">✓ ${escapeHTML(name)}</span>
+                                <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
+                                    ${path ? `
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFileIcon()}
+                                        </button>
+                                        ${dir ? `
+                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                                ${openFolderIcon()}
+                                            </button>
+                                        ` : ''}
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    } else if (stateText === 'transferring') {
+                        return `
+                            <div style="margin-top: 4px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⟳ ${escapeHTML(name)} ${escapeHTML(sizeProgressText)}</span>
+                                    <span>${percent}%</span>
+                                </div>
+                                <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
+                                    <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
+                                </div>
+                            </div>
+                        `;
+                    } else if (stateText === 'failed') {
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(180,35,24,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid rgba(180,35,24,0.15);">
+                                <span style="font-size: 11px; color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">✕ ${escapeHTML(name)} (Failed)</span>
+                            </div>
+                        `;
+                    } else {
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
+                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⌛ ${escapeHTML(name)} (Waiting)</span>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            } else {
+                const oldSavedHtml = savedFiles.map(file => {
+                    const name = shortName(file);
+                    const openFileTooltip = t('open_file_title', { file: name });
+                    const dir = getContainingFolder(file);
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
+                            <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(file)}">✓ ${escapeHTML(name)}</span>
+                            <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
+                                <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                    ${openFileIcon()}
                                 </button>
-                            ` : ''}
+                                ${dir ? `
+                                    <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                        ${openFolderIcon()}
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
 
-            let currentFileHtml = '';
-            if (client.state === 'transferring' && currentFile) {
-                currentFileHtml = `
-                    <div style="margin-top: 6px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
-                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeAttr(currentFile)}">⟳ ${escapeHTML(shortName(currentFile))}</span>
-                            <span>${percent}%</span>
+                let oldCurrentHtml = '';
+                if (client.state === 'transferring' && currentFile) {
+                    oldCurrentHtml = `
+                        <div style="margin-top: 6px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(currentFile)}">⟳ ${escapeHTML(shortName(currentFile))}</span>
+                                <span>${percent}%</span>
+                            </div>
+                            <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
+                                <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
+                            </div>
                         </div>
-                        <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
-                            <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
-                        </div>
-                    </div>
-                `;
+                    `;
+                }
+                filesHtml = oldCurrentHtml + oldSavedHtml;
             }
 
             let stateBadgeHtml = '';
@@ -950,14 +1017,15 @@ function renderReceiveDeviceProgressHtml(task) {
             return `
                 <li style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">📱 ${escapeHTML(displayName)}</span>
-                        <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">📱 ${escapeHTML(displayName)}</span>
+                        <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
                             ${stateBadgeHtml}
                         </div>
                     </div>
-                    ${currentFileHtml}
-                    ${savedFilesHtml ? `<div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px;">${savedFilesHtml}</div>` : ''}
+                    <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                        ${filesHtml}
+                    </div>
                 </li>
             `;
         }).join('');
