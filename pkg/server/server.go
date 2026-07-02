@@ -1809,6 +1809,10 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if s.KeepAlive && r.URL.Query().Get("reset") == "true" {
+		SetUsedReceiveTransfers(0)
+		SetUsedTransfers(0)
+	}
 	clientID := s.registerClientActivity(r, w)
 	w.Header().Set("Content-Type", "application/json")
 
