@@ -84,6 +84,18 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 - **问题成因**：由 Release 标签（例如 `v*`）触发的 GitHub Actions checkout 流程是分离的 HEAD，Wrangler 会自动将分支名称识别为 tag 名（如 `v1.7.3`）。若不指定分支参数，Wrangler 会把其判定为 Preview Branch 部署，更新 `head.eqt-27c.pages.dev` 却**不会更新**生产主域名 `eqt-27c.pages.dev`，导致主域名的 `update-metadata.json` 保持为旧的 404/Redirect 状态，使得客户端无法发现新版本。
 - **解决方案**：在 `.github/workflows/release.yml` 的 Pages 部署命令中强制指定 `--branch=master` 参数（即 `npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --branch=master`），确保即使从 Tag 触发，Wrangler 依然会将此次部署映射为 Production，直接刷新生产环境的主域名并使最新的 `update-metadata.json` 物理生效。
 
+### 3.6 Go embed 强缓存更新失效机制与彻底刷新策略 (Go embed Cache Busting & Force Rebuild)
+
+- **问题成因**：Go 编译器（`go run` 或普通的 `go build`）具有非常强大的文件编译缓存机制。如果在 Go 源码文件（例如 `pages.go`）中使用 `//go:embed` 嵌入了本地静态资源（如 `assets/tus.min.js`），当静态资源文件内容在物理上发生改变，但 `pages.go` 源码本身未进行任何字符更改时，Go 编译器可能会直接命中编译缓存，使用以前缓存的数据，而**不会读取新的静态资源文件**进行重新打包。这会导致在本地已修复的资源（如修复了截断损坏的 JS 库）在编译出来的二进制和返回给浏览器的 HTTP 响应中依然是损坏的旧缓存。
+- **解决方案**：
+  1. **触发源码更新**：对包含 `//go:embed` 声明的 Go 源码文件（如 `pkg/pages/pages.go`）添加一行无实际语义影响的空行或注释，强迫编译器识别为源码变化。
+  2. **强制全量编译与清理**：在编译前先执行 `go clean -cache` 清除编译缓存，然后在 build 时添加 `-a` 参数强制全量重建所有包：
+     ```bash
+     go clean -cache
+     go build -a -o ./test_eqt ./cmd/eqt
+     ```
+  3. **清理浏览器强缓存**：被 embed 的静态资源如果带有较长的缓存期请求头（如 `Cache-Control: public, max-age=86400`），浏览器会走强缓存。在进行 CDP 仿真或者前端测试时，应使用带忽略缓存参数的重载指令（例如 `navigate_page` 传入 `ignoreCache: true` 或带上随机时间戳 `?t=123` 进行调试）。
+
 ---
 
 ## 4. 大文件传输与断点续传技术规格说明 (Large File Transfer & Resumable Transfer Limitations)
