@@ -2142,6 +2142,9 @@ func New(cfg *config.Config) (*Server, error) {
 		})
 
 
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		app.expectedBytesMu.Lock()
 		if app.expectedBytes == nil {
@@ -2550,6 +2553,11 @@ func registerBrandAssets(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(pages.TusMinJS)
+	})
+	mux.HandleFunc("/assets/jszip.min.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.JSZipMinJS)
 	})
 }
 

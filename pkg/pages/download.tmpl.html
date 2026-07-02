@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/favicon.png">
     <title>Receive File - EQT</title>
+    <script src="/assets/jszip.min.js"></script>
     <style>
         :root {
             color-scheme: light;
@@ -592,36 +593,43 @@
             pageTranslations.zh.downloaded_files_title = '已下载文件：';
             pageTranslations.zh.can_open = '可以点击打开';
             pageTranslations.zh.cannot_open = '此格式无法直接打开，请在文件管理器中查看';
+            pageTranslations.zh.btn_save_zip = '保存 ZIP 压缩包';
         }
         if (pageTranslations.en) {
             pageTranslations.en.downloaded_files_title = 'Downloaded Files:';
             pageTranslations.en.can_open = 'Click to open/preview';
             pageTranslations.en.cannot_open = 'Cannot open directly. Please find it in file manager';
+            pageTranslations.en.btn_save_zip = 'Save ZIP Archive';
         }
         if (pageTranslations.ja) {
             pageTranslations.ja.downloaded_files_title = 'ダウンロードしたファイル：';
             pageTranslations.ja.can_open = 'クリックして開く/プレビュー';
             pageTranslations.ja.cannot_open = '直接開くことはできません。ファイル管理アプリ等で確認してください';
+            pageTranslations.ja.btn_save_zip = 'ZIPアーカイブを保存';
         }
         if (pageTranslations.ko) {
             pageTranslations.ko.downloaded_files_title = '다운로드된 파일:';
             pageTranslations.ko.can_open = '클릭하여 열기/미리보기';
             pageTranslations.ko.cannot_open = '직접 열 수 없습니다. 파일 관리자에서 확인하세요';
+            pageTranslations.ko.btn_save_zip = 'ZIP 아카이브 저장';
         }
         if (pageTranslations.es) {
             pageTranslations.es.downloaded_files_title = 'Archivos descargados:';
             pageTranslations.es.can_open = 'Haga clic para abrir';
             pageTranslations.es.cannot_open = 'No se puede abrir directamente. Búsquelo en el administrador de archivos';
+            pageTranslations.es.btn_save_zip = 'Guardar archivo ZIP';
         }
         if (pageTranslations.de) {
             pageTranslations.de.downloaded_files_title = 'Heruntergeladene Dateien:';
             pageTranslations.de.can_open = 'Klicken zum Öffnen';
             pageTranslations.de.cannot_open = 'Kann nicht direkt geöffnet werden. Bitte im Dateimanager suchen';
+            pageTranslations.de.btn_save_zip = 'ZIP-Archiv speichern';
         }
         if (pageTranslations.fr) {
             pageTranslations.fr.downloaded_files_title = 'Fichiers téléchargés:';
             pageTranslations.fr.can_open = 'Cliquer pour ouvrir';
             pageTranslations.fr.cannot_open = 'Impossible d\'ouvrir directement. Veuillez le retrouver dans le gestionnaire de fichiers';
+            pageTranslations.fr.btn_save_zip = 'Enregistrer l\'archive ZIP';
         }
 
         function getOrGenerateClientId() {
@@ -811,45 +819,212 @@
 
         var downloadTriggered = false;
         var totalCount = {{.Count}};
+        var downloadedZipBlob = null;
+        var isDownloading = false;
+
+        function renderDownloadedList() {
+            var listContainer = document.getElementById('downloaded-files-list');
+            if (!listContainer) return;
+            listContainer.innerHTML = '';
+            
+            filesList.forEach(function(file) {
+                if (file.blobUrl) {
+                    var canOpen = canOpenDirectly(file.name);
+                    var itemDiv = document.createElement('div');
+                    itemDiv.style.fontSize = '13px';
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.flexDirection = 'column';
+                    itemDiv.style.gap = '2px';
+                    itemDiv.style.background = '#fff';
+                    itemDiv.style.padding = '8px';
+                    itemDiv.style.borderRadius = '6px';
+                    itemDiv.style.border = '1px solid var(--line)';
+                    itemDiv.style.marginTop = '4px';
+                    
+                    var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                    var openTip = canOpen ? (dict.can_open || 'Click to open') : (dict.cannot_open || 'Cannot open directly');
+                    var tipColor = canOpen ? 'var(--accent)' : 'var(--text-secondary)';
+                    
+                    var linkHtml = '<a href="' + file.blobUrl + '" download="' + file.name + '" target="_blank" style="color: var(--accent); text-decoration: underline; font-weight: 600; word-break: break-all;">' + file.name + '</a>';
+                    var tipHtml = '<span style="font-size: 11px; color: ' + tipColor + '; font-weight: 500;">' + (canOpen ? '✓ ' : 'ℹ ') + openTip + '</span>';
+                    
+                    itemDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 6px;"><span>📄</span>' + linkHtml + '</div>' + tipHtml;
+                    listContainer.appendChild(itemDiv);
+                }
+            });
+        }
 
         function triggerDownload() {
+            if (isDownloading) return;
             startStatusPolling();
-            if (downloadTriggered) {
-                window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
-                return;
-            }
+            
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+            
+            var btnActionZip = document.getElementById('btn-action-download-zip');
+            var btnAction = document.getElementById('btn-action-download');
+            if (btnActionZip) btnActionZip.disabled = true;
+            if (btnAction) btnAction.disabled = true;
+            
+            isDownloading = true;
             downloadTriggered = true;
             
-            document.getElementById('status-icon-pending').style.display = 'none';
-            document.getElementById('status-icon-success').style.display = 'inline-flex';
-            document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
-            document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
-            applyLanguage();
+            var fileUrl = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
             
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
-            document.body.appendChild(iframe);
-            setTimeout(function() {
-                document.body.removeChild(iframe);
-            }, 3000);
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', fileUrl, true);
+            xhr.responseType = 'blob';
+            
+            xhr.onprogress = function(e) {
+                if (e.lengthComputable && e.total > 0) {
+                    var percent = Math.round((e.loaded / e.total) * 100);
+                    var fill = document.getElementById('download-progress-fill');
+                    if (fill) fill.style.width = percent + '%';
+                    var percentEl = document.getElementById('download-progress-percent');
+                    if (percentEl) percentEl.innerText = percent + '%';
+                    var bytesEl = document.getElementById('download-progress-bytes');
+                    if (bytesEl) {
+                        bytesEl.innerText = formatBytes(e.loaded) + ' / ' + formatBytes(e.total);
+                    }
+                }
+            };
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    isDownloading = false;
+                    if (btnActionZip) btnActionZip.disabled = false;
+                    if (btnAction) btnAction.disabled = false;
+                    
+                    if (xhr.status === 200) {
+                        var blob = xhr.response;
+                        
+                        if (totalCount > 1) {
+                            downloadedZipBlob = blob;
+                            var reader = new FileReader();
+                            reader.onload = function(event) {
+                                var arrayBuffer = event.target.result;
+                                JSZip.loadAsync(arrayBuffer).then(function(zip) {
+                                    var promises = [];
+                                    var filesData = [];
+                                    
+                                    zip.forEach(function(relativePath, zipEntry) {
+                                        if (!zipEntry.dir) {
+                                            var p = zipEntry.async('blob').then(function(fileBlob) {
+                                                var bUrl = URL.createObjectURL(fileBlob);
+                                                filesData.push({
+                                                    name: zipEntry.name,
+                                                    blobUrl: bUrl
+                                                });
+                                            });
+                                            promises.push(p);
+                                        }
+                                    });
+                                    
+                                    Promise.all(promises).then(function() {
+                                        filesList.forEach(function(f) {
+                                            var matched = filesData.filter(function(fd) {
+                                                var base = fd.name.split('/').pop();
+                                                return base === f.name || fd.name === f.name;
+                                            });
+                                            if (matched.length > 0) {
+                                                f.blobUrl = matched[0].blobUrl;
+                                            }
+                                        });
+                                        
+                                        isCompleted = true;
+                                        showCompletedUI();
+                                    }).catch(function(err) {
+                                        isCompleted = true;
+                                        showCompletedUI();
+                                    });
+                                }).catch(function(err) {
+                                    isCompleted = true;
+                                    showCompletedUI();
+                                });
+                            };
+                            reader.readAsArrayBuffer(blob);
+                        } else {
+                            var bUrl = URL.createObjectURL(blob);
+                            if (filesList.length > 0) {
+                                filesList[0].blobUrl = bUrl;
+                            }
+                            isCompleted = true;
+                            showCompletedUI();
+                        }
+                    }
+                }
+            };
+            xhr.send();
         }
   
         function triggerDownloadItem(index) {
+            if (isDownloading) return;
             startStatusPolling();
-            document.getElementById('status-icon-pending').style.display = 'none';
-            document.getElementById('status-icon-success').style.display = 'inline-flex';
-            document.getElementById('header-text').setAttribute('data-i18n', 'success_header');
-            document.getElementById('summary-text').setAttribute('data-i18n', 'success_tips');
-            applyLanguage();
             
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1&item=' + index + '&client_id=' + getOrGenerateClientId();
-            document.body.appendChild(iframe);
-            setTimeout(function() {
-                document.body.removeChild(iframe);
-            }, 3000);
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+            
+            isDownloading = true;
+            
+            var fileUrl = window.location.pathname + '?download=1&item=' + index + '&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', fileUrl, true);
+            xhr.responseType = 'blob';
+            
+            xhr.onprogress = function(e) {
+                if (e.lengthComputable && e.total > 0) {
+                    var percent = Math.round((e.loaded / e.total) * 100);
+                    var fill = document.getElementById('download-progress-fill');
+                    if (fill) fill.style.width = percent + '%';
+                    var percentEl = document.getElementById('download-progress-percent');
+                    if (percentEl) percentEl.innerText = percent + '%';
+                    var bytesEl = document.getElementById('download-progress-bytes');
+                    if (bytesEl) {
+                        bytesEl.innerText = formatBytes(e.loaded) + ' / ' + formatBytes(e.total);
+                    }
+                }
+            };
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    isDownloading = false;
+                    if (xhr.status === 200) {
+                        var blob = xhr.response;
+                        var bUrl = URL.createObjectURL(blob);
+                        
+                        if (filesList[index]) {
+                            filesList[index].blobUrl = bUrl;
+                        }
+                        
+                        var fileRows = document.querySelectorAll('.file-item-row');
+                        if (fileRows && fileRows[index]) {
+                            fileRows[index].classList.add('transferred');
+                        }
+                        
+                        var panel = document.getElementById('downloaded-files-panel');
+                        if (panel) {
+                            panel.style.display = 'block';
+                            renderDownloadedList();
+                        }
+                        
+                        if (totalCount === 1) {
+                            isCompleted = true;
+                            showCompletedUI();
+                        } else {
+                            var allDone = true;
+                            filesList.forEach(function(f) {
+                                if (!f.blobUrl) allDone = false;
+                            });
+                            if (allDone) {
+                                isCompleted = true;
+                                showCompletedUI();
+                            }
+                        }
+                    }
+                }
+            };
+            xhr.send();
         }
 
         function formatBytes(bytes) {
@@ -882,6 +1057,10 @@
 
             var consecutiveErrors = 0;
             intervalId = setInterval(function() {
+                if (isCompleted) {
+                    clearInterval(intervalId);
+                    return;
+                }
                 var xhr = new XMLHttpRequest();
                 xhr.open('GET', window.location.pathname + '/status?client_id=' + getOrGenerateClientId(), true);
                 xhr.onreadystatechange = function() {
@@ -998,6 +1177,9 @@
         }
 
         function showCompletedUI() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
             var progressContainer = document.getElementById('download-progress-container');
             if (isCompleted) {
                 if (progressContainer) {
@@ -1022,39 +1204,8 @@
                     
                     // 显示下载的文件列表及可点击状态
                     var panel = document.getElementById('downloaded-files-panel');
-                    var listContainer = document.getElementById('downloaded-files-list');
-                    if (panel && listContainer) {
-                        listContainer.innerHTML = '';
-                        filesList.forEach(function(file) {
-                            var fileUrl = '';
-                            if (filesList.length === 1) {
-                                fileUrl = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId();
-                            } else {
-                                fileUrl = window.location.pathname + '?download=1&item=' + file.index + '&client_id=' + getOrGenerateClientId();
-                            }
-                            
-                            var canOpen = canOpenDirectly(file.name);
-                            var itemDiv = document.createElement('div');
-                            itemDiv.style.fontSize = '13px';
-                            itemDiv.style.display = 'flex';
-                            itemDiv.style.flexDirection = 'column';
-                            itemDiv.style.gap = '2px';
-                            itemDiv.style.background = '#fff';
-                            itemDiv.style.padding = '8px';
-                            itemDiv.style.borderRadius = '6px';
-                            itemDiv.style.border = '1px solid var(--line)';
-                            itemDiv.style.marginTop = '4px';
-                            
-                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
-                            var openTip = canOpen ? (dict.can_open || 'Click to open') : (dict.cannot_open || 'Cannot open directly');
-                            var tipColor = canOpen ? 'var(--accent)' : 'var(--text-secondary)';
-                            
-                            var linkHtml = '<a href="' + fileUrl + '" target="_blank" style="color: var(--accent); text-decoration: underline; font-weight: 600; word-break: break-all;">' + file.name + '</a>';
-                            var tipHtml = '<span style="font-size: 11px; color: ' + tipColor + '; font-weight: 500;">' + (canOpen ? '✓ ' : 'ℹ ') + openTip + '</span>';
-                            
-                            itemDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 6px;"><span>📄</span>' + linkHtml + '</div>' + tipHtml;
-                            listContainer.appendChild(itemDiv);
-                        });
+                    if (panel) {
+                        renderDownloadedList();
                         panel.style.display = 'block';
                     }
                 }
@@ -1115,7 +1266,32 @@
             if (warningBox) warningBox.style.display = 'none';
 
             var btnRow = document.getElementById('action-btn-row');
-            if (btnRow) btnRow.style.display = 'none';
+            if (btnRow) {
+                var btnStop = document.getElementById('btn-action-stop');
+                if (btnStop) btnStop.style.display = 'none';
+                
+                if (totalCount > 1 && downloadedZipBlob) {
+                    var btnZip = document.getElementById('btn-action-download-zip');
+                    if (btnZip) {
+                        btnZip.style.display = 'inline-block';
+                        btnZip.disabled = false;
+                        btnZip.removeAttribute('onclick');
+                        btnZip.onclick = function() {
+                            var a = document.createElement('a');
+                            a.href = URL.createObjectURL(downloadedZipBlob);
+                            a.download = "{{.File}}" || "archive.zip";
+                            if (a.download.indexOf('.') === -1 || a.download.endsWith('.zip') === false) {
+                                a.download = a.download + ".zip";
+                            }
+                            a.click();
+                        };
+                        var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                        btnZip.textContent = dict.btn_save_zip || 'Save ZIP Archive';
+                    }
+                } else {
+                    btnRow.style.display = 'none';
+                }
+            }
 
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) {

@@ -49,3 +49,8 @@ var Favicon []byte
 //
 //go:embed assets/tus.min.js
 var TusMinJS []byte
+
+// JSZipMinJS is the JSZip minified script.
+//
+//go:embed assets/jszip.min.js
+var JSZipMinJS []byte
