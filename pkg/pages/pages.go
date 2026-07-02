@@ -2,6 +2,8 @@ package pages
 
 import _ "embed"
 
+// Trigger compilation recache for embed assets
+
 // QR page
 //
 //go:embed qr.tmpl.html
