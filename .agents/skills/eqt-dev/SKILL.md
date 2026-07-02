@@ -193,5 +193,60 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 
 ### 8.4 集成测试与验证方法
 - 在 `cloudflare/eqt-feedback-api` 下编写 `test-feedback.js`，启动本地 wrangler `npx wrangler dev --port 8787`。
-- 运行 `node test-feedback.js`，该脚本会向本地 Worker POST 虚拟反馈包（带 WebP 图片的 Base64 编码），验证返回的 `imageUrl` 并在本地 GET 该 URL 下载验证图片数据大小，确保存储和路由的完美跑通。
+- 运行 `node test-feedback.js`，该脚本会向本地 Worker POST 虚拟反馈包（带 WebP 图片 of Base64 编码），验证返回的 `imageUrl` 并在本地 GET 该 URL 下载验证图片数据大小，确保存储和路由的完美跑通。
+
+---
+
+## 9. 端到端 Chrome DevTools MCP 全链路仿真与交付效果测试指南 (End-to-End Simulation & Verification Guide for Share/Receive Modes)
+
+在开发与 EQT 局域网传输（Share/Receive）相关的网页交互、传输进度状态流、或大文件下载功能时，除了常规的单元测试，必须通过本节制定的端到端全链路仿真测试，确保交互流程、多语言展示、控制台无报错以及交付效果符合预期。
+
+### 9.1 测试环境前置准备
+1. **宿主机 Chrome 开启调试端口**：
+   在 Windows 宿主机上启动 Chrome 时，确保带上参数 `--remote-debugging-port=9222`（例如通过快捷方式或命令行 `chrome.exe --remote-debugging-port=9222`），并确保 Chrome MCP (`chrome-devtools-mcp`) 配置连接至该端口。
+2. **源码重新编译**：
+   网页模板（如 `download.tmpl.html`）使用 Go embed 强缓存嵌入。每次修改页面后，必须在根目录下重新编译最新的 Linux 版客户端程序：
+   ```bash
+   go build -o eqt ./cmd/eqt
+   ```
+
+### 9.2 仿真与验证步骤
+
+#### 步骤一：在后台拉起共享服务（发送端模拟）
+使用最新编译的可执行文件，在 WSL 后台启动一个共享任务。使用指定端口与测试路径，方便 Chrome 直接访问：
+```bash
+./eqt send --bind 127.0.0.1 --port 19000 --path test --keep-alive /mnt/e/developer/results/photo_2026-04-24_22-52-38.jpg
+```
+*注：可通过后台日志文件或标准输出读取本次传输服务最终生成的完整共享 URL（包含安全授权 `#key=...`）。*
+
+#### 步骤二：利用 Chrome MCP 控制浏览器接入（接收端模拟）
+1. 在 Agent 终端调用 Chrome MCP 的 `list_pages` 工具验证调试端点连通性。
+2. 调用 `new_page` 或 `navigate_page`（传入参数 `url: "<第一步中获取的完整共享URL>"` 并指定 `ignoreCache: true` 以清空页面强缓存），使 Chrome 渲染接收网页。
+
+#### 步骤三：抓取并核实初始 DOM 状态
+调用 `take_snapshot` 获取页面快照。核实：
+- 是否显示了正确的待接收文件名和大小。
+- 控制台是否干净（执行 `list_console_messages` 确保当前页面无任何 `SyntaxError` 或 `ReferenceError`）。
+
+#### 步骤四：执行下载并监控传输过程
+1. **触发下载**：可以通过 `click` 工具点击“开始下载”按钮（根据 `take_snapshot` 获取的 `uid`），或通过 `evaluate_script` 工具直接在控制台执行页面全局下载函数：
+   ```javascript
+   () => { triggerDownload(); }
+   ```
+2. **监控进度**：传输进行时，可在控制台使用 `evaluate_script` 动态向后端的 `/status` 端点拉取最新的 client 状态：
+   ```javascript
+   async () => {
+     var res = await fetch('/send/test/status?client_id=' + getOrGenerateClientId());
+     return await res.json();
+   }
+   ```
+   检查返回的 JSON 中 `bytesDone`, `percent`, `state` 及 `current` 字段在传输过程中的递增与变化，这正是桌面端 GUI 与移动端页面所感知和渲染的真实数据流。
+
+#### 步骤五：最终交付效果验证
+下载完成后，等待 2 秒（等候心跳轮询状态写回并触发成功回调），再次调用 `take_snapshot` 截取最终 DOM。校验以下交付指标：
+- 传输状态和进度区域（`#download-progress-container`）不被隐藏，进度显示为 100%。
+- 该区域是否正常渲染出了已下载文件列表，并附带判断出的“是否可以直接点击打开（或预览）”的安全提示。
+- 检查是否存在任何由新添加的页面节点或事件回调所引发的控制台异常。
+
+未来所有涉及局域网 Share 模式或 Web 端状态联动的 PR，均需基于此仿真测试套路进行全流程自测和交付成果核对。
 
