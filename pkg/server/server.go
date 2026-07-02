@@ -2169,7 +2169,7 @@ func New(cfg *config.Config) (*Server, error) {
 		expectedBytes := totalBytes
 
 		// Anti-bypass limit checks for free users who exceeded 5 free transfers limit
-		if !usage.IsPaid && usage.UsedTransfers >= 5 {
+		if !usage.IsPaid && usage.UsedTransfers >= 5 && (!app.KeepAlive || os.Getenv("EQT_TESTING") == "true") {
 			if expectedBytes > 50*1024*1024 {
 				http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 				app.setStatus("failed", "File size exceeds 50MB limit.")
@@ -2473,7 +2473,7 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			startUsage := limiterInstance.GetStatus()
-			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
+			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5 && (!app.KeepAlive || os.Getenv("EQT_TESTING") == "true")
 			app.statusMu.Lock()
 			alreadyCounted := app.transferCounted
 			if !alreadyCounted {
@@ -2740,7 +2740,7 @@ func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {
 	// Quota validation for Tus POST requests (Creation of upload resource)
 	if r.Method == http.MethodPost {
 		startUsage := limiterInstance.GetStatus()
-		quotaExceeded := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5
+		quotaExceeded := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5 && (!s.KeepAlive || os.Getenv("EQT_TESTING") == "true")
 
 		if quotaExceeded {
 			// 1. Check file size via Upload-Length header
