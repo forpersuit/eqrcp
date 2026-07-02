@@ -822,7 +822,172 @@ function renderReceiveTransfer(task) {
                 </div>
             ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             
-            ${files.length > 0 ? `
+            <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
+
+            <div id="receive-saved-files-wrapper">
+                ${files.length > 0 ? `
+                    <div class="locked-list">
+                        <strong>${t('saved_files')}</strong>
+                        <ul class="path-list locked">${files.map((file) => {
+                            const name = shortName(file);
+                            const dir = getContainingFolder(file);
+                            const openFileTooltip = t('open_file_title', { file: name });
+                            return `
+                                <li>
+                                    <div style="flex: 1; text-align: left; overflow: hidden; min-width: 0;">
+                                        <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(name)}</strong>
+                                        <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(file)}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
+                                            ${openFileIcon()}
+                                        </button>
+                                        ${dir ? `
+                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
+                                                ${openFolderIcon()}
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </li>
+                            `;
+                        }).join('')}</ul>
+                    </div>
+                ` : ''}
+            </div>
+            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderReceiveDeviceProgressHtml(task) {
+    let deviceProgressHtml = '';
+    const clients = task.clientStates ? Object.values(task.clientStates) : [];
+    if (clients.length > 0) {
+        const isExpanded = !!state.devicesExpanded;
+        const showLimit = 3;
+        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
+
+        const listItems = displayClients.map(client => {
+            const devName = client.deviceName || 'Device';
+            const clientID = client.clientID || '';
+            let displayName = devName;
+            if (!displayName.includes('(') && clientID) {
+                const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                displayName = `${displayName} (${shortId})`;
+            }
+            const stateText = getTranslatedState(client.state || 'waiting');
+            const percent = client.percent || 0;
+            const currentFile = client.current || '';
+            const savedFiles = client.savedFiles || [];
+
+            const savedFilesHtml = savedFiles.map(file => {
+                const name = shortName(file);
+                const openFileTooltip = t('open_file_title', { file: name });
+                const dir = getContainingFolder(file);
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
+                        <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeAttr(file)}">✓ ${escapeHTML(name)}</span>
+                        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
+                            <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                ${openFileIcon()}
+                            </button>
+                            ${dir ? `
+                                <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                    ${openFolderIcon()}
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            let currentFileHtml = '';
+            if (client.state === 'transferring' && currentFile) {
+                currentFileHtml = `
+                    <div style="margin-top: 6px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="${escapeAttr(currentFile)}">⟳ ${escapeHTML(shortName(currentFile))}</span>
+                            <span>${percent}%</span>
+                        </div>
+                        <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
+                            <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let stateBadgeHtml = '';
+            if (client.state === 'completed') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('completed') || 'Completed')}">✓</span>`;
+            } else if (client.state === 'failed') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 900;" title="${escapeAttr(client.message || t('failed') || 'Failed')}">✕</span>`;
+            } else if (client.state === 'waiting') {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--text-secondary); font-size: 8px; font-weight: 900;" title="${escapeAttr(t('waiting') || 'Waiting')}">⌛</span>`;
+            } else {
+                stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
+            }
+
+            return `
+                <li style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">📱 ${escapeHTML(displayName)}</span>
+                        <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                            <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
+                            ${stateBadgeHtml}
+                        </div>
+                    </div>
+                    ${currentFileHtml}
+                    ${savedFilesHtml ? `<div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px;">${savedFilesHtml}</div>` : ''}
+                </li>
+            `;
+        }).join('');
+
+        const expandButton = (clients.length > showLimit) ? `
+            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
+                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
+            </button>
+        ` : '';
+
+        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 250px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
+
+        deviceProgressHtml = `
+            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <div class="devices-scroll-container" style="${scrollStyle}">
+                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
+                </div>
+                ${expandButton}
+            </div>
+        `;
+    } else {
+        deviceProgressHtml = `
+            <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
+                    ${state.settings?.lang === 'zh' ? '暂无设备连接，开始上传后在此显示进度' : 'No devices connected. Progress will show here once uploading starts.'}
+                </div>
+            </div>
+        `;
+    }
+    return deviceProgressHtml;
+}
+
+function updateReceiveTransferActiveUI(task) {
+    const statusH2 = document.querySelector('.transfer-stage .transfer-head h2');
+    if (statusH2) {
+        statusH2.textContent = getTranslatedState(task.transferState || task.state || 'waiting');
+    }
+
+    const devicesWrapper = document.getElementById('receive-devices-progress-wrapper');
+    if (devicesWrapper) {
+        devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
+    }
+
+    const filesWrapper = document.getElementById('receive-saved-files-wrapper');
+    if (filesWrapper) {
+        const files = task.savedFiles || [];
+        if (files.length > 0) {
+            filesWrapper.innerHTML = `
                 <div class="locked-list">
                     <strong>${t('saved_files')}</strong>
                     <ul class="path-list locked">${files.map((file) => {
@@ -849,10 +1014,37 @@ function renderReceiveTransfer(task) {
                         `;
                     }).join('')}</ul>
                 </div>
-            ` : ''}
-            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
-        </div>
-    `;
+            `;
+        } else {
+            filesWrapper.innerHTML = '';
+        }
+    }
+
+    const quotaCountdown = document.querySelector('.transfer-stage .quota-countdown');
+    const isPaid = state.status?.isPaid;
+    const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
+    const remaining = Math.max(0, 5 - usedReceiveTransfers);
+    const shouldShowCountdown = (!isPaid && task.transferState !== 'waiting');
+    
+    if (shouldShowCountdown) {
+        const text = remaining > 0 ? `free ulimited: ${remaining}` : `free limit exceeded (restricted)`;
+        if (quotaCountdown) {
+            quotaCountdown.textContent = text;
+        } else {
+            const headerDiv = document.querySelector('.transfer-stage .transfer-head > div');
+            if (headerDiv) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = `
+                    <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
+                        ${text}
+                    </div>
+                `;
+                headerDiv.appendChild(tempDiv.firstElementChild);
+            }
+        }
+    } else if (quotaCountdown) {
+        quotaCountdown.remove();
+    }
 }
 
 function renderChat() {
@@ -3423,12 +3615,22 @@ function connectAgentEvents() {
             if (state.activePanel) {
                 return;
             }
-            // 如果处于 share 模式下的 activeTask 传输界面，直接进行局部渲染更新，从而避免全局 render 导致 tooltip 气泡闪烁
+            // 如果处于 share 模式或 receive 模式下的 activeTask 传输界面，直接进行局部渲染更新，从而避免全局 render 导致 tooltip 气泡闪烁
             const transferStage = document.querySelector('.transfer-stage');
-            const activeTask = activeShareTask();
-            if (transferStage && activeTask && state.mode === 'share') {
-                updateShareTransferActiveUI(activeTask);
-                return;
+            if (transferStage) {
+                if (state.mode === 'share') {
+                    const activeTask = activeShareTask();
+                    if (activeTask) {
+                        updateShareTransferActiveUI(activeTask);
+                        return;
+                    }
+                } else if (state.mode === 'receive') {
+                    const activeTask = activeReceiveTask();
+                    if (activeTask) {
+                        updateReceiveTransferActiveUI(activeTask);
+                        return;
+                    }
+                }
             }
             render();
         } catch (e) {

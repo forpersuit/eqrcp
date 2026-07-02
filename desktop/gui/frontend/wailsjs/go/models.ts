@@ -332,6 +332,7 @@ export namespace server {
 	    current?: string;
 	    message: string;
 	    deviceName?: string;
+	    savedFiles?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ClientTransferStateInfo(source);
@@ -347,6 +348,7 @@ export namespace server {
 	        this.current = source["current"];
 	        this.message = source["message"];
 	        this.deviceName = source["deviceName"];
+	        this.savedFiles = source["savedFiles"];
 	    }
 	}
 

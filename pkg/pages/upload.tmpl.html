@@ -694,6 +694,7 @@
                     var item = accumulatedFiles[index];
                     var fileWrapper = document.createElement('div');
                     fileWrapper.className = 'pasted-file-wrapper';
+                    fileWrapper.setAttribute('data-index', index);
                     fileWrapper.style.display = 'flex';
                     fileWrapper.style.alignItems = 'center';
                     fileWrapper.style.justifyContent = 'space-between';
@@ -940,67 +941,204 @@
             var formData = new FormData(uploadForm);
             formData.delete('files'); // remove raw files from input to avoid duplicates
             
+            var filesToUpload = [];
+            var totalFilesSize = 0;
+
             var textInput = document.getElementById('plaintext-text');
             if (titleInput.value || textInput.value) {
                 var currentDate = new Date().toJSON().slice(0, 19).replace(/[-T:]/g, '_');
                 var filename = titleInput.value || ('eqt-text-file-' + currentDate);
                 var blob = new Blob([textInput.value + '\n'], { type: 'text/plain' });
                 formData.append('textFile', blob, filename + '.txt');
+                filesToUpload.push({
+                    type: 'text',
+                    size: blob.size,
+                    name: filename + '.txt'
+                });
+                totalFilesSize += blob.size;
             }
 
             for (var i = 0; i < accumulatedFiles.length; i++) {
                 var file = accumulatedFiles[i].file;
                 var fileName = accumulatedFiles[i].name;
                 formData.append('files', file, fileName);
+                filesToUpload.push({
+                    type: 'file',
+                    size: file.size,
+                    name: fileName,
+                    index: i
+                });
+                totalFilesSize += file.size;
             }
 
-            fetch('{{.Route}}', {
-                method: 'POST',
-                body: formData
-            }).then(function(response) {
-                if (!response.ok) {
-                    return response.text().then(function(text) {
-                        var errObj = new Error(text || 'DEFAULT');
-                        errObj.status = response.status;
-                        throw errObj;
-                    });
+            // Hide delete buttons and show circular progress rings for files in selectedFileContainer
+            var fileWrappers = selectedFileContainer.querySelectorAll('.pasted-file-wrapper');
+            fileWrappers.forEach(function(wrapper) {
+                var deleteBtn = wrapper.querySelector('.delete-file-btn') || wrapper.querySelector('button');
+                if (deleteBtn) {
+                    deleteBtn.style.display = 'none';
                 }
-                return response.text();
-            }).then(function(html) {
-                clearDraft();
-                clearAccumulatedFiles();
-                var parser = new DOMParser();
-                var nextDoc = parser.parseFromString(html, 'text/html');
-                document.title = nextDoc.title || document.title;
-                document.head.innerHTML = nextDoc.head.innerHTML;
-                document.body.innerHTML = nextDoc.body.innerHTML;
-                var scripts = document.body.querySelectorAll('script');
-                for (var i = 0; i < scripts.length; i++) {
-                    var oldScript = scripts[i];
-                    var newScript = document.createElement('script');
-                    for (var j = 0; j < oldScript.attributes.length; j++) {
-                        var attr = oldScript.attributes[j];
-                        newScript.setAttribute(attr.name, attr.value);
+                
+                var index = parseInt(wrapper.getAttribute('data-index'), 10);
+                var ringContainer = document.createElement('div');
+                ringContainer.className = 'progress-ring-container';
+                ringContainer.style.display = 'inline-flex';
+                ringContainer.style.alignItems = 'center';
+                ringContainer.style.justifyContent = 'center';
+                ringContainer.style.position = 'relative';
+                ringContainer.style.width = '32px';
+                ringContainer.style.height = '32px';
+                ringContainer.style.flexShrink = '0';
+                ringContainer.innerHTML = `
+                    <svg width="32" height="32" viewBox="0 0 32 32">
+                        <circle cx="16" cy="16" r="13" fill="none" stroke="#e2e8f0" stroke-width="2.5"/>
+                        <circle class="ring-track" cx="16" cy="16" r="13" fill="none"
+                            stroke="#0f766e" stroke-width="2.5"
+                            stroke-dasharray="81.68"
+                            stroke-dashoffset="81.68"
+                            stroke-linecap="round"
+                            transform="rotate(-90 16 16)"
+                            style="transition: stroke-dashoffset 0.1s ease-in-out;"/>
+                    </svg>
+                    <span class="ring-label" style="position: absolute; font-size: 8px; font-weight: 800; color: var(--accent-strong);">0%</span>
+                `;
+                wrapper.appendChild(ringContainer);
+            });
+
+            titleInput.disabled = true;
+            textArea.disabled = true;
+            fileInput.disabled = true;
+            var addFilesLabel = document.querySelector('label[for="files"]');
+            if (addFilesLabel) {
+                addFilesLabel.style.pointerEvents = 'none';
+                addFilesLabel.style.opacity = '0.5';
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '{{.Route}}');
+
+            xhr.upload.onprogress = function(e) {
+                if (!e.lengthComputable || e.total <= 0) return;
+                var loaded = e.loaded;
+                var total = e.total;
+                
+                // Calculate scale factor to account for multipart boundaries/headers
+                var scaleFactor = total / (totalFilesSize || 1);
+                if (scaleFactor < 1) scaleFactor = 1;
+                
+                var currentOffset = 0;
+                for (var j = 0; j < filesToUpload.length; j++) {
+                    var item = filesToUpload[j];
+                    var start = currentOffset;
+                    var end = currentOffset + item.size * scaleFactor;
+                    currentOffset = end;
+                    
+                    var percent = 0;
+                    if (loaded >= end) {
+                        percent = 100;
+                    } else if (loaded > start) {
+                        percent = Math.round((loaded - start) / (end - start) * 100);
                     }
-                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                    
+                    if (item.type === 'file') {
+                        var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
+                        if (wrapper) {
+                            var ring = wrapper.querySelector('.progress-ring-container');
+                            if (ring) {
+                                var track = ring.querySelector('.ring-track');
+                                var label = ring.querySelector('.ring-label');
+                                var circumference = 81.68; // 2 * Math.PI * 13
+                                var offset = circumference * (1 - percent / 100);
+                                if (track) track.style.strokeDashoffset = offset;
+                                if (label) label.textContent = percent + '%';
+                                
+                                if (percent === 100 && !ring.querySelector('.ring-done')) {
+                                    ring.innerHTML = `
+                                        <div class="ring-done" style="width: 24px; height: 24px; border-radius: 50%; background: #d1fae5; border: 1.2px solid #a7f3d0; color: #065f46; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✓</div>
+                                    `;
+                                }
+                            }
+                        }
+                    }
                 }
-            }).catch(function(err) {
+            };
+
+            function handleError(status, text) {
                 var reason = '';
-                if (err.status === 413) {
-                    reason = t('err_reason_too_large') + (err.message ? ' (' + err.message + ')' : '');
-                } else if (err.status === 403) {
-                    // 后端超额限制会返回 403 并在 body 里包含详细原因，直接将其作为错误内容呈现
-                    reason = err.message || t('err_reason_default');
-                } else if (err.status === 500) {
-                    reason = t('err_reason_server') + (err.message ? ' (' + err.message + ')' : '');
-                } else if (err.status) {
-                    reason = t('err_reason_default') + ' (' + err.message + ')';
+                if (status === 413) {
+                    reason = t('err_reason_too_large') + (text ? ' (' + text + ')' : '');
+                } else if (status === 403) {
+                    reason = text || t('err_reason_default');
+                } else if (status === 500) {
+                    reason = t('err_reason_server') + (text ? ' (' + text + ')' : '');
+                } else if (status) {
+                    reason = t('err_reason_default') + ' (' + text + ')';
                 } else {
                     reason = t('err_reason_network');
                 }
                 renderUploadFailedPage(reason);
-            });
+            }
+
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    // Force complete all rings
+                    filesToUpload.forEach(function(item) {
+                        if (item.type === 'file') {
+                            var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
+                            if (wrapper) {
+                                var ring = wrapper.querySelector('.progress-ring-container');
+                                if (ring && !ring.querySelector('.ring-done')) {
+                                    ring.innerHTML = `
+                                        <div class="ring-done" style="width: 24px; height: 24px; border-radius: 50%; background: #d1fae5; border: 1.2px solid #a7f3d0; color: #065f46; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✓</div>
+                                    `;
+                                }
+                            }
+                        }
+                    });
+
+                    clearDraft();
+                    clearAccumulatedFiles();
+                    
+                    var html = xhr.responseText;
+                    var parser = new DOMParser();
+                    var nextDoc = parser.parseFromString(html, 'text/html');
+                    document.title = nextDoc.title || document.title;
+                    document.head.innerHTML = nextDoc.head.innerHTML;
+                    document.body.innerHTML = nextDoc.body.innerHTML;
+                    var scripts = document.body.querySelectorAll('script');
+                    for (var i = 0; i < scripts.length; i++) {
+                        var oldScript = scripts[i];
+                        var newScript = document.createElement('script');
+                        for (var j = 0; j < oldScript.attributes.length; j++) {
+                            var attr = oldScript.attributes[j];
+                            newScript.setAttribute(attr.name, attr.value);
+                        }
+                        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    }
+                } else {
+                    handleError(xhr.status, xhr.responseText);
+                }
+            };
+
+            xhr.onerror = function() {
+                filesToUpload.forEach(function(item) {
+                    if (item.type === 'file') {
+                        var wrapper = selectedFileContainer.querySelector('[data-index="' + item.index + '"]');
+                        if (wrapper) {
+                            var ring = wrapper.querySelector('.progress-ring-container');
+                            if (ring) {
+                                ring.innerHTML = `
+                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #fef3f2; border: 1.2px solid #fecaca; color: #b42318; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900;">✕</div>
+                                `;
+                            }
+                        }
+                    }
+                });
+                handleError(0, '');
+            };
+
+            xhr.send(formData);
         });
 
         var langSelect = document.getElementById('page-lang-select');

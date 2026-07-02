@@ -39,14 +39,15 @@ const defaultStatusGracePeriod = 15 * time.Second
 const maxTransferHistory = 20
 
 type ClientTransferStateInfo struct {
-	ClientID   string `json:"clientID,omitempty"`
-	State      string `json:"state"`
-	BytesDone  int64  `json:"bytesDone"`
-	BytesTotal int64  `json:"bytesTotal"`
-	Percent    int    `json:"percent"`
-	Current    string `json:"current,omitempty"`
-	Message    string `json:"message"`
-	DeviceName string `json:"deviceName,omitempty"`
+	ClientID   string   `json:"clientID,omitempty"`
+	State      string   `json:"state"`
+	BytesDone  int64    `json:"bytesDone"`
+	BytesTotal int64    `json:"bytesTotal"`
+	Percent    int      `json:"percent"`
+	Current    string   `json:"current,omitempty"`
+	Message    string   `json:"message"`
+	DeviceName string   `json:"deviceName,omitempty"`
+	SavedFiles []string `json:"savedFiles,omitempty"`
 }
 
 // Server is the server
@@ -916,6 +917,10 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 		m := make(map[string]*ClientTransferStateInfo)
 		for k, v := range status.ClientStates {
 			if v != nil {
+				var savedFiles []string
+				if v.SavedFiles != nil {
+					savedFiles = append([]string(nil), v.SavedFiles...)
+				}
 				m[k] = &ClientTransferStateInfo{
 					ClientID:   v.ClientID,
 					State:      v.State,
@@ -925,6 +930,7 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 					Current:    v.Current,
 					Message:    v.Message,
 					DeviceName: v.DeviceName,
+					SavedFiles: savedFiles,
 				}
 			}
 		}
@@ -939,7 +945,12 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		clientStates = make(map[string]*ClientTransferStateInfo)
 		for k, v := range status.ClientStates {
 			if v != nil {
+				var savedFiles []string
+				if v.SavedFiles != nil {
+					savedFiles = append([]string(nil), v.SavedFiles...)
+				}
 				clientStates[k] = &ClientTransferStateInfo{
+					ClientID:   v.ClientID,
 					State:      v.State,
 					BytesDone:  v.BytesDone,
 					BytesTotal: v.BytesTotal,
@@ -947,6 +958,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 					Current:    v.Current,
 					Message:    v.Message,
 					DeviceName: v.DeviceName,
+					SavedFiles: savedFiles,
 				}
 			}
 		}
@@ -1254,6 +1266,10 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 	m := make(map[string]*ClientTransferStateInfo)
 	for k, v := range s.clientStates {
 		if v != nil {
+			var savedFiles []string
+			if v.SavedFiles != nil {
+				savedFiles = append([]string(nil), v.SavedFiles...)
+			}
 			m[k] = &ClientTransferStateInfo{
 				ClientID:   v.ClientID,
 				State:      v.State,
@@ -1263,6 +1279,7 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 				Current:    v.Current,
 				Message:    v.Message,
 				DeviceName: v.DeviceName,
+				SavedFiles: savedFiles,
 			}
 		}
 	}
@@ -2091,11 +2108,25 @@ func New(cfg *config.Config) (*Server, error) {
 				status.Percent = 0
 				status.SavedFiles = nil
 			})
+			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+				cs.State = "transferring"
+				cs.BytesDone = 0
+				cs.BytesTotal = r.ContentLength
+				cs.Percent = 0
+				cs.Current = ""
+				cs.SavedFiles = nil
+			})
+			app.triggerStatusHookThrottled()
 			filenames, err := util.ReadFilenames(app.outputDir)
 			if err != nil {
 				fmt.Fprintf(w, "Unable to read output directory: %v\n", err)
 				log.Printf("Unable to read output directory: %v\n", err)
 				app.setStatus("failed", "Unable to read output directory.")
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.State = "failed"
+					cs.Message = "Unable to read output directory."
+				})
+				app.triggerStatusHookThrottled()
 				app.recordStatus()
 				app.signalStop()
 				return
@@ -2112,6 +2143,11 @@ func New(cfg *config.Config) (*Server, error) {
 					message = "Upload interrupted before completion."
 				}
 				app.setStatus(state, message)
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.State = state
+					cs.Message = message
+				})
+				app.triggerStatusHookThrottled()
 				app.recordStatus()
 				app.signalStop()
 				return
@@ -2132,6 +2168,11 @@ func New(cfg *config.Config) (*Server, error) {
 					if len(transferredFiles) >= 5 {
 						http.Error(w, "File count exceeds 5 files free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusForbidden)
 						app.setStatus("failed", "File count exceeds 5 files limit.")
+						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+							cs.State = "failed"
+							cs.Message = "File count exceeds 5 files limit."
+						})
+						app.triggerStatusHookThrottled()
 						app.recordStatus()
 						app.signalStop()
 						return
@@ -2146,6 +2187,11 @@ func New(cfg *config.Config) (*Server, error) {
 					log.Printf("Unable to create the file for writing: %s\n", err)
 					// Send signal to server to shutdown
 					app.setStatus("failed", "Unable to create the file for writing.")
+					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+						cs.State = "failed"
+						cs.Message = "Unable to create the file for writing."
+					})
+					app.triggerStatusHookThrottled()
 					app.recordStatus()
 					app.signalStop()
 					return
@@ -2158,6 +2204,12 @@ func New(cfg *config.Config) (*Server, error) {
 					status.Current = fileName
 					status.Message = "Receiving " + fileName + "."
 				})
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.State = "transferring"
+					cs.Current = fileName
+					cs.Message = "Receiving " + fileName + "."
+				})
+				app.triggerStatusHookThrottled()
 				progressBar.Prefix(out.Name())
 				progressBar.Start()
 				buf := make([]byte, 32*1024)
@@ -2184,6 +2236,11 @@ func New(cfg *config.Config) (*Server, error) {
 							message = "Upload interrupted before completion."
 						}
 						app.setStatus(state, message)
+						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+							cs.State = state
+							cs.Message = message
+						})
+						app.triggerStatusHookThrottled()
 						app.recordStatus()
 						app.signalStop()
 						return
@@ -2200,6 +2257,11 @@ func New(cfg *config.Config) (*Server, error) {
 						out.Close()
 						// Send signal to server to shutdown
 						app.setStatus("failed", "Unable to write file to disk.")
+						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+							cs.State = "failed"
+							cs.Message = "Unable to write file to disk."
+						})
+						app.triggerStatusHookThrottled()
 						app.recordStatus()
 						app.signalStop()
 						return
@@ -2209,6 +2271,11 @@ func New(cfg *config.Config) (*Server, error) {
 						out.Close()
 						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
 						app.setStatus("failed", "File size exceeds 50MB limit.")
+						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+							cs.State = "failed"
+							cs.Message = "File size exceeds 50MB limit."
+						})
+						app.triggerStatusHookThrottled()
 						app.recordStatus()
 						app.signalStop()
 						return
@@ -2219,12 +2286,25 @@ func New(cfg *config.Config) (*Server, error) {
 							status.BytesDone = status.BytesTotal
 						}
 					})
+					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+						cs.BytesDone += int64(n)
+						if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
+							cs.BytesDone = cs.BytesTotal
+						}
+						cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+					})
+					app.triggerStatusHookThrottled()
 					progressBar.Add(n)
 				}
 				if err := out.Close(); err != nil {
 					fmt.Fprintf(w, "Unable to close file: %v", err)
 					log.Printf("Unable to close file: %v", err)
 					app.setStatus("failed", "Unable to close file.")
+					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+						cs.State = "failed"
+						cs.Message = "Unable to close file."
+					})
+					app.triggerStatusHookThrottled()
 					app.recordStatus()
 					app.signalStop()
 					return
@@ -2233,6 +2313,10 @@ func New(cfg *config.Config) (*Server, error) {
 				app.updateStatus(func(status *transferStatus) {
 					status.SavedFiles = append([]string(nil), transferredFiles...)
 				})
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.SavedFiles = append(cs.SavedFiles, out.Name())
+				})
+				app.triggerStatusHookThrottled()
 			}
 			progressBar.FinishPrint("File transfer completed")
 			// Set the value of the variable to the actually transferred files
@@ -2256,6 +2340,14 @@ func New(cfg *config.Config) (*Server, error) {
 					status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
 				}
 			})
+			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+				cs.State = "completed"
+				cs.Percent = 100
+				cs.BytesDone = cs.BytesTotal
+				cs.Current = ""
+				cs.Message = "Transfer completed."
+			})
+			app.triggerStatusHookThrottled()
 			app.recordStatus()
 			if !cfg.KeepAlive {
 				go app.signalStopAfterStatusGrace()
