@@ -1804,6 +1804,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app := &Server{}
 	app.Lang = cfg.Lang
 	app.KeepAlive = cfg.KeepAlive
+	app.statusGrace = defaultStatusGracePeriod
 	app.downloadedItems = make(map[int]bool)
 	app.downloadedBytes = make(map[int]int64)
 	app.clientLastSeen = make(map[string]time.Time)
@@ -2326,9 +2327,13 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				app.clientStatesMu.Unlock()
 
-				htmlVariables.File = strings.Join(transferredFiles, ", ")
-				htmlVariables.Files = transferredFiles
-				htmlVariables.Count = len(transferredFiles)
+				displayFiles := make([]string, len(transferredFiles))
+				for i, f := range transferredFiles {
+					displayFiles[i] = filepath.Base(f)
+				}
+				htmlVariables.File = strings.Join(displayFiles, ", ")
+				htmlVariables.Files = displayFiles
+				htmlVariables.Count = len(displayFiles)
 				if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					log.Printf("Template error: %v\n", err)
@@ -2454,9 +2459,13 @@ func New(cfg *config.Config) (*Server, error) {
 				})
 				app.triggerStatusHookThrottled()
 			}
-			htmlVariables.File = strings.Join(transferredFiles, ", ")
-			htmlVariables.Files = transferredFiles
-			htmlVariables.Count = len(transferredFiles)
+			displayFiles := make([]string, len(transferredFiles))
+			for i, f := range transferredFiles {
+				displayFiles[i] = filepath.Base(f)
+			}
+			htmlVariables.File = strings.Join(displayFiles, ", ")
+			htmlVariables.Files = displayFiles
+			htmlVariables.Count = len(displayFiles)
 			if err := serveTemplate("done", pages.Done, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

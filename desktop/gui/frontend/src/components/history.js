@@ -87,9 +87,6 @@ export function renderHistoryFiles(task) {
     let files = [];
     if (task.action === 'receive') {
         files = task.savedFiles || [];
-        if (files.length === 0) {
-            files = task.paths || [];
-        }
     } else {
         files = task.paths || [];
     }
