@@ -965,7 +965,8 @@ function renderReceiveDeviceProgressHtml(task) {
                     }
                 }).join('');
             } else {
-                const oldSavedHtml = savedFiles.map(file => {
+                const oldSaved = client.savedFiles || [];
+                const oldSavedHtml = oldSaved.map(file => {
                     const name = shortName(file);
                     const openFileTooltip = t('open_file_title', { file: name });
                     const dir = getContainingFolder(file);
@@ -4796,3 +4797,5 @@ function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 
         reader.readAsDataURL(file);
     });
 }
+
+window.renderReceiveDeviceProgressHtml = renderReceiveDeviceProgressHtml;
