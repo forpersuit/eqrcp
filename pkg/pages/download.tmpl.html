@@ -1025,34 +1025,24 @@
                         listContainer.innerHTML = '';
                         
                         var filename = "{{.File}}";
-                        var fileUrl = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
                         var isZip = totalCount > 1;
-                        var canOpen = !isZip && typeof canOpenDirectly === 'function' && canOpenDirectly(filename);
                         
                         var itemDiv = document.createElement('div');
                         itemDiv.style.fontSize = '13px';
                         itemDiv.style.display = 'flex';
-                        itemDiv.style.flexDirection = 'column';
-                        itemDiv.style.gap = '2px';
+                        itemDiv.style.alignItems = 'center';
+                        itemDiv.style.gap = '6px';
                         itemDiv.style.background = '#fff';
-                        itemDiv.style.padding = '8px';
+                        itemDiv.style.padding = '10px 12px';
                         itemDiv.style.borderRadius = '6px';
                         itemDiv.style.border = '1px solid var(--line)';
-                        itemDiv.style.marginTop = '4px';
+                        itemDiv.style.marginTop = '6px';
+                        itemDiv.style.color = 'var(--text-primary)';
+                        itemDiv.style.fontWeight = '600';
+                        itemDiv.style.wordBreak = 'break-all';
                         
-                        var dict = pageTranslations[currentLang] || pageTranslations['en'];
-                        var openTip = '';
-                        if (isZip) {
-                            openTip = dict.cannot_open || 'Cannot open directly';
-                        } else {
-                            openTip = canOpen ? (dict.can_open || 'Click to open') : (dict.cannot_open || 'Cannot open directly');
-                        }
-                        var tipColor = canOpen ? 'var(--accent)' : 'var(--text-secondary)';
-                        
-                        var linkHtml = '<a href="' + fileUrl + '" download="' + filename + '" target="_blank" style="color: var(--accent); text-decoration: underline; font-weight: 600; word-break: break-all;">' + filename + '</a>';
-                        var tipHtml = '<span style="font-size: 11px; color: ' + tipColor + '; font-weight: 500;">' + (isZip ? '📦 ' : (canOpen ? '✓ ' : 'ℹ ')) + openTip + '</span>';
-                        
-                        itemDiv.innerHTML = '<div style="display: flex; align-items: center; gap: 6px;"><span>' + (isZip ? '📦' : '📄') + '</span>' + linkHtml + '</div>' + tipHtml;
+                        var icon = isZip ? '📦' : '📄';
+                        itemDiv.innerHTML = '<span>' + icon + '</span><span>' + filename + '</span>';
                         listContainer.appendChild(itemDiv);
                         panel.style.display = 'block';
                     }
