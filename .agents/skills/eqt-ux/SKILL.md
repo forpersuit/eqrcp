@@ -25,7 +25,12 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **High-frequency DOM Rebuild Click Loss & Throttle (高频 DOM 重载点击丢包与局部重绘节流)**：
     - **成因**：当后台传输高频推送状态并引起 innerHTML 大面积覆盖重写时，由于按钮或行的 `mousedown` 与 `mouseup` 分属于不同重建周期的 DOM 节点，浏览器无法产生 `click` 事件导致折叠展开或按钮点击失效。
     - **避坑准则**：在此类局部列表或易频繁刷新的交互面板上，必须使用 `pointerdown` 代替 `click` 监听以瞬时响应事件；同时，在前台接收后台状态更新（如 `agent-status`）的分发处，对于传输中状态的局部重绘操作，必须实施 250ms 渲染节流限制，从源头上减少 DOM 闪动与物理重构，为滚动和点击手势预留充足的平滑生存时间窗。
-
+  - **Skeleton-Value Separation Target-based In-place Updates (骨架与数值分离就地精准静默更新)**：
+    - **核心理念**：为避免列表数据变化时重建 DOM 带来滚动打断、悬停抖动、选区丢失等交互问题，对于频繁更新的列表类 UI 交互，应采用“骨架与值分离”的刷新设计。
+    - **设计准则**：
+      1. **判定骨架重建**：只有当设备连接状态变化（如 `clientID` 集合增减）、文件条目数等结构化元数据发生改变时，才允许执行一次性的 `innerHTML` 骨架重构。
+      2. **精准就地更新**：若结构化骨架未发生改变，禁止以任何形式重写外层容器的 `innerHTML`，必须为需要变动的文本、进度条、状态徽章等高频波动节点预埋带唯一标识（如 `clientID`）的 HTML `id`。在状态监听分发处，通过 `document.getElementById` 直接定位对应 DOM 节点，精准局部刷新其 `textContent`、`style.cssText` 或局部 `innerHTML`（仅限内部细微徽章）。
+      3. **未来适配要求**：未来在开发任何包含高频状态流（如传输进度、连接数、性能指标）的 UI 界面时，均需以此就地静默更新机制为标准，绝对禁止暴力覆载容器 innerHTML。
 
   - **Avoiding High-frequency Lock Contention on UI Feeds**:
     - **Issue**: High-frequency updates on write streams (e.g. updating `BytesDone` inside `onWrite` per network write chunk) trigger severe lock contention on status mutexes (`statusMu` / `clientStatesMu`) up to thousands of times per second. This starves the desktop GUI's main thread status retrieval, locking/freezing the interface (making Wails GUI non-scrollable and unresponsive).

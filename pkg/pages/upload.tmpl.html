@@ -1598,8 +1598,42 @@
             resetPolling(1500); // 1.5s fast interval
         }
 
-        sendPing();
-        resetPolling(4000);
+        var isPageActivated = false;
+        function activatePage() {
+            if (isPageActivated) return;
+            isPageActivated = true;
+
+            document.removeEventListener('pointerdown', activatePage);
+            document.removeEventListener('keydown', activatePage);
+            document.removeEventListener('touchstart', activatePage);
+            window.removeEventListener('scroll', activatePage);
+
+            var area = document.getElementById('draft-text');
+            if (area) {
+                area.removeEventListener('input', activatePage);
+            }
+            var fileSelector = document.getElementById('file-selector');
+            if (fileSelector) {
+                fileSelector.removeEventListener('change', activatePage);
+            }
+
+            sendPing();
+            resetPolling(4000);
+        }
+
+        document.addEventListener('pointerdown', activatePage);
+        document.addEventListener('keydown', activatePage);
+        document.addEventListener('touchstart', activatePage);
+        window.addEventListener('scroll', activatePage);
+
+        var area = document.getElementById('draft-text');
+        if (area) {
+            area.addEventListener('input', activatePage);
+        }
+        var fileSelector = document.getElementById('file-selector');
+        if (fileSelector) {
+            fileSelector.addEventListener('change', activatePage);
+        }
 
         // Plus limit logic for Free tier
         updateLimitUI(usedTransfers);
