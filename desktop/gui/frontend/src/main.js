@@ -1055,14 +1055,17 @@ function renderReceiveDeviceProgressHtml(task) {
             }
 
             const isFilesExpanded = !!state.deviceFilesExpanded[clientID];
-            const arrow = isFilesExpanded ? '▼' : '▶';
-            const arrowSpan = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>`;
+            const arrowSvg = `
+                <svg id="receive-client-arrow-${escapeAttr(clientID)}" class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px; color: var(--text-secondary); margin-right: 6px; transition: transform 0.2s ease-in-out; transform: rotate(${isFilesExpanded ? '90deg' : '0deg'}); display: inline-block;">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            `;
 
             return `
-                <li id="receive-client-li-${escapeAttr(clientID)}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                <li id="receive-client-li-${escapeAttr(clientID)}" data-expanded="${isFilesExpanded}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
                     <div class="device-header-toggle" data-client-id="${escapeAttr(clientID)}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
                         <span id="receive-client-name-${escapeAttr(clientID)}" style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
-                            ${arrowSpan}📱 ${escapeHTML(displayName)}
+                            ${arrowSvg}📱 <span id="receive-client-name-text-${escapeAttr(clientID)}">${escapeHTML(displayName)}</span>
                         </span>
                         <div id="receive-client-status-badge-${escapeAttr(clientID)}" style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
@@ -1131,6 +1134,10 @@ function updateReceiveTransferActiveUI(task) {
                 const li = devicesWrapper.querySelector(`#receive-client-li-${escapeAttr(client.clientID)}`);
                 if (!li) return true;
                 
+                const isExpandedInDom = li.getAttribute('data-expanded') === 'true';
+                const isExpandedInState = !!state.deviceFilesExpanded[client.clientID];
+                if (isExpandedInDom !== isExpandedInState) return true;
+                
                 const files = client.files || [];
                 const renderedFileRows = li.querySelectorAll('div[id^="receive-file-row-"]');
                 let expectedFileCount = files.length;
@@ -1138,7 +1145,7 @@ function updateReceiveTransferActiveUI(task) {
                     const fallbackListLen = (client.state === 'transferring' && client.current ? 1 : 0) + (client.savedFiles || []).length;
                     expectedFileCount = fallbackListLen;
                 }
-                if (renderedFileRows.length !== expectedFileCount) return true;
+                if (isExpandedInState && renderedFileRows.length !== expectedFileCount) return true;
             }
             return false;
         };
@@ -1179,11 +1186,15 @@ function updateReceiveTransferActiveUI(task) {
                 }
                 displayName = `${displayName}${statusCountText}`;
 
-                const clientNameEl = document.getElementById(`receive-client-name-${clientID}`);
-                if (clientNameEl) {
+                const clientNameTextEl = document.getElementById(`receive-client-name-text-${clientID}`);
+                if (clientNameTextEl) {
+                    clientNameTextEl.textContent = displayName;
+                }
+
+                const arrowEl = document.getElementById(`receive-client-arrow-${clientID}`);
+                if (arrowEl) {
                     const isFilesExpanded = !!state.deviceFilesExpanded[clientID];
-                    const arrow = isFilesExpanded ? '▼' : '▶';
-                    clientNameEl.innerHTML = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>📱 ${escapeHTML(displayName)}`;
+                    arrowEl.style.transform = isFilesExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                 }
 
                 const statusBadgeEl = document.getElementById(`receive-client-status-badge-${clientID}`);
