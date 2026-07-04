@@ -688,7 +688,13 @@ function updateShareTransferActiveUI(task) {
     // 4. 设备进度列表局部更新
     const devicesWrapper = document.getElementById('devices-progress-wrapper');
     if (devicesWrapper) {
+        const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+        const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
         devicesWrapper.innerHTML = renderDeviceProgressHtml(task);
+        const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+        if (newScrollContainer) {
+            newScrollContainer.scrollTop = scrollTop;
+        }
     }
 
     // 5. 锁定文件状态局部更新
@@ -1113,7 +1119,13 @@ function updateReceiveTransferActiveUI(task) {
 
     const devicesWrapper = document.getElementById('receive-devices-progress-wrapper');
     if (devicesWrapper) {
+        const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+        const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
         devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
+        const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+        if (newScrollContainer) {
+            newScrollContainer.scrollTop = scrollTop;
+        }
     }
 
 

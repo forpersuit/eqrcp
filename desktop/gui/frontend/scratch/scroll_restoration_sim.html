@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>EQT 滚动恢复与重绘仿真测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        p {
+            color: #64748b;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        button {
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button.active {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        .btn-legacy {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-legacy:hover { background: #dc2626; }
+        .btn-patched {
+            background: #10b981;
+            color: white;
+        }
+        .btn-patched:hover { background: #059669; }
+        .btn-stop {
+            background: #64748b;
+            color: white;
+        }
+        .btn-stop:hover { background: #475569; }
+
+        .status-indicator {
+            text-align: center;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #1e293b;
+        }
+
+        /* 模拟 Wails GUI 的滚动容器样式 */
+        .devices-scroll-container {
+            max-height: 220px;
+            overflow-y: auto;
+            border: 1.2px solid #cbd5e1;
+            padding: 8px;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background: #ffffff;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+        }
+
+        li {
+            padding: 12px;
+            background: #f1f5f9;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            box-sizing: border-box;
+            width: 100%;
+            border: 1.2px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .device-info {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .progress-bar-bg {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.05s linear;
+        }
+    </style>
+</head>
+<body>
+    <h1>EQT 滚动恢复与高频重绘仿真</h1>
+    <p>
+        由于多设备传输时接收进度或发送进度高频（例如每 50ms）发生变化，若直接重写包裹滚动容器的 <code>innerHTML</code>，滚动容器 <code>.devices-scroll-container</code> 会被全量重建，导致其 <code>scrollTop</code> 被清空，滚动条瞬间回弹至顶部，用户无法滚动查看下方的设备。
+    </p>
+
+    <div class="controls">
+        <button id="btn-legacy" class="btn-legacy">高频重绘 (无滚动还原 - 旧版)</button>
+        <button id="btn-patched" class="btn-patched">高频重绘 (带滚动还原 - 修复版)</button>
+        <button id="btn-stop" class="btn-stop">停止更新</button>
+    </div>
+
+    <div class="status-indicator" id="status-text">当前状态: 停止重绘</div>
+
+    <div id="devices-progress-wrapper">
+        <!-- 设备进度列表将在此重绘 -->
+    </div>
+
+    <script>
+        let intervalId = null;
+        let useScrollRestoration = false;
+        let percentState = Array.from({ length: 15 }, (_, i) => ({
+            id: `dev-${i}`,
+            name: `📱 仿真测试设备 ${String.fromCharCode(65 + i)}`,
+            percent: Math.floor(Math.random() * 100)
+        }));
+
+        const wrapper = document.getElementById('devices-progress-wrapper');
+        const statusText = document.getElementById('status-text');
+
+        // 生成设备进度 HTML 模板，模仿 main.js 的 renderDeviceProgressHtml
+        function renderSimulatedProgressHtml() {
+            const listItems = percentState.map(dev => `
+                <li>
+                    <div class="device-info">
+                        <span>${dev.name}</span>
+                        <span>${dev.percent}%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: ${dev.percent}%"></div>
+                    </div>
+                </li>
+            `).join('');
+
+            return `
+                <div class="devices-progress-section" style="width: 100%;">
+                    <div class="devices-scroll-container">
+                        <ul>${listItems}</ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateUI() {
+            // 仿真随机进度递增
+            percentState = percentState.map(dev => {
+                let next = dev.percent + Math.floor(Math.random() * 5) + 1;
+                if (next > 100) next = 0;
+                return { ...dev, percent: next };
+            });
+
+            if (useScrollRestoration) {
+                // 1. 获取重绘前的滚动条位置
+                const scrollContainer = wrapper.querySelector('.devices-scroll-container');
+                const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+
+                // 2. 局部覆盖 innerHTML
+                wrapper.innerHTML = renderSimulatedProgressHtml();
+
+                // 3. 立即恢复滚动位置
+                const newScrollContainer = wrapper.querySelector('.devices-scroll-container');
+                if (newScrollContainer) {
+                    newScrollContainer.scrollTop = scrollTop;
+                }
+            } else {
+                // 旧版直接 innerHTML 写入，导致 scrollTop 丢失
+                wrapper.innerHTML = renderSimulatedProgressHtml();
+            }
+        }
+
+        function startSimulation(patched) {
+            clearInterval(intervalId);
+            useScrollRestoration = patched;
+            
+            document.getElementById('btn-legacy').classList.toggle('active', !patched);
+            document.getElementById('btn-patched').classList.toggle('active', patched);
+
+            statusText.innerText = `当前状态: 高频更新中 (${patched ? '已启用' : '未启用'}滚动位置恢复)`;
+            statusText.style.color = patched ? '#10b981' : '#ef4444';
+
+            // 以 50ms 一次的高频不断触发重绘更新
+            intervalId = setInterval(updateUI, 50);
+        }
+
+        document.getElementById('btn-legacy').addEventListener('click', () => startSimulation(false));
+        document.getElementById('btn-patched').addEventListener('click', () => startSimulation(true));
+        
+        document.getElementById('btn-stop').addEventListener('click', () => {
+            clearInterval(intervalId);
+            document.getElementById('btn-legacy').classList.remove('active');
+            document.getElementById('btn-patched').classList.remove('active');
+            statusText.innerText = "当前状态: 停止重绘";
+            statusText.style.color = '#1e293b';
+        });
+
+        // 初始渲染一次
+        wrapper.innerHTML = renderSimulatedProgressHtml();
+    </script>
+</body>
+</html>
