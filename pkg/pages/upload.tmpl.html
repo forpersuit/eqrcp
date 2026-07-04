@@ -734,7 +734,7 @@
             }
             
             // 是否单文件大小超限 (免费模式 且 超过 50MB)
-            var isOversized = !isPlusMode && (file.size > 50 * 1024 * 1024);
+            var isOversized = !isPlusMode && (file.size > 1000 * 1024 * 1024);
 
             accumulatedFiles.push({
                 file: file,
