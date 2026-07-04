@@ -879,7 +879,8 @@ function renderReceiveDeviceProgressHtml(task) {
             let filesHtml = '';
             const files = client.files || [];
             if (files.length > 0) {
-                filesHtml = files.map(file => {
+                const displayFiles = [...files].reverse().slice(0, 5);
+                filesHtml = displayFiles.map(file => {
                     const name = file.name || 'File';
                     const percent = file.percent || 0;
                     const stateText = file.state || 'waiting';
@@ -915,9 +916,6 @@ function renderReceiveDeviceProgressHtml(task) {
                                     <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⟳ ${escapeHTML(name)} ${escapeHTML(sizeProgressText)}</span>
                                     <span>${percent}%</span>
                                 </div>
-                                <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
-                                    <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
-                                </div>
                             </div>
                         `;
                     } else if (stateText === 'failed') {
@@ -935,43 +933,70 @@ function renderReceiveDeviceProgressHtml(task) {
                     }
                 }).join('');
             } else {
-                const oldSaved = client.savedFiles || [];
-                const oldSavedHtml = oldSaved.map(file => {
-                    const name = shortName(file);
-                    const openFileTooltip = t('open_file_title', { file: name });
-                    const dir = getContainingFolder(file);
-                    return `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
-                            <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(file)}">✓ ${escapeHTML(name)}</span>
-                            <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
-                                <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                    ${openFileIcon()}
-                                </button>
-                                ${dir ? `
-                                    <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                        ${openFolderIcon()}
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-                let oldCurrentHtml = '';
+                const fallbackList = [];
                 if (client.state === 'transferring' && currentFile) {
-                    oldCurrentHtml = `
-                        <div style="margin-top: 6px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
-                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(currentFile)}">⟳ ${escapeHTML(shortName(currentFile))}</span>
-                                <span>${percent}%</span>
-                            </div>
-                            <div style="margin-top: 4px; height: 5px; background: rgba(0,0,0,0.06); border-radius: 2.5px; overflow: hidden;">
-                                <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 2.5px;"></div>
-                            </div>
-                        </div>
-                    `;
+                    fallbackList.push({
+                        name: shortName(currentFile),
+                        path: currentFile,
+                        state: 'transferring',
+                        percent: percent,
+                        bytesDone: client.bytesDone,
+                        bytesTotal: client.bytesTotal
+                    });
                 }
-                filesHtml = oldCurrentHtml + oldSavedHtml;
+                const oldSaved = client.savedFiles || [];
+                const revSaved = [...oldSaved].reverse();
+                revSaved.forEach(file => {
+                    fallbackList.push({
+                        name: shortName(file),
+                        path: file,
+                        state: 'completed',
+                        percent: 100
+                    });
+                });
+
+                const displayFallbackList = fallbackList.slice(0, 5);
+                filesHtml = displayFallbackList.map(file => {
+                    const name = file.name || 'File';
+                    const percent = file.percent || 0;
+                    const stateText = file.state || 'waiting';
+                    const path = file.path || '';
+                    const bytesDone = formatSize(file.bytesDone);
+                    const bytesTotal = formatSize(file.bytesTotal);
+                    const sizeProgressText = file.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
+
+                    if (stateText === 'completed') {
+                        const openFileTooltip = t('open_file_title', { file: name });
+                        const dir = path ? getContainingFolder(path) : '';
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
+                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">✓ ${escapeHTML(name)}</span>
+                                <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
+                                    ${path ? `
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFileIcon()}
+                                        </button>
+                                        ${dir ? `
+                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                                ${openFolderIcon()}
+                                            </button>
+                                        ` : ''}
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    } else if (stateText === 'transferring') {
+                        return `
+                            <div style="margin-top: 4px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⟳ ${escapeHTML(name)} ${escapeHTML(sizeProgressText)}</span>
+                                    <span>${percent}%</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    return '';
+                }).join('');
             }
 
             let stateBadgeHtml = '';

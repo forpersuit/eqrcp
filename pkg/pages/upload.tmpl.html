@@ -248,6 +248,46 @@
             .btn {
                 width: 100%;
             }
+        /* 圆圈进度条样式 */
+        .progress-ring-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+        }
+        .progress-ring {
+            width: 36px;
+            height: 36px;
+        }
+        .progress-ring__circle-bg {
+            stroke: var(--line);
+            stroke-width: 3;
+            fill: transparent;
+        }
+        .progress-ring__circle {
+            stroke: var(--accent);
+            stroke-width: 3;
+            fill: transparent;
+            stroke-dasharray: 88;
+            stroke-dashoffset: 88;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dashoffset 0.1s ease;
+        }
+        .progress-ring__circle.completed {
+            stroke: var(--success);
+        }
+        .progress-ring__circle.failed {
+            stroke: var(--danger);
+        }
+        .progress-ring-text {
+            position: absolute;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text);
         }
     </style>
 </head>
@@ -843,6 +883,42 @@
                         renderFiles();
                     });
                     fileWrapper.appendChild(deleteBtn);
+
+                    // Circular progress ring wrapper
+                    var progressWrapper = document.createElement('div');
+                    progressWrapper.className = 'progress-ring-wrapper';
+                    progressWrapper.id = 'progress-wrapper-' + index;
+                    progressWrapper.style.display = 'none';
+
+                    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('class', 'progress-ring');
+                    svg.setAttribute('width', '36');
+                    svg.setAttribute('height', '36');
+
+                    var circleBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circleBg.setAttribute('class', 'progress-ring__circle-bg');
+                    circleBg.setAttribute('r', '14');
+                    circleBg.setAttribute('cx', '18');
+                    circleBg.setAttribute('cy', '18');
+
+                    var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('class', 'progress-ring__circle');
+                    circle.setAttribute('r', '14');
+                    circle.setAttribute('cx', '18');
+                    circle.setAttribute('cy', '18');
+                    circle.id = 'progress-circle-' + index;
+
+                    svg.appendChild(circleBg);
+                    svg.appendChild(circle);
+
+                    var progressText = document.createElement('span');
+                    progressText.className = 'progress-ring-text';
+                    progressText.id = 'progress-text-' + index;
+                    progressText.textContent = '0%';
+
+                    progressWrapper.appendChild(svg);
+                    progressWrapper.appendChild(progressText);
+                    fileWrapper.appendChild(progressWrapper);
                     
                     selectedFileContainer.appendChild(fileWrapper);
                     
@@ -1001,6 +1077,16 @@
                 return;
             }
 
+            // 隐藏所有删除按钮，显示进度圆圈
+            var allDeleteBtns = selectedFileContainer.querySelectorAll('button');
+            for (var dIdx = 0; dIdx < allDeleteBtns.length; dIdx++) {
+                allDeleteBtns[dIdx].style.display = 'none';
+            }
+            var allProgressWrappers = selectedFileContainer.querySelectorAll('.progress-ring-wrapper');
+            for (var pIdx = 0; pIdx < allProgressWrappers.length; pIdx++) {
+                allProgressWrappers[pIdx].style.display = 'inline-flex';
+            }
+
             // Disable inputs
             titleInput.disabled = true;
             textArea.disabled = true;
@@ -1104,6 +1190,18 @@
                     },
                     onError: function(error) {
                         console.error("Tus upload error: ", error);
+                        if (item.index !== undefined) {
+                            var circle = document.getElementById('progress-circle-' + item.index);
+                            var text = document.getElementById('progress-text-' + item.index);
+                            if (circle) {
+                                circle.style.strokeDashoffset = 0;
+                                circle.classList.add('failed');
+                            }
+                            if (text) {
+                                text.textContent = '✕';
+                                text.style.color = 'var(--danger)';
+                            }
+                        }
                         handleError(500, error.message);
                     },
                     onProgress: function(bytesSent, bytesTotal) {
@@ -1114,9 +1212,34 @@
                         }
                         var globalPercent = Math.min(100, Math.round((totalUploaded / totalFilesSize) * 100));
                         submitButton.value = t('btn_transferring') + ' (' + globalPercent + '%)';
+                        
+                        if (item.index !== undefined) {
+                            var percent = Math.min(100, Math.round((bytesSent / bytesTotal) * 100));
+                            var circle = document.getElementById('progress-circle-' + item.index);
+                            var text = document.getElementById('progress-text-' + item.index);
+                            if (circle) {
+                                var offset = 88 - (88 * percent) / 100;
+                                circle.style.strokeDashoffset = offset;
+                            }
+                            if (text) {
+                                text.textContent = percent + '%';
+                            }
+                        }
                     },
                     onSuccess: function() {
                         bytesUploadedMap[uploadIndex] = item.size;
+                        if (item.index !== undefined) {
+                            var circle = document.getElementById('progress-circle-' + item.index);
+                            var text = document.getElementById('progress-text-' + item.index);
+                            if (circle) {
+                                circle.style.strokeDashoffset = 0;
+                                circle.classList.add('completed');
+                            }
+                            if (text) {
+                                text.textContent = '✓';
+                                text.style.color = 'var(--success)';
+                            }
+                        }
                         uploadIndex++;
                         startNextTusUpload();
                     }
