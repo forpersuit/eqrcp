@@ -108,6 +108,7 @@ type Server struct {
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
 	clientStates           map[string]*ClientTransferStateInfo
+	clientReceiveCounted   map[string]bool
 	clientStatesMu         sync.Mutex
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
@@ -285,6 +286,7 @@ func (s *Server) ReceiveTo(dir string) error {
 	s.clientMutex.Lock()
 	s.clientLastSeen = make(map[string]time.Time)
 	s.clientProgress = make(map[string]map[int]int64)
+	s.clientReceiveCounted = make(map[string]bool)
 	s.clientMutex.Unlock()
 
 	s.downloadedItemsMu.Lock()
@@ -581,7 +583,17 @@ func (s *Server) ReceiveTo(dir string) error {
 					}
 				}
 			})
-			if !limiterInstance.GetStatus().IsPaid {
+			s.clientMutex.Lock()
+			if s.clientReceiveCounted == nil {
+				s.clientReceiveCounted = make(map[string]bool)
+			}
+			alreadyCounted := s.clientReceiveCounted[clientID]
+			if !alreadyCounted {
+				s.clientReceiveCounted[clientID] = true
+			}
+			s.clientMutex.Unlock()
+
+			if !alreadyCounted && !limiterInstance.GetStatus().IsPaid {
 				IncrementUsedReceiveTransfers(1)
 			}
 			s.updateStatus(func(status *transferStatus) {
@@ -647,6 +659,7 @@ func (s *Server) Send(p body.Body) {
 	s.clientMutex.Lock()
 	s.clientLastSeen = make(map[string]time.Time)
 	s.clientProgress = make(map[string]map[int]int64)
+	s.clientReceiveCounted = make(map[string]bool)
 	s.clientMutex.Unlock()
 
 	s.downloadedItemsMu.Lock()
@@ -1980,6 +1993,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.autoStopIgnoredClients = make(map[string]bool)
 	app.clientProgress = make(map[string]map[int]int64)
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
+	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
@@ -2515,6 +2529,13 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			if r.URL.Query().Get("init") != "" {
+				app.clientMutex.Lock()
+				if app.clientReceiveCounted == nil {
+					app.clientReceiveCounted = make(map[string]bool)
+				}
+				app.clientReceiveCounted[clientID] = false
+				app.clientMutex.Unlock()
+
 				var reqData struct {
 					Files []struct {
 						Name string `json:"name"`
@@ -2568,12 +2589,16 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			startUsage := limiterInstance.GetStatus()
 			quotaExceededAtStart := !startUsage.IsPaid && startUsage.UsedReceiveTransfers >= 5 && (!app.KeepAlive || os.Getenv("EQT_TESTING") == "true")
-			app.statusMu.Lock()
-			alreadyCounted := app.transferCounted
-			if !alreadyCounted {
-				app.transferCounted = true
+			app.clientMutex.Lock()
+			if app.clientReceiveCounted == nil {
+				app.clientReceiveCounted = make(map[string]bool)
 			}
-			app.statusMu.Unlock()
+			alreadyCounted := app.clientReceiveCounted[clientID]
+			if !alreadyCounted {
+				app.clientReceiveCounted[clientID] = true
+			}
+			app.clientMutex.Unlock()
+
 			if !alreadyCounted && !startUsage.IsPaid {
 				IncrementUsedReceiveTransfers(1)
 			}
@@ -2752,6 +2777,13 @@ func New(cfg *config.Config) (*Server, error) {
 				go app.signalStopAfterStatusGrace()
 			}
 		case "GET":
+			app.clientMutex.Lock()
+			if app.clientReceiveCounted == nil {
+				app.clientReceiveCounted = make(map[string]bool)
+			}
+			app.clientReceiveCounted[clientID] = false
+			app.clientMutex.Unlock()
+
 			if err := serveTemplate("upload", pages.Upload, w, htmlVariables); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				log.Printf("Template error: %v\n", err)

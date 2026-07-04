@@ -297,6 +297,27 @@
             color: var(--text);
             line-height: 1;
         }
+        .quota-banner-card {
+            background: rgba(15, 118, 110, 0.05);
+            border: 1px solid rgba(15, 118, 110, 0.15);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--accent-strong);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.03);
+            transition: all 0.2s ease;
+        }
+        .quota-banner-card.exceeded {
+            background: rgba(180, 35, 24, 0.05);
+            border: 1px solid rgba(180, 35, 24, 0.15);
+            color: var(--danger);
+            box-shadow: 0 4px 12px rgba(180, 35, 24, 0.03);
+        }
     </style>
 </head>
 <body>
@@ -314,6 +335,7 @@
                 <p data-i18n="subtitle">Add files, paste an image, or write text. EQT saves everything on the receiving computer.</p>
             </div>
         </header>
+        <div id="quota-banner" style="margin-bottom: 18px; display: none;"></div>
         <form id="upload-form" class="upload-composer">
             <div class="composer-meta">
                 <div>
@@ -646,7 +668,7 @@
         var licenseTier = '{{.LicenseTier}}';
         var usedTransfers = {{.UsedTransfers}};
         var clockTampered = {{.ClockTampered}};
-        var isPlusMode = (isPaid && !clockTampered) || (usedTransfers < 5);
+        var isPaidMode = isPaid && !clockTampered;
 
         var uploadForm = document.getElementById('upload-form');
         var accumulatedFiles = [];
@@ -734,7 +756,7 @@
             }
             
             // 是否单文件大小超限 (免费模式 且 超过 50MB)
-            var isOversized = !isPlusMode && (file.size > 1000 * 1024 * 1024);
+            var isOversized = !isPaidMode && (file.size > 50 * 1024 * 1024);
 
             accumulatedFiles.push({
                 file: file,
@@ -760,7 +782,7 @@
             pastedFileContainer.innerHTML = ''; // Not used as everything is rendered in selectedFileContainer
             
             var hasOversizedFile = false;
-            var isCountExceeded = !isPlusMode && (accumulatedFiles.length > 5);
+            var isCountExceeded = !isPaidMode && (accumulatedFiles.length > 5);
             
             for (var i = 0; i < accumulatedFiles.length; i++) {
                 (function(index) {
@@ -772,7 +794,7 @@
                     fileWrapper.style.justifyContent = 'space-between';
                     fileWrapper.style.gap = '10px';
                     
-                    var isItemCountExceeded = !isPlusMode && (index >= 5);
+                    var isItemCountExceeded = !isPaidMode && (index >= 5);
                     var isItemOversized = item.isOversized;
                     
                     if (isItemOversized || isItemCountExceeded) {
@@ -967,7 +989,7 @@
             }
             
             // 校验整体是否超限并控制按钮与提示
-            var isSizeExceeded = !isPlusMode && hasOversizedFile;
+            var isSizeExceeded = !isPaidMode && hasOversizedFile;
             
             if (isCountExceeded || isSizeExceeded) {
                 submitButton.disabled = true;
@@ -1404,7 +1426,8 @@
         function updateLimitUI(count) {
             var oldTransfers = usedTransfers;
             usedTransfers = count;
-            isPlusMode = (isPaid && !clockTampered) || (usedTransfers < 5);
+            isPaidMode = isPaid && !clockTampered;
+            var isQuotaExceeded = !isPaidMode && (usedTransfers >= 5);
 
             // Re-render select list to clear oversized/overcount badge when quota changes
             if (oldTransfers !== usedTransfers) {
@@ -1412,7 +1435,7 @@
             }
 
             var countdownEl = document.getElementById('plus-countdown');
-            if (countdownEl && !isPaid && !clockTampered) {
+            if (countdownEl && !isPaidMode) {
                 var remaining = Math.max(0, 5 - usedTransfers);
                 countdownEl.style.display = 'inline-flex';
                 if (remaining > 0) {
@@ -1422,6 +1445,81 @@
                 }
             } else if (countdownEl) {
                 countdownEl.style.display = 'none';
+            }
+
+            // 更新 quota-banner
+            var bannerEl = document.getElementById('quota-banner');
+            if (bannerEl) {
+                if (!isPaidMode) {
+                    bannerEl.style.display = 'block';
+                    var remaining = Math.max(0, 5 - usedTransfers);
+                    if (remaining > 0) {
+                        var text = t('quota_info').replace('{remaining}', remaining);
+                        bannerEl.innerHTML = '<div class="quota-banner-card">' +
+                            '<span style="font-size: 16px;">ℹ️</span>' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
+                    } else {
+                        var text = t('quota_exceeded');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
+                    }
+                } else {
+                    bannerEl.style.display = 'none';
+                }
+            }
+
+            // 对列表元素进行锁定
+            var wrappers = selectedFileContainer.querySelectorAll('.pasted-file-wrapper');
+            for (var wIdx = 0; wIdx < wrappers.length; wIdx++) {
+                if (isQuotaExceeded) {
+                    wrappers[wIdx].style.pointerEvents = 'none';
+                    wrappers[wIdx].style.opacity = '0.5';
+                } else {
+                    wrappers[wIdx].style.pointerEvents = 'auto';
+                    wrappers[wIdx].style.opacity = '1';
+                }
+            }
+
+            if (isQuotaExceeded) {
+                submitButton.disabled = true;
+                submitButton.style.opacity = '0.5';
+                submitButton.style.cursor = 'not-allowed';
+                
+                titleInput.disabled = true;
+                textArea.disabled = true;
+                fileInput.disabled = true;
+                var addFilesLabel = document.querySelector('label[for="files"]');
+                if (addFilesLabel) {
+                    addFilesLabel.style.pointerEvents = 'none';
+                    addFilesLabel.style.opacity = '0.5';
+                }
+            } else {
+                var hasOversizedFile = false;
+                for (var i = 0; i < accumulatedFiles.length; i++) {
+                    if (accumulatedFiles[i].isOversized) {
+                        hasOversizedFile = true;
+                        break;
+                    }
+                }
+                var isCountExceeded = !isPaidMode && (accumulatedFiles.length > 5);
+                var isSizeExceeded = !isPaidMode && hasOversizedFile;
+                
+                if (!isCountExceeded && !isSizeExceeded) {
+                    submitButton.disabled = false;
+                    submitButton.style.opacity = '1';
+                    submitButton.style.cursor = 'pointer';
+                    
+                    titleInput.disabled = false;
+                    textArea.disabled = false;
+                    fileInput.disabled = false;
+                    var addFilesLabel = document.querySelector('label[for="files"]');
+                    if (addFilesLabel) {
+                        addFilesLabel.style.pointerEvents = 'auto';
+                        addFilesLabel.style.opacity = '1';
+                    }
+                }
             }
         }
 
