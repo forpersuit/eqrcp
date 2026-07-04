@@ -581,6 +581,9 @@ func (s *Server) ReceiveTo(dir string) error {
 					}
 				}
 			})
+			if !limiterInstance.GetStatus().IsPaid {
+				IncrementUsedReceiveTransfers(1)
+			}
 			s.updateStatus(func(status *transferStatus) {
 				status.SavedFiles = append(status.SavedFiles, out.Name())
 				status.BytesDone = totalDone

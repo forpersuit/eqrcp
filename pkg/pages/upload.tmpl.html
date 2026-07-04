@@ -1398,26 +1398,43 @@
         applyLanguage();
         resizeTextArea();
 
+        function updateLimitUI(count) {
+            usedTransfers = count;
+            var countdownEl = document.getElementById('plus-countdown');
+            if (countdownEl && !isPaid && !clockTampered) {
+                var remaining = Math.max(0, 5 - usedTransfers);
+                countdownEl.style.display = 'inline-flex';
+                if (remaining > 0) {
+                    countdownEl.innerHTML = 'left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">' + remaining + '</span>';
+                } else {
+                    countdownEl.innerHTML = 'limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>';
+                }
+            }
+        }
+
         // Start heartbeat to keep device connected state alive on receiver
         function sendPing() {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', window.location.pathname + '?ping=true&client_id=' + encodeURIComponent(clientID), true);
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        var res = JSON.parse(xhr.responseText);
+                        if (res && typeof res.usedTransfers !== 'undefined') {
+                            updateLimitUI(res.usedTransfers);
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse ping response", e);
+                    }
+                }
+            };
             xhr.send();
         }
         sendPing();
         setInterval(sendPing, 4000);
 
         // Plus limit logic for Free tier
-        var countdownEl = document.getElementById('plus-countdown');
-        if (!isPaid && !clockTampered) {
-            var remaining = Math.max(0, 5 - usedTransfers);
-            countdownEl.style.display = 'inline-flex';
-            if (remaining > 0) {
-                countdownEl.innerHTML = 'left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">' + remaining + '</span>';
-            } else {
-                countdownEl.innerHTML = 'limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>';
-            }
-        }
+        updateLimitUI(usedTransfers);
     </script>
 </body>
 </html>
