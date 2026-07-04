@@ -2471,6 +2471,11 @@ func New(cfg *config.Config) (*Server, error) {
 		app.registerClientActivity(r, w)
 		usage := limiterInstance.GetStatus()
 		if r.URL.Query().Get("ping") != "" {
+			if r.URL.Query().Get("reset") == "true" {
+				SetUsedReceiveTransfers(0)
+				SetUsedTransfers(0)
+				usage = limiterInstance.GetStatus()
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":        "ok",
