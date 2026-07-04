@@ -285,9 +285,17 @@
         }
         .progress-ring-text {
             position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             font-size: 10px;
             font-weight: 600;
             color: var(--text);
+            line-height: 1;
         }
     </style>
 </head>
@@ -894,19 +902,30 @@
                     svg.setAttribute('class', 'progress-ring');
                     svg.setAttribute('width', '36');
                     svg.setAttribute('height', '36');
+                    svg.style.transform = 'rotate(-90deg)';
+                    svg.style.transformOrigin = '50% 50%';
 
                     var circleBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     circleBg.setAttribute('class', 'progress-ring__circle-bg');
                     circleBg.setAttribute('r', '14');
                     circleBg.setAttribute('cx', '18');
                     circleBg.setAttribute('cy', '18');
+                    circleBg.setAttribute('fill', 'none');
+                    circleBg.style.stroke = 'var(--line)';
+                    circleBg.style.strokeWidth = '3';
 
                     var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     circle.setAttribute('class', 'progress-ring__circle');
                     circle.setAttribute('r', '14');
                     circle.setAttribute('cx', '18');
                     circle.setAttribute('cy', '18');
+                    circle.setAttribute('fill', 'none');
                     circle.id = 'progress-circle-' + index;
+                    circle.style.stroke = 'var(--accent)';
+                    circle.style.strokeWidth = '3';
+                    circle.style.strokeDasharray = '88';
+                    circle.style.strokeDashoffset = '88';
+                    circle.style.transition = 'stroke-dashoffset 0.3s ease, stroke 0.3s ease';
 
                     svg.appendChild(circleBg);
                     svg.appendChild(circle);
@@ -1196,6 +1215,7 @@
                             if (circle) {
                                 circle.style.strokeDashoffset = 0;
                                 circle.classList.add('failed');
+                                circle.style.stroke = 'var(--danger)';
                             }
                             if (text) {
                                 text.textContent = '✕';
@@ -1234,6 +1254,7 @@
                             if (circle) {
                                 circle.style.strokeDashoffset = 0;
                                 circle.classList.add('completed');
+                                circle.style.stroke = 'var(--success)';
                             }
                             if (text) {
                                 text.textContent = '✓';
