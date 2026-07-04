@@ -909,7 +909,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     if (pA !== pB) return pA - pB;
                     return b._naturalIndex - a._naturalIndex;
                 });
-                filesHtml = sortedFiles.map(file => {
+                filesHtml = sortedFiles.map((file, idx) => {
                     const name = file.name || 'File';
                     const percent = file.percent || 0;
                     const stateText = file.state || 'waiting';
@@ -943,17 +943,17 @@ function renderReceiveDeviceProgressHtml(task) {
                     const openFileTooltip = t('open_file_title', { file: name });
 
                     return `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                            <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                            <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
                             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
-                                <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
-                                ${stateText === 'completed' && path ? `
-                                    <div style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
+                                <span id="receive-file-progress-${escapeAttr(clientID)}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
+                                <div id="receive-file-action-container-${escapeAttr(clientID)}-${idx}" style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
+                                    ${stateText === 'completed' && path ? `
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                    </div>
-                                ` : ''}
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -992,7 +992,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     if (pA !== pB) return pA - pB;
                     return b._naturalIndex - a._naturalIndex;
                 });
-                filesHtml = sortedFallback.map(file => {
+                filesHtml = sortedFallback.map((file, idx) => {
                     const name = file.name || 'File';
                     const percent = file.percent || 0;
                     const stateText = file.state || 'waiting';
@@ -1026,17 +1026,17 @@ function renderReceiveDeviceProgressHtml(task) {
                     const openFileTooltip = t('open_file_title', { file: name });
 
                     return `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                            <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                            <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
                             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
-                                <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
-                                ${stateText === 'completed' && path ? `
-                                    <div style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
+                                <span id="receive-file-progress-${escapeAttr(clientID)}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
+                                <div id="receive-file-action-container-${escapeAttr(clientID)}-${idx}" style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
+                                    ${stateText === 'completed' && path ? `
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                    </div>
-                                ` : ''}
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -1059,12 +1059,12 @@ function renderReceiveDeviceProgressHtml(task) {
             const arrowSpan = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>`;
 
             return `
-                <li style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                <li id="receive-client-li-${escapeAttr(clientID)}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
                     <div class="device-header-toggle" data-client-id="${escapeAttr(clientID)}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
+                        <span id="receive-client-name-${escapeAttr(clientID)}" style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
                             ${arrowSpan}📱 ${escapeHTML(displayName)}
                         </span>
-                        <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
+                        <div id="receive-client-status-badge-${escapeAttr(clientID)}" style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
                             ${stateBadgeHtml}
                         </div>
@@ -1119,12 +1119,263 @@ function updateReceiveTransferActiveUI(task) {
 
     const devicesWrapper = document.getElementById('receive-devices-progress-wrapper');
     if (devicesWrapper) {
-        const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
-        const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-        devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
-        const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
-        if (newScrollContainer) {
-            newScrollContainer.scrollTop = scrollTop;
+        const clients = task.clientStates ? Object.values(task.clientStates) : [];
+        const hasSkeleton = !!devicesWrapper.querySelector('.devices-scroll-container');
+        
+        const needsRebuild = () => {
+            if (!hasSkeleton) return true;
+            const renderedLis = devicesWrapper.querySelectorAll('li[id^="receive-client-li-"]');
+            if (renderedLis.length !== clients.length) return true;
+            for (let i = 0; i < clients.length; i++) {
+                const client = clients[i];
+                const li = devicesWrapper.querySelector(`#receive-client-li-${escapeAttr(client.clientID)}`);
+                if (!li) return true;
+                
+                const files = client.files || [];
+                const renderedFileRows = li.querySelectorAll('div[id^="receive-file-row-"]');
+                let expectedFileCount = files.length;
+                if (files.length === 0) {
+                    const fallbackListLen = (client.state === 'transferring' && client.current ? 1 : 0) + (client.savedFiles || []).length;
+                    expectedFileCount = fallbackListLen;
+                }
+                if (renderedFileRows.length !== expectedFileCount) return true;
+            }
+            return false;
+        };
+
+        if (needsRebuild()) {
+            const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+            const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
+            const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+            if (newScrollContainer) {
+                newScrollContainer.scrollTop = scrollTop;
+            }
+        } else {
+            clients.forEach(client => {
+                const clientID = client.clientID;
+                const devName = client.deviceName || 'Device';
+                let displayName = devName;
+                if (!displayName.includes('(') && clientID) {
+                    const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                    displayName = `${displayName} (${shortId})`;
+                }
+                const stateText = getTranslatedState(client.state || 'waiting');
+                const percent = client.percent || 0;
+                const currentFile = client.current || '';
+
+                const totalFilesCount = client.files ? client.files.length : 0;
+                const completedFilesCount = client.files ? client.files.filter(f => f.state === 'completed').length : 0;
+                let statusCountText = '';
+                if (totalFilesCount > 0) {
+                    statusCountText = ` (${completedFilesCount}/${totalFilesCount})`;
+                } else {
+                    const savedLen = (client.savedFiles || []).length;
+                    if (client.state === 'transferring' && currentFile) {
+                        statusCountText = ` (${savedLen}/${savedLen + 1})`;
+                    } else if (savedLen > 0) {
+                        statusCountText = ` (${savedLen}/${savedLen})`;
+                    }
+                }
+                displayName = `${displayName}${statusCountText}`;
+
+                const clientNameEl = document.getElementById(`receive-client-name-${clientID}`);
+                if (clientNameEl) {
+                    const isFilesExpanded = !!state.deviceFilesExpanded[clientID];
+                    const arrow = isFilesExpanded ? '▼' : '▶';
+                    clientNameEl.innerHTML = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>📱 ${escapeHTML(displayName)}`;
+                }
+
+                const statusBadgeEl = document.getElementById(`receive-client-status-badge-${clientID}`);
+                if (statusBadgeEl) {
+                    let stateBadgeHtml = '';
+                    if (client.state === 'completed') {
+                        stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('completed') || 'Completed')}">✓</span>`;
+                    } else if (client.state === 'failed') {
+                        stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 900;" title="${escapeAttr(client.message || t('failed') || 'Failed')}">✕</span>`;
+                    } else if (client.state === 'waiting') {
+                        stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--text-secondary); font-size: 8px; font-weight: 900;" title="${escapeAttr(t('waiting') || 'Waiting')}">⌛</span>`;
+                    } else {
+                        stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
+                    }
+                    statusBadgeEl.innerHTML = `<span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>${stateBadgeHtml}`;
+                }
+
+                const formatSize = (bytes) => {
+                    if (!bytes) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+                };
+
+                const files = client.files || [];
+                if (files.length > 0) {
+                    const mappedFiles = files.map((file, idx) => {
+                        file._naturalIndex = idx;
+                        return file;
+                    });
+                    const sortedFiles = [...mappedFiles].sort((a, b) => {
+                        const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                        const pA = statePriority[a.state] || 5;
+                        const pB = statePriority[b.state] || 5;
+                        if (pA !== pB) return pA - pB;
+                        return b._naturalIndex - a._naturalIndex;
+                    });
+
+                    sortedFiles.forEach((file, idx) => {
+                        const fNameEl = document.getElementById(`receive-file-name-${clientID}-${idx}`);
+                        const fProgressEl = document.getElementById(`receive-file-progress-${clientID}-${idx}`);
+                        const fActionEl = document.getElementById(`receive-file-action-container-${clientID}-${idx}`);
+                        const fRowEl = document.getElementById(`receive-file-row-${clientID}-${idx}`);
+
+                        const bytesDone = formatSize(file.bytesDone);
+                        const bytesTotal = formatSize(file.bytesTotal);
+                        const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
+
+                        let progressRightStr = sizeProgressText;
+                        let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
+                        let namePrefix = '📄';
+
+                        if (file.state === 'completed') {
+                            namePrefix = '✓';
+                            progressRightStr = sizeProgressText || t('completed') || 'Completed';
+                            bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
+                        } else if (file.state === 'transferring') {
+                            namePrefix = '⟳';
+                            progressRightStr = sizeProgressText || `${file.percent || 0}%`;
+                            bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                        } else if (file.state === 'failed') {
+                            namePrefix = '✕';
+                            progressRightStr = t('failed') || 'Failed';
+                            bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
+                        } else {
+                            namePrefix = '⌛';
+                            progressRightStr = sizeProgressText || t('waiting') || 'Waiting';
+                            bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
+                        }
+
+                        if (fRowEl) {
+                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}`;
+                        }
+                        if (fNameEl) {
+                            fNameEl.textContent = `${namePrefix} ${file.name || 'File'}`;
+                            fNameEl.title = file.path || file.name || 'File';
+                        }
+                        if (fProgressEl) {
+                            fProgressEl.textContent = progressRightStr;
+                        }
+                        if (fActionEl) {
+                            const hasBtn = fActionEl.querySelector('button');
+                            if (file.state === 'completed' && file.path) {
+                                if (!hasBtn) {
+                                    const openFileTooltip = t('open_file_title', { file: file.name });
+                                    fActionEl.innerHTML = `
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file.path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFileIcon()}
+                                        </button>
+                                    `;
+                                }
+                            } else {
+                                fActionEl.innerHTML = '';
+                            }
+                        }
+                    });
+                } else {
+                    const fallbackList = [];
+                    if (client.state === 'transferring' && currentFile) {
+                        fallbackList.push({
+                            name: shortName(currentFile),
+                            path: currentFile,
+                            state: 'transferring',
+                            percent: percent,
+                            bytesDone: client.bytesDone,
+                            bytesTotal: client.bytesTotal
+                        });
+                    }
+                    const oldSaved = client.savedFiles || [];
+                    const revSaved = [...oldSaved].reverse();
+                    revSaved.forEach(file => {
+                        fallbackList.push({
+                            name: shortName(file),
+                            path: file,
+                            state: 'completed',
+                            percent: 100
+                        });
+                    });
+
+                    const mappedFallback = fallbackList.map((item, idx) => {
+                        item._naturalIndex = idx;
+                        return item;
+                    });
+                    const sortedFallback = [...mappedFallback].sort((a, b) => {
+                        const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                        const pA = statePriority[a.state] || 5;
+                        const pB = statePriority[b.state] || 5;
+                        if (pA !== pB) return pA - pB;
+                        return b._naturalIndex - a._naturalIndex;
+                    });
+
+                    sortedFallback.forEach((file, idx) => {
+                        const fNameEl = document.getElementById(`receive-file-name-${clientID}-${idx}`);
+                        const fProgressEl = document.getElementById(`receive-file-progress-${clientID}-${idx}`);
+                        const fActionEl = document.getElementById(`receive-file-action-container-${clientID}-${idx}`);
+                        const fRowEl = document.getElementById(`receive-file-row-${clientID}-${idx}`);
+
+                        const bytesDone = formatSize(file.bytesDone);
+                        const bytesTotal = formatSize(file.bytesTotal);
+                        const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
+
+                        let progressRightStr = sizeProgressText;
+                        let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
+                        let namePrefix = '📄';
+
+                        if (file.state === 'completed') {
+                            namePrefix = '✓';
+                            progressRightStr = sizeProgressText || t('completed') || 'Completed';
+                            bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
+                        } else if (file.state === 'transferring') {
+                            namePrefix = '⟳';
+                            progressRightStr = sizeProgressText || `${file.percent || 0}%`;
+                            bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                        } else if (file.state === 'failed') {
+                            namePrefix = '✕';
+                            progressRightStr = t('failed') || 'Failed';
+                            bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
+                        } else {
+                            namePrefix = '⌛';
+                            progressRightStr = sizeProgressText || t('waiting') || 'Waiting';
+                            bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
+                        }
+
+                        if (fRowEl) {
+                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}`;
+                        }
+                        if (fNameEl) {
+                            fNameEl.textContent = `${namePrefix} ${file.name || 'File'}`;
+                            fNameEl.title = file.path || file.name || 'File';
+                        }
+                        if (fProgressEl) {
+                            fProgressEl.textContent = progressRightStr;
+                        }
+                        if (fActionEl) {
+                            const hasBtn = fActionEl.querySelector('button');
+                            if (file.state === 'completed' && file.path) {
+                                if (!hasBtn) {
+                                    const openFileTooltip = t('open_file_title', { file: file.name });
+                                    fActionEl.innerHTML = `
+                                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file.path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFileIcon()}
+                                        </button>
+                                    `;
+                                }
+                            } else {
+                                fActionEl.innerHTML = '';
+                            }
+                        }
+                    });
+                }
+            });
         }
     }
 

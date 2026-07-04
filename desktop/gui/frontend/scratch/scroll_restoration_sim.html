@@ -267,7 +267,7 @@
                     let filesHtml = '';
                     const files = client.files || [];
                     if (files.length > 0) {
-                        filesHtml = files.map(file => {
+                        filesHtml = files.map((file, idx) => {
                             const name = file.name || 'File';
                             const percent = file.percent || 0;
                             const stateText = file.state || 'waiting';
@@ -286,10 +286,10 @@
                             }
 
                             return `
-                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                                    <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;">${namePrefix} ${name}</span>
+                                <div id="receive-file-row-${clientID}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                                    <span id="receive-file-name-${clientID}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;">${namePrefix} ${name}</span>
                                     <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
-                                        <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${percent}%</span>
+                                        <span id="receive-file-progress-${clientID}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${percent}%</span>
                                     </div>
                                 </div>
                             `;
@@ -302,12 +302,12 @@
                     const arrowSpan = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>`;
 
                     return `
-                        <li style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                        <li id="receive-client-li-${clientID}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
                             <div class="device-header-toggle" data-client-id="${clientID}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                                <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;">
+                                <span id="receive-client-name-${clientID}" style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;">
                                     ${arrowSpan}📱 ${displayName}
                                 </span>
-                                <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
+                                <div id="receive-client-status-badge-${clientID}" style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
                                     ${stateBadgeHtml}
                                 </div>
@@ -343,16 +343,94 @@
             devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
         }
 
-        // 修复版更新（会保留 scrollTop）
+        // 修复版更新（最细粒度静默精准就地更新，完全复刻 main.js 的算法）
         function updateReceiveTransferActiveUI_Patched(task) {
-            const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
-            const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            const clients = task.clientStates ? Object.values(task.clientStates) : [];
+            const hasSkeleton = !!devicesWrapper.querySelector('.devices-scroll-container');
+            
+            const needsRebuild = () => {
+                if (!hasSkeleton) return true;
+                const renderedLis = devicesWrapper.querySelectorAll('li[id^="receive-client-li-"]');
+                if (renderedLis.length !== clients.length) return true;
+                for (let i = 0; i < clients.length; i++) {
+                    const client = clients[i];
+                    const li = devicesWrapper.querySelector(`#receive-client-li-${client.clientID}`);
+                    if (!li) return true;
+                    
+                    const files = client.files || [];
+                    const renderedFileRows = li.querySelectorAll('div[id^="receive-file-row-"]');
+                    if (renderedFileRows.length !== files.length) return true;
+                }
+                return false;
+            };
 
-            devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
+            if (needsRebuild()) {
+                const scrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+                const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+                devicesWrapper.innerHTML = renderReceiveDeviceProgressHtml(task);
+                const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
+                if (newScrollContainer) {
+                    newScrollContainer.scrollTop = scrollTop;
+                }
+                logMsg("[骨架构建] 重构了设备列表 DOM 骨架", "error");
+            } else {
+                clients.forEach(client => {
+                    const clientID = client.clientID;
+                    const devName = client.deviceName || 'Device';
+                    const stateText = t(client.state || 'waiting');
+                    const percent = client.percent || 0;
+                    
+                    const totalFilesCount = client.files ? client.files.length : 0;
+                    const completedFilesCount = client.files ? client.files.filter(f => f.state === 'completed').length : 0;
+                    let displayName = `${devName} (${completedFilesCount}/${totalFilesCount})`;
 
-            const newScrollContainer = devicesWrapper.querySelector('.devices-scroll-container');
-            if (newScrollContainer) {
-                newScrollContainer.scrollTop = scrollTop;
+                    // 1. 精准更新行名称
+                    const clientNameEl = document.getElementById(`receive-client-name-${clientID}`);
+                    if (clientNameEl) {
+                        const isFilesExpanded = !!state.deviceFilesExpanded[clientID];
+                        const arrow = isFilesExpanded ? '▼' : '▶';
+                        clientNameEl.innerHTML = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>📱 ${displayName}`;
+                    }
+
+                    // 2. 精准更新徽章
+                    const statusBadgeEl = document.getElementById(`receive-client-status-badge-${clientID}`);
+                    if (statusBadgeEl) {
+                        let stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
+                        if (client.state === 'completed') {
+                            stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;">✓</span>`;
+                        }
+                        statusBadgeEl.innerHTML = `<span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>${stateBadgeHtml}`;
+                    }
+
+                    // 3. 精准更新文件项目
+                    const files = client.files || [];
+                    files.forEach((file, idx) => {
+                        const fNameEl = document.getElementById(`receive-file-name-${clientID}-${idx}`);
+                        const fProgressEl = document.getElementById(`receive-file-progress-${clientID}-${idx}`);
+                        const fRowEl = document.getElementById(`receive-file-row-${clientID}-${idx}`);
+
+                        let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
+                        let namePrefix = '📄';
+
+                        if (file.state === 'completed') {
+                            namePrefix = '✓';
+                            bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
+                        } else if (file.state === 'transferring') {
+                            namePrefix = '⟳';
+                            bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                        }
+
+                        if (fRowEl) {
+                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}`;
+                        }
+                        if (fNameEl) {
+                            fNameEl.textContent = `${namePrefix} ${file.name}`;
+                        }
+                        if (fProgressEl) {
+                            fProgressEl.textContent = `${file.percent}%`;
+                        }
+                    });
+                });
             }
         }
 
