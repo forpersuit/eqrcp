@@ -2460,6 +2460,7 @@ func New(cfg *config.Config) (*Server, error) {
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status":        "ok",
 				"isPaid":        usage.IsPaid,
+				"licenseTier":   usage.LicenseTier,
 				"usedTransfers": usage.UsedReceiveTransfers,
 			})
 			return

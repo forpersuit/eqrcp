@@ -1145,6 +1145,9 @@
                     if (stopButton) {
                         stopButton.style.display = 'none';
                     }
+                    if (typeof triggerFastPolling === 'function') {
+                        triggerFastPolling();
+                    }
                     return; // Prevent form submit
                 }
             }
@@ -1399,7 +1402,15 @@
         resizeTextArea();
 
         function updateLimitUI(count) {
+            var oldTransfers = usedTransfers;
             usedTransfers = count;
+            isPlusMode = (isPaid && !clockTampered) || (usedTransfers < 5);
+
+            // Re-render select list to clear oversized/overcount badge when quota changes
+            if (oldTransfers !== usedTransfers) {
+                renderFiles();
+            }
+
             var countdownEl = document.getElementById('plus-countdown');
             if (countdownEl && !isPaid && !clockTampered) {
                 var remaining = Math.max(0, 5 - usedTransfers);
@@ -1409,8 +1420,13 @@
                 } else {
                     countdownEl.innerHTML = 'limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>';
                 }
+            } else if (countdownEl) {
+                countdownEl.style.display = 'none';
             }
         }
+
+        var pingTimer = null;
+        var fastPollCount = 0;
 
         // Start heartbeat to keep device connected state alive on receiver
         function sendPing() {
@@ -1420,8 +1436,35 @@
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         var res = JSON.parse(xhr.responseText);
-                        if (res && typeof res.usedTransfers !== 'undefined') {
-                            updateLimitUI(res.usedTransfers);
+                        if (res) {
+                            if (typeof res.isPaid !== 'undefined') {
+                                isPaid = res.isPaid;
+                                var tierBadge = document.getElementById('tier-badge');
+                                if (tierBadge) {
+                                    if (isPaid) {
+                                        tierBadge.textContent = res.licenseTier || 'PLUS';
+                                        tierBadge.classList.remove('clock-error');
+                                    } else {
+                                        tierBadge.textContent = 'FREE';
+                                        tierBadge.classList.remove('clock-error');
+                                    }
+                                }
+                            }
+                            if (typeof res.usedTransfers !== 'undefined') {
+                                var oldTransfers = usedTransfers;
+                                updateLimitUI(res.usedTransfers);
+
+                                // If quota has been reset to 0, stop fast polling
+                                if (res.usedTransfers === 0 && oldTransfers > 0) {
+                                    fastPollCount = 0;
+                                    resetPolling(4000);
+                                } else if (fastPollCount > 0) {
+                                    fastPollCount--;
+                                    if (fastPollCount === 0) {
+                                        resetPolling(4000);
+                                    }
+                                }
+                            }
                         }
                     } catch (e) {
                         console.error("Failed to parse ping response", e);
@@ -1430,8 +1473,22 @@
             };
             xhr.send();
         }
+
+        function resetPolling(interval) {
+            if (pingTimer) {
+                clearInterval(pingTimer);
+            }
+            pingTimer = setInterval(sendPing, interval);
+        }
+
+        function triggerFastPolling() {
+            fastPollCount = 6;  // 6 times fast polling (approx 9 seconds duration)
+            sendPing();
+            resetPolling(1500); // 1.5s fast interval
+        }
+
         sendPing();
-        setInterval(sendPing, 4000);
+        resetPolling(4000);
 
         // Plus limit logic for Free tier
         updateLimitUI(usedTransfers);
