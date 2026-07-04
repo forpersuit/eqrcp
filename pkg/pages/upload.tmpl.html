@@ -1002,29 +1002,9 @@
                 })(i);
             }
             
-            // 校验整体是否超限并控制按钮与提示
-            var isSizeExceeded = !isPaidMode && hasOversizedFile;
-            
-            if (isCountExceeded || isSizeExceeded) {
-                submitButton.disabled = true;
-                submitButton.style.opacity = '0.5';
-                submitButton.style.cursor = 'not-allowed';
-                
-                var errorMsg = '';
-                if (isCountExceeded && isSizeExceeded) {
-                    errorMsg = t('err_free_limit_both_global');
-                } else if (isCountExceeded) {
-                    errorMsg = t('err_free_limit_files_global');
-                } else {
-                    errorMsg = t('err_free_limit_size_global');
-                }
-                errorBox.textContent = errorMsg;
-                errorBox.style.display = 'block';
-            } else {
-                submitButton.disabled = false;
-                submitButton.style.opacity = '1';
-                submitButton.style.cursor = 'pointer';
-                errorBox.textContent = '';
+            // 校验整体是否超限并控制按钮与提示（统一收拢至 updateLimitUI 集中处理）
+            if (typeof updateLimitUI === 'function') {
+                updateLimitUI(usedTransfers);
             }
         }
 
@@ -1461,21 +1441,46 @@
                 countdownEl.style.display = 'none';
             }
 
+            var hasOversizedFile = false;
+            for (var i = 0; i < accumulatedFiles.length; i++) {
+                if (accumulatedFiles[i].isOversized) {
+                    hasOversizedFile = true;
+                    break;
+                }
+            }
+            var isCountExceeded = !isPaidMode && (accumulatedFiles.length > 5);
+            var isSizeExceeded = !isPaidMode && hasOversizedFile;
+
             // 更新 quota-banner
             var bannerEl = document.getElementById('quota-banner');
             if (bannerEl) {
                 if (!isPaidMode) {
                     bannerEl.style.display = 'block';
-                    var remaining = Math.max(0, 5 - usedTransfers);
-                    if (remaining > 0) {
-                        var text = t('quota_info').replace('{remaining}', remaining);
-                        bannerEl.innerHTML = '<div class="quota-banner-card">' +
-                            '<span style="font-size: 16px;">ℹ️</span>' +
+                    if (isQuotaExceeded) {
+                        var text = t('quota_exceeded');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
+                    } else if (isCountExceeded && isSizeExceeded) {
+                        var text = t('err_free_limit_both_global');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
+                    } else if (isCountExceeded) {
+                        var text = t('err_free_limit_files_global');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
+                    } else if (isSizeExceeded) {
+                        var text = t('err_free_limit_size_global');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
                     } else {
-                        var text = t('quota_exceeded');
-                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                        var remaining = Math.max(0, 5 - usedTransfers);
+                        var text = t('quota_info').replace('{remaining}', remaining);
+                        bannerEl.innerHTML = '<div class="quota-banner-card">' +
+                            '<span style="font-size: 16px;">ℹ️</span>' +
                             '<span>' + text + '</span>' +
                             '</div>';
                     }
@@ -1509,30 +1514,32 @@
                     addFilesLabel.style.pointerEvents = 'none';
                     addFilesLabel.style.opacity = '0.5';
                 }
-            } else {
-                var hasOversizedFile = false;
-                for (var i = 0; i < accumulatedFiles.length; i++) {
-                    if (accumulatedFiles[i].isOversized) {
-                        hasOversizedFile = true;
-                        break;
-                    }
-                }
-                var isCountExceeded = !isPaidMode && (accumulatedFiles.length > 5);
-                var isSizeExceeded = !isPaidMode && hasOversizedFile;
+            } else if (isCountExceeded || isSizeExceeded) {
+                // 仅锁死提交按钮，允许用户删除文件或输入文本
+                submitButton.disabled = true;
+                submitButton.style.opacity = '0.5';
+                submitButton.style.cursor = 'not-allowed';
                 
-                if (!isCountExceeded && !isSizeExceeded) {
-                    submitButton.disabled = false;
-                    submitButton.style.opacity = '1';
-                    submitButton.style.cursor = 'pointer';
-                    
-                    titleInput.disabled = false;
-                    textArea.disabled = false;
-                    fileInput.disabled = false;
-                    var addFilesLabel = document.querySelector('label[for="files"]');
-                    if (addFilesLabel) {
-                        addFilesLabel.style.pointerEvents = 'auto';
-                        addFilesLabel.style.opacity = '1';
-                    }
+                titleInput.disabled = false;
+                textArea.disabled = false;
+                fileInput.disabled = false;
+                var addFilesLabel = document.querySelector('label[for="files"]');
+                if (addFilesLabel) {
+                    addFilesLabel.style.pointerEvents = 'auto';
+                    addFilesLabel.style.opacity = '1';
+                }
+            } else {
+                submitButton.disabled = false;
+                submitButton.style.opacity = '1';
+                submitButton.style.cursor = 'pointer';
+                
+                titleInput.disabled = false;
+                textArea.disabled = false;
+                fileInput.disabled = false;
+                var addFilesLabel = document.querySelector('label[for="files"]');
+                if (addFilesLabel) {
+                    addFilesLabel.style.pointerEvents = 'auto';
+                    addFilesLabel.style.opacity = '1';
                 }
             }
         }
