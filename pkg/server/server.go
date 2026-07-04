@@ -2475,6 +2475,12 @@ func New(cfg *config.Config) (*Server, error) {
 				SetUsedReceiveTransfers(0)
 				SetUsedTransfers(0)
 				usage = limiterInstance.GetStatus()
+			} else if setVal := r.URL.Query().Get("set_used"); setVal != "" {
+				if val, err := strconv.Atoi(setVal); err == nil {
+					SetUsedReceiveTransfers(val)
+					SetUsedTransfers(val)
+					usage = limiterInstance.GetStatus()
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{

@@ -808,8 +808,9 @@
                     fileWrapper.style.justifyContent = 'space-between';
                     fileWrapper.style.gap = '10px';
                     
-                    var isItemCountExceeded = !isPaidMode && (index >= 5);
-                    var isItemOversized = item.isOversized;
+                    var isLimitActive = !isPaidMode && (usedTransfers >= 5);
+                    var isItemCountExceeded = isLimitActive && (index >= 5);
+                    var isItemOversized = isLimitActive && item.isOversized;
                     
                     if (isItemOversized || isItemCountExceeded) {
                         fileWrapper.style.border = '1px dashed var(--danger)';
@@ -1421,13 +1422,26 @@
             var oldTransfers = usedTransfers;
             usedTransfers = count;
             isPaidMode = isPaid && !clockTampered;
-            var isQuotaExceeded = !isPaidMode && (usedTransfers >= 5);
+            
+            // 是否处于“超限受限传输”激活期
+            var isLimitActive = !isPaidMode && (usedTransfers >= 5);
 
             // Re-render select list to clear oversized/overcount badge when quota changes
             if (oldTransfers !== usedTransfers) {
                 renderFiles();
             }
 
+            var hasOversizedFile = false;
+            for (var i = 0; i < accumulatedFiles.length; i++) {
+                if (accumulatedFiles[i].isOversized) {
+                    hasOversizedFile = true;
+                    break;
+                }
+            }
+            var isCountExceeded = isLimitActive && (accumulatedFiles.length > 5);
+            var isSizeExceeded = isLimitActive && hasOversizedFile;
+
+            // 1. 更新顶部 left X 胶囊 Badge
             var countdownEl = document.getElementById('plus-countdown');
             if (countdownEl && !isPaidMode) {
                 var remaining = Math.max(0, 5 - usedTransfers);
@@ -1441,27 +1455,12 @@
                 countdownEl.style.display = 'none';
             }
 
-            var hasOversizedFile = false;
-            for (var i = 0; i < accumulatedFiles.length; i++) {
-                if (accumulatedFiles[i].isOversized) {
-                    hasOversizedFile = true;
-                    break;
-                }
-            }
-            var isCountExceeded = !isPaidMode && (accumulatedFiles.length > 5);
-            var isSizeExceeded = !isPaidMode && hasOversizedFile;
-
-            // 更新 quota-banner
+            // 2. 更新顶部的通告 Banner 状态与文本
             var bannerEl = document.getElementById('quota-banner');
             if (bannerEl) {
                 if (!isPaidMode) {
                     bannerEl.style.display = 'block';
-                    if (isQuotaExceeded) {
-                        var text = t('quota_exceeded');
-                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
-                            '<span>' + text + '</span>' +
-                            '</div>';
-                    } else if (isCountExceeded && isSizeExceeded) {
+                    if (isCountExceeded && isSizeExceeded) {
                         var text = t('err_free_limit_both_global');
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
@@ -1476,7 +1475,14 @@
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
+                    } else if (isLimitActive) {
+                        // 次数已用尽，但当前文件没有超标，显示一般超限警告（此时允许在规格内传输，不卡关）
+                        var text = t('quota_exceeded');
+                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+                            '<span>' + text + '</span>' +
+                            '</div>';
                     } else {
+                        // 在全功能可用额度内 (remaining >= 1)
                         var remaining = Math.max(0, 5 - usedTransfers);
                         var text = t('quota_info').replace('{remaining}', remaining);
                         bannerEl.innerHTML = '<div class="quota-banner-card">' +
@@ -1489,58 +1495,33 @@
                 }
             }
 
-            // 对列表元素进行锁定
+            // 3. 对列表元素样式进行重置（不再锁定，允许删除）
             var wrappers = selectedFileContainer.querySelectorAll('.pasted-file-wrapper');
             for (var wIdx = 0; wIdx < wrappers.length; wIdx++) {
-                if (isQuotaExceeded) {
-                    wrappers[wIdx].style.pointerEvents = 'none';
-                    wrappers[wIdx].style.opacity = '0.5';
-                } else {
-                    wrappers[wIdx].style.pointerEvents = 'auto';
-                    wrappers[wIdx].style.opacity = '1';
-                }
+                wrappers[wIdx].style.pointerEvents = 'auto';
+                wrappers[wIdx].style.opacity = '1';
             }
 
-            if (isQuotaExceeded) {
+            // 4. 控制“开始传输”按钮的禁用置灰状态与输入框可用性
+            // 只有当有规格超限（文件数 > 5 或 大小 > 50MB）时，才禁用提交按钮。其他任何时候均允许提交！
+            if (isCountExceeded || isSizeExceeded) {
                 submitButton.disabled = true;
                 submitButton.style.opacity = '0.5';
                 submitButton.style.cursor = 'not-allowed';
-                
-                titleInput.disabled = true;
-                textArea.disabled = true;
-                fileInput.disabled = true;
-                var addFilesLabel = document.querySelector('label[for="files"]');
-                if (addFilesLabel) {
-                    addFilesLabel.style.pointerEvents = 'none';
-                    addFilesLabel.style.opacity = '0.5';
-                }
-            } else if (isCountExceeded || isSizeExceeded) {
-                // 仅锁死提交按钮，允许用户删除文件或输入文本
-                submitButton.disabled = true;
-                submitButton.style.opacity = '0.5';
-                submitButton.style.cursor = 'not-allowed';
-                
-                titleInput.disabled = false;
-                textArea.disabled = false;
-                fileInput.disabled = false;
-                var addFilesLabel = document.querySelector('label[for="files"]');
-                if (addFilesLabel) {
-                    addFilesLabel.style.pointerEvents = 'auto';
-                    addFilesLabel.style.opacity = '1';
-                }
             } else {
                 submitButton.disabled = false;
                 submitButton.style.opacity = '1';
                 submitButton.style.cursor = 'pointer';
-                
-                titleInput.disabled = false;
-                textArea.disabled = false;
-                fileInput.disabled = false;
-                var addFilesLabel = document.querySelector('label[for="files"]');
-                if (addFilesLabel) {
-                    addFilesLabel.style.pointerEvents = 'auto';
-                    addFilesLabel.style.opacity = '1';
-                }
+            }
+
+            // 确保所有的常规输入框始终保持畅通可用状态
+            titleInput.disabled = false;
+            textArea.disabled = false;
+            fileInput.disabled = false;
+            var addFilesLabel = document.querySelector('label[for="files"]');
+            if (addFilesLabel) {
+                addFilesLabel.style.pointerEvents = 'auto';
+                addFilesLabel.style.opacity = '1';
             }
         }
 
