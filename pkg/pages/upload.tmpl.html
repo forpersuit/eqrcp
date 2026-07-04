@@ -697,6 +697,7 @@
         
         var currentTusUpload = null;
         var isUploadStopped = false;
+        var isUploading = false;
 
         function readDraft() {
             try {
@@ -792,6 +793,7 @@
         }
 
         function renderFiles() {
+            if (isUploading) { return; }
             selectedFileContainer.innerHTML = '';
             pastedFileContainer.innerHTML = ''; // Not used as everything is rendered in selectedFileContainer
             
@@ -1091,6 +1093,7 @@
             submitButton.disabled = true;
 
             isUploadStopped = false;
+            isUploading = true;
             var stopButton = document.getElementById('stop-btn');
             if (stopButton) {
                 stopButton.style.display = 'inline-block';
@@ -1129,6 +1132,7 @@
             if (filesToUpload.length === 0) {
                 submitButton.disabled = false;
                 submitButton.value = t('btn_transfer');
+                isUploading = false;
                 return;
             }
 
@@ -1166,6 +1170,7 @@
                     if (typeof triggerFastPolling === 'function') {
                         triggerFastPolling();
                     }
+                    isUploading = false;
                     return; // Prevent form submit
                 }
             }
@@ -1297,6 +1302,7 @@
                                 text.style.color = 'var(--danger)';
                             }
                         }
+                        isUploading = false;
                         handleError(500, error.message);
                     },
                     onProgress: function(bytesSent, bytesTotal) {
