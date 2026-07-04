@@ -97,6 +97,7 @@ type Server struct {
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
 	transferCounted        bool
+	receiveQuotaCounted    bool
 	downloadedItems        map[int]bool
 	downloadedItemsMu      sync.Mutex
 	downloadedBytes        map[int]int64
@@ -284,6 +285,7 @@ func (s *Server) ReceiveTo(dir string) error {
 	s.clientStatesMu.Unlock()
 
 	s.clientMutex.Lock()
+	s.receiveQuotaCounted = false
 	s.clientLastSeen = make(map[string]time.Time)
 	s.clientProgress = make(map[string]map[int]int64)
 	s.clientReceiveCounted = make(map[string]bool)
@@ -591,11 +593,14 @@ func (s *Server) ReceiveTo(dir string) error {
 			if !alreadyCounted {
 				s.clientReceiveCounted[clientID] = true
 			}
+			if !s.receiveQuotaCounted {
+				s.receiveQuotaCounted = true
+				if !limiterInstance.GetStatus().IsPaid {
+					IncrementUsedReceiveTransfers(1)
+				}
+			}
 			s.clientMutex.Unlock()
 
-			if !alreadyCounted && !limiterInstance.GetStatus().IsPaid {
-				IncrementUsedReceiveTransfers(1)
-			}
 			s.updateStatus(func(status *transferStatus) {
 				status.SavedFiles = append(status.SavedFiles, out.Name())
 				status.BytesDone = totalDone
@@ -2609,11 +2614,14 @@ func New(cfg *config.Config) (*Server, error) {
 			if !alreadyCounted {
 				app.clientReceiveCounted[clientID] = true
 			}
+			if !app.receiveQuotaCounted {
+				app.receiveQuotaCounted = true
+				if !startUsage.IsPaid {
+					IncrementUsedReceiveTransfers(1)
+				}
+			}
 			app.clientMutex.Unlock()
 
-			if !alreadyCounted && !startUsage.IsPaid {
-				IncrementUsedReceiveTransfers(1)
-			}
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
 				status.BytesDone = 0
