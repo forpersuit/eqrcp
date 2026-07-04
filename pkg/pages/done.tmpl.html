@@ -215,6 +215,7 @@
             <p class="summary" data-i18n="summary" data-count="{{.Count}}">
                 {{if eq .Count 1}}1 file has been saved successfully.{{else}}{{.Count}} files have been saved successfully.{{end}}
             </p>
+            <div id="device-id-container" style="font-size: 13px; color: var(--text-secondary); margin-top: -12px; margin-bottom: 24px; font-weight: 700; letter-spacing: 0.02em;"></div>
 
             {{if .Files}}
             <p class="section-title" data-i18n="saved_files">Saved files</p>
@@ -259,7 +260,8 @@
                 summary_multiple: '{count} 个文件已成功保存。',
                 saved_files: '已保存的文件',
                 saved_file: '已保存的文件',
-                close_hint: '您现在可以关闭此页面了。'
+                close_hint: '您现在可以关闭此页面了。',
+                device_id: '设备 ID'
             },
             en: {
                 title: 'Transfer Complete - EQT',
@@ -268,7 +270,8 @@
                 summary_multiple: '{count} files have been saved successfully.',
                 saved_files: 'Saved files',
                 saved_file: 'Saved file',
-                close_hint: 'You can close this page now.'
+                close_hint: 'You can close this page now.',
+                device_id: 'Device ID'
             },
             ja: {
                 title: '転送完了 - EQT',
@@ -277,7 +280,8 @@
                 summary_multiple: '{count} 個のファイルが正常に保存されました。',
                 saved_files: '保存されたファイル',
                 saved_file: '保存されたファイル',
-                close_hint: 'このページを閉じても大丈夫です。'
+                close_hint: 'このページを閉じても大丈夫です。',
+                device_id: 'デバイス ID'
             },
             ko: {
                 title: '전송 완료 - EQT',
@@ -286,7 +290,8 @@
                 summary_multiple: '{count}개의 파일이 성공적으로 저장되었습니다.',
                 saved_files: '저장된 파일',
                 saved_file: '저장된 파일',
-                close_hint: '이제 이 페이지를 닫으셔도 됩니다.'
+                close_hint: '이제 이 페이지를 닫으셔도 됩니다.',
+                device_id: '기기 ID'
             },
             es: {
                 title: 'Transferencia Completa - EQT',
@@ -295,7 +300,8 @@
                 summary_multiple: '{count} archivos se han guardado correctamente.',
                 saved_files: 'Archivos guardados',
                 saved_file: 'Archivo guardado',
-                close_hint: 'Ya puede cerrar esta página.'
+                close_hint: 'Ya puede cerrar esta página.',
+                device_id: 'ID de dispositivo'
             },
             de: {
                 title: 'Übertragung abgeschlossen - EQT',
@@ -304,7 +310,8 @@
                 summary_multiple: '{count} Dateien wurden erfolgreich gespeichert.',
                 saved_files: 'Gespeicherte Dateien',
                 saved_file: 'Gespeicherte Datei',
-                close_hint: 'Sie können diese Seite jetzt schließen.'
+                close_hint: 'Sie können diese Seite jetzt schließen.',
+                device_id: 'Geräte-ID'
             },
             fr: {
                 title: 'Transfert Terminé - EQT',
@@ -313,7 +320,8 @@
                 summary_multiple: '{count} fichiers ont été enregistrés avec succès.',
                 saved_files: 'Fichiers enregistrés',
                 saved_file: 'Fichier enregistré',
-                close_hint: 'Vous pouvez fermer cette page maintenant.'
+                close_hint: 'Vous pouvez fermer cette page maintenant.',
+                device_id: 'ID de l\'appareil'
             }
         };
 
@@ -375,6 +383,20 @@
             var langSelect = document.getElementById('page-lang-select');
             if (langSelect) {
                 langSelect.value = currentLang;
+            }
+
+            var getQueryParam = function(name) {
+                var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+                return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+            };
+            var clientID = window.currentClientID || getQueryParam('client_id');
+            if (clientID) {
+                var shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                var devIdEl = document.getElementById('device-id-container');
+                if (devIdEl) {
+                    devIdEl.style.display = 'block';
+                    devIdEl.textContent = dict.device_id + ': ' + shortId;
+                }
             }
         }
 

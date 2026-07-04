@@ -66,6 +66,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - 对于未激活 Plus 授权的免费设备，移动端应渲染一个醒目的、符合设计美学的限额状态通告栏（`#quota-banner`）。
   - 当今日剩余免费接收次数 > 0 时，显示剩余可用次数提示；当次数耗尽时，通告栏切换为超限红色警告，并彻底锁死移动端页面的所有输入域、文件列表和 Transfer 传输按钮。
   - 在客户端心跳轮询（ping）中，服务端需要动态向客户端同步当前的限额剩余次数与付费状态。移动端在探测到最新的限额数值发生改变或由于在 GUI 端发生重置/激活操作时，自动通过 `updateLimitUI()` 更新本地 UI 并安全恢复/锁死功能，无需用户手动刷新网页。
+- **传输完成界面设备 ID 渲染 (Done Page Device ID Rendering)**：在移动端传输完成的成功界面中，必须显示当前客户端 `clientID` 的后四位（如 `Device ID: XXXX`）。为了保证模板渲染的向下兼容性并避免 Go 模板反射结构体字段缺失报错，严禁在模板中直接嵌入 Go 的 `{{.ClientID}}` 语法进行渲染；必须采用 JavaScript 双重容错机制：优先从 `window.currentClientID` 全局变量中提取，若不存在则降级通过 `getQueryParam('client_id')` 从当前 URL 参数中解析出 `clientID`，再执行截取和多语言词条渲染。
 
 
 ## Wails App Modal and Drag-Drop Guidelines (Wails原生确认弹窗与拖拽最佳实践)
