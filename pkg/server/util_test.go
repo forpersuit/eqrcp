@@ -190,6 +190,7 @@ func TestUploadLangRendering(t *testing.T) {
 	htmlVariables := struct {
 		Route         string
 		ClientID      string
+		DeviceName    string
 		File          string
 		Files         []string
 		Count         int
@@ -224,6 +225,7 @@ func TestReceivePageRendering(t *testing.T) {
 	htmlVariables := struct {
 		Route         string
 		ClientID      string
+		DeviceName    string
 		File          string
 		Files         []string
 		Count         int

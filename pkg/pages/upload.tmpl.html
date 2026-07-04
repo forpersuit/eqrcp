@@ -1168,7 +1168,7 @@
                         stopButton.style.display = 'none';
                     }
                     var doneXhr = new XMLHttpRequest();
-                    doneXhr.open('POST', '{{.Route}}?done=true');
+                    doneXhr.open('POST', '{{.Route}}?done=true&client_id=' + encodeURIComponent(clientID));
                     doneXhr.onload = function() {
                         if (doneXhr.status >= 200 && doneXhr.status < 300) {
                             clearDraft();
@@ -1218,11 +1218,12 @@
                 var uploadBlob = item.type === 'text' ? item.blob : item.file;
                 
                 var upload = new tus.Upload(uploadBlob, {
-                    endpoint: '{{.Route}}/tus/',
+                    endpoint: '{{.Route}}/tus/?client_id=' + encodeURIComponent(clientID),
                     retryDelays: [0, 1000, 3000, 5000, 10000],
                     metadata: {
                         filename: item.name,
                         clientid: clientID,
+                        devicename: '{{.DeviceName}}',
                         totalsize: totalFilesSize.toString(),
                         totalfiles: filesToUpload.length.toString()
                     },
@@ -1291,7 +1292,7 @@
 
             // Send init request to register all files before starting TUS upload loop
             var initXhr = new XMLHttpRequest();
-            initXhr.open('POST', '{{.Route}}?init=true');
+            initXhr.open('POST', '{{.Route}}?init=true&client_id=' + encodeURIComponent(clientID));
             initXhr.setRequestHeader('Content-Type', 'application/json');
             initXhr.onload = function() {
                 startNextTusUpload();
@@ -1319,7 +1320,7 @@
                     }
                 }
                 var stopXhr = new XMLHttpRequest();
-                stopXhr.open('POST', '{{.Route}}?stop=true');
+                stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(clientID));
                 stopXhr.send();
 
                 stopButton.style.display = 'none';
@@ -1366,7 +1367,7 @@
         // Start heartbeat to keep device connected state alive on receiver
         function sendPing() {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', window.location.pathname + '?ping=true', true);
+            xhr.open('GET', window.location.pathname + '?ping=true&client_id=' + encodeURIComponent(clientID), true);
             xhr.send();
         }
         sendPing();

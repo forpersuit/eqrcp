@@ -356,6 +356,7 @@ func (s *Server) ReceiveTo(dir string) error {
 			if origName == "" {
 				origName = "upload_" + event.Upload.ID
 			}
+			deviceName := event.Upload.MetaData["devicename"]
 
 			// Refresh last seen
 			s.clientMutex.Lock()
@@ -396,6 +397,9 @@ func (s *Server) ReceiveTo(dir string) error {
 			}
 
 			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+				if deviceName != "" && (cs.DeviceName == "" || cs.DeviceName == "Device") {
+					cs.DeviceName = deviceName
+				}
 				// Find and update ClientFileTransferState
 				found := false
 				isAlreadyCompleted := false
@@ -452,6 +456,7 @@ func (s *Server) ReceiveTo(dir string) error {
 			if origName == "" {
 				origName = "upload_" + info.Upload.ID
 			}
+			deviceName := info.Upload.MetaData["devicename"]
 			clientID := info.Upload.MetaData["clientid"]
 			if clientID == "" {
 				clientID = "unknown"
@@ -523,6 +528,9 @@ func (s *Server) ReceiveTo(dir string) error {
 
 			var savedCount int
 			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+				if deviceName != "" && (cs.DeviceName == "" || cs.DeviceName == "Device") {
+					cs.DeviceName = deviceName
+				}
 				cs.SavedFiles = append(cs.SavedFiles, out.Name())
 				cs.State = "completed"
 				cs.BytesDone = clientDone
@@ -2456,6 +2464,7 @@ func New(cfg *config.Config) (*Server, error) {
 		htmlVariables := struct {
 			Route         string
 			ClientID      string
+			DeviceName    string
 			File          string
 			Files         []string
 			Count         int
@@ -2467,6 +2476,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}{
 			Route:         "/receive/" + path,
 			ClientID:      clientID,
+			DeviceName:    app.getClientStatus(clientID).DeviceName,
 			IsPaid:        usage.IsPaid,
 			LicenseTier:   usage.LicenseTier,
 			UsedTransfers: usage.UsedReceiveTransfers,
