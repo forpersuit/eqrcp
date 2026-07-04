@@ -880,13 +880,13 @@ function renderReceiveDeviceProgressHtml(task) {
             const completedFilesCount = client.files ? client.files.filter(f => f.state === 'completed').length : 0;
             let statusCountText = '';
             if (totalFilesCount > 0) {
-                statusCountText = ` 设备 (${completedFilesCount}/${totalFilesCount})`;
+                statusCountText = ` (${completedFilesCount}/${totalFilesCount})`;
             } else {
                 const savedLen = (client.savedFiles || []).length;
                 if (client.state === 'transferring' && currentFile) {
-                    statusCountText = ` 设备 (${savedLen}/${savedLen + 1})`;
+                    statusCountText = ` (${savedLen}/${savedLen + 1})`;
                 } else if (savedLen > 0) {
-                    statusCountText = ` 设备 (${savedLen}/${savedLen})`;
+                    statusCountText = ` (${savedLen}/${savedLen})`;
                 }
             }
             displayName = `${displayName}${statusCountText}`;
@@ -904,28 +904,25 @@ function renderReceiveDeviceProgressHtml(task) {
                     const bytesTotal = formatSize(file.bytesTotal);
                     const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
 
-                    let statusBadge = '';
-                    let progressTextStr = sizeProgressText;
+                    let progressRightStr = sizeProgressText;
                     let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
                     let namePrefix = '📄';
 
                     if (stateText === 'completed') {
                         namePrefix = '✓';
-                        progressTextStr = sizeProgressText || t('completed') || 'Completed';
-                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">100% / ${t('completed') || 'Completed'}</span>`;
+                        progressRightStr = sizeProgressText || t('completed') || 'Completed';
                         bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
                     } else if (stateText === 'transferring') {
                         namePrefix = '⟳';
-                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">${percent}% / ${t('transferring') || 'Transferring'}</span>`;
+                        progressRightStr = sizeProgressText || `${percent}%`;
                         bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
                     } else if (stateText === 'failed') {
                         namePrefix = '✕';
-                        statusBadge = `<span style="color: var(--danger); font-weight: 700; font-size: 11px;">${t('failed') || 'Failed'}</span>`;
+                        progressRightStr = t('failed') || 'Failed';
                         bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
                     } else {
                         namePrefix = '⌛';
-                        progressTextStr = sizeProgressText || '...';
-                        statusBadge = `<span style="color: var(--text-secondary); font-size: 11px;">${t('waiting') || 'Waiting'}</span>`;
+                        progressRightStr = sizeProgressText || t('waiting') || 'Waiting';
                         bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
                     }
 
@@ -934,14 +931,11 @@ function renderReceiveDeviceProgressHtml(task) {
 
                     return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                            <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left;">
-                                <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
-                                ${progressTextStr ? `<span style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">${escapeHTML(progressTextStr)}</span>` : ''}
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                ${statusBadge}
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
+                                <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
                                 ${stateText === 'completed' && path ? `
-                                    <div style="display: flex; gap: 4px; align-items: center;">
+                                    <div style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
@@ -989,28 +983,25 @@ function renderReceiveDeviceProgressHtml(task) {
                     const bytesTotal = formatSize(file.bytesTotal);
                     const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
 
-                    let statusBadge = '';
-                    let progressTextStr = sizeProgressText;
+                    let progressRightStr = sizeProgressText;
                     let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
                     let namePrefix = '📄';
 
                     if (stateText === 'completed') {
                         namePrefix = '✓';
-                        progressTextStr = sizeProgressText || t('completed') || 'Completed';
-                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">100% / ${t('completed') || 'Completed'}</span>`;
+                        progressRightStr = sizeProgressText || t('completed') || 'Completed';
                         bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
                     } else if (stateText === 'transferring') {
                         namePrefix = '⟳';
-                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">${percent}% / ${t('transferring') || 'Transferring'}</span>`;
+                        progressRightStr = sizeProgressText || `${percent}%`;
                         bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
                     } else if (stateText === 'failed') {
                         namePrefix = '✕';
-                        statusBadge = `<span style="color: var(--danger); font-weight: 700; font-size: 11px;">${t('failed') || 'Failed'}</span>`;
+                        progressRightStr = t('failed') || 'Failed';
                         bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
                     } else {
                         namePrefix = '⌛';
-                        progressTextStr = sizeProgressText || '...';
-                        statusBadge = `<span style="color: var(--text-secondary); font-size: 11px;">${t('waiting') || 'Waiting'}</span>`;
+                        progressRightStr = sizeProgressText || t('waiting') || 'Waiting';
                         bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
                     }
 
@@ -1019,14 +1010,11 @@ function renderReceiveDeviceProgressHtml(task) {
 
                     return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                            <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left;">
-                                <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
-                                ${progressTextStr ? `<span style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">${escapeHTML(progressTextStr)}</span>` : ''}
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                ${statusBadge}
+                            <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
+                                <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
                                 ${stateText === 'completed' && path ? `
-                                    <div style="display: flex; gap: 4px; align-items: center;">
+                                    <div style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>

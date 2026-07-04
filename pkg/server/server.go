@@ -1248,6 +1248,11 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 				if v.SavedFiles != nil {
 					savedFiles = append([]string(nil), v.SavedFiles...)
 				}
+				var files []ClientFileTransferState
+				if v.Files != nil {
+					files = make([]ClientFileTransferState, len(v.Files))
+					copy(files, v.Files)
+				}
 				m[k] = &ClientTransferStateInfo{
 					ClientID:   v.ClientID,
 					State:      v.State,
@@ -1258,6 +1263,7 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 					Message:    v.Message,
 					DeviceName: v.DeviceName,
 					SavedFiles: savedFiles,
+					Files:      files,
 				}
 			}
 		}
@@ -1276,6 +1282,11 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 				if v.SavedFiles != nil {
 					savedFiles = append([]string(nil), v.SavedFiles...)
 				}
+				var files []ClientFileTransferState
+				if v.Files != nil {
+					files = make([]ClientFileTransferState, len(v.Files))
+					copy(files, v.Files)
+				}
 				clientStates[k] = &ClientTransferStateInfo{
 					ClientID:   v.ClientID,
 					State:      v.State,
@@ -1286,6 +1297,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 					Message:    v.Message,
 					DeviceName: v.DeviceName,
 					SavedFiles: savedFiles,
+					Files:      files,
 				}
 			}
 		}
