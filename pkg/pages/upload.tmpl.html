@@ -1115,6 +1115,40 @@
                 return;
             }
 
+            // Free tier quota limits validation before starting upload
+            if (!isPaid && !clockTampered) {
+                var hasOversized = false;
+                for (var fIdx = 0; fIdx < filesToUpload.length; fIdx++) {
+                    if (filesToUpload[fIdx].size > 50 * 1024 * 1024) {
+                        hasOversized = true;
+                        break;
+                    }
+                }
+                var hasTooMany = filesToUpload.length > 5;
+
+                if (hasOversized || hasTooMany) {
+                    var errorMsg = '';
+                    if (hasOversized && hasTooMany) {
+                        errorMsg = t('err_free_limit_both_global');
+                    } else if (hasTooMany) {
+                        errorMsg = t('err_free_limit_files_global');
+                    } else {
+                        errorMsg = t('err_free_limit_size_global');
+                    }
+                    
+                    errorBox.textContent = errorMsg;
+                    errorBox.style.display = 'block';
+                    
+                    submitButton.disabled = false;
+                    submitButton.value = t('btn_transfer');
+                    
+                    if (stopButton) {
+                        stopButton.style.display = 'none';
+                    }
+                    return; // Prevent form submit
+                }
+            }
+
             // 隐藏所有删除按钮，显示进度圆圈
             var allDeleteBtns = selectedFileContainer.querySelectorAll('button');
             for (var dIdx = 0; dIdx < allDeleteBtns.length; dIdx++) {

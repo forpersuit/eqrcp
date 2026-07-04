@@ -532,7 +532,7 @@ func (s *Server) ReceiveTo(dir string) error {
 					cs.DeviceName = deviceName
 				}
 				cs.SavedFiles = append(cs.SavedFiles, out.Name())
-				cs.State = "completed"
+				cs.State = "transferring"
 				cs.BytesDone = clientDone
 				if clientTotal > 0 && cs.BytesDone > clientTotal {
 					cs.BytesDone = clientTotal
