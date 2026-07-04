@@ -555,11 +555,7 @@ function renderDeviceProgressHtml(task) {
     let deviceProgressHtml = '';
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
     if (clients.length > 0) {
-        const showLimit = 3;
-        const isExpanded = !!state.devicesExpanded;
-        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
-
-        const listItems = displayClients.map(client => {
+        const listItems = clients.map(client => {
             const devName = client.deviceName || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
@@ -622,13 +618,7 @@ function renderDeviceProgressHtml(task) {
             `;
         }).join('');
 
-        const expandButton = (clients.length > showLimit) ? `
-            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
-                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
-            </button>
-        ` : '';
-
-        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 150px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
+        const scrollStyle = 'max-height: 220px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;';
 
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
@@ -636,11 +626,9 @@ function renderDeviceProgressHtml(task) {
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
                 </div>
-                ${expandButton}
             </div>
         `;
     } else {
-        // Return a dotted placeholder area when no clients are downloading
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
                 <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
@@ -865,11 +853,9 @@ function renderReceiveDeviceProgressHtml(task) {
         </div>
     `;
     if (clients.length > 0) {
-        const isExpanded = !!state.devicesExpanded;
-        const showLimit = 3;
-        const displayClients = isExpanded ? clients : clients.slice(0, showLimit);
+        state.deviceFilesExpanded = state.deviceFilesExpanded || {};
 
-        const listItems = displayClients.map(client => {
+        const listItems = clients.map(client => {
             const devName = client.deviceName || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
@@ -949,7 +935,6 @@ function renderReceiveDeviceProgressHtml(task) {
                     }
 
                     const openFileTooltip = t('open_file_title', { file: name });
-                    const dir = path ? getContainingFolder(path) : '';
 
                     return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
@@ -961,7 +946,6 @@ function renderReceiveDeviceProgressHtml(task) {
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                        
                                     </div>
                                 ` : ''}
                             </div>
@@ -1034,7 +1018,6 @@ function renderReceiveDeviceProgressHtml(task) {
                     }
 
                     const openFileTooltip = t('open_file_title', { file: name });
-                    const dir = path ? getContainingFolder(path) : '';
 
                     return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
@@ -1046,7 +1029,6 @@ function renderReceiveDeviceProgressHtml(task) {
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                        
                                     </div>
                                 ` : ''}
                             </div>
@@ -1066,29 +1048,31 @@ function renderReceiveDeviceProgressHtml(task) {
                 stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
             }
 
+            const isFilesExpanded = !!state.deviceFilesExpanded[clientID];
+            const arrow = isFilesExpanded ? '▼' : '▶';
+            const arrowSpan = `<span style="font-size: 10px; margin-right: 6px; display: inline-block; width: 10px; color: var(--text-secondary); font-weight: 900; line-height: 1;">${arrow}</span>`;
+
             return `
                 <li style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">📱 ${escapeHTML(displayName)}</span>
+                    <div class="device-header-toggle" data-client-id="${escapeAttr(clientID)}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                        <span style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
+                            ${arrowSpan}📱 ${escapeHTML(displayName)}
+                        </span>
                         <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
                             ${stateBadgeHtml}
                         </div>
                     </div>
-                    <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px; max-height: 165px; overflow-y: auto; box-sizing: border-box; width: 100%;">
+                    ${isFilesExpanded ? `
+                    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; width: 100%;">
                         ${filesHtml}
                     </div>
+                    ` : ''}
                 </li>
             `;
         }).join('');
 
-        const expandButton = (clients.length > showLimit) ? `
-            <button class="ghost compact toggle-devices-expand" style="margin-top: 4px; font-size: 12px; font-weight: 700; width: 100%; text-align: center; border: 1px dashed var(--line); border-radius: 6px; padding: 4px;">
-                ${isExpanded ? t('hide_more_devices') || '折叠部分设备' : `${t('show_more_devices') || '查看更多设备'} (${clients.length - showLimit})`}
-            </button>
-        ` : '';
-
-        const scrollStyle = (isExpanded && clients.length > showLimit) ? 'max-height: 250px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;' : '';
+        const scrollStyle = 'max-height: 320px; overflow-y: auto; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;';
 
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
@@ -1096,7 +1080,6 @@ function renderReceiveDeviceProgressHtml(task) {
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
                 </div>
-                ${expandButton}
             </div>
         `;
     } else {
@@ -2182,6 +2165,16 @@ function bindEvents() {
             if (e.target.closest('.toggle-devices-expand')) {
                 state.devicesExpanded = !state.devicesExpanded;
                 render();
+                return;
+            }
+            const devHeader = e.target.closest('.device-header-toggle');
+            if (devHeader) {
+                const clientID = devHeader.dataset.clientId;
+                if (clientID) {
+                    state.deviceFilesExpanded = state.deviceFilesExpanded || {};
+                    state.deviceFilesExpanded[clientID] = !state.deviceFilesExpanded[clientID];
+                    render();
+                }
                 return;
             }
         });

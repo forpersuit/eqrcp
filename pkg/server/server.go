@@ -1529,8 +1529,13 @@ func (s *Server) isAllActiveClientsFinished() bool {
 
 func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) string {
 	clientID := s.getClientID(r, w)
+	s.registerClientActivityWithID(clientID, r)
+	return clientID
+}
+
+func (s *Server) registerClientActivityWithID(clientID string, r *http.Request) {
 	if s.isClientLimitExceeded(clientID) {
-		return clientID
+		return
 	}
 	s.clientMutex.Lock()
 	if s.clientLastSeen == nil {
@@ -1544,7 +1549,6 @@ func (s *Server) registerClientActivity(r *http.Request, w http.ResponseWriter) 
 		s.updateStatus(func(status *transferStatus) {})
 	}
 	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {})
-	return clientID
 }
 
 func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
@@ -2473,7 +2477,7 @@ func New(cfg *config.Config) (*Server, error) {
 			http.Error(w, "Device limit exceeded. Only 1 device is allowed for transfers under free quota exceeded state. Upgrade to Plus/Pro to unlock.", http.StatusForbidden)
 			return
 		}
-		app.registerClientActivity(r, w)
+		app.registerClientActivityWithID(clientID, r)
 		usage := limiterInstance.GetStatus()
 		if r.URL.Query().Get("ping") != "" {
 			if r.URL.Query().Get("reset") == "true" {
