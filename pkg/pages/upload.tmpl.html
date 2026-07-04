@@ -1437,11 +1437,11 @@
             var countdownEl = document.getElementById('plus-countdown');
             if (countdownEl && !isPaidMode) {
                 var remaining = Math.max(0, 5 - usedTransfers);
-                countdownEl.style.display = 'inline-flex';
                 if (remaining > 0) {
+                    countdownEl.style.display = 'inline-flex';
                     countdownEl.innerHTML = 'left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">' + remaining + '</span>';
                 } else {
-                    countdownEl.innerHTML = 'limit<span style="font-size: 10px; font-weight: 900; margin-top: 2px; color: var(--danger);">exceeded</span>';
+                    countdownEl.style.display = 'none';
                 }
             } else if (countdownEl) {
                 countdownEl.style.display = 'none';
