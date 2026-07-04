@@ -536,7 +536,6 @@ func (s *Server) ReceiveTo(dir string) error {
 						cs.Files[idx].Percent = 100
 						cs.Files[idx].State = "completed"
 						cs.Files[idx].Path = out.Name()
-						cs.Files[idx].Name = filepath.Base(out.Name())
 						found = true
 						break
 					}
@@ -544,13 +543,26 @@ func (s *Server) ReceiveTo(dir string) error {
 				if !found {
 					cs.Files = append(cs.Files, ClientFileTransferState{
 						FileID:     info.Upload.ID,
-						Name:       filepath.Base(out.Name()),
+						Name:       origName,
 						Path:       out.Name(),
 						State:      "completed",
 						BytesDone:  info.Upload.Size,
 						BytesTotal: info.Upload.Size,
 						Percent:    100,
 					})
+				}
+				if len(cs.SavedFiles) == len(cs.Files) || (cs.BytesTotal > 0 && cs.BytesDone >= cs.BytesTotal) {
+					cs.BytesDone = cs.BytesTotal
+					cs.Percent = 100
+					cs.State = "completed"
+					for i, f := range cs.Files {
+						if f.State != "completed" && i < len(cs.SavedFiles) {
+							cs.Files[i].State = "completed"
+							cs.Files[i].BytesDone = cs.Files[i].BytesTotal
+							cs.Files[i].Percent = 100
+							cs.Files[i].Path = cs.SavedFiles[i]
+						}
+					}
 				}
 			})
 			s.updateStatus(func(status *transferStatus) {

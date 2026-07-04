@@ -866,7 +866,26 @@
                         leftArea.appendChild(fileInfo);
                     }
                     
+                    var formatBytes = function(bytes) {
+                        if (bytes === undefined || bytes === null || isNaN(bytes)) return '0 B';
+                        if (bytes === 0) return '0 B';
+                        var k = 1024;
+                        var sizes = ['B', 'KB', 'MB', 'GB'];
+                        var i = Math.floor(Math.log(bytes) / Math.log(k));
+                        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+                    };
+                    var fileSizeSpan = document.createElement('span');
+                    fileSizeSpan.textContent = formatBytes(item.size || (item.file && item.file.size) || 0);
+                    fileSizeSpan.style.fontSize = '12px';
+                    fileSizeSpan.style.color = 'var(--text-muted)';
+                    fileSizeSpan.style.fontWeight = '600';
+                    fileSizeSpan.style.whiteSpace = 'nowrap';
+                    fileSizeSpan.style.marginLeft = 'auto';
+                    fileSizeSpan.style.marginRight = '8px';
+                    fileSizeSpan.style.flexShrink = '0';
+
                     fileWrapper.appendChild(leftArea);
+                    fileWrapper.appendChild(fileSizeSpan);
                     
                     // 无论是否是 isPlusMode，都显示删除按钮，以便用户可以移除超限文件
                     var deleteBtn = document.createElement('button');
