@@ -160,6 +160,7 @@ function getLicenseDisplayName(license) {
 let agentEvents = null;
 let confirmSwitchResolve = null;
 let qrExpandedManual = null;
+let _staticDelegationBound = false;
 
 function showConfirmSwitchDialog() {
     return new Promise((resolve) => {
@@ -2169,16 +2170,22 @@ function getTaskFolder(task) {
 
 
 function bindEvents() {
-    document.querySelector('.toggle-qr-expand-action')?.addEventListener('click', () => {
-        qrExpandedManual = !qrExpandedManual;
-        render();
-    });
-    document.querySelectorAll('.toggle-devices-expand').forEach(btn => {
-        btn.addEventListener('click', () => {
-            state.devicesExpanded = !state.devicesExpanded;
-            render();
+    // 通过事件委托绑定动态按钮，只绑定一次，避免每次 render 后重复叠加监听器
+    if (!_staticDelegationBound) {
+        _staticDelegationBound = true;
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.toggle-qr-expand-action')) {
+                qrExpandedManual = !qrExpandedManual;
+                render();
+                return;
+            }
+            if (e.target.closest('.toggle-devices-expand')) {
+                state.devicesExpanded = !state.devicesExpanded;
+                render();
+                return;
+            }
         });
-    });
+    }
     document.querySelectorAll('[data-mode]').forEach((button) => {
         button.addEventListener('click', async () => {
             const targetMode = button.dataset.mode;
