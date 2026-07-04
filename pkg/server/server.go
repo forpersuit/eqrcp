@@ -2463,7 +2463,8 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 		clientID := app.getClientID(r, w)
-		if app.isReceiveClientLimitExceeded(clientID) {
+		isPing := r.URL.Query().Get("ping") != ""
+		if !isPing && app.isReceiveClientLimitExceeded(clientID) {
 			http.Error(w, "Device limit exceeded. Only 1 device is allowed for transfers under free quota exceeded state. Upgrade to Plus/Pro to unlock.", http.StatusForbidden)
 			return
 		}

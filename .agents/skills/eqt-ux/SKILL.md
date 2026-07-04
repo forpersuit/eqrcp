@@ -85,8 +85,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **心跳保活与自动解锁回暖 (Polling Keepalive & Live Unlock)**：
   - 拦截限制期间，网页轮询心跳不得被杀死（不能 `clearInterval`）。
   - 当其他活跃设备离开或停止从而释放额度时，超限设备的心跳拉取到最新正常状态，立即自动触发 `restoreNormalUI()`：将警告图标、隐藏的常规动作按钮、文件列表的可点击性、多语言提示热还原为正常，实现免刷新的动态自动功能解锁。
-- **后端双重物理卡关 (Backend Double Guarding)**：
-  - 除了状态轮询，后端在接收物理下载 GET 请求（如 `?download=1` 物理文件拉取）时，也必须对当前 `clientID` 做出超限判定，并在超限时直接拦截，向客户端发出 `403 Forbidden` 标准错误响应，防止绕过网页端逻辑物理盗载。
+- **后端双重物理卡关与心跳放行 (Backend Double Guarding & Heartbeat Bypass)**：
+  - 除了状态轮询，后端在接收物理下载/上传等物理传输请求（如 `?download=1` 物理文件拉取、分块及 POST 上传）时，也必须对当前 `clientID` 做出超限判定，并在超限时直接拦截，向客户端发出 `403 Forbidden` 标准错误响应。
+  - **关键点：必须放行心跳请求**。对于无害的状态同步心跳接口（如 `?ping=true` 接口），后端绝对不能在超限时进行 `403` 拦截。心跳必须始终保持可达并返回最新的状态，否则一旦 403 阻断心跳，移动端前台将无法感知 GUI 端的重置限额（Reset）或授权升级状态，导致设备被永久锁死。
 
 
 ## Mobile Multi-file Non-ZIP Download Constraints & Serial Queue Guidelines
