@@ -520,7 +520,7 @@ function renderShareTransfer(task) {
             
             <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.transferDeviceCount || 0}</span>
+                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
@@ -687,7 +687,7 @@ function updateShareTransferActiveUI(task) {
     // 2. 设备数
     const countEl = document.getElementById('current-devices-count');
     if (countEl) {
-        countEl.textContent = task.transferDeviceCount || 0;
+        countEl.textContent = task.clientStates ? Object.keys(task.clientStates).length : 0;
     }
 
     // 3. 自动结束开关
@@ -825,7 +825,7 @@ function renderReceiveTransfer(task) {
 
             <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.transferDeviceCount || 0}</span>
+                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
@@ -876,6 +876,21 @@ function renderReceiveDeviceProgressHtml(task) {
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
             };
 
+            const totalFilesCount = client.files ? client.files.length : 0;
+            const completedFilesCount = client.files ? client.files.filter(f => f.state === 'completed').length : 0;
+            let statusCountText = '';
+            if (totalFilesCount > 0) {
+                statusCountText = ` 设备 (${completedFilesCount}/${totalFilesCount})`;
+            } else {
+                const savedLen = (client.savedFiles || []).length;
+                if (client.state === 'transferring' && currentFile) {
+                    statusCountText = ` 设备 (${savedLen}/${savedLen + 1})`;
+                } else if (savedLen > 0) {
+                    statusCountText = ` 设备 (${savedLen}/${savedLen})`;
+                }
+            }
+            displayName = `${displayName}${statusCountText}`;
+
             let filesHtml = '';
             const files = client.files || [];
             if (files.length > 0) {
@@ -887,16 +902,46 @@ function renderReceiveDeviceProgressHtml(task) {
                     const path = file.path || '';
                     const bytesDone = formatSize(file.bytesDone);
                     const bytesTotal = formatSize(file.bytesTotal);
-                    const sizeProgressText = file.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
+                    const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
+
+                    let statusBadge = '';
+                    let progressTextStr = sizeProgressText;
+                    let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
+                    let namePrefix = '📄';
 
                     if (stateText === 'completed') {
-                        const openFileTooltip = t('open_file_title', { file: name });
-                        const dir = path ? getContainingFolder(path) : '';
-                        return `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
-                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">✓ ${escapeHTML(name)}</span>
-                                <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
-                                    ${path ? `
+                        namePrefix = '✓';
+                        progressTextStr = sizeProgressText || t('completed') || 'Completed';
+                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">100% / ${t('completed') || 'Completed'}</span>`;
+                        bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
+                    } else if (stateText === 'transferring') {
+                        namePrefix = '⟳';
+                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">${percent}% / ${t('transferring') || 'Transferring'}</span>`;
+                        bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                    } else if (stateText === 'failed') {
+                        namePrefix = '✕';
+                        statusBadge = `<span style="color: var(--danger); font-weight: 700; font-size: 11px;">${t('failed') || 'Failed'}</span>`;
+                        bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
+                    } else {
+                        namePrefix = '⌛';
+                        progressTextStr = sizeProgressText || '...';
+                        statusBadge = `<span style="color: var(--text-secondary); font-size: 11px;">${t('waiting') || 'Waiting'}</span>`;
+                        bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
+                    }
+
+                    const openFileTooltip = t('open_file_title', { file: name });
+                    const dir = path ? getContainingFolder(path) : '';
+
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                            <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left;">
+                                <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                                ${progressTextStr ? `<span style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">${escapeHTML(progressTextStr)}</span>` : ''}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                                ${statusBadge}
+                                ${stateText === 'completed' && path ? `
+                                    <div style="display: flex; gap: 4px; align-items: center;">
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
@@ -905,32 +950,11 @@ function renderReceiveDeviceProgressHtml(task) {
                                                 ${openFolderIcon()}
                                             </button>
                                         ` : ''}
-                                    ` : ''}
-                                </div>
+                                    </div>
+                                ` : ''}
                             </div>
-                        `;
-                    } else if (stateText === 'transferring') {
-                        return `
-                            <div style="margin-top: 4px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
-                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⟳ ${escapeHTML(name)} ${escapeHTML(sizeProgressText)}</span>
-                                    <span>${percent}%</span>
-                                </div>
-                            </div>
-                        `;
-                    } else if (stateText === 'failed') {
-                        return `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(180,35,24,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid rgba(180,35,24,0.15);">
-                                <span style="font-size: 11px; color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">✕ ${escapeHTML(name)} (Failed)</span>
-                            </div>
-                        `;
-                    } else {
-                        return `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
-                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⌛ ${escapeHTML(name)} (Waiting)</span>
-                            </div>
-                        `;
-                    }
+                        </div>
+                    `;
                 }).join('');
             } else {
                 const fallbackList = [];
@@ -963,16 +987,46 @@ function renderReceiveDeviceProgressHtml(task) {
                     const path = file.path || '';
                     const bytesDone = formatSize(file.bytesDone);
                     const bytesTotal = formatSize(file.bytesTotal);
-                    const sizeProgressText = file.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
+                    const sizeProgressText = file.bytesTotal > 0 ? `${bytesDone} / ${bytesTotal}` : '';
+
+                    let statusBadge = '';
+                    let progressTextStr = sizeProgressText;
+                    let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
+                    let namePrefix = '📄';
 
                     if (stateText === 'completed') {
-                        const openFileTooltip = t('open_file_title', { file: name });
-                        const dir = path ? getContainingFolder(path) : '';
-                        return `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: rgba(0,0,0,0.02); border-radius: 4px; margin-top: 4px; border: 1px solid var(--line);">
-                                <span style="font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(path || name)}">✓ ${escapeHTML(name)}</span>
-                                <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0; margin-left: 8px;">
-                                    ${path ? `
+                        namePrefix = '✓';
+                        progressTextStr = sizeProgressText || t('completed') || 'Completed';
+                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">100% / ${t('completed') || 'Completed'}</span>`;
+                        bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
+                    } else if (stateText === 'transferring') {
+                        namePrefix = '⟳';
+                        statusBadge = `<span style="color: var(--accent-strong); font-weight: 700; font-size: 11px;">${percent}% / ${t('transferring') || 'Transferring'}</span>`;
+                        bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                    } else if (stateText === 'failed') {
+                        namePrefix = '✕';
+                        statusBadge = `<span style="color: var(--danger); font-weight: 700; font-size: 11px;">${t('failed') || 'Failed'}</span>`;
+                        bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
+                    } else {
+                        namePrefix = '⌛';
+                        progressTextStr = sizeProgressText || '...';
+                        statusBadge = `<span style="color: var(--text-secondary); font-size: 11px;">${t('waiting') || 'Waiting'}</span>`;
+                        bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
+                    }
+
+                    const openFileTooltip = t('open_file_title', { file: name });
+                    const dir = path ? getContainingFolder(path) : '';
+
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                            <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; text-align: left;">
+                                <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
+                                ${progressTextStr ? `<span style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">${escapeHTML(progressTextStr)}</span>` : ''}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                                ${statusBadge}
+                                ${stateText === 'completed' && path ? `
+                                    <div style="display: flex; gap: 4px; align-items: center;">
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
@@ -981,21 +1035,11 @@ function renderReceiveDeviceProgressHtml(task) {
                                                 ${openFolderIcon()}
                                             </button>
                                         ` : ''}
-                                    ` : ''}
-                                </div>
+                                    </div>
+                                ` : ''}
                             </div>
-                        `;
-                    } else if (stateText === 'transferring') {
-                        return `
-                            <div style="margin-top: 4px; padding: 6px 8px; background: rgba(15, 118, 110, 0.04); border-radius: 4px; border: 1px solid rgba(15, 118, 110, 0.15);">
-                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--accent-strong);">
-                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left;" title="${escapeAttr(name)}">⟳ ${escapeHTML(name)} ${escapeHTML(sizeProgressText)}</span>
-                                    <span>${percent}%</span>
-                                </div>
-                            </div>
-                        `;
-                    }
-                    return '';
+                        </div>
+                    `;
                 }).join('');
             }
 
@@ -1064,7 +1108,7 @@ function updateReceiveTransferActiveUI(task) {
 
     const countEl = document.getElementById('current-devices-count');
     if (countEl) {
-        countEl.textContent = task.transferDeviceCount || 0;
+        countEl.textContent = task.clientStates ? Object.keys(task.clientStates).length : 0;
     }
 
     const switchEl = document.getElementById('auto-stop-switch');
