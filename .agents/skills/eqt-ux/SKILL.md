@@ -56,13 +56,16 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **兜底翻译机制**：为了稳妥应对翻译缺漏，小语种词条加载时必须与最完备的 `en` 英文词条包进行安全深度 Merge 兜底，防止出现 JS 未定义键 of 报错，并保证漏译词条显示为英文而非空白。
   - **Iframe 消息接收**：内嵌在桌面 GUI 内的 `chat.tmpl.html` 必须监听 `window.addEventListener('message')` 中类型为 `update-lang` 的广播，当外部宿主语言切换时同步调用 `updateLanguage()` 瞬间热重载。
 
-## 移动端接收管理与失败卡片规范 (Mobile Upload Management & Failure Cards)
+## 移动端接收管理与限额特权及状态展示规范 (Mobile Upload Management, Quota Banner & Limits Handling)
 - **传输异常友好呈现**：文件上传失败或异常（网络中断、大小超限、服务端 500 写入失败）时，严禁使用原生弹窗或直接把 raw 错误文本打在表单下方。必须直接将整个界面重绘为带有红色“✕”圆形徽章的“传输失败卡片”（样式与 Done 成功卡片对称），给普通用户呈现易懂的本地化解释（如局域网未联通、磁盘满、或文件超大等提示），并提供醒目的“返回并重试”按钮以快速重载页面恢复输入状态。
-- **待传输列表累加与删除控制 (Plus 特权)**：
+- **待传输列表累加与删除控制**：
   - 移动端选择文件和粘贴内容应使用统一内存数组 `accumulatedFiles` 进行管理与提交。
-  - **特权检测**：通过后端注入的 `IsPaid`, `ClockTampered` 与 `UsedSeconds` 计算出 `isPlusMode = (IsPaid && !ClockTampered) || (UsedSeconds < 300)`。
-  - **累加删除**：在 `isPlusMode` 为 `true` 时，允许用户多次点击选择文件，新选中的文件将追加到 `accumulatedFiles` 中，且在 DOM 渲染列表中为每一项提供单独的删除按钮；
-  - **超额回退**：在 `isPlusMode` 为 `false` 时，禁用累加和删除功能。即每次选择文件都将先清空数组（覆盖添加），且不渲染任何删除按钮。
+  - **付费特权检测**：严格通过后端注入的 `IsPaid` 与 `ClockTampered` 计算出设备实际的付费授权特权状态：`isPaidMode = isPaid && !clockTampered`。**绝对不能**将剩余额度（如 `usedTransfers < 5`）误计入付费模式，因为免费用户即使有额度，也受单文件最大 50MB 以及单次最多 5 个文件的免费模式限制。
+  - **超限阻断**：在 `isPaidMode` 为 `false` 时，拖入的文件超过 50MB 或文件数超过 5 个应当在列表上立即以红色虚框和警告语向用户阻断，在 Transfer 提交时亦强制卡关拦截。
+- **就地限额通告栏与状态同步 (Mobile Quota Banner & State Sync)**：
+  - 对于未激活 Plus 授权的免费设备，移动端应渲染一个醒目的、符合设计美学的限额状态通告栏（`#quota-banner`）。
+  - 当今日剩余免费接收次数 > 0 时，显示剩余可用次数提示；当次数耗尽时，通告栏切换为超限红色警告，并彻底锁死移动端页面的所有输入域、文件列表和 Transfer 传输按钮。
+  - 在客户端心跳轮询（ping）中，服务端需要动态向客户端同步当前的限额剩余次数与付费状态。移动端在探测到最新的限额数值发生改变或由于在 GUI 端发生重置/激活操作时，自动通过 `updateLimitUI()` 更新本地 UI 并安全恢复/锁死功能，无需用户手动刷新网页。
 
 
 ## Wails App Modal and Drag-Drop Guidelines (Wails原生确认弹窗与拖拽最佳实践)
