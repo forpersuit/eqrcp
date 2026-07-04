@@ -905,8 +905,18 @@ function renderReceiveDeviceProgressHtml(task) {
             let filesHtml = '';
             const files = client.files || [];
             if (files.length > 0) {
-                const displayFiles = [...files].reverse().slice(0, 5);
-                filesHtml = displayFiles.map(file => {
+                const mappedFiles = files.map((file, idx) => {
+                    file._naturalIndex = idx;
+                    return file;
+                });
+                const sortedFiles = [...mappedFiles].sort((a, b) => {
+                    const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                    const pA = statePriority[a.state] || 5;
+                    const pB = statePriority[b.state] || 5;
+                    if (pA !== pB) return pA - pB;
+                    return b._naturalIndex - a._naturalIndex;
+                });
+                filesHtml = sortedFiles.map(file => {
                     const name = file.name || 'File';
                     const percent = file.percent || 0;
                     const stateText = file.state || 'waiting';
@@ -980,8 +990,18 @@ function renderReceiveDeviceProgressHtml(task) {
                     });
                 });
 
-                const displayFallbackList = fallbackList.slice(0, 5);
-                filesHtml = displayFallbackList.map(file => {
+                const mappedFallback = fallbackList.map((item, idx) => {
+                    item._naturalIndex = idx;
+                    return item;
+                });
+                const sortedFallback = [...mappedFallback].sort((a, b) => {
+                    const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                    const pA = statePriority[a.state] || 5;
+                    const pB = statePriority[b.state] || 5;
+                    if (pA !== pB) return pA - pB;
+                    return b._naturalIndex - a._naturalIndex;
+                });
+                filesHtml = sortedFallback.map(file => {
                     const name = file.name || 'File';
                     const percent = file.percent || 0;
                     const stateText = file.state || 'waiting';
@@ -1054,7 +1074,7 @@ function renderReceiveDeviceProgressHtml(task) {
                             ${stateBadgeHtml}
                         </div>
                     </div>
-                    <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                    <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px; max-height: 165px; overflow-y: auto; box-sizing: border-box; width: 100%;">
                         ${filesHtml}
                     </div>
                 </li>
