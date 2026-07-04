@@ -852,6 +852,17 @@ function renderReceiveTransfer(task) {
 function renderReceiveDeviceProgressHtml(task) {
     let deviceProgressHtml = '';
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
+    const recvDir = state.receiveDir || state.settings?.output || '';
+    const headerHtml = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+            ${recvDir ? `
+                <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || '打开接收文件夹')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
+                    ${openFolderIcon()}
+                </button>
+            ` : ''}
+        </div>
+    `;
     if (clients.length > 0) {
         const isExpanded = !!state.devicesExpanded;
         const showLimit = 3;
@@ -939,11 +950,7 @@ function renderReceiveDeviceProgressHtml(task) {
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                        ${dir ? `
-                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                                ${openFolderIcon()}
-                                            </button>
-                                        ` : ''}
+                                        
                                     </div>
                                 ` : ''}
                             </div>
@@ -1018,11 +1025,7 @@ function renderReceiveDeviceProgressHtml(task) {
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
-                                        ${dir ? `
-                                            <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
-                                                ${openFolderIcon()}
-                                            </button>
-                                        ` : ''}
+                                        
                                     </div>
                                 ` : ''}
                             </div>
@@ -1068,7 +1071,7 @@ function renderReceiveDeviceProgressHtml(task) {
 
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                ${headerHtml}
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
                 </div>
@@ -1078,7 +1081,7 @@ function renderReceiveDeviceProgressHtml(task) {
     } else {
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                ${headerHtml}
                 <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
                     ${state.settings?.lang === 'zh' ? '暂无设备连接，开始上传后在此显示进度' : 'No devices connected. Progress will show here once uploading starts.'}
                 </div>
@@ -1158,11 +1161,7 @@ function updateReceiveTransferActiveUI(task) {
                                     <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
                                         ${openFileIcon()}
                                     </button>
-                                    ${dir ? `
-                                        <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(dir)}" title="${escapeAttr(t('open_folder_title'))}">
-                                            ${openFolderIcon()}
-                                        </button>
-                                    ` : ''}
+                                    
                                 </div>
                             </li>
                         `;

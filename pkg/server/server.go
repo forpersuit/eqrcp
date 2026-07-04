@@ -396,16 +396,16 @@ func (s *Server) ReceiveTo(dir string) error {
 			}
 
 			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
-				cs.State = "transferring"
-				cs.Current = origName
-				cs.BytesDone = clientDone
-				cs.BytesTotal = clientTotal
-				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
-
 				// Find and update ClientFileTransferState
 				found := false
+				isAlreadyCompleted := false
 				for idx, fileState := range cs.Files {
 					if fileState.FileID == event.Upload.ID || (fileState.FileID == "" && fileState.Name == origName) {
+						if fileState.State == "completed" {
+							isAlreadyCompleted = true
+							found = true
+							break
+						}
 						cs.Files[idx].FileID = event.Upload.ID
 						cs.Files[idx].BytesDone = event.Upload.Offset
 						cs.Files[idx].BytesTotal = event.Upload.Size
@@ -424,6 +424,14 @@ func (s *Server) ReceiveTo(dir string) error {
 						BytesTotal: event.Upload.Size,
 						Percent:    transferPercent(event.Upload.Offset, event.Upload.Size),
 					})
+				}
+
+				if !isAlreadyCompleted && cs.State != "completed" {
+					cs.State = "transferring"
+					cs.Current = origName
+					cs.BytesDone = clientDone
+					cs.BytesTotal = clientTotal
+					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 				}
 			})
 			s.updateStatus(func(status *transferStatus) {
