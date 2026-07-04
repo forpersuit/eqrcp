@@ -405,7 +405,8 @@ func (s *Server) ReceiveTo(dir string) error {
 				// Find and update ClientFileTransferState
 				found := false
 				for idx, fileState := range cs.Files {
-					if fileState.FileID == event.Upload.ID {
+					if fileState.FileID == event.Upload.ID || (fileState.FileID == "" && fileState.Name == origName) {
+						cs.Files[idx].FileID = event.Upload.ID
 						cs.Files[idx].BytesDone = event.Upload.Offset
 						cs.Files[idx].BytesTotal = event.Upload.Size
 						cs.Files[idx].Percent = transferPercent(event.Upload.Offset, event.Upload.Size)
@@ -528,7 +529,8 @@ func (s *Server) ReceiveTo(dir string) error {
 				// Find and update ClientFileTransferState to completed
 				found := false
 				for idx, fileState := range cs.Files {
-					if fileState.FileID == info.Upload.ID {
+					if fileState.FileID == info.Upload.ID || (fileState.FileID == "" && fileState.Name == origName) {
+						cs.Files[idx].FileID = info.Upload.ID
 						cs.Files[idx].BytesDone = info.Upload.Size
 						cs.Files[idx].BytesTotal = info.Upload.Size
 						cs.Files[idx].Percent = 100
@@ -2455,7 +2457,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 				displayFiles := make([]string, len(transferredFiles))
 				for i, f := range transferredFiles {
-					displayFiles[i] = filepath.Base(f)
+					displayFiles[len(transferredFiles)-1-i] = filepath.Base(f)
 				}
 				htmlVariables.File = strings.Join(displayFiles, ", ")
 				htmlVariables.Files = displayFiles
@@ -2464,6 +2466,48 @@ func New(cfg *config.Config) (*Server, error) {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					log.Printf("Template error: %v\n", err)
 				}
+				return
+			}
+			if r.URL.Query().Get("init") != "" {
+				var reqData struct {
+					Files []struct {
+						Name string `json:"name"`
+						Size int64  `json:"size"`
+					} `json:"files"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&reqData); err == nil {
+					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+						cs.State = "transferring"
+						cs.SavedFiles = nil
+						cs.Files = nil
+						var clientTotal int64
+						for _, f := range reqData.Files {
+							cs.Files = append(cs.Files, ClientFileTransferState{
+								Name:       f.Name,
+								State:      "waiting",
+								BytesTotal: f.Size,
+								Percent:    0,
+							})
+							clientTotal += f.Size
+						}
+						cs.BytesTotal = clientTotal
+						cs.BytesDone = 0
+						cs.Percent = 0
+					})
+					app.updateStatus(func(status *transferStatus) {
+						status.State = "transferring"
+						status.BytesDone = 0
+						var totalTotal int64
+						for _, f := range reqData.Files {
+							totalTotal += f.Size
+						}
+						status.BytesTotal = totalTotal
+						status.Percent = 0
+					})
+					app.triggerStatusHookThrottled()
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
 				return
 			}
 			if r.URL.Query().Get("stop") != "" {

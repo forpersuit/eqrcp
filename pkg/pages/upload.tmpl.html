@@ -1270,7 +1270,22 @@
                 upload.start();
             }
 
-            startNextTusUpload();
+            // Send init request to register all files before starting TUS upload loop
+            var initXhr = new XMLHttpRequest();
+            initXhr.open('POST', '{{.Route}}?init=true');
+            initXhr.setRequestHeader('Content-Type', 'application/json');
+            initXhr.onload = function() {
+                startNextTusUpload();
+            };
+            initXhr.onerror = function() {
+                startNextTusUpload();
+            };
+            var initData = {
+                files: filesToUpload.map(function(f) {
+                    return { name: f.name, size: f.size };
+                })
+            };
+            initXhr.send(JSON.stringify(initData));
         });
 
         var stopButton = document.getElementById('stop-btn');
