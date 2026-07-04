@@ -2477,7 +2477,12 @@ func New(cfg *config.Config) (*Server, error) {
 			http.Error(w, "Device limit exceeded. Only 1 device is allowed for transfers under free quota exceeded state. Upgrade to Plus/Pro to unlock.", http.StatusForbidden)
 			return
 		}
-		app.registerClientActivityWithID(clientID, r)
+		isInit := r.URL.Query().Get("init") != ""
+		isStop := r.URL.Query().Get("stop") != ""
+		isDone := r.URL.Query().Get("done") != ""
+		if isPing || isInit || isStop || isDone {
+			app.registerClientActivityWithID(clientID, r)
+		}
 		usage := limiterInstance.GetStatus()
 		if r.URL.Query().Get("ping") != "" {
 			if r.URL.Query().Get("reset") == "true" {
