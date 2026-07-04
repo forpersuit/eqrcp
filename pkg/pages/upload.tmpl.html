@@ -747,6 +747,9 @@
         function updateDraftState() {
             resizeTextArea();
             saveDraft();
+            if (typeof updateLimitUI === 'function') {
+                updateLimitUI(usedTransfers);
+            }
         }
 
         function showLimitNotification(msg) {
@@ -1510,8 +1513,9 @@
             }
 
             // 4. 控制“开始传输”按钮的禁用置灰状态与输入框可用性
-            // 只有当有规格超限（文件数 > 5 或 大小 > 50MB）时，才禁用提交按钮。其他任何时候均允许提交！
-            if (isCountExceeded || isSizeExceeded) {
+            // 只有当有规格超限（文件数 > 5 或 大小 > 50MB）时，或没有文件且文本内容为空时，才禁用提交按钮。其他任何时候均允许提交！
+            var isDraftEmpty = (accumulatedFiles.length === 0) && (textArea.value.trim() === "");
+            if (isCountExceeded || isSizeExceeded || isDraftEmpty) {
                 submitButton.disabled = true;
                 submitButton.style.opacity = '0.5';
                 submitButton.style.cursor = 'not-allowed';

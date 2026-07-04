@@ -2179,15 +2179,35 @@ function bindEvents() {
                 render();
                 return;
             }
+        });
+        
+        document.addEventListener('pointerdown', (e) => {
             const devHeader = e.target.closest('.device-header-toggle');
             if (devHeader) {
                 const clientID = devHeader.dataset.clientId;
                 if (clientID) {
                     state.deviceFilesExpanded = state.deviceFilesExpanded || {};
                     state.deviceFilesExpanded[clientID] = !state.deviceFilesExpanded[clientID];
+                    
+                    // 局部更新 UI 替代全局 render()，以防打断或闪烁
+                    const transferStage = document.querySelector('.transfer-stage');
+                    if (transferStage) {
+                        if (state.mode === 'share') {
+                            const activeTask = activeShareTask();
+                            if (activeTask) {
+                                updateShareTransferActiveUI(activeTask);
+                                return;
+                            }
+                        } else if (state.mode === 'receive') {
+                            const activeTask = activeReceiveTask();
+                            if (activeTask) {
+                                updateReceiveTransferActiveUI(activeTask);
+                                return;
+                            }
+                        }
+                    }
                     render();
                 }
-                return;
             }
         });
     }
@@ -3756,6 +3776,7 @@ async function addSharePaths(paths) {
 }
 
 let agentEventsSubscribed = false;
+let lastUIUpdateTime = 0;
 
 function connectAgentEvents() {
     if (agentEventsSubscribed) {
@@ -3777,18 +3798,27 @@ function connectAgentEvents() {
             // 如果处于 share 模式或 receive 模式下的 activeTask 传输界面，直接进行局部渲染更新，从而避免全局 render 导致 tooltip 气泡闪烁
             const transferStage = document.querySelector('.transfer-stage');
             if (transferStage) {
-                if (state.mode === 'share') {
-                    const activeTask = activeShareTask();
-                    if (activeTask) {
-                        updateShareTransferActiveUI(activeTask);
-                        return;
+                const now = Date.now();
+                const isTransferring = nextStatus?.current?.transferState === 'transferring' || nextStatus?.current?.state === 'transferring';
+                const shouldThrottle = isTransferring && (now - lastUIUpdateTime < 250);
+                
+                if (!shouldThrottle) {
+                    lastUIUpdateTime = now;
+                    if (state.mode === 'share') {
+                        const activeTask = activeShareTask();
+                        if (activeTask) {
+                            updateShareTransferActiveUI(activeTask);
+                            return;
+                        }
+                    } else if (state.mode === 'receive') {
+                        const activeTask = activeReceiveTask();
+                        if (activeTask) {
+                            updateReceiveTransferActiveUI(activeTask);
+                            return;
+                        }
                     }
-                } else if (state.mode === 'receive') {
-                    const activeTask = activeReceiveTask();
-                    if (activeTask) {
-                        updateReceiveTransferActiveUI(activeTask);
-                        return;
-                    }
+                } else {
+                    return; // Throttle update, avoid innerHTML replacement
                 }
             }
             render();
