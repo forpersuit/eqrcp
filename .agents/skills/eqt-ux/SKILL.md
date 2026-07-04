@@ -124,3 +124,8 @@ The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试�
    - Query `/send/<token>/status` via fetch or navigate to `/` to check the receiver viewport.
    - Verify that the device progress block contains the device name (e.g. `"Linux (unknown)"` or similar parsed UA) and the details lists are correct.
 6. **Clean Up**: Terminate the background Go process.
+
+### Headless Sandbox Throttling & Mock Validation Tips:
+- **Tus Upload Throttling in Loopback**: Chrome DevTools network emulation ignores `localhost` loopback traffic. To simulate slower network speeds for UI validation, wrap `http.Request.Body` in Go server (`handleTusUpload` routing) with a `throttledReader` that restricts maximum read buffer size per call (e.g., 32KB) and forces a `time.Sleep` (e.g. 10ms) to limit throughput to ~3.2MB/s.
+- **Bypassing Tus Resume/Fingerprint Cache**: In test scripts, Tus might bypass uploads via instant resume matching. Force raw PATCH stream uploads by modifying the `fingerprint` option in `tus.Upload` to return a `Promise.resolve("unique-stamp-" + Date.now())`.
+- **Handling Headless Chrome 0-Byte Sandbox Restrictions**: When Chrome is run under container/WSL headless modes, security sandbox constraints may cause `upload_file` targets to read as `0` bytes (empty files), triggering instant mock success. To force data flow simulation, check `uploadBlob.size === 0` in JS upload handlers and dynamically overlay a 25MB zero-filled virtual blob (`new Blob([new Uint8Array(25*1024*1024)])`) to force a full simulated PATCH stream upload.
