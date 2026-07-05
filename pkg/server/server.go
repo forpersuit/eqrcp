@@ -530,7 +530,6 @@ func (s *Server) ReceiveTo(dir string) error {
 				}
 			}
 
-			var savedCount int
 			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
 				if deviceName != "" && (cs.DeviceName == "" || cs.DeviceName == "Device") {
 					cs.DeviceName = deviceName
@@ -544,7 +543,6 @@ func (s *Server) ReceiveTo(dir string) error {
 				cs.BytesTotal = clientTotal
 				cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 				cs.Message = fmt.Sprintf("Received %s", fileName)
-				savedCount = len(cs.SavedFiles)
 
 				// Find and update ClientFileTransferState to completed
 				found := false
@@ -613,29 +611,20 @@ func (s *Server) ReceiveTo(dir string) error {
 			})
 			s.triggerStatusHookThrottled()
 
-			// Auto-stop check
-			totalFiles := 1
-			if tfStr, ok := info.Upload.MetaData["totalfiles"]; ok {
-				if tf, err := strconv.Atoi(tfStr); err == nil && tf > 0 {
-					totalFiles = tf
-				}
-			}
 
-			if savedCount >= totalFiles {
-				s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
-					cs.State = "completed"
-					cs.BytesDone = cs.BytesTotal
-					cs.Percent = 100
-					for idx := range cs.Files {
-						cs.Files[idx].State = "completed"
-						cs.Files[idx].Percent = 100
-						cs.Files[idx].BytesDone = cs.Files[idx].BytesTotal
-					}
-				})
+
+			isClientCompleted := false
+			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+				if cs.State == "completed" {
+					isClientCompleted = true
+				}
+			})
+
+			if isClientCompleted {
 				s.statusMu.Lock()
 				autoStop := s.autoStop
 				s.statusMu.Unlock()
-				if autoStop || !s.KeepAlive {
+				if !s.KeepAlive || (autoStop && s.isAllActiveClientsFinished()) {
 					s.setStatus("completed", "Transfer completed.")
 					s.updateStatus(func(status *transferStatus) {
 						if len(status.SavedFiles) == 1 {
@@ -646,6 +635,9 @@ func (s *Server) ReceiveTo(dir string) error {
 					})
 					s.recordStatus()
 					go s.signalStopAfterStatusGrace()
+				} else {
+					s.setStatus("waiting", "Transfer completed. Waiting for more files.")
+					s.recordStatus()
 				}
 			}
 		}
@@ -1465,6 +1457,42 @@ func (s *Server) isAllActiveClientsFinished() bool {
 
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
+		// receive mode: check clientStates
+		now := time.Now()
+		activeCount := 0
+		finishedActiveCount := 0
+		finishedTotalCount := 0
+
+		for clientID, lastSeen := range s.clientLastSeen {
+			if s.autoStop && s.autoStopIgnoredClients[clientID] {
+				continue
+			}
+			isActive := now.Sub(lastSeen) <= 8*time.Second
+			if isActive {
+				activeCount++
+			}
+
+			isCompleted := false
+			if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+				if cs.State == "completed" {
+					isCompleted = true
+				}
+			}
+
+			if isCompleted {
+				finishedTotalCount++
+				if isActive {
+					finishedActiveCount++
+				}
+			}
+		}
+
+		if finishedTotalCount == totalClients {
+			return true
+		}
+		if activeCount > 0 && finishedActiveCount == activeCount {
+			return true
+		}
 		return false
 	}
 
@@ -2571,9 +2599,20 @@ func New(cfg *config.Config) (*Server, error) {
 				if err := json.NewDecoder(r.Body).Decode(&reqData); err == nil {
 					app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 						cs.State = "transferring"
-						cs.SavedFiles = nil
-						cs.Files = nil
-						var clientTotal int64
+						if cs.Files == nil {
+							cs.Files = []ClientFileTransferState{}
+						}
+
+						var oldDone int64
+						var oldTotal int64
+						for _, f := range cs.Files {
+							if f.State == "completed" {
+								oldDone += f.BytesTotal
+							}
+							oldTotal += f.BytesTotal
+						}
+
+						var newTotal int64
 						for _, f := range reqData.Files {
 							cs.Files = append(cs.Files, ClientFileTransferState{
 								Name:       f.Name,
@@ -2581,11 +2620,11 @@ func New(cfg *config.Config) (*Server, error) {
 								BytesTotal: f.Size,
 								Percent:    0,
 							})
-							clientTotal += f.Size
+							newTotal += f.Size
 						}
-						cs.BytesTotal = clientTotal
-						cs.BytesDone = 0
-						cs.Percent = 0
+						cs.BytesTotal = oldTotal + newTotal
+						cs.BytesDone = oldDone
+						cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
 					})
 					app.updateStatus(func(status *transferStatus) {
 						status.State = "transferring"
@@ -2776,15 +2815,6 @@ func New(cfg *config.Config) (*Server, error) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			app.setStatus("completed", "Transfer completed.")
-			app.updateStatus(func(status *transferStatus) {
-				status.SavedFiles = append([]string(nil), transferredFiles...)
-				if len(transferredFiles) == 1 {
-					status.Message = "Received 1 file."
-				} else {
-					status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
-				}
-			})
 			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 				cs.State = "completed"
 				cs.Percent = 100
@@ -2797,14 +2827,36 @@ func New(cfg *config.Config) (*Server, error) {
 					cs.Files[idx].BytesDone = cs.Files[idx].BytesTotal
 				}
 			})
-			app.triggerStatusHookThrottled()
-			app.recordStatus()
+
 			app.statusMu.Lock()
 			autoStop := app.autoStop
 			app.statusMu.Unlock()
-			if autoStop || !cfg.KeepAlive {
+
+			if !cfg.KeepAlive || (autoStop && app.isAllActiveClientsFinished()) {
+				app.setStatus("completed", "Transfer completed.")
+				app.updateStatus(func(status *transferStatus) {
+					status.SavedFiles = append([]string(nil), transferredFiles...)
+					if len(transferredFiles) == 1 {
+						status.Message = "Received 1 file."
+					} else {
+						status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
+					}
+				})
+				app.recordStatus()
 				go app.signalStopAfterStatusGrace()
+			} else {
+				app.setStatus("waiting", "Transfer completed. Waiting for more files.")
+				app.updateStatus(func(status *transferStatus) {
+					status.SavedFiles = append([]string(nil), transferredFiles...)
+					if len(transferredFiles) == 1 {
+						status.Message = "Received 1 file."
+					} else {
+						status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
+					}
+				})
+				app.recordStatus()
 			}
+			app.triggerStatusHookThrottled()
 		case "GET":
 			app.clientMutex.Lock()
 			if app.clientReceiveCounted == nil {

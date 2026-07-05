@@ -734,7 +734,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		agent.current.FinishedAt = &finishedAt
 	}
 	agent.notifyTransferStatusLocked(*agent.current)
-	if agent.current.State == "stopped" || agent.current.State == "replaced" {
+	if agent.current.State == "stopped" || agent.current.State == "replaced" || agent.current.State == "completed" || agent.current.State == "failed" {
 		record := *agent.current
 		agent.addHistoryLocked(record)
 		agent.notifyRecordLocked(record)
@@ -745,10 +745,6 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 		agent.startNextLocked()
 		agent.touchLocked()
 		return
-	} else if agent.current.State == "completed" || agent.current.State == "failed" {
-		record := *agent.current
-		agent.addHistoryLocked(record)
-		agent.notifyRecordLocked(record)
 	}
 	agent.touchLocked()
 }
