@@ -460,7 +460,6 @@ dd {
     display: grid;
     gap: 12px;
     width: 100%;
-    max-width: 600px;
 }
 
 /* ── Chat start screen ── */
@@ -2540,6 +2539,76 @@ dd {
 .history li:has(.history-file-row:hover),
 .history li:has(.history-device-group:hover) {
     background: var(--panel-hover, rgba(0, 0, 0, 0.012)) !important;
+    border-left-color: var(--accent) !important;
+    padding-left: 8px !important;
+}
+
+/* ── 历史搜索悬浮弹出面板样式 ── */
+.history-search-dropdown {
+    position: absolute;
+    top: 36px;
+    left: 8px;
+    right: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 0;
+    scrollbar-width: thin;
+}
+
+.search-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+    text-align: left;
+}
+
+.search-dropdown-item:hover {
+    background: var(--panel-hover, rgba(142, 178, 169, 0.08));
+}
+
+.dropdown-item-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.dropdown-item-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.dropdown-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dropdown-item-detail {
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
+}
+
+/* ── 视觉焦点选中态（比悬停态高优先级） ── */
+.history li.visual-focus-highlight {
+    background: var(--panel-hover, rgba(142, 178, 169, 0.08)) !important;
     border-left-color: var(--accent) !important;
     padding-left: 8px !important;
 }

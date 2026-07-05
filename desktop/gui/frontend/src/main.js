@@ -7,7 +7,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import morphdom from './vendor/morphdom.js';
-import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory } from './components/history.js';
+import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocusTaskId, getMatchResults, highlightText } from './components/history.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -776,9 +776,9 @@ function renderReceive() {
                 <button id="choose-receive">${t('choose')}</button>
             </div>
         </div>
-        <div class="primary-row" style="width: 100%; max-width: 600px; justify-content: flex-start; gap: 12px; margin-top: 18px;">
-            <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''} style="flex: 1; max-width: 290px;">${state.busy ? t('working') : t('start_receive')}</button>
-            <button class="ghost" id="save-receive-dir" style="flex: 1; max-width: 290px;">${t('save_dir')}</button>
+        <div class="primary-row" style="width: 100%; display: flex; justify-content: center; gap: 12px; margin-top: 18px;">
+            <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''} style="width: 180px; flex: none;">${state.busy ? t('working') : t('start_receive')}</button>
+            <button class="ghost" id="save-receive-dir" style="width: 180px; flex: none;">${t('save_dir')}</button>
         </div>
     `;
 }
@@ -2445,7 +2445,10 @@ function bindEvents() {
         
         document.addEventListener('pointerdown', (e) => {
             if (showSearchInput) {
-                const inSearchBox = e.target.closest('.search-input-box') || e.target.closest('#toggle-search') || e.target.closest('#history-search-input');
+                const inSearchBox = e.target.closest('.search-input-box') || 
+                                    e.target.closest('#toggle-search') || 
+                                    e.target.closest('#history-search-input') ||
+                                    e.target.closest('.history-search-dropdown');
                 if (!inSearchBox) {
                     toggleSearchInput();
                     render();
@@ -2543,6 +2546,99 @@ function bindEvents() {
     document.querySelector('#start-share')?.addEventListener('click', startShare);
     document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
+      // 悬浮匹配结果 Hover 滚动定位与高亮
+    document.addEventListener('mouseover', (e) => {
+        const dropdownItem = e.target.closest('.search-dropdown-item');
+        if (dropdownItem) {
+            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+            if (taskId) {
+                // 1. 更新当前视觉焦点
+                updateActiveFocusTaskId(taskId);
+                
+                // 2. 清除其他 li 的高亮类
+                document.querySelectorAll('.history li').forEach(li => {
+                    li.classList.remove('visual-focus-highlight');
+                });
+                
+                // 3. 给对应的 li 加上高亮类
+                const targetLi = document.getElementById(`history-item-${taskId}`);
+                if (targetLi) {
+                    targetLi.classList.add('visual-focus-highlight');
+                    
+                    // 4. 滚动到可视区 (nearest 能让它在不可见时拉入视野，可见时保持原地)
+                    targetLi.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                }
+            }
+        }
+    });
+
+    // 点击某条搜索记录，关闭搜索框，但保持焦点高亮不回滚
+    document.addEventListener('click', (e) => {
+        const dropdownItem = e.target.closest('.search-dropdown-item');
+        if (dropdownItem) {
+            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+            if (taskId) {
+                updateActiveFocusTaskId(taskId);
+                
+                // 隐藏下拉框和关闭搜索框
+                toggleSearchDropdown(false);
+                if (showSearchInput) {
+                    toggleSearchInput(); // 这会设 showSearchInput = false 并清空 searchQuery
+                }
+                
+                // 重新渲染以保持列表状态
+                render();
+            }
+        }
+    });
+
+    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
+        const val = e.target.value;
+        updateSearchQuery(val);
+        
+        const panel = document.querySelector('.side .panel');
+        if (panel) {
+            // 移除可能存在的旧下拉框
+            const oldDropdown = panel.querySelector('.history-search-dropdown');
+            if (oldDropdown) {
+                oldDropdown.remove();
+            }
+            
+            if (val.trim()) {
+                toggleSearchDropdown(true);
+                const history = state.status?.history || [];
+                const matchResults = getMatchResults(history, val);
+                
+                if (matchResults.length > 0) {
+                    const dropdown = document.createElement('div');
+                    dropdown.className = 'history-search-dropdown';
+                    dropdown.innerHTML = matchResults.map(item => `
+                        <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
+                            <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
+                            <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                                <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${highlightText(item.text, val)}
+                                </div>
+                                <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+                                    ${escapeHTML(item.detail)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    const panelHead = panel.querySelector('.panel-head');
+                    if (panelHead) {
+                        panelHead.after(dropdown);
+                    }
+                }
+            } else {
+                toggleSearchDropdown(false);
+            }
+        }
+    });
     document.querySelector('#receive-dir')?.addEventListener('input', (e) => {
         state.receiveDir = e.target.value;
         const startBtn = document.querySelector('#start-receive');

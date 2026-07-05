@@ -106,7 +106,7 @@ function titleCase(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function highlightText(text, query) {
+export function highlightText(text, query) {
     if (!text || !query || !query.trim()) {
         return escapeHTML(text);
     }
@@ -200,6 +200,84 @@ export function renderHistoryFiles(task) {
     </div>`;
 }
 
+export let searchQuery = '';
+export let showSearchInput = false;
+export let showSearchDropdown = false;
+export let activeFocusTaskId = null;
+
+export function updateActiveFocusTaskId(id) {
+    activeFocusTaskId = id;
+}
+
+export function toggleSearchDropdown(show) {
+    showSearchDropdown = show;
+}
+
+export function toggleSearchInput() {
+    showSearchInput = !showSearchInput;
+    if (!showSearchInput) {
+        searchQuery = '';
+        showSearchDropdown = false;
+    }
+}
+
+export function updateSearchQuery(val) {
+    searchQuery = val;
+}
+
+export function getMatchResults(history, query) {
+    if (!query || !query.trim()) return [];
+    const q = query.trim().toLowerCase();
+    const results = [];
+    
+    history.forEach(task => {
+        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action));
+        const title = `${actionText} #${task.id}`;
+        
+        // 1. 匹配任务 ID 或动作标题
+        if (title.toLowerCase().includes(q)) {
+            results.push({
+                type: 'task',
+                text: title,
+                taskId: task.id,
+                detail: `Task #${task.id}`
+            });
+        }
+        
+        // 2. 匹配设备名称
+        if (task.clientStates) {
+            Object.values(task.clientStates).forEach(client => {
+                const clientName = client.deviceName || client.clientID || '';
+                if (clientName.toLowerCase().includes(q)) {
+                    results.push({
+                        type: 'device',
+                        text: clientName,
+                        taskId: task.id,
+                        detail: `${t('device') || 'Device'} - ${title}`
+                    });
+                }
+            });
+        }
+        
+        // 3. 匹配文件名
+        const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);
+        files.forEach(file => {
+            const name = shortName(file);
+            if (name.toLowerCase().includes(q) || file.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'file',
+                    text: name,
+                    taskId: task.id,
+                    detail: file
+                });
+            }
+        });
+    });
+    
+    // 去重辅助逻辑：如果在同一个 task 下有多个同类型同标题的匹配结果，可以适当保留，但这里限制最多展示 15 条
+    return results.slice(0, 15);
+}
+
 export function renderHistory(history) {
     if (!history.length) {
         return `<div class="empty-state">${t('no_tasks')}</div>`;
@@ -208,8 +286,9 @@ export function renderHistory(history) {
         const taskFolder = getTaskFolder(task);
         const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
         const displayTitle = `${actionText} #${task.id}`;
+        const isFocused = task.id === activeFocusTaskId;
         return `
-        <li>
+        <li id="history-item-${task.id}" class="${isFocused ? 'visual-focus-highlight' : ''}" style="transition: all 0.22s ease-in-out;">
             <div class="history-item-left">
                 <div class="history-title-row">
                     <strong class="history-title">${highlightText(displayTitle, searchQuery)}</strong>
@@ -231,60 +310,38 @@ export function renderHistory(history) {
     }).join('')}</ol>`;
 }
 
-export let searchQuery = '';
-export let showSearchInput = false;
-
-export function toggleSearchInput() {
-    showSearchInput = !showSearchInput;
-    if (!showSearchInput) {
-        searchQuery = '';
-    }
-}
-
-export function updateSearchQuery(val) {
-    searchQuery = val;
-}
-
 export function renderSide() {
     if (state.mode === 'chat' || state.settings?.showHistory === false) {
         return '';
     }
     const history = state.status?.history || [];
-
-    // Filter history records based on search query
-    let filteredHistory = history;
-    if (showSearchInput && searchQuery.trim()) {
-        const query = searchQuery.trim().toLowerCase();
-        filteredHistory = history.filter(task => {
-            if (String(task.id).toLowerCase().includes(query)) return true;
-            
-            const actionText = (task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
-            if (actionText.includes(query)) return true;
-
-            const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);
-            for (const file of files) {
-                if (shortName(file).toLowerCase().includes(query) || file.toLowerCase().includes(query)) {
-                    return true;
-                }
-            }
-
-            if (task.clientStates) {
-                for (const client of Object.values(task.clientStates)) {
-                    const clientName = client.deviceName || client.clientID || '';
-                    if (clientName.toLowerCase().includes(query)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        });
-    }
-
     const searchActive = showSearchInput;
+    const matchResults = getMatchResults(history, searchQuery);
+
+    let dropdownHtml = '';
+    if (showSearchDropdown && searchQuery.trim() && matchResults.length > 0) {
+        dropdownHtml = `
+            <div class="history-search-dropdown">
+                ${matchResults.map(item => `
+                    <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
+                        <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
+                        <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                            <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                ${highlightText(item.text, searchQuery)}
+                            </div>
+                            <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+                                ${escapeHTML(item.detail)}
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
 
     return `
         <aside class="side">
-            <div class="panel">
+            <div class="panel" style="position: relative;">
                 <div class="panel-head" style="position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 32px; width: 100%; box-sizing: border-box;">
                     <h2 class="panel-title" style="transition: opacity 0.2s ease, transform 0.2s ease, max-width 0.2s ease; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; ${searchActive ? 'opacity: 0; max-width: 0px; transform: translateX(-10px); pointer-events: none;' : 'opacity: 1; max-width: 150px; transform: translateX(0);'}">${t('recent_history')}</h2>
                     
@@ -306,8 +363,10 @@ export function renderSide() {
                     </div>
                 </div>
                 
+                ${dropdownHtml}
+                
                 <div class="history-list-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; overflow: hidden;">
-                    ${renderHistory(filteredHistory)}
+                    ${renderHistory(history)}
                 </div>
             </div>
         </aside>
