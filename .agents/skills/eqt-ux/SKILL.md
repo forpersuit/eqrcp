@@ -108,6 +108,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **Receive Mode Device Grouping**:
   - Display progress and received files grouped by client device in the desktop GUI, mapping individual `SavedFiles` and `Current` status inside each `ClientTransferStateInfo`.
   - Perform surgical UI updates (`updateReceiveTransferActiveUI`) to avoid global page redraws and maintain scroll positions.
+  - **History Device Grouping**: For the completed transfer history records, they should also display files grouped by client devices. To preserve device-to-file mapping after transfer completion, make sure the desktop agent's history serialization/cloning (`cloneTaskRecord`) deep copies `SavedFiles` in `ClientTransferStateInfo`, and `renderHistoryFiles` inside `history.js` parses and renders the grouped lists accordingly.
 - **Mobile Circular Upload Progress (XHR-based)**:
   - Track upload progress via `XMLHttpRequest`'s `upload.onprogress`.
   - Estimate sequential multipart upload progress using virtual boundaries scaled by a calculated factor (`e.total / totalFilesSize`).

@@ -83,6 +83,24 @@ function titleCase(str) {
 }
 
 // ---- 主要渲染逻辑 ----
+function renderSingleHistoryFileRow(file) {
+    const name = shortName(file);
+    const openFileTooltip = t('open_file_title', { file: name });
+    return `
+        <div class="history-file-row">
+            <div class="history-filename-wrapper">
+                <span class="file-icon-mini">📄</span>
+                <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+            </div>
+            <div class="history-file-actions">
+                <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
+                    ${openFileIcon()}
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 export function renderHistoryFiles(task) {
     let files = [];
     if (task.action === 'receive') {
@@ -95,24 +113,56 @@ export function renderHistoryFiles(task) {
         return `<div class="history-empty-files">${t('no_files')}</div>`;
     }
 
-    return `<div class="history-files-list">
-        ${files.map((file) => {
-            const name = shortName(file);
-            const openFileTooltip = t('open_file_title', { file: name });
-            return `
-                <div class="history-file-row">
-                    <div class="history-filename-wrapper">
-                        <span class="file-icon-mini">📄</span>
-                        <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+    if (task.action === 'receive' && task.clientStates && Object.keys(task.clientStates).length > 0) {
+        const clients = Object.values(task.clientStates);
+        const claimedFiles = new Set();
+        clients.forEach(client => {
+            if (client.savedFiles) {
+                client.savedFiles.forEach(file => claimedFiles.add(file));
+            }
+        });
+        const unclaimedFiles = files.filter(f => !claimedFiles.has(f));
+
+        let html = `<div class="history-device-groups" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">`;
+
+        clients.forEach(client => {
+            const clientName = client.deviceName || client.clientID || t('unknown_device') || 'Unknown Device';
+            const clientFiles = client.savedFiles || [];
+
+            if (clientFiles.length > 0) {
+                html += `
+                    <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
+                        <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
+                            📱 ${escapeHTML(clientName)}
+                        </div>
+                        <div class="history-files-list" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+                            ${clientFiles.map(file => renderSingleHistoryFileRow(file)).join('')}
+                        </div>
                     </div>
-                    <div class="history-file-actions">
-                        <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
-                            ${openFileIcon()}
-                        </button>
+                `;
+            }
+        });
+
+        if (unclaimedFiles.length > 0) {
+            const unclaimedLabel = t('unknown_device') || 'Unknown Device';
+            html += `
+                <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
+                    <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
+                        📱 ${escapeHTML(unclaimedLabel)}
+                    </div>
+                    <div class="history-files-list" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+                        ${unclaimedFiles.map(file => renderSingleHistoryFileRow(file)).join('')}
                     </div>
                 </div>
             `;
-        }).join('')}
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    return `<div class="history-files-list">
+        ${files.map((file) => renderSingleHistoryFileRow(file)).join('')}
     </div>`;
 }
 

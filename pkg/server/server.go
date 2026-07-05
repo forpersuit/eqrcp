@@ -130,7 +130,19 @@ type Server struct {
 func (s *Server) SetAutoStop(enabled bool) {
 	s.statusMu.Lock()
 	s.autoStop = enabled
+	s.status.AutoStop = enabled
+	s.statusSeq++
+	status := cloneTransferStatus(s.status)
+	hook := s.statusHook
+	s.notifyStatusSubscribersLocked()
 	s.statusMu.Unlock()
+
+	status.ClientStates = s.copyClientStates()
+	status.TransferDeviceCount = s.getConnectedDevicesCount()
+	status.ItemClientStats = s.getItemClientStats()
+
+	notifyTransferStatusHook(hook, status)
+
 
 	if enabled {
 		s.clientMutex.Lock()

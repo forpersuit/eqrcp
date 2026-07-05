@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"eqt/pkg/server"
 )
 
 func TestGUIAgentHistoryDeDuplicate(t *testing.T) {
@@ -65,3 +67,43 @@ func TestGUIAgentHistoryCorruptedSelfHealing(t *testing.T) {
 		t.Fatalf("History length = %d, want 0 after self-healing", historyLen)
 	}
 }
+
+func TestGUIAgentCloneTaskRecordSavedFiles(t *testing.T) {
+	// Import mock package dependency if needed, but server is already imported in package main (agent.go imports server)
+	tr := TaskRecord{
+		ID:     1,
+		Action: "receive",
+		TransferClientStates: map[string]*server.ClientTransferStateInfo{
+			"client-1": {
+				ClientID:   "client-1",
+				DeviceName: "Test Device",
+				SavedFiles: []string{"/path/to/file1.txt", "/path/to/file2.txt"},
+			},
+		},
+	}
+
+	cloned := cloneTaskRecord(tr)
+
+	if cloned.TransferClientStates == nil {
+		t.Fatal("Expected cloned clientStates to not be nil")
+	}
+
+	clientState, ok := cloned.TransferClientStates["client-1"]
+	if !ok {
+		t.Fatal("Expected 'client-1' in cloned clientStates")
+	}
+
+	if len(clientState.SavedFiles) != 2 {
+		t.Fatalf("Expected 2 saved files, got %d", len(clientState.SavedFiles))
+	}
+
+	if clientState.SavedFiles[0] != "/path/to/file1.txt" || clientState.SavedFiles[1] != "/path/to/file2.txt" {
+		t.Fatalf("Unexpected saved files values: %v", clientState.SavedFiles)
+	}
+
+	clientState.SavedFiles[0] = "/mutated/path.txt"
+	if tr.TransferClientStates["client-1"].SavedFiles[0] != "/path/to/file1.txt" {
+		t.Fatal("Expected deep clone of SavedFiles, but mutation affected the original TaskRecord")
+	}
+}
+

@@ -5101,6 +5101,20 @@ document.addEventListener('change', async (event) => {
         await run(async () => {
             const status = await SetAutoStop(enabled);
             state.status = status;
+            
+            // 立即局部更新 UI，以保证开关状态的即时反馈，防止下一次轮询前的显示延迟
+            if (state.mode === 'receive') {
+                const activeTask = activeReceiveTask();
+                if (activeTask) {
+                    updateReceiveTransferActiveUI(activeTask);
+                }
+            } else if (state.mode === 'share') {
+                const activeTask = activeShareTask();
+                if (activeTask) {
+                    updateShareTransferActiveUI(activeTask);
+                }
+            }
+            
             syncPanelSurface();
         }, { busy: false });
     }
