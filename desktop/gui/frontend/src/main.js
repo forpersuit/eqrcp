@@ -599,7 +599,7 @@ function renderDeviceProgressHtml(task) {
             }
 
             return `
-                <li style="display: flex; flex-direction: column; padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none; gap: 6px;">
+                <li style="display: flex; flex-direction: column; padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; overflow: hidden; border: 1.2px solid var(--line); list-style: none; gap: 6px;">
                     <!-- 第一行: 设备名 与 传输文件名同一行 -->
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <span style="color: var(--text-primary); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; min-width: 0;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
@@ -624,7 +624,7 @@ function renderDeviceProgressHtml(task) {
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
                 <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
                 <div class="devices-scroll-container" style="${scrollStyle}">
-                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
+                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%; overflow: hidden;">${listItems}</ul>
                 </div>
             </div>
         `;
@@ -1062,7 +1062,7 @@ function renderReceiveDeviceProgressHtml(task) {
             `;
 
             return `
-                <li id="receive-client-li-${escapeAttr(clientID)}" data-expanded="${isFilesExpanded}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; border: 1.2px solid var(--line); list-style: none;">
+                <li id="receive-client-li-${escapeAttr(clientID)}" data-expanded="${isFilesExpanded}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; overflow: hidden; border: 1.2px solid var(--line); list-style: none;">
                     <div class="device-header-toggle" data-client-id="${escapeAttr(clientID)}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; min-width: 0;">
                         <span id="receive-client-name-${escapeAttr(clientID)}" style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center; min-width: 0;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
                             ${arrowSvg}📱 <span id="receive-client-name-text-${escapeAttr(clientID)}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">${escapeHTML(displayName)}</span>
@@ -1087,7 +1087,7 @@ function renderReceiveDeviceProgressHtml(task) {
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
                 ${headerHtml}
                 <div class="devices-scroll-container" style="${scrollStyle}">
-                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%;">${listItems}</ul>
+                    <ul style="list-style: none; padding: 0; margin: 0; width: 100%; overflow: hidden;">${listItems}</ul>
                 </div>
             </div>
         `;
