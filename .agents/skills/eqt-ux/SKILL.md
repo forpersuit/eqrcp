@@ -115,6 +115,19 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - Estimate sequential multipart upload progress using virtual boundaries scaled by a calculated factor (`e.total / totalFilesSize`).
   - Disable input elements and replace file delete buttons with SVG circular progress rings during active uploads, transitioning to a green ✓ on success and a red ✕ on failure.
 
+## Chat Mode Progress UX & Bidirectional Progress Indicators
+- **Bidirectional Progress Support**:
+  - In Chat mode, both sending (uploading) and receiving (downloading) attachments show real-time progress.
+  - Progress is displayed visually on the attachment description text (the file description element underneath the bubble) by styling it as a text-clipped progress bar using a CSS gradient background.
+- **Percentage Display Positioning**:
+  - Real-time progress percentages (e.g. `45%`) are displayed adjacent to the attachment description text.
+  - Position percentages according to layout flow:
+    - **Sending side (Mine, right-aligned)**: The percentage is displayed to the **left** of the description text (in the center direction of the screen).
+    - **Receiving side (Not Mine, left-aligned)**: The percentage is displayed to the **right** of the description text (in the center direction of the screen).
+  - Use Flexbox `row-reverse` dynamically via CSS `.mine` structure to handle this layout switch automatically by simply placing the percentage element immediately after the description element in HTML.
+- **Finished State Visual Persistence**:
+  - Once transfer (upload/download) is finished, keep the color of the description text as the highlight theme color (`fillClr`) instead of reverting it to the default muted gray (`var(--muted)`), establishing a persistent visual cue for successfully transferred attachments.
+
 
 ## Receive Mode E2E UI Simulation via Chrome MCP (9222)
 ### Definition of Simulation Testing:

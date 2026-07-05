@@ -4223,7 +4223,7 @@
             return wrap;
         }
         function renderMessageFooter(message) {
-            var hasMeta = Boolean(message.url) || message.sending;
+            var hasMeta = Boolean(message.url) || message.sending || message.receiving;
             var actions = renderFooterActions(message);
             var hasActions = actions && actions.childNodes && actions.childNodes.length > 0;
             if (!hasMeta && !hasActions) {
@@ -4242,6 +4242,18 @@
                 meta.className = 'message-footer-meta';
                 renderAttachmentDescription(meta, message);
                 footer.appendChild(meta);
+                if (message.sending || message.receiving) {
+                    var pct = message.progress || 0;
+                    var percentEl = document.createElement('span');
+                    percentEl.className = 'message-progress-percent';
+                    percentEl.style.fontSize = '11px';
+                    percentEl.style.fontWeight = '800';
+                    var fillClr = sc ? sc.border : '#2f9e73';
+                    percentEl.style.color = fillClr;
+                    percentEl.style.margin = '0 6px';
+                    percentEl.textContent = pct + '%';
+                    meta.after(percentEl);
+                }
             }
             if (hasActions) {
                 footer.appendChild(actions);
@@ -4298,18 +4310,20 @@
             return wrap;
         }
         function renderAttachmentDescription(container, message) {
-            if (message.sending) {
+            var sc = messageColor(message);
+            var fillClr = sc ? sc.border : '#2f9e73';
+            if (message.sending || message.receiving) {
                 var pct = message.progress || 0;
                 var desc = message.type === 'text' ? dict.sending : fileDescription(message);
                 container.textContent = desc;
                 container.classList.add('uploading');
-                var sc = messageColor(message);
-                var fillClr = sc ? sc.border : '#2f9e73';
                 container.style.backgroundImage = 'linear-gradient(to right, ' + fillClr + ' ' + pct + '%, var(--muted) ' + pct + '%)';
+                container.style.color = '';
             } else {
                 container.textContent = fileDescription(message);
                 container.classList.remove('uploading');
                 container.style.backgroundImage = '';
+                container.style.color = fillClr;
             }
         }
         function captureMessageFocus() {
@@ -4337,6 +4351,130 @@
             }
             item.focus({preventScroll: true});
         }
+        function startReceivingProgress(messageId) {
+            var msg = state.messages.find(function(m) { return m.id === messageId; });
+            if (msg) {
+                msg.receiving = true;
+                msg.progress = 0;
+            }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
+            if (item) {
+                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
+                if (downloadBtn) {
+                    downloadBtn.style.display = 'none';
+                }
+                var meta = item.querySelector('.message-footer-meta');
+                if (meta) {
+                    renderAttachmentDescription(meta, msg);
+                }
+            }
+        }
+        function updateDownloadProgress(messageId, pct) {
+            var msg = state.messages.find(function(m) { return m.id === messageId; });
+            if (msg) {
+                msg.progress = pct;
+            }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
+            if (item) {
+                var meta = item.querySelector('.message-footer-meta');
+                if (meta) {
+                    var desc = fileDescription(msg);
+                    meta.textContent = desc;
+                    meta.classList.add('uploading');
+                    var sc = msg ? messageColor(msg) : null;
+                    var fillClr = sc ? sc.border : '#2f9e73';
+                    meta.style.backgroundImage = 'linear-gradient(to right, ' + fillClr + ' ' + pct + '%, var(--muted) ' + pct + '%)';
+                    
+                    var percentEl = item.querySelector('.message-progress-percent');
+                    if (!percentEl) {
+                        percentEl = document.createElement('span');
+                        percentEl.className = 'message-progress-percent';
+                        percentEl.style.fontSize = '11px';
+                        percentEl.style.fontWeight = '800';
+                        percentEl.style.color = fillClr;
+                        percentEl.style.margin = '0 6px';
+                        meta.after(percentEl);
+                    }
+                    percentEl.textContent = pct + '%';
+                }
+            }
+        }
+        function finishReceivingProgress(messageId) {
+            var msg = state.messages.find(function(m) { return m.id === messageId; });
+            if (msg) {
+                msg.receiving = false;
+                msg.progress = 100;
+            }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
+            if (item) {
+                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
+                if (downloadBtn) {
+                    downloadBtn.style.display = '';
+                }
+                var percentEl = item.querySelector('.message-progress-percent');
+                if (percentEl) {
+                    percentEl.remove();
+                }
+                var meta = item.querySelector('.message-footer-meta');
+                if (meta) {
+                    renderAttachmentDescription(meta, msg);
+                }
+            }
+            saveChatCache();
+        }
+        function failReceivingProgress(messageId) {
+            var msg = state.messages.find(function(m) { return m.id === messageId; });
+            if (msg) {
+                msg.receiving = false;
+                msg.progress = 0;
+            }
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
+            if (item) {
+                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
+                if (downloadBtn) {
+                    downloadBtn.style.display = '';
+                }
+                var percentEl = item.querySelector('.message-progress-percent');
+                if (percentEl) {
+                    percentEl.remove();
+                }
+                var meta = item.querySelector('.message-footer-meta');
+                if (meta) {
+                    renderAttachmentDescription(meta, msg);
+                }
+            }
+            showSystemNotice('Download failed.');
+        }
+        function downloadFileWithXHR(message) {
+            startReceivingProgress(message.id);
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', downloadURL(message.url), true);
+            xhr.responseType = 'blob';
+            xhr.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    var pct = Math.round((e.loaded / e.total) * 100);
+                    updateDownloadProgress(message.id, pct);
+                }
+            });
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    var blob = xhr.response;
+                    var link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = message.fileName || 'attachment';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    finishReceivingProgress(message.id);
+                } else {
+                    failReceivingProgress(message.id);
+                }
+            };
+            xhr.onerror = function() {
+                failReceivingProgress(message.id);
+            };
+            xhr.send();
+        }
         function renderDownloadAction(message) {
             if (!message || !message.url || message.type === 'text' || message.sending) {
                 return null;
@@ -4350,18 +4488,25 @@
                 save.innerHTML = downloadIcon();
                 keepActionFocus(save);
                 save.addEventListener('click', function() {
-                    window.parent.postMessage({type: 'save-file', url: downloadURL(message.url), name: message.fileName || 'attachment'}, '*');
+                    var u = downloadURL(message.url);
+                    var sep = u.indexOf('?') === -1 ? '?' : '&';
+                    u = u + sep + 'messageId=' + encodeURIComponent(message.id);
+                    window.parent.postMessage({type: 'save-file', url: u, name: message.fileName || 'attachment'}, '*');
+                    startReceivingProgress(message.id);
                 });
                 return save;
             }
-            var download = document.createElement('a');
+            var download = document.createElement('button');
+            download.type = 'button';
             download.className = 'bubble-action';
-            download.href = downloadURL(message.url);
-            download.setAttribute('download', message.fileName || 'attachment');
             download.setAttribute('aria-label', 'Download');
             download.title = 'Download';
             download.innerHTML = downloadIcon();
             keepActionFocus(download);
+            download.addEventListener('click', function(e) {
+                e.preventDefault();
+                downloadFileWithXHR(message);
+            });
             return download;
         }
         function renderAttachment(message) {
@@ -5535,6 +5680,18 @@
             }
             if (event.data.type === 'pulse-session-qr') {
                 startSessionQRPulse(event.data.until);
+                return;
+            }
+            if (event.data.type === 'chat-download-progress') {
+                var messageId = event.data.messageId;
+                var pct = event.data.progress;
+                if (pct >= 100) {
+                    finishReceivingProgress(messageId);
+                } else if (pct < 0) {
+                    failReceivingProgress(messageId);
+                } else {
+                    updateDownloadProgress(messageId, pct);
+                }
                 return;
             }
             if (event.data.type === 'update-viewport-debug') {

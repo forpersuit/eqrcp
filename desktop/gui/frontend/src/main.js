@@ -4285,6 +4285,20 @@ function connectAgentEvents() {
         return;
     }
     agentEventsSubscribed = true;
+    EventsOn('chat-download-progress', (eventData) => {
+        try {
+            const frame = document.querySelector('#chat-iframe');
+            if (frame && frame.contentWindow) {
+                frame.contentWindow.postMessage({
+                    type: 'chat-download-progress',
+                    messageId: eventData.messageId,
+                    progress: eventData.progress
+                }, '*');
+            }
+        } catch (e) {
+            console.error('Failed to forward chat download progress:', e);
+        }
+    });
     EventsOn('agent-status', (nextStatus) => {
         try {
             const previousChatURL = activeChatPageURL();

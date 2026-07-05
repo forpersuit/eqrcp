@@ -105,6 +105,13 @@ type chatClient struct {
 
 // Chat adds handlers for a browser-based chat session.
 func (s *Server) Chat() error {
+	s.statusMu.Lock()
+	if s.chatSession != nil {
+		s.statusMu.Unlock()
+		return nil
+	}
+	s.statusMu.Unlock()
+
 	dir, err := os.MkdirTemp("", "eqt-chat-*")
 	if err != nil {
 		return err

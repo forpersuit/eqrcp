@@ -430,26 +430,89 @@ func chatAttachmentDownloadURL(rawURL string) (*url.URL, error) {
 	return parsed, nil
 }
 
+type chatDownloadProgressWriter struct {
+	ctx       context.Context
+	messageID string
+	total     int64
+	written   int64
+}
+
+func (pw *chatDownloadProgressWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	pw.written += int64(n)
+	if pw.total > 0 && pw.messageID != "" {
+		pct := int(float64(pw.written) / float64(pw.total) * 100)
+		wailsruntime.EventsEmit(pw.ctx, "chat-download-progress", map[string]interface{}{
+			"messageId": pw.messageID,
+			"progress":  pct,
+		})
+	}
+	return n, nil
+}
+
 func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
+	parsed, _ := url.Parse(rawURL)
+	messageID := ""
+	if parsed != nil {
+		messageID = parsed.Query().Get("messageId")
+	}
+
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
+		if messageID != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+				"messageId": messageID,
+				"progress":  -1,
+			})
+		}
 		return err
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
+		if messageID != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+				"messageId": messageID,
+				"progress":  -1,
+			})
+		}
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		if messageID != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+				"messageId": messageID,
+				"progress":  -1,
+			})
+		}
 		return fmt.Errorf("attachment download returned %s", resp.Status)
 	}
 	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
+		if messageID != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+				"messageId": messageID,
+				"progress":  -1,
+			})
+		}
 		return err
 	}
-	_, copyErr := io.Copy(out, resp.Body)
+
+	pw := &chatDownloadProgressWriter{
+		ctx:       a.ctx,
+		messageID: messageID,
+		total:     resp.ContentLength,
+	}
+
+	_, copyErr := io.Copy(io.MultiWriter(out, pw), resp.Body)
 	closeErr := out.Close()
 	if copyErr != nil {
+		if messageID != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+				"messageId": messageID,
+				"progress":  -1,
+			})
+		}
 		return copyErr
 	}
 	if closeErr != nil {
