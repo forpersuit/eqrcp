@@ -4515,10 +4515,10 @@
             var sourceURL = '';
             if (message.file) {
                 sourceURL = URL.createObjectURL(message.file);
-            } else {
+            } else if (message.url) {
                 sourceURL = attachmentURL(message.url);
             }
-            if (message.type === 'image') {
+            if (message.type === 'image' && sourceURL) {
                 wrap.classList.add('media-attachment');
                 wrap.classList.add('image-attachment');
                 var open = document.createElement('button');
@@ -4539,7 +4539,7 @@
                 });
                 open.appendChild(image);
                 wrap.appendChild(open);
-            } else if (message.type === 'video') {
+            } else if (message.type === 'video' && sourceURL) {
                 wrap.classList.add('media-attachment');
                 wrap.classList.add('video-attachment');
                 var frame = document.createElement('div');
@@ -4557,7 +4557,7 @@
                 });
                 frame.appendChild(video);
                 wrap.appendChild(frame);
-            } else if (message.type === 'audio') {
+            } else if (message.type === 'audio' && sourceURL) {
                 wrap.classList.add('audio-attachment');
                 var player = document.createElement('audio');
                 player.className = 'audio-player';
@@ -5297,6 +5297,13 @@
                 uploadSingleFile(file);
             });
         }
+        function deletePlaceholderMessage(tempId) {
+            fetch('{{.MessagesRoute}}/' + encodeURIComponent(tempId), {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sender: state.sender, token: state.token})
+            }).catch(function() {});
+        }
         function uploadSingleFile(file) {
             // Client side intercept for large files when limit is exceeded
             var isFreeExceeded = !limitState.isPaid && (300 - limitState.usedSeconds <= 0);
@@ -5342,15 +5349,32 @@
             data.append('token', state.token);
             data.append('theme', state.theme);
             data.append('join', joinToken);
+            data.append('tempId', tempId);
             data.append('files', file, file.name || 'attachment');
             
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '{{.AttachmentsRoute}}', true);
             
+            var lastSentTime = 0;
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) {
                     var pct = Math.round((e.loaded / e.total) * 100);
                     updateUploadProgress(tempId, pct);
+                    
+                    var now = Date.now();
+                    if (now - lastSentTime >= 300 || pct === 100) {
+                        lastSentTime = now;
+                        fetch('{{.MessagesRoute}}', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                tempId: tempId,
+                                token: state.token,
+                                progress: pct,
+                                sending: true
+                            })
+                        }).catch(function() {});
+                    }
                 }
             });
             
@@ -5358,10 +5382,12 @@
                 if (xhr.status === 402) {
                     document.getElementById('pay-modal-backdrop').classList.add('open');
                     removeTempMessage(tempId);
+                    deletePlaceholderMessage(tempId);
                     return;
                 }
                 if (xhr.status === 413) {
                     updateUploadFailed(tempId, dict.uploadFailedLimit);
+                    deletePlaceholderMessage(tempId);
                     return;
                 }
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -5370,15 +5396,37 @@
                         replaceTempMessage(tempId, messages);
                     } catch(e) {
                         updateUploadFailed(tempId, dict.uploadFailed);
+                        deletePlaceholderMessage(tempId);
                     }
                 } else {
                     updateUploadFailed(tempId, dict.uploadFailed);
+                    deletePlaceholderMessage(tempId);
                 }
             };
             
             xhr.onerror = function() {
                 updateUploadFailed(tempId, dict.uploadFailed);
+                deletePlaceholderMessage(tempId);
             };
+            
+            // 先广播创建占位气泡给其他客户端，实现发送即显示
+            fetch('{{.MessagesRoute}}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    tempId: tempId,
+                    sender: state.sender,
+                    avatar: state.avatar,
+                    token: state.token,
+                    theme: state.theme,
+                    join: joinToken,
+                    type: tempMsg.type,
+                    fileName: file.name,
+                    size: file.size,
+                    sending: true,
+                    progress: 0
+                })
+            }).catch(function() {});
             
             xhr.send(data);
         }

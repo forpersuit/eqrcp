@@ -84,6 +84,9 @@ type chatMessage struct {
 	createdSeq int64
 	ownerToken string
 	SenderID   string    `json:"senderId,omitempty"`
+	Sending    bool      `json:"sending,omitempty"`
+	Progress   int       `json:"progress,omitempty"`
+	Receiving  bool      `json:"receiving,omitempty"`
 }
 
 type chatAttachment struct {
@@ -716,12 +719,18 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		var request struct {
-			Sender string `json:"sender"`
-			Avatar string `json:"avatar"`
-			Text   string `json:"text"`
-			Token  string `json:"token"`
-			Theme  string `json:"theme"`
-			Join   string `json:"join"`
+			Sender   string `json:"sender"`
+			Avatar   string `json:"avatar"`
+			Text     string `json:"text"`
+			Token    string `json:"token"`
+			Theme    string `json:"theme"`
+			Join     string `json:"join"`
+			TempID   string `json:"tempId,omitempty"`
+			Type     string `json:"type,omitempty"`
+			FileName string `json:"fileName,omitempty"`
+			Size     int64  `json:"size,omitempty"`
+			Progress int    `json:"progress,omitempty"`
+			Sending  bool   `json:"sending,omitempty"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
 			http.Error(w, "invalid message", http.StatusBadRequest)
@@ -738,6 +747,38 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		if session.rejectKickedClient(w, request.Token) {
 			return
 		}
+
+		if request.Sending && request.Type != "" && request.Progress == 0 {
+			session.ensureChatTheme(request.Token, request.Sender, "", request.Theme, request.Join)
+			message := session.addUploadPlaceholderMessage(
+				sanitizeChatSender(request.Sender),
+				sanitizeChatAvatar(request.Avatar),
+				request.Token,
+				request.Type,
+				request.FileName,
+				request.Size,
+				request.TempID,
+			)
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(message); err != nil {
+				log.Println(err)
+			}
+			return
+		}
+
+		if request.TempID != "" && request.Progress > 0 {
+			message, ok := session.updateUploadProgressMessage(request.TempID, request.Progress)
+			if !ok {
+				http.Error(w, "placeholder message not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(message); err != nil {
+				log.Println(err)
+			}
+			return
+		}
+
 		session.ensureChatTheme(request.Token, request.Sender, "", request.Theme, request.Join)
 		message := session.addTextMessageWithAvatar(sanitizeChatSender(request.Sender), sanitizeChatAvatar(request.Avatar), request.Token, request.Text)
 		if message.ID == "" {
@@ -794,6 +835,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	sender := sanitizeChatSender(r.FormValue("sender"))
 	avatar := sanitizeChatAvatar(r.FormValue("avatar"))
 	token := strings.TrimSpace(r.FormValue("token"))
+	tempID := strings.TrimSpace(r.FormValue("tempId"))
 	if token == "" {
 		http.Error(w, "missing token", http.StatusBadRequest)
 		return
@@ -822,7 +864,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "File size exceeds 2MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
 			return
 		}
-		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file)
+		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file, tempID)
 		file.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1255,6 +1297,37 @@ func (session *chatSession) addTextMessageWithAvatar(sender string, avatar strin
 	}, "active")
 }
 
+func (session *chatSession) addUploadPlaceholderMessage(sender string, avatar string, token string, msgType string, fileName string, size int64, tempID string) chatMessage {
+	theme := session.chatThemeForToken(strings.TrimSpace(token), sender)
+	return session.addMessageWithStatus(chatMessage{
+		ID:         tempID,
+		Sender:     sender,
+		Avatar:     avatar,
+		Type:       msgType,
+		FileName:   fileName,
+		Size:       size,
+		Sending:    true,
+		Progress:   0,
+		Theme:      theme,
+		ownerToken: strings.TrimSpace(token),
+	}, "active")
+}
+
+func (session *chatSession) updateUploadProgressMessage(tempID string, progress int) (chatMessage, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for index := range session.messages {
+		if session.messages[index].ID == tempID {
+			session.messages[index].Progress = progress
+			session.messages[index].Seq = session.nextEventSeqLocked()
+			session.lastActivity = time.Now()
+			session.notifyLocked()
+			return session.messages[index], true
+		}
+	}
+	return chatMessage{}, false
+}
+
 func (session *chatSession) addSystemMessage(text string) chatMessage {
 	return session.addMessageWithStatus(chatMessage{
 		Sender: "system",
@@ -1280,14 +1353,19 @@ func (session *chatSession) addSystemMessageLocked(text string) chatMessage {
 }
 
 func (session *chatSession) saveAttachment(sender string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
-	return session.saveAttachmentWithAvatar(sender, "", token, name, mimeType, size, reader)
+	return session.saveAttachmentWithAvatar(sender, "", token, name, mimeType, size, reader, "")
 }
 
-func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
+func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar string, token string, name string, mimeType string, size int64, reader io.Reader, tempID string) (chatMessage, error) {
 	if name == "" {
 		name = "attachment"
 	}
-	id := session.nextMessageID()
+	var id string
+	if tempID != "" {
+		id = tempID
+	} else {
+		id = session.nextMessageID()
+	}
 	storedName := id + "-" + name
 	path := filepath.Join(session.dir, storedName)
 	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
@@ -1350,8 +1428,6 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 			message.Avatar = client.Avatar
 		}
 	}
-	message.Seq = session.nextEventSeqLocked()
-	message.createdSeq = message.Seq
 	session.attachments[id] = chatAttachment{
 		ID:       id,
 		Path:     path,
@@ -1359,7 +1435,23 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 		Size:     size,
 		MimeType: mimeType,
 	}
-	session.messages = append(session.messages, message)
+	foundIdx := -1
+	for index := range session.messages {
+		if session.messages[index].ID == id {
+			foundIdx = index
+			break
+		}
+	}
+	if foundIdx >= 0 {
+		message.CreatedAt = session.messages[foundIdx].CreatedAt
+		message.Seq = session.nextEventSeqLocked()
+		message.createdSeq = session.messages[foundIdx].createdSeq
+		session.messages[foundIdx] = message
+	} else {
+		message.Seq = session.nextEventSeqLocked()
+		message.createdSeq = message.Seq
+		session.messages = append(session.messages, message)
+	}
 	session.trimHistoryLocked()
 	session.lastActivity = time.Now()
 	session.notifyLocked()
@@ -1378,7 +1470,9 @@ func (session *chatSession) addMessageWithStatus(message chatMessage, statusStat
 			message.Avatar = client.Avatar
 		}
 	}
-	message.ID = session.nextMessageIDLocked()
+	if message.ID == "" {
+		message.ID = session.nextMessageIDLocked()
+	}
 	message.CreatedAt = time.Now()
 	message.Seq = session.nextEventSeqLocked()
 	message.createdSeq = message.Seq
@@ -1467,6 +1561,13 @@ func (session *chatSession) recallMessage(id string, sender string, token string
 			}
 		} else if sender != "" && session.messages[index].Sender != sender {
 			return chatMessage{}, false
+		}
+		if session.messages[index].Sending {
+			msg := session.messages[index]
+			session.messages = append(session.messages[:index], session.messages[index+1:]...)
+			session.lastActivity = time.Now()
+			session.notifyLocked()
+			return msg, true
 		}
 		session.messages[index].Recalled = true
 		session.messages[index].Seq = session.nextEventSeqLocked()

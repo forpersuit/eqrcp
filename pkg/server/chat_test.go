@@ -137,7 +137,7 @@ func TestChatAvatarTravelsWithMessagesAndRoster(t *testing.T) {
 	done := session.registerClientWithAvatar("mobile-token", "Phone", "📱", "", "", "join-1", "")
 	defer done()
 	text := session.addTextMessageWithAvatar("Phone", "📱", "mobile-token", "hello")
-	attachment, err := session.saveAttachmentWithAvatar("Phone", "📱", "mobile-token", "note.txt", "text/plain", 4, strings.NewReader("file"))
+	attachment, err := session.saveAttachmentWithAvatar("Phone", "📱", "mobile-token", "note.txt", "text/plain", 4, strings.NewReader("file"), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +151,49 @@ func TestChatAvatarTravelsWithMessagesAndRoster(t *testing.T) {
 	}
 	if devices[0].ID == "" {
 		t.Fatal("device roster should expose a server-generated device id")
+	}
+}
+
+func TestChatUploadPlaceholderAndProgress(t *testing.T) {
+	session := &chatSession{
+		attachments:      map[string]chatAttachment{},
+		subscribers:      map[chan struct{}]struct{}{},
+		clients:          map[string]chatClient{},
+		clientThemes:     map[string]string{},
+		clientThemeJoins: map[string]string{},
+		dir:              t.TempDir(),
+		attachmentRoute:  "/attachments",
+		startedAt:        time.Now(),
+	}
+
+	tempID := "temp-upload-test-id"
+	// 1. 创建占位消息
+	placeholder := session.addUploadPlaceholderMessage("Tester", "🤖", "tester-token", "file", "test.zip", 1000, tempID)
+	if placeholder.ID != tempID || !placeholder.Sending || placeholder.Progress != 0 {
+		t.Fatalf("unexpected placeholder: %#v", placeholder)
+	}
+
+	// 2. 更新进度
+	updatedMsg, ok := session.updateUploadProgressMessage(tempID, 50)
+	if !ok || updatedMsg.Progress != 50 || !updatedMsg.Sending {
+		t.Fatalf("failed to update progress: %#v", updatedMsg)
+	}
+
+	// 3. 完成上传
+	completedMsg, err := session.saveAttachmentWithAvatar("Tester", "🤖", "tester-token", "test.zip", "application/zip", 1000, strings.NewReader("file-content"), tempID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completedMsg.ID != tempID || completedMsg.Sending || completedMsg.Progress != 0 {
+		t.Fatalf("unexpected completed message: %#v", completedMsg)
+	}
+
+	// 4. 验证原消息列表中的消息被原地更新，没有重复
+	session.mu.Lock()
+	messagesCount := len(session.messages)
+	session.mu.Unlock()
+	if messagesCount != 1 {
+		t.Fatalf("messages count = %d, want 1 (no duplicates)", messagesCount)
 	}
 }
 
