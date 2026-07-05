@@ -2174,7 +2174,7 @@ dd {
 
 .history-filename-wrapper {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     min-width: 0;
     flex: 1;
@@ -2184,16 +2184,16 @@ dd {
     color: var(--ink);
     font-size: 13px;
     font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     text-align: left;
+    word-break: break-all;
+    white-space: normal;
 }
 
 .file-icon-mini {
     color: var(--muted);
     font-size: 14px;
     flex-shrink: 0;
+    margin-top: 1px;
 }
 
 .history-file-actions {
@@ -2521,26 +2521,10 @@ dd {
     margin-bottom: 0 !important;
 }
 
-/* ── 历史记录搜索 Hover 联动高亮 ── */
-.history-device-group {
-    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.panel:not(.search-active) .history-device-group:has(.history-file-row:hover) {
-    border-color: var(--accent) !important;
-    background: var(--bg) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    transform: translateY(-1px);
-}
-
+/* ── 历史记录条目基础过渡 ── */
 .history li {
     transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     border-left: 3px solid transparent;
-}
-.panel:not(.search-active) .history li:has(.history-file-row:hover),
-.panel:not(.search-active) .history li:has(.history-device-group:hover) {
-    background: var(--panel-hover, rgba(0, 0, 0, 0.012)) !important;
-    border-left-color: var(--accent) !important;
-    padding-left: 8px !important;
 }
 
 /* ── 历史搜索栏下扩展面板样式 ── */

@@ -2497,6 +2497,12 @@ function shrinkSearchBoxInDOM() {
         zone.style.display = 'none';
         zone.innerHTML = '';
     }
+
+    const historyListWrapper = document.querySelector('.history-list-wrapper');
+    if (historyListWrapper) {
+        const history = state.status?.history || [];
+        historyListWrapper.innerHTML = renderHistory(history);
+    }
 }
 
         document.addEventListener('pointerdown', (e) => {
@@ -2655,6 +2661,12 @@ function shrinkSearchBoxInDOM() {
     document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
         const val = e.target.value;
         updateSearchQuery(val);
+        
+        const historyListWrapper = document.querySelector('.history-list-wrapper');
+        if (historyListWrapper) {
+            const history = state.status?.history || [];
+            historyListWrapper.innerHTML = renderHistory(history);
+        }
         
         const zone = document.querySelector('#search-results-expand-zone');
         if (zone) {
