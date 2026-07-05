@@ -1465,7 +1465,7 @@ func (s *Server) isAllActiveClientsFinished() bool {
 
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
-		return true
+		return false
 	}
 
 	now := time.Now()

@@ -456,4 +456,37 @@ func TestAutoStopWhenAllInactiveButFinished(t *testing.T) {
 	}
 }
 
+func TestSetAutoStopReceiveMode(t *testing.T) {
+	stopChan := make(chan bool, 1)
+
+	s := &Server{
+		clientStates:           make(map[string]*ClientTransferStateInfo),
+		clientProgress:         make(map[string]map[int]int64),
+		expectedBytes:          make(map[int]int64),
+		clientLastSeen:         make(map[string]time.Time),
+		autoStopIgnoredClients: make(map[string]bool),
+		autoStop:               false,
+		body: body.Body{
+			Paths: []string{}, // Receive mode: empty paths
+		},
+		stopChannel: stopChan,
+	}
+	s.status.Mode = "receive"
+
+	clientID := "cli_receive_test"
+	s.clientLastSeen[clientID] = time.Now()
+	s.clientStates[clientID] = &ClientTransferStateInfo{}
+
+	// Toggling SetAutoStop to true should NOT trigger shutdown because paths is empty (receive mode)
+	s.SetAutoStop(true)
+
+	select {
+	case <-stopChan:
+		t.Error("stopChannel received signal in receive mode immediately when SetAutoStop was toggled to true")
+	case <-time.After(150 * time.Millisecond):
+		// Expected
+	}
+}
+
+
 
