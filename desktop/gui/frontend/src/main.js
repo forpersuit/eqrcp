@@ -769,16 +769,20 @@ function renderReceive() {
     }
     const output = state.receiveDir || state.settings?.output || '';
     return `
-        <div class="receive-box">
-            <label>${t('receive_dir')}</label>
-            <div class="directory-row">
-                <input id="receive-dir" value="${escapeAttr(output)}" placeholder="Choose a folder" />
-                <button id="choose-receive">${t('choose')}</button>
+        <div class="receive-start">
+            <div class="receive-card">
+                <div class="receive-box">
+                    <label>${t('receive_dir')}</label>
+                    <div class="directory-row">
+                        <input id="receive-dir" value="${escapeAttr(output)}" placeholder="Choose a folder" />
+                        <button id="choose-receive">${t('choose')}</button>
+                    </div>
+                </div>
+                <div class="primary-row" style="margin-top: 8px; width: 100%;">
+                    <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''} style="flex: 1;">${state.busy ? t('working') : t('start_receive')}</button>
+                    <button class="ghost" id="save-receive-dir" style="flex: 1;">${t('save_dir')}</button>
+                </div>
             </div>
-        </div>
-        <div class="primary-row">
-            <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''}>${state.busy ? t('working') : t('start_receive')}</button>
-            <button class="ghost" id="save-receive-dir">${t('save_dir')}</button>
         </div>
     `;
 }
