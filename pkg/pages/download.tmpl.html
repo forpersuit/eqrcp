@@ -280,8 +280,11 @@
             }
         }
         .lang-switch-container {
-            margin-top: 24px;
-            text-align: center;
+            position: fixed;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
         }
         .lang-switch-container select {
             background: var(--surface);
@@ -289,9 +292,11 @@
             border-radius: 6px;
             color: var(--text-secondary);
             font-size: 13px;
-            padding: 4px 8px;
+            font-weight: 600;
+            padding: 6px 8px;
             outline: none;
             cursor: pointer;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
         }
         @keyframes pulse-success {
             0% {

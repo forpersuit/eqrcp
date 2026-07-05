@@ -221,7 +221,8 @@
         .lang-switch-container {
             position: fixed;
             bottom: 16px;
-            right: 16px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 100;
         }
         #page-lang-select {
@@ -1485,12 +1486,13 @@
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
-                    } else if (isLimitActive) {
-                        // 次数已用尽，但当前文件没有超标，显示一般超限警告（此时允许在规格内传输，不卡关）
-                        var text = t('quota_exceeded');
-                        bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
-                            '<span>' + text + '</span>' +
-                            '</div>';
+                     } else if (isLimitActive) {
+                         // 次数已用尽，但当前文件没有超标，显示一般超限警告（此时允许在规格内传输，不卡关）
+//                          var text = t('quota_exceeded');
+//                          bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
+//                              '<span>' + text + '</span>' +
+//                              '</div>';
+                         bannerEl.innerHTML = '';
                     } else {
                         // 在全功能可用额度内 (remaining >= 1)
                         var remaining = Math.max(0, 5 - usedTransfers);

@@ -2516,3 +2516,7 @@ dd {
     background: rgba(142, 178, 169, 0.08); /* Curated theme color fallback */
     color: var(--text);
 }
+
+.devices-scroll-container ul li:last-child {
+    margin-bottom: 0 !important;
+}
