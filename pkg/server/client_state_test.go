@@ -543,6 +543,15 @@ func TestSetAutoStopReceiveModeIgnoreCompleted(t *testing.T) {
 	case <-time.After(150 * time.Millisecond):
 		t.Error("Expected server stopChannel to signal after the new active device completed")
 	}
+
+	// Verify clientCompleted is removed from autoStopIgnoredClients when it restarts transferring
+	s.updateClientStatus(clientCompleted, nil, func(cs *ClientTransferStateInfo) {
+		cs.State = "transferring"
+	})
+
+	if s.autoStopIgnoredClients[clientCompleted] {
+		t.Error("Expected clientCompleted to be removed from autoStopIgnoredClients when transitioning back to transferring")
+	}
 }
 
 

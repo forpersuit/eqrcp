@@ -1690,6 +1690,14 @@ func (s *Server) updateClientStatus(clientID string, r *http.Request, update fun
 		state.DeviceName = devType + suffix
 	}
 	update(state)
+
+	if state.State == "transferring" {
+		s.clientMutex.Lock()
+		if s.autoStopIgnoredClients != nil {
+			delete(s.autoStopIgnoredClients, clientID)
+		}
+		s.clientMutex.Unlock()
+	}
 }
 
 func (s *Server) getClientStatus(clientID string) ClientTransferStateInfo {
