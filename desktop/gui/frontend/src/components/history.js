@@ -269,29 +269,33 @@ export function renderSide() {
         });
     }
 
+    const searchActive = showSearchInput;
+
     return `
         <aside class="side">
             <div class="panel">
-                <div class="panel-head">
-                    <h2>${t('recent_history')}</h2>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <button class="ghost icon-btn" id="refresh" title="${escapeAttr(t('refresh'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                <div class="panel-head" style="position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 32px; overflow: hidden; width: 100%; box-sizing: border-box;">
+                    <h2 class="panel-title" style="transition: opacity 0.2s ease, transform 0.2s ease; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; ${searchActive ? 'opacity: 0; transform: translateX(-10px); pointer-events: none;' : 'opacity: 1; transform: translateX(0);'}">${t('recent_history')}</h2>
+                    
+                    <div class="panel-actions-wrapper" style="display: flex; gap: 6px; align-items: center; transition: opacity 0.2s ease; ${searchActive ? 'opacity: 0; pointer-events: none;' : 'opacity: 1;'}">
+                        <button class="ghost icon-btn" id="refresh" title="${escapeAttr(t('refresh'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; background: transparent;">
                             ${refreshIcon()}
                         </button>
-                        <button class="ghost icon-btn ${showSearchInput ? 'active' : ''}" id="toggle-search" title="${escapeAttr(t('search'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; ${showSearchInput ? 'background: var(--accent-hover); color: var(--accent-contrast);' : ''}">
-                            ${searchIcon()}
-                        </button>
-                        <button class="ghost icon-btn" id="clear-history" ${history.length ? '' : 'disabled'} title="${escapeAttr(t('clear'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                        <button class="ghost icon-btn" id="clear-history" ${history.length ? '' : 'disabled'} title="${escapeAttr(t('clear'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; background: transparent;">
                             ${clearIcon()}
                         </button>
                     </div>
-                </div>
-                ${showSearchInput ? `
-                    <div class="history-search-container" style="padding: 0 16px 8px 16px; display: flex; align-items: center; width: 100%; box-sizing: border-box;">
-                        <input type="text" id="history-search-input" value="${escapeAttr(searchQuery)}" placeholder="${escapeAttr(t('search_history_placeholder'))}" style="width: 100%; height: 28px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text-primary); font-size: 12px; box-sizing: border-box;" />
+
+                    <!-- 搜索框包装盒，通过过渡实现左右拉伸展开 -->
+                    <div class="search-input-box" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: flex-end; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); height: 28px; border-radius: 4px; overflow: hidden; z-index: 5; ${searchActive ? 'width: 100%; background: var(--bg);' : 'width: 28px; background: transparent;'}">
+                        <input type="text" id="history-search-input" value="${escapeAttr(searchQuery)}" placeholder="${escapeAttr(t('search_history_placeholder'))}" style="width: 100%; height: 28px; padding: 4px 32px 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text-primary); font-size: 12px; box-sizing: border-box; outline: none; transition: opacity 0.15s ease; ${searchActive ? 'opacity: 1; pointer-events: auto;' : 'opacity: 0; pointer-events: none;'}" />
+                        <button class="ghost icon-btn" id="toggle-search" title="${escapeAttr(t('search'))}" style="position: absolute; right: 0; top: 0; min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; z-index: 6; transition: background-color 0.2s ease; ${searchActive ? 'background: var(--accent-hover); color: var(--accent-contrast);' : 'background: transparent; color: inherit;'}">
+                            ${searchIcon()}
+                        </button>
                     </div>
-                ` : ''}
-                <div class="history-list-wrapper" style="display: flex; flex-direction: column; width: 100%;">
+                </div>
+                
+                <div class="history-list-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; overflow: hidden;">
                     ${renderHistory(filteredHistory)}
                 </div>
             </div>

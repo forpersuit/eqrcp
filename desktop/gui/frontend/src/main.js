@@ -2444,6 +2444,15 @@ function bindEvents() {
         });
         
         document.addEventListener('pointerdown', (e) => {
+            if (showSearchInput) {
+                const inSearchBox = e.target.closest('.search-input-box') || e.target.closest('#toggle-search') || e.target.closest('#history-search-input');
+                if (!inSearchBox) {
+                    toggleSearchInput();
+                    render();
+                    return;
+                }
+            }
+
             const devHeader = e.target.closest('.device-header-toggle');
             if (devHeader) {
                 const clientID = devHeader.dataset.clientId;

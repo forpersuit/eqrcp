@@ -460,6 +460,7 @@ dd {
     display: grid;
     gap: 12px;
     width: 100%;
+    max-width: 720px;
 }
 
 /* ── Chat start screen ── */
