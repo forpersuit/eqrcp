@@ -2619,21 +2619,17 @@ function refreshHistoryListInDOM() {
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
-                const filePath = dropdownItem.dataset.filePath || null;
-                const deviceName = dropdownItem.dataset.deviceName || null;
+                // 1. 清除其他 li 的高亮类
+                document.querySelectorAll('.history li').forEach(li => {
+                    li.classList.remove('visual-focus-highlight');
+                });
                 
-                // 1. 更新当前视觉焦点，包括具体的文件和设备
-                updateActiveFocus(taskId, filePath, deviceName);
-                
-                // 2. 局部重新渲染历史记录列表以添加具体项高亮（同时保留滚动条高度）
-                refreshHistoryListInDOM();
-                
-                // 3. 给对应的 li 加上高亮类
+                // 2. 给对应的 li 加上高亮类
                 const targetLi = document.getElementById(`history-item-${taskId}`);
                 if (targetLi) {
                     targetLi.classList.add('visual-focus-highlight');
                     
-                    // 4. 滚动到可视区 (nearest 能让它在不可见时拉入视野，可见时保持原地)
+                    // 3. 滚动到可视区 (nearest 能让它在不可见时拉入视野，可见时保持原地)
                     targetLi.scrollIntoView({
                         behavior: 'smooth',
                         block: 'nearest'
