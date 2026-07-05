@@ -2543,23 +2543,18 @@ dd {
     padding-left: 8px !important;
 }
 
-/* ── 历史搜索悬浮弹出面板样式 ── */
+/* ── 历史搜索栏下扩展面板样式 ── */
 .history-search-dropdown {
-    position: absolute;
-    top: 36px;
-    left: 8px;
-    right: 8px;
-    max-height: 240px;
+    position: relative;
+    max-height: 220px;
     overflow-y: auto;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
-    z-index: 100;
+    background: var(--wash);
+    border-bottom: 1px solid var(--line);
     display: flex;
     flex-direction: column;
-    padding: 6px 0;
+    padding: 4px 0;
     scrollbar-width: thin;
+    width: 100%;
 }
 
 .search-dropdown-item {

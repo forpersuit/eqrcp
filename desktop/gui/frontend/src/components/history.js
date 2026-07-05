@@ -318,26 +318,7 @@ export function renderSide() {
     const searchActive = showSearchInput;
     const matchResults = getMatchResults(history, searchQuery);
 
-    let dropdownHtml = '';
-    if (showSearchDropdown && searchQuery.trim() && matchResults.length > 0) {
-        dropdownHtml = `
-            <div class="history-search-dropdown">
-                ${matchResults.map(item => `
-                    <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
-                        <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
-                        <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
-                            <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                ${highlightText(item.text, searchQuery)}
-                            </div>
-                            <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
-                                ${escapeHTML(item.detail)}
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
+    const hasResults = showSearchDropdown && searchQuery.trim() && matchResults.length > 0;
 
     return `
         <aside class="side">
@@ -363,7 +344,21 @@ export function renderSide() {
                     </div>
                 </div>
                 
-                ${dropdownHtml}
+                <div id="search-results-expand-zone" class="history-search-dropdown" style="${hasResults ? 'display: flex;' : 'display: none;'}">
+                    ${hasResults ? matchResults.map(item => `
+                        <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
+                            <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
+                            <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
+                                <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${highlightText(item.text, searchQuery)}
+                                </div>
+                                <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+                                    ${escapeHTML(item.detail)}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') : ''}
+                </div>
                 
                 <div class="history-list-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; overflow: hidden;">
                     ${renderHistory(history)}

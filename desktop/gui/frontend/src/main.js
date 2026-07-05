@@ -2443,6 +2443,57 @@ function bindEvents() {
             }
         });
         
+function shrinkSearchBoxInDOM() {
+    const title = document.querySelector('.panel-title');
+    const refreshBtn = document.querySelector('#refresh');
+    const clearBtn = document.querySelector('#clear-history');
+    const searchBox = document.querySelector('.search-input-box');
+    const searchInput = document.querySelector('#history-search-input');
+    const toggleSearch = document.querySelector('#toggle-search');
+    
+    if (showSearchInput) {
+        toggleSearchInput(); // 这会把 showSearchInput 设为 false，searchQuery 设为 ''
+    }
+    toggleSearchDropdown(false);
+    
+    if (title) {
+        title.style.opacity = '1';
+        title.style.maxWidth = '150px';
+        title.style.transform = 'translateX(0)';
+        title.style.pointerEvents = 'auto';
+    }
+    if (refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.width = '28px';
+        refreshBtn.style.pointerEvents = 'auto';
+    }
+    if (clearBtn) {
+        clearBtn.style.opacity = '1';
+        clearBtn.style.width = '28px';
+        clearBtn.style.pointerEvents = 'auto';
+    }
+    if (searchBox) {
+        searchBox.style.width = '28px';
+        searchBox.style.background = 'transparent';
+    }
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.style.opacity = '0';
+        searchInput.style.width = '0px';
+        searchInput.style.pointerEvents = 'none';
+    }
+    if (toggleSearch) {
+        toggleSearch.style.background = 'transparent';
+        toggleSearch.style.color = 'inherit';
+    }
+    
+    const zone = document.querySelector('#search-results-expand-zone');
+    if (zone) {
+        zone.style.display = 'none';
+        zone.innerHTML = '';
+    }
+}
+
         document.addEventListener('pointerdown', (e) => {
             if (showSearchInput) {
                 const inSearchBox = e.target.closest('.search-input-box') || 
@@ -2450,8 +2501,7 @@ function bindEvents() {
                                     e.target.closest('#history-search-input') ||
                                     e.target.closest('.history-search-dropdown');
                 if (!inSearchBox) {
-                    toggleSearchInput();
-                    render();
+                    shrinkSearchBoxInDOM();
                     return;
                 }
             }
@@ -2575,22 +2625,24 @@ function bindEvents() {
         }
     });
 
-    // 点击某条搜索记录，关闭搜索框，但保持焦点高亮不回滚
+    // 点击某条搜索记录，关闭搜索并回缩，但绝不执行 render() 重绘以防滚动与焦点复位
     document.addEventListener('click', (e) => {
         const dropdownItem = e.target.closest('.search-dropdown-item');
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
+                // 1. 更新焦点状态并给对应 li 加高亮
                 updateActiveFocusTaskId(taskId);
-                
-                // 隐藏下拉框和关闭搜索框
-                toggleSearchDropdown(false);
-                if (showSearchInput) {
-                    toggleSearchInput(); // 这会设 showSearchInput = false 并清空 searchQuery
+                document.querySelectorAll('.history li').forEach(li => {
+                    li.classList.remove('visual-focus-highlight');
+                });
+                const targetLi = document.getElementById(`history-item-${taskId}`);
+                if (targetLi) {
+                    targetLi.classList.add('visual-focus-highlight');
                 }
                 
-                // 重新渲染以保持列表状态
-                render();
+                // 2. 直接缩回搜索框 DOM 样式而不用重新 render
+                shrinkSearchBoxInDOM();
             }
         }
     });
@@ -2599,23 +2651,15 @@ function bindEvents() {
         const val = e.target.value;
         updateSearchQuery(val);
         
-        const panel = document.querySelector('.side .panel');
-        if (panel) {
-            // 移除可能存在的旧下拉框
-            const oldDropdown = panel.querySelector('.history-search-dropdown');
-            if (oldDropdown) {
-                oldDropdown.remove();
-            }
-            
+        const zone = document.querySelector('#search-results-expand-zone');
+        if (zone) {
             if (val.trim()) {
                 toggleSearchDropdown(true);
                 const history = state.status?.history || [];
                 const matchResults = getMatchResults(history, val);
                 
                 if (matchResults.length > 0) {
-                    const dropdown = document.createElement('div');
-                    dropdown.className = 'history-search-dropdown';
-                    dropdown.innerHTML = matchResults.map(item => `
+                    zone.innerHTML = matchResults.map(item => `
                         <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
                             <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
                             <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
@@ -2628,14 +2672,15 @@ function bindEvents() {
                             </div>
                         </div>
                     `).join('');
-                    
-                    const panelHead = panel.querySelector('.panel-head');
-                    if (panelHead) {
-                        panelHead.after(dropdown);
-                    }
+                    zone.style.display = 'flex';
+                } else {
+                    zone.style.display = 'none';
+                    zone.innerHTML = '';
                 }
             } else {
                 toggleSearchDropdown(false);
+                zone.style.display = 'none';
+                zone.innerHTML = '';
             }
         }
     });
