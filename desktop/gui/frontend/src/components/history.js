@@ -16,6 +16,30 @@ export function openFolderIcon() {
     </svg>`;
 }
 
+export function refreshIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+        <path d="M23 4v6h-6"></path>
+        <path d="M1 20v-6h6"></path>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+    </svg>`;
+}
+
+export function searchIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>`;
+}
+
+export function clearIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+        <polyline points="3 6 5 6 21 6"></polyline>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        <line x1="10" y1="11" x2="10" y2="17"></line>
+        <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>`;
+}
+
 // ---- 工具函数 ----
 function escapeHTML(value) {
     if (value === null || value === undefined) return '';
@@ -196,22 +220,80 @@ export function renderHistory(history) {
     }).join('')}</ol>`;
 }
 
+export let searchQuery = '';
+export let showSearchInput = false;
+
+export function toggleSearchInput() {
+    showSearchInput = !showSearchInput;
+    if (!showSearchInput) {
+        searchQuery = '';
+    }
+}
+
+export function updateSearchQuery(val) {
+    searchQuery = val;
+}
+
 export function renderSide() {
     if (state.mode === 'chat' || state.settings?.showHistory === false) {
         return '';
     }
     const history = state.status?.history || [];
+
+    // Filter history records based on search query
+    let filteredHistory = history;
+    if (showSearchInput && searchQuery.trim()) {
+        const query = searchQuery.trim().toLowerCase();
+        filteredHistory = history.filter(task => {
+            if (String(task.id).toLowerCase().includes(query)) return true;
+            
+            const actionText = (task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
+            if (actionText.includes(query)) return true;
+
+            const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);
+            for (const file of files) {
+                if (shortName(file).toLowerCase().includes(query) || file.toLowerCase().includes(query)) {
+                    return true;
+                }
+            }
+
+            if (task.clientStates) {
+                for (const client of Object.values(task.clientStates)) {
+                    const clientName = client.deviceName || client.clientID || '';
+                    if (clientName.toLowerCase().includes(query)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+    }
+
     return `
         <aside class="side">
             <div class="panel">
                 <div class="panel-head">
                     <h2>${t('recent_history')}</h2>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="ghost" id="refresh" style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('refresh')}</button>
-                        <button class="ghost" id="clear-history" ${history.length ? '' : 'disabled'} style="min-height: 28px; padding: 4px 10px; font-size: 12px;">${t('clear')}</button>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button class="ghost icon-btn" id="refresh" title="${escapeAttr(t('refresh'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                            ${refreshIcon()}
+                        </button>
+                        <button class="ghost icon-btn ${showSearchInput ? 'active' : ''}" id="toggle-search" title="${escapeAttr(t('search'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; ${showSearchInput ? 'background: var(--accent-hover); color: var(--accent-contrast);' : ''}">
+                            ${searchIcon()}
+                        </button>
+                        <button class="ghost icon-btn" id="clear-history" ${history.length ? '' : 'disabled'} title="${escapeAttr(t('clear'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                            ${clearIcon()}
+                        </button>
                     </div>
                 </div>
-                ${renderHistory(history)}
+                ${showSearchInput ? `
+                    <div class="history-search-container" style="padding: 0 16px 8px 16px; display: flex; align-items: center; width: 100%; box-sizing: border-box;">
+                        <input type="text" id="history-search-input" value="${escapeAttr(searchQuery)}" placeholder="${escapeAttr(t('search_history_placeholder'))}" style="width: 100%; height: 28px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--text-primary); font-size: 12px; box-sizing: border-box;" />
+                    </div>
+                ` : ''}
+                <div class="history-list-wrapper" style="display: flex; flex-direction: column; width: 100%;">
+                    ${renderHistory(filteredHistory)}
+                </div>
             </div>
         </aside>
     `;

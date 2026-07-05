@@ -26,6 +26,7 @@ func TestGUIAgentHistoryDeDuplicate(t *testing.T) {
 		ID:        15,
 		Action:    "share",
 		State:     "completed",
+		BytesDone: 100,
 		StartedAt: time.Now(),
 	})
 	agent.mu.Unlock()
@@ -105,5 +106,106 @@ func TestGUIAgentCloneTaskRecordSavedFiles(t *testing.T) {
 	if tr.TransferClientStates["client-1"].SavedFiles[0] != "/path/to/file1.txt" {
 		t.Fatal("Expected deep clone of SavedFiles, but mutation affected the original TaskRecord")
 	}
+}
+
+func TestGUIAgentHistoryChatFiltered(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "gui_history_chat.json")
+	agent := newDesktopAgent(nil)
+	agent.historyPath = historyPath
+
+	agent.mu.Lock()
+	agent.addHistoryLocked(TaskRecord{
+		ID:        1,
+		Action:    "chat",
+		State:     "running",
+		StartedAt: time.Now(),
+	})
+	agent.addHistoryLocked(TaskRecord{
+		ID:        1,
+		Action:    "chat",
+		State:     "completed",
+		StartedAt: time.Now(),
+	})
+	agent.mu.Unlock()
+
+	agent.mu.Lock()
+	historyLen := len(agent.history)
+	agent.mu.Unlock()
+
+	if historyLen != 0 {
+		t.Fatalf("Chat history length = %d, want 0 (filtered)", historyLen)
+	}
+}
+
+func TestGUIAgentHistoryNoTransferFiltered(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "gui_history_notransfer.json")
+	agent := newDesktopAgent(nil)
+	agent.historyPath = historyPath
+
+	// 1. Share task with no transfer -> should be removed when completed
+	agent.mu.Lock()
+	agent.addHistoryLocked(TaskRecord{
+		ID:        1,
+		Action:    "send",
+		State:     "running",
+		StartedAt: time.Now(),
+	})
+	if len(agent.history) != 1 {
+		t.Fatalf("Expected task 1 in running state, got history length = %d", len(agent.history))
+	}
+
+	agent.addHistoryLocked(TaskRecord{
+		ID:        1,
+		Action:    "send",
+		State:     "completed",
+		BytesDone: 0,
+		StartedAt: time.Now(),
+	})
+	if len(agent.history) != 0 {
+		t.Fatalf("Expected task 1 to be removed from history when completed with 0 bytes, got %d", len(agent.history))
+	}
+	agent.mu.Unlock()
+
+	// 2. Share task with transfer -> should be kept
+	agent.mu.Lock()
+	agent.addHistoryLocked(TaskRecord{
+		ID:        2,
+		Action:    "send",
+		State:     "running",
+		StartedAt: time.Now(),
+	})
+	agent.addHistoryLocked(TaskRecord{
+		ID:        2,
+		Action:    "send",
+		State:     "completed",
+		BytesDone: 1024,
+		StartedAt: time.Now(),
+	})
+	if len(agent.history) != 1 {
+		t.Fatalf("Expected task 2 to be kept, got length = %d", len(agent.history))
+	}
+	agent.mu.Unlock()
+
+	// 3. Receive task with no files -> should be removed when completed
+	agent.mu.Lock()
+	agent.addHistoryLocked(TaskRecord{
+		ID:        3,
+		Action:    "receive",
+		State:     "running",
+		StartedAt: time.Now(),
+	})
+	agent.addHistoryLocked(TaskRecord{
+		ID:         3,
+		Action:     "receive",
+		State:      "completed",
+		BytesDone:  0,
+		SavedFiles: []string{},
+		StartedAt:  time.Now(),
+	})
+	// Still only task 2 should remain
+	if len(agent.history) != 1 || agent.history[0].ID != 2 {
+		t.Fatalf("Expected only task 2 in history, got %v", agent.history)
+	}
+	agent.mu.Unlock()
 }
 

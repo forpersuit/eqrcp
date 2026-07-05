@@ -459,7 +459,7 @@ dd {
 .receive-box {
     display: grid;
     gap: 12px;
-    max-width: 720px;
+    width: 100%;
 }
 
 /* ── Chat start screen ── */

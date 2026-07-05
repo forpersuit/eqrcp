@@ -7,7 +7,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import morphdom from './vendor/morphdom.js';
-import { renderSide } from './components/history.js';
+import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory } from './components/history.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -2554,6 +2554,57 @@ function bindEvents() {
         button.addEventListener('click', openQRPage);
     });
     document.querySelector('#clear-history')?.addEventListener('click', clearHistory);
+    document.querySelector('#toggle-search')?.addEventListener('click', () => {
+        toggleSearchInput();
+        render();
+        if (showSearchInput) {
+            const inputEl = document.querySelector('#history-search-input');
+            if (inputEl) {
+                inputEl.focus();
+                const val = inputEl.value;
+                inputEl.value = '';
+                inputEl.value = val;
+            }
+        }
+    });
+    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
+        const val = e.target.value;
+        updateSearchQuery(val);
+        
+        const historyListWrapper = document.querySelector('.history-list-wrapper');
+        if (historyListWrapper) {
+            const history = state.status?.history || [];
+            let filteredHistory = history;
+            if (val.trim()) {
+                const query = val.trim().toLowerCase();
+                filteredHistory = history.filter(task => {
+                    if (String(task.id).toLowerCase().includes(query)) return true;
+                    
+                    const actionText = (task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
+                    if (actionText.includes(query)) return true;
+
+                    const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);
+                    for (const file of files) {
+                        const shortName = String(file || '').split(/[\\/]/).filter(Boolean).pop() || file || '';
+                        if (shortName.toLowerCase().includes(query) || file.toLowerCase().includes(query)) {
+                            return true;
+                        }
+                    }
+
+                    if (task.clientStates) {
+                        for (const client of Object.values(task.clientStates)) {
+                            const clientName = client.deviceName || client.clientID || '';
+                            if (clientName.toLowerCase().includes(query)) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                });
+            }
+            historyListWrapper.innerHTML = renderHistory(filteredHistory);
+        }
+    });
     document.querySelectorAll('.repeat-task').forEach((button) => {
         button.addEventListener('click', repeatTask);
     });

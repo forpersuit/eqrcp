@@ -179,6 +179,44 @@ func (agent *desktopAgent) addHistoryLocked(record TaskRecord) {
 		}
 	}
 
+	if record.Action == "chat" {
+		foundIndex := -1
+		for i, r := range agent.history {
+			if r.ID == record.ID {
+				foundIndex = i
+				break
+			}
+		}
+		if foundIndex >= 0 {
+			agent.history = append(agent.history[:foundIndex], agent.history[foundIndex+1:]...)
+			_ = saveDesktopAgentHistory(agent.historyPath, agent.history)
+		}
+		return
+	}
+
+	isTerminal := record.State == "completed" || record.State == "stopped" || record.State == "failed" || record.State == "replaced"
+	hasNoTransfer := false
+	if record.Action == "send" && record.BytesDone <= 0 {
+		hasNoTransfer = true
+	} else if record.Action == "receive" && len(record.SavedFiles) == 0 && record.BytesDone <= 0 {
+		hasNoTransfer = true
+	}
+
+	if isTerminal && hasNoTransfer {
+		foundIndex := -1
+		for i, r := range agent.history {
+			if r.ID == record.ID {
+				foundIndex = i
+				break
+			}
+		}
+		if foundIndex >= 0 {
+			agent.history = append(agent.history[:foundIndex], agent.history[foundIndex+1:]...)
+			_ = saveDesktopAgentHistory(agent.historyPath, agent.history)
+		}
+		return
+	}
+
 	foundIndex := -1
 	for i, r := range agent.history {
 		if r.ID == record.ID {
@@ -206,6 +244,25 @@ func (agent *desktopAgent) loadHistory() error {
 	if err != nil {
 		return err
 	}
+	var filtered []TaskRecord
+	for _, record := range history {
+		if record.Action == "chat" {
+			continue
+		}
+		isTerminal := record.State == "completed" || record.State == "stopped" || record.State == "failed" || record.State == "replaced"
+		hasNoTransfer := false
+		if record.Action == "send" && record.BytesDone <= 0 {
+			hasNoTransfer = true
+		} else if record.Action == "receive" && len(record.SavedFiles) == 0 && record.BytesDone <= 0 {
+			hasNoTransfer = true
+		}
+		if isTerminal && hasNoTransfer {
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+	history = filtered
+
 	nextID := agent.nextID
 	for _, record := range history {
 		if record.ID > nextID {
