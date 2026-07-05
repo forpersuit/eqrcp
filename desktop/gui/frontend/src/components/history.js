@@ -106,6 +106,16 @@ function titleCase(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function highlightText(text, query) {
+    if (!text || !query || !query.trim()) {
+        return escapeHTML(text);
+    }
+    const escapedText = escapeHTML(text);
+    const q = query.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`(${q})`, 'gi');
+    return escapedText.replace(regex, '<mark class="search-highlight" style="background: rgba(253, 224, 71, 0.35); color: var(--text-primary); padding: 0 2px; border-radius: 2px; font-weight: 700;">$1</mark>');
+}
+
 // ---- 主要渲染逻辑 ----
 function renderSingleHistoryFileRow(file) {
     const name = shortName(file);
@@ -114,7 +124,7 @@ function renderSingleHistoryFileRow(file) {
         <div class="history-file-row">
             <div class="history-filename-wrapper">
                 <span class="file-icon-mini">📄</span>
-                <span class="history-filename" title="${escapeAttr(file)}">${escapeHTML(name)}</span>
+                <span class="history-filename" title="${escapeAttr(file)}">${highlightText(name, searchQuery)}</span>
             </div>
             <div class="history-file-actions">
                 <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(file)}" title="${escapeAttr(openFileTooltip)}">
@@ -157,7 +167,7 @@ export function renderHistoryFiles(task) {
                 html += `
                     <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
                         <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
-                            📱 ${escapeHTML(clientName)}
+                            📱 ${highlightText(clientName, searchQuery)}
                         </div>
                         <div class="history-files-list" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
                             ${clientFiles.map(file => renderSingleHistoryFileRow(file)).join('')}
@@ -172,7 +182,7 @@ export function renderHistoryFiles(task) {
             html += `
                 <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
                     <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
-                        📱 ${escapeHTML(unclaimedLabel)}
+                        📱 ${highlightText(unclaimedLabel, searchQuery)}
                     </div>
                     <div class="history-files-list" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
                         ${unclaimedFiles.map(file => renderSingleHistoryFileRow(file)).join('')}
@@ -197,11 +207,12 @@ export function renderHistory(history) {
     return `<ol class="history">${history.slice(0, 8).map((task) => {
         const taskFolder = getTaskFolder(task);
         const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
+        const displayTitle = `${actionText} #${task.id}`;
         return `
         <li>
             <div class="history-item-left">
                 <div class="history-title-row">
-                    <strong class="history-title">${escapeHTML(actionText)} #${task.id}</strong>
+                    <strong class="history-title">${highlightText(displayTitle, searchQuery)}</strong>
                     <span class="history-status-icon" title="${escapeAttr(getTranslatedState(task.state))}${task.transferState ? ` / ${escapeAttr(getTranslatedState(task.transferState))}` : ''}">
                         ${getStatusIcon(task)}
                     </span>

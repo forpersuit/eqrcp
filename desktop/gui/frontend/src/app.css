@@ -286,13 +286,6 @@ h2 {
     place-items: center;
 }
 
-.workspace:has(.receive-start) {
-    padding: 0;
-    overflow: hidden;
-    display: grid;
-    place-items: center;
-}
-
 .side {
     display: flex;
     flex-direction: column;
@@ -466,34 +459,8 @@ dd {
 .receive-box {
     display: grid;
     gap: 12px;
-    max-width: 720px;
-}
-
-.receive-start {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     width: 100%;
-    height: 100%;
-    min-height: 280px;
-    box-sizing: border-box;
-    padding: 20px;
-}
-
-.receive-card {
-    width: 100%;
-    max-width: 520px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel-card, var(--bg));
-    padding: 28px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    box-sizing: border-box;
-    transition: all 0.2s ease;
+    max-width: 600px;
 }
 
 /* ── Chat start screen ── */
@@ -2553,4 +2520,26 @@ dd {
 
 .devices-scroll-container ul li:last-child {
     margin-bottom: 0 !important;
+}
+
+/* ── 历史记录搜索 Hover 联动高亮 ── */
+.history-device-group {
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.history-device-group:has(.history-file-row:hover) {
+    border-color: var(--accent) !important;
+    background: var(--bg) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+}
+
+.history li {
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    border-left: 3px solid transparent;
+}
+.history li:has(.history-file-row:hover),
+.history li:has(.history-device-group:hover) {
+    background: var(--panel-hover, rgba(0, 0, 0, 0.012)) !important;
+    border-left-color: var(--accent) !important;
+    padding-left: 8px !important;
 }
