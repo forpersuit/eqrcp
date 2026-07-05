@@ -7,7 +7,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import morphdom from './vendor/morphdom.js';
-import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocusTaskId, getMatchResults, highlightText } from './components/history.js';
+import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -2498,10 +2498,16 @@ function shrinkSearchBoxInDOM() {
         zone.innerHTML = '';
     }
 
+    refreshHistoryListInDOM();
+}
+
+function refreshHistoryListInDOM() {
     const historyListWrapper = document.querySelector('.history-list-wrapper');
     if (historyListWrapper) {
+        const savedScrollTop = historyListWrapper.scrollTop;
         const history = state.status?.history || [];
         historyListWrapper.innerHTML = renderHistory(history);
+        historyListWrapper.scrollTop = savedScrollTop;
     }
 }
 
@@ -2613,13 +2619,14 @@ function shrinkSearchBoxInDOM() {
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
-                // 1. 更新当前视觉焦点
-                updateActiveFocusTaskId(taskId);
+                const filePath = dropdownItem.dataset.filePath || null;
+                const deviceName = dropdownItem.dataset.deviceName || null;
                 
-                // 2. 清除其他 li 的高亮类
-                document.querySelectorAll('.history li').forEach(li => {
-                    li.classList.remove('visual-focus-highlight');
-                });
+                // 1. 更新当前视觉焦点，包括具体的文件和设备
+                updateActiveFocus(taskId, filePath, deviceName);
+                
+                // 2. 局部重新渲染历史记录列表以添加具体项高亮（同时保留滚动条高度）
+                refreshHistoryListInDOM();
                 
                 // 3. 给对应的 li 加上高亮类
                 const targetLi = document.getElementById(`history-item-${taskId}`);
@@ -2642,17 +2649,13 @@ function shrinkSearchBoxInDOM() {
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
-                // 1. 更新焦点状态并给对应 li 加高亮
-                updateActiveFocusTaskId(taskId);
-                document.querySelectorAll('.history li').forEach(li => {
-                    li.classList.remove('visual-focus-highlight');
-                });
-                const targetLi = document.getElementById(`history-item-${taskId}`);
-                if (targetLi) {
-                    targetLi.classList.add('visual-focus-highlight');
-                }
+                const filePath = dropdownItem.dataset.filePath || null;
+                const deviceName = dropdownItem.dataset.deviceName || null;
                 
-                // 2. 直接缩回搜索框 DOM 样式而不用重新 render
+                // 1. 更新焦点状态
+                updateActiveFocus(taskId, filePath, deviceName);
+                
+                // 2. 直接缩回搜索框 DOM 样式，它会在内部调用 refreshHistoryListInDOM 并保留当前位置
                 shrinkSearchBoxInDOM();
             }
         }
@@ -2677,13 +2680,13 @@ function shrinkSearchBoxInDOM() {
                 
                 if (matchResults.length > 0) {
                     zone.innerHTML = matchResults.map(item => `
-                        <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
+                        <div class="search-dropdown-item" data-target-id="${item.taskId}" ${item.filePath ? `data-file-path="${escapeAttr(item.filePath)}"` : ''} ${item.deviceName ? `data-device-name="${escapeAttr(item.deviceName)}"` : ''}>
                             <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
-                            <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
-                                <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <div class="dropdown-item-content">
+                                <div class="dropdown-item-title">
                                     ${highlightText(item.text, val)}
                                 </div>
-                                <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+                                <div class="dropdown-item-detail">
                                     ${escapeHTML(item.detail)}
                                 </div>
                             </div>

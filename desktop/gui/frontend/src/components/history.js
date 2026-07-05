@@ -120,8 +120,9 @@ export function highlightText(text, query) {
 function renderSingleHistoryFileRow(file) {
     const name = shortName(file);
     const openFileTooltip = t('open_file_title', { file: name });
+    const isFileFocused = file === activeFocusFilePath;
     return `
-        <div class="history-file-row">
+        <div class="history-file-row ${isFileFocused ? 'visual-focus-highlight-file' : ''}" style="transition: all 0.2s ease-in-out;">
             <div class="history-filename-wrapper">
                 <span class="file-icon-mini">📄</span>
                 <span class="history-filename" title="${escapeAttr(file)}">${highlightText(name, searchQuery)}</span>
@@ -162,10 +163,11 @@ export function renderHistoryFiles(task) {
         clients.forEach(client => {
             const clientName = client.deviceName || client.clientID || t('unknown_device') || 'Unknown Device';
             const clientFiles = client.savedFiles || [];
+            const isDeviceFocused = clientName === activeFocusDeviceName;
 
             if (clientFiles.length > 0) {
                 html += `
-                    <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
+                    <div class="history-device-group ${isDeviceFocused ? 'visual-focus-highlight-device' : ''}" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%; transition: all 0.2s ease-in-out;">
                         <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
                             📱 ${highlightText(clientName, searchQuery)}
                         </div>
@@ -179,8 +181,9 @@ export function renderHistoryFiles(task) {
 
         if (unclaimedFiles.length > 0) {
             const unclaimedLabel = t('unknown_device') || 'Unknown Device';
+            const isDeviceFocused = unclaimedLabel === activeFocusDeviceName;
             html += `
-                <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
+                <div class="history-device-group ${isDeviceFocused ? 'visual-focus-highlight-device' : ''}" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%; transition: all 0.2s ease-in-out;">
                     <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
                         📱 ${highlightText(unclaimedLabel, searchQuery)}
                     </div>
@@ -204,9 +207,13 @@ export let searchQuery = '';
 export let showSearchInput = false;
 export let showSearchDropdown = false;
 export let activeFocusTaskId = null;
+export let activeFocusFilePath = null;
+export let activeFocusDeviceName = null;
 
-export function updateActiveFocusTaskId(id) {
+export function updateActiveFocus(id, filePath = null, deviceName = null) {
     activeFocusTaskId = id;
+    activeFocusFilePath = filePath;
+    activeFocusDeviceName = deviceName;
 }
 
 export function toggleSearchDropdown(show) {
@@ -253,6 +260,7 @@ export function getMatchResults(history, query) {
                         type: 'device',
                         text: clientName,
                         taskId: task.id,
+                        deviceName: clientName,
                         detail: `${t('device') || 'Device'} - ${title}`
                     });
                 }
@@ -268,6 +276,7 @@ export function getMatchResults(history, query) {
                     type: 'file',
                     text: name,
                     taskId: task.id,
+                    filePath: file,
                     detail: file
                 });
             }
@@ -346,13 +355,13 @@ export function renderSide() {
                 
                 <div id="search-results-expand-zone" class="history-search-dropdown" style="${hasResults ? 'display: flex;' : 'display: none;'}">
                     ${hasResults ? matchResults.map(item => `
-                        <div class="search-dropdown-item" data-target-id="${item.taskId}" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; text-align: left;">
+                        <div class="search-dropdown-item" data-target-id="${item.taskId}" ${item.filePath ? `data-file-path="${escapeAttr(item.filePath)}"` : ''} ${item.deviceName ? `data-device-name="${escapeAttr(item.deviceName)}"` : ''}>
                             <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
-                            <div class="dropdown-item-content" style="display: flex; flex-direction: column; min-width: 0; flex: 1;">
-                                <div class="dropdown-item-title" style="font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <div class="dropdown-item-content">
+                                <div class="dropdown-item-title">
                                     ${highlightText(item.text, searchQuery)}
                                 </div>
-                                <div class="dropdown-item-detail" style="font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;">
+                                <div class="dropdown-item-detail">
                                     ${escapeHTML(item.detail)}
                                 </div>
                             </div>
