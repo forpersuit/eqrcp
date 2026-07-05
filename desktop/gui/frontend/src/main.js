@@ -2507,7 +2507,9 @@ function refreshHistoryListInDOM() {
         const savedScrollTop = historyListWrapper.scrollTop;
         const history = state.status?.history || [];
         historyListWrapper.innerHTML = renderHistory(history);
-        historyListWrapper.scrollTop = savedScrollTop;
+        setTimeout(() => {
+            historyListWrapper.scrollTop = savedScrollTop;
+        }, 0);
     }
 }
 
