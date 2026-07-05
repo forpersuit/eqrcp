@@ -943,7 +943,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     const openFileTooltip = t('open_file_title', { file: name });
 
                     return `
-                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; width: 100%; min-width: 0; box-sizing: border-box; gap: 8px; ${bgStyle}">
                             <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; min-width: 0;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
                             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
                                 <span id="receive-file-progress-${escapeAttr(clientID)}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
@@ -1026,7 +1026,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     const openFileTooltip = t('open_file_title', { file: name });
 
                     return `
-                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}">
+                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; width: 100%; min-width: 0; box-sizing: border-box; gap: 8px; ${bgStyle}">
                             <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; min-width: 0;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
                             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
                                 <span id="receive-file-progress-${escapeAttr(clientID)}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
@@ -1073,7 +1073,7 @@ function renderReceiveDeviceProgressHtml(task) {
                         </div>
                     </div>
                     ${isFilesExpanded ? `
-                    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; width: 100%;">
+                    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; width: 100%; min-width: 0; overflow: hidden;">
                         ${filesHtml}
                     </div>
                     ` : ''}
@@ -1267,7 +1267,7 @@ function updateReceiveTransferActiveUI(task) {
                         }
 
                         if (fRowEl) {
-                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}`;
+                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; width: 100%; min-width: 0; box-sizing: border-box; gap: 8px; ${bgStyle}`;
                         }
                         if (fNameEl) {
                             fNameEl.textContent = `${namePrefix} ${file.name || 'File'}`;
@@ -1360,7 +1360,7 @@ function updateReceiveTransferActiveUI(task) {
                         }
 
                         if (fRowEl) {
-                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; box-sizing: border-box; gap: 8px; ${bgStyle}`;
+                            fRowEl.style.cssText = `display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; width: 100%; min-width: 0; box-sizing: border-box; gap: 8px; ${bgStyle}`;
                         }
                         if (fNameEl) {
                             fNameEl.textContent = `${namePrefix} ${file.name || 'File'}`;

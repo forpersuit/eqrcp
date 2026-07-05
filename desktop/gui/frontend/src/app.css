@@ -1067,6 +1067,7 @@ dd {
     display: grid;
     gap: 16px;
     min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .transfer-head {
