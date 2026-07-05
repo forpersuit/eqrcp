@@ -2525,7 +2525,7 @@ dd {
 .history-device-group {
     transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.history-device-group:has(.history-file-row:hover) {
+.panel:not(.search-active) .history-device-group:has(.history-file-row:hover) {
     border-color: var(--accent) !important;
     background: var(--bg) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -2536,8 +2536,8 @@ dd {
     transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     border-left: 3px solid transparent;
 }
-.history li:has(.history-file-row:hover),
-.history li:has(.history-device-group:hover) {
+.panel:not(.search-active) .history li:has(.history-file-row:hover),
+.panel:not(.search-active) .history li:has(.history-device-group:hover) {
     background: var(--panel-hover, rgba(0, 0, 0, 0.012)) !important;
     border-left-color: var(--accent) !important;
     padding-left: 8px !important;

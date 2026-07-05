@@ -322,7 +322,7 @@ export function renderSide() {
 
     return `
         <aside class="side">
-            <div class="panel" style="position: relative;">
+            <div class="panel ${searchActive ? 'search-active' : ''}" style="position: relative;">
                 <div class="panel-head" style="position: relative; display: flex; align-items: center; justify-content: space-between; min-height: 32px; width: 100%; box-sizing: border-box;">
                     <h2 class="panel-title" style="transition: opacity 0.2s ease, transform 0.2s ease, max-width 0.2s ease; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; ${searchActive ? 'opacity: 0; max-width: 0px; transform: translateX(-10px); pointer-events: none;' : 'opacity: 1; max-width: 150px; transform: translateX(0);'}">${t('recent_history')}</h2>
                     

@@ -2456,6 +2456,11 @@ function shrinkSearchBoxInDOM() {
     }
     toggleSearchDropdown(false);
     
+    const panel = document.querySelector('.side .panel');
+    if (panel) {
+        panel.classList.remove('search-active');
+    }
+    
     if (title) {
         title.style.opacity = '1';
         title.style.maxWidth = '150px';
