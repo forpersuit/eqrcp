@@ -2503,12 +2503,16 @@ function shrinkSearchBoxInDOM() {
 
 function refreshHistoryListInDOM() {
     const historyListWrapper = document.querySelector('.history-list-wrapper');
+    const historyEl = document.querySelector('.history');
     if (historyListWrapper) {
-        const savedScrollTop = historyListWrapper.scrollTop;
+        const savedScrollTop = historyEl ? historyEl.scrollTop : 0;
         const history = state.status?.history || [];
         historyListWrapper.innerHTML = renderHistory(history);
         setTimeout(() => {
-            historyListWrapper.scrollTop = savedScrollTop;
+            const newHistoryEl = document.querySelector('.history');
+            if (newHistoryEl) {
+                newHistoryEl.scrollTop = savedScrollTop;
+            }
         }, 0);
     }
 }
