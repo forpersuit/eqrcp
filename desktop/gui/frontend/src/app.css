@@ -407,6 +407,7 @@ h2 {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
+    scroll-behavior: smooth;
 }
 
 .path-list li,

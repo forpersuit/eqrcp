@@ -96,6 +96,7 @@ window.onunhandledrejection = function(event) {
 
 let reportedErrorsCount = 0;
 const reportedErrorsSet = new Set();
+let lastFocusedTaskId = null;
 
 function reportRuntimeErrorToBot(message, stack) {
     if (reportedErrorsCount >= 5) {
@@ -2511,7 +2512,20 @@ function refreshHistoryListInDOM() {
         setTimeout(() => {
             const newHistoryEl = document.querySelector('.history');
             if (newHistoryEl) {
-                newHistoryEl.scrollTop = savedScrollTop;
+                let scrolled = false;
+                if (lastFocusedTaskId) {
+                    const targetLi = newHistoryEl.querySelector(`#history-item-${lastFocusedTaskId}`);
+                    if (targetLi) {
+                        targetLi.scrollIntoView({
+                            behavior: 'auto',
+                            block: 'nearest'
+                        });
+                        scrolled = true;
+                    }
+                }
+                if (!scrolled) {
+                    newHistoryEl.scrollTop = savedScrollTop;
+                }
             }
         }, 0);
     }
@@ -2642,6 +2656,7 @@ function refreshHistoryListInDOM() {
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
+                lastFocusedTaskId = taskId;
                 // 1. 关闭下拉面板
                 toggleSearchDropdown(false);
                 const zone = document.querySelector('#search-results-expand-zone');
@@ -2736,6 +2751,8 @@ function refreshHistoryListInDOM() {
                 inputEl.value = '';
                 inputEl.value = val;
             }
+        } else {
+            lastFocusedTaskId = null;
         }
     });
     document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
@@ -3793,6 +3810,7 @@ async function stopChat() {
 async function clearHistory() {
     await run(async () => {
         await ClearHistory();
+        lastFocusedTaskId = null;
         state.notice = t('history_cleared');
         await loadStatusData();
     });
