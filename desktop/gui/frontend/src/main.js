@@ -2613,23 +2613,14 @@ function refreshHistoryListInDOM() {
     document.querySelector('#start-share')?.addEventListener('click', startShare);
     document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
-      // 悬浮匹配结果 Hover 滚动定位与高亮
+      // 悬浮匹配结果 Hover 滚动定位到对应大卡片项
     document.addEventListener('mouseover', (e) => {
         const dropdownItem = e.target.closest('.search-dropdown-item');
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
-                // 1. 清除其他 li 的高亮类
-                document.querySelectorAll('.history li').forEach(li => {
-                    li.classList.remove('visual-focus-highlight');
-                });
-                
-                // 2. 给对应的 li 加上高亮类
                 const targetLi = document.getElementById(`history-item-${taskId}`);
                 if (targetLi) {
-                    targetLi.classList.add('visual-focus-highlight');
-                    
-                    // 3. 滚动到可视区 (nearest 能让它在不可见时拉入视野，可见时保持原地)
                     targetLi.scrollIntoView({
                         behavior: 'smooth',
                         block: 'nearest'
@@ -2639,20 +2630,28 @@ function refreshHistoryListInDOM() {
         }
     });
 
-    // 点击某条搜索记录，关闭搜索并回缩，但绝不执行 render() 重绘以防滚动与焦点复位
+    // 点击某条搜索记录，收起结果列表，滚动到对应项，但不关闭搜索框，保持关键字高亮
     document.addEventListener('click', (e) => {
         const dropdownItem = e.target.closest('.search-dropdown-item');
         if (dropdownItem) {
             const taskId = parseInt(dropdownItem.dataset.targetId, 10);
             if (taskId) {
-                const filePath = dropdownItem.dataset.filePath || null;
-                const deviceName = dropdownItem.dataset.deviceName || null;
+                // 1. 关闭下拉面板
+                toggleSearchDropdown(false);
+                const zone = document.querySelector('#search-results-expand-zone');
+                if (zone) {
+                    zone.style.display = 'none';
+                    zone.innerHTML = '';
+                }
                 
-                // 1. 更新焦点状态
-                updateActiveFocus(taskId, filePath, deviceName);
-                
-                // 2. 直接缩回搜索框 DOM 样式，它会在内部调用 refreshHistoryListInDOM 并保留当前位置
-                shrinkSearchBoxInDOM();
+                // 2. 平滑滚动到历史记录中对应那项
+                const targetLi = document.getElementById(`history-item-${taskId}`);
+                if (targetLi) {
+                    targetLi.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                }
             }
         }
     });

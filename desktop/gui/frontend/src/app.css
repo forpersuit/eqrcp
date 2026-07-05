@@ -2605,32 +2605,4 @@ dd {
     line-height: 1.3;
 }
 
-/* ── 列表子项（文件行/设备分组）聚焦高亮样式 ── */
-.history-file-row.visual-focus-highlight-file {
-    background: var(--accent) !important;
-    color: var(--accent-contrast) !important;
-    border-radius: 4px;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-}
 
-.history-file-row.visual-focus-highlight-file .history-filename {
-    color: var(--accent-contrast) !important;
-}
-
-.history-file-row.visual-focus-highlight-file .file-icon-mini {
-    color: var(--accent-contrast) !important;
-}
-
-.history-device-group.visual-focus-highlight-device {
-    border-color: var(--accent) !important;
-    background: var(--bg) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-/* ── 视觉焦点选中态（比悬停态高优先级） ── */
-.history li.visual-focus-highlight {
-    background: var(--panel-hover, rgba(142, 178, 169, 0.08)) !important;
-    border-left-color: var(--accent) !important;
-    padding-left: 8px !important;
-}

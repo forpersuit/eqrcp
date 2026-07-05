@@ -120,9 +120,8 @@ export function highlightText(text, query) {
 function renderSingleHistoryFileRow(file) {
     const name = shortName(file);
     const openFileTooltip = t('open_file_title', { file: name });
-    const isFileFocused = file === activeFocusFilePath;
     return `
-        <div class="history-file-row ${isFileFocused ? 'visual-focus-highlight-file' : ''}" style="transition: all 0.2s ease-in-out;">
+        <div class="history-file-row">
             <div class="history-filename-wrapper">
                 <span class="file-icon-mini">📄</span>
                 <span class="history-filename" title="${escapeAttr(file)}">${highlightText(name, searchQuery)}</span>
@@ -163,11 +162,10 @@ export function renderHistoryFiles(task) {
         clients.forEach(client => {
             const clientName = client.deviceName || client.clientID || t('unknown_device') || 'Unknown Device';
             const clientFiles = client.savedFiles || [];
-            const isDeviceFocused = clientName === activeFocusDeviceName;
 
             if (clientFiles.length > 0) {
                 html += `
-                    <div class="history-device-group ${isDeviceFocused ? 'visual-focus-highlight-device' : ''}" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%; transition: all 0.2s ease-in-out;">
+                    <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
                         <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
                             📱 ${highlightText(clientName, searchQuery)}
                         </div>
@@ -181,9 +179,8 @@ export function renderHistoryFiles(task) {
 
         if (unclaimedFiles.length > 0) {
             const unclaimedLabel = t('unknown_device') || 'Unknown Device';
-            const isDeviceFocused = unclaimedLabel === activeFocusDeviceName;
             html += `
-                <div class="history-device-group ${isDeviceFocused ? 'visual-focus-highlight-device' : ''}" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%; transition: all 0.2s ease-in-out;">
+                <div class="history-device-group" style="border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--wash); display: flex; flex-direction: column; gap: 4px; box-sizing: border-box; width: 100%;">
                     <div class="history-device-header" style="font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 2px;">
                         📱 ${highlightText(unclaimedLabel, searchQuery)}
                     </div>
@@ -295,9 +292,8 @@ export function renderHistory(history) {
         const taskFolder = getTaskFolder(task);
         const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
         const displayTitle = `${actionText} #${task.id}`;
-        const isFocused = task.id === activeFocusTaskId;
         return `
-        <li id="history-item-${task.id}" class="${isFocused ? 'visual-focus-highlight' : ''}" style="transition: all 0.22s ease-in-out;">
+        <li id="history-item-${task.id}" style="transition: all 0.22s ease-in-out;">
             <div class="history-item-left">
                 <div class="history-title-row">
                     <strong class="history-title">${highlightText(displayTitle, searchQuery)}</strong>
