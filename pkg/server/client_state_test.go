@@ -488,6 +488,64 @@ func TestSetAutoStopReceiveMode(t *testing.T) {
 	}
 }
 
+func TestSetAutoStopReceiveModeIgnoreCompleted(t *testing.T) {
+	stopChan := make(chan bool, 1)
+
+	s := &Server{
+		clientStates:           make(map[string]*ClientTransferStateInfo),
+		clientProgress:         make(map[string]map[int]int64),
+		expectedBytes:          make(map[int]int64),
+		clientLastSeen:         make(map[string]time.Time),
+		autoStopIgnoredClients: make(map[string]bool),
+		autoStop:               false,
+		body: body.Body{
+			Paths: []string{}, // Receive mode
+		},
+		stopChannel: stopChan,
+	}
+	s.status.Mode = "receive"
+
+	clientCompleted := "client_completed"
+	s.clientLastSeen[clientCompleted] = time.Now().Add(-10 * time.Second)
+	s.clientStates[clientCompleted] = &ClientTransferStateInfo{State: "completed"}
+
+	s.SetAutoStop(true)
+
+	if !s.autoStopIgnoredClients[clientCompleted] {
+		t.Error("Expected clientCompleted to be added to autoStopIgnoredClients when auto-stop is toggled on")
+	}
+
+	select {
+	case <-stopChan:
+		t.Error("stopChannel received signal even though the completed client should be ignored")
+	case <-time.After(150 * time.Millisecond):
+		// Expected
+	}
+
+	clientNew := "client_new"
+	s.clientLastSeen[clientNew] = time.Now()
+	s.clientStates[clientNew] = &ClientTransferStateInfo{State: "transferring"}
+
+	if s.autoStopIgnoredClients[clientNew] {
+		t.Error("Expected clientNew to not be ignored")
+	}
+
+	s.clientStates[clientNew].State = "completed"
+	
+	// Mock standard auto-stop checking that happens in server when client state updates
+	if s.isAllActiveClientsFinished() {
+		s.stopChannel <- true
+	}
+
+	select {
+	case <-stopChan:
+		// Expected to stop now
+	case <-time.After(150 * time.Millisecond):
+		t.Error("Expected server stopChannel to signal after the new active device completed")
+	}
+}
+
+
 func TestReceiveModeAutoStopAllFinished(t *testing.T) {
 	s := &Server{
 		clientStates:           make(map[string]*ClientTransferStateInfo),

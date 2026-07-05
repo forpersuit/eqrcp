@@ -184,6 +184,19 @@ func (s *Server) SetAutoStop(enabled bool) {
 					s.autoStopIgnoredClients[clientID] = true
 				}
 			}
+		} else {
+			// Receive mode: ignore clients that have already completed upload before auto-stop is toggled on
+			for clientID := range s.clientLastSeen {
+				isCompleted := false
+				if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+					if cs.State == "completed" {
+						isCompleted = true
+					}
+				}
+				if isCompleted {
+					s.autoStopIgnoredClients[clientID] = true
+				}
+			}
 		}
 		s.clientMutex.Unlock()
 
@@ -1371,6 +1384,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		SavedFiles:          append([]string(nil), status.SavedFiles...),
 		Version:             status.Version,
 		ItemClientStats:     append([]string(nil), status.ItemClientStats...),
+		AutoStop:            status.AutoStop,
 		ClientStates:        clientStates,
 	}
 }
