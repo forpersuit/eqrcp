@@ -274,6 +274,16 @@ window.addEventListener('message', (e) => {
             .catch(() => {
                 e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, e.origin);
             });
+    } else if (e.data.type === 'select-files') {
+        const requestId = String(e.data.requestId || '');
+        if (!requestId) { return; }
+        SelectFiles()
+            .then((paths) => {
+                e.source?.postMessage({type: 'selected-files', requestId, paths: paths || []}, e.origin);
+            })
+            .catch((err) => {
+                e.source?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, e.origin);
+            });
     }
 });
 

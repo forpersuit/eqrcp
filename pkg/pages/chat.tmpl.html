@@ -3268,6 +3268,8 @@
         var programmaticScrollTimer = null;
         var clipboardRequestID = 0;
         var clipboardRequests = {};
+        var nativeFileSelectionRequestID = 0;
+        var nativeFileSelectionRequests = {};
         var viewportSettleTimer = null;
         var scrollCorrectionTimer = null;
         var chatViewportEl = document.getElementById('chat-viewport');
@@ -5698,6 +5700,22 @@
                 }, 1200);
             });
         }
+        function requestNativeFileSelection() {
+            if (!inWails || window.parent === window || !hostToken) {
+                return Promise.resolve([]);
+            }
+            var requestId = 'files-' + Date.now() + '-' + (++nativeFileSelectionRequestID);
+            return new Promise(function(resolve) {
+                nativeFileSelectionRequests[requestId] = resolve;
+                window.parent.postMessage({type: 'select-files', requestId: requestId}, '*');
+                window.setTimeout(function() {
+                    if (!nativeFileSelectionRequests[requestId]) { return; }
+                    delete nativeFileSelectionRequests[requestId];
+                    resolve([]);
+                    showSystemNotice('Failed to select files: native picker timed out');
+                }, 30000);
+            });
+        }
         function pasteComposerText() {
             textEl.focus({preventScroll: true});
             if (navigator.clipboard && navigator.clipboard.readText) {
@@ -5797,22 +5815,23 @@
 
         document.getElementById('composer').addEventListener('submit', sendText);
         fileEl.addEventListener('click', function(event) {
-            var wailsApp = window.go && window.go.main && window.go.main.App ? window.go.main.App : (window.parent && window.parent.go && window.parent.go.main && window.parent.go.main.App ? window.parent.go.main.App : null);
-            if (wailsApp && typeof wailsApp.SelectFiles === 'function' && hostToken) {
-                event.preventDefault();
-                wailsApp.SelectFiles()
-                    .then(function(paths) {
-                        if (!paths || !paths.length) { return; }
-                        paths.forEach(function(path) {
-                            registerLocalAttachment(path);
-                        });
-                    })
-                    .catch(function(err) {
-                        console.error('Wails SelectFiles failed:', err);
+            if (!inWails || !hostToken) { return; }
+            event.preventDefault();
+            requestNativeFileSelection()
+                .then(function(paths) {
+                    if (!paths || !paths.length) { return; }
+                    paths.forEach(function(path) {
+                        registerLocalAttachment(path);
                     });
-            }
+                });
         });
-        fileEl.addEventListener('change', uploadFiles);
+        fileEl.addEventListener('change', function() {
+            if (inWails && hostToken) {
+                fileEl.value = '';
+                return;
+            }
+            uploadFiles();
+        });
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);
         textEl.addEventListener('contextmenu', showComposerContextMenu);
@@ -5962,6 +5981,19 @@
                 if (!resolve) { return; }
                 delete clipboardRequests[requestId];
                 resolve(String(event.data.text || ''));
+                return;
+            }
+            if (event.data.type === 'selected-files') {
+                var filesRequestId = String(event.data.requestId || '');
+                var filesResolve = nativeFileSelectionRequests[filesRequestId];
+                if (!filesResolve) { return; }
+                delete nativeFileSelectionRequests[filesRequestId];
+                if (event.data.error) {
+                    showSystemNotice('Failed to select files: ' + String(event.data.error));
+                    filesResolve([]);
+                    return;
+                }
+                filesResolve(event.data.paths || []);
             }
         });
         window.addEventListener('resize', handleViewportChange);

@@ -80,6 +80,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 
 
 ## Wails App Modal and Drag-Drop Guidelines (Wails原生确认弹窗与拖拽最佳实践)
+- **Chat iframe Native File Picker Bridge**:
+  - The chat page runs inside a Wails-hosted iframe, so `chat.tmpl.html` must not call `window.parent.go` or Wails bindings directly.
+  - For GUI-only native actions such as selecting local chat attachments, send a trusted `postMessage` request from the iframe to `desktop/gui/frontend/src/main.js`; the parent window calls the Wails binding (for example `SelectFiles`) and posts the result back with a request ID.
+  - In Wails chat, block the `<input type="file">` fallback path after requesting native selection. Local GUI attachments should register paths through `/attachments/local`; they must not enter the TUS upload queue or show sender-side upload percentages.
 - **原生二次确认框 (Native Confirmation Dialogs)**:
   - 在需要用户强确认的操作（如切换运行模式）时，严禁使用浏览器原生 `confirm()`。应当在 Go 端通过 `wailsruntime.MessageDialog` 封装一个 RPC 方法（例如 `Confirm`），由 JS 异步调用以呈现操作系统原生的对话框，避免网页弹窗打断与卡死，提升应用的原生质感。
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:

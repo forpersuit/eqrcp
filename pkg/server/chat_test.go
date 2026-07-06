@@ -532,6 +532,49 @@ func TestChatPageUsesAvatarForMessagesRosterAndDesktopClipboardPaste(t *testing.
 	}
 }
 
+func TestChatPageUsesNativeFileBridgeInWails(t *testing.T) {
+	for _, want := range []string{
+		"var nativeFileSelectionRequests = {}",
+		"function requestNativeFileSelection()",
+		"type: 'select-files', requestId: requestId",
+		"event.data.type === 'selected-files'",
+		"if (inWails && hostToken) {",
+		"fileEl.value = '';",
+		"registerLocalAttachment(path)",
+	} {
+		if !strings.Contains(pages.Chat, want) {
+			t.Fatalf("chat page should contain %q", want)
+		}
+	}
+	for _, removed := range []string{
+		"window.parent.go && window.parent.go.main",
+		"wailsApp.SelectFiles()",
+		"fileEl.addEventListener('change', uploadFiles)",
+	} {
+		if strings.Contains(pages.Chat, removed) {
+			t.Fatalf("chat page should not contain %q", removed)
+		}
+	}
+}
+
+func TestDesktopChatBridgeSelectsNativeFiles(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "desktop", "gui", "frontend", "src", "main.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainJS := string(source)
+	for _, want := range []string{
+		"e.data.type === 'select-files'",
+		"SelectFiles()",
+		"type: 'selected-files', requestId, paths: paths || []",
+		"type: 'selected-files', requestId, paths: [], error:",
+	} {
+		if !strings.Contains(mainJS, want) {
+			t.Fatalf("desktop chat bridge should contain %q", want)
+		}
+	}
+}
+
 func TestChatQRImageRouteReturnsPNG(t *testing.T) {
 	server := newTestChatServer(t)
 	defer os.RemoveAll(server.chatDir)
