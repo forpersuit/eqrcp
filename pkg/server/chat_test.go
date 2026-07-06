@@ -1021,3 +1021,95 @@ func TestAcceptanceWailsWebViewURL(t *testing.T) {
 		t.Fatal("HTML missing doctype header")
 	}
 }
+
+type syncResponseWriter struct {
+	http.ResponseWriter
+	writeCalled chan struct{}
+	proceed     chan struct{}
+}
+
+func (s *syncResponseWriter) Header() http.Header {
+	return s.ResponseWriter.Header()
+}
+
+func (s *syncResponseWriter) Write(data []byte) (int, error) {
+	select {
+	case s.writeCalled <- struct{}{}:
+		<-s.proceed
+	default:
+	}
+	return s.ResponseWriter.Write(data)
+}
+
+func (s *syncResponseWriter) WriteHeader(statusCode int) {
+	s.ResponseWriter.WriteHeader(statusCode)
+}
+
+func TestChatAttachmentDownloadProgressPushedViaSSE(t *testing.T) {
+	server := newTestChatServer(t)
+	defer os.RemoveAll(server.chatDir)
+
+	data := make([]byte, 10240)
+	for i := range data {
+		data[i] = 'A'
+	}
+	uploaded := postChatAttachment(t, server, "Desk", "owner-token", "large.txt", "text/plain", string(data))
+
+	session := server.chatSession
+
+	rec := httptest.NewRecorder()
+	writeCalled := make(chan struct{}, 1)
+	proceed := make(chan struct{})
+
+	syncWriter := &syncResponseWriter{
+		ResponseWriter: rec,
+		writeCalled:    writeCalled,
+		proceed:        proceed,
+	}
+
+	request := httptest.NewRequest(http.MethodGet, uploaded.URL, nil)
+
+	var hasReceivingTrue bool
+	var progressRecords []int
+
+	go func() {
+		server.mux.ServeHTTP(syncWriter, request)
+	}()
+
+	// Wait for the first Write operation to block
+	select {
+	case <-writeCalled:
+		session.mu.Lock()
+		for _, m := range session.messages {
+			if m.ID == uploaded.ID {
+				if m.Receiving {
+					hasReceivingTrue = true
+					progressRecords = append(progressRecords, m.Progress)
+				}
+			}
+		}
+		session.mu.Unlock()
+		close(proceed)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for writeCalled signal")
+	}
+
+	// Give a tiny moment for ServeHTTP to exit and run deferred cleanup
+	time.Sleep(50 * time.Millisecond)
+
+	if !hasReceivingTrue {
+		t.Error("expected message to transition to Receiving=true during download, but it did not")
+	}
+
+	session.mu.Lock()
+	for _, m := range session.messages {
+		if m.ID == uploaded.ID {
+			if m.Receiving {
+				t.Error("expected message.Receiving to be reset to false after download completed")
+			}
+		}
+	}
+	session.mu.Unlock()
+
+	t.Logf("Progress records captured: %v", progressRecords)
+}

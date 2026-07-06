@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"eqt/pkg/pages"
@@ -909,6 +910,14 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		w.Header().Set("Content-Type", attachment.MimeType)
 	}
 
+	rangeInfo := ParseRangeHeader(r)
+	initialPercent := CalculatePercent(rangeInfo.StartByte, attachment.Size)
+	session.updateDownloadProgressMessage(id, true, initialPercent)
+
+	defer func() {
+		session.updateDownloadProgressMessage(id, false, 0)
+	}()
+
 	usage := limiterInstance.GetStatus()
 	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
 
@@ -928,11 +937,39 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		}
 		
 		w.Header().Set("Content-Length", strconv.FormatInt(attachment.Size, 10))
-		_, _ = io.Copy(w, throttled)
+		var writtenSoFar int64
+		var lastPercent int = -1
+		progressWriter := &progressResponseWriter{
+			ResponseWriter: w,
+			onWrite: func(written int64) {
+				atomic.AddInt64(&writtenSoFar, written)
+				totalWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenSoFar)
+				pct := CalculatePercent(totalWritten, attachment.Size)
+				if pct != lastPercent {
+					lastPercent = pct
+					session.updateDownloadProgressMessage(id, true, pct)
+				}
+			},
+		}
+		_, _ = io.Copy(progressWriter, throttled)
 		return
 	}
 
-	http.ServeFile(w, r, attachment.Path)
+	var writtenSoFar int64
+	var lastPercent int = -1
+	progressWriter := &progressResponseWriter{
+		ResponseWriter: w,
+		onWrite: func(written int64) {
+			atomic.AddInt64(&writtenSoFar, written)
+			totalWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenSoFar)
+			pct := CalculatePercent(totalWritten, attachment.Size)
+			if pct != lastPercent {
+				lastPercent = pct
+				session.updateDownloadProgressMessage(id, true, pct)
+			}
+		},
+	}
+	http.ServeFile(progressWriter, r, attachment.Path)
 }
 
 func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -1318,6 +1355,22 @@ func (session *chatSession) updateUploadProgressMessage(tempID string, progress 
 	defer session.mu.Unlock()
 	for index := range session.messages {
 		if session.messages[index].ID == tempID {
+			session.messages[index].Progress = progress
+			session.messages[index].Seq = session.nextEventSeqLocked()
+			session.lastActivity = time.Now()
+			session.notifyLocked()
+			return session.messages[index], true
+		}
+	}
+	return chatMessage{}, false
+}
+
+func (session *chatSession) updateDownloadProgressMessage(messageID string, receiving bool, progress int) (chatMessage, bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for index := range session.messages {
+		if session.messages[index].ID == messageID {
+			session.messages[index].Receiving = receiving
 			session.messages[index].Progress = progress
 			session.messages[index].Seq = session.nextEventSeqLocked()
 			session.lastActivity = time.Now()

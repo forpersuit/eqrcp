@@ -4496,17 +4496,14 @@
                 });
                 return save;
             }
-            var download = document.createElement('button');
-            download.type = 'button';
+            var download = document.createElement('a');
             download.className = 'bubble-action';
             download.setAttribute('aria-label', 'Download');
             download.title = 'Download';
             download.innerHTML = downloadIcon();
+            download.href = downloadURL(message.url);
+            download.setAttribute('download', message.fileName || 'attachment');
             keepActionFocus(download);
-            download.addEventListener('click', function(e) {
-                e.preventDefault();
-                downloadFileWithXHR(message);
-            });
             return download;
         }
         function renderAttachment(message) {
