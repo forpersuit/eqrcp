@@ -1153,3 +1153,78 @@ func TestChatVideoMetadataHandling(t *testing.T) {
 		t.Fatalf("attachment not stored properly: %#v", attachment)
 	}
 }
+
+func TestChatLocalAttachmentRegister(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "eqt-local-test-*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tempFile.Name())
+	
+	content := []byte("local-zero-copy-file-content")
+	if _, err := tempFile.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	tempFile.Close()
+
+	s := &Server{}
+	session := &chatSession{
+		hostToken:        "host-secret-token",
+		messages:         []chatMessage{},
+		attachments:      map[string]chatAttachment{},
+		clients:          map[string]chatClient{},
+		clientThemes:     map[string]string{},
+		clientThemeJoins: map[string]string{},
+		dir:              t.TempDir(),
+		attachmentRoute:  "/attachments",
+		startedAt:        time.Now(),
+	}
+	s.chatSession = session
+	s.chatDir = session.dir
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/attachments/local", session.handleLocalAttachmentRegister)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	// 1. 测试不带 HostToken 访问，应当被拒绝 (403)
+	reqBody, _ := json.Marshal(map[string]string{
+		"path":   tempFile.Name(),
+		"sender": "GUI",
+		"token":  "client-token",
+	})
+	resp, err := http.Post(ts.URL+"/attachments/local", "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected forbidden (403), got: %d", resp.StatusCode)
+	}
+
+	// 2. 测试带上合法的 HostToken 登记本地文件，应当成功 (200)
+	resp, err = http.Post(ts.URL+"/attachments/local?hostToken=host-secret-token", "application/json", bytes.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected OK (200), got: %d", resp.StatusCode)
+	}
+
+	// 3. 验证内存映射是否正确指向了 tempFile.Name() 原始文件路径，实现了零自传
+	var msg chatMessage
+	if err := json.NewDecoder(resp.Body).Decode(&msg); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	session.mu.Lock()
+	attachment, ok := session.attachments[msg.ID]
+	session.mu.Unlock()
+
+	if !ok {
+		t.Fatalf("expected attachment to be registered, but not found")
+	}
+	if attachment.Path != tempFile.Name() {
+		t.Fatalf("expected path to be %s, got: %s (non-zero-copy bypass broke)", tempFile.Name(), attachment.Path)
+	}
+}

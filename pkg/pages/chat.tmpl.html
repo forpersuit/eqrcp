@@ -5411,6 +5411,34 @@
             uploadFileList(fileEl.files);
             fileEl.value = '';
         }
+
+        function registerLocalAttachment(path) {
+            var url = '{{.AttachmentsRoute}}/local?hostToken=' + encodeURIComponent(hostToken);
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    path: path,
+                    sender: state.sender,
+                    avatar: state.avatar,
+                    token: state.token
+                })
+            })
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.text().then(function(t) { throw new Error(t); });
+                }
+                return r.json();
+            })
+            .then(function(message) {
+                console.log('Successfully registered local attachment:', message);
+            })
+            .catch(function(err) {
+                showSystemNotice('Failed to send file: ' + err.message);
+            });
+        }
         var uploadQueue = [];
         var isUploadingFromQueue = false;
 
@@ -5768,6 +5796,22 @@
         }
 
         document.getElementById('composer').addEventListener('submit', sendText);
+        fileEl.addEventListener('click', function(event) {
+            var wailsApp = window.go && window.go.main && window.go.main.App ? window.go.main.App : (window.parent && window.parent.go && window.parent.go.main && window.parent.go.main.App ? window.parent.go.main.App : null);
+            if (wailsApp && typeof wailsApp.SelectFiles === 'function' && hostToken) {
+                event.preventDefault();
+                wailsApp.SelectFiles()
+                    .then(function(paths) {
+                        if (!paths || !paths.length) { return; }
+                        paths.forEach(function(path) {
+                            registerLocalAttachment(path);
+                        });
+                    })
+                    .catch(function(err) {
+                        console.error('Wails SelectFiles failed:', err);
+                    });
+            }
+        });
         fileEl.addEventListener('change', uploadFiles);
         textEl.addEventListener('input', handleComposerInput);
         textEl.addEventListener('paste', handleComposerPaste);

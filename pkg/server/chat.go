@@ -394,6 +394,7 @@ func (s *Server) Chat() error {
 	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
 	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
 	s.mux.HandleFunc(attachmentsRoute+"/tus/", session.handleTusUpload)
+	s.mux.HandleFunc(attachmentsRoute+"/local", session.handleLocalAttachmentRegister)
 	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
 	s.mux.HandleFunc(clientsRoute+"/", session.handleClientAction)
 	s.mux.HandleFunc(viewportDebugRoute, session.handleViewportDebug)
@@ -2156,4 +2157,77 @@ func (tr *ThrottledReader) Read(p []byte) (n int, err error) {
 type ThrottledReadCloser struct {
 	io.Reader
 	io.Closer
+}
+
+func (session *chatSession) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request) {
+	if handleChatCORS(w, r, http.MethodPost) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if session.isTerminal() {
+		writeChatTerminal(w)
+		return
+	}
+	if !session.validHostToken(chatHostTokenFromRequest(r)) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Path   string `json:"path"`
+		Sender string `json:"sender"`
+		Avatar string `json:"avatar"`
+		Token  string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	info, err := os.Stat(req.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "file does not exist", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if info.IsDir() {
+		http.Error(w, "path is a directory, not a file", http.StatusBadRequest)
+		return
+	}
+
+	fileName := filepath.Base(req.Path)
+	size := info.Size()
+	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
+
+	message, err := session.registerTusAttachment(
+		sanitizeChatSender(req.Sender),
+		sanitizeChatAvatar(req.Avatar),
+		strings.TrimSpace(req.Token),
+		safeChatFilename(fileName),
+		mimeType,
+		size,
+		req.Path,
+		"",
+		0, 0, 0,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(message); err != nil {
+		log.Println(err)
+	}
 }
