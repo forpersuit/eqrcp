@@ -9,7 +9,7 @@ import (
 
 var (
 	app     = "eqt"
-	version = "v1.8.1"
+	version = "v1.8.2"
 	date    = "n/a"
 )
 
@@ -146,4 +146,3 @@ func parseVersionParts(v string) []int {
 	}
 	return res
 }
-

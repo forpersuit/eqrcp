@@ -557,6 +557,31 @@ func TestChatPageUsesNativeFileBridgeInWails(t *testing.T) {
 	}
 }
 
+func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T) {
+	for _, want := range []string{
+		"function syncReceivingProgressUI(messageId)",
+		"message.receiving || message.progress >= 100",
+		"msg.receiving = false",
+		"msg.progress = 100",
+		"download.addEventListener('click', function()",
+		"downloadFileWithXHR(message)",
+		"mergeLocalTransferState(m, byExistingID[m.id])",
+		"return mergeLocalTransferState(message, existingByID[message.id])",
+	} {
+		if !strings.Contains(pages.Chat, want) {
+			t.Fatalf("chat page should contain %q", want)
+		}
+	}
+	for _, removed := range []string{
+		"download.href = downloadURL(message.url)",
+		"download.setAttribute('download', message.fileName || 'attachment')",
+	} {
+		if strings.Contains(pages.Chat, removed) {
+			t.Fatalf("chat page should not contain %q", removed)
+		}
+	}
+}
+
 func TestDesktopChatBridgeSelectsNativeFiles(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("..", "..", "desktop", "gui", "frontend", "src", "main.js"))
 	if err != nil {

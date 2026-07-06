@@ -4226,7 +4226,7 @@
             return wrap;
         }
         function renderMessageFooter(message) {
-            var hasMeta = Boolean(message.url) || message.sending || message.receiving;
+            var hasMeta = Boolean(message.url) || message.sending || message.receiving || message.progress >= 100;
             var actions = renderFooterActions(message);
             var hasActions = actions && actions.childNodes && actions.childNodes.length > 0;
             if (!hasMeta && !hasActions) {
@@ -4245,7 +4245,7 @@
                 meta.className = 'message-footer-meta';
                 renderAttachmentDescription(meta, message);
                 footer.appendChild(meta);
-                if (message.sending || message.receiving) {
+                if (isTransferProgressVisible(message)) {
                     var pct = message.progress || 0;
                     var percentEl = document.createElement('span');
                     percentEl.className = 'message-progress-percent';
@@ -4329,6 +4329,42 @@
                 container.style.color = fillClr;
             }
         }
+        function isTransferProgressVisible(message) {
+            return Boolean(message && (message.sending || message.receiving || message.progress >= 100));
+        }
+        function syncReceivingProgressUI(messageId) {
+            var msg = state.messages.find(function(m) { return m.id === messageId; });
+            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
+            if (!item) { return; }
+            var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
+            if (downloadBtn) {
+                downloadBtn.style.display = msg && msg.receiving ? 'none' : '';
+            }
+            var meta = item.querySelector('.message-footer-meta');
+            if (meta && msg) {
+                renderAttachmentDescription(meta, msg);
+            }
+            var percentEl = item.querySelector('.message-progress-percent');
+            if (!isTransferProgressVisible(msg)) {
+                if (percentEl) {
+                    percentEl.remove();
+                }
+                return;
+            }
+            if (!percentEl && meta) {
+                percentEl = document.createElement('span');
+                percentEl.className = 'message-progress-percent';
+                percentEl.style.fontSize = '11px';
+                percentEl.style.fontWeight = '800';
+                percentEl.style.margin = '0 6px';
+                meta.after(percentEl);
+            }
+            if (percentEl) {
+                var sc = msg ? messageColor(msg) : null;
+                percentEl.style.color = sc ? sc.border : '#2f9e73';
+                percentEl.textContent = Math.max(0, Math.min(100, msg.progress || 0)) + '%';
+            }
+        }
         function captureMessageFocus() {
             var active = document.activeElement;
             if (!active || !messagesEl.contains(active)) { return null; }
@@ -4360,47 +4396,15 @@
                 msg.receiving = true;
                 msg.progress = 0;
             }
-            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
-            if (item) {
-                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
-                if (downloadBtn) {
-                    downloadBtn.style.display = 'none';
-                }
-                var meta = item.querySelector('.message-footer-meta');
-                if (meta) {
-                    renderAttachmentDescription(meta, msg);
-                }
-            }
+            syncReceivingProgressUI(messageId);
         }
         function updateDownloadProgress(messageId, pct) {
             var msg = state.messages.find(function(m) { return m.id === messageId; });
             if (msg) {
+                msg.receiving = true;
                 msg.progress = pct;
             }
-            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
-            if (item) {
-                var meta = item.querySelector('.message-footer-meta');
-                if (meta) {
-                    var desc = fileDescription(msg);
-                    meta.textContent = desc;
-                    meta.classList.add('uploading');
-                    var sc = msg ? messageColor(msg) : null;
-                    var fillClr = sc ? sc.border : '#2f9e73';
-                    meta.style.backgroundImage = 'linear-gradient(to right, ' + fillClr + ' ' + pct + '%, var(--muted) ' + pct + '%)';
-                    
-                    var percentEl = item.querySelector('.message-progress-percent');
-                    if (!percentEl) {
-                        percentEl = document.createElement('span');
-                        percentEl.className = 'message-progress-percent';
-                        percentEl.style.fontSize = '11px';
-                        percentEl.style.fontWeight = '800';
-                        percentEl.style.color = fillClr;
-                        percentEl.style.margin = '0 6px';
-                        meta.after(percentEl);
-                    }
-                    percentEl.textContent = pct + '%';
-                }
-            }
+            syncReceivingProgressUI(messageId);
         }
         function finishReceivingProgress(messageId) {
             var msg = state.messages.find(function(m) { return m.id === messageId; });
@@ -4408,21 +4412,7 @@
                 msg.receiving = false;
                 msg.progress = 100;
             }
-            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
-            if (item) {
-                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
-                if (downloadBtn) {
-                    downloadBtn.style.display = '';
-                }
-                var percentEl = item.querySelector('.message-progress-percent');
-                if (percentEl) {
-                    percentEl.remove();
-                }
-                var meta = item.querySelector('.message-footer-meta');
-                if (meta) {
-                    renderAttachmentDescription(meta, msg);
-                }
-            }
+            syncReceivingProgressUI(messageId);
             saveChatCache();
         }
         function failReceivingProgress(messageId) {
@@ -4431,21 +4421,7 @@
                 msg.receiving = false;
                 msg.progress = 0;
             }
-            var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
-            if (item) {
-                var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
-                if (downloadBtn) {
-                    downloadBtn.style.display = '';
-                }
-                var percentEl = item.querySelector('.message-progress-percent');
-                if (percentEl) {
-                    percentEl.remove();
-                }
-                var meta = item.querySelector('.message-footer-meta');
-                if (meta) {
-                    renderAttachmentDescription(meta, msg);
-                }
-            }
+            syncReceivingProgressUI(messageId);
             showSystemNotice('Download failed.');
         }
         function downloadFileWithXHR(message) {
@@ -4499,14 +4475,16 @@
                 });
                 return save;
             }
-            var download = document.createElement('a');
+            var download = document.createElement('button');
+            download.type = 'button';
             download.className = 'bubble-action';
             download.setAttribute('aria-label', 'Download');
             download.title = 'Download';
             download.innerHTML = downloadIcon();
-            download.href = downloadURL(message.url);
-            download.setAttribute('download', message.fileName || 'attachment');
             keepActionFocus(download);
+            download.addEventListener('click', function() {
+                downloadFileWithXHR(message);
+            });
             return download;
         }
         function renderAttachment(message) {
@@ -4947,7 +4925,9 @@
             // Apply updates to existing messages (e.g. recalled)
             if (updated.length) {
                 var byID = {};
-                updated.forEach(function(m) { byID[m.id] = m; });
+                updated.forEach(function(m) {
+                    byID[m.id] = mergeLocalTransferState(m, byExistingID[m.id]);
+                });
                 state.messages = state.messages.map(function(m) { return byID[m.id] || m; });
             }
             if (fresh.length) {
@@ -4963,8 +4943,20 @@
             var focusID = forceScroll && incoming.length ? incoming[incoming.length - 1].id || '' : '';
             if (followLatest || forceScroll) { scrollMessagesToBottomSoon(focusID); }
         }
+        function mergeLocalTransferState(next, existing) {
+            if (!next || !existing) { return next; }
+            if (existing.receiving || existing.progress >= 100) {
+                next.receiving = existing.receiving;
+                next.progress = existing.progress;
+            }
+            return next;
+        }
         function setMessages(messages) {
-            state.messages = messages || [];
+            var existingByID = {};
+            state.messages.forEach(function(m) { existingByID[m.id] = m; });
+            state.messages = (messages || []).map(function(message) {
+                return mergeLocalTransferState(message, existingByID[message.id]);
+            });
             renderMessages();
             saveChatCache();
             if (followLatest) { scrollMessagesToBottom(); }
