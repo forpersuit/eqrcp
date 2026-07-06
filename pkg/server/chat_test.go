@@ -1021,30 +1021,7 @@ func TestAcceptanceWailsWebViewURL(t *testing.T) {
 	}
 }
 
-type syncResponseWriter struct {
-	http.ResponseWriter
-	writeCalled chan struct{}
-	proceed     chan struct{}
-}
-
-func (s *syncResponseWriter) Header() http.Header {
-	return s.ResponseWriter.Header()
-}
-
-func (s *syncResponseWriter) Write(data []byte) (int, error) {
-	select {
-	case s.writeCalled <- struct{}{}:
-		<-s.proceed
-	default:
-	}
-	return s.ResponseWriter.Write(data)
-}
-
-func (s *syncResponseWriter) WriteHeader(statusCode int) {
-	s.ResponseWriter.WriteHeader(statusCode)
-}
-
-func TestChatAttachmentDownloadProgressPushedViaSSE(t *testing.T) {
+func TestChatAttachmentDownloadDoesNotMutateSharedMessageProgress(t *testing.T) {
 	server := newTestChatServer(t)
 	defer os.RemoveAll(server.chatDir)
 
@@ -1057,60 +1034,30 @@ func TestChatAttachmentDownloadProgressPushedViaSSE(t *testing.T) {
 	session := server.chatSession
 
 	rec := httptest.NewRecorder()
-	writeCalled := make(chan struct{}, 1)
-	proceed := make(chan struct{})
-
-	syncWriter := &syncResponseWriter{
-		ResponseWriter: rec,
-		writeCalled:    writeCalled,
-		proceed:        proceed,
-	}
-
 	request := httptest.NewRequest(http.MethodGet, uploaded.URL, nil)
+	server.mux.ServeHTTP(rec, request)
 
-	var hasReceivingTrue bool
-	var progressRecords []int
-
-	go func() {
-		server.mux.ServeHTTP(syncWriter, request)
-	}()
-
-	// Wait for the first Write operation to block
-	select {
-	case <-writeCalled:
-		session.mu.Lock()
-		for _, m := range session.messages {
-			if m.ID == uploaded.ID {
-				if m.Receiving {
-					hasReceivingTrue = true
-					progressRecords = append(progressRecords, m.Progress)
-				}
-			}
-		}
-		session.mu.Unlock()
-		close(proceed)
-	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for writeCalled signal")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("download status = %d, want %d; body = %q", rec.Code, http.StatusOK, rec.Body.String())
 	}
-
-	// Give a tiny moment for ServeHTTP to exit and run deferred cleanup
-	time.Sleep(50 * time.Millisecond)
-
-	if !hasReceivingTrue {
-		t.Error("expected message to transition to Receiving=true during download, but it did not")
+	if rec.Body.Len() != len(data) {
+		t.Fatalf("downloaded bytes = %d, want %d", rec.Body.Len(), len(data))
 	}
 
 	session.mu.Lock()
+	defer session.mu.Unlock()
 	for _, m := range session.messages {
 		if m.ID == uploaded.ID {
 			if m.Receiving {
-				t.Error("expected message.Receiving to be reset to false after download completed")
+				t.Error("download progress should remain local to the downloader, not mutate shared message Receiving")
 			}
+			if m.Progress != 0 {
+				t.Fatalf("shared message progress = %d, want 0", m.Progress)
+			}
+			return
 		}
 	}
-	session.mu.Unlock()
-
-	t.Logf("Progress records captured: %v", progressRecords)
+	t.Fatalf("message %q not found", uploaded.ID)
 }
 
 func TestChatVideoMetadataHandling(t *testing.T) {
@@ -1126,7 +1073,7 @@ func TestChatVideoMetadataHandling(t *testing.T) {
 	}
 
 	tempID := "temp-video-meta-test"
-	
+
 	// 1. 测试创建占位符消息时解析并存储 duration, width, height
 	placeholder := session.addUploadPlaceholderMessage(
 		"Tester", "🤖", "tester-token", "video", "test.mp4", 2048, tempID, 15.5, 1920, 1080,
@@ -1137,7 +1084,7 @@ func TestChatVideoMetadataHandling(t *testing.T) {
 
 	// 2. 测试完成文件上传时持久化这些元数据
 	completedMsg, err := session.saveAttachmentWithAvatar(
-		"Tester", "🤖", "tester-token", "test.mp4", "video/mp4", 2048, 
+		"Tester", "🤖", "tester-token", "test.mp4", "video/mp4", 2048,
 		strings.NewReader("fake-video-payload"), tempID, 15.5, 1920, 1080,
 	)
 	if err != nil {
@@ -1160,7 +1107,7 @@ func TestChatLocalAttachmentRegister(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(tempFile.Name())
-	
+
 	content := []byte("local-zero-copy-file-content")
 	if _, err := tempFile.Write(content); err != nil {
 		t.Fatal(err)

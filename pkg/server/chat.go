@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"eqt/pkg/pages"
@@ -93,13 +92,13 @@ type chatMessage struct {
 	Seq        int64     `json:"seq,omitempty"`
 	createdSeq int64
 	ownerToken string
-	SenderID   string    `json:"senderId,omitempty"`
-	Sending    bool      `json:"sending,omitempty"`
-	Progress   int       `json:"progress,omitempty"`
-	Receiving  bool      `json:"receiving,omitempty"`
-	Duration   float64   `json:"duration,omitempty"`
-	Width      int       `json:"width,omitempty"`
-	Height     int       `json:"height,omitempty"`
+	SenderID   string  `json:"senderId,omitempty"`
+	Sending    bool    `json:"sending,omitempty"`
+	Progress   int     `json:"progress,omitempty"`
+	Receiving  bool    `json:"receiving,omitempty"`
+	Duration   float64 `json:"duration,omitempty"`
+	Width      int     `json:"width,omitempty"`
+	Height     int     `json:"height,omitempty"`
 }
 
 type chatAttachment struct {
@@ -975,7 +974,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	avatar := sanitizeChatAvatar(r.FormValue("avatar"))
 	token := strings.TrimSpace(r.FormValue("token"))
 	tempID := strings.TrimSpace(r.FormValue("tempId"))
-	
+
 	var duration float64
 	if dVal := r.FormValue("duration"); dVal != "" {
 		duration, _ = strconv.ParseFloat(dVal, 64)
@@ -1062,14 +1061,6 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		w.Header().Set("Content-Type", attachment.MimeType)
 	}
 
-	rangeInfo := ParseRangeHeader(r)
-	initialPercent := CalculatePercent(rangeInfo.StartByte, attachment.Size)
-	session.updateDownloadProgressMessage(id, true, initialPercent)
-
-	defer func() {
-		session.updateDownloadProgressMessage(id, false, 0)
-	}()
-
 	usage := limiterInstance.GetStatus()
 	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
 
@@ -1087,41 +1078,13 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 			limit:  100 * 1024,
 			active: true,
 		}
-		
+
 		w.Header().Set("Content-Length", strconv.FormatInt(attachment.Size, 10))
-		var writtenSoFar int64
-		var lastPercent int = -1
-		progressWriter := &progressResponseWriter{
-			ResponseWriter: w,
-			onWrite: func(written int64) {
-				atomic.AddInt64(&writtenSoFar, written)
-				totalWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenSoFar)
-				pct := CalculatePercent(totalWritten, attachment.Size)
-				if pct != lastPercent {
-					lastPercent = pct
-					session.updateDownloadProgressMessage(id, true, pct)
-				}
-			},
-		}
-		_, _ = io.Copy(progressWriter, throttled)
+		_, _ = io.Copy(w, throttled)
 		return
 	}
 
-	var writtenSoFar int64
-	var lastPercent int = -1
-	progressWriter := &progressResponseWriter{
-		ResponseWriter: w,
-		onWrite: func(written int64) {
-			atomic.AddInt64(&writtenSoFar, written)
-			totalWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenSoFar)
-			pct := CalculatePercent(totalWritten, attachment.Size)
-			if pct != lastPercent {
-				lastPercent = pct
-				session.updateDownloadProgressMessage(id, true, pct)
-			}
-		},
-	}
-	http.ServeFile(progressWriter, r, attachment.Path)
+	http.ServeFile(w, r, attachment.Path)
 }
 
 func (session *chatSession) handleEvents(w http.ResponseWriter, r *http.Request) {
