@@ -4509,13 +4509,23 @@
         function renderAttachment(message) {
             var wrap = document.createElement('div');
             wrap.className = 'attachment-card';
-            var sourceURL = '';
-            if (message.file) {
-                sourceURL = URL.createObjectURL(message.file);
-            } else if (message.url) {
-                sourceURL = attachmentURL(message.url);
+            
+            var maxPreviewLimit = 50 * 1024 * 1024; // 50MB
+            var effectiveType = message.type;
+            if (message.size > maxPreviewLimit) {
+                effectiveType = 'file';
             }
-            if (message.type === 'image' && sourceURL) {
+
+            var sourceURL = '';
+            if (effectiveType === 'image' || effectiveType === 'video' || effectiveType === 'audio') {
+                if (message.file) {
+                    sourceURL = URL.createObjectURL(message.file);
+                } else if (message.url) {
+                    sourceURL = attachmentURL(message.url);
+                }
+            }
+
+            if (effectiveType === 'image' && sourceURL) {
                 wrap.classList.add('media-attachment');
                 wrap.classList.add('image-attachment');
                 var open = document.createElement('button');
@@ -4536,7 +4546,7 @@
                 });
                 open.appendChild(image);
                 wrap.appendChild(open);
-            } else if (message.type === 'video' && sourceURL) {
+            } else if (effectiveType === 'video' && sourceURL) {
                 wrap.classList.add('media-attachment');
                 wrap.classList.add('video-attachment');
                 var frame = document.createElement('div');
@@ -4554,7 +4564,7 @@
                 });
                 frame.appendChild(video);
                 wrap.appendChild(frame);
-            } else if (message.type === 'audio' && sourceURL) {
+            } else if (effectiveType === 'audio' && sourceURL) {
                 wrap.classList.add('audio-attachment');
                 var player = document.createElement('audio');
                 player.className = 'audio-player';
@@ -5328,12 +5338,15 @@
                 file: file
             };
             
-            if (file.type && file.type.startsWith('image/')) {
-                tempMsg.type = 'image';
-            } else if (file.type && file.type.startsWith('video/')) {
-                tempMsg.type = 'video';
-            } else if (file.type && file.type.startsWith('audio/')) {
-                tempMsg.type = 'audio';
+            var maxPreviewLimit = 50 * 1024 * 1024; // 50MB
+            if (file.size <= maxPreviewLimit) {
+                if (file.type && file.type.startsWith('image/')) {
+                    tempMsg.type = 'image';
+                } else if (file.type && file.type.startsWith('video/')) {
+                    tempMsg.type = 'video';
+                } else if (file.type && file.type.startsWith('audio/')) {
+                    tempMsg.type = 'audio';
+                }
             }
             
             state.messages.push(tempMsg);
