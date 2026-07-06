@@ -56,6 +56,8 @@ Keep comments short and useful. Avoid broad refactors when changing transfer beh
 
 Use Go’s built-in `testing` package. Add focused tests next to the modified code, especially for server state transitions, desktop agent behavior, launcher errors, and config migration. Run `go test ./...` before submitting. For narrow work, also run targeted packages such as `go test ./server ./cmd`.
 
+When frontend templates (like `chat.tmpl.html` or `upload.tmpl.html`) or core transfer routes change, the user may ask to run `/chrome-test` (Chrome MCP E2E simulation test). Always refer to `.agents/skills/eqt-ux/SKILL.md` to run the step-by-step E2E simulation via `chrome-devtools-mcp` to verify the responsive UI layout and capture completed screen states.
+
 ## Commit & Pull Request Guidelines
 
 Recent history uses short imperative commit messages, for example `Add agent-level transfer repeat` and `Push transfer status updates to browser pages`. Follow that style.
