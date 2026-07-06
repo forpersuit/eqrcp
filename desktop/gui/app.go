@@ -457,6 +457,22 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 		messageID = parsed.Query().Get("messageId")
 	}
 
+	// 优先进行本地直拷贝优化（Link/Copy）
+	if messageID != "" && a.agent != nil && a.agent.activeServer != nil {
+		if localPath, ok := a.agent.activeServer.GetChatAttachmentPath(messageID); ok && localPath != "" {
+			err := quickCopyFile(localPath, target)
+			if err == nil {
+				// 发送 100% 进度事件
+				wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
+					"messageId": messageID,
+					"progress":  100,
+				})
+				return nil
+			}
+			a.logError(fmt.Sprintf("Local direct copy failed, falling back to HTTP: %v", err))
+		}
+	}
+
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		if messageID != "" {
@@ -519,6 +535,25 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 		return closeErr
 	}
 	return nil
+}
+
+func quickCopyFile(src, dst string) error {
+	_ = os.Remove(dst)
+	if err := os.Link(src, dst); err == nil {
+		return nil
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 func (a *App) StopCurrent() error {

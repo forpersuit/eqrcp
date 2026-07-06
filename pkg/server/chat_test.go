@@ -521,7 +521,6 @@ func TestChatPageUsesAvatarForMessagesRosterAndDesktopClipboardPaste(t *testing.
 		"cleanAvatarLabel(message.avatar || '')",
 		"cleanAvatarLabel(device.avatar || '')",
 		"avatar: state.avatar",
-		"data.append('avatar', state.avatar)",
 		"withClientAvatar",
 		"read-clipboard-text",
 		"clipboard-text",

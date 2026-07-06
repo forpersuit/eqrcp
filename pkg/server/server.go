@@ -3054,3 +3054,23 @@ func formatByteSize(bytes int64) string {
 	}
 	return fmt.Sprintf("%.1f %s", f, units[idx-1])
 }
+
+// GetChatAttachmentPath returns the absolute local path for a chat attachment by ID.
+func (s *Server) GetChatAttachmentPath(id string) (string, bool) {
+	s.statusMu.Lock()
+	session := s.chatSession
+	s.statusMu.Unlock()
+
+	if session == nil {
+		return "", false
+	}
+	session.mu.Lock()
+	attachment, ok := session.attachments[id]
+	session.mu.Unlock()
+
+	if !ok {
+		return "", false
+	}
+	return attachment.Path, true
+}
+

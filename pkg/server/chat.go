@@ -25,6 +25,9 @@ import (
 	"eqt/pkg/pages"
 	"eqt/pkg/qr"
 	"eqt/pkg/version"
+
+	"github.com/tus/tusd/v2/pkg/filestore"
+	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
 
 const (
@@ -56,6 +59,12 @@ type chatSession struct {
 	hostToken        string
 	statusHook       func(ChatStatusSnapshot)
 	hostRenameHook   func(string)
+
+	tusHandler       *tusd.Handler
+	tusUploadsDone   map[string]int64
+	tusUploadsTotal  map[string]int64
+	tusUploadClients map[string]string
+	tusMu            sync.Mutex
 }
 
 // ChatStatusSnapshot represents the current state of a chat session.
@@ -138,6 +147,26 @@ func (s *Server) Chat() error {
 	viewportDebugRoute := route + "/viewport-debug"
 	payRoute := route + "/pay"
 	viewportDebugLog := chatViewportDebugLogPath()
+	tusTmpDir := filepath.Join(dir, ".tus-tmp")
+	_ = os.MkdirAll(tusTmpDir, 0755)
+
+	store := filestore.New(tusTmpDir)
+	composer := tusd.NewStoreComposer()
+	store.UseIn(composer)
+
+	tusBasePath := attachmentsRoute + "/tus/"
+	tusHandler, err := tusd.NewHandler(tusd.Config{
+		BasePath:               tusBasePath,
+		StoreComposer:          composer,
+		NotifyUploadProgress:   true,
+		NotifyCompleteUploads:  true,
+		UploadProgressInterval: 200 * time.Millisecond,
+	})
+	if err != nil {
+		os.RemoveAll(dir)
+		return err
+	}
+
 	session := &chatSession{
 		attachments:      map[string]chatAttachment{},
 		subscribers:      map[chan struct{}]struct{}{},
@@ -155,7 +184,105 @@ func (s *Server) Chat() error {
 		hostToken:        randomChatToken(),
 		statusHook:       s.chatStatusHook,
 		hostRenameHook:   s.chatHostRenameHook,
+		tusHandler:       tusHandler,
+		tusUploadsDone:   make(map[string]int64),
+		tusUploadsTotal:  make(map[string]int64),
+		tusUploadClients: make(map[string]string),
 	}
+
+	copyFile := func(src, dst string) error {
+		in, err := os.Open(src)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.Create(dst)
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+		_, err = io.Copy(out, in)
+		return err
+	}
+
+	// Listen to chat tus progress channel
+	go func() {
+		for event := range tusHandler.UploadProgress {
+			messageID := event.Upload.MetaData["messageid"]
+			if messageID == "" {
+				continue
+			}
+			progressPercent := int(float64(event.Upload.Offset) / float64(event.Upload.Size) * 100)
+			_, _ = session.updateUploadProgressMessage(messageID, progressPercent)
+		}
+	}()
+
+	// Listen to chat tus complete channel
+	go func() {
+		for info := range tusHandler.CompleteUploads {
+			filename := info.Upload.MetaData["filename"]
+			messageID := info.Upload.MetaData["messageid"]
+			sender := sanitizeChatSender(info.Upload.MetaData["sender"])
+			avatar := sanitizeChatAvatar(info.Upload.MetaData["avatar"])
+			token := info.Upload.MetaData["token"]
+			theme := info.Upload.MetaData["theme"]
+			join := info.Upload.MetaData["join"]
+
+			if messageID == "" || filename == "" {
+				continue
+			}
+
+			storedName := messageID + "-" + safeChatFilename(filename)
+			finalPath := filepath.Join(session.dir, storedName)
+			tmpPath := info.Upload.Storage["Path"]
+
+			if err := os.Rename(tmpPath, finalPath); err != nil {
+				if err := copyFile(tmpPath, finalPath); err == nil {
+					_ = os.Remove(tmpPath)
+				} else {
+					log.Printf("Chat Tus complete: failed to save attachment: %v\n", err)
+					continue
+				}
+			} else {
+				_ = os.Remove(tmpPath)
+			}
+
+			mimeType := info.Upload.MetaData["mime"]
+			if mimeType == "" {
+				mimeType = mime.TypeByExtension(filepath.Ext(filename))
+			}
+
+			var duration float64
+			if dVal := info.Upload.MetaData["duration"]; dVal != "" {
+				duration, _ = strconv.ParseFloat(dVal, 64)
+			}
+			var width int
+			if wVal := info.Upload.MetaData["width"]; wVal != "" {
+				width, _ = strconv.Atoi(wVal)
+			}
+			var height int
+			if hVal := info.Upload.MetaData["height"]; hVal != "" {
+				height, _ = strconv.Atoi(hVal)
+			}
+
+			session.ensureChatTheme(token, sender, "", theme, join)
+
+			_, _ = session.registerTusAttachment(
+				sender,
+				avatar,
+				token,
+				filename,
+				mimeType,
+				info.Upload.Size,
+				finalPath,
+				messageID,
+				duration,
+				width,
+				height,
+			)
+		}
+	}()
+
 	limiterInstance.mu.Lock()
 	limiterInstance.activeSession = session
 	limiterInstance.mu.Unlock()
@@ -266,6 +393,7 @@ func (s *Server) Chat() error {
 	s.mux.HandleFunc(messagesRoute, session.handleMessages)
 	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
 	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
+	s.mux.HandleFunc(attachmentsRoute+"/tus/", session.handleTusUpload)
 	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
 	s.mux.HandleFunc(clientsRoute+"/", session.handleClientAction)
 	s.mux.HandleFunc(viewportDebugRoute, session.handleViewportDebug)
@@ -1541,6 +1669,92 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 	session.mu.Unlock()
 	notifyChatStatusHook(hook, snapshot)
 	return message, nil
+}
+
+func (session *chatSession) registerTusAttachment(sender string, avatar string, token string, name string, mimeType string, size int64, finalPath string, tempID string, duration float64, width int, height int) (chatMessage, error) {
+	if name == "" {
+		name = "attachment"
+	}
+	id := tempID
+	if id == "" {
+		id = session.nextMessageID()
+	}
+	if mimeType == "" || mimeType == "application/octet-stream" {
+		mimeType = mime.TypeByExtension(filepath.Ext(name))
+	}
+	messageType := "file"
+	if strings.HasPrefix(mimeType, "image/") {
+		messageType = "image"
+	} else if strings.HasPrefix(mimeType, "video/") {
+		messageType = "video"
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		messageType = "audio"
+	}
+	ownerToken := strings.TrimSpace(token)
+	message := chatMessage{
+		ID:         id,
+		Sender:     sender,
+		Avatar:     avatar,
+		Type:       messageType,
+		FileName:   name,
+		Size:       size,
+		MimeType:   mimeType,
+		URL:        strings.TrimRight(session.attachmentRoute, "/") + "/" + id,
+		Theme:      session.chatThemeForToken(ownerToken, sender),
+		CreatedAt:  time.Now(),
+		ownerToken: ownerToken,
+		Duration:   duration,
+		Width:      width,
+		Height:     height,
+	}
+	session.mu.Lock()
+	if client, ok := session.clients[ownerToken]; ok {
+		message.Sender = client.Label
+		message.SenderID = client.ID
+		if client.Avatar != "" {
+			message.Avatar = client.Avatar
+		}
+	}
+	session.attachments[id] = chatAttachment{
+		ID:       id,
+		Path:     finalPath,
+		FileName: name,
+		Size:     size,
+		MimeType: mimeType,
+	}
+	foundIdx := -1
+	for index := range session.messages {
+		if session.messages[index].ID == id {
+			foundIdx = index
+			break
+		}
+	}
+	if foundIdx >= 0 {
+		message.CreatedAt = session.messages[foundIdx].CreatedAt
+		message.Seq = session.nextEventSeqLocked()
+		message.createdSeq = session.messages[foundIdx].createdSeq
+		session.messages[foundIdx] = message
+	} else {
+		message.Seq = session.nextEventSeqLocked()
+		message.createdSeq = message.Seq
+		session.messages = append(session.messages, message)
+	}
+	session.trimHistoryLocked()
+	session.lastActivity = time.Now()
+	session.notifyLocked()
+	hook, snapshot := session.statusSnapshotLocked("active")
+	session.mu.Unlock()
+	notifyChatStatusHook(hook, snapshot)
+	return message, nil
+}
+
+func (session *chatSession) handleTusUpload(w http.ResponseWriter, r *http.Request) {
+	if session.isTerminal() {
+		writeChatTerminal(w)
+		return
+	}
+	prefix := session.attachmentRoute + "/tus/"
+	http.StripPrefix(prefix, session.tusHandler).ServeHTTP(w, r)
 }
 
 func (session *chatSession) addMessageWithStatus(message chatMessage, statusState string) chatMessage {
