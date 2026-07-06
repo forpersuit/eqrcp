@@ -137,7 +137,7 @@ func TestChatAvatarTravelsWithMessagesAndRoster(t *testing.T) {
 	done := session.registerClientWithAvatar("mobile-token", "Phone", "📱", "", "", "join-1", "")
 	defer done()
 	text := session.addTextMessageWithAvatar("Phone", "📱", "mobile-token", "hello")
-	attachment, err := session.saveAttachmentWithAvatar("Phone", "📱", "mobile-token", "note.txt", "text/plain", 4, strings.NewReader("file"), "")
+	attachment, err := session.saveAttachmentWithAvatar("Phone", "📱", "mobile-token", "note.txt", "text/plain", 4, strings.NewReader("file"), "", 0, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestChatUploadPlaceholderAndProgress(t *testing.T) {
 
 	tempID := "temp-upload-test-id"
 	// 1. 创建占位消息
-	placeholder := session.addUploadPlaceholderMessage("Tester", "🤖", "tester-token", "file", "test.zip", 1000, tempID)
+	placeholder := session.addUploadPlaceholderMessage("Tester", "🤖", "tester-token", "file", "test.zip", 1000, tempID, 0, 0, 0)
 	if placeholder.ID != tempID || !placeholder.Sending || placeholder.Progress != 0 {
 		t.Fatalf("unexpected placeholder: %#v", placeholder)
 	}
@@ -180,7 +180,7 @@ func TestChatUploadPlaceholderAndProgress(t *testing.T) {
 	}
 
 	// 3. 完成上传
-	completedMsg, err := session.saveAttachmentWithAvatar("Tester", "🤖", "tester-token", "test.zip", "application/zip", 1000, strings.NewReader("file-content"), tempID)
+	completedMsg, err := session.saveAttachmentWithAvatar("Tester", "🤖", "tester-token", "test.zip", "application/zip", 1000, strings.NewReader("file-content"), tempID, 0, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1112,4 +1112,45 @@ func TestChatAttachmentDownloadProgressPushedViaSSE(t *testing.T) {
 	session.mu.Unlock()
 
 	t.Logf("Progress records captured: %v", progressRecords)
+}
+
+func TestChatVideoMetadataHandling(t *testing.T) {
+	session := &chatSession{
+		attachments:      map[string]chatAttachment{},
+		subscribers:      map[chan struct{}]struct{}{},
+		clients:          map[string]chatClient{},
+		clientThemes:     map[string]string{},
+		clientThemeJoins: map[string]string{},
+		dir:              t.TempDir(),
+		attachmentRoute:  "/attachments",
+		startedAt:        time.Now(),
+	}
+
+	tempID := "temp-video-meta-test"
+	
+	// 1. 测试创建占位符消息时解析并存储 duration, width, height
+	placeholder := session.addUploadPlaceholderMessage(
+		"Tester", "🤖", "tester-token", "video", "test.mp4", 2048, tempID, 15.5, 1920, 1080,
+	)
+	if placeholder.ID != tempID || placeholder.Duration != 15.5 || placeholder.Width != 1920 || placeholder.Height != 1080 {
+		t.Fatalf("placeholder video metadata mismatches: %#v", placeholder)
+	}
+
+	// 2. 测试完成文件上传时持久化这些元数据
+	completedMsg, err := session.saveAttachmentWithAvatar(
+		"Tester", "🤖", "tester-token", "test.mp4", "video/mp4", 2048, 
+		strings.NewReader("fake-video-payload"), tempID, 15.5, 1920, 1080,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completedMsg.ID != tempID || completedMsg.Duration != 15.5 || completedMsg.Width != 1920 || completedMsg.Height != 1080 {
+		t.Fatalf("completed message video metadata mismatches: %#v", completedMsg)
+	}
+
+	// 3. 验证从 attachments Map 中查询结果也带路径
+	attachment, ok := session.attachments[tempID]
+	if !ok || attachment.FileName != "test.mp4" || attachment.Size != 2048 {
+		t.Fatalf("attachment not stored properly: %#v", attachment)
+	}
 }

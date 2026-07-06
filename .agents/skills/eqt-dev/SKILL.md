@@ -24,6 +24,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 1. **普通接收模式 (Receive 命令行/移动端上传方向)**：采用 **Tus 协议分片上传**，客户端使用 `tus-js-client`。服务端支持 Tus 并发上传与 Offset HEAD 对齐，**完美支持大文件断点续传**。
 2. **Chat 模式附件发送 (上传方向)**：采用标准的单 HTTP `Multipart Form` 一次性上传。一旦中途断开，整个上传失败，必须重新从头上传。
+   * **视频流式优化 (Play-on-Demand & Metadata)**：针对视频类型附件，发送端利用浏览器离屏 video 提前提取元数据（`duration` 时长、`width` 宽、`height` 高）并一并上传广播。接收端直接使用元数据适配画面宽高比并渲染时长小微章，默认不预载大视频。**只有在点击播放时才流式拉取数据**，依靠后端的 HTTP Range 头部提供按需滑动窗口缓冲（前后 15~30s 缓冲），彻底避免视频常驻渲染引发堆内存 OOM。
 3. **大文件下载 (下载方向)**：
    - 服务端底层调用 `http.ServeFile`，自动支持 HTTP `Range` 和 `206 Partial Content`。
    - 但客户端（Wails 与 H5 网页端下载）目前皆采用 `GET` 单次拉取，暂不支持断点续传。

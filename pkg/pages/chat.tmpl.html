@@ -4510,6 +4510,14 @@
             var wrap = document.createElement('div');
             wrap.className = 'attachment-card';
             
+            var formatDuration = function(sec) {
+                if (!sec || isNaN(sec)) return '';
+                var m = Math.floor(sec / 60);
+                var s = Math.floor(sec % 60);
+                if (s < 10) s = '0' + s;
+                return m + ':' + s;
+            };
+            
             var maxPreviewLimit = 10 * 1024 * 1024; // 10MB
             var effectiveType = message.type;
             if (message.size > maxPreviewLimit) {
@@ -4567,16 +4575,22 @@
                     loadingCover.textContent = dict.sending || 'Sending...';
                     frame.appendChild(loadingCover);
                 } else {
-                    // Offscreen detection for dimensions, immediately revoke src to save memory
-                    var tempVideo = document.createElement('video');
-                    tempVideo.preload = 'metadata';
-                    tempVideo.src = sourceURL;
-                    tempVideo.addEventListener('loadedmetadata', function() {
-                        applyMediaAspect(wrap, tempVideo.videoWidth, tempVideo.videoHeight);
-                        keepLatestVisible();
-                        tempVideo.src = '';
-                        tempVideo.load();
-                    });
+                    // Use pre-extracted metadata if available to save network and memory
+                    if (message.width && message.height) {
+                        applyMediaAspect(wrap, message.width, message.height);
+                        window.setTimeout(function() { keepLatestVisible(); }, 50);
+                    } else {
+                        // Offscreen detection for dimensions (fallback for legacy messages), immediately revoke src to save memory
+                        var tempVideo = document.createElement('video');
+                        tempVideo.preload = 'metadata';
+                        tempVideo.src = sourceURL;
+                        tempVideo.addEventListener('loadedmetadata', function() {
+                            applyMediaAspect(wrap, tempVideo.videoWidth, tempVideo.videoHeight);
+                            keepLatestVisible();
+                            tempVideo.src = '';
+                            tempVideo.load();
+                        });
+                    }
 
                     // Render play buttons with premium aesthetics
                     var playBtn = document.createElement('button');
@@ -4609,6 +4623,23 @@
                     playCircle.innerHTML = '▶';
 
                     playBtn.appendChild(playCircle);
+                    
+                    // Show video duration badge on the video card if available
+                    if (message.duration) {
+                        var durationTag = document.createElement('span');
+                        durationTag.style.position = 'absolute';
+                        durationTag.style.bottom = '8px';
+                        durationTag.style.right = '8px';
+                        durationTag.style.background = 'rgba(0,0,0,0.65)';
+                        durationTag.style.color = '#fff';
+                        durationTag.style.fontSize = '10px';
+                        durationTag.style.padding = '2px 6px';
+                        durationTag.style.borderRadius = '4px';
+                        durationTag.style.fontFamily = 'monospace';
+                        durationTag.textContent = formatDuration(message.duration);
+                        playBtn.appendChild(durationTag);
+                    }
+                    
                     frame.appendChild(playBtn);
 
                     // Stream dynamically only when user triggers click
@@ -5407,6 +5438,45 @@
                 body: JSON.stringify({sender: state.sender, token: state.token})
             }).catch(function() {});
         }
+        function getVideoMetadata(file, callback) {
+            if (!file || !file.type || !file.type.startsWith('video/')) {
+                callback(null);
+                return;
+            }
+            var tempVideo = document.createElement('video');
+            var objectUrl = URL.createObjectURL(file);
+            tempVideo.src = objectUrl;
+            tempVideo.preload = 'metadata';
+            tempVideo.muted = true;
+            tempVideo.playsInline = true;
+            
+            var resolved = false;
+            function resolve(meta) {
+                if (resolved) return;
+                resolved = true;
+                URL.revokeObjectURL(objectUrl);
+                tempVideo.onloadedmetadata = null;
+                tempVideo.onerror = null;
+                callback(meta);
+            }
+            
+            tempVideo.onloadedmetadata = function() {
+                resolve({
+                    duration: tempVideo.duration || 0,
+                    width: tempVideo.videoWidth || 0,
+                    height: tempVideo.videoHeight || 0
+                });
+            };
+            
+            tempVideo.onerror = function() {
+                resolve(null);
+            };
+            
+            window.setTimeout(function() {
+                resolve(null);
+            }, 2000);
+        }
+
         function uploadSingleFile(file, onDone) {
             // Client side intercept for large files when limit is exceeded
             var isFreeExceeded = !limitState.isPaid && (300 - limitState.usedSeconds <= 0);
@@ -5419,127 +5489,143 @@
                 }
             }
             
-            var tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            var tempMsg = {
-                id: tempId,
-                sender: state.sender,
-                senderId: state.clientId,
-                avatar: state.avatar,
-                theme: state.theme,
-                type: 'file',
-                fileName: file.name,
-                size: file.size,
-                createdAt: new Date().toISOString(),
-                sending: true,
-                progress: 0,
-                file: file
-            };
-            
-            var maxPreviewLimit = 50 * 1024 * 1024; // 50MB
-            if (file.size <= maxPreviewLimit) {
-                if (file.type && file.type.startsWith('image/')) {
-                    tempMsg.type = 'image';
-                } else if (file.type && file.type.startsWith('video/')) {
-                    tempMsg.type = 'video';
-                } else if (file.type && file.type.startsWith('audio/')) {
-                    tempMsg.type = 'audio';
+            getVideoMetadata(file, function(meta) {
+                var tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                var tempMsg = {
+                    id: tempId,
+                    sender: state.sender,
+                    senderId: state.clientId,
+                    avatar: state.avatar,
+                    theme: state.theme,
+                    type: 'file',
+                    fileName: file.name,
+                    size: file.size,
+                    createdAt: new Date().toISOString(),
+                    sending: true,
+                    progress: 0,
+                    file: file
+                };
+                
+                if (meta) {
+                    tempMsg.duration = meta.duration;
+                    tempMsg.width = meta.width;
+                    tempMsg.height = meta.height;
                 }
-            }
-            
-            state.messages.push(tempMsg);
-            renderMessages();
-            scrollMessagesToBottomSoon(tempId);
-            
-            var data = new FormData();
-            data.append('sender', state.sender);
-            data.append('avatar', state.avatar);
-            data.append('token', state.token);
-            data.append('theme', state.theme);
-            data.append('join', joinToken);
-            data.append('tempId', tempId);
-            data.append('files', file, file.name || 'attachment');
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '{{.AttachmentsRoute}}', true);
-            
-            var lastSentTime = 0;
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    var pct = Math.round((e.loaded / e.total) * 100);
-                    updateUploadProgress(tempId, pct);
-                    
-                    var now = Date.now();
-                    if (now - lastSentTime >= 300 || pct === 100) {
-                        lastSentTime = now;
-                        fetch('{{.MessagesRoute}}', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                tempId: tempId,
-                                token: state.token,
-                                progress: pct,
-                                sending: true
-                            })
-                        }).catch(function() {});
+                
+                var maxPreviewLimit = 50 * 1024 * 1024; // 50MB
+                if (file.size <= maxPreviewLimit) {
+                    if (file.type && file.type.startsWith('image/')) {
+                        tempMsg.type = 'image';
+                    } else if (file.type && file.type.startsWith('video/')) {
+                        tempMsg.type = 'video';
+                    } else if (file.type && file.type.startsWith('audio/')) {
+                        tempMsg.type = 'audio';
                     }
                 }
-            });
-            
-            xhr.onload = function() {
-                if (xhr.status === 402) {
-                    document.getElementById('pay-modal-backdrop').classList.add('open');
-                    removeTempMessage(tempId);
-                    deletePlaceholderMessage(tempId);
-                    if (onDone) onDone();
-                    return;
+                
+                state.messages.push(tempMsg);
+                renderMessages();
+                scrollMessagesToBottomSoon(tempId);
+                
+                var data = new FormData();
+                data.append('sender', state.sender);
+                data.append('avatar', state.avatar);
+                data.append('token', state.token);
+                data.append('theme', state.theme);
+                data.append('join', joinToken);
+                data.append('tempId', tempId);
+                if (meta) {
+                    data.append('duration', meta.duration);
+                    data.append('width', meta.width);
+                    data.append('height', meta.height);
                 }
-                if (xhr.status === 413) {
-                    updateUploadFailed(tempId, dict.uploadFailedLimit);
-                    deletePlaceholderMessage(tempId);
-                    if (onDone) onDone();
-                    return;
-                }
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        var messages = JSON.parse(xhr.responseText);
-                        replaceTempMessage(tempId, messages);
-                    } catch(e) {
+                data.append('files', file, file.name || 'attachment');
+                
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '{{.AttachmentsRoute}}', true);
+                
+                var lastSentTime = 0;
+                xhr.upload.addEventListener('progress', function(e) {
+                    if (e.lengthComputable) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        updateUploadProgress(tempId, pct);
+                        
+                        var now = Date.now();
+                        if (now - lastSentTime >= 300 || pct === 100) {
+                            lastSentTime = now;
+                            fetch('{{.MessagesRoute}}', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    tempId: tempId,
+                                    token: state.token,
+                                    progress: pct,
+                                    sending: true
+                                })
+                            }).catch(function() {});
+                        }
+                    }
+                });
+                
+                xhr.onload = function() {
+                    if (xhr.status === 402) {
+                        document.getElementById('pay-modal-backdrop').classList.add('open');
+                        removeTempMessage(tempId);
+                        deletePlaceholderMessage(tempId);
+                        if (onDone) onDone();
+                        return;
+                    }
+                    if (xhr.status === 413) {
+                        updateUploadFailed(tempId, dict.uploadFailedLimit);
+                        deletePlaceholderMessage(tempId);
+                        if (onDone) onDone();
+                        return;
+                    }
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var messages = JSON.parse(xhr.responseText);
+                            replaceTempMessage(tempId, messages);
+                        } catch(e) {
+                            updateUploadFailed(tempId, dict.uploadFailed);
+                            deletePlaceholderMessage(tempId);
+                        }
+                    } else {
                         updateUploadFailed(tempId, dict.uploadFailed);
                         deletePlaceholderMessage(tempId);
                     }
-                } else {
+                    if (onDone) onDone();
+                };
+                
+                xhr.onerror = function() {
                     updateUploadFailed(tempId, dict.uploadFailed);
                     deletePlaceholderMessage(tempId);
-                }
-                if (onDone) onDone();
-            };
-            
-            xhr.onerror = function() {
-                updateUploadFailed(tempId, dict.uploadFailed);
-                deletePlaceholderMessage(tempId);
-                if (onDone) onDone();
-            };
-            
-            // 先广播创建占位气泡给其他客户端，实现发送即显示
-            fetch('{{.MessagesRoute}}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    tempId: tempId,
-                    sender: state.sender,
-                    avatar: state.avatar,
-                    token: state.token,
-                    theme: state.theme,
-                    join: joinToken,
-                    type: tempMsg.type,
-                    fileName: file.name,
-                    size: file.size,
-                    sending: true,
-                    progress: 0
-                })
-            }).catch(function() {});
-            
-            xhr.send(data);
+                    if (onDone) onDone();
+                };
+                
+                // 先广播创建占位气泡给其他客户端，实现发送即显示
+                fetch('{{.MessagesRoute}}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        tempId: tempId,
+                        sender: state.sender,
+                        avatar: state.avatar,
+                        token: state.token,
+                        theme: state.theme,
+                        join: joinToken,
+                        type: tempMsg.type,
+                        fileName: file.name,
+                        size: file.size,
+                        sending: true,
+                        progress: 0,
+                        duration: meta ? meta.duration : 0,
+                        width: meta ? meta.width : 0,
+                        height: meta ? meta.height : 0
+                    })
+                }).catch(function() {});
+                
+                xhr.send(data);
+            });
         }
         function formatBytes(value) {
             var units = ['B', 'KB', 'MB', 'GB', 'TB'];

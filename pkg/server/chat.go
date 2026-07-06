@@ -88,6 +88,9 @@ type chatMessage struct {
 	Sending    bool      `json:"sending,omitempty"`
 	Progress   int       `json:"progress,omitempty"`
 	Receiving  bool      `json:"receiving,omitempty"`
+	Duration   float64   `json:"duration,omitempty"`
+	Width      int       `json:"width,omitempty"`
+	Height     int       `json:"height,omitempty"`
 }
 
 type chatAttachment struct {
@@ -720,18 +723,21 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		var request struct {
-			Sender   string `json:"sender"`
-			Avatar   string `json:"avatar"`
-			Text     string `json:"text"`
-			Token    string `json:"token"`
-			Theme    string `json:"theme"`
-			Join     string `json:"join"`
-			TempID   string `json:"tempId,omitempty"`
-			Type     string `json:"type,omitempty"`
-			FileName string `json:"fileName,omitempty"`
-			Size     int64  `json:"size,omitempty"`
-			Progress int    `json:"progress,omitempty"`
-			Sending  bool   `json:"sending,omitempty"`
+			Sender   string  `json:"sender"`
+			Avatar   string  `json:"avatar"`
+			Text     string  `json:"text"`
+			Token    string  `json:"token"`
+			Theme    string  `json:"theme"`
+			Join     string  `json:"join"`
+			TempID   string  `json:"tempId,omitempty"`
+			Type     string  `json:"type,omitempty"`
+			FileName string  `json:"fileName,omitempty"`
+			Size     int64   `json:"size,omitempty"`
+			Progress int     `json:"progress,omitempty"`
+			Sending  bool    `json:"sending,omitempty"`
+			Duration float64 `json:"duration,omitempty"`
+			Width    int     `json:"width,omitempty"`
+			Height   int     `json:"height,omitempty"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&request); err != nil {
 			http.Error(w, "invalid message", http.StatusBadRequest)
@@ -759,6 +765,9 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 				request.FileName,
 				request.Size,
 				request.TempID,
+				request.Duration,
+				request.Width,
+				request.Height,
 			)
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(message); err != nil {
@@ -837,6 +846,20 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 	avatar := sanitizeChatAvatar(r.FormValue("avatar"))
 	token := strings.TrimSpace(r.FormValue("token"))
 	tempID := strings.TrimSpace(r.FormValue("tempId"))
+	
+	var duration float64
+	if dVal := r.FormValue("duration"); dVal != "" {
+		duration, _ = strconv.ParseFloat(dVal, 64)
+	}
+	var width int
+	if wVal := r.FormValue("width"); wVal != "" {
+		width, _ = strconv.Atoi(wVal)
+	}
+	var height int
+	if hVal := r.FormValue("height"); hVal != "" {
+		height, _ = strconv.Atoi(hVal)
+	}
+
 	if token == "" {
 		http.Error(w, "missing token", http.StatusBadRequest)
 		return
@@ -865,7 +888,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "File size exceeds 2MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
 			return
 		}
-		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file, tempID)
+		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file, tempID, duration, width, height)
 		file.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1334,7 +1357,7 @@ func (session *chatSession) addTextMessageWithAvatar(sender string, avatar strin
 	}, "active")
 }
 
-func (session *chatSession) addUploadPlaceholderMessage(sender string, avatar string, token string, msgType string, fileName string, size int64, tempID string) chatMessage {
+func (session *chatSession) addUploadPlaceholderMessage(sender string, avatar string, token string, msgType string, fileName string, size int64, tempID string, duration float64, width int, height int) chatMessage {
 	theme := session.chatThemeForToken(strings.TrimSpace(token), sender)
 	return session.addMessageWithStatus(chatMessage{
 		ID:         tempID,
@@ -1347,6 +1370,9 @@ func (session *chatSession) addUploadPlaceholderMessage(sender string, avatar st
 		Progress:   0,
 		Theme:      theme,
 		ownerToken: strings.TrimSpace(token),
+		Duration:   duration,
+		Width:      width,
+		Height:     height,
 	}, "active")
 }
 
@@ -1406,10 +1432,10 @@ func (session *chatSession) addSystemMessageLocked(text string) chatMessage {
 }
 
 func (session *chatSession) saveAttachment(sender string, token string, name string, mimeType string, size int64, reader io.Reader) (chatMessage, error) {
-	return session.saveAttachmentWithAvatar(sender, "", token, name, mimeType, size, reader, "")
+	return session.saveAttachmentWithAvatar(sender, "", token, name, mimeType, size, reader, "", 0, 0, 0)
 }
 
-func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar string, token string, name string, mimeType string, size int64, reader io.Reader, tempID string) (chatMessage, error) {
+func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar string, token string, name string, mimeType string, size int64, reader io.Reader, tempID string, duration float64, width int, height int) (chatMessage, error) {
 	if name == "" {
 		name = "attachment"
 	}
@@ -1472,6 +1498,9 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 		Theme:      session.chatThemeForToken(ownerToken, sender),
 		CreatedAt:  time.Now(),
 		ownerToken: ownerToken,
+		Duration:   duration,
+		Width:      width,
+		Height:     height,
 	}
 	session.mu.Lock()
 	if client, ok := session.clients[ownerToken]; ok {
