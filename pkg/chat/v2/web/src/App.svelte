@@ -85,7 +85,46 @@
     if (event.data.type === 'pulse-session-qr') {
       const remaining = Math.max(0, Number(event.data.until || 0) - Date.now());
       startQRPulse(remaining);
+    } else if (event.data.type === 'selected-files') {
+      const paths: string[] = event.data.paths || [];
+      paths.forEach(p => {
+        registerLocalAttachment(p);
+      });
     }
+  }
+
+  function registerLocalAttachment(filePath: string) {
+    const hostToken = localStorage.getItem('chat_host_token') || '';
+    const url = `/chat-v2/${token}/attachments/local?hostToken=${encodeURIComponent(hostToken)}`;
+    const sender = $currentDevice?.label || 'Me';
+    const avatar = $currentDevice?.avatar || '';
+    const deviceToken = localStorage.getItem('chat_token') || '';
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        path: filePath,
+        sender: sender,
+        avatar: avatar,
+        token: deviceToken
+      })
+    })
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(t => { throw new Error(t); });
+      }
+      return r.json();
+    })
+    .then(message => {
+      console.log('Successfully registered local attachment:', message);
+    })
+    .catch(err => {
+      console.error('Failed to register local attachment:', err);
+      chatActions.addSystemMessage('发送本地附件失败: ' + err.message);
+    });
   }
 
   let selectedDevId = '';
@@ -179,6 +218,11 @@
     const urlPeer = params.get('peer');
     if (urlPeer) {
       localStorage.setItem('chat_peer', urlPeer);
+    }
+
+    const hostToken = params.get('hostToken') || '';
+    if (hostToken) {
+      localStorage.setItem('chat_host_token', hostToken);
     }
 
     client = new ChatWebSocketClient(token);
@@ -277,7 +321,11 @@
   function handleOpenFolder(e: CustomEvent<Message>) {
     const msg = e.detail;
     if (isEmbedded) {
-      window.parent.postMessage({ type: 'open-chat-file', filename: msg.fileName }, '*');
+      if (msg.filePath) {
+        window.parent.postMessage({ type: 'open-file', path: msg.filePath }, '*');
+      } else {
+        window.parent.postMessage({ type: 'open-chat-file', filename: msg.fileName }, '*');
+      }
     } else {
       chatActions.addSystemMessage(currentLang === 'en'
         ? 'Browser sandbox restricted, cannot locate local folders'

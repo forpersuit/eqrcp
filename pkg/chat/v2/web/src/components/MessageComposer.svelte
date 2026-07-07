@@ -15,8 +15,16 @@
     setTimeout(resizeComposer, 0);
   }
 
-  function triggerFileInput() {
-    fileInput.click();
+  const isEmbedded = typeof window !== 'undefined' && window.parent !== window;
+
+  function triggerFileInput(e: Event) {
+    e.preventDefault();
+    if (isEmbedded) {
+      const requestId = 'select-' + Math.random().toString(36).substring(2, 11);
+      window.parent.postMessage({ type: 'select-files', requestId }, '*');
+    } else {
+      fileInput.click();
+    }
   }
 
   function handleFileChange(e: Event) {
@@ -72,10 +80,8 @@
       wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
     }
 
-    const viewport = window.innerHeight;
-    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
-    const max = isDesktop ? Math.min(viewport * 0.34, 168) : Math.min(viewport * 0.30, 140);
-    const min = 46;
+    const max = 124; // Cap height to maximum 5 lines (44px + 20px * 4 = 124px)
+    const min = 44;
 
     const style = window.getComputedStyle(textareaEl);
     const border = parseFloat(style.borderTopWidth || '0') + parseFloat(style.borderBottomWidth || '0');
