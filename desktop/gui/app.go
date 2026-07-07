@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"eqt/cmd"
+	"eqt/pkg/application"
+	"eqt/pkg/config"
 	"eqt/pkg/server"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
@@ -122,6 +124,7 @@ type DesktopSettings struct {
 	Lang                     string            `json:"lang"`
 	ShowHistory              bool              `json:"showHistory"`
 	EnableChatV2             bool              `json:"enableChatV2"`
+	ChatDownloadDir          string            `json:"chatDownloadDir"`
 }
 
 type InterfaceOption struct {
@@ -360,9 +363,17 @@ func (a *App) Chat() (AgentStatus, error) {
 
 
 func (a *App) ChatSaveDirectory() (string, error) {
-	dir, err := currentChatSaveDirectory()
-	if err != nil {
-		return "", err
+	var dir string
+	settingsApp := application.New()
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	if err == nil && settings.ChatDownloadDir != "" {
+		dir = settings.ChatDownloadDir
+	} else {
+		d, err := currentChatSaveDirectory()
+		if err != nil {
+			return "", err
+		}
+		dir = d
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err

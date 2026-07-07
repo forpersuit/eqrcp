@@ -1811,6 +1811,16 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
+                        <strong>${t('chat_download_dir')}</strong>
+                        <span>${t('chat_download_dir_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack path-selector-wrapper" style="display: flex; gap: 8px; align-items: center; width: 220px; justify-content: flex-end;">
+                        <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; width: 140px; box-sizing: border-box;" readonly />
+                        <button type="button" class="btn-mini secondary" id="btn-select-chat-download-dir" style="height: 26px; font-size: 11px; padding: 0 10px; border-radius: 6px; flex-shrink: 0;">${t('choose')}</button>
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
                         <strong>${t('chat_v2')}</strong>
                         <span>${t('chat_v2_desc')}</span>
                     </div>
@@ -3464,6 +3474,7 @@ function syncSettingsFromDOM() {
     const receiveBrowser = document.querySelector('#browser-open');
     const sideBrowser = document.querySelector('#settings-browser');
     const chatAutoSave = document.querySelector('#settings-chat-autosave');
+    const chatDownloadDir = document.querySelector('#settings-chat-download-dir');
     const enableChatV2 = document.querySelector('#settings-chat-v2');
     const closeBehavior = document.querySelector('#settings-close-behavior');
     const iface = document.querySelector('#settings-interface');
@@ -3480,6 +3491,7 @@ function syncSettingsFromDOM() {
     if (receiveBrowser) state.settings.browser = receiveBrowser.checked;
     if (sideBrowser) state.settings.browser = sideBrowser.checked;
     if (chatAutoSave) state.settings.chatAutoSave = chatAutoSave.checked;
+    if (chatDownloadDir) state.settings.chatDownloadDir = chatDownloadDir.value;
     if (enableChatV2) state.settings.enableChatV2 = enableChatV2.checked;
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
     if (iface) state.settings.interface = iface.value;
@@ -3510,6 +3522,7 @@ async function saveSettingsData() {
     state.receiveDir = state.settings.output;
     state.browserFallback = state.settings.browser;
     state.chatAutoSave = state.settings.chatAutoSave !== false;
+    state.chatSaveDir = state.settings.chatDownloadDir || await ChatSaveDirectory();
     state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
     syncViewportDebugToChatFrame();
 }
@@ -3567,6 +3580,22 @@ function bindSettingsControls() {
     document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
+    document.querySelector('#btn-select-chat-download-dir')?.addEventListener('click', async () => {
+        try {
+            const dir = await SelectReceiveDirectory();
+            if (dir) {
+                const input = document.querySelector('#settings-chat-download-dir');
+                if (input) {
+                    input.value = dir;
+                    syncSettingsFromDOM();
+                    await handleAutoSaveSettings();
+                    syncPanelSurface();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to select chat download directory:', err);
+        }
+    });
 
     // Chat Sender Edit controls
     document.querySelector('.edit-chat-sender')?.addEventListener('click', () => {
@@ -3742,6 +3771,7 @@ function bindSettingsControls() {
         '#settings-port',
         '#settings-browser',
         '#settings-chat-autosave',
+        '#settings-chat-download-dir',
         '#settings-chat-v2',
         '#settings-close-behavior',
         '#settings-auto-update-mode',

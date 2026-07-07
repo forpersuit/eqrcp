@@ -48,14 +48,23 @@ main {
     padding: 16px 28px;
 }
 html.embedded-chat body { background: transparent; }
-html.embedded-chat .chat-viewport, html.embedded-chat #app { height: 100%; }
+html.embedded-chat .chat-viewport, html.embedded-chat #app {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
 html.embedded-chat main {
     max-width: none;
     padding: 8px;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
 }
 html.embedded-chat .chat-shell {
     border-radius: 12px;
-    height: 100%;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
 }
 html.embedded-chat .chat-head {
     border-radius: 0;
@@ -644,6 +653,22 @@ h1 {
         width: 16px;
     }
 }
+@media (max-width: 360px) {
+    .chat-head .qr-btn,
+    .chat-head .lang-btn {
+        display: none !important;
+    }
+    .chat-head {
+        padding: 8px 10px;
+        gap: 6px;
+    }
+    .chat-logo {
+        display: none !important;
+    }
+    .chat-head-title h1 {
+        font-size: 13px;
+    }
+}
 .message-avatar {
     align-items: center;
     background: #eaf2ec;
@@ -741,6 +766,8 @@ h1 {
     -webkit-user-select: text;
     user-select: text;
     white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
 .message:not(.system):not(.attachment-message) .bubble {
     -webkit-user-select: text;
@@ -889,6 +916,19 @@ button.file-card:hover {
     width: 26px;
 }
 .bubble-action svg { fill: none; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 14px; }
+.bubble-action.completed-btn .icon-download {
+    display: none !important;
+}
+.bubble-action.completed-btn .icon-completed {
+    display: block !important;
+    color: var(--accent);
+}
+.bubble-action.completed-btn:hover .icon-download {
+    display: block !important;
+}
+.bubble-action.completed-btn:hover .icon-completed {
+    display: none !important;
+}
 .bubble-action.confirm-delete {
     background: #fee2e2;
     border-color: #fca5a5;

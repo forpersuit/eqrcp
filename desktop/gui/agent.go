@@ -404,6 +404,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
+		ChatDownloadDir:          s.ChatDownloadDir,
 	}
 }
 
@@ -438,6 +439,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
+		ChatDownloadDir:          s.ChatDownloadDir,
 	}
 }
 
