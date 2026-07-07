@@ -366,6 +366,9 @@ func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token st
 		scheme = "https"
 	}
 	joinURL := scheme + "://" + r.Host + h.basePath + "/" + token
+	if r.URL.RawQuery != "" {
+		joinURL += "?" + r.URL.RawQuery
+	}
 
 	qrImg, err := qr.RenderImage(joinURL)
 	if err != nil {

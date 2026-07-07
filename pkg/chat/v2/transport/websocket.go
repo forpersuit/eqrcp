@@ -167,6 +167,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			}
 			cl = session.NewClient(cmd.Client, conn)
 			sess = h.sessions.GetOrCreate(token)
+			sess.AssignTheme(cl, cmd.Client)
 
 			go cl.WritePump(ctx)
 

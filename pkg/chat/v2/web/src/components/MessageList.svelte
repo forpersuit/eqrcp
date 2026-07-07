@@ -167,9 +167,13 @@
           </div>
 
           {#if !msg.recalled}
-            <div class="message-footer" style="margin-top: 4px;">
+            <div class="message-footer" style="
+              margin-top: 4px;
+              --message-action-bg: {colors.bg};
+              --message-action-border: {colors.border};
+              --message-action-text: {colors.text};
+            ">
               {#if msg.type === 'text'}
-                <div class="message-footer-meta" style="flex: 1;"></div>
                 <div class="message-footer-actions">
                   <button class="bubble-action" type="button" on:click={() => handleCopy(msg.text || '')} title="Copy">
                     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -196,20 +200,20 @@
               {:else if msg.type === 'file'}
                 {#if tx}
                   {#if tx.state === 'queued'}
-                    <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Queued...' : '排队中...'}</div>
+                    <div class="message-footer-meta" style="flex: 1; color: var(--accent-strong);">{currentLang === 'en' ? 'Queued...' : '排队中...'}</div>
                   {:else if tx.state === 'running'}
-                    <div class="message-footer-meta" style="flex: 1;">
+                    <div class="message-footer-meta uploading" style="flex: 1; background-image: linear-gradient(to right, var(--accent) {tx.percent}%, var(--muted) {tx.percent}%);">
                       {tx.percent}% ({formatBytes(tx.bytesDone || 0)} / {formatBytes(tx.bytesTotal || 0)})
                     </div>
                   {:else if tx.state === 'completed'}
-                    <div class="message-footer-meta text-success" style="font-weight: 700; flex: 1;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
+                    <div class="message-footer-meta" style="font-weight: 700; flex: 1; color: var(--accent);">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
                   {:else if tx.state === 'failed'}
                     <div class="message-footer-meta text-danger" style="flex: 1;">{currentLang === 'en' ? 'Download failed' : '下载失败'}</div>
                   {:else if tx.state === 'cancelled'}
-                    <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
+                    <div class="message-footer-meta" style="flex: 1; color: var(--accent-strong);">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
                   {/if}
                 {:else}
-                  <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
+                  <div class="message-footer-meta" style="flex: 1; color: var(--accent-strong);">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
                 {/if}
 
                 <div class="message-footer-actions">

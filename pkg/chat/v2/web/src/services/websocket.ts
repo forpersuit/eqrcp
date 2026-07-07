@@ -13,6 +13,8 @@ export class ChatWebSocketClient {
 
   private clientLabel: string;
   private clientPeer: string;
+  private joinParam: string = '';
+  private themeParam: string = '';
 
   constructor(token: string) {
     this.token = token;
@@ -21,6 +23,11 @@ export class ChatWebSocketClient {
     this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
     localStorage.setItem('chat_label', this.clientLabel);
     localStorage.setItem('chat_peer', this.clientPeer);
+
+    // Extract join and theme parameter from URL search query
+    const params = new URLSearchParams(window.location.search);
+    this.joinParam = params.get('join') || '';
+    this.themeParam = params.get('theme') || '';
   }
 
   public connect(): void {
@@ -52,6 +59,11 @@ export class ChatWebSocketClient {
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       
+      let preferredTheme = this.themeParam;
+      if (this.clientPeer === 'desktop') {
+        preferredTheme = 'theme-0';
+      }
+
       // Perform Connect Command handshake
       this.sendCommand({
         type: 'connect',
@@ -60,7 +72,8 @@ export class ChatWebSocketClient {
           token: this.token,
           label: this.clientLabel,
           peer: this.clientPeer,
-          theme: 'dark'
+          theme: preferredTheme,
+          join: this.joinParam
         }
       });
 

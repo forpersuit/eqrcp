@@ -1,6 +1,11 @@
 package session
 
 import (
+	"crypto/rand"
+	"fmt"
+	"math/big"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -9,18 +14,22 @@ import (
 
 // Session represents a single chat room / token session.
 type Session struct {
-	Token        string
-	mu           sync.RWMutex
-	clients      map[string]*Client
-	MessageStore *MessageStore
+	Token            string
+	mu               sync.RWMutex
+	clients          map[string]*Client
+	MessageStore     *MessageStore
+	clientThemes     map[string]string // maps client peer ID to allocated theme
+	clientThemeJoins map[string]string // maps client peer ID to last join token
 }
 
 // NewSession creates a new Session.
 func NewSession(token string) *Session {
 	return &Session{
-		Token:        token,
-		clients:      make(map[string]*Client),
-		MessageStore: NewMessageStore(),
+		Token:            token,
+		clients:          make(map[string]*Client),
+		MessageStore:     NewMessageStore(),
+		clientThemes:     make(map[string]string),
+		clientThemeJoins: make(map[string]string),
 	}
 }
 
@@ -165,3 +174,78 @@ func (s *Session) SendSystemMessage(text string) {
 
 	s.Broadcast(event)
 }
+
+// AssignTheme determines and assigns the correct theme for a client based on its peer type and scan join token.
+func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.clientThemes == nil {
+		s.clientThemes = make(map[string]string)
+	}
+	if s.clientThemeJoins == nil {
+		s.clientThemeJoins = make(map[string]string)
+	}
+
+	isDesktop := false
+	if strings.EqualFold(strings.TrimSpace(info.Peer), "desktop") || strings.EqualFold(strings.TrimSpace(c.Peer), "desktop") {
+		isDesktop = true
+	}
+
+	if isDesktop {
+		s.clientThemes[c.Peer] = "theme-0"
+		c.Theme = "theme-0"
+		return
+	}
+
+	join := strings.TrimSpace(info.Join)
+	if theme := s.clientThemes[c.Peer]; s.validChatTheme(theme) && (join == "" || s.clientThemeJoins[c.Peer] == join) {
+		c.Theme = theme
+		return
+	}
+
+	theme := s.randomChatThemeLocked(c.Peer)
+	s.clientThemes[c.Peer] = theme
+	if join != "" {
+		s.clientThemeJoins[c.Peer] = join
+	}
+	c.Theme = theme
+}
+
+func (s *Session) validChatTheme(theme string) bool {
+	if !strings.HasPrefix(theme, "theme-") {
+		return false
+	}
+	idxStr := strings.TrimPrefix(theme, "theme-")
+	_, err := strconv.ParseInt(idxStr, 10, 64)
+	return err == nil
+}
+
+func (s *Session) randomChatThemeLocked(peer string) string {
+	for tries := 0; tries < 8; tries++ {
+		theme := s.randomChatThemeID()
+		if !s.themeInUseByOtherClientLocked(peer, theme) {
+			return theme
+		}
+	}
+	return s.randomChatThemeID()
+}
+
+func (s *Session) randomChatThemeID() string {
+	maxChatThemeSeed := int64(1<<31 - 1)
+	seed, err := rand.Int(rand.Reader, big.NewInt(maxChatThemeSeed))
+	if err != nil {
+		return fmt.Sprintf("theme-%d", time.Now().UnixNano()%maxChatThemeSeed+1)
+	}
+	return fmt.Sprintf("theme-%d", seed.Int64()+1)
+}
+
+func (s *Session) themeInUseByOtherClientLocked(peer string, theme string) bool {
+	for other, assigned := range s.clientThemes {
+		if other != peer && assigned == theme {
+			return true
+		}
+	}
+	return false
+}
+

@@ -11,6 +11,17 @@
   let isEmbedded = false;
   let observer: MutationObserver | null = null;
 
+  // Generate a dynamic random joinToken for the lifetime of this session page
+  function generateJoinToken(): string {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    let tok = '';
+    for (let i = 0; i < 16; i++) {
+      tok += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return tok;
+  }
+  const joinToken = generateJoinToken();
+
   let showDevicePanel = false;
   let showLicensePanel = false;
   let showLangPanel = false;
@@ -162,6 +173,13 @@
       token = 'default-room';
     }
 
+    // Persist peer type if passed via URL parameter
+    const params = new URLSearchParams(window.location.search);
+    const urlPeer = params.get('peer');
+    if (urlPeer) {
+      localStorage.setItem('chat_peer', urlPeer);
+    }
+
     client = new ChatWebSocketClient(token);
     client.connect();
   });
@@ -271,7 +289,9 @@
     window.location.reload();
   }
 
-  $: joinUrl = window.location.origin + "/chat-v2/" + token;
+  $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
+  $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme;
+  $: qrImgSrc = `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}`;
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(joinUrl).then(() => {
@@ -443,7 +463,7 @@
         </div>
         <p class="side-note">扫描下方二维码从其他设备加入会话</p>
         <div class="qr-frame">
-          <img class="qr" src="/chat-v2/{token}/qr.png" alt="Chat QR code">
+          <img class="qr" src={qrImgSrc} alt="Chat QR code">
         </div>
         <div class="session-collapsible" class:collapsed={!showUrl}>
           <div class="url-row" style="margin-top: 8px;">
