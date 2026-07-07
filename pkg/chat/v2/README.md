@@ -19,10 +19,27 @@ This package currently contains only skeleton contracts:
 
 - protocol command and event envelopes
 - typed event payloads for messages, presence, transfer state, and errors
+- diagnostic errors, JSON error responses, and structured logger hooks
 - an unmounted experimental HTTP handler for future `/chat-v2/{token}` routes
 
 It does not create chat sessions, serve the Svelte frontend, or handle file
 transfers yet.
+
+## Development Infrastructure
+
+The `diag` package is the v2 observability foundation:
+
+- `diag.Error` maps internal failures to public protocol error codes and HTTP
+  status codes.
+- `diag.WriteError` returns JSON errors that future frontend and WebSocket
+  code can handle consistently.
+- `diag.Logger` records structured events with stable fields such as method,
+  path, token, command ID, client ID, transfer ID, and error.
+- `diag.MemoryLogger` lets tests assert operational events without parsing text
+  logs.
+
+WebSocket, event bus, TransferManager, and bandwidth scheduler code should use
+these hooks from the start instead of temporary prints.
 
 ## Validation
 

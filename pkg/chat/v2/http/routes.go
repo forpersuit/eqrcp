@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"eqt/pkg/chat/v2/diag"
+	"eqt/pkg/chat/v2/protocol"
 )
 
 const Version = "v2"
@@ -12,11 +15,13 @@ const Version = "v2"
 // Config controls the experimental chat v2 handler.
 type Config struct {
 	BasePath string
+	Logger   diag.Logger
 }
 
 // Handler is an isolated, unmounted chat v2 HTTP handler.
 type Handler struct {
 	basePath string
+	logger   diag.Logger
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -25,7 +30,14 @@ func NewHandler(cfg Config) *Handler {
 	if basePath == "" {
 		basePath = "/chat-v2"
 	}
-	return &Handler{basePath: basePath}
+	logger := cfg.Logger
+	if logger == nil {
+		logger = diag.NopLogger{}
+	}
+	return &Handler{
+		basePath: basePath,
+		logger:   logger,
+	}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -34,12 +46,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	fields := []diag.Field{
+		diag.F("method", r.Method),
+		diag.F("path", r.URL.Path),
+		diag.F("token", token),
+	}
+	diag.Emit(r.Context(), h.logger, diag.LevelDebug, "request received", nil, fields...)
 
 	switch suffix {
 	case "", "/":
-		h.writeSkeleton(w, r, token)
+		h.writeSkeleton(w, r, token, fields...)
 	case "/health":
-		h.writeHealth(w, r, token)
+		h.writeHealth(w, r, token, fields...)
 	default:
 		http.NotFound(w, r)
 	}
@@ -61,9 +79,9 @@ func (h *Handler) route(path string) (string, string, bool) {
 	return token, suffix, true
 }
 
-func (h *Handler) writeSkeleton(w http.ResponseWriter, r *http.Request, token string) {
+func (h *Handler) writeSkeleton(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -73,11 +91,12 @@ func (h *Handler) writeSkeleton(w http.ResponseWriter, r *http.Request, token st
 		"token":   token,
 		"status":  "not_implemented",
 	})
+	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "skeleton response sent", nil, fields...)
 }
 
-func (h *Handler) writeHealth(w http.ResponseWriter, r *http.Request, token string) {
+func (h *Handler) writeHealth(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -86,4 +105,5 @@ func (h *Handler) writeHealth(w http.ResponseWriter, r *http.Request, token stri
 		"token":   token,
 		"status":  "skeleton",
 	})
+	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "health response sent", nil, fields...)
 }
