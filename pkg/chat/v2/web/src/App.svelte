@@ -31,8 +31,37 @@
     }
   }
 
+  let isQRPulsing = false;
+  let qrPulseTimer: any = null;
+
+  function stopQRPulse() {
+    isQRPulsing = false;
+    if (qrPulseTimer) {
+      clearTimeout(qrPulseTimer);
+      qrPulseTimer = null;
+    }
+  }
+
+  function startQRPulse(remaining: number) {
+    if (qrPulseTimer) {
+      clearTimeout(qrPulseTimer);
+    }
+    isQRPulsing = true;
+    const duration = remaining > 0 ? remaining : 10000;
+    qrPulseTimer = setTimeout(stopQRPulse, Math.min(duration, 10000));
+  }
+
+  function handleMessage(event: MessageEvent) {
+    if (!event.data || typeof event.data !== 'object') return;
+    if (event.data.type === 'pulse-session-qr') {
+      const remaining = Math.max(0, Number(event.data.until || 0) - Date.now());
+      startQRPulse(remaining);
+    }
+  }
+
   onMount(() => {
     isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
+    window.addEventListener('message', handleMessage);
 
     // Extract token from path /chat-v2/{token}
     const path = window.location.pathname;
@@ -50,6 +79,10 @@
   });
 
   onDestroy(() => {
+    window.removeEventListener('message', handleMessage);
+    if (qrPulseTimer) {
+      clearTimeout(qrPulseTimer);
+    }
     if (client) {
       client.close();
     }
@@ -150,7 +183,7 @@
             <span id="device-count">{$peers.length}</span>
           </button>
 
-          <button class="icon-button qr-breathe" type="button" on:click|stopPropagation={() => { showShareModal = true; closeAllPanels(); }} title="Show session QR">
+          <button class="icon-button" class:qr-breathe={isQRPulsing} type="button" on:click|stopPropagation={() => { showShareModal = true; stopQRPulse(); closeAllPanels(); }} title="Show session QR">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
           </button>
 

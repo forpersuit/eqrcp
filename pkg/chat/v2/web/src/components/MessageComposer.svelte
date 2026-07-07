@@ -1,14 +1,18 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   const dispatch = createEventDispatcher();
   let text = '';
   let fileInput: HTMLInputElement;
+  let textareaEl: HTMLTextAreaElement;
+  let composerEl: HTMLFormElement;
 
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!text.trim()) return;
     dispatch('sendText', text);
     text = '';
+    // Reset height after submit
+    setTimeout(resizeComposer, 0);
   }
 
   function triggerFileInput() {
@@ -33,9 +37,46 @@
       handleSubmit(e);
     }
   }
+
+  async function resizeComposer() {
+    await tick();
+    if (!textareaEl || !composerEl) return;
+
+    const viewport = window.innerHeight;
+    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
+    const max = isDesktop ? Math.min(viewport * 0.34, 168) : Math.min(viewport * 0.30, 140);
+    const min = 36;
+
+    const style = window.getComputedStyle(textareaEl);
+    const border = parseFloat(style.borderTopWidth || '0') + parseFloat(style.borderBottomWidth || '0');
+
+    textareaEl.style.height = 'auto';
+    textareaEl.style.height = Math.max(min, Math.min(textareaEl.scrollHeight + border, max)) + 'px';
+    textareaEl.style.overflowY = textareaEl.scrollHeight + border > max ? 'auto' : 'hidden';
+
+    // Propagate the new composer height to CSS variable --composer-height
+    // so the message list's bottom padding updates dynamically and doesn't hide text.
+    document.documentElement.style.setProperty('--composer-height', composerEl.offsetHeight + 'px');
+  }
+
+  // Reactive listener to resize height as the user types text
+  $: {
+    if (text !== undefined) {
+      resizeComposer();
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('resize', resizeComposer);
+    resizeComposer();
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('resize', resizeComposer);
+  });
 </script>
 
-<form class="composer" on:submit={handleSubmit}>
+<form bind:this={composerEl} class="composer" on:submit={handleSubmit}>
   <div class="composer-shell">
     <div class="compose-row">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -44,6 +85,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       </label>
       <textarea 
+        bind:this={textareaEl}
         bind:value={text} 
         on:keydown={handleKeydown}
         placeholder="Message" 
@@ -59,8 +101,5 @@
 </form>
 
 <style>
-  /* 
-    Rely on global app.css V1 styling for .composer, .composer-shell, .compose-row, 
-    .file-label, textarea and .send-button class definitions.
-  */
+  /* Rely on global app.css V1 styling */
 </style>
