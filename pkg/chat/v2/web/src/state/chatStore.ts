@@ -31,6 +31,19 @@ export const chatActions = {
     });
   },
 
+  recallMessage(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          recalled: true,
+          text: undefined
+        };
+      }
+      return m;
+    }));
+  },
+
   clearMessages() {
     messages.set([]);
   },

@@ -111,6 +111,12 @@ export class ChatWebSocketClient {
         }
         break;
 
+      case 'message_recalled':
+        if (event.message?.id) {
+          chatActions.recallMessage(event.message.id);
+        }
+        break;
+
       case 'presence_changed':
         if (event.presence) {
           chatActions.updatePresence(event.presence.devices);
@@ -204,6 +210,16 @@ export class ChatWebSocketClient {
       commandId: `cancel-tx-${Date.now()}`,
       transferId: transferId
     });
+  }
+
+  public recallMessage(messageId: string): void {
+    this.sendCommand({
+      type: 'recall_message',
+      commandId: `rc-${Date.now()}`,
+      messageId: messageId
+    });
+    // Optimistic update locally
+    chatActions.recallMessage(messageId);
   }
 
   private sendCommand(command: CommandEnvelope): void {

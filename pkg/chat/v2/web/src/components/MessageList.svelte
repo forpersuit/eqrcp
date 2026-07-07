@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { createEventDispatcher, afterUpdate } from 'svelte';
+  import { createEventDispatcher, afterUpdate, onDestroy } from 'svelte';
   import { messages, currentDevice, transfers } from '../state/chatStore';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
 
   const dispatch = createEventDispatcher();
   let listElement: HTMLDivElement;
+
+  let recallConfirmingId: string | null = null;
+  let resetTimer: any = null;
 
   afterUpdate(() => {
     if (listElement) {
@@ -27,6 +30,42 @@
   function handleCancel(transferId: string) {
     dispatch('cancelDownload', transferId);
   }
+
+  function handleCopy(text: string) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      dispatch('systemNotice', currentLang === 'en' ? 'Copied to clipboard' : '已复制到剪贴板');
+    }).catch(err => {
+      dispatch('systemNotice', 'Copy failed: ' + err.message);
+    });
+  }
+
+  function triggerRecall(msgId: string) {
+    if (recallConfirmingId === msgId) {
+      dispatch('recallMessage', msgId);
+      recallConfirmingId = null;
+      if (resetTimer) {
+        clearTimeout(resetTimer);
+        resetTimer = null;
+      }
+    } else {
+      recallConfirmingId = msgId;
+      if (resetTimer) {
+        clearTimeout(resetTimer);
+      }
+      resetTimer = setTimeout(() => {
+        if (recallConfirmingId === msgId) {
+          recallConfirmingId = null;
+        }
+      }, 3000);
+    }
+  }
+
+  onDestroy(() => {
+    if (resetTimer) {
+      clearTimeout(resetTimer);
+    }
+  });
 
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
 
@@ -55,7 +94,7 @@
         This restores the original V1 look where bubble wash/border tints 
         inherited the sender's device visual styling.
       -->
-      <div class="message" class:mine={isMine} class:attachment-message={msg.type === 'file'}
+      <div class="message" class:mine={isMine} class:attachment-message={msg.type === 'file'} class:recalled={msg.recalled}
            style="
              --accent: {colors.border};
              --accent-strong: {colors.text};
@@ -75,74 +114,89 @@
         <div class="message-main">
           <div class="sender">{msg.sender}</div>
           <div class="bubble">
-            {#if msg.type === 'text'}
-              <span class="text">{msg.text}</span>
-            {:else if msg.type === 'file'}
-              <div class="bubble-content">
-                <div class="attachment-card file-attachment">
-                  <div class="file-card">
-                    <div class="file-icon">FILE</div>
-                    <div class="file-details">
-                      <div class="file-name" title={msg.fileName}>{msg.fileName}</div>
-                      <div class="file-subtitle">
-                        {formatBytes(msg.size || 0)}
-                        {#if tx}
-                          {#if tx.state === 'running'}
-                            · 传输中 {tx.percent}%
-                          {:else if tx.state === 'completed'}
-                            · 已完成
+            {#if msg.recalled}
+              <span class="text recalled">{msg.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
+            {:else}
+              {#if msg.type === 'text'}
+                <span class="text">{msg.text}</span>
+              {:else if msg.type === 'file'}
+                <div class="bubble-content">
+                  <div class="attachment-card file-attachment">
+                    <div class="file-card">
+                      <div class="file-icon">FILE</div>
+                      <div class="file-details">
+                        <div class="file-name" title={msg.fileName}>{msg.fileName}</div>
+                        <div class="file-subtitle">
+                          {formatBytes(msg.size || 0)}
+                          {#if tx}
+                            {#if tx.state === 'running'}
+                              · 传输中 {tx.percent}%
+                            {:else if tx.state === 'completed'}
+                              · 已完成
+                            {/if}
                           {/if}
-                        {/if}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <!-- Footer interactions and progress inside the bubble card -->
-                <div class="message-footer">
-                  {#if tx}
-                    {#if tx.state === 'queued'}
-                      <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Queued...' : '排队中...'}</div>
-                    {:else if tx.state === 'running'}
-                      <div class="message-footer-meta" style="flex: 1;">
-                        {tx.percent}% ({formatBytes(tx.bytesDone || 0)} / {formatBytes(tx.bytesTotal || 0)})
-                      </div>
+                  <!-- Footer interactions and progress inside the bubble card -->
+                  <div class="message-footer">
+                    {#if tx}
+                      {#if tx.state === 'queued'}
+                        <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Queued...' : '排队中...'}</div>
+                      {:else if tx.state === 'running'}
+                        <div class="message-footer-meta" style="flex: 1;">
+                          {tx.percent}% ({formatBytes(tx.bytesDone || 0)} / {formatBytes(tx.bytesTotal || 0)})
+                        </div>
+                        <div class="message-footer-actions">
+                          <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
+                            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                          </button>
+                        </div>
+                      {:else if tx.state === 'completed'}
+                        <div class="message-footer-meta text-success" style="font-weight: 700; flex: 1;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
+                        <div class="message-footer-actions">
+                          <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
+                            <!-- Check icon -->
+                            <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <!-- Download icon -->
+                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          </button>
+                        </div>
+                      {:else if tx.state === 'failed'}
+                        <div class="message-footer-meta text-danger" style="flex: 1;">{currentLang === 'en' ? 'Download failed' : '下载失败'}</div>
+                        <div class="message-footer-actions">
+                          <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
+                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          </button>
+                        </div>
+                      {:else if tx.state === 'cancelled'}
+                        <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
+                        <div class="message-footer-actions">
+                          <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
+                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          </button>
+                        </div>
+                      {/if}
+                    {:else}
+                      <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
                       <div class="message-footer-actions">
-                        <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
-                          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                        </button>
-                      </div>
-                    {:else if tx.state === 'completed'}
-                      <div class="message-footer-meta text-success" style="font-weight: 700; flex: 1;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
-                      <div class="message-footer-actions">
-                        <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
-                          <!-- Check icon -->
-                          <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          <!-- Download icon -->
-                          <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </button>
-                      </div>
-                    {:else if tx.state === 'failed'}
-                      <div class="message-footer-meta text-danger" style="flex: 1;">{currentLang === 'en' ? 'Download failed' : '下载失败'}</div>
-                      <div class="message-footer-actions">
-                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
-                          <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </button>
-                      </div>
-                    {:else if tx.state === 'cancelled'}
-                      <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
-                      <div class="message-footer-actions">
-                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
+                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Download">
                           <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                             <polyline points="7 10 12 15 17 10" />
@@ -151,22 +205,32 @@
                         </button>
                       </div>
                     {/if}
-                  {:else}
-                    <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
-                    <div class="message-footer-actions">
-                      <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Download">
-                        <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      </button>
-                    </div>
-                  {/if}
+                  </div>
                 </div>
-              </div>
+              {/if}
             {/if}
           </div>
+ 
+          <!-- Bubble actions row -->
+          {#if !msg.recalled}
+            <div class="bubble-actions-row">
+              {#if msg.type === 'text'}
+                <button class="action-link-btn" type="button" on:click={() => handleCopy(msg.text || '')} title="Copy text">
+                  {currentLang === 'en' ? 'Copy' : '复制'}
+                </button>
+              {/if}
+ 
+              {#if isMine}
+                <button class="action-link-btn danger" type="button" on:click={() => triggerRecall(msg.id)} title="Recall message">
+                  {#if recallConfirmingId === msg.id}
+                    {currentLang === 'en' ? 'Confirm?' : '确认撤回？'}
+                  {:else}
+                    {currentLang === 'en' ? 'Recall' : '撤回'}
+                  {/if}
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     {/if}

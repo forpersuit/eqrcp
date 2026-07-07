@@ -51,6 +51,7 @@ export type MessageType =
 
 export interface Message {
   id: string;
+  recalled?: boolean;
   senderId?: string;
   sender: string;
   avatar?: string;

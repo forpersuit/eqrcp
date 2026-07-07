@@ -46,6 +46,8 @@ main {
     max-width: 860px;
     margin: 0 auto;
     padding: 16px 28px;
+    overflow: hidden;
+    min-height: 0;
 }
 html.embedded-chat,
 html.embedded-chat body,
@@ -695,6 +697,7 @@ h1 {
     top: 0;
     width: 40px;
     z-index: 1;
+    align-self: start;
 }
 .message.mine .avatar-stack {
     grid-column: 2;
@@ -936,6 +939,42 @@ button.file-card:hover {
     background: #fee2e2;
     border-color: #fca5a5;
     color: #b91c1c;
+}
+/* ── Bubble actions row ── */
+.bubble-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    opacity: 0.42;
+    transition: opacity 0.2s ease;
+    justify-content: flex-start;
+}
+.message.mine .bubble-actions-row {
+    justify-content: flex-end;
+}
+.message:hover .bubble-actions-row {
+    opacity: 1;
+}
+.action-link-btn {
+    background: transparent;
+    border: 0;
+    color: var(--accent-strong);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background 0.16s ease, color 0.16s ease;
+}
+.action-link-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+.action-link-btn.danger {
+    color: #b91c1c;
+}
+.action-link-btn.danger:hover {
+    background: rgba(185, 28, 28, 0.08);
 }
 @media (hover: none), (pointer: coarse) {
     .message {
