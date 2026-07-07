@@ -3251,6 +3251,9 @@
         var previewPanStart = null;
         var previewCurrentURL = '';
         var autoSaveNotified = {};
+        var maxBrowserDownloadConcurrency = 3;
+        var activeBrowserDownloads = 0;
+        var browserDownloadQueue = [];
         var chatCacheKey = 'eqt-chat-cache:' + window.location.pathname + ':' + state.token;
         var reconnectDelay = 1000;
         var maxReconnectDelay = 30000;
@@ -4424,8 +4427,23 @@
             syncReceivingProgressUI(messageId);
             showSystemNotice('Download failed.');
         }
-        function downloadFileWithXHR(message) {
+        function enqueueBrowserDownload(message) {
+            if (!message || !message.id) { return; }
             startReceivingProgress(message.id);
+            browserDownloadQueue.push(message);
+            drainBrowserDownloadQueue();
+        }
+        function drainBrowserDownloadQueue() {
+            while (activeBrowserDownloads < maxBrowserDownloadConcurrency && browserDownloadQueue.length) {
+                activeBrowserDownloads++;
+                downloadFileWithXHR(browserDownloadQueue.shift(), function() {
+                    activeBrowserDownloads = Math.max(0, activeBrowserDownloads - 1);
+                    drainBrowserDownloadQueue();
+                });
+            }
+        }
+        function downloadFileWithXHR(message, done) {
+            done = done || function() {};
             var xhr = new XMLHttpRequest();
             xhr.open('GET', downloadURL(message.url), true);
             xhr.responseType = 'blob';
@@ -4444,13 +4462,20 @@
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    window.setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
                     finishReceivingProgress(message.id);
                 } else {
                     failReceivingProgress(message.id);
                 }
+                done();
             };
             xhr.onerror = function() {
                 failReceivingProgress(message.id);
+                done();
+            };
+            xhr.onabort = function() {
+                failReceivingProgress(message.id);
+                done();
             };
             xhr.send();
         }
@@ -4483,7 +4508,7 @@
             download.innerHTML = downloadIcon();
             keepActionFocus(download);
             download.addEventListener('click', function() {
-                downloadFileWithXHR(message);
+                enqueueBrowserDownload(message);
             });
             return download;
         }

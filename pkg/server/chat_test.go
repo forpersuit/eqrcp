@@ -564,7 +564,9 @@ func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T) {
 		"msg.receiving = false",
 		"msg.progress = 100",
 		"download.addEventListener('click', function()",
-		"downloadFileWithXHR(message)",
+		"var maxBrowserDownloadConcurrency = 3",
+		"activeBrowserDownloads < maxBrowserDownloadConcurrency",
+		"enqueueBrowserDownload(message)",
 		"mergeLocalTransferState(m, byExistingID[m.id])",
 		"return mergeLocalTransferState(message, existingByID[message.id])",
 	} {
