@@ -9,6 +9,7 @@
   let client: ChatWebSocketClient;
   let token = '';
   let isEmbedded = false;
+  let observer: MutationObserver | null = null;
 
   let showDevicePanel = false;
   let showLicensePanel = false;
@@ -59,8 +60,78 @@
     }
   }
 
+  let selectedDevId = '';
+  let isEditingName = false;
+  let editNameVal = '';
+
+  function toggleDeviceDetail(devId: string) {
+    if (selectedDevId === devId) {
+      selectedDevId = '';
+      isEditingName = false;
+    } else {
+      selectedDevId = devId;
+      isEditingName = false;
+      const dev = $peers.find(p => p.id === devId);
+      if (dev) {
+        editNameVal = dev.label;
+      }
+    }
+  }
+
+  function handleKickDevice(devId: string, label: string) {
+    // Local list simulation for immediate high fidelity UI feedback
+    peers.update(list => list.filter(p => p.id !== devId));
+    chatActions.addSystemMessage(`已强制设备 "${label}" 退出会话。`);
+    selectedDevId = '';
+  }
+
+  function handleRenameDevice() {
+    if (!editNameVal.trim() || !$currentDevice) return;
+    const oldLabel = $currentDevice.label;
+    const newLabel = editNameVal.trim();
+
+    // Preserve language/names under local storage
+    localStorage.setItem('eqt_device_name', newLabel);
+
+    currentDevice.update(d => {
+      if (d) d.label = newLabel;
+      return d;
+    });
+
+    chatActions.addSystemMessage(`本机设备名称已从 "${oldLabel}" 重命名为 "${newLabel}"，正在重新同步。`);
+    isEditingName = false;
+    selectedDevId = '';
+
+    // Hot reconnect so the websocket establishes using the fresh custom label
+    if (client) {
+      client.close();
+      setTimeout(() => {
+        client = new ChatWebSocketClient(token);
+        client.connect();
+      }, 100);
+    }
+  }
+
+  function formatDeviceTime(timeStr?: string): string {
+    if (!timeStr) return '刚刚';
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return '刚刚';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   onMount(() => {
-    isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
+    const updateEmbeddedState = () => {
+      isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
+      if (isEmbedded && !document.documentElement.classList.contains('embedded-chat')) {
+        document.documentElement.classList.add('embedded-chat');
+      }
+    };
+    updateEmbeddedState();
+
+    // Dynamically observe class change on <html> element to update Svelte state reactive-like
+    observer = new MutationObserver(updateEmbeddedState);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
     window.addEventListener('message', handleMessage);
 
     // Extract token from path /chat-v2/{token}
@@ -80,6 +151,9 @@
 
   onDestroy(() => {
     window.removeEventListener('message', handleMessage);
+    if (observer) {
+      observer.disconnect();
+    }
     if (qrPulseTimer) {
       clearTimeout(qrPulseTimer);
     }
@@ -131,7 +205,11 @@
   }
 
   function handleClose() {
-    window.location.href = '/close';
+    if (isEmbedded) {
+      window.parent.postMessage({ type: 'stop-chat' }, '*');
+    } else {
+      window.location.href = '/close';
+    }
   }
 
   function setLanguage(lang: string) {
@@ -202,15 +280,51 @@
             <div class="device-panel-title" style="margin-bottom: 8px;">在线设备</div>
             <div class="device-roster">
               {#each $peers as dev}
-                <div class="device-row-lite">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
-                  <div>
-                    <strong>{dev.label}</strong>
-                    <span>{dev.peer || 'connected'}</span>
+                {@const isSelf = dev.id === $currentDevice?.id}
+                <div class="device-item">
+                  <button class="device-row-lite roster-row" type="button" on:click={() => toggleDeviceDetail(dev.id)} aria-expanded={selectedDevId === dev.id ? 'true' : 'false'}>
+                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0;">
+                      {dev.label ? dev.label.slice(0, 2).toUpperCase() : 'DE'}
+                    </div>
+                    <div style="text-align: left; margin-left: 8px; flex: 1;">
+                      <strong style="display: block; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px;">{dev.label}</strong>
+                      <span style="font-size: 10px; color: #888;">{dev.peer || 'connected'}</span>
+                    </div>
+                    {#if isSelf}
+                      <span class="device-state">本机</span>
+                    {:else}
+                      <span class="device-state" style="background: #eef5ee; color: var(--accent-strong);">在线</span>
+                    {/if}
+                  </button>
+
+                  <div class="device-detail" class:open={selectedDevId === dev.id}>
+                    <div class="device-detail-head" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--line);">
+                      {#if isSelf}
+                        {#if isEditingName}
+                          <div style="display: flex; gap: 4px; width: 100%;">
+                            <input bind:value={editNameVal} style="font-size: 11px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; flex: 1; height: 22px; box-sizing: border-box;">
+                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px;" on:click={handleRenameDevice}>保存</button>
+                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px; background: #eee;" on:click={() => isEditingName = false}>取消</button>
+                          </div>
+                        {:else}
+                          <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label} (本机)</strong>
+                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px;" on:click={() => isEditingName = true} title="重命名设备">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          </button>
+                        {/if}
+                      {:else}
+                        <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label}</strong>
+                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626;" on:click={() => handleKickDevice(dev.id, dev.label)} title="强制踢下线">
+                          <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 12h10M17 8l4 4-4 4M15 4H9a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>
+                        </button>
+                      {/if}
+                    </div>
+                    <div class="device-detail-meta" style="font-size: 10px; color: #666; display: flex; flex-direction: column; gap: 2px; text-align: left;">
+                      <span>状态: 在线</span>
+                      <span>并发连接数: 1</span>
+                      <span>上次活跃时间: {formatDeviceTime(dev.lastSeen)}</span>
+                    </div>
                   </div>
-                  {#if dev.id === $currentDevice?.id}
-                    <span class="device-state">本机</span>
-                  {/if}
                 </div>
               {:else}
                 <div class="device-empty">无其他在线设备</div>

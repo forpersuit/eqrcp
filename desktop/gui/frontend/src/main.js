@@ -284,6 +284,8 @@ window.addEventListener('message', (e) => {
             .catch((err) => {
                 e.source?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, e.origin);
             });
+    } else if (e.data.type === 'stop-chat' || e.data.type === 'close-page') {
+        stopChat();
     }
 });
 
