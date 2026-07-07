@@ -21,7 +21,7 @@
     :root { --chat-viewport-height: 100dvh; }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
+html, body, #app {
     height: 100%;
     overscroll-behavior: none;
 }
@@ -31,6 +31,7 @@ body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 15px;
     overflow: hidden;
+    height: 100%;
 }
 .chat-viewport {
     height: 100%;
@@ -47,7 +48,7 @@ main {
     padding: 16px 28px;
 }
 html.embedded-chat body { background: transparent; }
-html.embedded-chat .chat-viewport { height: 100%; }
+html.embedded-chat .chat-viewport, html.embedded-chat #app { height: 100%; }
 html.embedded-chat main {
     max-width: none;
     padding: 8px;
@@ -112,18 +113,21 @@ html.embedded-chat .chat-head-title h1 {
     max-width: 100%;
 }
 .license-badge {
-    background: var(--accent);
-    color: #fff;
+    background: linear-gradient(135deg, #e5c158 0%, #c69c32 100%);
+    color: #4a3300;
+    text-shadow: 0 0.5px 0px rgba(255,255,255,0.4);
     font-size: 10px;
-    font-weight: 800;
-    padding: 2px 6px;
+    font-weight: 900;
+    padding: 2px 7px;
     border-radius: 4px;
     margin-left: 8px;
     vertical-align: middle;
     display: inline-block;
     line-height: 1.2;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(198,156,50,0.3), inset 0 0.5px 0px rgba(255,255,255,0.6);
+    border: 1px solid rgba(170,124,17,0.25);
 }
 .chat-logo {
     flex-shrink: 0;

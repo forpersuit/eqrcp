@@ -4,6 +4,7 @@ package chathttp
 import (
 	"encoding/json"
 	"flag"
+	"image/png"
 	"io"
 	"io/fs"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
 	"eqt/pkg/chat/v2/transport"
+	"eqt/pkg/qr"
 )
 
 const Version = "v2"
@@ -150,6 +152,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeHealth(w, r, token, fields...)
 	case "/ws":
 		h.ws.ServeWS(w, r, token)
+	case "/qr.png":
+		h.handleQRImage(w, r, token, fields...)
 	default:
 		http.NotFound(w, r)
 	}
@@ -347,4 +351,30 @@ func isRunningInTest() bool {
 		return true
 	}
 	return false
+}
+
+func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodGet {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	joinURL := scheme + "://" + r.Host + h.basePath + "/" + token
+
+	qrImg, err := qr.RenderImage(joinURL)
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, err.Error()), fields...)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-cache")
+	if err := png.Encode(w, qrImg); err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, err.Error()), fields...)
+		return
+	}
+	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "QR image rendered and sent", nil, append(fields, diag.F("url", joinURL))...)
 }

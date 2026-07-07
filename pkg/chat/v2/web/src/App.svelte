@@ -90,8 +90,9 @@
     const oldLabel = $currentDevice.label;
     const newLabel = editNameVal.trim();
 
-    // Preserve language/names under local storage
+    // Preserve name under BOTH keys so both Svelte store and ChatWebSocketClient load it
     localStorage.setItem('eqt_device_name', newLabel);
+    localStorage.setItem('chat_label', newLabel);
 
     currentDevice.update(d => {
       if (d) d.label = newLabel;
