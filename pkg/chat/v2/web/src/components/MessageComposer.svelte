@@ -40,6 +40,21 @@
     }
   }
 
+  function handleInsertNewline() {
+    if (!textareaEl) return;
+    const start = textareaEl.selectionStart;
+    const end = textareaEl.selectionEnd;
+    const val = textareaEl.value;
+
+    text = val.substring(0, start) + '\n' + val.substring(end);
+
+    setTimeout(() => {
+      textareaEl.focus();
+      textareaEl.selectionStart = textareaEl.selectionEnd = start + 1;
+      resizeComposer();
+    }, 0);
+  }
+
   let lastComposerHeight = 0;
 
   async function resizeComposer() {
@@ -60,7 +75,7 @@
     const viewport = window.innerHeight;
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
     const max = isDesktop ? Math.min(viewport * 0.34, 168) : Math.min(viewport * 0.30, 140);
-    const min = 40;
+    const min = 46;
 
     const style = window.getComputedStyle(textareaEl);
     const border = parseFloat(style.borderTopWidth || '0') + parseFloat(style.borderBottomWidth || '0');
@@ -111,9 +126,19 @@
         autocomplete="off" 
         rows="1"
       ></textarea>
-      <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
-      </button>
+      <div class="composer-actions-right">
+        {#if text.trim()}
+          <button class="newline-button" type="button" on:click|preventDefault={handleInsertNewline} title="换行">
+            <svg viewBox="0 0 24 24">
+              <polyline points="9 10 4 15 9 20" />
+              <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+            </svg>
+          </button>
+        {/if}
+        <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
+        </button>
+      </div>
     </div>
   </div>
   <input bind:this={fileInput} on:change={handleFileChange} class="hidden" type="file" multiple>
