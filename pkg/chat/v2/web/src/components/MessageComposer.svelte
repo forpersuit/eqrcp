@@ -60,7 +60,7 @@
     const viewport = window.innerHeight;
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
     const max = isDesktop ? Math.min(viewport * 0.34, 168) : Math.min(viewport * 0.30, 140);
-    const min = 36;
+    const min = 40;
 
     const style = window.getComputedStyle(textareaEl);
     const border = parseFloat(style.borderTopWidth || '0') + parseFloat(style.borderBottomWidth || '0');

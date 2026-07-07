@@ -2,6 +2,7 @@
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
   import { connState } from '../state/chatStore';
   import type { Message } from '../services/types';
+  import { getThemeColors, getSenderThemeColors } from '../services/types';
   import { currentDevice } from '../state/chatStore';
 
   const dispatch = createEventDispatcher();
@@ -120,6 +121,21 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
+  function getMessageColors(msg: Message, mine: boolean) {
+    if (mine && $currentDevice && $currentDevice.theme) {
+      const colors = getThemeColors($currentDevice.theme);
+      if (colors) return colors;
+    }
+    if (msg.theme) {
+      const colors = getThemeColors(msg.theme);
+      if (colors) return colors;
+    }
+    if (msg.sender) {
+      return getSenderThemeColors(msg.sender);
+    }
+    return { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155' };
+  }
+
   // Scroll Helpers
   function isNearBottom(): boolean {
     if (!messagesEl) return true;
@@ -205,7 +221,7 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const tx = txState[msg.id] || txState['dl-' + msg.id] || txState['ul-' + msg.id]}
-        {@const colors = msg.senderColor || { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155' }}
+        {@const colors = getMessageColors(msg, mine)}
         <div 
           class="message" 
           class:mine 
