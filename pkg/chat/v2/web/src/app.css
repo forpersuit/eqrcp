@@ -648,7 +648,7 @@ h1 {
 }
 /* ── Bubble ── */
 .bubble {
-    background: var(--panel);
+    background: var(--accent-wash, var(--panel));
     border: 1.5px solid var(--line);
     border-radius: 12px;
     font-size: clamp(14px, 1.4vw, 15px);

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, afterUpdate } from 'svelte';
   import { messages, currentDevice, transfers } from '../state/chatStore';
+  import { getThemeColors, getSenderThemeColors } from '../services/types';
 
   const dispatch = createEventDispatcher();
   let listElement: HTMLDivElement;
@@ -26,6 +27,11 @@
   function handleCancel(transferId: string) {
     dispatch('cancelDownload', transferId);
   }
+
+  // Get sender colors dynamically based on message theme or sender name hash seed
+  $: getColors = (msg: any) => {
+    return getThemeColors(msg.theme) || getSenderThemeColors(msg.sender);
+  };
 </script>
 
 <div class="messages" bind:this={listElement}>
@@ -40,8 +46,21 @@
       {@const isMine = msg.senderId === $currentDevice?.id}
       {@const transferId = 'dl-' + msg.id}
       {@const tx = $transfers[transferId]}
+      {@const colors = getColors(msg)}
       
-      <div class="message" class:mine={isMine} class:attachment-message={msg.type === 'file'}>
+      <!-- 
+        Bind dynamic theme color variables onto each message local DOM context.
+        This restores the original V1 look where bubble wash/border tints 
+        inherited the sender's device visual styling.
+      -->
+      <div class="message" class:mine={isMine} class:attachment-message={msg.type === 'file'}
+           style="
+             --accent: {colors.border};
+             --accent-strong: {colors.text};
+             --accent-wash: {colors.bg};
+             --line: {colors.border}44;
+           "
+      >
         <div class="avatar-stack">
           <div class="message-avatar">
             {msg.sender ? msg.sender.slice(0, 2).toUpperCase() : 'DE'}
@@ -129,8 +148,5 @@
 </div>
 
 <style>
-  /* 
-    We override the default scoped Svelte styles to let global app.css V1 classes 
-    perfectly control layout rendering. This matches legacy v1 pixel-perfect styling.
-  */
+  /* Rely on global app.css V1 classes */
 </style>

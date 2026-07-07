@@ -2058,6 +2058,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app := &Server{}
 	app.Lang = cfg.Lang
 	app.KeepAlive = cfg.KeepAlive
+	app.EnableChatV2 = cfg.EnableChatV2
 	app.statusGrace = defaultStatusGracePeriod
 	app.downloadedItems = make(map[int]bool)
 	app.downloadedBytes = make(map[int]int64)

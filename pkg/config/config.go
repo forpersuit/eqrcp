@@ -32,6 +32,7 @@ type Config struct {
 	Output    string `yaml:",omitempty"`
 	Reversed  bool   `yaml:",omitempty"`
 	Lang      string `yaml:",omitempty"`
+	EnableChatV2 bool `yaml:"enableChatV2,omitempty"`
 }
 
 var interactive bool = false
@@ -72,6 +73,7 @@ func New(app application.App) (Config, error) {
 	cfg.FQDN = v.GetString("fqdn")
 	cfg.Output = v.GetString("output")
 	cfg.Reversed = v.GetBool("reversed")
+	cfg.EnableChatV2 = v.GetBool("enableChatV2")
 
 	// Override
 	if app.Flags.Interface != "" {

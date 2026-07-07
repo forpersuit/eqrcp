@@ -148,9 +148,9 @@ export function generateThemeColors(index: number): ComputedTheme {
   if (index === 0) {
     // theme-0 defaults to classic EQT green
     return {
-      bg: 'rgba(16, 185, 129, 0.1)',
-      border: '#10b981',
-      text: '#34d399'
+      bg: '#edf6f0',
+      border: '#156f5a',
+      text: '#0d4e42'
     };
   }
 
@@ -158,9 +158,9 @@ export function generateThemeColors(index: number): ComputedTheme {
   const saturation = 50 + seededUnit(index, 2) * 18;
 
   return {
-    bg: hslToHex(hue, 22, 12) + '33', // alpha 0.2 dark mode wash
-    border: hslToHex(hue, saturation, 55),
-    text: hslToHex(hue, saturation + 10, 75)
+    bg: hslToHex(hue, 22, 93),
+    border: hslToHex(hue, saturation, 48),
+    text: hslToHex(hue, saturation + 10, 25)
   };
 }
 
