@@ -230,6 +230,18 @@
                 </button>
               {/if}
             </div>
+          {:else if isMine}
+            <div class="bubble-actions-row">
+              {#if msg.type === 'text'}
+                <button class="action-link-btn" type="button" on:click={() => dispatch('editAgain', msg.text || '')} title="Edit again">
+                  {currentLang === 'en' ? 'Edit again' : '再次编辑'}
+                </button>
+              {:else if msg.type === 'file'}
+                <button class="action-link-btn" type="button" on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })} title="Resend file">
+                  {currentLang === 'en' ? 'Resend' : '再次发送'}
+                </button>
+              {/if}
+            </div>
           {/if}
         </div>
       </div>

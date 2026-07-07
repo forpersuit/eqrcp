@@ -36,8 +36,7 @@ export const chatActions = {
       if (m.id === messageId) {
         return {
           ...m,
-          recalled: true,
-          text: undefined
+          recalled: true
         };
       }
       return m;

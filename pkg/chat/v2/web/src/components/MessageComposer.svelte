@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   const dispatch = createEventDispatcher();
-  let text = '';
+  export let text = '';
   let fileInput: HTMLInputElement;
   let textareaEl: HTMLTextAreaElement;
   let composerEl: HTMLFormElement;

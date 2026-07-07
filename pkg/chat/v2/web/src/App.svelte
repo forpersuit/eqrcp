@@ -17,6 +17,7 @@
   let showShareModal = false;
   let showUrl = false;
   let copied = false;
+  let composerText = '';
   
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
 
@@ -207,6 +208,38 @@
     }
   }
 
+  function handleRecallMessage(e: CustomEvent<string>) {
+    if (client) {
+      client.recallMessage(e.detail);
+    }
+  }
+
+  function handleSystemNotice(e: CustomEvent<string>) {
+    chatActions.addSystemMessage(e.detail);
+  }
+
+  function handleEditAgain(e: CustomEvent<string>) {
+    composerText = e.detail;
+    // Focus composer textarea
+    setTimeout(() => {
+      const textarea = document.querySelector('.composer textarea') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 50);
+  }
+
+  function handleResendFile(e: CustomEvent<{ name: string; size: number }>) {
+    if (client) {
+      const filePayload = JSON.stringify({
+        type: 'file',
+        fileName: e.detail.name,
+        size: e.detail.size
+      });
+      client.sendText(filePayload);
+    }
+  }
+
   function handleClose() {
     if (isEmbedded) {
       window.parent.postMessage({ type: 'stop-chat' }, '*');
@@ -367,9 +400,14 @@
       <MessageList 
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}
+        on:recallMessage={handleRecallMessage}
+        on:systemNotice={handleSystemNotice}
+        on:editAgain={handleEditAgain}
+        on:resendFile={handleResendFile}
       />
 
       <MessageComposer 
+        bind:text={composerText}
         on:sendText={handleSendText}
         on:sendFile={handleSendFile}
       />
