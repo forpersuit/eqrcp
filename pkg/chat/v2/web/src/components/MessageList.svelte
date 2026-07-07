@@ -15,9 +15,36 @@
   let confirmTimer: number | null = null;
 
   function handleCopy(text: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      dispatch('systemNotice', currentLang === 'en' ? 'Text copied' : '文本已复制');
-    });
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        dispatch('systemNotice', currentLang === 'en' ? 'Text copied' : '文本已复制');
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (success) {
+        dispatch('systemNotice', currentLang === 'en' ? 'Text copied' : '文本已复制');
+      } else {
+        dispatch('systemNotice', currentLang === 'en' ? 'Copy failed' : '复制失败');
+      }
+    } catch (e) {
+      dispatch('systemNotice', currentLang === 'en' ? 'Copy failed' : '复制失败');
+    }
   }
 
   function triggerRecall(messageId: string) {

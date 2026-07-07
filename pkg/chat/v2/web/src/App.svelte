@@ -22,6 +22,14 @@
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
 
   // React to theme changes and inject CSS variables
+  function hexToRgb(hex: string): string | null {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? 
+      parseInt(result[1], 16) + ',' + 
+      parseInt(result[2], 16) + ',' + 
+      parseInt(result[3], 16) : null;
+  }
+
   $: {
     if ($currentDevice && $currentDevice.theme) {
       const colors = getThemeColors($currentDevice.theme);
@@ -29,6 +37,13 @@
         document.documentElement.style.setProperty('--accent', colors.border);
         document.documentElement.style.setProperty('--accent-strong', colors.text);
         document.documentElement.style.setProperty('--accent-wash', colors.bg);
+        document.documentElement.style.setProperty('--wash', colors.bg);
+        document.documentElement.style.setProperty('--bg', colors.bg);
+        document.documentElement.style.setProperty('--line', colors.border);
+        const rgb = hexToRgb(colors.border);
+        if (rgb) {
+          document.documentElement.style.setProperty('--accent-rgb', rgb);
+        }
       }
     }
   }

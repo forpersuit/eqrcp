@@ -1300,6 +1300,10 @@ input:focus { border-color: var(--accent); outline: none; }
         font-size: 8px;
     }
     /* Session QR Mobile Adapt */
+    .session-backdrop.open {
+        display: block;
+        padding: 0;
+    }
     .session-backdrop .side {
         border-bottom-left-radius: 0;
         border-bottom-right-radius: 0;
