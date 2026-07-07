@@ -45,6 +45,12 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 	// Start the job
 	_ = h.transfer.StartJob(jobID)
 
+	isPaid := query.Get("is_paid") == "true"
+	h.scheduler.RegisterJob(jobID, isPaid)
+	defer h.scheduler.UnregisterJob(jobID)
+
+	startTime := time.Now()
+
 	var bytesWritten int64
 	// We check elapsed time or percentage inside Job.UpdateProgress to throttle WebSocket events.
 	// Write progress is intercepted per write.
@@ -56,6 +62,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		onWrite: func(n int) {
 			bytesWritten += int64(n)
 			_ = h.transfer.UpdateProgress(jobID, bytesWritten)
+			h.scheduler.Throttle(jobID, bytesWritten, startTime)
 		},
 	}
 

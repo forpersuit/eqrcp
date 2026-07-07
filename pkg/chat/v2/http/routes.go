@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"eqt/pkg/chat/v2/bandwidth"
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
@@ -24,11 +25,12 @@ type Config struct {
 
 // Handler is an isolated, unmounted chat v2 HTTP handler.
 type Handler struct {
-	basePath string
-	logger   diag.Logger
-	sessions *session.Manager
-	transfer *transfer.Manager
-	ws       *transport.WebSocketHandler
+	basePath  string
+	logger    diag.Logger
+	sessions  *session.Manager
+	transfer  *transfer.Manager
+	scheduler *bandwidth.Scheduler
+	ws        *transport.WebSocketHandler
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -43,6 +45,7 @@ func NewHandler(cfg Config) *Handler {
 	}
 	sessions := session.NewManager()
 	transferMgr := transfer.NewManager()
+	sched := bandwidth.NewScheduler(10 * 1024 * 1024) // 10MB/s default global limit
 
 	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
 		sess := sessions.GetOrCreate(token)
@@ -54,11 +57,12 @@ func NewHandler(cfg Config) *Handler {
 	})
 
 	return &Handler{
-		basePath: basePath,
-		logger:   logger,
-		sessions: sessions,
-		transfer: transferMgr,
-		ws:       transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
+		basePath:  basePath,
+		logger:    logger,
+		sessions:  sessions,
+		transfer:  transferMgr,
+		scheduler: sched,
+		ws:        transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
 	}
 }
 

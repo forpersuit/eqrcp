@@ -4,9 +4,9 @@ Last updated: 2026-07-07
 
 ## Current Status
 
-Chat v2 is in Phase 3: Bandwidth Scheduler.
+Chat v2 is in Phase 4: Svelte Frontend.
 
-Phase 0, Phase 1, and Phase 2 are complete. The WebSocket control-plane features and native HTTP download progress tracking are fully implemented, integrated, and verified:
+Phase 0, Phase 1, Phase 2, and Phase 3 are complete. The WebSocket control-plane, native HTTP download tracking, and bandwidth scheduler are fully implemented, integrated, and verified:
 
 - Fully supports `session.Manager` lifecycle.
 - Handles client registration with custom identities.
@@ -16,7 +16,8 @@ Phase 0, Phase 1, and Phase 2 are complete. The WebSocket control-plane features
 - Supports reconnect recovery (afterSeq and joinSeq replaying).
 - Serves an interactive micro-UI browser harness for chat v2.
 - Tracks native HTTP file downloads with server-side progress writers.
-- Broadcasts throttled real-time transfer progress and lifecycle events over WS.
+- Enforces active bandwidth scheduling with dynamic fair share and policy throttle sleep.
+- WebSocket text channels remain highly responsive even under maximum local loopback download load.
 
 ## Commit Timeline
 
@@ -95,14 +96,14 @@ Completed:
 
 ### Phase 3: Bandwidth Scheduler
 
-Status: not started.
+Status: complete.
 
-Planned:
+Completed:
 
-- [ ] Implement data-plane token bucket or equivalent scheduler.
-- [ ] Add per-device fairness.
-- [ ] Ensure data transfers do not starve control messages.
-- [ ] Add cancellation and fairness tests.
+- [x] Implement data-plane token bucket or equivalent scheduler.
+- [x] Add per-device fairness.
+- [x] Ensure data transfers do not starve control messages.
+- [x] Add cancellation and fairness tests.
 
 ### Phase 4: Svelte Frontend
 
@@ -145,7 +146,7 @@ Planned:
 | Reconnect recovery | Done | Recovers missed events using seq. |
 | Browser UI | Done | Served under `/chat-v2/{token}` for manual verification. |
 | TransferManager | Done | Tracks native downloads and updates. |
-| Bandwidth scheduler | Missing | Phase 3. |
+| Bandwidth scheduler | Done | Fair-share and throttled scheduling. |
 | Svelte frontend | Missing | Phase 4. |
 
 ## Test Record
@@ -180,12 +181,13 @@ Latest pre-commit verification:
 - The v2 handler is not mounted in production server setup yet. It is tested as
   an isolated handler.
 - Only a minimal test harness UI exists, so mobile/Safari browser layout behavior is still unvalidated until Svelte UI in Phase 4.
+- **In-memory MessageStore growth**: Events in `session.MessageStore` grow indefinitely. A ring buffer or maximum capacity limit should be introduced to prevent potential memory leakage on long-lived sessions.
 
 ## Next Step
 
-Implement the Phase 3 Bandwidth Scheduler:
+Implement the Phase 4 Svelte Frontend:
 
-1. Implement a data-plane token bucket or equivalent scheduler.
-2. Ensure control-plane WS messages have priority over large data downloads.
-3. Implement per-device and per-job bandwidth sharing fairness.
-4. Write scheduler unit and integration tests under load.
+1. Create Svelte + Vite app under `pkg/chat/v2/web`.
+2. Build message list, composer, attachment bubbles, transfer states, and device panel.
+3. Add WebSocket client service with reconnect and fallback handling.
+4. Validate responsive layout with `/chrome-test`.
