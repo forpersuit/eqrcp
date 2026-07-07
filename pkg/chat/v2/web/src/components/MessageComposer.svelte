@@ -57,6 +57,12 @@
     // Propagate the new composer height to CSS variable --composer-height
     // so the message list's bottom padding updates dynamically and doesn't hide text.
     document.documentElement.style.setProperty('--composer-height', composerEl.offsetHeight + 'px');
+
+    // Automatically scroll message list to bottom on resizing (like window resize or input height changes)
+    const messagesEl = document.querySelector('.messages');
+    if (messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
   }
 
   // Reactive listener to resize height as the user types text

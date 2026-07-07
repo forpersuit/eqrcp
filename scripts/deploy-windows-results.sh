@@ -102,6 +102,8 @@ if [[ "$run_checks" -eq 1 ]]; then
   fi
   echo "Building GUI frontend..."
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
+  echo "Building Chat v2 frontend..."
+  (cd "$root_dir/pkg/chat/v2/web" && npm run build)
   echo "Running GUI Go tests..."
   (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
 fi

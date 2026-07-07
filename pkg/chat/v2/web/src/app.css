@@ -47,8 +47,11 @@ main {
     margin: 0 auto;
     padding: 16px 28px;
 }
-html.embedded-chat body { background: transparent; }
-html.embedded-chat .chat-viewport, html.embedded-chat #app {
+html.embedded-chat,
+html.embedded-chat body,
+html.embedded-chat .chat-viewport,
+html.embedded-chat #app {
+    background: transparent !important;
     height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -509,9 +512,9 @@ h1 {
     gap: 12px;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 18px 16px var(--messages-bottom-space);
+    padding: 18px 16px var(--composer-height, var(--messages-bottom-space));
     overscroll-behavior: contain;
-    scroll-padding-bottom: var(--messages-bottom-space);
+    scroll-padding-bottom: var(--composer-height, var(--messages-bottom-space));
     scrollbar-width: none;
     touch-action: pan-y;
     position: relative;
