@@ -563,10 +563,8 @@ func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T) {
 		"message.receiving || message.progress >= 100",
 		"msg.receiving = false",
 		"msg.progress = 100",
-		"download.addEventListener('click', function()",
-		"var maxBrowserDownloadConcurrency = 3",
-		"activeBrowserDownloads < maxBrowserDownloadConcurrency",
-		"enqueueBrowserDownload(message)",
+		"download.href = downloadURL(message.url)",
+		"download.setAttribute('download', message.fileName || 'attachment')",
 		"mergeLocalTransferState(m, byExistingID[m.id])",
 		"return mergeLocalTransferState(message, existingByID[message.id])",
 	} {
@@ -575,8 +573,10 @@ func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T) {
 		}
 	}
 	for _, removed := range []string{
-		"download.href = downloadURL(message.url)",
-		"download.setAttribute('download', message.fileName || 'attachment')",
+		"function downloadFileWithXHR(message",
+		"link.href = URL.createObjectURL(blob)",
+		"var maxBrowserDownloadConcurrency = 3",
+		"enqueueBrowserDownload(message)",
 	} {
 		if strings.Contains(pages.Chat, removed) {
 			t.Fatalf("chat page should not contain %q", removed)

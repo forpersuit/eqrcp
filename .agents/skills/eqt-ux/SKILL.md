@@ -123,9 +123,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **Bidirectional Progress Support**:
   - In Chat mode, both sending (uploading) and receiving (downloading) attachments show real-time progress.
   - Progress is displayed visually on the attachment description text (the file description element underneath the bubble) by styling it as a text-clipped progress bar using a CSS gradient background.
-- **Browser Download Connection Budget**:
-  - When browser-side attachment downloads need XHR/fetch progress, never launch unbounded parallel requests to the same chat origin.
-  - Cap active browser downloads (for example, 3 concurrent XHRs) and queue the rest so EventSource, health polling, and message fetches retain available same-origin connections. Wails/native Go downloads are separate and do not need this browser connection-pool cap.
+- **Browser Download Stability**:
+  - Do not use browser-side XHR/fetch + Blob/ObjectURL for regular chat attachment downloads. Safari/WebKit can crash with `webkitblobresource` errors on large or parallel Blob downloads.
+  - For non-Wails browsers, prefer native `<a href download>` direct HTTP downloads so the browser download manager handles streaming. Put bandwidth limits on the server stream path, not in browser memory buffering. Wails/native Go downloads may still emit local progress from the Go HTTP client.
 - **Percentage Display Positioning**:
   - Real-time progress percentages (e.g. `45%`) are displayed adjacent to the attachment description text.
   - Position percentages according to layout flow:

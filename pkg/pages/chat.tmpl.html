@@ -3251,9 +3251,6 @@
         var previewPanStart = null;
         var previewCurrentURL = '';
         var autoSaveNotified = {};
-        var maxBrowserDownloadConcurrency = 3;
-        var activeBrowserDownloads = 0;
-        var browserDownloadQueue = [];
         var chatCacheKey = 'eqt-chat-cache:' + window.location.pathname + ':' + state.token;
         var reconnectDelay = 1000;
         var maxReconnectDelay = 30000;
@@ -4427,58 +4424,6 @@
             syncReceivingProgressUI(messageId);
             showSystemNotice('Download failed.');
         }
-        function enqueueBrowserDownload(message) {
-            if (!message || !message.id) { return; }
-            startReceivingProgress(message.id);
-            browserDownloadQueue.push(message);
-            drainBrowserDownloadQueue();
-        }
-        function drainBrowserDownloadQueue() {
-            while (activeBrowserDownloads < maxBrowserDownloadConcurrency && browserDownloadQueue.length) {
-                activeBrowserDownloads++;
-                downloadFileWithXHR(browserDownloadQueue.shift(), function() {
-                    activeBrowserDownloads = Math.max(0, activeBrowserDownloads - 1);
-                    drainBrowserDownloadQueue();
-                });
-            }
-        }
-        function downloadFileWithXHR(message, done) {
-            done = done || function() {};
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', downloadURL(message.url), true);
-            xhr.responseType = 'blob';
-            xhr.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    var pct = Math.round((e.loaded / e.total) * 100);
-                    updateDownloadProgress(message.id, pct);
-                }
-            });
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    var blob = xhr.response;
-                    var link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = message.fileName || 'attachment';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.setTimeout(function() { URL.revokeObjectURL(link.href); }, 1000);
-                    finishReceivingProgress(message.id);
-                } else {
-                    failReceivingProgress(message.id);
-                }
-                done();
-            };
-            xhr.onerror = function() {
-                failReceivingProgress(message.id);
-                done();
-            };
-            xhr.onabort = function() {
-                failReceivingProgress(message.id);
-                done();
-            };
-            xhr.send();
-        }
         function renderDownloadAction(message) {
             if (!message || !message.url || message.type === 'text' || message.sending) {
                 return null;
@@ -4500,16 +4445,14 @@
                 });
                 return save;
             }
-            var download = document.createElement('button');
-            download.type = 'button';
+            var download = document.createElement('a');
             download.className = 'bubble-action';
             download.setAttribute('aria-label', 'Download');
             download.title = 'Download';
             download.innerHTML = downloadIcon();
+            download.href = downloadURL(message.url);
+            download.setAttribute('download', message.fileName || 'attachment');
             keepActionFocus(download);
-            download.addEventListener('click', function() {
-                enqueueBrowserDownload(message);
-            });
             return download;
         }
         function renderAttachment(message) {
