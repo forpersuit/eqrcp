@@ -1,13 +1,18 @@
 package chathttp
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 )
 
 func TestHandlerHealth(t *testing.T) {
@@ -91,5 +96,26 @@ func TestHandlerMethodErrorUsesJSONPayload(t *testing.T) {
 	}
 	if events[1].Level != diag.LevelWarn || events[1].Message != "request failed" {
 		t.Fatalf("last log event = %#v", events[1])
+	}
+}
+
+func TestHandlerWebSocketRoute(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx := context.Background()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/chat-v2/test-token/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+
+	var hello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, conn, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if hello.Type != protocol.EventHello {
+		t.Fatalf("hello event = %#v", hello)
 	}
 }

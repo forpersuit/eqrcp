@@ -8,6 +8,7 @@ require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 	github.com/adrg/xdg v0.5.3
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
+	github.com/coder/websocket v1.8.15
 	github.com/eiannone/keyboard v0.0.0-20220611211555-0d226195f203
 	github.com/jhoonb/archivex v0.0.0-20201016144719-6a343cdae81d
 	github.com/manifoldco/promptui v0.9.0

@@ -8,6 +8,7 @@ import (
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/chat/v2/transport"
 )
 
 const Version = "v2"
@@ -22,6 +23,7 @@ type Config struct {
 type Handler struct {
 	basePath string
 	logger   diag.Logger
+	ws       *transport.WebSocketHandler
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -37,6 +39,7 @@ func NewHandler(cfg Config) *Handler {
 	return &Handler{
 		basePath: basePath,
 		logger:   logger,
+		ws:       transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger}),
 	}
 }
 
@@ -58,6 +61,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeSkeleton(w, r, token, fields...)
 	case "/health":
 		h.writeHealth(w, r, token, fields...)
+	case "/ws":
+		h.ws.ServeHTTP(w, r)
 	default:
 		http.NotFound(w, r)
 	}

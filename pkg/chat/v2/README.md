@@ -21,6 +21,8 @@ This package currently contains only skeleton contracts:
 - typed event payloads for messages, presence, transfer state, and errors
 - diagnostic errors, JSON error responses, and structured logger hooks
 - an unmounted experimental HTTP handler for future `/chat-v2/{token}` routes
+- an early WebSocket control-plane endpoint that emits `hello`, responds to
+  `heartbeat`, and reports unsupported commands as protocol errors
 
 It does not create chat sessions, serve the Svelte frontend, or handle file
 transfers yet.
