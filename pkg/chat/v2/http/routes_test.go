@@ -44,15 +44,19 @@ func TestHandlerHealth(t *testing.T) {
 	}
 }
 
-func TestHandlerRootIsExplicitlyNotImplemented(t *testing.T) {
+func TestHandlerRootServesHarness(t *testing.T) {
 	handler := NewHandler(Config{BasePath: "/chat-v2"})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/chat-v2/test-token", nil)
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotImplemented)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Chat v2 Test Harness") {
+		t.Fatalf("body does not contain harness title: %q", body)
 	}
 }
 

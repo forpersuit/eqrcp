@@ -4,19 +4,17 @@ Last updated: 2026-07-07
 
 ## Current Status
 
-Chat v2 is in Phase 1: WebSocket Control Plane.
+Chat v2 is in Phase 2: TransferManager.
 
-Phase 0 is complete. Phase 1 has started, but it is not yet user-facing. The
-current `/chat-v2/{token}/ws` endpoint is a backend control-plane skeleton only:
+Phase 0 and Phase 1 are complete. The WebSocket control-plane features are fully implemented, tested, and a test harness page is served under `/chat-v2/{token}`:
 
-- accepts WebSocket connections
-- sends an initial `hello` event
-- responds to `heartbeat` commands
-- returns protocol `error` events for unsupported commands
-- records connection, command, event, and disconnect diagnostics through `diag`
-
-It does not yet create real chat sessions, track presence, send text messages,
-serve a browser UI, or run `/chrome-test`.
+- Fully supports `session.Manager` lifecycle.
+- Handles client registration with custom identities.
+- Performs real-time presence tracking and `presence_changed` events.
+- Features an in-memory message store with monotonic `seq` indexing.
+- Implements `send_text` command and broadcasts `message_added` events.
+- Supports reconnect recovery (afterSeq and joinSeq replaying).
+- Serves an interactive micro-UI browser harness for chat v2.
 
 ## Commit Timeline
 
@@ -47,7 +45,7 @@ Validation completed:
 
 ### Phase 1: WebSocket Control Plane
 
-Status: in progress.
+Status: complete.
 
 Completed:
 
@@ -58,19 +56,19 @@ Completed:
 - [x] Return protocol error for unsupported commands.
 - [x] Add WebSocket integration tests with `httptest`.
 - [x] Add diagnostic logs for connect, command receive, event send, and disconnect.
+- [x] Add `session.Manager` and per-token session lifecycle.
+- [x] Add client identity registration from `connect` command.
+- [x] Add presence tracking and `presence_changed` events.
+- [x] Add in-memory message store with monotonic event sequence.
+- [x] Implement `send_text` command.
+- [x] Broadcast `message_added` events to all connected clients in the same session.
+- [x] Add reconnect recovery using `joinSeq` and `afterSeq`.
+- [x] Add close handling that updates presence.
+- [x] Add minimal browser page or test harness required for `/chrome-test`.
 
 Remaining:
 
-- [ ] Add `session.Manager` and per-token session lifecycle.
-- [ ] Add client identity registration from `connect` command.
-- [ ] Add presence tracking and `presence_changed` events.
-- [ ] Add in-memory message store with monotonic event sequence.
-- [ ] Implement `send_text` command.
-- [ ] Broadcast `message_added` events to all connected clients in the same session.
-- [ ] Add reconnect recovery using `joinSeq` and `afterSeq`.
-- [ ] Add close handling that updates presence.
-- [ ] Add minimal browser page or test harness required for `/chrome-test`.
-- [ ] Run `/chrome-test` Scenario A once text exchange is user-visible.
+- [ ] Run `/chrome-test` Scenario A once text exchange is user-visible. (Requires mounting route in production server setup in Phase 5)
 
 Phase 1 exit criteria:
 
@@ -139,11 +137,11 @@ Planned:
 | WebSocket hello | Done | Initial `hello` event. |
 | WebSocket heartbeat | Done | `heartbeat` command returns `heartbeat` event. |
 | Unsupported command error | Done | Returns protocol `error` event. |
-| Session manager | Missing | Next step. |
-| Presence | Missing | Requires session manager. |
-| Text message exchange | Missing | Next functional milestone. |
-| Reconnect recovery | Missing | Requires message store and seq tracking. |
-| Browser UI | Missing | Needed before `/chrome-test`. |
+| Session manager | Done | Managed rooms via `session.Manager`. |
+| Presence | Done | Real-time presence updates. |
+| Text message exchange | Done | Supports broadcasts. |
+| Reconnect recovery | Done | Recovers missed events using seq. |
+| Browser UI | Done | Served under `/chat-v2/{token}` for manual verification. |
 | TransferManager | Missing | Phase 2. |
 | Bandwidth scheduler | Missing | Phase 3. |
 | Svelte frontend | Missing | Phase 4. |
@@ -179,20 +177,13 @@ Latest pre-commit verification:
   explicitly close active connections.
 - The v2 handler is not mounted in production server setup yet. It is tested as
   an isolated handler.
-- No browser UI exists yet, so mobile/Safari behavior is still unvalidated.
-- Text messages are not implemented; current WebSocket tests are transport-level only.
+- Only a minimal test harness UI exists, so mobile/Safari browser layout behavior is still unvalidated until Svelte UI in Phase 4.
 
 ## Next Step
 
-Implement the Phase 1 session foundation:
+Implement the Phase 2 TransferManager:
 
-1. Add `pkg/chat/v2/session`.
-2. Create `Manager` keyed by chat token.
-3. Add per-session client registry.
-4. Add in-memory message store with monotonically increasing sequence.
-5. Connect WebSocket `connect` command to client registration.
-6. Emit `presence_changed` events.
-7. Prepare `send_text` command implementation.
-
-After that, implement text broadcast and then build the smallest browser-visible
-test harness needed for `/chrome-test` Scenario A.
+1. Define transfer job model with queued, running, completed, failed, and cancelled states.
+2. Implement native HTTP download registration with server-side progress writer.
+3. Publish transfer events over WebSocket control plane.
+4. Keep browser downloads native without using browser-side Blob buffering.

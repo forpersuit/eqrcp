@@ -3,10 +3,12 @@ package transport
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/chat/v2/session"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -18,14 +20,16 @@ const (
 
 // WebSocketConfig configures the v2 control-plane WebSocket handler.
 type WebSocketConfig struct {
-	Logger diag.Logger
-	Now    func() time.Time
+	Logger   diag.Logger
+	Now      func() time.Time
+	Sessions *session.Manager
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
 type WebSocketHandler struct {
-	logger diag.Logger
-	now    func() time.Time
+	logger   diag.Logger
+	now      func() time.Time
+	sessions *session.Manager
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -38,9 +42,14 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 	if now == nil {
 		now = time.Now
 	}
+	sessions := cfg.Sessions
+	if sessions == nil {
+		sessions = session.NewManager()
+	}
 	return &WebSocketHandler{
-		logger: logger,
-		now:    now,
+		logger:   logger,
+		now:      now,
+		sessions: sessions,
 	}
 }
 
@@ -53,95 +62,183 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token := extractToken(r.URL.Path)
+	h.ServeWS(w, r, token)
+}
+
+// ServeWS handles WebSocket upgrading and control-plane loop for a specific token.
+func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token string) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "websocket accept failed", err,
 			diag.F("path", r.URL.Path),
+			diag.F("token", token),
 		)
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "closed")
 	conn.SetReadLimit(DefaultReadLimit)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	diag.Emit(ctx, h.logger, diag.LevelInfo, "websocket connected", nil,
 		diag.F("path", r.URL.Path),
+		diag.F("token", token),
 		diag.F("subprotocol", conn.Subprotocol()),
 	)
 
+	// Send initial hello
 	if err := h.writeHello(ctx, conn); err != nil {
 		diag.Emit(ctx, h.logger, diag.LevelWarn, "websocket hello failed", err,
 			diag.F("path", r.URL.Path),
+			diag.F("token", token),
 		)
 		return
 	}
 
+	var cl *session.Client
+	var sess *session.Session
+
+	defer func() {
+		if cl != nil && sess != nil {
+			sess.Unregister(cl)
+			diag.Emit(ctx, h.logger, diag.LevelInfo, "client unregistered and disconnected", nil,
+				diag.F("path", r.URL.Path),
+				diag.F("token", token),
+				diag.F("clientID", cl.ID),
+			)
+		} else {
+			diag.Emit(ctx, h.logger, diag.LevelInfo, "websocket disconnected", nil,
+				diag.F("path", r.URL.Path),
+				diag.F("token", token),
+			)
+		}
+	}()
+
 	for {
 		var cmd protocol.CommandEnvelope
 		if err := wsjson.Read(ctx, conn, &cmd); err != nil {
-			diag.Emit(ctx, h.logger, diag.LevelInfo, "websocket disconnected", err,
-				diag.F("path", r.URL.Path),
-			)
+			// Read error, exit loop (connection will be closed by deferred cleanups)
 			return
 		}
-		if !h.handleCommand(ctx, conn, cmd, r.URL.Path) {
-			return
+
+		fields := []diag.Field{
+			diag.F("path", r.URL.Path),
+			diag.F("token", token),
+			diag.F("commandType", cmd.Type),
+			diag.F("commandID", cmd.CommandID),
+		}
+		if cl != nil {
+			fields = append(fields, diag.F("clientID", cl.ID))
+		}
+		diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket command received", nil, fields...)
+
+		switch cmd.Type {
+		case protocol.CommandConnect:
+			if cl != nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "already connected")
+				continue
+			}
+			cl = session.NewClient(cmd.Client, conn)
+			sess = h.sessions.GetOrCreate(token)
+
+			go cl.WritePump(ctx)
+
+			cl.Send(protocol.EventEnvelope{
+				Type:      protocol.EventHello,
+				Seq:       0,
+				Time:      h.now(),
+				CommandID: cmd.CommandID,
+			})
+			diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket event sent", nil,
+				append(fields, diag.F("eventType", protocol.EventHello))...,
+			)
+
+			sess.Register(cl, cmd.AfterSeq, cmd.JoinSeq)
+
+		case protocol.CommandHeartbeat:
+			event := protocol.EventEnvelope{
+				Type:      protocol.EventHeartbeat,
+				Seq:       0,
+				Time:      h.now(),
+				CommandID: cmd.CommandID,
+			}
+			if cl != nil {
+				cl.Send(event)
+			} else {
+				_ = wsjson.Write(ctx, conn, event)
+			}
+			diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket event sent", nil,
+				append(fields, diag.F("eventType", event.Type))...,
+			)
+
+		case protocol.CommandSendText:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			sess.SendText(cl, cmd.Text, cmd.CommandID)
+
+		default:
+			event := protocol.EventEnvelope{
+				Type:      protocol.EventError,
+				Seq:       0,
+				Time:      h.now(),
+				CommandID: cmd.CommandID,
+				Error: &protocol.ErrorPayload{
+					Code:    protocol.ErrorBadCommand,
+					Message: "unsupported command",
+				},
+			}
+			if cl != nil {
+				cl.Send(event)
+			} else {
+				_ = wsjson.Write(ctx, conn, event)
+			}
+			diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket event sent", nil,
+				append(fields, diag.F("eventType", event.Type))...,
+			)
 		}
 	}
 }
 
 func (h *WebSocketHandler) writeHello(ctx context.Context, conn *websocket.Conn) error {
-	return wsjson.Write(ctx, conn, protocol.EventEnvelope{
+	err := wsjson.Write(ctx, conn, protocol.EventEnvelope{
 		Type: protocol.EventHello,
 		Seq:  0,
 		Time: h.now(),
 	})
+	if err == nil {
+		diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket event sent", nil,
+			diag.F("eventType", protocol.EventHello),
+		)
+	}
+	return err
 }
 
-func (h *WebSocketHandler) handleCommand(ctx context.Context, conn *websocket.Conn, cmd protocol.CommandEnvelope, path string) bool {
-	fields := []diag.Field{
-		diag.F("path", path),
-		diag.F("commandType", cmd.Type),
-		diag.F("commandID", cmd.CommandID),
-	}
-	diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket command received", nil, fields...)
-
-	switch cmd.Type {
-	case protocol.CommandConnect:
-		return h.writeEvent(ctx, conn, protocol.EventEnvelope{
-			Type:      protocol.EventHello,
-			Seq:       0,
-			Time:      h.now(),
-			CommandID: cmd.CommandID,
-		}, fields...)
-	case protocol.CommandHeartbeat:
-		return h.writeEvent(ctx, conn, protocol.EventEnvelope{
-			Type:      protocol.EventHeartbeat,
-			Seq:       0,
-			Time:      h.now(),
-			CommandID: cmd.CommandID,
-		}, fields...)
-	default:
-		return h.writeEvent(ctx, conn, protocol.EventEnvelope{
-			Type:      protocol.EventError,
-			Seq:       0,
-			Time:      h.now(),
-			CommandID: cmd.CommandID,
-			Error: &protocol.ErrorPayload{
-				Code:    protocol.ErrorBadCommand,
-				Message: "unsupported command",
-			},
-		}, fields...)
-	}
-}
-
-func (h *WebSocketHandler) writeEvent(ctx context.Context, conn *websocket.Conn, event protocol.EventEnvelope, fields ...diag.Field) bool {
-	if err := wsjson.Write(ctx, conn, event); err != nil {
-		diag.Emit(ctx, h.logger, diag.LevelWarn, "websocket write failed", err, fields...)
-		return false
-	}
+func (h *WebSocketHandler) sendError(ctx context.Context, conn *websocket.Conn, commandID string, code protocol.ErrorCode, message string) {
+	_ = wsjson.Write(ctx, conn, protocol.EventEnvelope{
+		Type:      protocol.EventError,
+		Seq:       0,
+		Time:      h.now(),
+		CommandID: commandID,
+		Error: &protocol.ErrorPayload{
+			Code:    code,
+			Message: message,
+		},
+	})
 	diag.Emit(ctx, h.logger, diag.LevelDebug, "websocket event sent", nil,
-		append(fields, diag.F("eventType", event.Type))...,
+		diag.F("commandID", commandID),
+		diag.F("eventType", protocol.EventError),
 	)
-	return true
 }
+
+func extractToken(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2]
+	}
+	return "test-token"
+}
+

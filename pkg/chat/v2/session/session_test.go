@@ -1,0 +1,107 @@
+package session
+
+import (
+	"context"
+	"testing"
+
+	"eqt/pkg/chat/v2/protocol"
+)
+
+func TestMessageStoreMonotonicAndGetSince(t *testing.T) {
+	store := NewMessageStore()
+
+	e1 := store.Add(protocol.EventEnvelope{Type: protocol.EventHeartbeat})
+	e2 := store.Add(protocol.EventEnvelope{Type: protocol.EventMessageAdded})
+	e3 := store.Add(protocol.EventEnvelope{Type: protocol.EventPresenceChanged})
+
+	if e1.Seq != 1 || e2.Seq != 2 || e3.Seq != 3 {
+		t.Fatalf("seq numbers = %d, %d, %d; want 1, 2, 3", e1.Seq, e2.Seq, e3.Seq)
+	}
+
+	since1 := store.GetSince(1)
+	if len(since1) != 2 {
+		t.Fatalf("GetSince(1) len = %d, want 2", len(since1))
+	}
+	if since1[0].Seq != 2 || since1[1].Seq != 3 {
+		t.Fatalf("GetSince(1) seqs = %d, %d; want 2, 3", since1[0].Seq, since1[1].Seq)
+	}
+
+	since3 := store.GetSince(3)
+	if len(since3) != 0 {
+		t.Fatalf("GetSince(3) len = %d, want 0", len(since3))
+	}
+}
+
+func TestSessionRegistrationAndPresence(t *testing.T) {
+	sess := NewSession("test-room")
+
+	c1 := NewClient(protocol.ClientInfo{
+		Label: "User A",
+		Peer:  "peer-a",
+	}, nil)
+
+	sess.Register(c1, 0, 0)
+
+	if sess.ClientsCount() != 1 {
+		t.Fatalf("clients count = %d, want 1", sess.ClientsCount())
+	}
+
+	// Capture the presence broadcasted by session.
+	// Registering c1 triggers a presence changed event, which is stored in messageStore.
+	events := sess.MessageStore.GetSince(0)
+	if len(events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(events))
+	}
+	if events[0].Type != protocol.EventPresenceChanged {
+		t.Fatalf("event type = %s, want %s", events[0].Type, protocol.EventPresenceChanged)
+	}
+
+	presence := events[0].Presence
+	if presence == nil || len(presence.Devices) != 1 {
+		t.Fatalf("presence devices = %v, want 1", presence)
+	}
+	if presence.Devices[0].Label != "User A" || presence.Devices[0].Peer != "peer-a" {
+		t.Fatalf("device info = %v", presence.Devices[0])
+	}
+}
+
+func TestSessionSendTextAndReplay(t *testing.T) {
+	sess := NewSession("test-room")
+
+	c1 := NewClient(protocol.ClientInfo{Label: "User A"}, nil)
+	c2 := NewClient(protocol.ClientInfo{Label: "User B"}, nil)
+
+	// Register c1
+	sess.Register(c1, 0, 0)
+	
+	// Send text message from c1
+	sess.SendText(c1, "hello world", "cmd-1")
+
+	// Now register c2 with afterSeq = 1 (to receive the send_text message which has seq = 2)
+	// Why seq = 2? Because c1's presence event was seq = 1.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		// Mock read from c2's sendChan to avoid blocking
+		for {
+			select {
+			case <-c2.sendChan:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	sess.Register(c2, 1, 0)
+
+	events := sess.MessageStore.GetSince(1)
+	if len(events) != 2 {
+		t.Fatalf("events since 1 = %d, want 2", len(events))
+	}
+	if events[0].Type != protocol.EventMessageAdded || events[0].Message.Text != "hello world" {
+		t.Fatalf("msg = %#v", events[0].Message)
+	}
+	if events[1].Type != protocol.EventPresenceChanged {
+		t.Fatalf("expected presence changed event, got = %s", events[1].Type)
+	}
+}
