@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, afterUpdate } from 'svelte';
   import { messages, currentDevice, transfers } from '../state/chatStore';
+  import { getThemeColors, getSenderThemeColors } from '../services/types';
 
   const dispatch = createEventDispatcher();
   let listElement: HTMLDivElement;
@@ -26,12 +27,26 @@
   function handleCancel(transferId: string) {
     dispatch('cancelDownload', transferId);
   }
+
+  // Get sender colors dynamically based on message theme or sender name hash seed
+  $: getColors = (msg: any) => {
+    return getThemeColors(msg.theme) || getSenderThemeColors(msg.sender);
+  };
 </script>
 
 <div class="message-list" bind:this={listElement}>
   {#each $messages as msg (msg.id)}
+    {@const colors = getColors(msg)}
     <div class="message-wrapper" class:is-me={msg.senderId === $currentDevice?.id}>
-      <div class="message-bubble">
+      <div 
+        class="message-bubble" 
+        style="
+          --bubble-border: {colors.border}44; 
+          --bubble-wash: {colors.bg}; 
+          --accent-color: {colors.border}; 
+          --accent-text: {colors.text};
+        "
+      >
         <div class="msg-header">
           <span class="sender">{msg.sender}</span>
           <span class="time">{new Date(msg.createdAt).toLocaleTimeString()}</span>
@@ -135,15 +150,15 @@
     padding: 12px 16px;
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--bubble-border, rgba(255, 255, 255, 0.05));
     backdrop-filter: blur(8px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .message-wrapper.is-me .message-bubble {
-    background: rgba(124, 58, 237, 0.15);
-    border-color: rgba(124, 58, 237, 0.25);
+    background: var(--bubble-wash, rgba(124, 58, 237, 0.15));
+    border-color: var(--bubble-border, rgba(124, 58, 237, 0.25));
   }
 
   .msg-header {
@@ -156,11 +171,8 @@
 
   .sender {
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.7);
-  }
-
-  .message-wrapper.is-me .sender {
-    color: #a78bfa;
+    color: var(--accent-text, rgba(255, 255, 255, 0.7));
+    transition: color 0.2s ease;
   }
 
   .time {
@@ -196,7 +208,8 @@
   .file-icon {
     width: 32px;
     height: 32px;
-    color: #a78bfa;
+    color: var(--accent-color, #a78bfa);
+    transition: color 0.2s ease;
   }
 
   .file-details {
@@ -245,7 +258,7 @@
   }
 
   .dl-btn.paid {
-    background: linear-gradient(135deg, #7c3aed, #db2777);
+    background: linear-gradient(135deg, var(--accent-color, #7c3aed), #db2777);
     color: #fff;
     box-shadow: 0 2px 6px rgba(124, 58, 237, 0.2);
   }
@@ -271,9 +284,9 @@
 
   .progress-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #7c3aed, #db2777);
+    background: linear-gradient(90deg, var(--accent-color, #7c3aed), #db2777);
     border-radius: 3px;
-    transition: width 0.1s linear;
+    transition: width 0.1s linear, background-color 0.2s ease;
   }
 
   .progress-meta {
