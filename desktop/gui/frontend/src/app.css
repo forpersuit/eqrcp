@@ -279,6 +279,7 @@ h2 {
 .workspace:has(.chat-start) {
     padding: 0;
     overflow: hidden;
+    height: 100%;
 }
 
 .workspace:has(.chat-start) {

@@ -45,7 +45,10 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 	// Start the job
 	_ = h.transfer.StartJob(jobID)
 
-	isPaid := query.Get("is_paid") == "true"
+	isPaid := false
+	if h.isPaidOrUnrestricted != nil {
+		isPaid = h.isPaidOrUnrestricted()
+	}
 	h.scheduler.RegisterJob(jobID, isPaid)
 	defer h.scheduler.UnregisterJob(jobID)
 

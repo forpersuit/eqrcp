@@ -28,6 +28,8 @@
     dispatch('cancelDownload', transferId);
   }
 
+  let currentLang = localStorage.getItem('eqt_lang') || 'zh';
+
   // Get sender colors dynamically based on message theme or sender name hash seed
   $: getColors = (msg: any) => {
     return getThemeColors(msg.theme) || getSenderThemeColors(msg.sender);
@@ -100,7 +102,7 @@
                 <div class="message-footer">
                   {#if tx}
                     {#if tx.state === 'queued'}
-                      <div class="message-footer-meta">排队中...</div>
+                      <div class="message-footer-meta">{currentLang === 'en' ? 'Queued...' : '排队中...'}</div>
                     {:else if tx.state === 'running'}
                       <div class="message-footer-meta" style="flex: 1;">
                         {tx.percent}% ({formatBytes(tx.bytesDone || 0)} / {formatBytes(tx.bytesTotal || 0)})
@@ -111,24 +113,21 @@
                         </button>
                       </div>
                     {:else if tx.state === 'completed'}
-                      <div class="message-footer-meta text-success" style="font-weight: 700;">下载已完成</div>
+                      <div class="message-footer-meta text-success" style="font-weight: 700;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
                     {:else if tx.state === 'failed'}
-                      <div class="message-footer-meta text-danger">下载失败: {tx.error || '网络错误'}</div>
+                      <div class="message-footer-meta text-danger">{currentLang === 'en' ? 'Download failed: ' : '下载失败: '}{tx.error || (currentLang === 'en' ? 'Network error' : '网络错误')}</div>
                       <div class="message-footer-actions">
-                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>重试 (标准)</button>
-                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, true)}>重试 (VIP)</button>
+                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>{currentLang === 'en' ? 'Retry' : '重试'}</button>
                       </div>
                     {:else if tx.state === 'cancelled'}
-                      <div class="message-footer-meta">已取消</div>
+                      <div class="message-footer-meta">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
                       <div class="message-footer-actions">
-                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>重新下载 (标准)</button>
-                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, true)}>重新下载 (VIP)</button>
+                        <button class="side-btn" style="height:22px; font-size:9px; padding:0 6px; border-radius:11px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>{currentLang === 'en' ? 'Redownload' : '重新下载'}</button>
                       </div>
                     {/if}
                   {:else}
                     <div class="message-footer-actions">
-                      <button class="side-btn" style="height:24px; font-size:10px; padding:0 8px; border-radius:12px;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>标准下载 (512K/s)</button>
-                      <button class="side-btn" style="height:24px; font-size:10px; padding:0 8px; border-radius:12px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, true)}>VIP加速 (极速)</button>
+                      <button class="side-btn" style="height:24px; font-size:10px; padding:0 8px; border-radius:12px; background:var(--accent); color:#fff;" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}>{currentLang === 'en' ? 'Download' : '下载文件'}</button>
                     </div>
                   {/if}
                 </div>

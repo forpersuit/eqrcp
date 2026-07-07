@@ -126,6 +126,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **Browser Download Stability**:
   - Do not use browser-side XHR/fetch + Blob/ObjectURL for regular chat attachment downloads. Safari/WebKit can crash with `webkitblobresource` errors on large or parallel Blob downloads.
   - For non-Wails browsers, prefer native `<a href download>` direct HTTP downloads so the browser download manager handles streaming. Put bandwidth limits on the server stream path, not in browser memory buffering. Wails/native Go downloads may still emit local progress from the Go HTTP client.
+- **Simplified Download & Automatic Dynamic Speed Allocation**:
+  - In Chat Mode, attachment bubbles should only present a single, unified "Download", "Retry", or "Redownload" action button rather than presenting two redundant paths (e.g., standard vs. VIP).
+  - The UI does not determine the transmission tier. The backend automatically decides the transmission speed limit dynamically: if the system is paid or within the daily 5-minute free window, it transmits at maximum speed (PRO/PLUS Policy); otherwise, it defaults to standard rate-limiting (Free Policy, 512KB/s).
 - **Percentage Display Positioning**:
   - Real-time progress percentages (e.g. `45%`) are displayed adjacent to the attachment description text.
   - Position percentages according to layout flow:

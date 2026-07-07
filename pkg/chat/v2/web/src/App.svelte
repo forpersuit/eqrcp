@@ -181,13 +181,13 @@
   }
 
   function handleStartDownload(e: CustomEvent<{ messageId: string; filename: string; size: number; isPaid: boolean }>) {
-    const { messageId, filename, size, isPaid } = e.detail;
+    const { messageId, filename, size } = e.detail;
     if (!client) return;
 
     const transferId = 'dl-' + messageId;
     client.startTransfer(transferId);
 
-    const downloadURL = `/chat-v2/${token}/files/${messageId}?mock_size=${size}&clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}&is_paid=${isPaid}`;
+    const downloadURL = `/chat-v2/${token}/files/${messageId}?mock_size=${size}&clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
 
     const link = document.createElement('a');
     link.href = downloadURL;
@@ -196,7 +196,9 @@
     link.click();
     document.body.removeChild(link);
 
-    chatActions.addSystemMessage(`Initiated ${isPaid ? 'VIP Accelerated (10MB/s)' : 'Standard Limit (512KB/s)'} native stream download for: ${filename}`);
+    chatActions.addSystemMessage(currentLang === 'en'
+      ? `Initiated native stream download for: ${filename}`
+      : `开始下载文件: ${filename}`);
   }
 
   function handleCancelDownload(e: CustomEvent<string>) {

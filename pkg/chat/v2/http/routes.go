@@ -27,18 +27,20 @@ const Version = "v2"
 
 // Config controls the experimental chat v2 handler.
 type Config struct {
-	BasePath string
-	Logger   diag.Logger
+	BasePath             string
+	Logger               diag.Logger
+	IsPaidOrUnrestricted func() bool
 }
 
 // Handler is an isolated, unmounted chat v2 HTTP handler.
 type Handler struct {
-	basePath  string
-	logger    diag.Logger
-	sessions  *session.Manager
-	transfer  *transfer.Manager
-	scheduler *bandwidth.Scheduler
-	ws        *transport.WebSocketHandler
+	basePath             string
+	logger               diag.Logger
+	sessions             *session.Manager
+	transfer             *transfer.Manager
+	scheduler            *bandwidth.Scheduler
+	ws                   *transport.WebSocketHandler
+	isPaidOrUnrestricted func() bool
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -65,12 +67,13 @@ func NewHandler(cfg Config) *Handler {
 	})
 
 	return &Handler{
-		basePath:  basePath,
-		logger:    logger,
-		sessions:  sessions,
-		transfer:  transferMgr,
-		scheduler: sched,
-		ws:        transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
+		basePath:             basePath,
+		logger:               logger,
+		sessions:             sessions,
+		transfer:             transferMgr,
+		scheduler:            sched,
+		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
+		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 	}
 }
 

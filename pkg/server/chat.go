@@ -325,6 +325,10 @@ func (s *Server) Chat() error {
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
 		BasePath: "/chat-v2",
 		Logger:   nil,
+		IsPaidOrUnrestricted: func() bool {
+			usage := limiterInstance.GetStatus()
+			return usage.IsPaid || usage.UsedSeconds < 300
+		},
 	})
 	s.mux.Handle("/chat-v2/", chatV2Handler)
 
