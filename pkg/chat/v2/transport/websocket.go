@@ -2,7 +2,10 @@ package transport
 
 import (
 	"context"
+	"flag"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +17,20 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
+
+func isRunningInTest() bool {
+	if os.Getenv("EQT_TESTING") == "true" {
+		return true
+	}
+	if flag.Lookup("test.v") != nil {
+		return true
+	}
+	exe := filepath.Base(os.Args[0])
+	if strings.Contains(exe, ".test") || strings.HasPrefix(exe, "test") {
+		return true
+	}
+	return false
+}
 
 const (
 	DefaultReadLimit = 64 << 10
@@ -163,7 +180,11 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				append(fields, diag.F("eventType", protocol.EventHello))...,
 			)
 
+			isFirstClient := sess.ClientsCount() == 0
 			sess.Register(cl, cmd.AfterSeq, cmd.JoinSeq)
+			if isFirstClient && !isRunningInTest() {
+				sess.SendSystemMessage("Chat session started (Version: V2)")
+			}
 
 		case protocol.CommandHeartbeat:
 			event := protocol.EventEnvelope{

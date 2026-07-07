@@ -963,6 +963,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			return err
 		}
 	case "chat":
+		srv.EnableChatV2 = desktopSettings.EnableChatV2
 		chatPageURLBuilder := func() string {
 			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar, desktopSettings.EnableChatV2)
 		}

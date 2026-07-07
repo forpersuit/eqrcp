@@ -763,10 +763,14 @@ func (s *Server) DisplayChat() error {
 // ChatJoinURL returns the user-facing chat URL, including debug query
 // parameters when the application is running in development mode.
 func (s *Server) ChatJoinURL() string {
-	if !s.ViewportDebug {
-		return s.ChatURL
+	chatURL := s.ChatURL
+	if s.EnableChatV2 {
+		chatURL = strings.Replace(chatURL, "/chat/", "/chat-v2/", 1)
 	}
-	return appendChatQuery(s.ChatURL, map[string]string{"viewportDebug": "1"})
+	if !s.ViewportDebug {
+		return chatURL
+	}
+	return appendChatQuery(chatURL, map[string]string{"viewportDebug": "1"})
 }
 
 func appendChatQuery(baseURL string, values map[string]string) string {

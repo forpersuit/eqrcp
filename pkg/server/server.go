@@ -75,6 +75,7 @@ type Server struct {
 	ChatURL        string
 	ChatDebug      bool
 	ViewportDebug  bool
+	EnableChatV2   bool
 	Lang           string
 	instance       *http.Server
 	mux            *http.ServeMux

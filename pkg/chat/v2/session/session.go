@@ -125,3 +125,23 @@ func (s *Session) ClientsCount() int {
 	defer s.mu.RUnlock()
 	return len(s.clients)
 }
+
+// SendSystemMessage broadcasts a system notification text message.
+func (s *Session) SendSystemMessage(text string) {
+	msg := &protocol.Message{
+		ID:        generateID(),
+		SenderID:  "system",
+		Sender:    "system",
+		Type:      protocol.MessageSystem,
+		Text:      text,
+		CreatedAt: time.Now(),
+	}
+
+	event := protocol.EventEnvelope{
+		Type:    protocol.EventMessageAdded,
+		Message: msg,
+		Time:    time.Now(),
+	}
+
+	s.Broadcast(event)
+}
