@@ -98,7 +98,7 @@
       </div>
     {:else}
       {@const mine = isMine(msg)}
-      {@const tx = txState[msg.id]}
+      {@const tx = txState[msg.id] || txState['dl-' + msg.id] || txState['ul-' + msg.id]}
       {@const colors = msg.senderColor || { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155' }}
       <div 
         class="message" 

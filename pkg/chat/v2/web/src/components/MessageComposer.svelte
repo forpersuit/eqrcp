@@ -22,12 +22,14 @@
   function handleFileChange(e: Event) {
     const files = fileInput.files;
     if (!files || files.length === 0) return;
-    const file = files[0];
-    dispatch('sendFile', {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    });
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      dispatch('sendFile', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+    }
     fileInput.value = ''; // clear
   }
 
