@@ -385,19 +385,21 @@
                     {/if}
 
                     {#if mine}
-                      <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
-                        {#if recallConfirmingId === msg.id}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                        {:else}
-                          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18"></path>
-                            <path d="M8 6V4h8v2"></path>
-                            <path d="M10 11v6"></path>
-                            <path d="M14 11v6"></path>
-                            <path d="M6 6l1 14h10l1-14"></path>
-                          </svg>
-                        {/if}
-                      </button>
+                      {#if !(msg.type === 'file' && tx && tx.state === 'completed')}
+                        <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
+                          {#if recallConfirmingId === msg.id}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                          {:else}
+                            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M3 6h18"></path>
+                              <path d="M8 6V4h8v2"></path>
+                              <path d="M10 11v6"></path>
+                              <path d="M14 11v6"></path>
+                              <path d="M6 6l1 14h10l1-14"></path>
+                            </svg>
+                          {/if}
+                        </button>
+                      {/if}
                     {/if}
                   </div>
                 {/if}

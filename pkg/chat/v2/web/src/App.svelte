@@ -11,6 +11,7 @@
   let token = '';
   let isEmbedded = false;
   let observer: MutationObserver | null = null;
+  let visualViewportHandler: (() => void) | null = null;
 
   // Generate a dynamic random joinToken for the lifetime of this session page
   function generateJoinToken(): string {
@@ -152,8 +153,25 @@
     selectedDevId = '';
   }
 
+  function handleRenameInputKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.target instanceof HTMLInputElement) {
+        e.target.blur();
+      }
+      handleRenameDevice();
+    }
+  }
+
   function handleRenameDevice() {
     if (!editNameVal.trim() || !$currentDevice) return;
+    
+    // Explicitly blur focused elements to hide mobile software keyboard
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     const oldLabel = $currentDevice.label;
     const newLabel = editNameVal.trim();
 
@@ -225,6 +243,25 @@
       localStorage.setItem('chat_host_token', hostToken);
     }
 
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      visualViewportHandler = () => {
+        const vv = window.visualViewport;
+        if (vv) {
+          document.documentElement.style.setProperty('--chat-viewport-height', `${vv.height}px`);
+          const messagesEl = document.querySelector('.messages');
+          if (messagesEl) {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            setTimeout(() => {
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }, 50);
+          }
+        }
+      };
+      window.visualViewport.addEventListener('resize', visualViewportHandler);
+      window.visualViewport.addEventListener('scroll', visualViewportHandler);
+      visualViewportHandler();
+    }
+
     client = new ChatWebSocketClient(token);
     client.connect();
   });
@@ -233,6 +270,10 @@
     window.removeEventListener('message', handleMessage);
     if (observer) {
       observer.disconnect();
+    }
+    if (visualViewportHandler && typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', visualViewportHandler);
+      window.visualViewport.removeEventListener('scroll', visualViewportHandler);
     }
     if (qrPulseTimer) {
       clearTimeout(qrPulseTimer);
@@ -433,9 +474,9 @@
                       {#if isSelf}
                         {#if isEditingName}
                           <div style="display: flex; gap: 4px; width: 100%;">
-                            <input bind:value={editNameVal} style="font-size: 11px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; flex: 1; height: 22px; box-sizing: border-box;">
-                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px;" on:click={handleRenameDevice}>保存</button>
-                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px; background: #eee;" on:click={() => isEditingName = false}>取消</button>
+                            <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} style="font-size: 11px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; flex: 1; height: 22px; box-sizing: border-box;">
+                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px;" on:click|preventDefault={handleRenameDevice}>保存</button>
+                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px; background: #eee;" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
                           </div>
                         {:else}
                           <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label} (本机)</strong>

@@ -204,7 +204,16 @@ func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
 		return
 	}
 
+	oldTheme := s.clientThemes[c.Peer]
 	theme := s.randomChatThemeLocked(c.Peer)
+	if theme == oldTheme && oldTheme != "" {
+		for i := 0; i < 5; i++ {
+			theme = s.randomChatThemeLocked(c.Peer)
+			if theme != oldTheme {
+				break
+			}
+		}
+	}
 	s.clientThemes[c.Peer] = theme
 	if join != "" {
 		s.clientThemeJoins[c.Peer] = join
