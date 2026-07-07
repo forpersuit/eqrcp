@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
+	"eqt/pkg/chat/v2/transfer"
 	"eqt/pkg/chat/v2/transport"
 )
 
@@ -25,6 +27,7 @@ type Handler struct {
 	basePath string
 	logger   diag.Logger
 	sessions *session.Manager
+	transfer *transfer.Manager
 	ws       *transport.WebSocketHandler
 }
 
@@ -39,11 +42,23 @@ func NewHandler(cfg Config) *Handler {
 		logger = diag.NopLogger{}
 	}
 	sessions := session.NewManager()
+	transferMgr := transfer.NewManager()
+
+	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
+		sess := sessions.GetOrCreate(token)
+		sess.Broadcast(protocol.EventEnvelope{
+			Type:     et,
+			Transfer: &ev,
+			Time:     time.Now(),
+		})
+	})
+
 	return &Handler{
 		basePath: basePath,
 		logger:   logger,
 		sessions: sessions,
-		ws:       transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions}),
+		transfer: transferMgr,
+		ws:       transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
 	}
 }
 
@@ -59,6 +74,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		diag.F("token", token),
 	}
 	diag.Emit(r.Context(), h.logger, diag.LevelDebug, "request received", nil, fields...)
+
+	if strings.HasPrefix(suffix, "/files/") {
+		fileID := strings.TrimPrefix(suffix, "/files/")
+		h.handleDownload(w, r, token, fileID, fields...)
+		return
+	}
 
 	switch suffix {
 	case "", "/":

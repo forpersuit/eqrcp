@@ -4,9 +4,9 @@ Last updated: 2026-07-07
 
 ## Current Status
 
-Chat v2 is in Phase 2: TransferManager.
+Chat v2 is in Phase 3: Bandwidth Scheduler.
 
-Phase 0 and Phase 1 are complete. The WebSocket control-plane features are fully implemented, tested, and a test harness page is served under `/chat-v2/{token}`:
+Phase 0, Phase 1, and Phase 2 are complete. The WebSocket control-plane features and native HTTP download progress tracking are fully implemented, integrated, and verified:
 
 - Fully supports `session.Manager` lifecycle.
 - Handles client registration with custom identities.
@@ -15,6 +15,8 @@ Phase 0 and Phase 1 are complete. The WebSocket control-plane features are fully
 - Implements `send_text` command and broadcasts `message_added` events.
 - Supports reconnect recovery (afterSeq and joinSeq replaying).
 - Serves an interactive micro-UI browser harness for chat v2.
+- Tracks native HTTP file downloads with server-side progress writers.
+- Broadcasts throttled real-time transfer progress and lifecycle events over WS.
 
 ## Commit Timeline
 
@@ -80,16 +82,16 @@ Phase 1 exit criteria:
 
 ### Phase 2: TransferManager
 
-Status: not started.
+Status: complete.
 
-Planned:
+Completed:
 
-- [ ] Define transfer job model.
-- [ ] Register native HTTP downloads as jobs.
-- [ ] Measure server-side write progress.
-- [ ] Publish transfer events over WebSocket.
-- [ ] Keep browser downloads native; do not use XHR/fetch + Blob/ObjectURL.
-- [ ] Validate download while chatting.
+- [x] Define transfer job model.
+- [x] Register native HTTP downloads as jobs.
+- [x] Measure server-side write progress.
+- [x] Publish transfer events over WebSocket.
+- [x] Keep browser downloads native; do not use XHR/fetch + Blob/ObjectURL.
+- [x] Validate download while chatting.
 
 ### Phase 3: Bandwidth Scheduler
 
@@ -142,7 +144,7 @@ Planned:
 | Text message exchange | Done | Supports broadcasts. |
 | Reconnect recovery | Done | Recovers missed events using seq. |
 | Browser UI | Done | Served under `/chat-v2/{token}` for manual verification. |
-| TransferManager | Missing | Phase 2. |
+| TransferManager | Done | Tracks native downloads and updates. |
 | Bandwidth scheduler | Missing | Phase 3. |
 | Svelte frontend | Missing | Phase 4. |
 
@@ -181,9 +183,9 @@ Latest pre-commit verification:
 
 ## Next Step
 
-Implement the Phase 2 TransferManager:
+Implement the Phase 3 Bandwidth Scheduler:
 
-1. Define transfer job model with queued, running, completed, failed, and cancelled states.
-2. Implement native HTTP download registration with server-side progress writer.
-3. Publish transfer events over WebSocket control plane.
-4. Keep browser downloads native without using browser-side Blob buffering.
+1. Implement a data-plane token bucket or equivalent scheduler.
+2. Ensure control-plane WS messages have priority over large data downloads.
+3. Implement per-device and per-job bandwidth sharing fairness.
+4. Write scheduler unit and integration tests under load.

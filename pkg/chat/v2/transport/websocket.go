@@ -9,6 +9,7 @@ import (
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
+	"eqt/pkg/chat/v2/transfer"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -23,6 +24,7 @@ type WebSocketConfig struct {
 	Logger   diag.Logger
 	Now      func() time.Time
 	Sessions *session.Manager
+	Transfer *transfer.Manager
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
@@ -30,6 +32,7 @@ type WebSocketHandler struct {
 	logger   diag.Logger
 	now      func() time.Time
 	sessions *session.Manager
+	transfer *transfer.Manager
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -46,10 +49,15 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 	if sessions == nil {
 		sessions = session.NewManager()
 	}
+	transferMgr := cfg.Transfer
+	if transferMgr == nil {
+		transferMgr = transfer.NewManager()
+	}
 	return &WebSocketHandler{
 		logger:   logger,
 		now:      now,
 		sessions: sessions,
+		transfer: transferMgr,
 	}
 }
 
@@ -179,6 +187,36 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				continue
 			}
 			sess.SendText(cl, cmd.Text, cmd.CommandID)
+
+		case protocol.CommandStartTransfer:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.TransferID == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing transferId")
+				continue
+			}
+			err := h.transfer.StartJob(cmd.TransferID)
+			if err != nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, err.Error())
+				continue
+			}
+
+		case protocol.CommandCancelTransfer:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.TransferID == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing transferId")
+				continue
+			}
+			err := h.transfer.CancelJob(cmd.TransferID)
+			if err != nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, err.Error())
+				continue
+			}
 
 		default:
 			event := protocol.EventEnvelope{
