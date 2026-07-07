@@ -116,9 +116,48 @@
           <div class="bubble">
             {#if msg.recalled}
               <span class="text recalled">{msg.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
+              {#if isMine}
+                <div class="recalled-actions">
+                  {#if msg.type === 'text'}
+                    <button class="edit-recalled" type="button" on:click={() => dispatch('editAgain', msg.text || '')}>
+                      {currentLang === 'en' ? 'Edit again' : '再次编辑'}
+                    </button>
+                  {:else if msg.type === 'file'}
+                    <button class="edit-recalled" type="button" on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })}>
+                      {currentLang === 'en' ? 'Resend' : '再次发送'}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
             {:else}
               {#if msg.type === 'text'}
                 <span class="text">{msg.text}</span>
+                <div class="message-footer" style="margin-top: 4px;">
+                  <div class="message-footer-meta" style="flex: 1;"></div>
+                  <div class="message-footer-actions">
+                    <button class="bubble-action" type="button" on:click={() => handleCopy(msg.text || '')} title="Copy">
+                      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="11" height="11" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                    {#if isMine}
+                      <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
+                        {#if recallConfirmingId === msg.id}
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                        {:else}
+                          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M8 6V4h8v2"></path>
+                            <path d="M10 11v6"></path>
+                            <path d="M14 11v6"></path>
+                            <path d="M6 6l1 14h10l1-14"></path>
+                          </svg>
+                        {/if}
+                      </button>
+                    {/if}
+                  </div>
+                </div>
               {:else if msg.type === 'file'}
                 <div class="bubble-content">
                   <div class="attachment-card file-attachment">
@@ -149,30 +188,35 @@
                         <div class="message-footer-meta" style="flex: 1;">
                           {tx.percent}% ({formatBytes(tx.bytesDone || 0)} / {formatBytes(tx.bytesTotal || 0)})
                         </div>
-                        <div class="message-footer-actions">
+                      {:else if tx.state === 'completed'}
+                        <div class="message-footer-meta text-success" style="font-weight: 700; flex: 1;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
+                      {:else if tx.state === 'failed'}
+                        <div class="message-footer-meta text-danger" style="flex: 1;">{currentLang === 'en' ? 'Download failed' : '下载失败'}</div>
+                      {:else if tx.state === 'cancelled'}
+                        <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
+                      {/if}
+                    {:else}
+                      <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
+                    {/if}
+ 
+                    <div class="message-footer-actions">
+                      {#if tx}
+                        {#if tx.state === 'running'}
                           <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
                             <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                           </button>
-                        </div>
-                      {:else if tx.state === 'completed'}
-                        <div class="message-footer-meta text-success" style="font-weight: 700; flex: 1;">{currentLang === 'en' ? 'Download completed' : '下载已完成'}</div>
-                        <div class="message-footer-actions">
+                        {:else if tx.state === 'completed'}
                           <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
-                            <!-- Check icon -->
                             <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
-                            <!-- Download icon -->
                             <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                               <polyline points="7 10 12 15 17 10" />
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
                           </button>
-                        </div>
-                      {:else if tx.state === 'failed'}
-                        <div class="message-footer-meta text-danger" style="flex: 1;">{currentLang === 'en' ? 'Download failed' : '下载失败'}</div>
-                        <div class="message-footer-actions">
+                        {:else if tx.state === 'failed'}
                           <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
                             <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -180,10 +224,7 @@
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
                           </button>
-                        </div>
-                      {:else if tx.state === 'cancelled'}
-                        <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Cancelled' : '已取消'}</div>
-                        <div class="message-footer-actions">
+                        {:else if tx.state === 'cancelled'}
                           <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
                             <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -191,11 +232,8 @@
                               <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
                           </button>
-                        </div>
-                      {/if}
-                    {:else}
-                      <div class="message-footer-meta" style="flex: 1;">{currentLang === 'en' ? 'Not downloaded' : '未下载'}</div>
-                      <div class="message-footer-actions">
+                        {/if}
+                      {:else}
                         <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Download">
                           <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -203,46 +241,31 @@
                             <line x1="12" y1="15" x2="12" y2="3" />
                           </svg>
                         </button>
-                      </div>
-                    {/if}
+                      {/if}
+ 
+                      {#if isMine}
+                        <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
+                          {#if recallConfirmingId === msg.id}
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                          {:else}
+                            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M3 6h18"></path>
+                              <path d="M8 6V4h8v2"></path>
+                              <path d="M10 11v6"></path>
+                              <path d="M14 11v6"></path>
+                              <path d="M6 6l1 14h10l1-14"></path>
+                            </svg>
+                          {/if}
+                        </button>
+                      {/if}
+                    </div>
                   </div>
                 </div>
               {/if}
             {/if}
           </div>
  
-          <!-- Bubble actions row -->
-          {#if !msg.recalled}
-            <div class="bubble-actions-row">
-              {#if msg.type === 'text'}
-                <button class="action-link-btn" type="button" on:click={() => handleCopy(msg.text || '')} title="Copy text">
-                  {currentLang === 'en' ? 'Copy' : '复制'}
-                </button>
-              {/if}
- 
-              {#if isMine}
-                <button class="action-link-btn danger" type="button" on:click={() => triggerRecall(msg.id)} title="Recall message">
-                  {#if recallConfirmingId === msg.id}
-                    {currentLang === 'en' ? 'Confirm?' : '确认撤回？'}
-                  {:else}
-                    {currentLang === 'en' ? 'Recall' : '撤回'}
-                  {/if}
-                </button>
-              {/if}
-            </div>
-          {:else if isMine}
-            <div class="bubble-actions-row">
-              {#if msg.type === 'text'}
-                <button class="action-link-btn" type="button" on:click={() => dispatch('editAgain', msg.text || '')} title="Edit again">
-                  {currentLang === 'en' ? 'Edit again' : '再次编辑'}
-                </button>
-              {:else if msg.type === 'file'}
-                <button class="action-link-btn" type="button" on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })} title="Resend file">
-                  {currentLang === 'en' ? 'Resend' : '再次发送'}
-                </button>
-              {/if}
-            </div>
-          {/if}
+
         </div>
       </div>
     {/if}

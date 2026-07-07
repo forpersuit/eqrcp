@@ -940,42 +940,24 @@ button.file-card:hover {
     border-color: #fca5a5;
     color: #b91c1c;
 }
-/* ── Bubble actions row ── */
-.bubble-actions-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
-    opacity: 0.42;
-    transition: opacity 0.2s ease;
-    justify-content: flex-start;
-}
-.message.mine .bubble-actions-row {
-    justify-content: flex-end;
-}
-.message:hover .bubble-actions-row {
-    opacity: 1;
-}
-.action-link-btn {
-    background: transparent;
-    border: 0;
+.edit-recalled {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid var(--line);
+    border-radius: 999px;
     color: var(--accent-strong);
     cursor: pointer;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: 4px;
-    transition: background 0.16s ease, color 0.16s ease;
+    min-height: 26px;
+    overflow: hidden;
+    padding: 4px 10px;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.2s ease, border-color 0.2s ease;
 }
-.action-link-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-}
-.action-link-btn.danger {
-    color: #b91c1c;
-}
-.action-link-btn.danger:hover {
-    background: rgba(185, 28, 28, 0.08);
-}
+.edit-recalled:hover {
+    background: #ffffff;
+    border-color: var(--accent);
+
 @media (hover: none), (pointer: coarse) {
     .message {
         max-width: min(560px, calc(100% - 74px));
