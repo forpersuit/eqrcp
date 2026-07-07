@@ -4,6 +4,7 @@ package chathttp
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -83,6 +84,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fileID := strings.TrimPrefix(suffix, "/files/")
 		h.handleDownload(w, r, token, fileID, fields...)
 		return
+	}
+
+	distPath := "./pkg/chat/v2/web/dist"
+	if _, err := os.Stat(distPath + "/index.html"); err == nil {
+		if suffix == "" || suffix == "/" {
+			http.ServeFile(w, r, distPath+"/index.html")
+			return
+		}
+		localFile := distPath + suffix
+		if _, err := os.Stat(localFile); err == nil {
+			http.ServeFile(w, r, localFile)
+			return
+		}
 	}
 
 	switch suffix {

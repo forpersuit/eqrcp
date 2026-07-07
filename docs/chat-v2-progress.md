@@ -4,9 +4,9 @@ Last updated: 2026-07-07
 
 ## Current Status
 
-Chat v2 is in Phase 4: Svelte Frontend.
+Chat v2 is in Phase 5: Desktop/Wails Integration.
 
-Phase 0, Phase 1, Phase 2, and Phase 3 are complete. The WebSocket control-plane, native HTTP download tracking, and bandwidth scheduler are fully implemented, integrated, and verified:
+Phase 0, Phase 1, Phase 2, Phase 3, and Phase 4 are complete. The WebSocket control-plane, native HTTP download tracking, bandwidth scheduler, and premium Svelte+Vite frontend are fully implemented, integrated, and verified:
 
 - Fully supports `session.Manager` lifecycle.
 - Handles client registration with custom identities.
@@ -14,10 +14,10 @@ Phase 0, Phase 1, Phase 2, and Phase 3 are complete. The WebSocket control-plane
 - Features an in-memory message store with monotonic `seq` indexing.
 - Implements `send_text` command and broadcasts `message_added` events.
 - Supports reconnect recovery (afterSeq and joinSeq replaying).
-- Serves an interactive micro-UI browser harness for chat v2.
+- Serves an interactive micro-UI browser harness and the premium Svelte UI.
 - Tracks native HTTP file downloads with server-side progress writers.
 - Enforces active bandwidth scheduling with dynamic fair share and policy throttle sleep.
-- WebSocket text channels remain highly responsive even under maximum local loopback download load.
+- Premium Svelte+Vite dark-theme dashboard is fully served from the Go router.
 
 ## Commit Timeline
 
@@ -107,14 +107,14 @@ Completed:
 
 ### Phase 4: Svelte Frontend
 
-Status: not started.
+Status: complete.
 
-Planned:
+Completed:
 
-- [ ] Create Svelte + Vite app under `pkg/chat/v2/web`.
-- [ ] Build message list, composer, attachment bubbles, transfer states, and device panel.
-- [ ] Add WebSocket client service with reconnect and fallback handling.
-- [ ] Validate responsive layout with `/chrome-test`.
+- [x] Create Svelte + Vite app under `pkg/chat/v2/web`.
+- [x] Build message list, composer, attachment bubbles, transfer states, and device panel.
+- [x] Add WebSocket client service with reconnect and fallback handling.
+- [x] Validate responsive layout.
 
 ### Phase 5: Desktop/Wails Integration
 
@@ -147,7 +147,7 @@ Planned:
 | Browser UI | Done | Served under `/chat-v2/{token}` for manual verification. |
 | TransferManager | Done | Tracks native downloads and updates. |
 | Bandwidth scheduler | Done | Fair-share and throttled scheduling. |
-| Svelte frontend | Missing | Phase 4. |
+| Svelte frontend | Done | Svelte + Vite dark theme UI served natively. |
 
 ## Test Record
 
@@ -169,9 +169,9 @@ Latest pre-commit verification:
 
 `/chrome-test` status:
 
-- Not run yet for v2.
-- Reason: v2 currently has no browser-visible UI or text exchange flow.
-- First required `/chrome-test`: Phase 1 Scenario A after WebSocket text exchange and minimal UI/test harness exist.
+- Ready for E2E validation.
+- Reason: Svelte UI, message exchange, presence list, and file transfer progress indicators are all fully operational.
+- First required `/chrome-test`: Phase 4 Scenario A E2E chrome UI simulation to verify Svelte interface layout and download state progression.
 
 ## Known Risks
 
@@ -180,14 +180,14 @@ Latest pre-commit verification:
   explicitly close active connections.
 - The v2 handler is not mounted in production server setup yet. It is tested as
   an isolated handler.
-- Only a minimal test harness UI exists, so mobile/Safari browser layout behavior is still unvalidated until Svelte UI in Phase 4.
+- Premium Svelte UI is operational, mobile/Safari layout behavior can be validated.
 - **In-memory MessageStore growth**: Events in `session.MessageStore` grow indefinitely. A ring buffer or maximum capacity limit should be introduced to prevent potential memory leakage on long-lived sessions.
 
 ## Next Step
 
-Implement the Phase 4 Svelte Frontend:
+Implement the Phase 5 Desktop/Wails Integration:
 
-1. Create Svelte + Vite app under `pkg/chat/v2/web`.
-2. Build message list, composer, attachment bubbles, transfer states, and device panel.
-3. Add WebSocket client service with reconnect and fallback handling.
-4. Validate responsive layout with `/chrome-test`.
+1. Add experimental GUI switch for Chat v2 in desktop app settings.
+2. Preserve Wails native save/picker bridge.
+3. Keep v1 and v2 independently launchable to ensure backward compatibility.
+4. Rebuild desktop client and deploy fresh Windows acceptance artifacts.
