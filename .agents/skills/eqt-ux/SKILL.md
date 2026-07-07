@@ -168,6 +168,8 @@ The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试�
 - **Mocking Wails Runtime for Browser Dev Server Preview**: When previewing the Wails frontend in a standard browser (e.g. running `npm run dev`), the Wails runtime API (`window.go` and `window.runtime`) is absent and will cause load/runtime errors. Inject a JS Proxy and Mock objects early (e.g. in `index.html`) to intercept calls:
   - Mock `window.runtime.EventsOnMultiple` to capture callbacks (which handles wrapper calls to `EventsOn`).
   - Use a `Proxy` on `window.go.main.App` that dynamically returns `() => Promise.resolve({})` for any accessed property, avoiding undefined-function crashes when frontend invokes Wails Go backend methods.
+- **Vite relative assets path (base: "./") routing trap**: When Vite builds assets to `dist/assets/` using relative paths, and Go handles dynamic routes by cutting the token (e.g. `/chat-v2/:token/`), the browser's request for `assets/` will cut `assets` as the token. To prevent 404 responses or incorrect stylesheet MIME type (text/plain) rejections, intercept special token names (such as `"assets"`, `"favicon.png"`) inside `ServeHTTP` and restore their file paths to `distPath + "/" + token + suffix`.
+
 
 
 ## Receive Mode Keep-Alive, Auto-Stop, and Client-ID Accumulation
