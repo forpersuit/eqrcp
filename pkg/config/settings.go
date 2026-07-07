@@ -212,6 +212,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("lang", settings.Lang)
 	v.Set("showHistory", settings.ShowHistory)
 	v.Set("enableChatV2", settings.EnableChatV2)
+	fmt.Printf("[Config Debug] WriteDesktopSettings: enableChatV2=%v, configFileUsed=%s\n", settings.EnableChatV2, v.ConfigFileUsed())
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}

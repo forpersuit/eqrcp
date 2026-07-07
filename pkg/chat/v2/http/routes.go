@@ -3,13 +3,18 @@ package chathttp
 
 import (
 	"encoding/json"
+	"flag"
+	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"eqt/pkg/chat/v2/bandwidth"
 	"eqt/pkg/chat/v2/diag"
+	"eqt/pkg/chat/v2/web"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
@@ -103,6 +108,38 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if _, err := os.Stat(localFile); err == nil {
 			http.ServeFile(w, r, localFile)
 			return
+		}
+	} else if !isRunningInTest() {
+		if subFS, err := fs.Sub(web.Dist, "dist"); err == nil {
+			if f, err := subFS.Open("index.html"); err == nil {
+				f.Close()
+				fileServer := http.FileServer(http.FS(subFS))
+				if token == "assets" || token == "favicon.png" {
+					r2 := r.Clone(r.Context())
+					r2.URL.Path = "/" + token + suffix
+					fileServer.ServeHTTP(w, r2)
+					return
+				}
+				if suffix == "" || suffix == "/" {
+					if fHtml, err := subFS.Open("index.html"); err == nil {
+						defer fHtml.Close()
+						if stat, err := fHtml.Stat(); err == nil {
+							if seeker, ok := fHtml.(io.ReadSeeker); ok {
+								http.ServeContent(w, r, "index.html", stat.ModTime(), seeker)
+								return
+							}
+						}
+					}
+				}
+				filePath := strings.TrimPrefix(suffix, "/")
+				if f2, err := subFS.Open(filePath); err == nil {
+					f2.Close()
+					r2 := r.Clone(r.Context())
+					r2.URL.Path = suffix
+					fileServer.ServeHTTP(w, r2)
+					return
+				}
+			}
 		}
 	}
 
@@ -296,4 +333,18 @@ func (h *Handler) writeHealth(w http.ResponseWriter, r *http.Request, token stri
 		"status":  "skeleton",
 	})
 	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "health response sent", nil, fields...)
+}
+
+func isRunningInTest() bool {
+	if os.Getenv("EQT_TESTING") == "true" {
+		return true
+	}
+	if flag.Lookup("test.v") != nil {
+		return true
+	}
+	exe := filepath.Base(os.Args[0])
+	if strings.Contains(exe, ".test") || strings.HasPrefix(exe, "test") {
+		return true
+	}
+	return false
 }
