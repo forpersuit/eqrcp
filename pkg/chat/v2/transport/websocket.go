@@ -209,6 +209,18 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			}
 			sess.SendText(cl, cmd.Text, cmd.CommandID)
 
+		case protocol.CommandRecallMessage:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.MessageID == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing messageId")
+				continue
+			}
+			sess.RecallMessage(cl.ID, cmd.MessageID, cmd.CommandID)
+
+
 		case protocol.CommandStartTransfer:
 			if cl == nil || sess == nil {
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")

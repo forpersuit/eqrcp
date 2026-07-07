@@ -105,3 +105,58 @@ func TestSessionSendTextAndReplay(t *testing.T) {
 		t.Fatalf("expected presence changed event, got = %s", events[1].Type)
 	}
 }
+
+func TestSessionRecallMessage(t *testing.T) {
+	sess := NewSession("test-room")
+	c1 := NewClient(protocol.ClientInfo{Label: "User A"}, nil)
+	sess.Register(c1, 0, 0)
+
+	// Send message
+	sess.SendText(c1, "hello recall", "cmd-1")
+
+	// Get message ID
+	events := sess.MessageStore.GetSince(1) // since presence (seq 1)
+	if len(events) < 1 || events[0].Message == nil {
+		t.Fatalf("message not found in store")
+	}
+	msgID := events[0].Message.ID
+
+	// Recall message (matching sender)
+	sess.RecallMessage(c1.ID, msgID, "cmd-2")
+
+	// Verify recalled in message store
+	eventsAfterRecall := sess.MessageStore.GetSince(1)
+	if len(eventsAfterRecall) < 1 || eventsAfterRecall[0].Message == nil {
+		t.Fatalf("message not found after recall")
+	}
+	if !eventsAfterRecall[0].Message.Recalled {
+		t.Fatalf("expected message to be recalled")
+	}
+
+	// Verify that trying to recall someone else's message fails
+	c2 := NewClient(protocol.ClientInfo{Label: "User B"}, nil)
+	sess.Register(c2, 0, 0)
+	
+	// Send another message
+	sess.SendText(c1, "hello recall 2", "cmd-3")
+	events2 := sess.MessageStore.GetSince(int64(len(sess.MessageStore.events) - 1)) // get last
+	if len(events2) < 1 || events2[0].Message == nil {
+		t.Fatalf("message 2 not found")
+	}
+	msgID2 := events2[0].Message.ID
+
+	// Try to recall message of c1 using c2.ID
+	sess.RecallMessage(c2.ID, msgID2, "cmd-4")
+
+	// Verify it remains not recalled
+	eventsAfterRecall2 := sess.MessageStore.GetSince(int64(len(sess.MessageStore.events) - 2))
+
+	for _, ev := range eventsAfterRecall2 {
+		if ev.Message != nil && ev.Message.ID == msgID2 {
+			if ev.Message.Recalled {
+				t.Fatalf("should not have recalled message since sender mismatch")
+			}
+		}
+	}
+}
+

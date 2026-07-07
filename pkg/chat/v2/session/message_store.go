@@ -51,3 +51,25 @@ func (s *MessageStore) GetSince(afterSeq int64) []protocol.EventEnvelope {
 	}
 	return res
 }
+
+// Recall finds the message event with the given messageID. If senderID is not empty,
+// it verifies that the senderID matches the message's SenderID.
+// If valid, it marks the message as recalled and returns it.
+func (s *MessageStore) Recall(messageID string, senderID string) *protocol.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, e := range s.events {
+		if e.Message != nil && e.Message.ID == messageID {
+			if senderID != "" && e.Message.SenderID != senderID {
+				return nil
+			}
+			e.Message.Recalled = true
+			s.events[i] = e
+			return e.Message
+		}
+	}
+	return nil
+}
+
+

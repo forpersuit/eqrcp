@@ -100,6 +100,26 @@ func (s *Session) SendText(sender *Client, text string, commandID string) {
 	s.Broadcast(event)
 }
 
+// RecallMessage broadcasts a message recall event and marks the message as recalled in the message store.
+func (s *Session) RecallMessage(senderID string, messageID string, commandID string) {
+	// Find and mark the message in MessageStore
+	msg := s.MessageStore.Recall(messageID, senderID)
+	if msg == nil {
+		return
+	}
+
+	event := protocol.EventEnvelope{
+		Type:      protocol.EventMessageRecalled,
+		CommandID: commandID,
+		Message:   msg,
+		Time:      time.Now(),
+	}
+
+	s.Broadcast(event)
+}
+
+
+
 func (s *Session) broadcastPresence() {
 	s.mu.RLock()
 	devices := make([]protocol.Device, 0, len(s.clients))

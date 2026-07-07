@@ -93,7 +93,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **问题成因**：在 Wails 桌面端，Chat v2 等界面运行在嵌入式的 iframe 中。当用户拖拽窗口边缘调整大小时，如果子页面的 `html` / `body` / `#app` 等容器没有强制 `100%` 高度，或者受限于浏览器的高度循环计算，在窗口被拉小后再拉大时，iframe 极易在变矮时的物理像素高度上“死锁”，导致消息区域塌陷缩小且无法自动复原。同时，在输入框因多行输入或 resize 变高时，若消息历史区域（`.messages`）的底边距写死（未关联 `--composer-height`），将导致底部最新消息被输入框遮挡。此外，若 resize 发生时消息历史区域没有同步滚动到底部，会导致上方出现大量空白，并给用户造成区域塌陷的视觉假象。
   - **解决方案**：
     1. **强制高度继承**：在子页面 CSS 中，为 `html.embedded-chat`, `html.embedded-chat body`, `html.embedded-chat .chat-viewport`, `html.embedded-chat #app` 统统设置 `height: 100% !important; min-height: 0 !important; overflow: hidden !important;`。
-    2. **绑定输入框高度**：将消息历史区域（`.messages`）的 `padding-bottom` 和 `scroll-padding-bottom` 设置为 `var(--composer-height, var(--messages-bottom-space))`，自适应输入框高度变化。
+    2. **绑定输入框高度（防止遮挡与双重扣除冲突）**：若界面输入框采用绝对定位（`position: fixed/absolute`）覆盖在列表之上，必须将消息历史区域（`.messages`）的 `padding-bottom` 和 `scroll-padding-bottom` 设置为 `var(--composer-height, var(--messages-bottom-space))`。但如果整个聊天视口采用的是 CSS Grid (`grid-template-rows: auto minmax(0, 1fr) auto;`) 等非重叠轨道排版，输入框已经在下方独占一行，则**严禁**在消息列表中引入 `--composer-height` 的底部 padding，否则当输入框变高或窗口缩小时会发生双重扣除高度的冲突，导致有效的聊天消息区域发生严重坍缩并出现大片空白；在此 Grid 模式下列表只需使用固定的 `--messages-bottom-space` 作为垫底距离即可。
     3. **自动滚动贴底**：在 resize 或输入框尺寸重算逻辑的末尾，通过 JS 获取滚动容器并强制贴底滚动：`const messagesEl = document.querySelector('.messages'); if (messagesEl) { messagesEl.scrollTop = messagesEl.scrollHeight; }`。
 
 ## 移动端就地超限拦截与动态解锁规范 (Mobile Device-Limit Handling & Live Recovery)
