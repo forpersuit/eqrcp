@@ -5,6 +5,7 @@
   import { ChatWebSocketClient } from './services/websocket';
   import { chatActions, currentDevice, peers, connState, messages, transfers } from './state/chatStore';
   import { getThemeColors } from './services/types';
+  import type { Message } from './services/types';
 
   let client: ChatWebSocketClient;
   let token = '';
@@ -273,6 +274,17 @@
     }
   }
 
+  function handleOpenFolder(e: CustomEvent<Message>) {
+    const msg = e.detail;
+    if (isEmbedded) {
+      window.parent.postMessage({ type: 'open-chat-file', filename: msg.fileName }, '*');
+    } else {
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? 'Browser sandbox restricted, cannot locate local folders'
+        : '浏览器安全沙箱限制，无法直接定位本地文件夹');
+    }
+  }
+
   function handleClose() {
     if (isEmbedded) {
       window.parent.postMessage({ type: 'stop-chat' }, '*');
@@ -443,6 +455,7 @@
         on:systemNotice={handleSystemNotice}
         on:editAgain={handleEditAgain}
         on:resendFile={handleResendFile}
+        on:openFolder={handleOpenFolder}
       />
 
       <MessageComposer 

@@ -264,6 +264,16 @@ window.addEventListener('message', (e) => {
             });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
+    } else if (e.data.type === 'open-chat-file') {
+        const filename = String(e.data.filename || '');
+        ChatSaveDirectory()
+            .then((dir) => {
+                if (dir) {
+                    const fullPath = dir + '/' + filename;
+                    OpenFile(fullPath).catch(() => {});
+                }
+            })
+            .catch(() => {});
     } else if (e.data.type === 'read-clipboard-text') {
         const requestId = String(e.data.requestId || '');
         if (!requestId) { return; }

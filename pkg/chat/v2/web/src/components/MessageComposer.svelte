@@ -40,9 +40,22 @@
     }
   }
 
+  let lastComposerHeight = 0;
+
   async function resizeComposer() {
     await tick();
     if (!textareaEl || !composerEl) return;
+
+    const currentHeight = composerEl.offsetHeight;
+    if (currentHeight === lastComposerHeight && lastComposerHeight > 0) {
+      return;
+    }
+
+    const messagesEl = document.querySelector('.messages');
+    let wasNearBottom = false;
+    if (messagesEl) {
+      wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    }
 
     const viewport = window.innerHeight;
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 821px)').matches;
@@ -56,13 +69,11 @@
     textareaEl.style.height = Math.max(min, Math.min(textareaEl.scrollHeight + border, max)) + 'px';
     textareaEl.style.overflowY = textareaEl.scrollHeight + border > max ? 'auto' : 'hidden';
 
-    // Propagate the new composer height to CSS variable --composer-height
-    // so the message list's bottom padding updates dynamically and doesn't hide text.
-    document.documentElement.style.setProperty('--composer-height', composerEl.offsetHeight + 'px');
+    const finalHeight = composerEl.offsetHeight;
+    lastComposerHeight = finalHeight;
+    document.documentElement.style.setProperty('--composer-height', finalHeight + 'px');
 
-    // Automatically scroll message list to bottom on resizing (like window resize or input height changes)
-    const messagesEl = document.querySelector('.messages');
-    if (messagesEl) {
+    if (messagesEl && wasNearBottom) {
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
   }
