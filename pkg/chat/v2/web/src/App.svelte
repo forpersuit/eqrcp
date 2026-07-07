@@ -248,6 +248,10 @@
         const vv = window.visualViewport;
         if (vv) {
           document.documentElement.style.setProperty('--chat-viewport-height', `${vv.height}px`);
+          // Prevent mobile keyboard from scrolling the entire fixed body out of viewport
+          if (window.scrollY !== 0) {
+            window.scrollTo(0, 0);
+          }
           const messagesEl = document.querySelector('.messages');
           if (messagesEl) {
             messagesEl.scrollTop = messagesEl.scrollHeight;

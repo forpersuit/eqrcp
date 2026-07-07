@@ -299,7 +299,7 @@
                   <div class="message-footer-actions">
                     <button class="bubble-action" type="button" on:click={() => handleCopy(msg.id, msg.text || '')} title="Copy">
                       {#if copiedId === msg.id}
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #10b981;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--message-action-text, var(--accent-strong));">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       {:else}

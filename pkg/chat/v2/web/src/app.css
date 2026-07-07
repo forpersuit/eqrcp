@@ -1324,16 +1324,10 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     .composer { padding: 9px 10px 11px; padding-bottom: max(11px, env(safe-area-inset-bottom)); }
     .composer-shell { padding: 6px; }
-    .compose-row { column-gap: 6px; grid-template-columns: 36px minmax(0,1fr) 36px; }
+    .compose-row { column-gap: 6px; grid-template-columns: 36px minmax(0,1fr) auto; }
     input,
     textarea {
         font-size: 16px;
-    }
-    textarea {
-        height: 38px;
-        min-height: 38px;
-        padding: 8px 12px;
-        border-radius: 19px;
     }
     .send-button,
     .file-label {
