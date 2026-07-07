@@ -3,7 +3,7 @@
   import MessageList from './components/MessageList.svelte';
   import MessageComposer from './components/MessageComposer.svelte';
   import { ChatWebSocketClient } from './services/websocket';
-  import { chatActions, currentDevice, peers, connState } from './state/chatStore';
+  import { chatActions, currentDevice, peers, connState, messages, transfers } from './state/chatStore';
   import { getThemeColors } from './services/types';
 
   let client: ChatWebSocketClient;
@@ -398,6 +398,10 @@
       </header>
 
       <MessageList 
+        messages={$messages}
+        txState={$transfers}
+        currentLang={currentLang}
+        isMine={(msg) => msg.sender === ($currentDevice?.label || 'Me')}
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}
         on:recallMessage={handleRecallMessage}

@@ -89,6 +89,12 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
   - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部 of 子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
   - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
+- **嵌入式 iframe 的高度塌陷与拉伸自适应 (Embedded iframe Height Resizing stability)**:
+  - **问题成因**：在 Wails 桌面端，Chat v2 等界面运行在嵌入式的 iframe 中。当用户拖拽窗口边缘调整大小时，如果子页面的 `html` / `body` / `#app` 等容器没有强制 `100%` 高度，或者受限于浏览器的高度循环计算，在窗口被拉小后再拉大时，iframe 极易在变矮时的物理像素高度上“死锁”，导致消息区域塌陷缩小且无法自动复原。同时，在输入框因多行输入或 resize 变高时，若消息历史区域（`.messages`）的底边距写死（未关联 `--composer-height`），将导致底部最新消息被输入框遮挡。此外，若 resize 发生时消息历史区域没有同步滚动到底部，会导致上方出现大量空白，并给用户造成区域塌陷的视觉假象。
+  - **解决方案**：
+    1. **强制高度继承**：在子页面 CSS 中，为 `html.embedded-chat`, `html.embedded-chat body`, `html.embedded-chat .chat-viewport`, `html.embedded-chat #app` 统统设置 `height: 100% !important; min-height: 0 !important; overflow: hidden !important;`。
+    2. **绑定输入框高度**：将消息历史区域（`.messages`）的 `padding-bottom` 和 `scroll-padding-bottom` 设置为 `var(--composer-height, var(--messages-bottom-space))`，自适应输入框高度变化。
+    3. **自动滚动贴底**：在 resize 或输入框尺寸重算逻辑的末尾，通过 JS 获取滚动容器并强制贴底滚动：`const messagesEl = document.querySelector('.messages'); if (messagesEl) { messagesEl.scrollTop = messagesEl.scrollHeight; }`。
 
 ## 移动端就地超限拦截与动态解锁规范 (Mobile Device-Limit Handling & Live Recovery)
 - **避免直接重定向 (Avoid Direct Redirection)**：当并发连接或使用额度超限时，移动端网页严禁直接使用 `window.location.href` 重定向到独立的静态错误页，这会导致页面脱离心跳状态，失去与后端的“热解锁”联系。
@@ -137,6 +143,29 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - Use Flexbox `row-reverse` dynamically via CSS `.mine` structure to handle this layout switch automatically by simply placing the percentage element immediately after the description element in HTML.
 - **Finished State Visual Persistence**:
   - Once transfer (upload/download) is finished, keep the color of the description text as the highlight theme color (`fillClr`) instead of reverting it to the default muted gray (`var(--muted)`), establishing a persistent visual cue for successfully transferred attachments.
+
+
+## Chat Mode E2E UI Simulation via Chrome MCP
+### E2E Chat v2 UI Testing Step-by-Step:
+1. **Start Local Service**: Spawn `go run ./cmd/eqt/ chat --port 18081 --bind 127.0.0.1 --keep-alive` asynchronously and parse the terminal output to extract the random URL Token (e.g., `Ic6mFk6TEG74JXumFfF8ZEhB`).
+2. **Open page in Chrome**: Create a new tab with `new_page` navigating to: `http://127.0.0.1:18081/chat-v2/<token>`.
+3. **QR Backdrop Modal Closing**: On initial load, the sharing modal overlay is shown. Locate the close button via selector `button[title="Close"]` and click it using `evaluate_script` to reveal the main chat list and composer.
+4. **Interact and send message**: Submit text by evaluating input events:
+   ```javascript
+   const textarea = document.querySelector('form.composer textarea');
+   textarea.value = 'Hi EQT, test message.';
+   textarea.dispatchEvent(new Event('input', { bubbles: true }));
+   document.querySelector('form.composer').dispatchEvent(new Event('submit', { bubbles: true }));
+   ```
+5. **Verify Bubble & Actions**:
+   - Check that the `.message-footer` actions (Copy and Delete/Recall) are unnested outside `.bubble`, allowing text bubbles to size dynamically according to characters length.
+   - Click the delete button twice to execute the recall. Confirm that the pill-shaped "Edit again" or "Resend" button appears for recalled sender-side messages.
+   - Verify that clicking "Edit again" populates back the text content and automatically delays 50ms to refocus the composer textarea.
+6. **Clean Up**: Terminate the background Go process.
+
+### Critical Styling & Store Binding Verification Checklist:
+- **CSS Nesting Check**: Ensure no missing closing curly braces `}` in `app.css` (e.g. inside media queries or hover classes) as it leaks nested selector constraints and breaks global backdrop displays (`display: none` overridden to `block`).
+- **Store Bindings**: Verify that `messages={$messages}` and `txState={$transfers}` are explicitly bound to `<MessageList>` in `App.svelte` so the message list reactively populates in the DOM tree.
 
 
 ## Receive Mode E2E UI Simulation via Chrome MCP (9222)
