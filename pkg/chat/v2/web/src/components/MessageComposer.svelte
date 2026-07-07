@@ -26,112 +26,41 @@
     });
     fileInput.value = ''; // clear
   }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  }
 </script>
 
-<form class="composer-form" on:submit={handleSubmit}>
-  <input 
-    type="file" 
-    bind:this={fileInput} 
-    on:change={handleFileChange} 
-    style="display: none;" 
-  />
-  
-  <button type="button" class="action-btn file-btn" on:click={triggerFileInput} title="发送文件">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9" />
-    </svg>
-  </button>
-
-  <input 
-    type="text" 
-    placeholder="输入消息..." 
-    bind:value={text} 
-    class="text-input"
-  />
-
-  <button type="submit" class="action-btn send-btn" disabled={!text.trim()} title="发送">
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-    </svg>
-  </button>
+<form class="composer" on:submit={handleSubmit}>
+  <div class="composer-shell">
+    <div class="compose-row">
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <label class="file-label" title="Add attachment" aria-label="Add attachment" on:click={triggerFileInput}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      </label>
+      <textarea 
+        bind:value={text} 
+        on:keydown={handleKeydown}
+        placeholder="Message" 
+        autocomplete="off" 
+        rows="1"
+      ></textarea>
+      <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </div>
+  <input bind:this={fileInput} on:change={handleFileChange} class="hidden" type="file" multiple>
 </form>
 
 <style>
-  .composer-form {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 20px;
-    background: rgba(14, 12, 21, 0.4);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(10px);
-  }
-
-  .text-input {
-    flex: 1;
-    height: 42px;
-    padding: 0 16px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.03);
-    color: #fff;
-    font-size: 0.9rem;
-    outline: none;
-    transition: all 0.2s ease;
-  }
-
-  .text-input:focus {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(124, 58, 237, 0.4);
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
-  }
-
-  .action-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    cursor: pointer;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
-    transition: all 0.2s ease;
-  }
-
-  .action-btn svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  .file-btn {
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
-  }
-
-  .file-btn:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .send-btn {
-    background: linear-gradient(135deg, #7c3aed, #db2777);
-    color: #fff;
-    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
-  }
-
-  .send-btn:hover:not(:disabled) {
-    transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.5);
-  }
-
-  .send-btn:disabled {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.2);
-    box-shadow: none;
-    cursor: not-allowed;
-  }
+  /* 
+    Rely on global app.css V1 styling for .composer, .composer-shell, .compose-row, 
+    .file-label, textarea and .send-button class definitions.
+  */
 </style>
