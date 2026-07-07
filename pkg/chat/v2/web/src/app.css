@@ -598,6 +598,51 @@ h1 {
         --attach-card-width: min(var(--media-width, 320px), 100%);
         width: var(--attach-card-width);
     }
+
+    /* Header mobile adaptation */
+    .chat-head {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+    .chat-head-title {
+        gap: 6px;
+    }
+    .chat-logo {
+        height: 30px;
+        width: 30px;
+    }
+    .chat-title-brand {
+        display: none;
+    }
+    .license-badge {
+        margin-left: 2px;
+        padding: 1.5px 5px;
+        font-size: 9px;
+    }
+    .head-actions {
+        gap: 6px;
+    }
+    .limit-status-pill {
+        display: none !important;
+    }
+    .device-pill {
+        height: 32px;
+        padding: 0 8px;
+        gap: 4px;
+        font-size: 11px;
+    }
+    .device-pill svg {
+        height: 14px;
+        width: 14px;
+    }
+    .icon-button {
+        height: 32px;
+        width: 32px;
+    }
+    .icon-button svg {
+        height: 16px;
+        width: 16px;
+    }
 }
 .message-avatar {
     align-items: center;

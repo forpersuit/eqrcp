@@ -246,7 +246,7 @@
         <div class="chat-head-title">
           <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
           <div class="chat-title-container">
-            <h1 id="chat-title-text">EQT<span class="license-badge">VIP</span></h1>
+            <h1 id="chat-title-text"><span class="chat-title-brand">EQT</span><span class="license-badge">VIP</span></h1>
           </div>
         </div>
 
