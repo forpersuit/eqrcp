@@ -121,6 +121,7 @@ type DesktopSettings struct {
 	LastSuccessfulVersion    string            `json:"lastSuccessfulVersion"`
 	Lang                     string            `json:"lang"`
 	ShowHistory              bool              `json:"showHistory"`
+	EnableChatV2             bool              `json:"enableChatV2"`
 }
 
 type InterfaceOption struct {

@@ -34,6 +34,7 @@ type DesktopSettings struct {
 	LastSuccessfulVersion    string           `json:"lastSuccessfulVersion"`
 	Lang             string                   `json:"lang"`
 	ShowHistory      bool                     `json:"showHistory"`
+	EnableChatV2     bool                     `json:"enableChatV2"`
 }
 
 const (
@@ -127,6 +128,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("showHistory") {
 		showHistory = v.GetBool("showHistory")
 	}
+	enableChatV2 := false
+	if v.IsSet("enableChatV2") {
+		enableChatV2 = v.GetBool("enableChatV2")
+	}
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
@@ -149,6 +154,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		LastSuccessfulVersion:    lastSuccessfulVersion,
 		Lang:                     lang,
 		ShowHistory:              showHistory,
+		EnableChatV2:             enableChatV2,
 	}, nil
 }
 
@@ -205,6 +211,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("lastSuccessfulVersion", settings.LastSuccessfulVersion)
 	v.Set("lang", settings.Lang)
 	v.Set("showHistory", settings.ShowHistory)
+	v.Set("enableChatV2", settings.EnableChatV2)
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}

@@ -403,6 +403,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		LastSuccessfulVersion:    s.LastSuccessfulVersion,
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
+		EnableChatV2:             s.EnableChatV2,
 	}
 }
 
@@ -436,6 +437,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		LastSuccessfulVersion:    s.LastSuccessfulVersion,
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
+		EnableChatV2:             s.EnableChatV2,
 	}
 }
 
@@ -962,7 +964,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		}
 	case "chat":
 		chatPageURLBuilder := func() string {
-			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar)
+			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar, desktopSettings.EnableChatV2)
 		}
 		agent.log.Infof("runTask (chat): chat join URL = %s", srv.ChatJoinURL())
 		if agentApp.Flags.Browser {
@@ -1223,7 +1225,10 @@ func desktopAgentPathsSummary(paths []string) string {
 	}
 }
 
-func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar string) string {
+func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar string, useV2 bool) string {
+	if useV2 {
+		baseURL = strings.Replace(baseURL, "/chat/", "/chat-v2/", 1)
+	}
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		query := "?peer=desktop&hostToken=" + url.QueryEscape(hostToken)

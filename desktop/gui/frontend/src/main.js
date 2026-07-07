@@ -1807,6 +1807,15 @@ function renderSettingsPanel() {
                         <button type="button" class="icon-button-mini path-link" id="open-chat-save" data-open-path="${escapeAttr(state.chatSaveDir || '')}" title="${t('open_folder')}" aria-label="${t('open_folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center;">${openFolderIcon()}</button>
                     </div>
                 </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('chat_v2')}</strong>
+                        <span>${t('chat_v2_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-chat-v2', state.settings.enableChatV2)}
+                    </div>
+                </div>
             </section>
 
             <section class="settings-section">
@@ -3453,6 +3462,7 @@ function syncSettingsFromDOM() {
     const receiveBrowser = document.querySelector('#browser-open');
     const sideBrowser = document.querySelector('#settings-browser');
     const chatAutoSave = document.querySelector('#settings-chat-autosave');
+    const enableChatV2 = document.querySelector('#settings-chat-v2');
     const closeBehavior = document.querySelector('#settings-close-behavior');
     const iface = document.querySelector('#settings-interface');
     const port = document.querySelector('#settings-port');
@@ -3468,6 +3478,7 @@ function syncSettingsFromDOM() {
     if (receiveBrowser) state.settings.browser = receiveBrowser.checked;
     if (sideBrowser) state.settings.browser = sideBrowser.checked;
     if (chatAutoSave) state.settings.chatAutoSave = chatAutoSave.checked;
+    if (enableChatV2) state.settings.enableChatV2 = enableChatV2.checked;
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
     if (iface) state.settings.interface = iface.value;
     if (port) state.settings.port = Number(port.value);
@@ -3729,6 +3740,7 @@ function bindSettingsControls() {
         '#settings-port',
         '#settings-browser',
         '#settings-chat-autosave',
+        '#settings-chat-v2',
         '#settings-close-behavior',
         '#settings-auto-update-mode',
         '#settings-update-interval',

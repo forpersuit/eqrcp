@@ -228,6 +228,7 @@ export namespace main {
 	    lastSuccessfulVersion: string;
 	    lang: string;
 	    showHistory: boolean;
+	    enableChatV2: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -255,6 +256,7 @@ export namespace main {
 	        this.lastSuccessfulVersion = source["lastSuccessfulVersion"];
 	        this.lang = source["lang"];
 	        this.showHistory = source["showHistory"];
+	        this.enableChatV2 = source["enableChatV2"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

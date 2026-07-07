@@ -24,6 +24,7 @@ import (
 	"eqt/pkg/pages"
 	"eqt/pkg/qr"
 	"eqt/pkg/version"
+	chatv2http "eqt/pkg/chat/v2/http"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -321,6 +322,12 @@ func (s *Server) Chat() error {
 		w.Header().Set("Content-Length", strconv.Itoa(len(qrBytes)))
 		_, _ = w.Write(qrBytes)
 	})
+	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
+		BasePath: "/chat-v2",
+		Logger:   nil,
+	})
+	s.mux.Handle("/chat-v2/", chatV2Handler)
+
 	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
 		if handleChatCORS(w, r, http.MethodGet) {
 			return

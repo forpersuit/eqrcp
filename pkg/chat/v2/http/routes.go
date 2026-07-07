@@ -88,6 +88,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	distPath := "./pkg/chat/v2/web/dist"
 	if _, err := os.Stat(distPath + "/index.html"); err == nil {
+		if token == "assets" || token == "favicon.png" {
+			localFile := distPath + "/" + token + suffix
+			if _, err := os.Stat(localFile); err == nil {
+				http.ServeFile(w, r, localFile)
+				return
+			}
+		}
 		if suffix == "" || suffix == "/" {
 			http.ServeFile(w, r, distPath+"/index.html")
 			return
