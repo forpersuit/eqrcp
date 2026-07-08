@@ -392,3 +392,11 @@ func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token st
 	}
 	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "QR image rendered and sent", nil, append(fields, diag.F("url", joinURL))...)
 }
+
+// GetAttachmentPath retrieves the absolute local path for a chat attachment by ID.
+func (h *Handler) GetAttachmentPath(id string) (string, bool) {
+	if h.sessions == nil {
+		return "", false
+	}
+	return h.sessions.GetAttachmentPathByID(id)
+}

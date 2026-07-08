@@ -32,6 +32,7 @@ import (
 	"eqt/pkg/pages"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
+	chatv2http "eqt/pkg/chat/v2/http"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -83,6 +84,7 @@ type Server struct {
 	outputDir      string
 	chatDir        string
 	chatSession    *chatSession
+	chatV2Handler  *chatv2http.Handler
 	stopChannel    chan bool
 	statusMu       sync.Mutex
 	status         transferStatus
@@ -3059,6 +3061,12 @@ func formatByteSize(bytes int64) string {
 
 // GetChatAttachmentPath returns the absolute local path for a chat attachment by ID.
 func (s *Server) GetChatAttachmentPath(id string) (string, bool) {
+	if s.chatV2Handler != nil {
+		if path, ok := s.chatV2Handler.GetAttachmentPath(id); ok && path != "" {
+			return path, true
+		}
+	}
+
 	s.statusMu.Lock()
 	session := s.chatSession
 	s.statusMu.Unlock()

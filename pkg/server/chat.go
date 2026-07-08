@@ -333,6 +333,7 @@ func (s *Server) Chat() error {
 			return s.ChatHostToken()
 		},
 	})
+	s.chatV2Handler = chatV2Handler
 	s.mux.Handle("/chat-v2/", chatV2Handler)
 
 	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {

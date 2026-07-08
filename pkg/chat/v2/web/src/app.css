@@ -1315,10 +1315,21 @@ input:focus { border-color: var(--accent); outline: none; }
 /* ── Mobile ── */
 @media (max-width: 820px) {
     .device-panel {
+        position: fixed;
+        top: 56px;
         right: 8px;
         left: 8px;
         min-width: 0;
         width: auto;
+        z-index: 1000;
+    }
+    .lang-panel {
+        position: fixed;
+        top: 56px;
+        right: 8px;
+        left: auto;
+        min-width: 120px;
+        z-index: 1000;
     }
     .device-rename-input {
         font-size: 16px; /* Prevent automatic zooming in mobile Safari */
@@ -1354,6 +1365,7 @@ input:focus { border-color: var(--accent); outline: none; }
         top: var(--chat-viewport-top);
         width: var(--chat-viewport-width);
         z-index: 0;
+        transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), max-height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
     main {
         display: grid;

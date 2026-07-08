@@ -36,3 +36,15 @@ func (m *Manager) Delete(token string) {
 	defer m.mu.Unlock()
 	delete(m.sessions, token)
 }
+
+// GetAttachmentPathByID searches all sessions for the physical path of the given attachment ID.
+func (m *Manager) GetAttachmentPathByID(id string) (string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, sess := range m.sessions {
+		if path := sess.GetAttachment(id); path != "" {
+			return path, true
+		}
+	}
+	return "", false
+}
