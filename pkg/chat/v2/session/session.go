@@ -98,7 +98,7 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 func (s *Session) SendText(sender *Client, text string, commandID string) {
 	msg := &protocol.Message{
 		ID:        generateID(),
-		SenderID:  sender.ID,
+		SenderID:  sender.Peer,
 		Sender:    sender.Label,
 		Avatar:    sender.Avatar,
 		Theme:     sender.Theme,

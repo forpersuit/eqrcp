@@ -39,6 +39,7 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 		Sender string `json:"sender"`
 		Avatar string `json:"avatar"`
 		Token  string `json:"token"`
+		Peer   string `json:"peer"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "invalid request body"), fields...)
@@ -75,9 +76,14 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 	sess := h.sessions.GetOrCreate(token)
 	sess.AddAttachment(msgID, req.Path)
 
+	senderID := req.Peer
+	if senderID == "" {
+		senderID = "desktop"
+	}
+
 	msg := &protocol.Message{
 		ID:        msgID,
-		SenderID:  "desktop",
+		SenderID:  senderID,
 		Sender:    req.Sender,
 		Avatar:    req.Avatar,
 		Type:      protocol.MessageFile,
@@ -133,6 +139,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 
 	sender := r.FormValue("sender")
 	avatar := r.FormValue("avatar")
+	peer := r.FormValue("peer")
 	if sender == "" {
 		sender = "Anonymous"
 	}
@@ -165,9 +172,14 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	sess := h.sessions.GetOrCreate(token)
 	sess.AddAttachment(msgID, tempFile.Name())
 
+	senderID := peer
+	if senderID == "" {
+		senderID = "web-upload"
+	}
+
 	msg := &protocol.Message{
 		ID:        msgID,
-		SenderID:  "web-upload",
+		SenderID:  senderID,
 		Sender:    sender,
 		Avatar:    avatar,
 		Type:      protocol.MessageFile,

@@ -219,7 +219,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing messageId")
 				continue
 			}
-			sess.RecallMessage(cl.ID, cmd.MessageID, cmd.CommandID)
+			sess.RecallMessage(cl.Peer, cmd.MessageID, cmd.CommandID)
 
 
 		case protocol.CommandStartTransfer:

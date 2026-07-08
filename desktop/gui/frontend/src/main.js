@@ -364,7 +364,12 @@ function isTrustedChatFrameMessage(event) {
 function isTrustedChatURL(rawURL, origin) {
     try {
         const parsed = new URL(rawURL);
-        const matched = parsed.origin === origin && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        const normalizeOrigin = (orig) => {
+            if (!orig) return '';
+            return orig.replace('://localhost', '://127.0.0.1');
+        };
+        const matched = normalizeOrigin(parsed.origin) === normalizeOrigin(origin) && 
+                        (parsed.protocol === 'http:' || parsed.protocol === 'https:');
         if (!matched) {
             console.warn('[Antigravity Debug] isTrustedChatURL check failed. parsed.origin:', parsed.origin, 'event.origin:', origin);
         }

@@ -122,7 +122,8 @@
         path: filePath,
         sender: sender,
         avatar: avatar,
-        token: deviceToken
+        token: deviceToken,
+        peer: localStorage.getItem('chat_peer') || ''
       })
     })
     .then(r => {
@@ -463,6 +464,7 @@
     formData.append('file', file);
     formData.append('sender', $currentDevice?.label || 'Me');
     formData.append('avatar', $currentDevice?.avatar || '');
+    formData.append('peer', localStorage.getItem('chat_peer') || '');
 
     const uploadUrl = `/chat-v2/${token}/upload`;
 
@@ -736,7 +738,14 @@
         txState={$transfers}
         currentLang={currentLang}
         isEmbedded={isEmbedded}
-        isMine={(msg) => msg.sender === ($currentDevice?.label || 'Me')}
+        isMine={(msg) => {
+          const myPeer = localStorage.getItem('chat_peer');
+          if (msg.senderId) {
+            if (msg.senderId === myPeer) return true;
+            if (myPeer === 'desktop' && msg.senderId === 'desktop') return true;
+          }
+          return msg.sender === ($currentDevice?.label || 'Me');
+        }}
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}
         on:recallMessage={handleRecallMessage}

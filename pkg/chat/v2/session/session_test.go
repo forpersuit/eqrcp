@@ -122,7 +122,7 @@ func TestSessionRecallMessage(t *testing.T) {
 	msgID := events[0].Message.ID
 
 	// Recall message (matching sender)
-	sess.RecallMessage(c1.ID, msgID, "cmd-2")
+	sess.RecallMessage(c1.Peer, msgID, "cmd-2")
 
 	// Verify recalled in message store
 	eventsAfterRecall := sess.MessageStore.GetSince(1)
@@ -145,8 +145,8 @@ func TestSessionRecallMessage(t *testing.T) {
 	}
 	msgID2 := events2[0].Message.ID
 
-	// Try to recall message of c1 using c2.ID
-	sess.RecallMessage(c2.ID, msgID2, "cmd-4")
+	// Try to recall message of c1 using c2.Peer
+	sess.RecallMessage(c2.Peer, msgID2, "cmd-4")
 
 	// Verify it remains not recalled
 	eventsAfterRecall2 := sess.MessageStore.GetSince(int64(len(sess.MessageStore.events) - 2))
