@@ -61,6 +61,9 @@ func NewHandler(cfg Config) *Handler {
 
 	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
 		sess := sessions.GetOrCreate(token)
+		if ev.MessageID != "" && (et == protocol.EventTransferStarted || et == protocol.EventTransferProgress || et == protocol.EventTransferCompleted) {
+			sess.MessageStore.MarkDownloaded(ev.MessageID)
+		}
 		sess.Broadcast(protocol.EventEnvelope{
 			Type:     et,
 			Transfer: &ev,

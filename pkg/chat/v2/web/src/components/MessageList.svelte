@@ -291,6 +291,8 @@
                               {:else if tx.state === 'completed'}
                                 · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
                               {/if}
+                            {:else if msg.downloaded}
+                              · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
                             {/if}
                           </div>
                         </div>
@@ -399,7 +401,7 @@
                     {/if}
 
                     {#if mine}
-                      {#if !(msg.type === 'file' && tx && tx.state === 'completed')}
+                      {#if !(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded))}
                         <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
                           {#if recallConfirmingId === msg.id}
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>

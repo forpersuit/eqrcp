@@ -79,4 +79,22 @@ func (s *MessageStore) CurrentSeq() int64 {
 	return s.nextSeq - 1
 }
 
+// MarkDownloaded finds the message event with the given messageID, marks it as downloaded, and returns it.
+func (s *MessageStore) MarkDownloaded(messageID string) *protocol.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, e := range s.events {
+		if e.Message != nil && e.Message.ID == messageID {
+			if !e.Message.Downloaded {
+				e.Message.Downloaded = true
+				s.events[i] = e
+				return e.Message
+			}
+			return e.Message
+		}
+	}
+	return nil
+}
+
 

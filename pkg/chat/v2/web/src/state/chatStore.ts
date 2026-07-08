@@ -84,5 +84,17 @@ export const chatActions = {
       }
       return m;
     }));
+  },
+
+  markMessageDownloaded(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          downloaded: true
+        };
+      }
+      return m;
+    }));
   }
 };

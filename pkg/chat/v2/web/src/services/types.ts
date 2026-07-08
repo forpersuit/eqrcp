@@ -63,6 +63,7 @@ export interface Message {
   mimeType?: string;
   url?: string;
   filePath?: string;
+  downloaded?: boolean;
   createdAt: string;
 }
 

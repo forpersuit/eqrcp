@@ -47,6 +47,7 @@ type Message struct {
 	URL       string      `json:"url,omitempty"`
 	FilePath  string      `json:"filePath,omitempty"`
 	Recalled  bool        `json:"recalled,omitempty"`
+	Downloaded bool        `json:"downloaded,omitempty"`
 	CreatedAt time.Time   `json:"createdAt"`
 }
 
