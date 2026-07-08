@@ -233,7 +233,7 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const tx = txState[msg.id] || txState['dl-' + msg.id] || txState['ul-' + msg.id]}
-        {@const isDownloaded = (tx && tx.state === 'completed') || (!tx && msg.filePath)}
+        {@const isDownloaded = (tx && tx.state === 'completed') || (!tx && (isEmbedded ? msg.filePath : msg.downloaded))}
         {@const colors = getMessageColors(msg, mine)}
         <div 
           class="message" 
