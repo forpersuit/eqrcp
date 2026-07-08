@@ -1427,3 +1427,19 @@ input:focus { border-color: var(--accent); outline: none; }
     }
 }
 
+.custom-context-menu {
+    background: var(--panel, #fff);
+    border: 1px solid var(--line, #ddd);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    min-width: 130px;
+}
+.custom-context-menu button {
+    transition: background 0.1s ease, color 0.1s ease;
+}
+.custom-context-menu button:hover {
+    background: var(--wash, #f5f5f5);
+    color: var(--accent-strong, #7c3aed) !important;
+}
+

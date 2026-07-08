@@ -210,6 +210,136 @@
     }
   }
 
+  let contextMenuEl: HTMLDivElement | null = null;
+
+  function handleGlobalContextMenu(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      const isReadOnly = (target as HTMLInputElement).readOnly || (target as HTMLInputElement).disabled;
+      const type = target.getAttribute('type') || 'text';
+      if (type === 'checkbox' || type === 'radio' || type === 'file') {
+        return;
+      }
+
+      e.preventDefault();
+      closeContextMenu();
+
+      const menu = document.createElement('div');
+      menu.className = 'custom-context-menu';
+      menu.style.position = 'fixed';
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      menu.style.zIndex = '99999';
+
+      const input = target as HTMLInputElement | HTMLTextAreaElement;
+      const isZh = currentLang === 'zh';
+      const labels = isZh ? {
+        cut: '剪切',
+        copy: '复制',
+        paste: '粘贴',
+        selectAll: '全选'
+      } : {
+        cut: 'Cut',
+        copy: 'Copy',
+        paste: 'Paste',
+        selectAll: 'Select All'
+      };
+
+      const items = [];
+
+      // Cut
+      if (!isReadOnly) {
+        items.push({
+          label: labels.cut,
+          action: () => {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const val = input.value;
+            if (start !== end) {
+              const selectedText = val.substring(start, end);
+              navigator.clipboard.writeText(selectedText).then(() => {
+                input.value = val.substring(0, start) + val.substring(end);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+              });
+            }
+          }
+        });
+      }
+
+      // Copy
+      items.push({
+        label: labels.copy,
+        action: () => {
+          const start = input.selectionStart || 0;
+          const end = input.selectionEnd || 0;
+          if (start !== end) {
+            const selectedText = input.value.substring(start, end);
+            navigator.clipboard.writeText(selectedText);
+          }
+        }
+      });
+
+      // Paste
+      if (!isReadOnly) {
+        items.push({
+          label: labels.paste,
+          action: () => {
+            navigator.clipboard.readText().then(text => {
+              const start = input.selectionStart || 0;
+              const end = input.selectionEnd || 0;
+              const val = input.value;
+              input.value = val.substring(0, start) + text + val.substring(end);
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              setTimeout(() => {
+                input.selectionStart = input.selectionEnd = start + text.length;
+              }, 0);
+            }).catch(() => {});
+          }
+        });
+      }
+
+      // Select All
+      items.push({
+        label: labels.selectAll,
+        action: () => {
+          input.select();
+        }
+      });
+
+      items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = item.label;
+        btn.style.width = '100%';
+        btn.style.padding = '8px 12px';
+        btn.style.border = 'none';
+        btn.style.background = 'none';
+        btn.style.color = 'var(--ink, #333)';
+        btn.style.textAlign = 'left';
+        btn.style.cursor = 'pointer';
+        btn.style.fontSize = '12px';
+        btn.style.outline = 'none';
+        btn.addEventListener('click', () => {
+          item.action();
+          closeContextMenu();
+        });
+        menu.appendChild(btn);
+      });
+
+      document.body.appendChild(menu);
+      contextMenuEl = menu;
+
+      document.addEventListener('click', closeContextMenu, { once: true });
+    }
+  }
+
+  function closeContextMenu() {
+    if (contextMenuEl) {
+      contextMenuEl.remove();
+      contextMenuEl = null;
+    }
+  }
+
   function formatDeviceTime(timeStr?: string): string {
     if (!timeStr) return '刚刚';
     const date = new Date(timeStr);
@@ -293,9 +423,12 @@
 
     client = new ChatWebSocketClient(token);
     client.connect();
+    document.addEventListener('contextmenu', handleGlobalContextMenu);
   });
 
   onDestroy(() => {
+    document.removeEventListener('contextmenu', handleGlobalContextMenu);
+    closeContextMenu();
     window.removeEventListener('message', handleMessage);
     if (observer) {
       observer.disconnect();
@@ -401,7 +534,7 @@
     const msg = e.detail;
     if (isEmbedded) {
       if (msg.filePath) {
-        window.parent.postMessage({ type: 'open-file', path: msg.filePath }, '*');
+        window.parent.postMessage({ type: 'open-path', path: msg.filePath }, '*');
       } else {
         window.parent.postMessage({ type: 'open-chat-file', filename: msg.fileName }, '*');
       }

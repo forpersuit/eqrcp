@@ -285,13 +285,15 @@ window.addEventListener('message', (e) => {
             });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
+    } else if (e.data.type === 'open-path') {
+        OpenPath(String(e.data.path || '')).catch(() => {});
     } else if (e.data.type === 'open-chat-file') {
         const filename = String(e.data.filename || '');
         ChatSaveDirectory()
             .then((dir) => {
                 if (dir) {
                     const fullPath = dir + '/' + filename;
-                    OpenFile(fullPath).catch(() => {});
+                    OpenPath(fullPath).catch(() => {});
                 }
             })
             .catch(() => {});
@@ -5502,3 +5504,100 @@ function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 
 }
 
 window.renderReceiveDeviceProgressHtml = renderReceiveDeviceProgressHtml;
+
+// 全局 input/textarea 的右键菜单支持 (Context menu for text elements)
+document.addEventListener('contextmenu', (e) => {
+    const target = e.target;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        const isReadOnly = target.readOnly || target.disabled;
+        const type = target.getAttribute('type') || 'text';
+        if (type === 'checkbox' || type === 'radio' || type === 'file') {
+            return;
+        }
+
+        e.preventDefault();
+        const labels = getTextContextMenuLabels();
+        const items = [];
+
+        // 剪切
+        if (!isReadOnly) {
+            items.push({
+                label: labels.cut,
+                action: () => {
+                    const start = target.selectionStart || 0;
+                    const end = target.selectionEnd || 0;
+                    const val = target.value;
+                    if (start !== end) {
+                        const selectedText = val.substring(start, end);
+                        navigator.clipboard.writeText(selectedText).then(() => {
+                            target.value = val.substring(0, start) + val.substring(end);
+                            target.dispatchEvent(new Event('input', { bubbles: true }));
+                            target.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                    }
+                }
+            });
+        }
+
+        // 复制
+        items.push({
+            label: labels.copy,
+            action: () => {
+                const start = target.selectionStart || 0;
+                const end = target.selectionEnd || 0;
+                if (start !== end) {
+                    const selectedText = target.value.substring(start, end);
+                    navigator.clipboard.writeText(selectedText);
+                }
+            }
+        });
+
+        // 粘贴
+        if (!isReadOnly) {
+            items.push({
+                label: labels.paste,
+                action: () => {
+                    navigator.clipboard.readText().then(text => {
+                        const start = target.selectionStart || 0;
+                        const end = target.selectionEnd || 0;
+                        const val = target.value;
+                        target.value = val.substring(0, start) + text + val.substring(end);
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                        target.dispatchEvent(new Event('change', { bubbles: true }));
+                        setTimeout(() => {
+                            target.selectionStart = target.selectionEnd = start + text.length;
+                        }, 0);
+                    }).catch(() => {});
+                }
+            });
+        }
+
+        // 全选
+        items.push({
+            label: labels.selectAll,
+            action: () => {
+                target.select();
+            }
+        });
+
+        showContextMenu(items, e.clientX, e.clientY);
+    }
+});
+
+function getTextContextMenuLabels() {
+    const lang = (state && state.settings && state.settings.lang) || 'zh';
+    if (lang.startsWith('zh')) {
+        return { cut: '剪切', copy: '复制', paste: '粘贴', selectAll: '全选' };
+    } else if (lang.startsWith('ja')) {
+        return { cut: '切り取り', copy: 'コピー', paste: '貼り付け', selectAll: 'すべて選択' };
+    } else if (lang.startsWith('ko')) {
+        return { cut: '잘라내기', copy: '복사', paste: '붙여넣기', selectAll: '모두 선택' };
+    } else if (lang.startsWith('es')) {
+        return { cut: 'Cortar', copy: 'Copiar', paste: 'Pegar', selectAll: 'Seleccionar todo' };
+    } else if (lang.startsWith('de')) {
+        return { cut: 'Ausschneiden', copy: 'Kopieren', paste: 'Einfügen', selectAll: 'Alles auswählen' };
+    } else if (lang.startsWith('fr')) {
+        return { cut: 'Couper', copy: 'Copier', paste: 'Coller', selectAll: 'Tout sélectionner' };
+    }
+    return { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' };
+}
