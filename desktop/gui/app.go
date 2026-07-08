@@ -489,6 +489,8 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 					"messageId": messageID,
 					"progress":  100,
 				})
+				// Notify the server about this fast local download to trigger websocket events for other clients
+				a.agent.activeServer.NotifyQuickDownload(messageID)
 				return nil
 			}
 			a.logError(fmt.Sprintf("[GUI] downloadChatAttachmentTo: quickCopyFile failed, falling back to HTTP: %v", err))

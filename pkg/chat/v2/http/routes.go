@@ -84,6 +84,7 @@ func NewHandler(cfg Config) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	token, suffix, ok := h.route(r.URL.Path)
 	if !ok || token == "" {
 		http.NotFound(w, r)
@@ -407,4 +408,28 @@ func (h *Handler) GetAttachmentPath(id string) (string, bool) {
 		return "", false
 	}
 	return h.sessions.GetAttachmentPathByID(id)
+}
+
+// NotifyQuickDownload simulates a transfer job for a fast local copy, triggering broadcast events.
+func (h *Handler) NotifyQuickDownload(messageID string) {
+	if h.sessions == nil || h.transfer == nil {
+		return
+	}
+	token, filePath, ok := h.sessions.GetAttachmentTokenAndPath(messageID)
+	if !ok {
+		return
+	}
+
+	jobID := "dl-" + messageID
+	filename := "download-" + messageID + ".bin"
+	var size int64 = 1024 * 1024
+	if info, err := os.Stat(filePath); err == nil {
+		filename = info.Name()
+		size = info.Size()
+	}
+
+	// Trigger full event lifecycle to notify all connected clients (e.g. mobile)
+	h.transfer.CreateJob(token, jobID, messageID, "", filename, size)
+	_ = h.transfer.StartJob(jobID)
+	_ = h.transfer.CompleteJob(jobID)
 }

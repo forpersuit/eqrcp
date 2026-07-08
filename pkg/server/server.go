@@ -3084,3 +3084,10 @@ func (s *Server) GetChatAttachmentPath(id string) (string, bool) {
 	return attachment.Path, true
 }
 
+// NotifyQuickDownload triggers transfer notification for local copy downloads.
+func (s *Server) NotifyQuickDownload(id string) {
+	if s.chatV2Handler != nil {
+		s.chatV2Handler.NotifyQuickDownload(id)
+	}
+}
+

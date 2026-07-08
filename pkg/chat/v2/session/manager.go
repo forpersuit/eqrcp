@@ -48,3 +48,15 @@ func (m *Manager) GetAttachmentPathByID(id string) (string, bool) {
 	}
 	return "", false
 }
+
+// GetAttachmentTokenAndPath searches all sessions for both token and physical path of the given attachment ID.
+func (m *Manager) GetAttachmentTokenAndPath(id string) (string, string, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for token, sess := range m.sessions {
+		if path := sess.GetAttachment(id); path != "" {
+			return token, path, true
+		}
+	}
+	return "", "", false
+}
