@@ -357,7 +357,13 @@
                         {/if}
                       {/if}
                     {:else}
-                      {#if isDownloaded}
+                      {#if msg.uploading}
+                        <div class="bubble-action disabled-upload" title={currentLang === 'en' ? 'Uploading...' : '对方上传中...'} style="display: flex; align-items: center; justify-content: center; padding: 4px;">
+                          <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; opacity: 0.6;">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
+                          </svg>
+                        </div>
+                      {:else if isDownloaded}
                         <div style="display: flex; gap: 6px; align-items: center;">
                           <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
                             <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -401,7 +407,7 @@
                     {/if}
 
                     {#if mine}
-                      {#if !(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded))}
+                      {#if !(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))}
                         <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
                           {#if recallConfirmingId === msg.id}
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>

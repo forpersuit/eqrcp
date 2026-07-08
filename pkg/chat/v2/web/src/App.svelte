@@ -504,20 +504,22 @@
     if (!file) return;
 
     chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Uploading file: ${name}...` 
-      : `正在上传文件: ${name}...`);
+      ? `Initializing upload for: ${name}...` 
+      : `准备上传文件: ${name}...`);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('sender', $currentDevice?.label || 'Me');
-    formData.append('avatar', $currentDevice?.avatar || '');
-    formData.append('peer', localStorage.getItem('chat_peer') || '');
-
-    const uploadUrl = `/chat-v2/${token}/upload`;
-
-    fetch(uploadUrl, {
+    const initUrl = `/chat-v2/${token}/upload/init`;
+    fetch(initUrl, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        fileName: name,
+        size: file.size,
+        sender: $currentDevice?.label || 'Me',
+        avatar: $currentDevice?.avatar || '',
+        peer: localStorage.getItem('chat_peer') || ''
+      })
     })
     .then(r => {
       if (!r.ok) {
@@ -525,8 +527,30 @@
       }
       return r.json();
     })
-    .then(message => {
-      console.log('File uploaded and registered successfully:', message);
+    .then(msg => {
+      const msgID = msg.id;
+      // Metdata registered, now send the actual file stream via /upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('sender', $currentDevice?.label || 'Me');
+      formData.append('avatar', $currentDevice?.avatar || '');
+      formData.append('peer', localStorage.getItem('chat_peer') || '');
+      formData.append('messageId', msgID);
+
+      const uploadUrl = `/chat-v2/${token}/upload`;
+      return fetch(uploadUrl, {
+        method: 'POST',
+        body: formData
+      });
+    })
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(t => { throw new Error(t); });
+      }
+      return r.json();
+    })
+    .then(res => {
+      console.log('File upload completed successfully:', res);
     })
     .catch(err => {
       console.error('Failed to upload file:', err);

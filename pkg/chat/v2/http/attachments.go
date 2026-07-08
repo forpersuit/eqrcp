@@ -14,6 +14,7 @@ import (
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/chat/v2/transfer"
 )
 
 // handleLocalAttachmentRegister registers a local file attachment from the GUI host.
@@ -117,6 +118,62 @@ func generateAttachmentMsgID() string {
 	return fmt.Sprintf("msg-%d", seed.Int64()+1)
 }
 
+// handleUploadInit handles pre-registering a file upload message to get a message ID and allocate placeholder cards.
+func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodPost {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
+	}
+
+	var req struct {
+		FileName string `json:"fileName"`
+		Size     int64  `json:"size"`
+		Sender   string `json:"sender"`
+		Avatar   string `json:"avatar"`
+		Peer     string `json:"peer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "invalid request body"), fields...)
+		return
+	}
+
+	msgID := generateAttachmentMsgID()
+
+	// Register an upload job
+	jobID := "ul-" + msgID
+	h.transfer.CreateJob(token, jobID, msgID, "", req.FileName, req.Size)
+	_ = h.transfer.StartJob(jobID)
+
+	sess := h.sessions.GetOrCreate(token)
+	senderID := req.Peer
+	if senderID == "" {
+		senderID = "web-upload"
+	}
+
+	msg := &protocol.Message{
+		ID:        msgID,
+		SenderID:  senderID,
+		Sender:    req.Sender,
+		Avatar:    req.Avatar,
+		Type:      protocol.MessageFile,
+		FileName:  req.FileName,
+		Size:      req.Size,
+		MimeType:  mime.TypeByExtension(filepath.Ext(req.FileName)),
+		Uploading: true, // Marked as uploading state
+		CreatedAt: time.Now(),
+	}
+
+	event := protocol.EventEnvelope{
+		Type:    protocol.EventMessageAdded,
+		Message: msg,
+		Time:    time.Now(),
+	}
+	sess.Broadcast(event)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(msg)
+}
+
 // handleUpload handles file upload from web clients, writing the data to a temporary file.
 func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
 	if r.Method != http.MethodPost {
@@ -141,6 +198,8 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	sender := r.FormValue("sender")
 	avatar := r.FormValue("avatar")
 	peer := r.FormValue("peer")
+	messageID := r.FormValue("messageId")
+
 	if sender == "" {
 		sender = "Anonymous"
 	}
@@ -151,63 +210,98 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to create temp file: "+err.Error()), fields...)
 		return
 	}
-	// Note: We intentionally do NOT delete the tempFile upon handler completion
-	// because other clients need to download it later. It resides in system temp directory.
 	defer tempFile.Close()
 
+	// Wrap copy stream to report progress
+	var pr io.Reader = file
+	if messageID != "" {
+		pr = &progressReader{
+			reader:   file,
+			transfer: h.transfer,
+			jobID:    "ul-" + messageID,
+		}
+	}
+
 	// Stream copy
-	size, err := io.Copy(tempFile, file)
+	size, err := io.Copy(tempFile, pr)
 	if err != nil {
 		tempFile.Close()
 		os.Remove(tempFile.Name())
+		if messageID != "" {
+			_ = h.transfer.FailJob("ul-"+messageID, err)
+		}
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to save upload: "+err.Error()), fields...)
 		return
 	}
 
-	// 显式关闭临时文件以确保数据落盘且释放文件句柄，防止广播事件触发后并发下载读取到截断的残缺文件
+	// 显式关闭临时文件以确保数据落盘且释放文件句柄
 	if err := tempFile.Close(); err != nil {
 		os.Remove(tempFile.Name())
+		if messageID != "" {
+			_ = h.transfer.FailJob("ul-"+messageID, err)
+		}
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to flush upload temp file: "+err.Error()), fields...)
 		return
 	}
 
 	fileName := header.Filename
 	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
-
-	// Generate unique message ID
-	msgID := generateAttachmentMsgID()
-
-	// Register mapping in session
 	sess := h.sessions.GetOrCreate(token)
-	sess.AddAttachment(msgID, tempFile.Name())
 
-	senderID := peer
-	if senderID == "" {
-		senderID = "web-upload"
+	if messageID != "" {
+		// Update physical path and complete job
+		sess.AddAttachment(messageID, tempFile.Name())
+		sess.MessageStore.MarkUploadComplete(messageID)
+		_ = h.transfer.CompleteJob("ul-" + messageID)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "messageId": messageID})
+	} else {
+		// Fallback direct upload mode
+		msgID := generateAttachmentMsgID()
+		sess.AddAttachment(msgID, tempFile.Name())
+
+		senderID := peer
+		if senderID == "" {
+			senderID = "web-upload"
+		}
+
+		msg := &protocol.Message{
+			ID:        msgID,
+			SenderID:  senderID,
+			Sender:    sender,
+			Avatar:    avatar,
+			Type:      protocol.MessageFile,
+			FileName:  fileName,
+			Size:      size,
+			MimeType:  mimeType,
+			CreatedAt: time.Now(),
+		}
+
+		event := protocol.EventEnvelope{
+			Type:    protocol.EventMessageAdded,
+			Message: msg,
+			Time:    time.Now(),
+		}
+		sess.Broadcast(event)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(msg)
 	}
+}
 
-	msg := &protocol.Message{
-		ID:        msgID,
-		SenderID:  senderID,
-		Sender:    sender,
-		Avatar:    avatar,
-		Type:      protocol.MessageFile,
-		FileName:  fileName,
-		Size:      size,
-		MimeType:  mimeType,
-		CreatedAt: time.Now(),
+type progressReader struct {
+	reader   io.Reader
+	transfer *transfer.Manager
+	jobID    string
+	written  int64
+}
+
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.reader.Read(p)
+	if n > 0 {
+		pr.written += int64(n)
+		_ = pr.transfer.UpdateProgress(pr.jobID, pr.written)
 	}
-
-	event := protocol.EventEnvelope{
-		Type:    protocol.EventMessageAdded,
-		Message: msg,
-		Time:    time.Now(),
-	}
-
-	sess.Broadcast(event)
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(msg); err != nil {
-		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "failed to encode upload response", err, fields...)
-	}
+	return n, err
 }

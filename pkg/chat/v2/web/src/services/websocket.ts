@@ -164,8 +164,13 @@ export class ChatWebSocketClient {
       case 'transfer_cancelled':
         if (event.transfer) {
           chatActions.updateTransfer(event.transfer);
-          if (event.transfer.messageId && (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed')) {
-            chatActions.markMessageDownloaded(event.transfer.messageId);
+          if (event.transfer.messageId) {
+            if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
+              chatActions.markMessageDownloaded(event.transfer.messageId);
+            }
+            if (event.type === 'transfer_completed') {
+              chatActions.markMessageUploadComplete(event.transfer.messageId);
+            }
           }
         }
         break;

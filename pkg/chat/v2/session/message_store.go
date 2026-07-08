@@ -97,4 +97,22 @@ func (s *MessageStore) MarkDownloaded(messageID string) *protocol.Message {
 	return nil
 }
 
+// MarkUploadComplete finds the message event with the given messageID, marks Uploading as false, and returns it.
+func (s *MessageStore) MarkUploadComplete(messageID string) *protocol.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, e := range s.events {
+		if e.Message != nil && e.Message.ID == messageID {
+			if e.Message.Uploading {
+				e.Message.Uploading = false
+				s.events[i] = e
+				return e.Message
+			}
+			return e.Message
+		}
+	}
+	return nil
+}
+
 

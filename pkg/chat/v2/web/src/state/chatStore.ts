@@ -96,5 +96,17 @@ export const chatActions = {
       }
       return m;
     }));
+  },
+
+  markMessageUploadComplete(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          uploading: false
+        };
+      }
+      return m;
+    }));
   }
 };

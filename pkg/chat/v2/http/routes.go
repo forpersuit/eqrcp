@@ -108,6 +108,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if suffix == "/upload/init" {
+		h.handleUploadInit(w, r, token, fields...)
+		return
+	}
+
 	if suffix == "/upload" {
 		h.handleUpload(w, r, token, fields...)
 		return

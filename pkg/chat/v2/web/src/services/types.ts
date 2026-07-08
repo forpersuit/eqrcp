@@ -64,6 +64,7 @@ export interface Message {
   url?: string;
   filePath?: string;
   downloaded?: boolean;
+  uploading?: boolean;
   createdAt: string;
 }
 
