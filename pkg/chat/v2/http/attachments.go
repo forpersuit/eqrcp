@@ -90,6 +90,7 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 		FileName:  fileName,
 		Size:      size,
 		MimeType:  mimeType,
+		FilePath:  req.Path,
 		CreatedAt: time.Now(),
 	}
 

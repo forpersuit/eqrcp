@@ -45,6 +45,7 @@ type Message struct {
 	Size      int64       `json:"size,omitempty"`
 	MimeType  string      `json:"mimeType,omitempty"`
 	URL       string      `json:"url,omitempty"`
+	FilePath  string      `json:"filePath,omitempty"`
 	Recalled  bool        `json:"recalled,omitempty"`
 	CreatedAt time.Time   `json:"createdAt"`
 }

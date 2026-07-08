@@ -4046,10 +4046,45 @@ function showContextMenu(items, x, y) {
     });
     document.body.appendChild(menu);
     const rect = menu.getBoundingClientRect();
-    const left = Math.min(x, window.innerWidth - rect.width - 8);
-    const top = Math.min(y, window.innerHeight - rect.height - 8);
-    menu.style.left = `${Math.max(8, left)}px`;
-    menu.style.top = `${Math.max(8, top)}px`;
+    
+    // 默认在右上角弹出：
+    // 水平方向默认向右展开 (left = x)
+    // 垂直方向默认向上展开 (top = y - rect.height)
+    let left = x;
+    let top = y - rect.height;
+
+    // 检查水平方向是否超出右边缘
+    if (left + rect.width > window.innerWidth - 8) {
+        // 超出则调整到水平对侧 (向左展开)
+        left = x - rect.width;
+        // 如果向左展开后又超出了左边缘，则限制在可见区域内
+        if (left < 8) {
+            left = Math.max(8, window.innerWidth - rect.width - 8);
+        }
+    } else {
+        // 如果没有超出右边缘，但也需防范向右展开时 left 自身小于 8 的极端情况
+        if (left < 8) {
+            left = 8;
+        }
+    }
+
+    // 检查垂直方向是否超出上边缘
+    if (top < 8) {
+        // 超出则调整到水平对侧 (向下展开)
+        top = y;
+        // 如果向下展开后又超出了下边缘，则限制在可见区域内
+        if (top + rect.height > window.innerHeight - 8) {
+            top = Math.max(8, window.innerHeight - rect.height - 8);
+        }
+    } else {
+        // 如果没有超出上边缘，但也需防范向上展开时超出下边缘的极端情况
+        if (top + rect.height > window.innerHeight - 8) {
+            top = Math.max(8, window.innerHeight - rect.height - 8);
+        }
+    }
+
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
     window.setTimeout(() => {
         document.addEventListener('pointerdown', closeContextMenuOnOutside);
         document.addEventListener('keydown', closeContextMenuOnEscape);
