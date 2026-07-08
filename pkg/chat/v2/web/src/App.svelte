@@ -671,8 +671,10 @@
                         {#if isEditingName}
                           <div class="device-rename-form">
                             <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} class="device-rename-input" placeholder="输入设备名称">
-                            <button class="side-btn device-rename-btn" on:click|preventDefault={handleRenameDevice}>保存</button>
-                            <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
+                            <div class="device-rename-buttons">
+                              <button class="side-btn device-rename-btn" on:click|preventDefault={handleRenameDevice}>保存</button>
+                              <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
+                            </div>
                           </div>
                         {:else}
                           <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label} (本机)</strong>

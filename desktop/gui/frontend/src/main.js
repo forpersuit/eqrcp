@@ -242,7 +242,11 @@ function stopChatQRPulse() {
 
 // postMessage bridge: handle native operations requested by the chat iframe.
 window.addEventListener('message', (e) => {
-    if (!isTrustedChatFrameMessage(e)) { return; }
+    console.log('[Antigravity Debug] Wails parent received message:', e.data?.type, 'origin:', e.origin, 'data:', e.data);
+    if (!isTrustedChatFrameMessage(e)) {
+        console.warn('[Antigravity Debug] isTrustedChatFrameMessage validation failed for origin:', e.origin);
+        return;
+    }
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, e.origin)) { return; }
@@ -264,9 +268,15 @@ window.addEventListener('message', (e) => {
     } else if (e.data.type === 'download-file') {
         const url = String(e.data.url || '');
         const messageId = String(e.data.messageId || '');
-        if (!isTrustedChatURL(url, e.origin)) { return; }
+        console.log('[Antigravity Debug] download-file bridge invoked. URL:', url, 'messageId:', messageId);
+        if (!isTrustedChatURL(url, e.origin)) {
+            console.warn('[Antigravity Debug] download-file: URL trust check failed');
+            return;
+        }
+        console.log('[Antigravity Debug] Triggering DownloadChatAttachment API...');
         DownloadChatAttachment(url, String(e.data.name || 'attachment'))
             .then((path) => {
+                console.log('[Antigravity Debug] DownloadChatAttachment success. Save path:', path);
                 if (path) {
                     state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
                     e.source?.postMessage({
@@ -277,6 +287,7 @@ window.addEventListener('message', (e) => {
                 }
             })
             .catch((err) => {
+                console.error('[Antigravity Debug] DownloadChatAttachment backend error:', err);
                 e.source?.postMessage({
                     type: 'download-failed',
                     messageId: messageId,
@@ -330,16 +341,36 @@ function activeChatFrameOrigin() {
 
 function isTrustedChatFrameMessage(event) {
     const frame = document.querySelector('#chat-iframe');
-    if (!frame || event.source !== frame.contentWindow) { return false; }
+    if (!frame) {
+        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: iframe #chat-iframe not found');
+        return false;
+    }
     const origin = activeChatFrameOrigin();
-    return Boolean(origin && event.origin === origin);
+    if (!origin) {
+        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: activeChatFrameOrigin is empty');
+        return false;
+    }
+    const originMatched = (event.origin === origin);
+    if (!originMatched) {
+        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected:', origin);
+        return false;
+    }
+    if (event.source !== frame.contentWindow) {
+        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: event.source !== frame.contentWindow, but origin matched. Proceeding.');
+    }
+    return true;
 }
 
 function isTrustedChatURL(rawURL, origin) {
     try {
         const parsed = new URL(rawURL);
-        return parsed.origin === origin && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
-    } catch {
+        const matched = parsed.origin === origin && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        if (!matched) {
+            console.warn('[Antigravity Debug] isTrustedChatURL check failed. parsed.origin:', parsed.origin, 'event.origin:', origin);
+        }
+        return matched;
+    } catch (err) {
+        console.error('[Antigravity Debug] isTrustedChatURL: error parsing rawURL:', rawURL, err);
         return false;
     }
 }

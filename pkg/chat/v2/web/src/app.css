@@ -208,6 +208,11 @@ h1 {
     width: 100%;
     align-items: center;
 }
+.device-rename-buttons {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
 .device-rename-input {
     font-size: 11px;
     padding: 2px 6px;
@@ -1331,15 +1336,30 @@ input:focus { border-color: var(--accent); outline: none; }
         min-width: 120px;
         z-index: 1000;
     }
+    .device-rename-form {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+        align-items: stretch;
+    }
+    .device-rename-buttons {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        width: 100%;
+    }
     .device-rename-input {
-        font-size: 13px;
-        height: 28px;
-        padding: 4px 6px;
+        font-size: 16px; /* Lock to 16px to completely prevent auto-zooming on mobile iOS Safari */
+        height: 32px;
+        padding: 4px 8px;
+        width: 100%;
+        box-sizing: border-box;
     }
     .device-rename-btn {
         height: 28px;
-        font-size: 11px;
-        padding: 0 8px;
+        font-size: 12px;
+        padding: 0 10px;
     }
     .device-detail-head {
         flex-wrap: wrap;
