@@ -350,7 +350,11 @@ function isTrustedChatFrameMessage(event) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: activeChatFrameOrigin is empty');
         return false;
     }
-    const originMatched = (event.origin === origin);
+    const normalizeOrigin = (orig) => {
+        if (!orig) return '';
+        return orig.replace('://localhost', '://127.0.0.1');
+    };
+    const originMatched = (normalizeOrigin(event.origin) === normalizeOrigin(origin));
     if (!originMatched) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected:', origin);
         return false;
