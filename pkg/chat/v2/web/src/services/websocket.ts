@@ -64,6 +64,9 @@ export class ChatWebSocketClient {
         preferredTheme = 'theme-0';
       }
 
+      const savedJoinSeq = parseInt(localStorage.getItem(`eqt_join_seq_${this.token}`) || '0', 10);
+      const savedAfterSeq = parseInt(localStorage.getItem(`eqt_after_seq_${this.token}`) || '0', 10);
+
       // Perform Connect Command handshake
       this.sendCommand({
         type: 'connect',
@@ -74,7 +77,9 @@ export class ChatWebSocketClient {
           peer: this.clientPeer,
           theme: preferredTheme,
           join: this.joinParam
-        }
+        },
+        afterSeq: savedAfterSeq,
+        joinSeq: savedJoinSeq
       });
 
       this.startHeartbeat();
@@ -106,11 +111,21 @@ export class ChatWebSocketClient {
   }
 
   private handleEvent(event: EventEnvelope): void {
+    // Record event watermark to ensure reliable reconnection replay
+    if (event.seq !== undefined && event.seq > 0) {
+      localStorage.setItem(`eqt_after_seq_${this.token}`, event.seq.toString());
+    }
+
     switch (event.type) {
       case 'hello':
         chatActions.setConnectionState('connected');
         if (event.commandId && event.commandId.startsWith('init-')) {
           chatActions.addSystemMessage(`Registered presence roster as ${this.clientLabel}.`);
+        }
+        // Initialize join sequence boundary for new clients
+        const keyJoin = `eqt_join_seq_${this.token}`;
+        if (!localStorage.getItem(keyJoin) && event.seq !== undefined && event.seq > 0) {
+          localStorage.setItem(keyJoin, event.seq.toString());
         }
         break;
 

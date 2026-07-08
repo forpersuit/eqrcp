@@ -72,4 +72,11 @@ func (s *MessageStore) Recall(messageID string, senderID string) *protocol.Messa
 	return nil
 }
 
+// CurrentSeq returns the sequence number of the most recently added event.
+func (s *MessageStore) CurrentSeq() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.nextSeq - 1
+}
+
 

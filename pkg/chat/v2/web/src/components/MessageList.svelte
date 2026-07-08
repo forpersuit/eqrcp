@@ -95,7 +95,18 @@
     }
   }
 
+  function handleWindowResize() {
+    if (followLatest && messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('resize', handleWindowResize);
+  });
+
   onDestroy(() => {
+    window.removeEventListener('resize', handleWindowResize);
     if (confirmTimer) clearTimeout(confirmTimer);
     if (copiedTimer) clearTimeout(copiedTimer);
     if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);

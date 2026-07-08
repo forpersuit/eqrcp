@@ -173,7 +173,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 
 			cl.Send(protocol.EventEnvelope{
 				Type:      protocol.EventHello,
-				Seq:       0,
+				Seq:       sess.MessageStore.CurrentSeq(),
 				Time:      h.now(),
 				CommandID: cmd.CommandID,
 			})

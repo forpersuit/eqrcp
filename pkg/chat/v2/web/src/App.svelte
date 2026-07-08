@@ -451,15 +451,40 @@
     }
   }
 
-  function handleSendFile(e: CustomEvent<{ name: string; size: number; type: string }>) {
-    if (client) {
-      const filePayload = JSON.stringify({
-        type: 'file',
-        fileName: e.detail.name,
-        size: e.detail.size
-      });
-      client.sendText(filePayload);
-    }
+  function handleSendFile(e: CustomEvent<{ file: File; name: string; size: number; type: string }>) {
+    const { file, name } = e.detail;
+    if (!file) return;
+
+    chatActions.addSystemMessage(currentLang === 'en' 
+      ? `Uploading file: ${name}...` 
+      : `正在上传文件: ${name}...`);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sender', $currentDevice?.label || 'Me');
+    formData.append('avatar', $currentDevice?.avatar || '');
+
+    const uploadUrl = `/chat-v2/${token}/upload`;
+
+    fetch(uploadUrl, {
+      method: 'POST',
+      body: formData
+    })
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(t => { throw new Error(t); });
+      }
+      return r.json();
+    })
+    .then(message => {
+      console.log('File uploaded and registered successfully:', message);
+    })
+    .catch(err => {
+      console.error('Failed to upload file:', err);
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `Failed to upload file "${name}": ${err.message}`
+        : `上传文件 "${name}" 失败: ${err.message}`);
+    });
   }
 
   function handleStartDownload(e: CustomEvent<{ messageId: string; filename: string; size: number; isPaid: boolean }>) {
@@ -629,8 +654,8 @@
                     <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0;">
                       {dev.label ? dev.label.slice(0, 2).toUpperCase() : 'DE'}
                     </div>
-                    <div style="text-align: left; margin-left: 8px; flex: 1;">
-                      <strong style="display: block; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px;">{dev.label}</strong>
+                    <div style="text-align: left; margin-left: 8px; flex: 1; min-width: 0;">
+                      <strong style="display: block; font-size: 13px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
                       <span style="font-size: 10px; color: #888;">{dev.peer || 'connected'}</span>
                     </div>
                     {#if isSelf}
@@ -641,7 +666,7 @@
                   </button>
 
                   <div class="device-detail" class:open={selectedDevId === dev.id}>
-                    <div class="device-detail-head" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--line);">
+                    <div class="device-detail-head" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--line); min-width: 0;">
                       {#if isSelf}
                         {#if isEditingName}
                           <div class="device-rename-form">
@@ -650,14 +675,14 @@
                             <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
                           </div>
                         {:else}
-                          <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label} (本机)</strong>
-                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px;" on:click={() => isEditingName = true} title="重命名设备">
+                          <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label} (本机)</strong>
+                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px; flex-shrink: 0;" on:click={() => isEditingName = true} title="重命名设备">
                             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           </button>
                         {/if}
                       {:else}
-                        <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label}</strong>
-                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626;" on:click={() => handleKickDevice(dev.id, dev.label)} title="强制踢下线">
+                        <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
+                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626; flex-shrink: 0;" on:click={() => handleKickDevice(dev.id, dev.label)} title="强制踢下线">
                           <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 12h10M17 8l4 4-4 4M15 4H9a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>
                         </button>
                       {/if}

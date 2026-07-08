@@ -1318,9 +1318,9 @@ input:focus { border-color: var(--accent); outline: none; }
         position: fixed;
         top: 56px;
         right: 8px;
-        left: 8px;
+        left: auto;
         min-width: 0;
-        width: auto;
+        width: 220px;
         z-index: 1000;
     }
     .lang-panel {

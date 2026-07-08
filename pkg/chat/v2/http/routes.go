@@ -104,6 +104,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if suffix == "/upload" {
+		h.handleUpload(w, r, token, fields...)
+		return
+	}
+
 	distPath := "./pkg/chat/v2/web/dist"
 	if _, err := os.Stat(distPath + "/index.html"); err == nil {
 		if token == "assets" || token == "favicon.png" {

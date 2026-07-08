@@ -41,9 +41,15 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	s.clients[c.ID] = c
 	s.mu.Unlock()
 
-	// Replay missed events
+	// Replay missed events safely ensuring we never leak history before joinSeq
 	var startSeq int64 = 0
-	if afterSeq > 0 {
+	if afterSeq > 0 && joinSeq > 0 {
+		if afterSeq >= joinSeq {
+			startSeq = afterSeq
+		} else {
+			startSeq = joinSeq
+		}
+	} else if afterSeq > 0 {
 		startSeq = afterSeq
 	} else if joinSeq > 0 {
 		startSeq = joinSeq
