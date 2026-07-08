@@ -247,6 +247,7 @@ window.addEventListener('message', (e) => {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage validation failed for origin:', e.origin);
         return;
     }
+    const targetOrigin = activeChatFrameOrigin() || '*';
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
@@ -283,7 +284,7 @@ window.addEventListener('message', (e) => {
                         type: 'download-success',
                         messageId: messageId,
                         path: path
-                    }, e.origin);
+                    }, targetOrigin);
                 }
             })
             .catch((err) => {
@@ -292,7 +293,7 @@ window.addEventListener('message', (e) => {
                     type: 'download-failed',
                     messageId: messageId,
                     error: String(err?.message || err || 'download failed')
-                }, e.origin);
+                }, targetOrigin);
             });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
@@ -313,20 +314,20 @@ window.addEventListener('message', (e) => {
         if (!requestId) { return; }
         ClipboardGetText()
             .then((text) => {
-                e.source?.postMessage({type: 'clipboard-text', requestId, text: String(text || '')}, e.origin);
+                e.source?.postMessage({type: 'clipboard-text', requestId, text: String(text || '')}, targetOrigin);
             })
             .catch(() => {
-                e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, e.origin);
+                e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, targetOrigin);
             });
     } else if (e.data.type === 'select-files') {
         const requestId = String(e.data.requestId || '');
         if (!requestId) { return; }
         SelectFiles()
             .then((paths) => {
-                e.source?.postMessage({type: 'selected-files', requestId, paths: paths || []}, e.origin);
+                e.source?.postMessage({type: 'selected-files', requestId, paths: paths || []}, targetOrigin);
             })
             .catch((err) => {
-                e.source?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, e.origin);
+                e.source?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, targetOrigin);
             });
     } else if (e.data.type === 'stop-chat' || e.data.type === 'close-page') {
         stopChat();
