@@ -91,6 +91,18 @@
       paths.forEach(p => {
         registerLocalAttachment(p);
       });
+    } else if (event.data.type === 'download-success') {
+      const { messageId, path } = event.data;
+      chatActions.updateMessageFilePath(messageId, path);
+    } else if (event.data.type === 'download-failed') {
+      const { messageId, error } = event.data;
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `Download attachment failed: ${error}`
+        : `下载附件失败: ${error}`);
+      const transferId = 'dl-' + messageId;
+      if (client) {
+        client.cancelTransfer(transferId);
+      }
     }
   }
 
@@ -247,17 +259,30 @@
       visualViewportHandler = () => {
         const vv = window.visualViewport;
         if (vv) {
-          document.documentElement.style.setProperty('--chat-viewport-height', `${vv.height}px`);
+          const activeEl = document.activeElement;
+          const isComposerActive = activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea');
+          const isKeyboardOpen = vv.height < window.innerHeight - 80;
+
+          if (isKeyboardOpen && !isComposerActive) {
+            // Keep height at full screen so composer stays hidden under keyboard
+            document.documentElement.style.setProperty('--chat-viewport-height', `${window.innerHeight}px`);
+          } else {
+            document.documentElement.style.setProperty('--chat-viewport-height', `${vv.height}px`);
+          }
+
           // Prevent mobile keyboard from scrolling the entire fixed body out of viewport
           if (window.scrollY !== 0) {
             window.scrollTo(0, 0);
           }
-          const messagesEl = document.querySelector('.messages');
-          if (messagesEl) {
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            setTimeout(() => {
+
+          if (isComposerActive) {
+            const messagesEl = document.querySelector('.messages');
+            if (messagesEl) {
               messagesEl.scrollTop = messagesEl.scrollHeight;
-            }, 50);
+              setTimeout(() => {
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+              }, 50);
+            }
           }
         }
       };
@@ -313,15 +338,24 @@
 
     const downloadURL = `/chat-v2/${token}/files/${messageId}?mock_size=${size}&clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
 
-    const link = document.createElement('a');
-    link.href = downloadURL;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (isEmbedded) {
+      window.parent.postMessage({
+        type: 'download-file',
+        messageId: messageId,
+        url: window.location.origin + downloadURL,
+        name: filename
+      }, '*');
+    } else {
+      const link = document.createElement('a');
+      link.href = downloadURL;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
 
     chatActions.addSystemMessage(currentLang === 'en'
-      ? `Initiated native stream download for: ${filename}`
+      ? `Initiated download for: ${filename}`
       : `开始下载文件: ${filename}`);
   }
 
@@ -477,10 +511,10 @@
                     <div class="device-detail-head" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px dashed var(--line);">
                       {#if isSelf}
                         {#if isEditingName}
-                          <div style="display: flex; gap: 4px; width: 100%;">
-                            <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} style="font-size: 11px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; flex: 1; height: 22px; box-sizing: border-box;">
-                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px;" on:click|preventDefault={handleRenameDevice}>保存</button>
-                            <button class="side-btn" style="height: 22px; font-size: 10px; padding: 0 6px; background: #eee;" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
+                          <div class="device-rename-form">
+                            <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} class="device-rename-input" placeholder="输入设备名称">
+                            <button class="side-btn device-rename-btn" on:click|preventDefault={handleRenameDevice}>保存</button>
+                            <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
                           </div>
                         {:else}
                           <strong style="font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100px;">{dev.label} (本机)</strong>
@@ -541,6 +575,7 @@
         messages={$messages}
         txState={$transfers}
         currentLang={currentLang}
+        isEmbedded={isEmbedded}
         isMine={(msg) => msg.sender === ($currentDevice?.label || 'Me')}
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}

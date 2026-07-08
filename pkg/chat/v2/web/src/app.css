@@ -37,6 +37,7 @@ body {
     height: 100%;
     overflow: hidden;
     width: 100%;
+    transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 main {
     display: grid;
@@ -201,6 +202,38 @@ h1 {
     z-index: 10;
 }
 .device-panel.open { display: grid; }
+.device-rename-form {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    align-items: center;
+}
+.device-rename-input {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    flex: 1;
+    height: 22px;
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--ink);
+}
+.device-rename-btn {
+    height: 22px;
+    font-size: 10px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+}
+.device-rename-btn.cancel {
+    background: #eee;
+    color: #333;
+    border-color: #ddd;
+}
 
 /* ── Language Panel ── */
 .lang-panel {
@@ -1281,6 +1314,26 @@ input:focus { border-color: var(--accent); outline: none; }
 
 /* ── Mobile ── */
 @media (max-width: 820px) {
+    .device-panel {
+        right: 8px;
+        left: 8px;
+        min-width: 0;
+        width: auto;
+    }
+    .device-rename-input {
+        font-size: 16px; /* Prevent automatic zooming in mobile Safari */
+        height: 36px;    /* Comfort tap size */
+        padding: 6px 10px;
+    }
+    .device-rename-btn {
+        height: 36px;
+        font-size: 14px;
+        padding: 0 12px;
+    }
+    .device-detail-head {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
     .device-detail-name-input {
         font-size: 16px;
     }

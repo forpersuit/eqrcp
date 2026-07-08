@@ -72,5 +72,17 @@ export const chatActions = {
 
   clearSystemMessages() {
     systemMessages.set([]);
+  },
+
+  updateMessageFilePath(messageId: string, filePath: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          filePath: filePath
+        };
+      }
+      return m;
+    }));
   }
 };

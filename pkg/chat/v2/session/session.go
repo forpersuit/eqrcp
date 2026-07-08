@@ -20,6 +20,7 @@ type Session struct {
 	MessageStore     *MessageStore
 	clientThemes     map[string]string // maps client peer ID to allocated theme
 	clientThemeJoins map[string]string // maps client peer ID to last join token
+	attachments      map[string]string // maps fileID/messageID to absolute filePath
 }
 
 // NewSession creates a new Session.
@@ -30,6 +31,7 @@ func NewSession(token string) *Session {
 		MessageStore:     NewMessageStore(),
 		clientThemes:     make(map[string]string),
 		clientThemeJoins: make(map[string]string),
+		attachments:      make(map[string]string),
 	}
 }
 
@@ -256,5 +258,25 @@ func (s *Session) themeInUseByOtherClientLocked(peer string, theme string) bool 
 		}
 	}
 	return false
+}
+
+// AddAttachment maps a message/file ID to a local absolute filePath.
+func (s *Session) AddAttachment(id string, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.attachments == nil {
+		s.attachments = make(map[string]string)
+	}
+	s.attachments[id] = path
+}
+
+// GetAttachment retrieves the local absolute filePath mapped to an ID.
+func (s *Session) GetAttachment(id string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.attachments == nil {
+		return ""
+	}
+	return s.attachments[id]
 }
 

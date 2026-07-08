@@ -30,6 +30,7 @@ type Config struct {
 	BasePath             string
 	Logger               diag.Logger
 	IsPaidOrUnrestricted func() bool
+	HostToken            func() string
 }
 
 // Handler is an isolated, unmounted chat v2 HTTP handler.
@@ -41,6 +42,7 @@ type Handler struct {
 	scheduler            *bandwidth.Scheduler
 	ws                   *transport.WebSocketHandler
 	isPaidOrUnrestricted func() bool
+	hostToken            func() string
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -74,6 +76,7 @@ func NewHandler(cfg Config) *Handler {
 		scheduler:            sched,
 		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
+		hostToken:            cfg.HostToken,
 	}
 }
 
@@ -93,6 +96,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(suffix, "/files/") {
 		fileID := strings.TrimPrefix(suffix, "/files/")
 		h.handleDownload(w, r, token, fileID, fields...)
+		return
+	}
+
+	if suffix == "/attachments/local" {
+		h.handleLocalAttachmentRegister(w, r, token, fields...)
 		return
 	}
 

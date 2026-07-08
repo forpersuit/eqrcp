@@ -2,7 +2,9 @@ package chathttp
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -31,6 +33,24 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		if s, err := strconv.ParseInt(mockSizeStr, 10, 64); err == nil && s > 0 {
 			size = s
 		}
+	}
+
+	// Look up physical path if registered
+	sess := h.sessions.GetOrCreate(token)
+	filePath := sess.GetAttachment(fileID)
+	var fileReader io.ReadCloser
+	if filePath != "" {
+		info, err := os.Stat(filePath)
+		if err == nil && !info.IsDir() {
+			size = info.Size()
+			f, err := os.Open(filePath)
+			if err == nil {
+				fileReader = f
+			}
+		}
+	}
+	if fileReader != nil {
+		defer fileReader.Close()
 	}
 
 	// Create and register the download Job
@@ -78,7 +98,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		return n, err
 	}
 
-	// Simulate streaming out the file content in chunks
+	// Stream out the file content in chunks
 	buf := make([]byte, 32*1024) // 32KB chunks
 	var totalWritten int64
 	for totalWritten < size {
@@ -95,7 +115,25 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			writeSize = size - totalWritten
 		}
 
-		n, err := writeFunc(buf[:writeSize])
+		var chunk []byte
+		if fileReader != nil {
+			chunk = buf[:writeSize]
+			nRead, err := io.ReadFull(fileReader, chunk)
+			if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+				_ = h.transfer.FailJob(jobID, err)
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "file read failed", err, fields...)
+				return
+			}
+			if nRead > 0 {
+				chunk = chunk[:nRead]
+			} else {
+				break
+			}
+		} else {
+			chunk = buf[:writeSize]
+		}
+
+		n, err := writeFunc(chunk)
 		if err != nil {
 			_ = h.transfer.FailJob(jobID, err)
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download write failed", err, fields...)
@@ -105,7 +143,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		totalWritten += int64(n)
 
 		// Throttle loop speed slightly for very small mock sizes during tests to simulate network transmission
-		if size < 500*1024 {
+		if fileReader == nil && size < 500*1024 {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}

@@ -243,7 +243,6 @@ function stopChatQRPulse() {
 // postMessage bridge: handle native operations requested by the chat iframe.
 window.addEventListener('message', (e) => {
     if (!isTrustedChatFrameMessage(e)) { return; }
-    if (!e.data || typeof e.data !== 'object') { return; }
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, e.origin)) { return; }
@@ -261,6 +260,28 @@ window.addEventListener('message', (e) => {
             })
             .catch(() => {
                 autoSavedAttachments.delete(id);
+            });
+    } else if (e.data.type === 'download-file') {
+        const url = String(e.data.url || '');
+        const messageId = String(e.data.messageId || '');
+        if (!isTrustedChatURL(url, e.origin)) { return; }
+        DownloadChatAttachment(url, String(e.data.name || 'attachment'))
+            .then((path) => {
+                if (path) {
+                    state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
+                    e.source?.postMessage({
+                        type: 'download-success',
+                        messageId: messageId,
+                        path: path
+                    }, e.origin);
+                }
+            })
+            .catch((err) => {
+                e.source?.postMessage({
+                    type: 'download-failed',
+                    messageId: messageId,
+                    error: String(err?.message || err || 'download failed')
+                }, e.origin);
             });
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});

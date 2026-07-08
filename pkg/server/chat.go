@@ -329,6 +329,9 @@ func (s *Server) Chat() error {
 			usage := limiterInstance.GetStatus()
 			return usage.IsPaid || usage.UsedSeconds < 300
 		},
+		HostToken: func() string {
+			return s.ChatHostToken()
+		},
 	})
 	s.mux.Handle("/chat-v2/", chatV2Handler)
 

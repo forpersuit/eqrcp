@@ -62,6 +62,7 @@ export interface Message {
   size?: number;
   mimeType?: string;
   url?: string;
+  filePath?: string;
   createdAt: string;
 }
 
