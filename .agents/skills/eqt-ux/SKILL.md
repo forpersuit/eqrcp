@@ -42,6 +42,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **Prevent Action Overflows**:
   - Keep titles and badges strictly non-wrapping by applying `white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`.
   - For narrow viewports (e.g. `<= 360px`), hide low-priority action buttons (such as `#share-session` session sharing button which is rarely used on visitor mobile devices) and scale down logos/gaps slightly to allocate sufficient space for the remaining actions.
+  - **Mobile Input Scaling Prevention & Panel Positioning**: To prevent mobile browsers (e.g. iOS Safari) from automatically zooming in when focusing an input field, all inputs (such as the device name rename input) must have a font-size of at least `16px` on viewport widths `<= 820px`. Tap targets (e.g., input and action buttons in a rename form) should also be scaled up to `36px` to improve ergonomics. Additionally, small popup panels like `.device-panel` must use adaptive percentage-based boundaries (e.g., `left: 8px; right: 8px; width: auto; min-width: 0;`) instead of hardcoded minimum widths to prevent overflow cut-offs on narrow screens.
 - **Modals & Collapsible Panels Layout**:
   - Ensure mobile responsive modals/panels (such as `.session-backdrop.open .side`) preserve grid structures: do not rawly override `display` to `block` in media queries as it clears `grid-gap` spacing and compresses buttons; maintain `display: grid` with appropriate gaps (e.g. `gap: 14px`) to preserve spacing.
 - **Tooltips & Truncation Safe Layouts**:
@@ -80,10 +81,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 
 
 ## Wails App Modal and Drag-Drop Guidelines (Wails原生确认弹窗与拖拽最佳实践)
-- **Chat iframe Native File Picker Bridge**:
-  - The chat page runs inside a Wails-hosted iframe, so `chat.tmpl.html` must not call `window.parent.go` or Wails bindings directly.
-  - For GUI-only native actions such as selecting local chat attachments, send a trusted `postMessage` request from the iframe to `desktop/gui/frontend/src/main.js`; the parent window calls the Wails binding (for example `SelectFiles`) and posts the result back with a request ID.
-  - In Wails chat, block the `<input type="file">` fallback path after requesting native selection. Local GUI attachments should register paths through `/attachments/local`; they must not enter the TUS upload queue or show sender-side upload percentages.
+- **Chat iframe Native File Picker & Download Bridge**:
+  - The chat page runs inside a Wails-hosted iframe, so `chat.tmpl.html` and `App.svelte` must not call `window.parent.go` or Wails bindings directly.
+  - **Native File Picking**: For GUI-only native actions such as selecting local chat attachments, send a trusted `postMessage` request (e.g. `{ type: 'select-files' }`) from the iframe to `desktop/gui/frontend/src/main.js`; the parent window calls the Wails binding (for example `SelectFiles`) and posts the result back with a request ID. Local GUI attachments should register paths through `/attachments/local`; they must not enter the TUS upload queue or show sender-side upload percentages.
+  - **Native Silent Downloading (Preventing Edge/WebView2 browser popups)**: Under Wails GUI embedding mode, files must NOT be downloaded using local standard `<a>` tag click downloads as this triggers default WebView2 browser download managers and popups. Instead, post a message (`{ type: 'download-file', url, messageId, name }`) to the parent window; the parent calls the Go backend Wails binding `DownloadChatAttachment(url, name)` to execute background silent downloading. Upon success, parent posts `{ type: 'download-success', messageId, path }` back, and Svelte registers this path on the file message to display a file location folder button next to the download button.
 - **原生二次确认框 (Native Confirmation Dialogs)**:
   - 在需要用户强确认的操作（如切换运行模式）时，严禁使用浏览器原生 `confirm()`。应当在 Go 端通过 `wailsruntime.MessageDialog` 封装一个 RPC 方法（例如 `Confirm`），由 JS 异步调用以呈现操作系统原生的对话框，避免网页弹窗打断与卡死，提升应用的原生质感。
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
