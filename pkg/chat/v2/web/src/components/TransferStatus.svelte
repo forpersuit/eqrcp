@@ -18,10 +18,10 @@
         <div class="tx-row">
           <div class="tx-meta">
             <span class="tx-name" title={tx.fileName}>{tx.fileName}</span>
-            <span class="tx-percent">{tx.percent}%</span>
+            <span class="tx-percent">{tx.percent ?? 0}%</span>
           </div>
           <div class="tx-bar-bg">
-            <div class="tx-bar-fg" style="width: {tx.percent}%"></div>
+            <div class="tx-bar-fg" style="width: {tx.percent ?? 0}%"></div>
           </div>
         </div>
       {:else}

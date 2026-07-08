@@ -287,7 +287,7 @@
                             {formatBytes(msg.size || 0)}
                             {#if tx}
                               {#if tx.state === 'running'}
-                                · 传输中 {tx.percent}%
+                                · 传输中 {tx.percent ?? 0}%
                               {:else if tx.state === 'completed'}
                                 · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
                               {/if}
@@ -357,7 +357,7 @@
                         {/if}
                       {/if}
                     {:else}
-                      {#if msg.uploading}
+                      {#if msg.uploading && mine}
                         <div class="bubble-action disabled-upload" title={currentLang === 'en' ? 'Uploading...' : '对方上传中...'} style="display: flex; align-items: center; justify-content: center; padding: 4px;">
                           <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; opacity: 0.6;">
                             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />

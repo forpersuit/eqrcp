@@ -86,9 +86,9 @@ type TransferEvent struct {
 	MessageID  string        `json:"messageId,omitempty"`
 	ClientID   string        `json:"clientId,omitempty"`
 	FileName   string        `json:"fileName,omitempty"`
-	BytesDone  int64         `json:"bytesDone,omitempty"`
-	BytesTotal int64         `json:"bytesTotal,omitempty"`
-	Percent    int           `json:"percent,omitempty"`
+	BytesDone  int64         `json:"bytesDone"`
+	BytesTotal int64         `json:"bytesTotal"`
+	Percent    int           `json:"percent"`
 	State      TransferState `json:"state"`
 	Error      string        `json:"error,omitempty"`
 	UpdatedAt  time.Time     `json:"updatedAt"`

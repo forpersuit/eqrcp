@@ -590,7 +590,7 @@
     const transferId = 'dl-' + messageId;
     client.startTransfer(transferId);
 
-    const downloadURL = `/chat-v2/${token}/files/${messageId}?mock_size=${size}&clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
+    const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
 
     if (isEmbedded) {
       window.parent.postMessage({

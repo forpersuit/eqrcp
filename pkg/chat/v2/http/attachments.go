@@ -139,11 +139,6 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 
 	msgID := generateAttachmentMsgID()
 
-	// Register an upload job
-	jobID := "ul-" + msgID
-	h.transfer.CreateJob(token, jobID, msgID, "", req.FileName, req.Size)
-	_ = h.transfer.StartJob(jobID)
-
 	sess := h.sessions.GetOrCreate(token)
 	senderID := req.Peer
 	if senderID == "" {
