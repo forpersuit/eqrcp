@@ -510,7 +510,7 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 		}
 		return err
 	}
-	resp, err := a.client.Do(req)
+	resp, err := (&http.Client{Timeout: 0}).Do(req)
 	if err != nil {
 		if messageID != "" {
 			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
