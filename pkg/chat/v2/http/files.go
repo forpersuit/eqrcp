@@ -142,6 +142,13 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			h.mu.Unlock()
 		}()
 
+		// Explicitly set response headers so client downloaders get exact size and correct name.
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", msg.Size))
+		}
+
 		// Broadcast socket event to ask the web client (sender) to start streaming
 		sess.Broadcast(protocol.EventEnvelope{
 			Type: protocol.EventRequestFileData,
@@ -202,22 +209,9 @@ func (h *Handler) handleUploadStream(w http.ResponseWriter, r *http.Request, tok
 		return
 	}
 
-	// Extract the upload file stream
-	var fileStream io.ReadCloser
-	err := r.ParseMultipartForm(32 * 1024 * 1024)
-	if err == nil {
-		file, _, err := r.FormFile("file")
-		if err == nil {
-			fileStream = file
-		}
-	}
-	if fileStream == nil {
-		fileStream = r.Body
-	}
-	defer fileStream.Close()
-
-	// Send file reader to the waiting GET download thread
-	rdv.readerChan <- fileStream
+	// We stream raw r.Body directly without parsing multipart to prevent memory buffering or temp file writes.
+	// Send file reader to the waiting GET download thread.
+	rdv.readerChan <- r.Body
 
 	// Wait until the receiver finishes reading the stream, or cancels
 	select {

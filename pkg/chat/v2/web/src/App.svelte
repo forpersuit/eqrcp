@@ -117,6 +117,27 @@
       if (client) {
         client.cancelTransfer(transferId);
       }
+    } else if (event.data.type === 'chat-download-progress') {
+      const { messageId, progress } = event.data;
+      const transferId = 'dl-' + messageId;
+      if (progress === -1) {
+        chatActions.updateTransfer({
+          id: transferId,
+          state: 'failed',
+          progress: -1,
+          speed: 0,
+          error: currentLang === 'en' ? 'Download interrupted or failed' : '下载中断或失败'
+        });
+      } else {
+        chatActions.updateTransfer({
+          id: transferId,
+          state: progress >= 100 ? 'completed' : 'running',
+          progress: progress,
+          percent: progress,
+          speed: 0,
+          error: ''
+        });
+      }
     }
   }
 
@@ -512,17 +533,13 @@
       ? `Sending data for file: ${file.name}...` 
       : `正在传送文件数据: ${file.name}...`);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('messageId', messageId);
-    formData.append('sender', $currentDevice?.label || 'Me');
-    formData.append('avatar', $currentDevice?.avatar || '');
-    formData.append('peer', localStorage.getItem('chat_peer') || '');
-
     const uploadUrl = `/chat-v2/${token}/upload/stream?messageId=${messageId}`;
     fetch(uploadUrl, {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/octet-stream'
+      },
+      body: file
     })
     .then(r => {
       if (!r.ok) {

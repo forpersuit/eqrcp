@@ -115,4 +115,17 @@ func (s *MessageStore) MarkUploadComplete(messageID string) *protocol.Message {
 	return nil
 }
 
+// Find retrieves the message with the given messageID from the store.
+func (s *MessageStore) Find(messageID string) (*protocol.Message, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, e := range s.events {
+		if e.Message != nil && e.Message.ID == messageID {
+			return e.Message, true
+		}
+	}
+	return nil, false
+}
+
 

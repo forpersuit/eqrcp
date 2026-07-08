@@ -290,6 +290,8 @@
                                 · 传输中 {tx.percent ?? 0}%
                               {:else if tx.state === 'completed'}
                                 · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
+                              {:else if tx.state === 'failed'}
+                                · <span class="tx-error-text" title={tx.error || (currentLang === 'en' ? 'Unknown error' : '未知传输错误')} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{currentLang === 'en' ? 'Failed' : '传输失败'} ⚠️</span>
                               {/if}
                             {:else if msg.downloaded}
                               · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
@@ -388,11 +390,11 @@
                           <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                         </button>
                       {:else if tx && tx.state === 'failed'}
-                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
-                          <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
+                        <button class="bubble-action error-retry-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title={`${currentLang === 'en' ? 'Download failed:' : '传输失败:'} ${tx.error || (currentLang === 'en' ? 'Unknown error' : '未知错误')}. ${currentLang === 'en' ? 'Click to retry.' : '点击以重试。'}`}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
                           </svg>
                         </button>
                       {:else}
