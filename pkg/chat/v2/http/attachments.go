@@ -158,8 +158,16 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	// Stream copy
 	size, err := io.Copy(tempFile, file)
 	if err != nil {
+		tempFile.Close()
 		os.Remove(tempFile.Name())
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to save upload: "+err.Error()), fields...)
+		return
+	}
+
+	// 显式关闭临时文件以确保数据落盘且释放文件句柄，防止广播事件触发后并发下载读取到截断的残缺文件
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempFile.Name())
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to flush upload temp file: "+err.Error()), fields...)
 		return
 	}
 

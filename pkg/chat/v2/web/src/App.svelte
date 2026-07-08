@@ -242,8 +242,6 @@
       const menu = document.createElement('div');
       menu.className = 'custom-context-menu';
       menu.style.position = 'fixed';
-      menu.style.left = `${e.clientX}px`;
-      menu.style.top = `${e.clientY}px`;
       menu.style.zIndex = '99999';
 
       const input = target as HTMLInputElement | HTMLTextAreaElement;
@@ -343,6 +341,41 @@
 
       document.body.appendChild(menu);
       contextMenuEl = menu;
+
+      const rect = menu.getBoundingClientRect();
+      let left = e.clientX;
+      let top = e.clientY - rect.height;
+
+      // 检查水平方向是否超出右边缘
+      if (left + rect.width > window.innerWidth - 8) {
+        // 超出则调整到水平对侧 (向左展开)
+        left = e.clientX - rect.width;
+        // 如果向左展开后又超出了左边缘，则限制在可见区域内
+        if (left < 8) {
+          left = Math.max(8, window.innerWidth - rect.width - 8);
+        }
+      } else {
+        if (left < 8) {
+          left = 8;
+        }
+      }
+
+      // 检查垂直方向是否超出上边缘
+      if (top < 8) {
+        // 超出则调整到水平对侧 (向下展开)
+        top = e.clientY;
+        // 如果向下展开后又超出了下边缘，则限制在可见区域内
+        if (top + rect.height > window.innerHeight - 8) {
+          top = Math.max(8, window.innerHeight - rect.height - 8);
+        }
+      } else {
+        if (top + rect.height > window.innerHeight - 8) {
+          top = Math.max(8, window.innerHeight - rect.height - 8);
+        }
+      }
+
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
 
       document.addEventListener('click', closeContextMenu, { once: true });
     }

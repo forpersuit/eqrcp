@@ -233,6 +233,7 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const tx = txState[msg.id] || txState['dl-' + msg.id] || txState['ul-' + msg.id]}
+        {@const isDownloaded = (tx && tx.state === 'completed') || (!tx && msg.filePath)}
         {@const colors = getMessageColors(msg, mine)}
         <div 
           class="message" 
@@ -352,48 +353,38 @@
                         </button>
                       {/if}
                     {:else}
-                      {#if tx}
-                        {#if tx.state === 'running'}
-                          <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
-                            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                      {#if isDownloaded}
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                          <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
+                            <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
                           </button>
-                        {:else if tx.state === 'completed'}
-                          <div style="display: flex; gap: 6px; align-items: center;">
-                            <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
-                              <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                              <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
+                          {#if isEmbedded && (msg.filePath || msg.fileName)}
+                            <button class="bubble-action" on:click={() => handleOpenFolder(msg)} title={currentLang === 'en' ? 'Open in Folder' : '定位文件'}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                               </svg>
                             </button>
-                            {#if isEmbedded && (msg.filePath || msg.fileName)}
-                              <button class="bubble-action" on:click={() => handleOpenFolder(msg)} title={currentLang === 'en' ? 'Open in Folder' : '定位文件'}>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                                </svg>
-                              </button>
-                            {/if}
-                          </div>
-                        {:else if tx.state === 'failed'}
-                          <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
-                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                          </button>
-                        {:else if tx.state === 'cancelled'}
-                          <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
-                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                          </button>
-                        {/if}
+                          {/if}
+                        </div>
+                      {:else if tx && tx.state === 'running'}
+                        <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
+                          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        </button>
+                      {:else if tx && tx.state === 'failed'}
+                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Retry">
+                          <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        </button>
                       {:else}
                         <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Download">
                           <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
