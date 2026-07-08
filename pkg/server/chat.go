@@ -25,6 +25,7 @@ import (
 	"eqt/pkg/qr"
 	"eqt/pkg/version"
 	chatv2http "eqt/pkg/chat/v2/http"
+	diag "eqt/pkg/chat/v2/diag"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -324,7 +325,7 @@ func (s *Server) Chat() error {
 	})
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
 		BasePath: "/chat-v2",
-		Logger:   nil,
+		Logger:   diag.NewStdLogger(),
 		IsPaidOrUnrestricted: func() bool {
 			usage := limiterInstance.GetStatus()
 			return usage.IsPaid || usage.UsedSeconds < 300
