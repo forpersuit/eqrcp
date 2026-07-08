@@ -383,12 +383,15 @@ func (a *App) ChatSaveDirectory() (string, error) {
 }
 
 func (a *App) DownloadChatAttachment(rawURL string, filename string) (string, error) {
+	a.logInfo(fmt.Sprintf("[GUI] DownloadChatAttachment: rawURL=%q, filename=%q", rawURL, filename))
 	parsed, err := chatAttachmentDownloadURL(rawURL)
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: URL parsing failed: %v", err))
 		return "", err
 	}
 	dir, err := a.ChatSaveDirectory()
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: ChatSaveDirectory failed: %v", err))
 		return "", err
 	}
 	if filename == "" {
@@ -396,11 +399,15 @@ func (a *App) DownloadChatAttachment(rawURL string, filename string) (string, er
 	}
 	target, err := uniquePath(dir, safeFilename(filename))
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: uniquePath failed: %v", err))
 		return "", err
 	}
+	a.logInfo(fmt.Sprintf("[GUI] DownloadChatAttachment: target target path=%q", target))
 	if err := a.downloadChatAttachmentTo(parsed.String(), target); err != nil {
+		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: download failed: %v", err))
 		return "", err
 	}
+	a.logInfo(fmt.Sprintf("[GUI] DownloadChatAttachment: successfully saved attachment to %q", target))
 	return target, nil
 }
 
@@ -468,12 +475,15 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 	if parsed != nil {
 		messageID = parsed.Query().Get("messageId")
 	}
+	a.logInfo(fmt.Sprintf("[GUI] downloadChatAttachmentTo starting: messageID=%q, rawURL=%q, target=%q", messageID, rawURL, target))
 
 	// 优先进行本地直拷贝优化（Link/Copy）
 	if messageID != "" && a.agent != nil && a.agent.activeServer != nil {
 		if localPath, ok := a.agent.activeServer.GetChatAttachmentPath(messageID); ok && localPath != "" {
+			a.logInfo(fmt.Sprintf("[GUI] downloadChatAttachmentTo: local attachment found at path=%q. Attempting quickCopyFile...", localPath))
 			err := quickCopyFile(localPath, target)
 			if err == nil {
+				a.logInfo(fmt.Sprintf("[GUI] downloadChatAttachmentTo: quickCopyFile success! target=%q", target))
 				// 发送 100% 进度事件
 				wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
 					"messageId": messageID,
@@ -481,10 +491,13 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 				})
 				return nil
 			}
-			a.logError(fmt.Sprintf("Local direct copy failed, falling back to HTTP: %v", err))
+			a.logError(fmt.Sprintf("[GUI] downloadChatAttachmentTo: quickCopyFile failed, falling back to HTTP: %v", err))
+		} else {
+			a.logInfo("[GUI] downloadChatAttachmentTo: local attachment path not registered or empty in activeServer")
 		}
 	}
 
+	a.logInfo("[GUI] downloadChatAttachmentTo: initiating HTTP stream download...")
 	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		if messageID != "" {

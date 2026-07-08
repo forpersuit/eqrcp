@@ -345,20 +345,28 @@ function isTrustedChatFrameMessage(event) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: iframe #chat-iframe not found');
         return false;
     }
-    // Instant trust if the source matches the iframe's contentWindow precisely
-    if (event.source === frame.contentWindow) {
-        return true;
-    }
     const origin = activeChatFrameOrigin();
-    if (!origin) {
-        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: activeChatFrameOrigin is empty');
-        return false;
-    }
     const normalizeOrigin = (orig) => {
         if (!orig) return '';
         return orig.replace('://localhost', '://127.0.0.1');
     };
-    const originMatched = (normalizeOrigin(event.origin) === normalizeOrigin(origin));
+    const evOriginNorm = normalizeOrigin(event.origin);
+    const frameOriginNorm = normalizeOrigin(origin);
+    
+    // Accept origin match, or WebView2 cross-protocol null/empty origins
+    const isSourceMatch = (event.source === frame.contentWindow);
+    const originMatched = (evOriginNorm === frameOriginNorm) || evOriginNorm === '' || evOriginNorm === 'null';
+    
+    console.log('[Antigravity Debug] isTrustedChatFrameMessage validation:', {
+        eventOrigin: event.origin,
+        frameOrigin: origin,
+        eventOriginNormalized: evOriginNorm,
+        frameOriginNormalized: frameOriginNorm,
+        isSourceMatch: isSourceMatch,
+        originMatched: originMatched,
+        data: event.data
+    });
+    
     if (!originMatched) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected:', origin);
         return false;
@@ -373,8 +381,24 @@ function isTrustedChatURL(rawURL, origin) {
             if (!orig) return '';
             return orig.replace('://localhost', '://127.0.0.1');
         };
-        const matched = normalizeOrigin(parsed.origin) === normalizeOrigin(origin) && 
-                        (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        const parsedNormalized = normalizeOrigin(parsed.origin);
+        const originNormalized = normalizeOrigin(origin);
+        
+        // Accept matching loopback origin or null/empty target origin from WebView2 cross-protocol messages
+        const originOk = (parsedNormalized === originNormalized) || originNormalized === '' || originNormalized === 'null';
+        const protocolOk = (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        const matched = originOk && protocolOk;
+        
+        console.log('[Antigravity Debug] isTrustedChatURL validation:', {
+            rawURL: rawURL,
+            origin: origin,
+            parsedOriginNormalized: parsedNormalized,
+            originNormalized: originNormalized,
+            originOk: originOk,
+            protocolOk: protocolOk,
+            matched: matched
+        });
+        
         if (!matched) {
             console.warn('[Antigravity Debug] isTrustedChatURL check failed. parsed.origin:', parsed.origin, 'event.origin:', origin);
         }
