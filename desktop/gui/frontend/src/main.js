@@ -249,12 +249,12 @@ window.addEventListener('message', (e) => {
     }
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
-        if (!isTrustedChatURL(url, e.origin)) { return; }
+        if (!isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
         SaveChatAttachmentAs(url, String(e.data.name || 'attachment')).catch(() => {});
     } else if (e.data.type === 'auto-save-file') {
         const url = String(e.data.url || '');
         const id = String(e.data.id || url);
-        if (!state.chatAutoSave || autoSavedAttachments.has(id) || !isTrustedChatURL(url, e.origin)) { return; }
+        if (!state.chatAutoSave || autoSavedAttachments.has(id) || !isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
         autoSavedAttachments.add(id);
         DownloadChatAttachment(url, String(e.data.name || 'attachment'))
             .then((path) => {
@@ -269,7 +269,7 @@ window.addEventListener('message', (e) => {
         const url = String(e.data.url || '');
         const messageId = String(e.data.messageId || '');
         console.log('[Antigravity Debug] download-file bridge invoked. URL:', url, 'messageId:', messageId);
-        if (!isTrustedChatURL(url, e.origin)) {
+        if (!isTrustedChatURL(url, activeChatFrameOrigin())) {
             console.warn('[Antigravity Debug] download-file: URL trust check failed');
             return;
         }
@@ -345,6 +345,10 @@ function isTrustedChatFrameMessage(event) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: iframe #chat-iframe not found');
         return false;
     }
+    // Instant trust if the source matches the iframe's contentWindow precisely
+    if (event.source === frame.contentWindow) {
+        return true;
+    }
     const origin = activeChatFrameOrigin();
     if (!origin) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: activeChatFrameOrigin is empty');
@@ -358,9 +362,6 @@ function isTrustedChatFrameMessage(event) {
     if (!originMatched) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected:', origin);
         return false;
-    }
-    if (event.source !== frame.contentWindow) {
-        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: event.source !== frame.contentWindow, but origin matched. Proceeding.');
     }
     return true;
 }
