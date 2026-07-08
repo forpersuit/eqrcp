@@ -9,15 +9,17 @@
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!text.trim()) return;
+    
+    // Focus back synchronously before the browser event loop triggers dismiss animations on mobile keyboard
+    if (textareaEl) {
+      textareaEl.focus();
+    }
+
     dispatch('sendText', text);
     text = '';
-    // Reset height and keep focus on textarea to prevent keyboard from dismissing on mobile
-    setTimeout(() => {
-      resizeComposer();
-      if (textareaEl) {
-        textareaEl.focus();
-      }
-    }, 0);
+    
+    // Reset height asynchronously
+    setTimeout(resizeComposer, 0);
   }
 
   const isEmbedded = typeof window !== 'undefined' && window.parent !== window;
@@ -116,7 +118,7 @@
         rows="1"
       ></textarea>
       <div class="composer-actions-right">
-        <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()}>
+        <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()} on:mousedown|preventDefault>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
         </button>
       </div>

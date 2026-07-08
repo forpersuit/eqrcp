@@ -1332,14 +1332,14 @@ input:focus { border-color: var(--accent); outline: none; }
         z-index: 1000;
     }
     .device-rename-input {
-        font-size: 16px; /* Prevent automatic zooming in mobile Safari */
-        height: 36px;    /* Comfort tap size */
-        padding: 6px 10px;
+        font-size: 13px;
+        height: 28px;
+        padding: 4px 6px;
     }
     .device-rename-btn {
-        height: 36px;
-        font-size: 14px;
-        padding: 0 12px;
+        height: 28px;
+        font-size: 11px;
+        padding: 0 8px;
     }
     .device-detail-head {
         flex-wrap: wrap;
