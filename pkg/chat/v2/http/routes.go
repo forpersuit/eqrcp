@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"eqt/pkg/chat/v2/bandwidth"
@@ -33,6 +34,11 @@ type Config struct {
 	HostToken            func() string
 }
 
+type rendezvous struct {
+	readerChan chan io.ReadCloser
+	errChan    chan error
+}
+
 // Handler is an isolated, unmounted chat v2 HTTP handler.
 type Handler struct {
 	basePath             string
@@ -43,6 +49,8 @@ type Handler struct {
 	ws                   *transport.WebSocketHandler
 	isPaidOrUnrestricted func() bool
 	hostToken            func() string
+	mu                   sync.Mutex
+	rendezvousMap        map[string]*rendezvous
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -80,6 +88,7 @@ func NewHandler(cfg Config) *Handler {
 		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 		hostToken:            cfg.HostToken,
+		rendezvousMap:        make(map[string]*rendezvous),
 	}
 }
 
@@ -105,6 +114,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if suffix == "/attachments/local" {
 		h.handleLocalAttachmentRegister(w, r, token, fields...)
+		return
+	}
+
+	if suffix == "/upload/stream" {
+		h.handleUploadStream(w, r, token, fields...)
 		return
 	}
 

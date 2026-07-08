@@ -470,6 +470,12 @@
     }
 
     client = new ChatWebSocketClient(token);
+    client.onRequestFileData = (messageId) => {
+      const file = pendingSendFiles[messageId];
+      if (file) {
+        uploadFileStream(messageId, file);
+      }
+    };
     client.connect();
     document.addEventListener('contextmenu', handleGlobalContextMenu);
   });
@@ -499,13 +505,50 @@
     }
   }
 
+  let pendingSendFiles: Record<string, File> = {};
+
+  function uploadFileStream(messageId: string, file: File) {
+    chatActions.addSystemMessage(currentLang === 'en' 
+      ? `Sending data for file: ${file.name}...` 
+      : `正在传送文件数据: ${file.name}...`);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('messageId', messageId);
+    formData.append('sender', $currentDevice?.label || 'Me');
+    formData.append('avatar', $currentDevice?.avatar || '');
+    formData.append('peer', localStorage.getItem('chat_peer') || '');
+
+    const uploadUrl = `/chat-v2/${token}/upload/stream?messageId=${messageId}`;
+    fetch(uploadUrl, {
+      method: 'POST',
+      body: formData
+    })
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(t => { throw new Error(t); });
+      }
+      return r.json();
+    })
+    .then(res => {
+      console.log('Stream upload succeeded for messageId:', messageId, res);
+      delete pendingSendFiles[messageId];
+    })
+    .catch(err => {
+      console.error('Stream upload failed:', err);
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `Failed to send data for "${file.name}": ${err.message}`
+        : `传送文件 "${file.name}" 的数据失败: ${err.message}`);
+    });
+  }
+
   function handleSendFile(e: CustomEvent<{ file: File; name: string; size: number; type: string }>) {
     const { file, name } = e.detail;
     if (!file) return;
 
     chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Initializing upload for: ${name}...` 
-      : `准备上传文件: ${name}...`);
+      ? `Added file "${name}". Waiting for recipient to download...` 
+      : `已添加文件 "${name}"。等待接收方下载...`);
 
     const initUrl = `/chat-v2/${token}/upload/init`;
     fetch(initUrl, {
@@ -529,34 +572,14 @@
     })
     .then(msg => {
       const msgID = msg.id;
-      // Metdata registered, now send the actual file stream via /upload
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('sender', $currentDevice?.label || 'Me');
-      formData.append('avatar', $currentDevice?.avatar || '');
-      formData.append('peer', localStorage.getItem('chat_peer') || '');
-      formData.append('messageId', msgID);
-
-      const uploadUrl = `/chat-v2/${token}/upload`;
-      return fetch(uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
-    })
-    .then(r => {
-      if (!r.ok) {
-        return r.text().then(t => { throw new Error(t); });
-      }
-      return r.json();
-    })
-    .then(res => {
-      console.log('File upload completed successfully:', res);
+      pendingSendFiles[msgID] = file;
+      console.log('Attachment registered successfully, messageID:', msgID);
     })
     .catch(err => {
-      console.error('Failed to upload file:', err);
+      console.error('Failed to add attachment:', err);
       chatActions.addSystemMessage(currentLang === 'en'
-        ? `Failed to upload file "${name}": ${err.message}`
-        : `上传文件 "${name}" 失败: ${err.message}`);
+        ? `Failed to add attachment "${name}": ${err.message}`
+        : `添加文件 "${name}" 失败: ${err.message}`);
     });
   }
 

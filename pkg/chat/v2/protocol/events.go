@@ -18,6 +18,7 @@ const (
 	EventTransferFailed    EventType = "transfer_failed"
 	EventTransferCancelled EventType = "transfer_cancelled"
 	EventError             EventType = "error"
+	EventRequestFileData   EventType = "request_file_data"
 )
 
 // MessageType identifies a chat message payload type.

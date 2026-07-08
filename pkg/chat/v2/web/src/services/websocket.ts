@@ -15,6 +15,7 @@ export class ChatWebSocketClient {
   private clientPeer: string;
   private joinParam: string = '';
   private themeParam: string = '';
+  public onRequestFileData: ((messageId: string) => void) | null = null;
 
   constructor(token: string) {
     this.token = token;
@@ -171,6 +172,13 @@ export class ChatWebSocketClient {
             if (event.type === 'transfer_completed') {
               chatActions.markMessageUploadComplete(event.transfer.messageId);
             }
+          }
+        }
+        break;
+      case 'request_file_data':
+        if (event.message && event.message.id) {
+          if (this.onRequestFileData) {
+            this.onRequestFileData(event.message.id);
           }
         }
         break;

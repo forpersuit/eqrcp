@@ -91,8 +91,10 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", err, fields...)
 			return
 		}
-	} else {
-		// Mock data fallback path
+		_ = h.transfer.CompleteJob(jobID)
+		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully", nil, fields...)
+	} else if mockSizeStr != "" {
+		// Mock data fallback path (mainly for concurrency test suites)
 		buf := make([]byte, 32*1024) // 32KB chunks
 		var totalWritten int64
 		for totalWritten < size {
@@ -122,10 +124,114 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 				time.Sleep(1 * time.Millisecond)
 			}
 		}
+		_ = h.transfer.CompleteJob(jobID)
+		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully (mock path)", nil, fields...)
+	} else {
+		// P2P / Duplex Streaming Proxy mode:
+		// Wait for the web client (sender) to initiate POST upload stream on /upload/stream?messageId=xxx
+		h.mu.Lock()
+		rdv := &rendezvous{
+			readerChan: make(chan io.ReadCloser, 1),
+			errChan:    make(chan error, 1),
+		}
+		h.rendezvousMap[fileID] = rdv
+		h.mu.Unlock()
+		defer func() {
+			h.mu.Lock()
+			delete(h.rendezvousMap, fileID)
+			h.mu.Unlock()
+		}()
+
+		// Broadcast socket event to ask the web client (sender) to start streaming
+		sess.Broadcast(protocol.EventEnvelope{
+			Type: protocol.EventRequestFileData,
+			Message: &protocol.Message{
+				ID: fileID,
+			},
+			Time: time.Now(),
+		})
+
+		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "Waiting for web client stream rendezvous", nil, append(fields, diag.F("messageID", fileID))...)
+
+		// Block and wait for connection from the sender
+		select {
+		case senderStream := <-rdv.readerChan:
+			defer senderStream.Close()
+			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "Stream rendezvous established", nil, append(fields, diag.F("messageID", fileID))...)
+
+			if _, err := io.Copy(pw, senderStream); err != nil {
+				_ = h.transfer.FailJob(jobID, err)
+				rdv.errChan <- err
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "streaming rendezvous copy failed", err, fields...)
+				return
+			}
+			rdv.errChan <- nil
+			_ = h.transfer.CompleteJob(jobID)
+			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully via streaming rendezvous", nil, fields...)
+
+		case <-r.Context().Done():
+			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Download context canceled", nil, append(fields, diag.F("messageID", fileID))...)
+			return
+		case <-time.After(35 * time.Second):
+			// Timed out waiting
+			_ = h.transfer.FailJob(jobID, fmt.Errorf("timeout waiting for sender stream"))
+			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusRequestTimeout, "timed out waiting for sender file stream"), fields...)
+			return
+		}
+	}
+}
+
+// handleUploadStream receives the direct file stream from the sender and passes it to the waiting download response.
+func (h *Handler) handleUploadStream(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodPost {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
 	}
 
-	_ = h.transfer.CompleteJob(jobID)
-	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully", nil, fields...)
+	messageID := r.URL.Query().Get("messageId")
+	if messageID == "" {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "messageId is required"), fields...)
+		return
+	}
+
+	h.mu.Lock()
+	rdv, exists := h.rendezvousMap[messageID]
+	h.mu.Unlock()
+	if !exists {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusNotFound, "stream rendezvous not found (receiver might have canceled or timed out)"), fields...)
+		return
+	}
+
+	// Extract the upload file stream
+	var fileStream io.ReadCloser
+	err := r.ParseMultipartForm(32 * 1024 * 1024)
+	if err == nil {
+		file, _, err := r.FormFile("file")
+		if err == nil {
+			fileStream = file
+		}
+	}
+	if fileStream == nil {
+		fileStream = r.Body
+	}
+	defer fileStream.Close()
+
+	// Send file reader to the waiting GET download thread
+	rdv.readerChan <- fileStream
+
+	// Wait until the receiver finishes reading the stream, or cancels
+	select {
+	case copyErr := <-rdv.errChan:
+		if copyErr != nil {
+			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, copyErr.Error()), fields...)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"success"}`))
+		}
+	case <-r.Context().Done():
+		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Stream upload sender context canceled", nil, append(fields, diag.F("messageID", messageID))...)
+	}
 }
 
 type progressWriter struct {
