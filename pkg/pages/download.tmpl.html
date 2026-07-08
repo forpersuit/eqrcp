@@ -1124,6 +1124,11 @@
                 clearInterval(intervalId);
             }
 
+            // Send stop request to backend
+            var stopXhr = new XMLHttpRequest();
+            stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(getOrGenerateClientId()));
+            stopXhr.send();
+
             // 2. Change the interface to stopped final view, hiding action buttons
             document.getElementById('status-icon-pending').style.display = 'none';
             document.getElementById('status-icon-success').style.display = 'none';
