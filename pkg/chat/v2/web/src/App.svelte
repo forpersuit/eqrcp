@@ -94,11 +94,25 @@
     } else if (event.data.type === 'download-success') {
       const { messageId, path } = event.data;
       chatActions.updateMessageFilePath(messageId, path);
+      chatActions.updateTransfer({
+        id: 'dl-' + messageId,
+        state: 'completed',
+        progress: 100,
+        speed: 0,
+        error: ''
+      });
     } else if (event.data.type === 'download-failed') {
       const { messageId, error } = event.data;
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Download attachment failed: ${error}`
         : `下载附件失败: ${error}`);
+      chatActions.updateTransfer({
+        id: 'dl-' + messageId,
+        state: 'failed',
+        progress: -1,
+        speed: 0,
+        error: error
+      });
       const transferId = 'dl-' + messageId;
       if (client) {
         client.cancelTransfer(transferId);
