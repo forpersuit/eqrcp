@@ -55,12 +55,18 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		defer fileReader.Close()
 	}
 
+	if fileReader == nil && mockSizeStr == "" {
+		if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
+			size = msg.Size
+		}
+	}
+
 	// Create and register the download Job
 	jobID := "dl-" + fileID
 	h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 
@@ -142,12 +148,6 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			h.mu.Unlock()
 		}()
 
-		// Explicitly set response headers so client downloaders get exact size and correct name.
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-		w.Header().Set("Content-Type", "application/octet-stream")
-		if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", msg.Size))
-		}
 
 		// Broadcast socket event to ask the web client (sender) to start streaming
 		sess.Broadcast(protocol.EventEnvelope{
@@ -166,7 +166,12 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			defer senderStream.Close()
 			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "Stream rendezvous established", nil, append(fields, diag.F("messageID", fileID))...)
 
-			if _, err := io.Copy(pw, senderStream); err != nil {
+			var limitReader io.Reader = senderStream
+			if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
+				limitReader = io.LimitReader(senderStream, msg.Size)
+			}
+
+			if _, err := io.Copy(pw, limitReader); err != nil {
 				_ = h.transfer.FailJob(jobID, err)
 				rdv.errChan <- err
 				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "streaming rendezvous copy failed", err, fields...)

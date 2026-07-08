@@ -203,6 +203,23 @@ The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试�
   - Mock `window.runtime.EventsOnMultiple` to capture callbacks (which handles wrapper calls to `EventsOn`).
   - Use a `Proxy` on `window.go.main.App` that dynamically returns `() => Promise.resolve({})` for any accessed property, avoiding undefined-function crashes when frontend invokes Wails Go backend methods.
 - **Vite relative assets path (base: "./") routing trap**: When Vite builds assets to `dist/assets/` using relative paths, and Go handles dynamic routes by cutting the token (e.g. `/chat-v2/:token/`), the browser's request for `assets/` will cut `assets` as the token. To prevent 404 responses or incorrect stylesheet MIME type (text/plain) rejections, intercept special token names (such as `"assets"`, `"favicon.png"`) inside `ServeHTTP` and restore their file paths to `distPath + "/" + token + suffix`.
+- **E2E Chat v2 Large File Rendezvous Simulation Verification Method**:
+  - **Problem**: Running Chrome E2E simulation tests for large file streaming in headless mode may fail because standard `<a>` tag click downloads are blocked by headless Chrome's default security rules. Also, initiating parallel download commands and stream POSTs too quickly can lead to a Race Condition if the WebSocket `start_transfer` command arrives before the HTTP GET handler has called `CreateJob`.
+  - **Solution**:
+    1. **Eliminate Race Condition**: The Go server should resolve the exact file size from `MessageStore` beforehand so that standard HTTP GET headers (`Content-Length`) are committed properly at the top of the route handler. Protect the proxy write pipeline using `io.LimitReader(senderStream, msg.Size)` to guarantee that no extra bytes are written, physically preventing `wrote more than declared Content-Length` panic crashes.
+    2. **Headless Stream Consumer**: In the simulated browser page context, bypass native `link.click()` by evaluating an asynchronous `fetch` stream consumer that reads and discards chunks from the `/files/:messageId` route:
+       ```javascript
+       fetch(downloadURL).then(async response => {
+         const reader = response.body.getReader();
+         while (true) {
+           const { done } = await reader.read();
+           if (done) break;
+         }
+       });
+       ```
+       This keeps the TCP receive window open and pulls the stream correctly through the server's bandwidth controller.
+    3. **Simulating Network Drops**: Force-killing the uploading `curl` process during active streaming will trigger an `unexpected EOF` in Go's `io.Copy`. Verify that the UI reactive WebSocket listener successfully updates the target bubble to a red `传输失败 ⚠️` badge and popup tooltip displaying the exact error message.
+
 
 
 
