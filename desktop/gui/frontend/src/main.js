@@ -295,6 +295,11 @@ window.addEventListener('message', (e) => {
                     error: String(err?.message || err || 'download failed')
                 }, targetOrigin);
             });
+    } else if (e.data.type === 'cancel-download') {
+        const messageId = String(e.data.messageId || '');
+        if (messageId) {
+            CancelChatDownload(messageId).catch(() => {});
+        }
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
     } else if (e.data.type === 'open-path') {

@@ -8,6 +8,8 @@ export function AgentStatus():Promise<main.AgentStatus>;
 
 export function AppInfo():Promise<main.AppInfo>;
 
+export function CancelChatDownload(arg1:string):Promise<void>;
+
 export function Chat():Promise<main.AgentStatus>;
 
 export function ChatSaveDirectory():Promise<string>;

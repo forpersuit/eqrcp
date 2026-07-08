@@ -14,6 +14,10 @@ export function AppInfo() {
   return window['go']['main']['App']['AppInfo']();
 }
 
+export function CancelChatDownload(arg1) {
+  return window['go']['main']['App']['CancelChatDownload'](arg1);
+}
+
 export function Chat() {
   return window['go']['main']['App']['Chat']();
 }

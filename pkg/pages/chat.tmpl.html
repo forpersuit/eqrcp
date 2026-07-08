@@ -4336,9 +4336,23 @@
             var msg = state.messages.find(function(m) { return m.id === messageId; });
             var item = messagesEl.querySelector('[data-message-id="' + cssEscape(messageId) + '"]');
             if (!item) { return; }
-            var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"]');
+            var downloadBtn = item.querySelector('.message-footer-actions .bubble-action[aria-label="Download"], .message-footer-actions .bubble-action[aria-label="Save"], .message-footer-actions .bubble-action[aria-label="Cancel"]');
             if (downloadBtn) {
-                downloadBtn.style.display = msg && msg.receiving ? 'none' : '';
+                if (inWails && msg && msg.receiving) {
+                    downloadBtn.style.display = '';
+                    downloadBtn.setAttribute('aria-label', 'Cancel');
+                    downloadBtn.title = 'Cancel';
+                    downloadBtn.innerHTML = closeIcon();
+                    downloadBtn.classList.add('btn-cancel-download');
+                } else if (inWails) {
+                    downloadBtn.style.display = '';
+                    downloadBtn.setAttribute('aria-label', 'Save');
+                    downloadBtn.title = 'Save';
+                    downloadBtn.innerHTML = downloadIcon();
+                    downloadBtn.classList.remove('btn-cancel-download');
+                } else {
+                    downloadBtn.style.display = msg && msg.receiving ? 'none' : '';
+                }
             }
             var meta = item.querySelector('.message-footer-meta');
             if (meta && msg) {
@@ -4437,6 +4451,13 @@
                 save.innerHTML = downloadIcon();
                 keepActionFocus(save);
                 save.addEventListener('click', function() {
+                    var isCancel = save.classList.contains('btn-cancel-download');
+                    var currentMsg = state.messages.find(function(m) { return m.id === message.id; });
+                    if (isCancel || (currentMsg && currentMsg.receiving)) {
+                        window.parent.postMessage({type: 'cancel-download', messageId: message.id}, '*');
+                        failReceivingProgress(message.id);
+                        return;
+                    }
                     var u = downloadURL(message.url);
                     var sep = u.indexOf('?') === -1 ? '?' : '&';
                     u = u + sep + 'messageId=' + encodeURIComponent(message.id);

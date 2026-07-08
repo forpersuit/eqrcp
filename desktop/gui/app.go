@@ -44,6 +44,8 @@ type App struct {
 	forceQuit     bool
 	logger        *FileLogger
 	agent         *desktopAgent
+	downloadsMu   sync.Mutex
+	downloads     map[string]context.CancelFunc
 }
 
 type AgentTask struct {
@@ -164,6 +166,7 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.agent = newDesktopAgent(ctx)
+	a.downloads = make(map[string]context.CancelFunc)
 	go func() {
 		if err := a.agent.loadHistory(); err != nil {
 			wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
@@ -210,6 +213,15 @@ func (a *App) quit() {
 	a.mu.Lock()
 	a.forceQuit = true
 	a.mu.Unlock()
+
+	a.downloadsMu.Lock()
+	for _, cancel := range a.downloads {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	a.downloads = nil
+	a.downloadsMu.Unlock()
 
 	if a.agent != nil {
 		a.agent.mu.Lock()
@@ -477,6 +489,24 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 	}
 	a.logInfo(fmt.Sprintf("[GUI] downloadChatAttachmentTo starting: messageID=%q, rawURL=%q, target=%q", messageID, rawURL, target))
 
+	key := messageID
+	if key == "" {
+		key = rawURL
+	}
+	downloadCtx, cancel := context.WithCancel(a.ctx)
+	a.downloadsMu.Lock()
+	if a.downloads == nil {
+		a.downloads = make(map[string]context.CancelFunc)
+	}
+	a.downloads[key] = cancel
+	a.downloadsMu.Unlock()
+	defer func() {
+		a.downloadsMu.Lock()
+		delete(a.downloads, key)
+		a.downloadsMu.Unlock()
+		cancel()
+	}()
+
 	// 优先进行本地直拷贝优化（Link/Copy）
 	if messageID != "" && a.agent != nil && a.agent.activeServer != nil {
 		if localPath, ok := a.agent.activeServer.GetChatAttachmentPath(messageID); ok && localPath != "" {
@@ -500,7 +530,7 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 	}
 
 	a.logInfo("[GUI] downloadChatAttachmentTo: initiating HTTP stream download...")
-	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(downloadCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		if messageID != "" {
 			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{
@@ -605,8 +635,28 @@ func (a *App) StopChat() error {
 	if a.agent == nil {
 		return fmt.Errorf("agent not initialized")
 	}
+
+	a.downloadsMu.Lock()
+	for _, cancel := range a.downloads {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	a.downloads = make(map[string]context.CancelFunc)
+	a.downloadsMu.Unlock()
+
 	if !a.agent.stopChat("stopped") {
 		return fmt.Errorf("no active chat to stop")
+	}
+	return nil
+}
+
+func (a *App) CancelChatDownload(messageID string) error {
+	a.downloadsMu.Lock()
+	defer a.downloadsMu.Unlock()
+	if cancel, ok := a.downloads[messageID]; ok && cancel != nil {
+		cancel()
+		delete(a.downloads, messageID)
 	}
 	return nil
 }
