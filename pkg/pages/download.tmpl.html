@@ -1138,6 +1138,12 @@
             var btnRow = document.getElementById('action-btn-row');
             if (btnRow) btnRow.style.display = 'none';
 
+            var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
+            if (savedFileTitle) savedFileTitle.style.display = 'none';
+
+            var filesListContainer = document.getElementById('files-list-container');
+            if (filesListContainer) filesListContainer.style.display = 'none';
+
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) {
                 hintEl.removeAttribute('data-i18n');
