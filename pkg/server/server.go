@@ -62,7 +62,8 @@ type ClientTransferStateInfo struct {
 	Message    string                    `json:"message"`
 	DeviceName string                    `json:"deviceName,omitempty"`
 	SavedFiles []string                  `json:"savedFiles,omitempty"`
-	Files      []ClientFileTransferState `json:"files,omitempty"`
+	Files             []ClientFileTransferState `json:"files,omitempty"`
+	ActiveConnections int                       `json:"-"`
 }
 
 // Server is the server
@@ -2409,6 +2410,16 @@ func New(cfg *config.Config) (*Server, error) {
 			defer waitgroup.Done()
 		}
 		clientID = app.getClientID(r, w)
+		// Setup defer hook to decrement active connection count reliably
+		defer func() {
+			app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
+				state.ActiveConnections--
+				if state.ActiveConnections < 0 {
+					state.ActiveConnections = 0
+				}
+			})
+		}()
+
 		currentIndex := 0
 		if isMultiFile && itemIndexStr != "" {
 			if idx, err := strconv.Atoi(itemIndexStr); err == nil {
@@ -2446,6 +2457,7 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+			state.ActiveConnections++
 			state.State = "transferring"
 			state.Current = downloadName
 			state.BytesDone = rangeInfo.StartByte
@@ -2515,6 +2527,19 @@ func New(cfg *config.Config) (*Server, error) {
 			log.Printf("[EQT Server] [Download Interrupt] clientID=%s, IP=%s, File=%s, WrittenInThisRequest=%d, TotalWritten=%d/%d, Error=%v",
 				clientID, r.RemoteAddr, downloadName, atomic.LoadInt64(&writtenInThisRequest), itemWritten, expectedBytes, progressWriter.err)
 
+			// Get other active connections count for this client (excluding current)
+			var activeConns int
+			app.clientStatesMu.Lock()
+			if cs, ok := app.clientStates[clientID]; ok && cs != nil {
+				activeConns = cs.ActiveConnections - 1
+			}
+			app.clientStatesMu.Unlock()
+
+			// If other Range requests are still transferring concurrently, do not reset global state
+			if activeConns > 0 {
+				return
+			}
+
 			isAlreadyFailed := false
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				if state.State == "failed" {
@@ -2525,9 +2550,10 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			// Retain current progress to support resume, mark state as waiting
+			clientDone, _ := app.getClientDownloadedAndTotal(clientID)
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = itemWritten
+				state.BytesDone = clientDone
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
@@ -2541,6 +2567,19 @@ func New(cfg *config.Config) (*Server, error) {
 			log.Printf("[EQT Server] [Download Chunk Done] clientID=%s, IP=%s, File=%s, WrittenInThisRequest=%d, TotalWritten=%d/%d",
 				clientID, r.RemoteAddr, downloadName, atomic.LoadInt64(&writtenInThisRequest), itemWritten, expectedBytes)
 
+			// Get other active connections count for this client (excluding current)
+			var activeConns int
+			app.clientStatesMu.Lock()
+			if cs, ok := app.clientStates[clientID]; ok && cs != nil {
+				activeConns = cs.ActiveConnections - 1
+			}
+			app.clientStatesMu.Unlock()
+
+			// If other concurrent Range connections are active, skip rewriting status
+			if activeConns > 0 {
+				return
+			}
+
 			isAlreadyFailed := false
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				if state.State == "failed" {
@@ -2551,9 +2590,10 @@ func New(cfg *config.Config) (*Server, error) {
 				return
 			}
 			// Retain current progress, mark state as waiting
+			clientDone, _ := app.getClientDownloadedAndTotal(clientID)
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
-				state.BytesDone = itemWritten
+				state.BytesDone = clientDone
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
