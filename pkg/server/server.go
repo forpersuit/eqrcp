@@ -2430,6 +2430,10 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.clientStatesMu.Unlock()
 
+		// Output dynamic device-identified tracking log
+		log.Printf("[EQT Server] [Download Start] clientID=%s, IP=%s, File=%s, Range=%s, UA=%s, isZip=%t, isAlreadyTransferring=%t",
+			clientID, r.RemoteAddr, downloadName, r.Header.Get("Range"), r.UserAgent(), isZipDownload, isAlreadyTransferring)
+
 		if !isAlreadyTransferring {
 			if isZipDownload {
 				app.setClientDownloadedBytes(clientID, -1, rangeInfo.StartByte)
@@ -2460,13 +2464,7 @@ func New(cfg *config.Config) (*Server, error) {
 			app.expectedBytes = make(map[int]int64)
 		}
 		if isZipDownload {
-			app.expectedBytesMu.Lock()
-			if app.expectedBytes == nil {
-				app.expectedBytes = make(map[int]int64)
-			}
 			app.expectedBytes[-1] = expectedBytes
-			app.expectedBytesMu.Unlock()
-
 			for idx := 0; idx < len(app.body.Paths); idx++ {
 				app.expectedBytes[idx] = expectedBytes
 			}
@@ -2513,6 +2511,10 @@ func New(cfg *config.Config) (*Server, error) {
 		itemWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
 
 		if progressWriter.err != nil {
+			// Output dynamic device-identified interrupt log
+			log.Printf("[EQT Server] [Download Interrupt] clientID=%s, IP=%s, File=%s, WrittenInThisRequest=%d, TotalWritten=%d/%d, Error=%v",
+				clientID, r.RemoteAddr, downloadName, atomic.LoadInt64(&writtenInThisRequest), itemWritten, expectedBytes, progressWriter.err)
+
 			isAlreadyFailed := false
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				if state.State == "failed" {
@@ -2535,6 +2537,10 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if itemWritten < expectedBytes {
+			// Output dynamic device-identified chunk done log
+			log.Printf("[EQT Server] [Download Chunk Done] clientID=%s, IP=%s, File=%s, WrittenInThisRequest=%d, TotalWritten=%d/%d",
+				clientID, r.RemoteAddr, downloadName, atomic.LoadInt64(&writtenInThisRequest), itemWritten, expectedBytes)
+
 			isAlreadyFailed := false
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				if state.State == "failed" {
@@ -2569,6 +2575,10 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if app.isClientFinished(clientID) {
+			// Output dynamic device-identified success log
+			log.Printf("[EQT Server] [Download Completed] clientID=%s, IP=%s, File=%s, Status=SUCCESS",
+				clientID, r.RemoteAddr, downloadName)
+
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "completed"
 				state.BytesDone = state.BytesTotal
