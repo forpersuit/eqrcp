@@ -345,6 +345,9 @@
                     <div id="download-progress-fill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.2s ease;"></div>
                 </div>
                 <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
+                <div id="download-notification-tips" style="font-size: 11.5px; color: var(--accent-strong); margin-top: 8px; text-align: center; border-top: 1px dashed var(--line); padding-top: 8px; display: none; line-height: 1.4; font-weight: 600;" data-i18n="notification_tips">
+                    To pause or stop the transfer, please use your phone's notification bar or browser download manager.
+                </div>
                 <!-- 成功时显示的已下载文件面板 -->
                 <div id="downloaded-files-panel" style="display: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; text-align: left;">
                     <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;" data-i18n="downloaded_files_title">Downloaded Files:</div>
@@ -450,7 +453,10 @@
                 success_tips_all: '传输已成功完成。您现在可以关闭此页面了。',
                 limit_header: '设备连接数已超限',
                 limit_tips: '根据免费版使用规则，每日非首次传输最多允许连接 2 台设备。当前任务已达上限，当其他设备退出时，本设备将自动恢复下载权限。',
-                btn_upgrade: '升级许可证解锁限制'
+                btn_upgrade: '升级许可证解锁限制',
+                notification_tips: '若要中止或暂停传输，请直接在您的手机下拉通知栏或浏览器下载任务中进行操作。',
+                waiting_status: '连接已中断，等待重新连接...',
+                failed_status: '传输已停止。可点击按钮重新下载。'
             },
             en: {
                 title: 'Receive File - EQT',
@@ -473,7 +479,10 @@
                 success_tips_all: 'The transfer has completed successfully. You can close this page now.',
                 limit_header: 'Device Limit Exceeded',
                 limit_tips: 'According to the free tier rules, daily non-first transfers allow up to 2 devices. This transfer has reached the limit. Once other devices disconnect, this page will automatically restore download access.',
-                btn_upgrade: 'Upgrade License to Unlock'
+                btn_upgrade: 'Upgrade License to Unlock',
+                notification_tips: 'To pause or stop the transfer, please use your phone\'s notification bar or browser download manager.',
+                waiting_status: 'Connection interrupted, waiting to reconnect...',
+                failed_status: 'Transfer stopped. You can click button to restart.'
             },
             ja: {
                 title: 'ファイル受信 - EQT',
@@ -791,6 +800,9 @@
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) hintEl.textContent = dict.close_hint;
 
+            var notifEl = document.getElementById('download-notification-tips');
+            if (notifEl) notifEl.textContent = dict.notification_tips || pageTranslations.zh.notification_tips;
+
             var btnStopEl = document.getElementById('btn-action-stop');
             if (btnStopEl) {
                 btnStopEl.textContent = dict.btn_stop || 'Stop Sharing';
@@ -914,7 +926,7 @@
                                 
                                 var progressContainer = document.getElementById('download-progress-container');
                                 if (progressContainer) {
-                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting') && (status.bytesDone || 0) > 0) || status.state === 'completed';
+                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
                                      if (showProgress && status.bytesTotal > 0) {
                                         progressContainer.style.display = 'block';
                                          
@@ -930,12 +942,27 @@
                                             var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
                                             statusText = 'ID: ' + shortId;
                                         } else if (status.state === 'waiting') {
-                                            statusText = 'Interrupted, waiting for resume...';
+                                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                                            statusText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
+                                        } else if (status.state === 'failed') {
+                                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                                            statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
                                         }
                                         document.getElementById('download-progress-status').innerText = statusText;
                                     } else {
                                         progressContainer.style.display = 'none';
                                     }
+                                }
+
+                                var actionBtnRow = document.getElementById('action-btn-row');
+                                var notifTips = document.getElementById('download-notification-tips');
+                                if (status.state === 'transferring') {
+                                     if (actionBtnRow) actionBtnRow.style.display = 'none';
+                                     if (notifTips) notifTips.style.display = 'block';
+                                } else if (status.state === 'waiting' || status.state === 'failed') {
+                                     if (actionBtnRow) actionBtnRow.style.display = 'flex';
+                                     if (notifTips) notifTips.style.display = 'none';
+                                     applyLanguage(); // update button text for redownload
                                 }
 
                                 if (status.state === 'limit_exceeded') {
