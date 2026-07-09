@@ -6,8 +6,9 @@ import (
 )
 
 func TestSchedulerBandwidthFairShare(t *testing.T) {
-	// Set global limit to 1MB/s
+	// Set global limit to 1MB/s and disable probing for legacy test compatibility
 	sched := NewScheduler(1024 * 1024)
+	sched.ProbingBytes = -1
 
 	sched.RegisterJob("job-free-1", false)
 
@@ -53,8 +54,9 @@ func TestSchedulerBandwidthFairShare(t *testing.T) {
 }
 
 func TestSchedulerThrottleproportionalSleep(t *testing.T) {
-	// Set global limit to very slow 10KB/s to force throttle sleep
+	// Set global limit to very slow 10KB/s and disable probing
 	sched := NewScheduler(10 * 1024)
+	sched.ProbingBytes = -1
 	sched.RegisterJob("job-slow", true)
 
 	startTime := time.Now()
@@ -65,5 +67,72 @@ func TestSchedulerThrottleproportionalSleep(t *testing.T) {
 	elapsed := time.Since(startTime)
 	if elapsed < 800*time.Millisecond {
 		t.Fatalf("expected throttle sleep for around 1s limit, but elapsed only = %v", elapsed)
+	}
+}
+
+func TestSchedulerProbingAndCapacityEstimation(t *testing.T) {
+	sched := NewScheduler(1024 * 1024)
+	sched.ProbingBytes = 1000 // 1KB limit
+	sched.ProbingTime = 100 * time.Millisecond
+
+	sched.RegisterJob("job-probing", true)
+
+	// In probing phase, it should return PolicyPaid.MaxSpeed
+	limit := sched.LimitForJob("job-probing")
+	if limit != PolicyPaid.MaxSpeed {
+		t.Fatalf("probing limit = %d, want PolicyPaid.MaxSpeed", limit)
+	}
+
+	// Trigger Throttle to start probing
+	sched.Throttle("job-probing", 100, time.Now())
+
+	// Sleep slightly to simulate transfer duration
+	time.Sleep(50 * time.Millisecond)
+
+	// Trigger Throttle to exceed probing limit
+	sched.Throttle("job-probing", 1200, time.Now())
+
+	// Check that it transitioned out of probing
+	sched.mu.RLock()
+	job := sched.activeJobs["job-probing"]
+	probing := job.probing
+	capacity := job.capacity
+	sched.mu.RUnlock()
+
+	if probing {
+		t.Fatalf("job should have finished probing")
+	}
+	if capacity <= 0 {
+		t.Fatalf("estimated capacity should be greater than 0, got %d", capacity)
+	}
+}
+
+func TestSchedulerCapacityAwareProportionalAllocation(t *testing.T) {
+	// Global limit is 4MB/s
+	sched := NewScheduler(4 * 1024 * 1024)
+	sched.ProbingBytes = 1000 // Enable probing window so capacity-aware logic is active
+
+	sched.RegisterJob("job-slow", true)
+	sched.RegisterJob("job-fast", true)
+
+	// Manually inject estimated capacities
+	sched.mu.Lock()
+	sched.activeJobs["job-slow"].probing = false
+	sched.activeJobs["job-slow"].capacity = 1 * 1024 * 1024 // 1MB/s
+	sched.activeJobs["job-fast"].probing = false
+	sched.activeJobs["job-fast"].capacity = 3 * 1024 * 1024 // 3MB/s
+	sched.mu.Unlock()
+
+	// Proportional allocation:
+	// Slow job should get: 4MB * (1MB / 4MB) = 1MB/s
+	// Fast job should get: 4MB * (3MB / 4MB) = 3MB/s
+	limitSlow := sched.LimitForJob("job-slow")
+	limitFast := sched.LimitForJob("job-fast")
+
+	if limitSlow != 1*1024*1024 {
+		t.Fatalf("job-slow rate = %d, want 1MB/s, got %d", limitSlow, limitSlow)
+	}
+	if limitFast != 3*1024*1024 {
+		t.Fatalf("job-fast rate = %d, want 3MB/s, got %d", limitFast, limitFast)
 	}
 }
