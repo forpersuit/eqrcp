@@ -607,42 +607,49 @@
             pageTranslations.zh.can_open = '可以点击打开';
             pageTranslations.zh.cannot_open = '此格式无法直接打开，请在文件管理器中查看';
             pageTranslations.zh.btn_save_zip = '保存 ZIP 压缩包';
+            pageTranslations.zh.zip_contents = '压缩包内包含的文件：';
         }
         if (pageTranslations.en) {
             pageTranslations.en.downloaded_files_title = 'Downloaded Files:';
             pageTranslations.en.can_open = 'Click to open/preview';
             pageTranslations.en.cannot_open = 'Cannot open directly. Please find it in file manager';
             pageTranslations.en.btn_save_zip = 'Save ZIP Archive';
+            pageTranslations.en.zip_contents = 'Files included in the ZIP:';
         }
         if (pageTranslations.ja) {
             pageTranslations.ja.downloaded_files_title = 'ダウンロードしたファイル：';
             pageTranslations.ja.can_open = 'クリックして開く/プレビュー';
             pageTranslations.ja.cannot_open = '直接開くことはできません。ファイル管理アプリ等で確認してください';
             pageTranslations.ja.btn_save_zip = 'ZIPアーカイブを保存';
+            pageTranslations.ja.zip_contents = '圧縮ファイルに含まれるファイル：';
         }
         if (pageTranslations.ko) {
             pageTranslations.ko.downloaded_files_title = '다운로드된 파일:';
             pageTranslations.ko.can_open = '클릭하여 열기/미리보기';
             pageTranslations.ko.cannot_open = '직접 열 수 없습니다. 파일 관리자에서 확인하세요';
             pageTranslations.ko.btn_save_zip = 'ZIP 아카이브 저장';
+            pageTranslations.ko.zip_contents = '압축 파일에 포함된 파일:';
         }
         if (pageTranslations.es) {
             pageTranslations.es.downloaded_files_title = 'Archivos descargados:';
             pageTranslations.es.can_open = 'Haga clic para abrir';
             pageTranslations.es.cannot_open = 'No se puede abrir directamente. Búsquelo en el administrador de archivos';
             pageTranslations.es.btn_save_zip = 'Guardar archivo ZIP';
+            pageTranslations.es.zip_contents = 'Archivos incluidos en el ZIP:';
         }
         if (pageTranslations.de) {
             pageTranslations.de.downloaded_files_title = 'Heruntergeladene Dateien:';
             pageTranslations.de.can_open = 'Klicken zum Öffnen';
             pageTranslations.de.cannot_open = 'Kann nicht direkt geöffnet werden. Bitte im Dateimanager suchen';
             pageTranslations.de.btn_save_zip = 'ZIP-Archiv speichern';
+            pageTranslations.de.zip_contents = 'Im ZIP enthaltene Dateien:';
         }
         if (pageTranslations.fr) {
             pageTranslations.fr.downloaded_files_title = 'Fichiers téléchargés:';
             pageTranslations.fr.can_open = 'Cliquer pour ouvrir';
             pageTranslations.fr.cannot_open = 'Impossible d\'ouvrir directement. Veuillez le retrouver dans le gestionnaire de fichiers';
             pageTranslations.fr.btn_save_zip = 'Enregistrer l\'archive ZIP';
+            pageTranslations.fr.zip_contents = 'Fichiers inclus dans le ZIP :';
         }
 
         function getOrGenerateClientId() {
@@ -1139,10 +1146,20 @@
             if (btnRow) btnRow.style.display = 'none';
 
             var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
-            if (savedFileTitle) savedFileTitle.style.display = 'none';
-
             var filesListContainer = document.getElementById('files-list-container');
-            if (filesListContainer) filesListContainer.style.display = 'none';
+            if (totalCount > 1) {
+                if (savedFileTitle) {
+                    savedFileTitle.removeAttribute('data-i18n');
+                    savedFileTitle.textContent = dict.zip_contents || 'Files included in the ZIP:';
+                    savedFileTitle.style.display = 'block';
+                }
+                if (filesListContainer) {
+                    filesListContainer.style.display = 'block';
+                }
+            } else {
+                if (savedFileTitle) savedFileTitle.style.display = 'none';
+                if (filesListContainer) filesListContainer.style.display = 'none';
+            }
 
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
             if (hintEl) {
