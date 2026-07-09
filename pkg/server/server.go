@@ -1501,14 +1501,14 @@ func (s *Server) isAllActiveClientsFinished() bool {
 				activeCount++
 			}
 
-			isCompleted := false
+			isFinished := false
 			if cs, ok := s.clientStates[clientID]; ok && cs != nil {
-				if cs.State == "completed" {
-					isCompleted = true
+				if cs.State == "completed" || cs.State == "failed" {
+					isFinished = true
 				}
 			}
 
-			if isCompleted {
+			if isFinished {
 				finishedTotalCount++
 				if isActive {
 					finishedActiveCount++
@@ -1539,31 +1539,43 @@ func (s *Server) isAllActiveClientsFinished() bool {
 			activeCount++
 		}
 
-		completedForClient := 0
-		if progress, ok := s.clientProgress[clientID]; ok {
-			for i := 0; i < totalItems; i++ {
-				clientBytes := progress[i]
-				var size int64
-				s.expectedBytesMu.Lock()
-				if s.expectedBytes != nil {
-					size = s.expectedBytes[i]
-				}
-				s.expectedBytesMu.Unlock()
-
-				if size <= 0 {
-					targetPath := s.body.Paths[i]
-					if info, err := os.Stat(targetPath); err == nil {
-						size = info.Size()
-					}
-				}
-
-				if size > 0 && clientBytes >= size {
-					completedForClient++
-				}
+		isFinished := false
+		if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+			if cs.State == "completed" || cs.State == "failed" {
+				isFinished = true
 			}
 		}
 
-		if completedForClient >= totalItems {
+		if !isFinished {
+			completedForClient := 0
+			if progress, ok := s.clientProgress[clientID]; ok {
+				for i := 0; i < totalItems; i++ {
+					clientBytes := progress[i]
+					var size int64
+					s.expectedBytesMu.Lock()
+					if s.expectedBytes != nil {
+						size = s.expectedBytes[i]
+					}
+					s.expectedBytesMu.Unlock()
+
+					if size <= 0 {
+						targetPath := s.body.Paths[i]
+						if info, err := os.Stat(targetPath); err == nil {
+							size = info.Size()
+						}
+					}
+
+					if size > 0 && clientBytes >= size {
+						completedForClient++
+					}
+				}
+			}
+			if completedForClient >= totalItems {
+				isFinished = true
+			}
+		}
+
+		if isFinished {
 			finishedTotalCount++
 			if isActive {
 				finishedActiveCount++
@@ -2178,14 +2190,24 @@ func New(cfg *config.Config) (*Server, error) {
 	app.registerRoute("/send/"+path+"/status", app.statusHandler)
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
+			clientID := app.getClientID(r, w)
+			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+				cs.State = "failed"
+				cs.Message = "Transfer manually stopped by user."
+			})
+			app.triggerStatusHookThrottled()
+
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
-			app.setStatus("stopped", "Transfer stopped by user.")
-			app.recordStatus()
-			go func() {
-				time.Sleep(500 * time.Millisecond)
-				app.signalStop()
-			}()
+
+			app.statusMu.Lock()
+			autoStop := app.autoStop
+			app.statusMu.Unlock()
+			if autoStop && app.isAllActiveClientsFinished() {
+				app.setStatus("completed", "Transfer completed.")
+				app.recordStatus()
+				go app.signalStopAfterStatusGrace()
+			}
 			return
 		}
 		usage := limiterInstance.GetStatus()
@@ -2459,6 +2481,15 @@ func New(cfg *config.Config) (*Server, error) {
 		itemWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
 
 		if progressWriter.err != nil {
+			isAlreadyFailed := false
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+				if state.State == "failed" {
+					isAlreadyFailed = true
+				}
+			})
+			if isAlreadyFailed {
+				return
+			}
 			// Retain current progress to support resume, mark state as waiting
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
@@ -2472,6 +2503,15 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		if itemWritten < expectedBytes {
+			isAlreadyFailed := false
+			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+				if state.State == "failed" {
+					isAlreadyFailed = true
+				}
+			})
+			if isAlreadyFailed {
+				return
+			}
 			// Retain current progress, mark state as waiting
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 				state.State = "waiting"
@@ -2783,6 +2823,20 @@ func New(cfg *config.Config) (*Server, error) {
 				var currentFileWritten int64
 				buf := make([]byte, 32*1024)
 				for {
+					isStopped := false
+					app.clientStatesMu.Lock()
+					if cs, ok := app.clientStates[clientID]; ok && cs != nil {
+						if cs.State == "failed" {
+							isStopped = true
+						}
+					}
+					app.clientStatesMu.Unlock()
+					if isStopped {
+						out.Close()
+						http.Error(w, "Transfer manually stopped.", http.StatusForbidden)
+						return
+					}
+
 					n, err := part.Read(buf)
 					if err == io.EOF {
 						break
@@ -2980,6 +3034,19 @@ func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientID := s.getClientID(r, w)
+	isStopped := false
+	s.clientStatesMu.Lock()
+	if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+		if cs.State == "failed" {
+			isStopped = true
+		}
+	}
+	s.clientStatesMu.Unlock()
+	if isStopped {
+		http.Error(w, "Transfer manually stopped.", http.StatusForbidden)
+		return
+	}
+
 	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {})
 
 	// Quota validation for Tus POST requests (Creation of upload resource)

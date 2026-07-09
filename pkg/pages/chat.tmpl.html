@@ -4269,6 +4269,20 @@
             }
             var wrap = document.createElement('div');
             wrap.className = 'message-footer-actions';
+            if (message.sending) {
+                var cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'bubble-action';
+                cancelBtn.setAttribute('aria-label', 'Cancel Upload');
+                cancelBtn.title = 'Cancel';
+                cancelBtn.innerHTML = recallIcon();
+                keepActionFocus(cancelBtn);
+                cancelBtn.addEventListener('click', function() {
+                    deletePlaceholderMessage(message.id);
+                });
+                wrap.appendChild(cancelBtn);
+                return wrap;
+            }
             if (message.type === 'text' && messageCopyText(message)) {
                 var copy = document.createElement('button');
                 copy.type = 'button';
@@ -4875,6 +4889,14 @@
         }
         function mergeMessages(incoming, forceScroll) {
             if (!incoming || !incoming.length) { return; }
+            var incomingIDs = {};
+            incoming.forEach(function(m) { incomingIDs[m.id] = true; });
+            state.messages = state.messages.filter(function(m) {
+                if (m.id && m.id.indexOf('temp-') === 0 && m.sending && !incomingIDs[m.id]) {
+                    return false;
+                }
+                return true;
+            });
             if (forceScroll) {
                 setFollowLatest(true);
             }
@@ -5422,6 +5444,7 @@
                 showSystemNotice('Failed to send file: ' + err.message);
             });
         }
+        var activeUploads = {};
         var uploadQueue = [];
         var isUploadingFromQueue = false;
 
@@ -5444,6 +5467,15 @@
             });
         }
         function deletePlaceholderMessage(tempId) {
+            var upload = activeUploads[tempId];
+            if (upload) {
+                try { upload.abort(); } catch(e) {}
+                delete activeUploads[tempId];
+            }
+            state.messages = state.messages.filter(function(m) { return m.id !== tempId; });
+            renderMessages();
+            saveChatCache();
+
             fetch('{{.MessagesRoute}}/' + encodeURIComponent(tempId), {
                 method: 'DELETE',
                 headers: {'Content-Type': 'application/json'},
@@ -5580,6 +5612,7 @@
                     },
                     onError: function(error) {
                         console.error("Tus upload error: ", error);
+                        delete activeUploads[tempId];
                         updateUploadFailed(tempId, dict.uploadFailed);
                         deletePlaceholderMessage(tempId);
                         if (onDone) onDone();
@@ -5589,9 +5622,11 @@
                         updateUploadProgress(tempId, pct);
                     },
                     onSuccess: function() {
+                        delete activeUploads[tempId];
                         if (onDone) onDone();
                     }
                 });
+                activeUploads[tempId] = upload;
                 upload.start();
             });
         }

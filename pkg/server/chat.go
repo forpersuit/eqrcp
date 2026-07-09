@@ -62,6 +62,7 @@ type chatSession struct {
 	hostRenameHook   func(string)
 
 	tusHandler       *tusd.Handler
+	tusComposer      *tusd.StoreComposer
 	tusUploadsDone   map[string]int64
 	tusUploadsTotal  map[string]int64
 	tusUploadClients map[string]string
@@ -186,6 +187,7 @@ func (s *Server) Chat() error {
 		statusHook:       s.chatStatusHook,
 		hostRenameHook:   s.chatHostRenameHook,
 		tusHandler:       tusHandler,
+		tusComposer:      composer,
 		tusUploadsDone:   make(map[string]int64),
 		tusUploadsTotal:  make(map[string]int64),
 		tusUploadClients: make(map[string]string),
@@ -1736,6 +1738,36 @@ func (session *chatSession) handleTusUpload(w http.ResponseWriter, r *http.Reque
 	if session.isTerminal() {
 		writeChatTerminal(w)
 		return
+	}
+	// Check if this upload has been canceled by recalling the placeholder message
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) > 0 {
+		uploadID := parts[len(parts)-1]
+		if uploadID != "tus" && uploadID != "" {
+			if session.tusComposer != nil && session.tusComposer.Core != nil {
+				if upload, err := session.tusComposer.Core.GetUpload(r.Context(), uploadID); err == nil {
+					if info, err := upload.GetInfo(r.Context()); err == nil {
+						meta := info.MetaData
+						messageID := meta["messageid"]
+						if messageID != "" {
+							exists := false
+							session.mu.Lock()
+							for _, msg := range session.messages {
+								if msg.ID == messageID {
+									exists = true
+									break
+								}
+							}
+							session.mu.Unlock()
+							if !exists {
+								http.Error(w, "Upload canceled by recall.", http.StatusForbidden)
+								return
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 	prefix := session.attachmentRoute + "/tus/"
 	http.StripPrefix(prefix, session.tusHandler).ServeHTTP(w, r)
