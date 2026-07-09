@@ -1911,12 +1911,27 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	progress, ok := s.clientProgress[clientID]
+	if ok && progress != nil {
+		if zipProgress, hasZip := progress[-1]; hasZip {
+			var zipTotal int64
+			s.expectedBytesMu.Lock()
+			if s.expectedBytes != nil {
+				zipTotal = s.expectedBytes[-1]
+			}
+			s.expectedBytesMu.Unlock()
+			if zipProgress > zipTotal {
+				zipProgress = zipTotal
+			}
+			return zipProgress, zipTotal
+		}
+	}
+
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
 		return 0, 0
 	}
 
-	progress, ok := s.clientProgress[clientID]
 	var downloaded int64
 	var total int64
 
@@ -2405,12 +2420,25 @@ func New(cfg *config.Config) (*Server, error) {
 		rangeInfo := ParseRangeHeader(r)
 		isZipDownload := isMultiFile && itemIndexStr == ""
 
-		if isZipDownload {
-			for idx := 0; idx < len(app.body.Paths); idx++ {
-				app.setClientDownloadedBytes(clientID, idx, rangeInfo.StartByte)
+		// Check if this client is already transferring to prevent concurrent Range requests from resetting clientProgress
+		isAlreadyTransferring := false
+		app.clientStatesMu.Lock()
+		if cs, ok := app.clientStates[clientID]; ok && cs != nil {
+			if cs.State == "transferring" {
+				isAlreadyTransferring = true
 			}
-		} else {
-			app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
+		}
+		app.clientStatesMu.Unlock()
+
+		if !isAlreadyTransferring {
+			if isZipDownload {
+				app.setClientDownloadedBytes(clientID, -1, rangeInfo.StartByte)
+				for idx := 0; idx < len(app.body.Paths); idx++ {
+					app.setClientDownloadedBytes(clientID, idx, rangeInfo.StartByte)
+				}
+			} else {
+				app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
+			}
 		}
 
 		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
@@ -2432,6 +2460,13 @@ func New(cfg *config.Config) (*Server, error) {
 			app.expectedBytes = make(map[int]int64)
 		}
 		if isZipDownload {
+			app.expectedBytesMu.Lock()
+			if app.expectedBytes == nil {
+				app.expectedBytes = make(map[int]int64)
+			}
+			app.expectedBytes[-1] = expectedBytes
+			app.expectedBytesMu.Unlock()
+
 			for idx := 0; idx < len(app.body.Paths); idx++ {
 				app.expectedBytes[idx] = expectedBytes
 			}
@@ -2448,6 +2483,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 				// Track cumulative bytes specifically for this clientID and item index
 				if isZipDownload {
+					app.addClientDownloadedBytes(clientID, -1, written)
 					for idx := 0; idx < len(app.body.Paths); idx++ {
 						app.addClientDownloadedBytes(clientID, idx, written)
 					}
@@ -2457,11 +2493,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 				// 计算当前 client 的总已下载字节
 				var clientDone int64
-				if isZipDownload {
-					clientDone = rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
-				} else {
-					clientDone, _ = app.getClientDownloadedAndTotal(clientID)
-				}
+				clientDone, _ = app.getClientDownloadedAndTotal(clientID)
 
 				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
 				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
