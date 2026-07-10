@@ -28,6 +28,10 @@
 - **落盘位置**：
   - **GUI 模式**：所有组件（GUI 后台、服务端 HTTP/WS 诊断、移动浏览器回传日志）一并追加写入统一的 `desktop.log` 中。会话关闭后日志依然保留，可随时通过 About 页的“打开日志文件”按钮打开分析。
   - **CLI 模式**：自动创建并输出到用户缓存目录下的 `cli.log`（例如 `~/.cache/eqt/cli.log` 或 `%LOCALAPPDATA%/eqt/cli.log`），实现每次启动运行皆可追溯。
+  - **自定义保存路径**：在 Dev 模式的设置面板中，增加了“自定义日志保存路径 (LogDir)”配置项。用户输入并失焦后，新启动的会话以及 `desktop.log`/`cli.log` 会自动使用新路径，并在 About 页直接链接展示该自定义目录下的日志文件。
+- **会话级物理隔离 (Session Isolation)**：
+  - 针对移动浏览器回传的每个设备（Peer）日志，服务端在 `LogDir` 目录下自动按会话 Token 维度归类：`logDir/session-<token>/device-<peer>.log`。
+  - 每一个会话在每次启动创建时都有独一无二的随机 token（如扫码的 room token），这使得不同会话周期、不同会话房间的移动端日志实现了物理上目录级别的强隔离，极易查找和分析。
 - **移动端 (MOBILE) 离线日志缓冲机制**：
   - 移动浏览器端的 H5 页面中（`App.svelte` / `websocket.ts`）提供日志队列 `pendingLogs`。
   - 当 WebSocket 连接断开或尚未就绪时，发生的动作与异常日志先存入队列，防止丢失。在重新连接上 WebSocket 的瞬间（`onopen` 手续完成），批量 Flush 回传给服务端。
