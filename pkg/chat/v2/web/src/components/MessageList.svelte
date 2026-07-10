@@ -259,7 +259,7 @@
           <div class="message-main">
             <div class="sender">{msg.sender}</div>
             <div class="bubble" style="position: relative; overflow: hidden;">
-              {#if msg.type === 'file' && (msg.uploading || (tx && tx.state === 'running' && tx.id.startsWith('ul-')))}
+              {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (tx && tx.state === 'running' && tx.id.startsWith('ul-')))}
                 <div class="upload-mask" style="
                   position: absolute;
                   top: 0;
