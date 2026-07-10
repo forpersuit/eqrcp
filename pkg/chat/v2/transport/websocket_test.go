@@ -3,6 +3,8 @@ package transport
 import (
 	"context"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -103,6 +105,76 @@ func TestWebSocketUnsupportedCommandReturnsProtocolError(t *testing.T) {
 
 func wsURL(httpURL string) string {
 	return "ws" + strings.TrimPrefix(httpURL, "http")
+}
+
+func TestWebSocketCommandLog(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/room-token/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+
+	var hello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, conn, &hello); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Perform connect handshake to establish client peer identity
+	err = wsjson.Write(ctx, conn, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-log-test",
+		Client: protocol.ClientInfo{
+			Label: "LogTester",
+			Peer:  "test-log-peer",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var helloConn protocol.EventEnvelope
+	if err := wsjson.Read(ctx, conn, &helloConn); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Send log command
+	logText := "Hello from client test-log-peer to server logger"
+	err = wsjson.Write(ctx, conn, protocol.CommandEnvelope{
+		Type:      protocol.CommandLog,
+		CommandID: "log-1",
+		Text:      logText,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Give a small amount of time for the async log writing thread to process if necessary
+	time.Sleep(50 * time.Millisecond)
+
+	// 3. Verify the file exists and has correct content
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	logFilePath := filepath.Join(dir, "eqt", "device-test-log-peer.log")
+	defer os.Remove(logFilePath) // clean up
+
+	content, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+
+	if !strings.Contains(string(content), logText) {
+		t.Fatalf("Expected log file to contain %q, but got %q", logText, string(content))
+	}
 }
 
 func TestWebSocketTwoClientsExchangeText(t *testing.T) {

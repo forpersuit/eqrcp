@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"flag"
 	"net/http"
 	"os"
@@ -252,6 +253,11 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				continue
 			}
 
+		case protocol.CommandLog:
+			if cl != nil {
+				h.writeClientLog(cl.Peer, cmd.Text)
+			}
+
 		default:
 			event := protocol.EventEnvelope{
 				Type:      protocol.EventError,
@@ -312,5 +318,37 @@ func extractToken(path string) string {
 		return parts[len(parts)-2]
 	}
 	return "test-token"
+}
+
+func (h *WebSocketHandler) writeClientLog(peer string, text string) {
+	if peer == "" {
+		peer = "unknown"
+	}
+	safePeer := sanitizeFilename(peer)
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	logDir := filepath.Join(dir, "eqt")
+	_ = os.MkdirAll(logDir, 0755)
+
+	logFilePath := filepath.Join(logDir, fmt.Sprintf("device-%s.log", safePeer))
+	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	_, _ = fmt.Fprintf(f, "[%s] %s\n", timestamp, text)
+}
+
+func sanitizeFilename(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' {
+			return '_'
+		}
+		return r
+	}, s)
 }
 

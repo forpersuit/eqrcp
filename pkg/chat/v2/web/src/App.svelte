@@ -532,6 +532,9 @@
     chatActions.addSystemMessage(currentLang === 'en' 
       ? `Sending data for file: ${file.name}...` 
       : `正在传送文件数据: ${file.name}...`);
+    if (client) {
+      client.sendLog(`[ACTION] Starting upload stream for file: ${file.name} (Size: ${file.size} bytes, Message ID: ${messageId})`);
+    }
 
     const uploadUrl = `/chat-v2/${token}/upload/stream?messageId=${messageId}`;
     fetch(uploadUrl, {
@@ -549,10 +552,16 @@
     })
     .then(res => {
       console.log('Stream upload succeeded for messageId:', messageId, res);
+      if (client) {
+        client.sendLog(`[ACTION] Completed upload stream for file: ${file.name} (Message ID: ${messageId})`);
+      }
       delete pendingSendFiles[messageId];
     })
     .catch(err => {
       console.error('Stream upload failed:', err);
+      if (client) {
+        client.sendLog(`[ERROR] Upload stream failed for file: ${file.name}: ${err.message}`);
+      }
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Failed to send data for "${file.name}": ${err.message}`
         : `传送文件 "${file.name}" 的数据失败: ${err.message}`);
@@ -606,6 +615,7 @@
 
     const transferId = 'dl-' + messageId;
     client.startTransfer(transferId);
+    client.sendLog(`[ACTION] Initiated download for file: ${filename} (Size: ${size} bytes, Message ID: ${messageId})`);
 
     const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
 

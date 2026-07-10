@@ -11,6 +11,7 @@ const (
 	CommandStartTransfer  CommandType = "start_transfer"
 	CommandCancelTransfer CommandType = "cancel_transfer"
 	CommandAck            CommandType = "ack"
+	CommandLog            CommandType = "log"
 )
 
 // ClientInfo describes a chat client at connection time.

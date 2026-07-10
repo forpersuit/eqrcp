@@ -84,6 +84,7 @@ export class ChatWebSocketClient {
       });
 
       this.startHeartbeat();
+      this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
     };
 
     this.ws.onmessage = (event) => {
@@ -97,6 +98,7 @@ export class ChatWebSocketClient {
 
     this.ws.onerror = (err) => {
       chatActions.addSystemMessage('WebSocket encountered an error.');
+      this.sendLog(`[SYSTEM] WebSocket encountered an error.`);
     };
 
     this.ws.onclose = (event) => {
@@ -104,9 +106,11 @@ export class ChatWebSocketClient {
       this.stopHeartbeat();
       if (!this.isManualClosed) {
         chatActions.addSystemMessage(`WebSocket closed: ${event.reason || 'No reason given'}. Reconnecting...`);
+        this.sendLog(`[SYSTEM] WebSocket closed: reason=${event.reason || 'none'}. Reconnecting...`);
         this.handleReconnect();
       } else {
         chatActions.addSystemMessage('WebSocket closed manually.');
+        this.sendLog(`[SYSTEM] WebSocket closed manually.`);
       }
     };
   }
@@ -128,6 +132,7 @@ export class ChatWebSocketClient {
         if (!localStorage.getItem(keyJoin) && event.seq !== undefined && event.seq > 0) {
           localStorage.setItem(keyJoin, event.seq.toString());
         }
+        this.sendLog(`[SYSTEM] Handshake Hello received. Sequence: ${event.seq}`);
         break;
 
       case 'heartbeat':
@@ -137,12 +142,14 @@ export class ChatWebSocketClient {
       case 'message_added':
         if (event.message) {
           chatActions.addMessage(event.message);
+          this.sendLog(`[EVENT] Message added: ID=${event.message.id}, Type=${event.message.type}`);
         }
         break;
 
       case 'message_recalled':
         if (event.message?.id) {
           chatActions.recallMessage(event.message.id);
+          this.sendLog(`[EVENT] Message recalled: ID=${event.message.id}`);
         }
         break;
 
@@ -154,6 +161,7 @@ export class ChatWebSocketClient {
           if (me) {
             chatActions.setCurrentDevice(me);
           }
+          this.sendLog(`[EVENT] Presence updated. Connected devices: ${event.presence.devices.map(d => d.label).join(', ')}`);
         }
         break;
 
@@ -164,19 +172,25 @@ export class ChatWebSocketClient {
       case 'transfer_failed':
       case 'transfer_cancelled':
         if (event.transfer) {
-          chatActions.updateTransfer(event.transfer);
-          if (event.transfer.messageId) {
-            if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
-              chatActions.markMessageDownloaded(event.transfer.messageId);
+          // ONLY update local store and UI state if this transfer belongs to us (the downloader client)
+          if (event.transfer.clientId === this.clientPeer) {
+            chatActions.updateTransfer(event.transfer);
+            if (event.transfer.messageId) {
+              if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
+                chatActions.markMessageDownloaded(event.transfer.messageId);
+              }
+              if (event.type === 'transfer_completed') {
+                chatActions.markMessageUploadComplete(event.transfer.messageId);
+              }
             }
-            if (event.type === 'transfer_completed') {
-              chatActions.markMessageUploadComplete(event.transfer.messageId);
-            }
+            this.sendLog(`[TRANSFER] Event=${event.type}, messageId=${event.transfer.messageId}, bytes=${event.transfer.bytesDone}/${event.transfer.bytesTotal}, state=${event.transfer.state}`);
           }
         }
         break;
+
       case 'request_file_data':
         if (event.message && event.message.id) {
+          this.sendLog(`[EVENT] Received request_file_data from server for messageId: ${event.message.id}`);
           if (this.onRequestFileData) {
             this.onRequestFileData(event.message.id);
           }
@@ -186,6 +200,7 @@ export class ChatWebSocketClient {
       case 'error':
         if (event.error) {
           chatActions.addSystemMessage(`Server Error: [${event.error.code}] ${event.error.message}`);
+          this.sendLog(`[SERVER-ERROR] Code=${event.error.code}, Msg=${event.error.message}`);
         }
         break;
 
@@ -264,6 +279,21 @@ export class ChatWebSocketClient {
     });
     // Optimistic update locally
     chatActions.recallMessage(messageId);
+  }
+
+  public sendLog(text: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendCommand({
+        type: 'log',
+        commandId: `log-${Date.now()}`,
+        text: text
+      });
+    }
+  }
+
+  public log(msg: string): void {
+    console.log(`[CLIENT-LOG] ${msg}`);
+    this.sendLog(msg);
   }
 
   private sendCommand(command: CommandEnvelope): void {

@@ -5,7 +5,8 @@ export type CommandType =
   | 'recall_message'
   | 'start_transfer'
   | 'cancel_transfer'
-  | 'ack';
+  | 'ack'
+  | 'log';
 
 export interface ClientInfo {
   token: string;
