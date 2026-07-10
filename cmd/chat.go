@@ -28,7 +28,9 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 	var logFile *os.File
 	if debugLogEnabled {
 		logDir := filepath.Join(os.TempDir(), "eqt")
-		if cacheDir, err := os.UserCacheDir(); err == nil {
+		if settings.LogDir != "" {
+			logDir = settings.LogDir
+		} else if cacheDir, err := os.UserCacheDir(); err == nil {
 			logDir = filepath.Join(cacheDir, "eqt")
 		}
 		_ = os.MkdirAll(logDir, 0755)
@@ -59,6 +61,7 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 		srv.ChatV2Logger = diag.NewStdLogger()
 	}
 	srv.ChatDebug = debugLogEnabled
+	srv.ChatLogDir = settings.LogDir
 
 	log.Print(`Scan the following URL with a QR reader to join the chat session, press CTRL+C or "q" to exit:`)
 	log.Print(srv.ChatJoinURL())

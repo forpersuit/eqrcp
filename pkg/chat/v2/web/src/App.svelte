@@ -942,6 +942,7 @@
           if (msg.senderId) {
             if (msg.senderId === myPeer) return true;
             if (myPeer === 'desktop' && msg.senderId === 'desktop') return true;
+            return false;
           }
           const myLabel = client?.clientLabel || $currentDevice?.label || 'Me';
           return msg.sender === myLabel;

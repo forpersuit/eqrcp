@@ -33,6 +33,7 @@ type Config struct {
 	IsPaidOrUnrestricted func() bool
 	HostToken            func() string
 	DebugLog             func() bool
+	LogDir               func() string
 }
 
 type rendezvous struct {
@@ -100,7 +101,7 @@ func NewHandler(cfg Config) *Handler {
 		sessions:             sessions,
 		transfer:             transferMgr,
 		scheduler:            sched,
-		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr, DebugLog: debugLogFn}),
+		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr, DebugLog: debugLogFn, LogDir: cfg.LogDir}),
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 		hostToken:            cfg.HostToken,
 		rendezvousMap:        make(map[string][]*rendezvous),

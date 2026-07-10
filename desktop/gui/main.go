@@ -88,6 +88,11 @@ func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
 func (l *FileLogger) Fatal(message string)   { l.log("FATAL", message) }
 
 func desktopLogFilePath() string {
+	settingsApp := application.New()
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	if err == nil && settings.LogDir != "" {
+		return filepath.Join(settings.LogDir, "desktop.log")
+	}
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		dir = os.TempDir()

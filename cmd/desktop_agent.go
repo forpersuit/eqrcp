@@ -1775,6 +1775,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.mu.Unlock()
 	}()
 	srv.ChatDebug = desktopSettings.DebugLog
+	srv.ChatLogDir = desktopSettings.LogDir
 	srv.ViewportDebug = desktopSettings.ViewportDebug
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {

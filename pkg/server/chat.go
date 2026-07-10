@@ -342,6 +342,9 @@ func (s *Server) Chat() error {
 		DebugLog: func() bool {
 			return s.ChatDebug
 		},
+		LogDir: func() string {
+			return s.ChatLogDir
+		},
 	})
 	s.chatV2Handler = chatV2Handler
 	s.mux.Handle("/chat-v2/", chatV2Handler)

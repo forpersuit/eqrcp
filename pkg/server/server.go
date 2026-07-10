@@ -78,6 +78,7 @@ type Server struct {
 	// ChatURL is the URL used for a browser chat session
 	ChatURL            string
 	ChatDebug          bool
+	ChatLogDir         string
 	ViewportDebug      bool
 	EnableChatV2       bool
 	ChatV2Logger       diag.Logger

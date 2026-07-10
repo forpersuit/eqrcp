@@ -44,6 +44,7 @@ type WebSocketConfig struct {
 	Sessions *session.Manager
 	Transfer *transfer.Manager
 	DebugLog func() bool
+	LogDir   func() string
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
@@ -53,6 +54,7 @@ type WebSocketHandler struct {
 	sessions *session.Manager
 	transfer *transfer.Manager
 	debugLog func() bool
+	logDir   func() string
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -77,12 +79,17 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 	if debugLog == nil {
 		debugLog = func() bool { return false }
 	}
+	logDir := cfg.LogDir
+	if logDir == nil {
+		logDir = func() string { return "" }
+	}
 	return &WebSocketHandler{
 		logger:   logger,
 		now:      now,
 		sessions: sessions,
 		transfer: transferMgr,
 		debugLog: debugLog,
+		logDir:   logDir,
 	}
 }
 
@@ -271,7 +278,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 
 		case protocol.CommandLog:
 			if cl != nil {
-				h.writeClientLog(cl.Peer, cmd.Text)
+				h.writeClientLog(token, cl.Peer, cmd.Text)
 				if h.debugLog() {
 					diag.Emit(ctx, h.logger, diag.LevelInfo, fmt.Sprintf("[MOBILE:%s] %s", cl.Peer, cmd.Text), nil, fields...)
 				}
@@ -351,7 +358,7 @@ func extractToken(path string) string {
 	return "test-token"
 }
 
-func (h *WebSocketHandler) writeClientLog(peer string, text string) {
+func (h *WebSocketHandler) writeClientLog(token string, peer string, text string) {
 	if !h.debugLog() {
 		return
 	}
@@ -359,14 +366,26 @@ func (h *WebSocketHandler) writeClientLog(peer string, text string) {
 		peer = "unknown"
 	}
 	safePeer := sanitizeFilename(peer)
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
+	
+	var logDir string
+	if h.logDir != nil {
+		logDir = h.logDir()
 	}
-	logDir := filepath.Join(dir, "eqt")
-	_ = os.MkdirAll(logDir, 0755)
+	if logDir == "" {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			dir = os.TempDir()
+		}
+		logDir = filepath.Join(dir, "eqt")
+	}
 
-	logFilePath := filepath.Join(logDir, fmt.Sprintf("device-%s.log", safePeer))
+	sessionLogDir := logDir
+	if token != "" {
+		sessionLogDir = filepath.Join(logDir, fmt.Sprintf("session-%s", sanitizeFilename(token)))
+	}
+	_ = os.MkdirAll(sessionLogDir, 0755)
+
+	logFilePath := filepath.Join(sessionLogDir, fmt.Sprintf("device-%s.log", safePeer))
 	f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return

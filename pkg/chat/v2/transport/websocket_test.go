@@ -167,8 +167,11 @@ func TestWebSocketCommandLog(t *testing.T) {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	logFilePath := filepath.Join(dir, "eqt", "device-test-log-peer.log")
-	defer os.Remove(logFilePath) // clean up
+	logFilePath := filepath.Join(dir, "eqt", "session-room-token", "device-test-log-peer.log")
+	defer func() {
+		_ = os.Remove(logFilePath)
+		_ = os.Remove(filepath.Dir(logFilePath))
+	}()
 
 	content, err := os.ReadFile(logFilePath)
 	if err != nil {

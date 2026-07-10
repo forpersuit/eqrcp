@@ -232,6 +232,7 @@ export namespace main {
 	    showHistory: boolean;
 	    enableChatV2: boolean;
 	    chatDownloadDir: string;
+	    logDir: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);
@@ -261,6 +262,7 @@ export namespace main {
 	        this.showHistory = source["showHistory"];
 	        this.enableChatV2 = source["enableChatV2"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
+	        this.logDir = source["logDir"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
