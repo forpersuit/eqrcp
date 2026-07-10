@@ -140,11 +140,20 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			readerChan: make(chan io.ReadCloser, 1),
 			errChan:    make(chan error, 1),
 		}
-		h.rendezvousMap[fileID] = rdv
+		h.rendezvousMap[fileID] = append(h.rendezvousMap[fileID], rdv)
 		h.mu.Unlock()
 		defer func() {
 			h.mu.Lock()
-			delete(h.rendezvousMap, fileID)
+			list := h.rendezvousMap[fileID]
+			for i, r := range list {
+				if r == rdv {
+					h.rendezvousMap[fileID] = append(list[:i], list[i+1:]...)
+					break
+				}
+			}
+			if len(h.rendezvousMap[fileID]) == 0 {
+				delete(h.rendezvousMap, fileID)
+			}
 			h.mu.Unlock()
 		}()
 
@@ -207,9 +216,18 @@ func (h *Handler) handleUploadStream(w http.ResponseWriter, r *http.Request, tok
 	}
 
 	h.mu.Lock()
-	rdv, exists := h.rendezvousMap[messageID]
+	var rdv *rendezvous
+	list := h.rendezvousMap[messageID]
+	if len(list) > 0 {
+		rdv = list[0]
+		h.rendezvousMap[messageID] = list[1:]
+		if len(h.rendezvousMap[messageID]) == 0 {
+			delete(h.rendezvousMap, messageID)
+		}
+	}
 	h.mu.Unlock()
-	if !exists {
+
+	if rdv == nil {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusNotFound, "stream rendezvous not found (receiver might have canceled or timed out)"), fields...)
 		return
 	}

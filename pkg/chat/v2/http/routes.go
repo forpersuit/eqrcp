@@ -50,7 +50,7 @@ type Handler struct {
 	isPaidOrUnrestricted func() bool
 	hostToken            func() string
 	mu                   sync.Mutex
-	rendezvousMap        map[string]*rendezvous
+	rendezvousMap        map[string][]*rendezvous
 }
 
 // NewHandler creates an experimental chat v2 handler.
@@ -88,7 +88,7 @@ func NewHandler(cfg Config) *Handler {
 		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr}),
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 		hostToken:            cfg.HostToken,
-		rendezvousMap:        make(map[string]*rendezvous),
+		rendezvousMap:        make(map[string][]*rendezvous),
 	}
 }
 
