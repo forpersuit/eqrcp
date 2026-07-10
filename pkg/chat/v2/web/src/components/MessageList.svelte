@@ -258,7 +258,41 @@
 
           <div class="message-main">
             <div class="sender">{msg.sender}</div>
-            <div class="bubble">
+            <div class="bubble" style="position: relative; overflow: hidden;">
+              {#if msg.type === 'file' && (msg.uploading || (tx && tx.state === 'running' && tx.id.startsWith('ul-')))}
+                <div class="upload-mask" style="
+                  position: absolute;
+                  top: 0;
+                  left: 0;
+                  right: 0;
+                  bottom: 0;
+                  background: var(--accent-wash);
+                  opacity: 0.96;
+                  backdrop-filter: blur(1.5px);
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  z-index: 10;
+                  padding: 8px 12px;
+                  box-sizing: border-box;
+                  text-align: center;
+                ">
+                  <span style="font-size: 13px; font-weight: 600; color: var(--accent-strong); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
+                    </svg>
+                    {#if tx && tx.state === 'running'}
+                      {currentLang === 'en' ? 'Uploading' : '正在上传'} {tx.percent ?? 0}%
+                    {:else}
+                      {currentLang === 'en' ? 'Preparing' : '准备中'}...
+                    {/if}
+                  </span>
+                  <div style="width: 80%; height: 5px; background: rgba(0, 0, 0, 0.08); border-radius: 3.5px; overflow: hidden; margin-top: 2px;">
+                    <div style="width: {tx?.percent ?? 0}%; height: 100%; background: var(--accent-strong); transition: width 0.15s ease-out; border-radius: 3.5px;"></div>
+                  </div>
+                </div>
+              {/if}
               {#if msg.recalled}
                 <span class="text recalled">{msg.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
                 {#if mine}
@@ -456,4 +490,11 @@
 
 <style>
   /* Rely on global app.css V1 classes */
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  :global(.icon-uploading-spin) {
+    animation: spin 1.5s linear infinite;
+  }
 </style>

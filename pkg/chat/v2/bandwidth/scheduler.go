@@ -214,9 +214,9 @@ func (s *Scheduler) Throttle(id string, totalBytesTransferred int64, startTime t
 				job.capacity = int64(float64(bytesProbed) / elapsed.Seconds())
 			}
 			// Safeguard: sanitize estimated capacity to prevent slow-start stall lockouts
-			minCapacity := int64(512 * 1024) // 512KB/s minimum floor for Free users
+			minCapacity := int64(2 * 1024 * 1024) // 2MB/s minimum floor for Free users
 			if job.isPaid {
-				minCapacity = 2 * 1024 * 1024 // 2MB/s minimum floor for Paid users
+				minCapacity = 10 * 1024 * 1024 // 10MB/s minimum floor for Paid users
 			}
 			if job.capacity < minCapacity {
 				job.capacity = minCapacity

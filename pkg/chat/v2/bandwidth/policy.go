@@ -6,8 +6,8 @@ type Policy struct {
 }
 
 var (
-	// PolicyFree limits visitor connections to 512KB/s.
-	PolicyFree = Policy{MaxSpeed: 512 * 1024}
-	// PolicyPaid limits paid connections to 10MB/s.
-	PolicyPaid = Policy{MaxSpeed: 10 * 1024 * 1024}
+	// PolicyFree limits visitor connections to 2MB/s.
+	PolicyFree = Policy{MaxSpeed: 2 * 1024 * 1024}
+	// PolicyPaid limits paid connections to 100MB/s.
+	PolicyPaid = Policy{MaxSpeed: 100 * 1024 * 1024}
 )

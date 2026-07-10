@@ -6,13 +6,13 @@ import (
 )
 
 func TestSchedulerBandwidthFairShare(t *testing.T) {
-	// Set global limit to 1MB/s and disable probing for legacy test compatibility
-	sched := NewScheduler(1024 * 1024)
+	// Set global limit to 4MB/s and disable probing for legacy test compatibility
+	sched := NewScheduler(4 * 1024 * 1024)
 	sched.ProbingBytes = -1
 
 	sched.RegisterJob("job-free-1", false)
 
-	// Free policy limits to 512KB/s, fairShare is 1MB. Min(1MB, 512KB) = 512KB.
+	// Free policy limits to 2MB/s, fairShare is 4MB. Min(4MB, 2MB) = 2MB.
 	limit1 := sched.LimitForJob("job-free-1")
 	if limit1 != PolicyFree.MaxSpeed {
 		t.Fatalf("job limit = %d, want %d (Free Policy Cap)", limit1, PolicyFree.MaxSpeed)
@@ -21,26 +21,26 @@ func TestSchedulerBandwidthFairShare(t *testing.T) {
 	// Register a second job (paid)
 	sched.RegisterJob("job-paid-2", true)
 
-	// Two jobs active. Fair share per job is 1MB / 2 = 512KB.
-	// For job-paid-2: Min(512KB, 10MB) = 512KB.
+	// Two jobs active. Fair share per job is 4MB / 2 = 2MB.
+	// For job-paid-2: Min(2MB, 100MB) = 2MB.
 	limit2 := sched.LimitForJob("job-paid-2")
-	if limit2 != 512*1024 {
-		t.Fatalf("job-paid limit = %d, want 512KB (Fair Share)", limit2)
+	if limit2 != 2*1024*1024 {
+		t.Fatalf("job-paid limit = %d, want 2MB (Fair Share)", limit2)
 	}
 
-	// For job-free-1: Min(512KB, 512KB) = 512KB.
+	// For job-free-1: Min(2MB, 2MB) = 2MB.
 	limit1Post := sched.LimitForJob("job-free-1")
-	if limit1Post != 512*1024 {
-		t.Fatalf("job-free limit = %d, want 512KB", limit1Post)
+	if limit1Post != 2*1024*1024 {
+		t.Fatalf("job-free limit = %d, want 2MB", limit1Post)
 	}
 
 	// Register a third job (paid)
 	sched.RegisterJob("job-paid-3", true)
 
-	// Three jobs active. Fair share is 1MB / 3 = 349525 bytes.
-	// For job-paid-3: Min(349525, 10MB) = 349525 bytes.
+	// Three jobs active. Fair share is 4MB / 3 = 1398101 bytes.
+	// For job-paid-3: Min(1.33MB, 100MB) = 1.33MB.
 	limit3 := sched.LimitForJob("job-paid-3")
-	expectedLimit := int64(1024 * 1024 / 3)
+	expectedLimit := int64(4 * 1024 * 1024 / 3)
 	if limit3 != expectedLimit {
 		t.Fatalf("job-paid-3 limit = %d, want %d", limit3, expectedLimit)
 	}
@@ -48,8 +48,8 @@ func TestSchedulerBandwidthFairShare(t *testing.T) {
 	// Unregister one job
 	sched.UnregisterJob("job-free-1")
 	limit2Post := sched.LimitForJob("job-paid-2")
-	if limit2Post != 512*1024 { // 1MB / 2
-		t.Fatalf("post unregister job-paid-2 limit = %d, want 512KB", limit2Post)
+	if limit2Post != 2*1024*1024 { // 4MB / 2
+		t.Fatalf("post unregister job-paid-2 limit = %d, want 2MB", limit2Post)
 	}
 }
 

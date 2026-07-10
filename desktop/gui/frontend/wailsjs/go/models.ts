@@ -155,6 +155,7 @@ export namespace main {
 	    arch: string;
 	    cliPath?: string;
 	    logPath?: string;
+	    uploadDirFreeSpace?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -171,6 +172,7 @@ export namespace main {
 	        this.arch = source["arch"];
 	        this.cliPath = source["cliPath"];
 	        this.logPath = source["logPath"];
+	        this.uploadDirFreeSpace = source["uploadDirFreeSpace"];
 	    }
 	}
 	export class DesktopIntegrationStatus {
