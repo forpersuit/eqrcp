@@ -888,4 +888,3 @@ func DesktopStartupStatus() (string, error) {
 func DesktopIntegrationStatus() (string, error) {
 	return desktopIntegrationStatus()
 }
-

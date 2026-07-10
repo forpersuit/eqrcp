@@ -26,7 +26,7 @@ func TestChatLimiter(t *testing.T) {
 	// we will backup and restore the file if it exists, or dynamically mock it.
 	// Since getChatUsageFilePath() uses config.DefaultConfigDir(),
 	// we can check if it creates the file correctly.
-	
+
 	// Let's backup current file if exists
 	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
 	var backup []byte

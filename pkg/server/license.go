@@ -79,7 +79,7 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 // VerifyFingerprint checks if current hardware matches the certificate hashes using 3-of-2 model
 func VerifyFingerprint(cert LicenseCertificate) bool {
 	curUUID, curCPU, curDisk := GetDeviceFingerprintHashes()
-	
+
 	matches := 0
 	if cert.UUIDHash != "" && curUUID != "" && cert.UUIDHash == curUUID {
 		matches++
@@ -149,7 +149,7 @@ func ActivateLicenseOnline(licenseCode string) error {
 	})
 
 	apiURL := fmt.Sprintf("%s/api/v1/activate", getLicenseServer())
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {

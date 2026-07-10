@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/png"
@@ -28,11 +28,12 @@ import (
 	"eqt/pkg/qr"
 
 	"eqt/pkg/body"
+	chatv2http "eqt/pkg/chat/v2/http"
+	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
 	"eqt/pkg/pages"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
-	chatv2http "eqt/pkg/chat/v2/http"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -53,15 +54,15 @@ type ClientFileTransferState struct {
 }
 
 type ClientTransferStateInfo struct {
-	ClientID   string                    `json:"clientID,omitempty"`
-	State      string                    `json:"state"`
-	BytesDone  int64                     `json:"bytesDone"`
-	BytesTotal int64                     `json:"bytesTotal"`
-	Percent    int                       `json:"percent"`
-	Current    string                    `json:"current,omitempty"`
-	Message    string                    `json:"message"`
-	DeviceName string                    `json:"deviceName,omitempty"`
-	SavedFiles []string                  `json:"savedFiles,omitempty"`
+	ClientID          string                    `json:"clientID,omitempty"`
+	State             string                    `json:"state"`
+	BytesDone         int64                     `json:"bytesDone"`
+	BytesTotal        int64                     `json:"bytesTotal"`
+	Percent           int                       `json:"percent"`
+	Current           string                    `json:"current,omitempty"`
+	Message           string                    `json:"message"`
+	DeviceName        string                    `json:"deviceName,omitempty"`
+	SavedFiles        []string                  `json:"savedFiles,omitempty"`
 	Files             []ClientFileTransferState `json:"files,omitempty"`
 	ActiveConnections int                       `json:"-"`
 }
@@ -74,29 +75,29 @@ type Server struct {
 	// ReceiveURL is the URL used to Receive the file
 	ReceiveURL string
 	// ChatURL is the URL used for a browser chat session
-	ChatURL        string
-	ChatDebug      bool
-	ViewportDebug  bool
-	EnableChatV2   bool
-	Lang           string
-	instance       *http.Server
-	mux            *http.ServeMux
-	body           body.Body
-	outputDir      string
-	chatDir        string
-	chatSession    *chatSession
-	chatV2Handler  *chatv2http.Handler
-	stopChannel    chan bool
-	statusMu       sync.Mutex
-	status         transferStatus
-	history        []transferStatusRecord
-	statusGrace    time.Duration
-	statusHook     func(TransferStatusSnapshot)
-	chatStatusHook func(ChatStatusSnapshot)
+	ChatURL            string
+	ChatDebug          bool
+	ViewportDebug      bool
+	EnableChatV2       bool
+	Lang               string
+	instance           *http.Server
+	mux                *http.ServeMux
+	body               body.Body
+	outputDir          string
+	chatDir            string
+	chatSession        *chatSession
+	chatV2Handler      *chatv2http.Handler
+	stopChannel        chan bool
+	statusMu           sync.Mutex
+	status             transferStatus
+	history            []transferStatusRecord
+	statusGrace        time.Duration
+	statusHook         func(TransferStatusSnapshot)
+	chatStatusHook     func(ChatStatusSnapshot)
 	chatHostRenameHook func(string)
-	repeatRoute    string
-	statusSeq      int64
-	statusSubs     map[chan struct{}]struct{}
+	repeatRoute        string
+	statusSeq          int64
+	statusSubs         map[chan struct{}]struct{}
 	// expectParallelRequests is set to true when eqt sends files, in order
 	// to support downloading of parallel chunks
 	expectParallelRequests bool
@@ -118,16 +119,16 @@ type Server struct {
 	expectedBytesMu        sync.Mutex
 	expectedBytes          map[int]int64
 	registeredRoutes       map[string]bool
-	initFirstTransferOnce sync.Once
-	isFirstDailyTransfer  bool
-	lastHookTime          time.Time
-	lastHookTimeMu        sync.Mutex
-	tusHandler            *tusd.Handler
-	tusPath               string
-	tusUploadsDone        map[string]int64
-	tusUploadsTotal       map[string]int64
-	tusUploadClients      map[string]string
-	tusMu                 sync.Mutex
+	initFirstTransferOnce  sync.Once
+	isFirstDailyTransfer   bool
+	lastHookTime           time.Time
+	lastHookTimeMu         sync.Mutex
+	tusHandler             *tusd.Handler
+	tusPath                string
+	tusUploadsDone         map[string]int64
+	tusUploadsTotal        map[string]int64
+	tusUploadClients       map[string]string
+	tusMu                  sync.Mutex
 }
 
 // SetAutoStop enables or disables automatic server shutdown when all devices finish downloading.
@@ -146,7 +147,6 @@ func (s *Server) SetAutoStop(enabled bool) {
 	status.ItemClientStats = s.getItemClientStats()
 
 	notifyTransferStatusHook(hook, status)
-
 
 	if enabled {
 		s.clientMutex.Lock()
@@ -225,26 +225,26 @@ func (s *Server) SetAutoStop(enabled bool) {
 }
 
 type transferStatus struct {
-	ClientID            string   `json:"clientID,omitempty"`
-	DeviceName          string   `json:"deviceName,omitempty"`
-	State               string   `json:"state"`
-	Mode                string   `json:"mode,omitempty"`
-	Title               string   `json:"title,omitempty"`
-	Target              string   `json:"target,omitempty"`
-	Archive             bool     `json:"archive,omitempty"`
-	ArchiveName         string   `json:"archiveName,omitempty"`
-	Items               []string `json:"items,omitempty"`
-	DownloadedItems     []int    `json:"downloadedItems,omitempty"`
-	ItemClientStats     []string `json:"itemClientStats,omitempty"`
-	Current             string   `json:"current,omitempty"`
-	Message             string   `json:"message"`
-	BytesDone           int64    `json:"bytesDone"`
-	BytesTotal          int64    `json:"bytesTotal"`
-	Percent             int      `json:"percent"`
-	SavedFiles          []string `json:"savedFiles,omitempty"`
-	Version             string   `json:"version,omitempty"`
-	TransferDeviceCount int      `json:"transferDeviceCount,omitempty"`
-	AutoStop            bool     `json:"autoStop,omitempty"`
+	ClientID            string                              `json:"clientID,omitempty"`
+	DeviceName          string                              `json:"deviceName,omitempty"`
+	State               string                              `json:"state"`
+	Mode                string                              `json:"mode,omitempty"`
+	Title               string                              `json:"title,omitempty"`
+	Target              string                              `json:"target,omitempty"`
+	Archive             bool                                `json:"archive,omitempty"`
+	ArchiveName         string                              `json:"archiveName,omitempty"`
+	Items               []string                            `json:"items,omitempty"`
+	DownloadedItems     []int                               `json:"downloadedItems,omitempty"`
+	ItemClientStats     []string                            `json:"itemClientStats,omitempty"`
+	Current             string                              `json:"current,omitempty"`
+	Message             string                              `json:"message"`
+	BytesDone           int64                               `json:"bytesDone"`
+	BytesTotal          int64                               `json:"bytesTotal"`
+	Percent             int                                 `json:"percent"`
+	SavedFiles          []string                            `json:"savedFiles,omitempty"`
+	Version             string                              `json:"version,omitempty"`
+	TransferDeviceCount int                                 `json:"transferDeviceCount,omitempty"`
+	AutoStop            bool                                `json:"autoStop,omitempty"`
 	ClientStates        map[string]*ClientTransferStateInfo `json:"clientStates,omitempty"`
 }
 
@@ -273,21 +273,21 @@ type serviceStatus struct {
 }
 
 type TransferStatusSnapshot struct {
-	State       string
-	Mode        string
-	Title       string
-	Target      string
-	Archive     bool
-	ArchiveName string
-	Items       []string
-	Current     string
-	Message     string
-	BytesDone   int64
-	BytesTotal  int64
-	Percent     int
-	SavedFiles  []string
-	Version     string
-	ItemClientStats []string
+	State               string
+	Mode                string
+	Title               string
+	Target              string
+	Archive             bool
+	ArchiveName         string
+	Items               []string
+	Current             string
+	Message             string
+	BytesDone           int64
+	BytesTotal          int64
+	Percent             int
+	SavedFiles          []string
+	Version             string
+	ItemClientStats     []string
 	TransferDeviceCount int
 	AutoStop            bool
 	ClientStates        map[string]*ClientTransferStateInfo
@@ -639,8 +639,6 @@ func (s *Server) ReceiveTo(dir string) error {
 				status.Message = fmt.Sprintf("Received %s", fileName)
 			})
 			s.triggerStatusHookThrottled()
-
-
 
 			isClientCompleted := false
 			s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
@@ -1373,23 +1371,23 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		}
 	}
 	return TransferStatusSnapshot{
-		State:               status.State,
-		Mode:                status.Mode,
-		Title:               status.Title,
-		Target:              status.Target,
-		Archive:             status.Archive,
-		ArchiveName:         status.ArchiveName,
-		Items:               append([]string(nil), status.Items...),
-		Current:             status.Current,
-		Message:             status.Message,
-		BytesDone:           status.BytesDone,
-		BytesTotal:          status.BytesTotal,
-		Percent:             status.Percent,
-		SavedFiles:          append([]string(nil), status.SavedFiles...),
-		Version:             status.Version,
-		ItemClientStats:     append([]string(nil), status.ItemClientStats...),
-		AutoStop:            status.AutoStop,
-		ClientStates:        clientStates,
+		State:           status.State,
+		Mode:            status.Mode,
+		Title:           status.Title,
+		Target:          status.Target,
+		Archive:         status.Archive,
+		ArchiveName:     status.ArchiveName,
+		Items:           append([]string(nil), status.Items...),
+		Current:         status.Current,
+		Message:         status.Message,
+		BytesDone:       status.BytesDone,
+		BytesTotal:      status.BytesTotal,
+		Percent:         status.Percent,
+		SavedFiles:      append([]string(nil), status.SavedFiles...),
+		Version:         status.Version,
+		ItemClientStats: append([]string(nil), status.ItemClientStats...),
+		AutoStop:        status.AutoStop,
+		ClientStates:    clientStates,
 	}
 }
 
@@ -1802,7 +1800,6 @@ func (s *Server) setClientDownloadedBytes(clientID string, itemIndex int, val in
 	s.clientProgress[clientID][itemIndex] = val
 }
 
-
 func (s *Server) isClientFinished(clientID string) bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
@@ -2057,12 +2054,14 @@ func (s *Server) Wait() error {
 // Shutdown the server
 func (s *Server) Shutdown() {
 	s.stopChatSession("stopped")
+	_ = chatv2session.CleanupUploads()
 	s.signalStop()
 }
 
 // ShutdownChat stops the server and records a chat-specific terminal state.
 func (s *Server) ShutdownChat(state string) {
 	s.stopChatSession(state)
+	_ = chatv2session.CleanupUploads()
 	s.signalStop()
 }
 
@@ -2228,7 +2227,6 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		usage := limiterInstance.GetStatus()
 		app.initFirstTransferFlag()
-
 
 		if !cfg.KeepAlive {
 			if status, done := app.terminalStatus(); done {
@@ -2465,7 +2463,6 @@ func New(cfg *config.Config) (*Server, error) {
 			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 			state.Message = "Sending file to connected device."
 		})
-
 
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
@@ -3239,4 +3236,3 @@ func (s *Server) NotifyQuickDownload(id string) {
 		s.chatV2Handler.NotifyQuickDownload(id)
 	}
 }
-

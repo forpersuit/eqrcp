@@ -73,7 +73,7 @@ func VerifyUpdateSignature(fileBytes []byte, sigBytes []byte) bool {
 	// Clean signature bytes
 	sig := sigBytes
 	sigStr := strings.TrimSpace(string(sigBytes))
-	
+
 	// If it is hex string format signature (128 hex chars), decode it
 	if len(sigStr) == 128 {
 		if decoded, err := hex.DecodeString(sigStr); err == nil {
@@ -106,16 +106,16 @@ func getUpdateURL() string {
 func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error) {
 	apiURL := getUpdateURL()
 	Log.Debugf("CheckForUpdates: initiated. isDesktop: %v, currentVersion: %s, url: %s", isDesktop, currentVersion, apiURL)
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		Log.Errorf("CheckForUpdates: request build failed: %v", err)
 		return nil, fmt.Errorf("failed to create update request: %w", err)
 	}
-	
+
 	req.Header.Set("User-Agent", "EQT-Update-Client")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		Log.Errorf("CheckForUpdates: API request failed: %v", err)
@@ -212,7 +212,7 @@ func getUpdateTempDir() string {
 // and saves it to a persistent update buffer folder in the config directory.
 func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, error) {
 	tempDir := getUpdateTempDir()
-	
+
 	// Create paths for saving download files
 	pkgPath := filepath.Join(tempDir, assetName)
 	sigPath := pkgPath + ".sig"
@@ -317,7 +317,7 @@ func InstallAndRestart(assetName string) error {
 	if runtime.GOOS == "windows" {
 		exeOldPath := exePath + ".old"
 		Log.Debugf("InstallAndRestart: Windows scheme - renaming %s to %s", exePath, exeOldPath)
-		
+
 		// Remove existing old file if any
 		_ = os.Remove(exeOldPath)
 
@@ -340,12 +340,12 @@ func InstallAndRestart(assetName string) error {
 		exeDir := filepath.Dir(exePath)
 		tempNewFile := filepath.Join(exeDir, filepath.Base(exePath)+".new")
 		Log.Debugf("InstallAndRestart: POSIX scheme - writing temp binary to %s", tempNewFile)
-		
+
 		if err := os.WriteFile(tempNewFile, newBytes, 0755); err != nil {
 			Log.Errorf("InstallAndRestart: failed to write temp file: %v", err)
 			return fmt.Errorf("failed to write temporary new executable: %w", err)
 		}
-		
+
 		Log.Debugf("InstallAndRestart: POSIX scheme - setting executable permission on %s", tempNewFile)
 		if err := os.Chmod(tempNewFile, 0755); err != nil {
 			_ = os.Remove(tempNewFile)
@@ -411,7 +411,7 @@ func CleanLingeringOldExecutables() {
 // Returns true if an update was applied and a restart was triggered.
 func ApplyOfflineUpdateIfExists() bool {
 	tempDir := getUpdateTempDir()
-	
+
 	// Target binary name based on type (desktop) and current platform
 	// E.g., eqt-desktop-windows-amd64.exe or eqt-desktop-linux-amd64
 	var assetName string
@@ -467,7 +467,7 @@ func ApplyOfflineUpdateIfExists() bool {
 	if runtime.GOOS == "windows" {
 		exeOldPath := exePath + ".old"
 		_ = os.Remove(exeOldPath)
-		
+
 		if err := os.Rename(exePath, exeOldPath); err != nil {
 			Log.Errorf("ApplyOfflineUpdateIfExists: failed to rename running exe: %v", err)
 			return false
@@ -517,4 +517,3 @@ func ApplyOfflineUpdateIfExists() bool {
 	os.Exit(0)
 	return true
 }
-

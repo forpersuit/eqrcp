@@ -47,4 +47,3 @@ func notifyDesktopWindowsBalloon(title string, message string) error {
 func powershellString(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
-

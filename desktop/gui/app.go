@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"eqt/cmd"
 	"eqt/pkg/application"
+	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
 	"eqt/pkg/server"
 	"eqt/pkg/util"
@@ -25,6 +26,7 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
 const chatSaveRetentionDays = 7
 
 var (
@@ -54,50 +56,49 @@ type AgentTask struct {
 	Browser *bool    `json:"browser,omitempty"`
 }
 
-
 type TaskRecord struct {
-	ID                  int        `json:"id"`
-	Action              string     `json:"action"`
-	Paths               []string   `json:"paths"`
-	State               string     `json:"state"`
-	TransferState       string     `json:"transferState,omitempty"`
-	TransferMessage     string     `json:"transferMessage,omitempty"`
-	TransferMode        string     `json:"transferMode,omitempty"`
-	TransferTarget      string     `json:"transferTarget,omitempty"`
-	TransferArchiveName string     `json:"transferArchiveName,omitempty"`
-	TransferCurrent     string     `json:"transferCurrent,omitempty"`
-	TransferPercent     int        `json:"transferPercent,omitempty"`
-	BytesDone           int64      `json:"bytesDone,omitempty"`
-	BytesTotal          int64      `json:"bytesTotal,omitempty"`
-	SavedFiles          []string   `json:"savedFiles,omitempty"`
-	TransferItemClientStats []string   `json:"itemClientStats,omitempty"`
-	TransferDeviceCount int        `json:"transferDeviceCount,omitempty"`
-	TransferAutoStop    bool       `json:"transferAutoStop,omitempty"`
-	TransferClientStates map[string]*server.ClientTransferStateInfo `json:"clientStates,omitempty"`
-	ChatState           string     `json:"chatState,omitempty"`
-	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
-	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`
-	ChatLastActivity    string     `json:"chatLastActivity,omitempty"`
-	PageURL             string     `json:"pageUrl,omitempty"`
-	Error               string     `json:"error,omitempty"`
-	StartedAt           time.Time  `json:"startedAt"`
-	FinishedAt          *time.Time `json:"finishedAt,omitempty"`
+	ID                      int                                        `json:"id"`
+	Action                  string                                     `json:"action"`
+	Paths                   []string                                   `json:"paths"`
+	State                   string                                     `json:"state"`
+	TransferState           string                                     `json:"transferState,omitempty"`
+	TransferMessage         string                                     `json:"transferMessage,omitempty"`
+	TransferMode            string                                     `json:"transferMode,omitempty"`
+	TransferTarget          string                                     `json:"transferTarget,omitempty"`
+	TransferArchiveName     string                                     `json:"transferArchiveName,omitempty"`
+	TransferCurrent         string                                     `json:"transferCurrent,omitempty"`
+	TransferPercent         int                                        `json:"transferPercent,omitempty"`
+	BytesDone               int64                                      `json:"bytesDone,omitempty"`
+	BytesTotal              int64                                      `json:"bytesTotal,omitempty"`
+	SavedFiles              []string                                   `json:"savedFiles,omitempty"`
+	TransferItemClientStats []string                                   `json:"itemClientStats,omitempty"`
+	TransferDeviceCount     int                                        `json:"transferDeviceCount,omitempty"`
+	TransferAutoStop        bool                                       `json:"transferAutoStop,omitempty"`
+	TransferClientStates    map[string]*server.ClientTransferStateInfo `json:"clientStates,omitempty"`
+	ChatState               string                                     `json:"chatState,omitempty"`
+	ChatMessageCount        int                                        `json:"chatMessageCount,omitempty"`
+	ChatDeviceCount         int                                        `json:"chatDeviceCount,omitempty"`
+	ChatLastActivity        string                                     `json:"chatLastActivity,omitempty"`
+	PageURL                 string                                     `json:"pageUrl,omitempty"`
+	Error                   string                                     `json:"error,omitempty"`
+	StartedAt               time.Time                                  `json:"startedAt"`
+	FinishedAt              *time.Time                                 `json:"finishedAt,omitempty"`
 }
 
 type AgentStatus struct {
-	State            string       `json:"state"`
-	Current          *TaskRecord  `json:"current,omitempty"`
-	Chat             *TaskRecord  `json:"chat,omitempty"`
-	Queued           int          `json:"queued"`
-	History          []TaskRecord `json:"history,omitempty"`
-	LastError        string       `json:"lastError,omitempty"`
-	Version          string       `json:"version"`
-	AgentStartedAt   time.Time    `json:"agentStartedAt"`
-	ClockTampered    bool         `json:"clockTampered"`
-	IsPaid           bool         `json:"isPaid"`
-	LicenseTier      string       `json:"licenseTier"`
-	MaxDevices       int          `json:"maxDevices"`
-	ActivatedDevices int          `json:"activatedDevices"`
+	State                string       `json:"state"`
+	Current              *TaskRecord  `json:"current,omitempty"`
+	Chat                 *TaskRecord  `json:"chat,omitempty"`
+	Queued               int          `json:"queued"`
+	History              []TaskRecord `json:"history,omitempty"`
+	LastError            string       `json:"lastError,omitempty"`
+	Version              string       `json:"version"`
+	AgentStartedAt       time.Time    `json:"agentStartedAt"`
+	ClockTampered        bool         `json:"clockTampered"`
+	IsPaid               bool         `json:"isPaid"`
+	LicenseTier          string       `json:"licenseTier"`
+	MaxDevices           int          `json:"maxDevices"`
+	ActivatedDevices     int          `json:"activatedDevices"`
 	UsedSeconds          int          `json:"usedSeconds"`
 	UsedTransfers        int          `json:"usedTransfers"`
 	UsedReceiveTransfers int          `json:"usedReceiveTransfers"`
@@ -105,16 +106,16 @@ type AgentStatus struct {
 }
 
 type DesktopSettings struct {
-	ConfigPath       string            `json:"configPath"`
-	Interface        string            `json:"interface"`
-	InterfaceOptions []InterfaceOption `json:"interfaceOptions"`
-	Port             int               `json:"port"`
-	Output           string            `json:"output"`
-	Browser          bool              `json:"browser"`
-	ChatAutoSave     bool              `json:"chatAutoSave"`
-	CloseBehavior    string            `json:"closeBehavior"`
-	ChatSender       string            `json:"chatSender"`
-	ChatAvatar       string            `json:"chatAvatar"`
+	ConfigPath               string            `json:"configPath"`
+	Interface                string            `json:"interface"`
+	InterfaceOptions         []InterfaceOption `json:"interfaceOptions"`
+	Port                     int               `json:"port"`
+	Output                   string            `json:"output"`
+	Browser                  bool              `json:"browser"`
+	ChatAutoSave             bool              `json:"chatAutoSave"`
+	CloseBehavior            string            `json:"closeBehavior"`
+	ChatSender               string            `json:"chatSender"`
+	ChatAvatar               string            `json:"chatAvatar"`
 	DevMode                  bool              `json:"devMode"`
 	DebugLog                 bool              `json:"debugLog"`
 	ViewportDebug            bool              `json:"viewportDebug"`
@@ -136,15 +137,16 @@ type InterfaceOption struct {
 }
 
 type AppInfo struct {
-	Product     string `json:"product"`
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Description string `json:"description"`
-	AgentURL    string `json:"agentUrl"`
-	OS          string `json:"os"`
-	Arch        string `json:"arch"`
-	CLIPath     string `json:"cliPath,omitempty"`
-	LogPath     string `json:"logPath,omitempty"`
+	Product            string `json:"product"`
+	Name               string `json:"name"`
+	Version            string `json:"version"`
+	Description        string `json:"description"`
+	AgentURL           string `json:"agentUrl"`
+	OS                 string `json:"os"`
+	Arch               string `json:"arch"`
+	CLIPath            string `json:"cliPath,omitempty"`
+	LogPath            string `json:"logPath,omitempty"`
+	UploadDirFreeSpace string `json:"uploadDirFreeSpace,omitempty"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -371,8 +373,6 @@ func (a *App) Chat() (AgentStatus, error) {
 	a.logInfo("[GUI] Chat task started successfully.")
 	return status, nil
 }
-
-
 
 func (a *App) ChatSaveDirectory() (string, error) {
 	var dir string
@@ -789,7 +789,7 @@ func (a *App) OpenPath(path string) error {
 	}
 
 	a.logInfo(fmt.Sprintf("[GUI] OpenPath resolved target directory: %s", target))
-	
+
 	info, err = os.Stat(target)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("directory does not exist: %s", target)
@@ -962,7 +962,7 @@ func (a *App) GetFileInfos(paths []string) ([]GUIFileInfo, error) {
 		if err != nil {
 			continue
 		}
-		
+
 		var sizeBytes int64
 		if fi.IsDir() {
 			_ = filepath.Walk(p, func(_ string, info os.FileInfo, walkErr error) error {
@@ -974,7 +974,7 @@ func (a *App) GetFileInfos(paths []string) ([]GUIFileInfo, error) {
 		} else {
 			sizeBytes = fi.Size()
 		}
-		
+
 		var sizeStr string
 		if sizeBytes < 1024 {
 			sizeStr = fmt.Sprintf("%d B", sizeBytes)
@@ -988,7 +988,7 @@ func (a *App) GetFileInfos(paths []string) ([]GUIFileInfo, error) {
 			}
 			sizeStr = fmt.Sprintf("%.1f %s", f, units[idx-1])
 		}
-		
+
 		result = append(result, GUIFileInfo{
 			Path:      p,
 			Name:      filepath.Base(p),
@@ -1024,6 +1024,18 @@ func (a *App) AppInfo() AppInfo {
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
 	}
+
+	// Calculate and assign the free space of the upload directory
+	if root, err := chatv2session.UploadRoot(); err == nil {
+		if free, err := util.GetDiskFreeSpace(root); err == nil {
+			info.UploadDirFreeSpace = chatv2session.FormatFreeSpace(free)
+		} else {
+			info.UploadDirFreeSpace = "N/A"
+		}
+	} else {
+		info.UploadDirFreeSpace = "N/A"
+	}
+
 	return info
 }
 
@@ -1095,7 +1107,6 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 	a.agent.mu.Unlock()
 	return status, nil
 }
-
 
 func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 	a.logInfo(fmt.Sprintf("[GUI] DevSetUsedSeconds called with %d", seconds))
@@ -1471,6 +1482,3 @@ func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat 
 
 	return result.ImageURL, nil
 }
-
-
-

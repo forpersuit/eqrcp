@@ -14,6 +14,7 @@ import (
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
 )
 
@@ -199,8 +200,13 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 		sender = "Anonymous"
 	}
 
-	// Create temp file
-	tempFile, err := os.CreateTemp("", "eqt-chat-upload-*")
+	// Create temp file inside dedicated uploads root directory
+	uploadRoot, err := session.UploadRoot()
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to resolve upload root: "+err.Error()), fields...)
+		return
+	}
+	tempFile, err := os.CreateTemp(uploadRoot, "eqt-chat-upload-*")
 	if err != nil {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to create temp file: "+err.Error()), fields...)
 		return

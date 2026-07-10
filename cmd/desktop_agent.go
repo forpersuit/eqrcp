@@ -28,6 +28,7 @@ import (
 )
 
 var desktopAgentAddress = getDesktopAgentAddress()
+
 const desktopAgentMaxQueue = 16
 const desktopAgentMaxHistory = 20
 const desktopAgentHistoryFilename = "desktop-agent-history.json"
@@ -50,7 +51,6 @@ type desktopAgentTask struct {
 	Paths   []string `json:"paths"`
 	Browser *bool    `json:"browser,omitempty"`
 }
-
 
 type desktopAgentTaskRecord struct {
 	ID                  int        `json:"id"`
@@ -103,22 +103,22 @@ type desktopAgentHistoryStore struct {
 type desktopAgentNotifier func(title string, message string) error
 
 type desktopAgent struct {
-	mu          sync.Mutex
-	baseFlags   application.Flags
-	log         logger.Logger
-	startedAt   time.Time
-	busy        bool
-	current     *desktopAgentTaskRecord
-	chat        *desktopAgentTaskRecord
-	queue       []desktopAgentTask
-	history     []desktopAgentTaskRecord
-	nextID      int
-	activeStop  func(string)
-	chatStop    func(string)
-	shutdown    func()
-	lastError   string
-	runner      func(desktopAgentTask) error
-	notifier    desktopAgentNotifier
+	mu           sync.Mutex
+	baseFlags    application.Flags
+	log          logger.Logger
+	startedAt    time.Time
+	busy         bool
+	current      *desktopAgentTaskRecord
+	chat         *desktopAgentTaskRecord
+	queue        []desktopAgentTask
+	history      []desktopAgentTaskRecord
+	nextID       int
+	activeStop   func(string)
+	chatStop     func(string)
+	shutdown     func()
+	lastError    string
+	runner       func(desktopAgentTask) error
+	notifier     desktopAgentNotifier
 	historyPath  string
 	notified     map[int]map[string]bool
 	revision     int64
@@ -360,7 +360,7 @@ func (agent *desktopAgent) handleSettings(w http.ResponseWriter, r *http.Request
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
-	
+
 	// Read current settings to determine if dev mode is enabled
 	currentSettings, err := agent.readSettings()
 	isDev := err == nil && (currentSettings.DevMode || currentSettings.DebugLog)
@@ -378,14 +378,14 @@ func (agent *desktopAgent) handleSettings(w http.ResponseWriter, r *http.Request
 
 	case http.MethodPost:
 		agent.log.Infof("HTTP Request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
-		
+
 		var settings config.DesktopSettings
 		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
 			agent.log.Errorf("handleSettings POST: Failed to decode incoming settings: %v", err)
 			http.Error(w, fmt.Sprintf("invalid settings: %v", err), http.StatusBadRequest)
 			return
 		}
-		
+
 		isIncomingDev := settings.DevMode || settings.DebugLog
 		if isDev || isIncomingDev {
 			settingsJSON, _ := json.Marshal(settings)
@@ -837,7 +837,7 @@ func (agent *desktopAgent) handleUpdateCheck(w http.ResponseWriter, r *http.Requ
 	if rejectCrossOriginDesktopAgent(w, r) {
 		return
 	}
-	
+
 	// Read settings to check dev mode and dynamically set server package logger
 	settings, err := config.ReadDesktopSettings(agent.settingsApp())
 	if err == nil {
@@ -855,7 +855,7 @@ func (agent *desktopAgent) handleUpdateCheck(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	agent.log.Infof("handleUpdateCheck: starting check with version %s", version.Version())
 	res, err := server.CheckForUpdates(true, version.Version())
 	if err != nil {
@@ -894,7 +894,7 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	var req struct {
 		AssetURL     string `json:"asset_url"`
 		SignatureURL string `json:"signature_url"`
@@ -1629,7 +1629,7 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 
 func (agent *desktopAgent) addHistoryLocked(record desktopAgentTaskRecord) {
 	record = cloneDesktopAgentRecord(record)
-	
+
 	foundIndex := -1
 	for i, r := range agent.history {
 		if r.ID == record.ID {

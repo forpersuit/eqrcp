@@ -78,6 +78,15 @@ func (s *Session) Unregister(c *Client) {
 	if exists {
 		c.Close()
 		s.broadcastPresence()
+
+		s.mu.RLock()
+		clientCount := len(s.clients)
+		s.mu.RUnlock()
+		if clientCount == 0 {
+			go func() {
+				_ = CleanupUploads()
+			}()
+		}
 	}
 }
 
@@ -134,8 +143,6 @@ func (s *Session) RecallMessage(senderID string, messageID string, commandID str
 
 	s.Broadcast(event)
 }
-
-
 
 func (s *Session) broadcastPresence() {
 	s.mu.RLock()
@@ -285,4 +292,3 @@ func (s *Session) GetAttachment(id string) string {
 	}
 	return s.attachments[id]
 }
-

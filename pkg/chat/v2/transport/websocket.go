@@ -2,8 +2,8 @@ package transport
 
 import (
 	"context"
-	"fmt"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -222,7 +222,6 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			}
 			sess.RecallMessage(cl.Peer, cmd.MessageID, cmd.CommandID)
 
-
 		case protocol.CommandStartTransfer:
 			if cl == nil || sess == nil {
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
@@ -351,4 +350,3 @@ func sanitizeFilename(s string) string {
 		return r
 	}, s)
 }
-

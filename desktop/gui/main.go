@@ -244,7 +244,7 @@ func startWailsGUI() {
 		MinHeight:         640,
 		HideWindowOnClose: false,
 		Windows: &windows.Options{
-			ZoomFactor:        1.0,
+			ZoomFactor: 1.0,
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,

@@ -2224,6 +2224,7 @@ function renderAboutPanel() {
                 <dt>${t('product') || 'Product'}</dt><dd>${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</dd>
                 <dt>${t('version') || 'Version'}</dt><dd>${escapeHTML(info.version || 'Unknown')}</dd>
                 <dt>${t('platform') || 'Platform'}</dt><dd>${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</dd>
+                <dt>${t('temp_space_available') || 'Temp Space Available'}</dt><dd>${escapeHTML(info.uploadDirFreeSpace || 'Unknown')}</dd>
                 <dt>${t('legal') || 'Legal'}</dt><dd>MIT license. Forked from qrcp.</dd>
             </dl>
             ${devSection}

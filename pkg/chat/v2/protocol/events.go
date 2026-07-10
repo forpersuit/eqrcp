@@ -35,22 +35,22 @@ const (
 
 // Message is the v2 protocol message representation.
 type Message struct {
-	ID        string      `json:"id"`
-	SenderID  string      `json:"senderId,omitempty"`
-	Sender    string      `json:"sender"`
-	Avatar    string      `json:"avatar,omitempty"`
-	Theme     string      `json:"theme,omitempty"`
-	Type      MessageType `json:"type"`
-	Text      string      `json:"text,omitempty"`
-	FileName  string      `json:"fileName,omitempty"`
-	Size      int64       `json:"size,omitempty"`
-	MimeType  string      `json:"mimeType,omitempty"`
-	URL       string      `json:"url,omitempty"`
-	FilePath  string      `json:"filePath,omitempty"`
-	Recalled  bool        `json:"recalled,omitempty"`
+	ID         string      `json:"id"`
+	SenderID   string      `json:"senderId,omitempty"`
+	Sender     string      `json:"sender"`
+	Avatar     string      `json:"avatar,omitempty"`
+	Theme      string      `json:"theme,omitempty"`
+	Type       MessageType `json:"type"`
+	Text       string      `json:"text,omitempty"`
+	FileName   string      `json:"fileName,omitempty"`
+	Size       int64       `json:"size,omitempty"`
+	MimeType   string      `json:"mimeType,omitempty"`
+	URL        string      `json:"url,omitempty"`
+	FilePath   string      `json:"filePath,omitempty"`
+	Recalled   bool        `json:"recalled,omitempty"`
 	Downloaded bool        `json:"downloaded,omitempty"`
 	Uploading  bool        `json:"uploading,omitempty"`
-	CreatedAt time.Time   `json:"createdAt"`
+	CreatedAt  time.Time   `json:"createdAt"`
 }
 
 // PresenceEvent describes current device presence after a connect/disconnect

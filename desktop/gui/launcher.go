@@ -251,7 +251,6 @@ func readTailBytes(path string, limit int64) string {
 	return string(data)
 }
 
-
 func readPortFileAndGetURL() string {
 	portFilePath := desktopAgentPortFilePath()
 	if data, err := os.ReadFile(portFilePath); err == nil {

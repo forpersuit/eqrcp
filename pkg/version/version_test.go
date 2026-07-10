@@ -60,4 +60,3 @@ func TestIsNewerVersion(t *testing.T) {
 		}
 	}
 }
-

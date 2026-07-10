@@ -62,7 +62,6 @@ func scoreInterface(name, ip string) int {
 	return score
 }
 
-
 func chooseInterface(flags application.Flags) (string, error) {
 	interfaces, err := util.Interfaces(flags.ListAllInterfaces)
 	if err != nil {

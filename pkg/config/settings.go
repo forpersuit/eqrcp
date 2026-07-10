@@ -13,29 +13,29 @@ import (
 )
 
 type DesktopSettings struct {
-	ConfigPath       string                   `json:"configPath"`
-	Interface        string                   `json:"interface"`
-	InterfaceOptions []DesktopInterfaceOption `json:"interfaceOptions"`
-	Mode             string                   `json:"mode,omitempty"`
-	Port             int                      `json:"port"`
-	Output           string                   `json:"output"`
-	Browser          bool                     `json:"browser"`
-	ChatAutoSave     bool                     `json:"chatAutoSave"`
-	CloseBehavior    string                   `json:"closeBehavior"`
-	ChatSender       string                   `json:"chatSender"`
-	ChatAvatar       string                   `json:"chatAvatar"`
-	DevMode          bool                     `json:"devMode"`
-	DebugLog         bool                     `json:"debugLog"`
-	ViewportDebug    bool                     `json:"viewportDebug"`
-	AutoUpdateMode   string                   `json:"autoUpdateMode"`
-	UpdateChannel    string                   `json:"updateChannel"`
-	LastUpdateCheckTime      int64            `json:"lastUpdateCheckTime"`
-	UpdateCheckIntervalHours int              `json:"updateCheckIntervalHours"`
-	LastSuccessfulVersion    string           `json:"lastSuccessfulVersion"`
-	Lang             string                   `json:"lang"`
-	ShowHistory      bool                     `json:"showHistory"`
-	EnableChatV2     bool                     `json:"enableChatV2"`
-	ChatDownloadDir  string                   `json:"chatDownloadDir"`
+	ConfigPath               string                   `json:"configPath"`
+	Interface                string                   `json:"interface"`
+	InterfaceOptions         []DesktopInterfaceOption `json:"interfaceOptions"`
+	Mode                     string                   `json:"mode,omitempty"`
+	Port                     int                      `json:"port"`
+	Output                   string                   `json:"output"`
+	Browser                  bool                     `json:"browser"`
+	ChatAutoSave             bool                     `json:"chatAutoSave"`
+	CloseBehavior            string                   `json:"closeBehavior"`
+	ChatSender               string                   `json:"chatSender"`
+	ChatAvatar               string                   `json:"chatAvatar"`
+	DevMode                  bool                     `json:"devMode"`
+	DebugLog                 bool                     `json:"debugLog"`
+	ViewportDebug            bool                     `json:"viewportDebug"`
+	AutoUpdateMode           string                   `json:"autoUpdateMode"`
+	UpdateChannel            string                   `json:"updateChannel"`
+	LastUpdateCheckTime      int64                    `json:"lastUpdateCheckTime"`
+	UpdateCheckIntervalHours int                      `json:"updateCheckIntervalHours"`
+	LastSuccessfulVersion    string                   `json:"lastSuccessfulVersion"`
+	Lang                     string                   `json:"lang"`
+	ShowHistory              bool                     `json:"showHistory"`
+	EnableChatV2             bool                     `json:"enableChatV2"`
+	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 }
 
 const (

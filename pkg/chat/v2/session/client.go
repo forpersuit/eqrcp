@@ -22,10 +22,10 @@ type Client struct {
 	Peer     string
 	LastSeen time.Time
 
-	sendChan chan protocol.EventEnvelope
-	done     chan struct{}
+	sendChan  chan protocol.EventEnvelope
+	done      chan struct{}
 	closeOnce sync.Once
-	conn     *websocket.Conn
+	conn      *websocket.Conn
 }
 
 // NewClient creates a new client.

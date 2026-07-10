@@ -113,16 +113,16 @@ func TestCheckForUpdates(t *testing.T) {
 		// We dynamically adapt our checks since runtime.GOOS/GOARCH are immutable.
 		// For the platform running the test, we mock check update.
 		// E.g., if we run under linux/amd64, it should fetch linux-amd64 CLI/Desktop.
-		
+
 		// If running under linux/amd64 (common for development/WSL)
 		// We try CheckForUpdates(false, "v1.4.0") -> should match eqt-cli-linux-amd64
 		// If we are on windows/amd64, it should match eqt-cli-windows-amd64 (which is not in our mock assets, so it should error).
-		
+
 		res, err := CheckForUpdates(false, "v1.4.0")
 		// Detect whether current OS/Arch is in our mock list:
 		// We have windows-amd64 and linux-amd64 in mocks.
-		if (os.Getenv("GOOS") == "" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64") || 
-		   (os.Getenv("GOOS") == "" && runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
+		if (os.Getenv("GOOS") == "" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64") ||
+			(os.Getenv("GOOS") == "" && runtime.GOOS == "windows" && runtime.GOARCH == "amd64") {
 			if err != nil {
 				t.Fatalf("expected update check to succeed: %v", err)
 			}
@@ -203,7 +203,7 @@ func TestDownloadUpdate(t *testing.T) {
 	t.Run("Successful download and verify", func(t *testing.T) {
 		pkgURL := server.URL + "/binary.zip"
 		sigURL := server.URL + "/binary.zip.sig"
-		
+
 		savedPath, err := DownloadUpdate(pkgURL, sigURL, "test-eqt-update.zip")
 		if err != nil {
 			t.Fatalf("expected DownloadUpdate to succeed: %v", err)
@@ -293,7 +293,7 @@ func TestProductionUpdateFlow(t *testing.T) {
 	// 3. Download and verify the production Windows package
 	// Note: We run this test on any platform (e.g. Linux/WSL) but verify the Windows pack and signature.
 	t.Logf("Downloading and verifying production Windows package...")
-	savedPath, err := DownloadUpdate(winAsset.DownloadURL, winSigAsset.DownloadURL, "prod-test-" + winAsset.Name)
+	savedPath, err := DownloadUpdate(winAsset.DownloadURL, winSigAsset.DownloadURL, "prod-test-"+winAsset.Name)
 	if err != nil {
 		t.Logf("Warning: Download/Verification of production Windows asset failed: %v", err)
 		t.Skip("Skipping production check due to transient signature discrepancy or CDN caching propagation delay.")
@@ -304,5 +304,3 @@ func TestProductionUpdateFlow(t *testing.T) {
 
 	t.Logf("Successfully downloaded and verified production Windows asset signature at: %s", savedPath)
 }
-
-

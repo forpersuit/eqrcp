@@ -54,4 +54,3 @@ func New(quiet bool) Logger {
 		quiet: quiet,
 	}
 }
-

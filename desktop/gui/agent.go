@@ -73,17 +73,17 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 	}
 
 	response := AgentStatus{
-		State:            "idle",
-		Queued:           len(agent.queue),
-		History:          cloneTaskRecords(agent.history),
-		LastError:        agent.lastError,
-		Version:          version.String(),
-		AgentStartedAt:   agent.startedAt,
-		ClockTampered:    server.GetClockTamperedStatus(),
-		IsPaid:           server.GetPaidStatus(),
-		LicenseTier:      server.GetLicenseTier(),
-		MaxDevices:       maxDev,
-		ActivatedDevices: actDev,
+		State:                "idle",
+		Queued:               len(agent.queue),
+		History:              cloneTaskRecords(agent.history),
+		LastError:            agent.lastError,
+		Version:              version.String(),
+		AgentStartedAt:       agent.startedAt,
+		ClockTampered:        server.GetClockTamperedStatus(),
+		IsPaid:               server.GetPaidStatus(),
+		LicenseTier:          server.GetLicenseTier(),
+		MaxDevices:           maxDev,
+		ActivatedDevices:     actDev,
 		UsedSeconds:          server.GetUsedSeconds(),
 		UsedTransfers:        server.GetUsedTransfers(),
 		UsedReceiveTransfers: server.GetUsedReceiveTransfers(),
@@ -121,7 +121,7 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
 	record.SavedFiles = append([]string(nil), record.SavedFiles...)
 	record.TransferItemClientStats = append([]string(nil), record.TransferItemClientStats...)
-	
+
 	if record.TransferClientStates != nil {
 		cloned := make(map[string]*server.ClientTransferStateInfo)
 		for k, v := range record.TransferClientStates {
@@ -573,7 +573,7 @@ func (agent *desktopAgent) execute(task AgentTask, id int) {
 				agent.current.State = "completed"
 			}
 		}
-		
+
 		record := *agent.current
 		agent.addHistoryLocked(record)
 		agent.notifyRecordLocked(record)
@@ -1041,7 +1041,7 @@ func (agent *desktopAgent) checkForUpdates() (GUIUpdateCheckResult, error) {
 	if err != nil {
 		return GUIUpdateCheckResult{}, err
 	}
-	
+
 	// CheckForUpdates succeeded, save LastUpdateCheckTime
 	if s, err := agent.readSettings(); err == nil {
 		s.LastUpdateCheckTime = time.Now().Unix()
@@ -1257,6 +1257,3 @@ func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar 
 	parsed.RawQuery = params.Encode()
 	return parsed.String()
 }
-
-
-

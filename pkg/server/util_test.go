@@ -251,7 +251,6 @@ func TestReceivePageRendering(t *testing.T) {
 	}
 }
 
-
 func TestChatPageIncludesMessagingRoutes(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {
@@ -940,8 +939,8 @@ func TestReceiveToSetsStatusMetadata(t *testing.T) {
 
 func TestSendTitle(t *testing.T) {
 	tests := map[string]string{
-		"report.txt":                               "Share file",
-		"photos-directory-20260422-010203.zip":     "Share directory",
+		"report.txt":                             "Share file",
+		"photos-directory-20260422-010203.zip":   "Share directory",
 		"eqt-multiple-files-20260422-010203.zip": "Share multiple files",
 		"eqt-multiple-files.zip":                 "Share file",
 	}

@@ -16,11 +16,11 @@ import (
 
 	"eqt/pkg/chat/v2/bandwidth"
 	"eqt/pkg/chat/v2/diag"
-	"eqt/pkg/chat/v2/web"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
 	"eqt/pkg/chat/v2/transport"
+	"eqt/pkg/chat/v2/web"
 	"eqt/pkg/qr"
 )
 

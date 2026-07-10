@@ -13,7 +13,7 @@ func TestGUIAgentHistoryDeDuplicate(t *testing.T) {
 	historyPath := filepath.Join(t.TempDir(), "gui_history_dedup.json")
 	agent := newDesktopAgent(nil)
 	agent.historyPath = historyPath
-	
+
 	// Add same task multiple times with updates
 	agent.mu.Lock()
 	agent.addHistoryLocked(TaskRecord{
@@ -46,7 +46,7 @@ func TestGUIAgentHistoryDeDuplicate(t *testing.T) {
 
 func TestGUIAgentHistoryCorruptedSelfHealing(t *testing.T) {
 	historyPath := filepath.Join(t.TempDir(), "gui_history_corrupt.json")
-	
+
 	// Write invalid JSON content
 	if err := os.WriteFile(historyPath, []byte("{invalid json"), 0600); err != nil {
 		t.Fatal(err)
@@ -54,7 +54,7 @@ func TestGUIAgentHistoryCorruptedSelfHealing(t *testing.T) {
 
 	agent := newDesktopAgent(nil)
 	agent.historyPath = historyPath
-	
+
 	// loadHistory should tolerate corrupted file and not fail, just treating it as empty
 	if err := agent.loadHistory(); err != nil {
 		t.Fatalf("loadHistory returned error for corrupted file: %v", err)
@@ -208,4 +208,3 @@ func TestGUIAgentHistoryNoTransferFiltered(t *testing.T) {
 	}
 	agent.mu.Unlock()
 }
-

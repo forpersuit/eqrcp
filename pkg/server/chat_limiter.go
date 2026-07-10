@@ -17,7 +17,7 @@ import (
 type ChatUsage struct {
 	Date                 string `json:"date"`
 	UsedSeconds          int    `json:"usedSeconds"`
-	UsedTransfers        int    `json:"usedTransfers"` // Daily transfers count (Share)
+	UsedTransfers        int    `json:"usedTransfers"`        // Daily transfers count (Share)
 	UsedReceiveTransfers int    `json:"usedReceiveTransfers"` // Daily Receive transfers count
 	IsPaid               bool   `json:"isPaid"`
 	LastTime             int64  `json:"lastTime"`      // Last running timestamp in seconds
@@ -26,7 +26,6 @@ type ChatUsage struct {
 	ClockTampered        bool   `json:"clockTampered"` // Locked if clock rollback is detected
 	LicenseTier          string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
 }
-
 
 // ChatLimiter manages daily chat time limits and payment state.
 type ChatLimiter struct {
@@ -38,7 +37,6 @@ type ChatLimiter struct {
 }
 
 var limiterInstance = &ChatLimiter{}
-
 
 func getChatUsageFilePath() string {
 	return filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
@@ -188,7 +186,7 @@ func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
 				// Verify signature, fingerprint, and expiration
 				sigOk := VerifyLicenseSignature(cert)
 				fpOk := VerifyFingerprint(cert)
-				
+
 				expOk := true
 				if cert.ExpiresAt != "LIFETIME" {
 					if expiry, err := time.Parse(time.RFC3339, cert.ExpiresAt); err == nil {
@@ -567,5 +565,3 @@ func IncrementUsedReceiveTransfers(count int) {
 func SetUsedReceiveTransfers(transfers int) {
 	limiterInstance.SetUsedReceiveTransfers(transfers)
 }
-
-

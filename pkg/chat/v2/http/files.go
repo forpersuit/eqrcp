@@ -160,7 +160,6 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			h.mu.Unlock()
 		}()
 
-
 		// Broadcast socket event to ask the web client (sender) to start streaming
 		sess.Broadcast(protocol.EventEnvelope{
 			Type: protocol.EventRequestFileData,

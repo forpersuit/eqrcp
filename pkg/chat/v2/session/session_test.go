@@ -73,7 +73,7 @@ func TestSessionSendTextAndReplay(t *testing.T) {
 
 	// Register c1
 	sess.Register(c1, 0, 0)
-	
+
 	// Send text message from c1
 	sess.SendText(c1, "hello world", "cmd-1")
 
@@ -136,7 +136,7 @@ func TestSessionRecallMessage(t *testing.T) {
 	// Verify that trying to recall someone else's message fails
 	c2 := NewClient(protocol.ClientInfo{Label: "User B"}, nil)
 	sess.Register(c2, 0, 0)
-	
+
 	// Send another message
 	sess.SendText(c1, "hello recall 2", "cmd-3")
 	events2 := sess.MessageStore.GetSince(int64(len(sess.MessageStore.events) - 1)) // get last
@@ -159,4 +159,3 @@ func TestSessionRecallMessage(t *testing.T) {
 		}
 	}
 }
-

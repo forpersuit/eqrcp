@@ -301,13 +301,13 @@ func TestMultiDeviceAutoStopRules(t *testing.T) {
 
 	// 2. Client A finishes downloading.
 	s.clientProgress[cliA][0] = 500
-	
+
 	// Single client finished in multiple clients setting must NOT close channel
 	if s.isClientFinished(cliA) {
 		s.updateClientStatus(cliA, nil, func(state *ClientTransferStateInfo) {
 			state.State = "completed"
 		})
-		
+
 		// Simulated ServeFile completion logic
 		allDownloaded := s.isAllActiveClientsFinished()
 		if allDownloaded {
@@ -531,7 +531,7 @@ func TestSetAutoStopReceiveModeIgnoreCompleted(t *testing.T) {
 	}
 
 	s.clientStates[clientNew].State = "completed"
-	
+
 	// Mock standard auto-stop checking that happens in server when client state updates
 	if s.isAllActiveClientsFinished() {
 		s.stopChannel <- true
@@ -553,7 +553,6 @@ func TestSetAutoStopReceiveModeIgnoreCompleted(t *testing.T) {
 		t.Error("Expected clientCompleted to be removed from autoStopIgnoredClients when transitioning back to transferring")
 	}
 }
-
 
 func TestReceiveModeAutoStopAllFinished(t *testing.T) {
 	s := &Server{
@@ -598,10 +597,10 @@ func TestReceiveModeAutoStopAllFinished(t *testing.T) {
 
 func TestReceiveInitAccumulation(t *testing.T) {
 	app := &Server{
-		clientStates:           make(map[string]*ClientTransferStateInfo),
-		clientProgress:         make(map[string]map[int]int64),
-		clientLastSeen:         make(map[string]time.Time),
-		clientReceiveCounted:   make(map[string]bool),
+		clientStates:         make(map[string]*ClientTransferStateInfo),
+		clientProgress:       make(map[string]map[int]int64),
+		clientLastSeen:       make(map[string]time.Time),
+		clientReceiveCounted: make(map[string]bool),
 	}
 
 	clientID := "client_accum_test"
@@ -685,6 +684,3 @@ func TestReceiveInitAccumulation(t *testing.T) {
 		t.Errorf("file states incorrect: file1 state=%s, file2 state=%s", cs.Files[0].State, cs.Files[1].State)
 	}
 }
-
-
-

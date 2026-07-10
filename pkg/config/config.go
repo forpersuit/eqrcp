@@ -19,20 +19,20 @@ import (
 )
 
 type Config struct {
-	Interface string `yaml:",omitempty"`
-	Port      int    `yaml:",omitempty"`
-	Bind      string `yaml:",omitempty"`
-	Mode      string `yaml:",omitempty"`
-	KeepAlive bool   `yaml:",omitempty"`
-	Path      string `yaml:",omitempty"`
-	Secure    bool   `yaml:",omitempty"`
-	TlsKey    string `yaml:",omitempty"`
-	TlsCert   string `yaml:",omitempty"`
-	FQDN      string `yaml:",omitempty"`
-	Output    string `yaml:",omitempty"`
-	Reversed  bool   `yaml:",omitempty"`
-	Lang      string `yaml:",omitempty"`
-	EnableChatV2 bool `yaml:"enableChatV2,omitempty"`
+	Interface    string `yaml:",omitempty"`
+	Port         int    `yaml:",omitempty"`
+	Bind         string `yaml:",omitempty"`
+	Mode         string `yaml:",omitempty"`
+	KeepAlive    bool   `yaml:",omitempty"`
+	Path         string `yaml:",omitempty"`
+	Secure       bool   `yaml:",omitempty"`
+	TlsKey       string `yaml:",omitempty"`
+	TlsCert      string `yaml:",omitempty"`
+	FQDN         string `yaml:",omitempty"`
+	Output       string `yaml:",omitempty"`
+	Reversed     bool   `yaml:",omitempty"`
+	Lang         string `yaml:",omitempty"`
+	EnableChatV2 bool   `yaml:"enableChatV2,omitempty"`
 }
 
 var interactive bool = false

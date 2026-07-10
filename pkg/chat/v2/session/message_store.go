@@ -127,5 +127,3 @@ func (s *MessageStore) Find(messageID string) (*protocol.Message, bool) {
 	}
 	return nil, false
 }
-
-

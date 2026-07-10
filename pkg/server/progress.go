@@ -9,9 +9,9 @@ import (
 
 // RangeInfo 保存从 HTTP Range Header 中解析出的断点续传信息
 type RangeInfo struct {
-	HasRange   bool  // 是否包含 Range 请求头
-	StartByte  int64 // 开始的字节偏移量
-	EndByte    int64 // 结束的字节偏移量 (如果指定)
+	HasRange  bool  // 是否包含 Range 请求头
+	StartByte int64 // 开始的字节偏移量
+	EndByte   int64 // 结束的字节偏移量 (如果指定)
 }
 
 // ParseRangeHeader 从 http.Request 的 Range 头中解析出断点续传的相关参数
@@ -33,12 +33,12 @@ func ParseRangeHeader(r *http.Request) RangeInfo {
 		if err != nil {
 			return RangeInfo{}
 		}
-		
+
 		info := RangeInfo{
 			HasRange:  true,
 			StartByte: start,
 		}
-		
+
 		if len(matches) > 2 && matches[2] != "" {
 			if end, err := strconv.ParseInt(matches[2], 10, 64); err == nil {
 				info.EndByte = end

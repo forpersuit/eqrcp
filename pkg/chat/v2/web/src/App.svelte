@@ -503,10 +503,7 @@
 
     client = new ChatWebSocketClient(token);
     client.onRequestFileData = (messageId) => {
-      const file = pendingSendFiles[messageId];
-      if (file) {
-        uploadFileStream(messageId, file);
-      }
+      // 采用预先落盘暂存模式，下载端直接拉取服务器临时文件，不需要实时向发送端请求流数据。
     };
     client.connect();
     document.addEventListener('contextmenu', handleGlobalContextMenu);
@@ -537,23 +534,26 @@
     }
   }
 
-  let pendingSendFiles: Record<string, File> = {};
-
-  function uploadFileStream(messageId: string, file: File) {
+  function performFileUpload(messageId: string, file: File) {
     chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Sending data for file: ${file.name}...` 
-      : `正在传送文件数据: ${file.name}...`);
+      ? `Uploading file: ${file.name}...` 
+      : `正在上传文件: ${file.name}...`);
+    
     if (client) {
-      client.sendLog(`[ACTION] Starting upload stream for file: ${file.name} (Size: ${file.size} bytes, Message ID: ${messageId})`);
+      client.sendLog(`[ACTION] Starting file upload for: ${file.name} (Size: ${file.size} bytes, Message ID: ${messageId})`);
     }
 
-    const uploadUrl = `/chat-v2/${token}/upload/stream?messageId=${messageId}`;
+    const uploadUrl = `/chat-v2/${token}/upload`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('messageId', messageId);
+    formData.append('sender', $currentDevice?.label || 'Me');
+    formData.append('avatar', $currentDevice?.avatar || '');
+    formData.append('peer', localStorage.getItem('chat_peer') || '');
+
     fetch(uploadUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream'
-      },
-      body: file
+      body: formData
     })
     .then(r => {
       if (!r.ok) {
@@ -562,20 +562,19 @@
       return r.json();
     })
     .then(res => {
-      console.log('Stream upload succeeded for messageId:', messageId, res);
+      console.log('File upload succeeded for messageId:', messageId, res);
       if (client) {
-        client.sendLog(`[ACTION] Completed upload stream for file: ${file.name} (Message ID: ${messageId})`);
+        client.sendLog(`[ACTION] Completed file upload for: ${file.name} (Message ID: ${messageId})`);
       }
-      delete pendingSendFiles[messageId];
     })
     .catch(err => {
-      console.error('Stream upload failed:', err);
+      console.error('File upload failed:', err);
       if (client) {
-        client.sendLog(`[ERROR] Upload stream failed for file: ${file.name}: ${err.message}`);
+        client.sendLog(`[ERROR] File upload failed for: ${file.name}: ${err.message}`);
       }
       chatActions.addSystemMessage(currentLang === 'en'
-        ? `Failed to send data for "${file.name}": ${err.message}`
-        : `传送文件 "${file.name}" 的数据失败: ${err.message}`);
+        ? `Failed to upload "${file.name}": ${err.message}`
+        : `上传文件 "${file.name}" 失败: ${err.message}`);
     });
   }
 
@@ -584,8 +583,8 @@
     if (!file) return;
 
     chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Added file "${name}". Waiting for recipient to download...` 
-      : `已添加文件 "${name}"。等待接收方下载...`);
+      ? `Added file "${name}". Initializing upload...` 
+      : `已添加文件 "${name}"。正在初始化上传...`);
 
     const initUrl = `/chat-v2/${token}/upload/init`;
     fetch(initUrl, {
@@ -609,8 +608,8 @@
     })
     .then(msg => {
       const msgID = msg.id;
-      pendingSendFiles[msgID] = file;
       console.log('Attachment registered successfully, messageID:', msgID);
+      performFileUpload(msgID, file);
     })
     .catch(err => {
       console.error('Failed to add attachment:', err);
@@ -784,6 +783,7 @@
             <div class="device-roster">
               {#each $peers as dev}
                 {@const isSelf = dev.id === $currentDevice?.id}
+                {@const activeTx = Object.values($transfers).find(tx => tx.clientId === dev.peer && (tx.state === 'running' || tx.state === 'queued'))}
                 <div class="device-item">
                   <button class="device-row-lite roster-row" type="button" on:click={() => toggleDeviceDetail(dev.id)} aria-expanded={selectedDevId === dev.id ? 'true' : 'false'}>
                     <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0;">
@@ -791,7 +791,6 @@
                     </div>
                     <div style="text-align: left; margin-left: 8px; flex: 1; min-width: 0;">
                       <strong style="display: block; font-size: 13px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
-                      {@const activeTx = Object.values($transfers).find(tx => tx.clientId === dev.peer && (tx.state === 'running' || tx.state === 'queued'))}
                       {#if activeTx}
                         {#if activeTx.state === 'running'}
                           <span style="font-size: 10px; color: var(--accent-strong); font-weight: bold;">
