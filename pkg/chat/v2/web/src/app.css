@@ -1020,11 +1020,10 @@ button.file-card:hover {
     border-color: var(--message-action-text, var(--accent-strong, var(--accent)));
     color: var(--message-action-text, var(--accent-strong, var(--accent)));
 }
-.bubble-action.completed-btn:hover .icon-download {
-    display: block !important;
-}
-.bubble-action.completed-btn:hover .icon-completed {
-    display: none !important;
+.bubble-action.confirm-redownload {
+    background: #e0f2fe;
+    border-color: #0284c7;
+    color: #0369a1;
 }
 .bubble-action.confirm-delete {
     background: #fee2e2;

@@ -274,10 +274,10 @@ window.addEventListener('message', (e) => {
             console.warn('[Antigravity Debug] download-file: URL trust check failed');
             return;
         }
-        console.log('[Antigravity Debug] Triggering DownloadChatAttachment API...');
-        DownloadChatAttachment(url, String(e.data.name || 'attachment'))
+        console.log('[Antigravity Debug] Triggering SaveChatAttachmentAs API...');
+        SaveChatAttachmentAs(url, String(e.data.name || 'attachment'))
             .then((path) => {
-                console.log('[Antigravity Debug] DownloadChatAttachment success. Save path:', path);
+                console.log('[Antigravity Debug] SaveChatAttachmentAs success. Save path:', path);
                 if (path) {
                     state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
                     e.source?.postMessage({

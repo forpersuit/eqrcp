@@ -26,7 +26,12 @@ export const chatActions = {
     }
 
     messages.update(list => {
-      if (list.some(m => m.id === msg.id)) return list;
+      const idx = list.findIndex(m => m.id === msg.id);
+      if (idx !== -1) {
+        const updated = [...list];
+        updated[idx] = { ...updated[idx], ...msg };
+        return updated;
+      }
       return [...list, msg].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     });
   },

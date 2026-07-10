@@ -16,6 +16,9 @@
   let recallConfirmingId: string | null = null;
   let confirmTimer: number | null = null;
 
+  let redownloadConfirmingId: string | null = null;
+  let redownloadConfirmTimer: number | null = null;
+
   // Copy success indicator
   let copiedId: string | null = null;
   let copiedTimer: number | null = null;
@@ -110,7 +113,27 @@
     if (confirmTimer) clearTimeout(confirmTimer);
     if (copiedTimer) clearTimeout(copiedTimer);
     if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);
+    if (redownloadConfirmTimer) clearTimeout(redownloadConfirmTimer);
   });
+
+  function handleRedownloadClick(messageId: string, filename: string, size: number, isPaid: boolean) {
+    if (redownloadConfirmingId === messageId) {
+      handleDownload(messageId, filename, size, isPaid);
+      clearRedownloadConfirm();
+    } else {
+      redownloadConfirmingId = messageId;
+      if (redownloadConfirmTimer) clearTimeout(redownloadConfirmTimer);
+      redownloadConfirmTimer = window.setTimeout(clearRedownloadConfirm, 4000);
+    }
+  }
+
+  function clearRedownloadConfirm() {
+    redownloadConfirmingId = null;
+    if (redownloadConfirmTimer) {
+      clearTimeout(redownloadConfirmTimer);
+      redownloadConfirmTimer = null;
+    }
+  }
 
   function handleDownload(messageId: string, filename: string, size: number, isPaid: boolean) {
     dispatch('startDownload', { messageId, filename, size, isPaid });
@@ -225,7 +248,7 @@
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
-    {#each messages as msg (msg.id)}
+    {#each messages.filter(m => !(m.type === 'file' && m.uploading && !isMine(m) && !isEmbedded)) as msg (msg.id)}
       {#if msg.type === 'system'}
         <div class="system-message">
           <span class="system-text">{msg.text}</span>
@@ -402,15 +425,24 @@
                         </div>
                       {:else if isDownloaded}
                         <div style="display: flex; gap: 6px; align-items: center;">
-                          <button class="bubble-action completed-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Redownload">
-                            <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
+                          <button 
+                            class="bubble-action completed-btn {redownloadConfirmingId === msg.id ? 'confirm-redownload' : ''}" 
+                            on:click={() => handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false)} 
+                            title={redownloadConfirmingId === msg.id 
+                              ? (currentLang === 'en' ? 'Click again to redownload' : '再次点击以重新下载') 
+                              : (currentLang === 'en' ? 'Downloaded (Click to redownload)' : '已下载 (点击重新下载)')}
+                          >
+                            {#if redownloadConfirmingId === msg.id}
+                              <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                              </svg>
+                            {:else}
+                              <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            {/if}
                           </button>
                           {#if isEmbedded && (msg.filePath || msg.fileName)}
                             <button class="bubble-action" on:click={() => handleOpenFolder(msg)} title={currentLang === 'en' ? 'Open in Folder' : '定位文件'}>

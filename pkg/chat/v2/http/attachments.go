@@ -165,6 +165,7 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 		Time:    time.Now(),
 	}
 	_ = sess.MessageStore.Add(event)
+	sess.Broadcast(event)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(msg)
