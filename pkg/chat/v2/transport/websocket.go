@@ -129,12 +129,14 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 	defer func() {
 		if cl != nil && sess != nil {
 			sess.Unregister(cl)
+			fmt.Printf("[WebSocket LEFT] RoomToken=%s, ClientID=%s, Peer=%s\n", token, cl.ID, cl.Peer)
 			diag.Emit(ctx, h.logger, diag.LevelInfo, "client unregistered and disconnected", nil,
 				diag.F("path", r.URL.Path),
 				diag.F("token", token),
 				diag.F("clientID", cl.ID),
 			)
 		} else {
+			fmt.Printf("[WebSocket Disconnected] RoomToken=%s (without client session)\n", token)
 			diag.Emit(ctx, h.logger, diag.LevelInfo, "websocket disconnected", nil,
 				diag.F("path", r.URL.Path),
 				diag.F("token", token),
@@ -184,6 +186,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 
 			isFirstClient := sess.ClientsCount() == 0
 			sess.Register(cl, cmd.AfterSeq, cmd.JoinSeq)
+			fmt.Printf("[WebSocket JOINED] RoomToken=%s, ClientID=%s, Peer=%s, Label=%s\n", token, cl.ID, cl.Peer, cl.Label)
 			if isFirstClient && !isRunningInTest() {
 				sess.SendSystemMessage("Chat session started (Version: V2)")
 			}

@@ -116,20 +116,23 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
+		visible := true
 		if (event.Type == protocol.EventMessageAdded || event.Type == protocol.EventMessageUpdated) && event.Message != nil && event.Message.Type == protocol.MessageFile && !event.Message.Downloaded {
-			if c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == "" {
-				fmt.Printf("[WebSocket Broadcast Filtered] Sending EventType=%s Seq=%d MsgID=%s to ClientID=%s Peer=%s (MATCHED)\n", event.Type, event.Seq, event.Message.ID, c.ID, c.Peer)
-				c.Send(event)
-			} else {
-				fmt.Printf("[WebSocket Broadcast Filtered] Skipping EventType=%s Seq=%d MsgID=%s for ClientID=%s Peer=%s (SKIPPED)\n", event.Type, event.Seq, event.Message.ID, c.ID, c.Peer)
-			}
-		} else {
+			visible = c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == ""
+		}
+		if visible && event.Transfer != nil {
+			visible = s.isTransferEventVisibleTo(c, event)
+		}
+
+		if visible {
 			msgID := ""
 			if event.Message != nil {
 				msgID = event.Message.ID
 			}
 			fmt.Printf("[WebSocket Broadcast All] Sending EventType=%s Seq=%d MsgID=%s to ClientID=%s Peer=%s\n", event.Type, event.Seq, msgID, c.ID, c.Peer)
 			c.Send(event)
+		} else {
+			fmt.Printf("[WebSocket Broadcast Filtered] Skipping EventType=%s Seq=%d to ClientID=%s Peer=%s\n", event.Type, event.Seq, c.ID, c.Peer)
 		}
 	}
 }
@@ -140,12 +143,21 @@ func (s *Session) BroadcastRaw(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
-		msgID := ""
-		if event.Message != nil {
-			msgID = event.Message.ID
+		visible := true
+		if event.Transfer != nil {
+			visible = s.isTransferEventVisibleTo(c, event)
 		}
-		fmt.Printf("[WebSocket BroadcastRaw All] Sending EventType=%s MsgID=%s to ClientID=%s Peer=%s\n", event.Type, msgID, c.ID, c.Peer)
-		c.Send(event)
+
+		if visible {
+			msgID := ""
+			if event.Message != nil {
+				msgID = event.Message.ID
+			}
+			fmt.Printf("[WebSocket BroadcastRaw All] Sending EventType=%s MsgID=%s to ClientID=%s Peer=%s\n", event.Type, msgID, c.ID, c.Peer)
+			c.Send(event)
+		} else {
+			fmt.Printf("[WebSocket BroadcastRaw Filtered] Skipping EventType=%s to ClientID=%s Peer=%s\n", event.Type, c.ID, c.Peer)
+		}
 	}
 }
 
@@ -337,4 +349,25 @@ func (s *Session) GetAttachment(id string) string {
 		return ""
 	}
 	return s.attachments[id]
+}
+
+// isTransferEventVisibleTo checks if a specific transfer status event is visible to a client.
+func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelope) bool {
+	if event.Transfer != nil {
+		msgID := event.Transfer.MessageID
+		if msgID != "" {
+			// Find the target file message from the store
+			if msg, exists := s.MessageStore.Find(msgID); exists && msg != nil {
+				// If fully downloaded, it's ready and visible to all participants
+				if msg.Downloaded {
+					return true
+				}
+				// Otherwise, limit progress updates to the uploader, downloader, desktop, or empty targets
+				return c.Peer == msg.SenderID || c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
+			}
+		}
+		// If not registered yet in message store, fallback to client/desktop bounds
+		return c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
+	}
+	return true
 }

@@ -244,6 +244,7 @@
       handleNewMessages(messages);
     }
   }
+  let completedMap: Record<string, boolean> = {};
 </script>
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
@@ -258,7 +259,9 @@
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isDownloaded = (dlTx && dlTx.state === 'completed') || (isEmbedded && !dlTx && (msg.filePath || msg.downloaded))}
+        {@const isTxCompleted = dlTx && dlTx.state === 'completed'}
+        {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
+        {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !dlTx && (msg.filePath || msg.downloaded))}
         {@const tx = ulTx || dlTx}
         {@const colors = getMessageColors(msg, mine)}
         <div 
