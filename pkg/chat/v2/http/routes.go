@@ -66,6 +66,7 @@ func NewHandler(cfg Config) *Handler {
 	sessions := session.NewManager()
 	transferMgr := transfer.NewManager()
 	sched := bandwidth.NewScheduler(10 * 1024 * 1024) // 10MB/s default global limit
+	sched.Logger = logger
 
 	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
 		sess := sessions.GetOrCreate(token)

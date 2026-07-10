@@ -9,15 +9,16 @@ import (
 )
 
 type activeJob struct {
-	id                string
-	isPaid            bool
-	capacity          int64         // Estimated bottleneck capacity in bytes/sec
-	probing           bool          // Currently in the probing phase
-	probingStart      time.Time     // Time when probing started
-	probingBytesLimit int64         // Probing window size in bytes
-	probingTimeLimit  time.Duration // Probing window duration limit
-	bytesAtProbingEnd int64         // Total bytes transferred when probing ended
-	timeAtProbingEnd  time.Time     // Time when probing ended
+	id                  string
+	isPaid              bool
+	capacity            int64         // Estimated bottleneck capacity in bytes/sec
+	probing             bool          // Currently in the probing phase
+	probingStart        time.Time     // Time when probing started
+	bytesAtProbingStart int64         // Total bytes transferred when probing started
+	probingBytesLimit   int64         // Probing window size in bytes
+	probingTimeLimit    time.Duration // Probing window duration limit
+	bytesAtProbingEnd   int64         // Total bytes transferred when probing ended
+	timeAtProbingEnd    time.Time     // Time when probing ended
 }
 
 // Scheduler owns data-plane fairness and controls transmission speed.
@@ -186,24 +187,41 @@ func (s *Scheduler) Throttle(id string, totalBytesTransferred int64, startTime t
 	// Handle Probing phase transitions and bandwidth measurement
 	if s.ProbingBytes >= 0 && job.probing {
 		if job.probingStart.IsZero() {
+			warmUpLimit := int64(0)
+			if s.ProbingBytes >= 256*1024 {
+				warmUpLimit = 128 * 1024
+			}
+			if totalBytesTransferred < warmUpLimit {
+				s.mu.Unlock()
+				return
+			}
 			job.probingStart = time.Now()
+			job.bytesAtProbingStart = totalBytesTransferred
 			s.mu.Unlock()
 			diag.Emit(context.Background(), s.Logger, diag.LevelInfo, "bandwidth probing started", nil,
 				diag.F("jobID", id),
 				diag.F("isPaid", job.isPaid),
+				diag.F("warmUpBytes", totalBytesTransferred),
 			)
 			return
 		}
 
 		elapsed := time.Since(job.probingStart)
-		if totalBytesTransferred >= job.probingBytesLimit || elapsed >= job.probingTimeLimit {
+		bytesProbed := totalBytesTransferred - job.bytesAtProbingStart
+		if bytesProbed >= job.probingBytesLimit || elapsed >= job.probingTimeLimit {
 			// Probing finished! Transition to throttle phase
 			if elapsed > 0 {
-				job.capacity = int64(float64(totalBytesTransferred) / elapsed.Seconds())
+				job.capacity = int64(float64(bytesProbed) / elapsed.Seconds())
 			}
-			if job.capacity <= 0 {
-				job.capacity = 32 * 1024
+			// Safeguard: sanitize estimated capacity to prevent slow-start stall lockouts
+			minCapacity := int64(512 * 1024) // 512KB/s minimum floor for Free users
+			if job.isPaid {
+				minCapacity = 2 * 1024 * 1024 // 2MB/s minimum floor for Paid users
 			}
+			if job.capacity < minCapacity {
+				job.capacity = minCapacity
+			}
+
 			job.probing = false
 			job.bytesAtProbingEnd = totalBytesTransferred
 			job.timeAtProbingEnd = time.Now()
@@ -213,13 +231,15 @@ func (s *Scheduler) Throttle(id string, totalBytesTransferred int64, startTime t
 			diag.Emit(context.Background(), s.Logger, diag.LevelInfo, "bandwidth probing completed", nil,
 				diag.F("jobID", id),
 				diag.F("estimatedCapacityBytesPerSec", capacity),
+				diag.F("bytesProbed", bytesProbed),
+				diag.F("elapsedSec", elapsed.Seconds()),
 			)
 			return
 		}
 
 		// Update sliding capacity estimate during active probing
-		if elapsed > 0 {
-			job.capacity = int64(float64(totalBytesTransferred) / elapsed.Seconds())
+		if elapsed > 0 && bytesProbed > 0 {
+			job.capacity = int64(float64(bytesProbed) / elapsed.Seconds())
 		}
 		s.mu.Unlock()
 		return
