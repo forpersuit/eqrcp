@@ -256,8 +256,10 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const localPeer = $currentDevice?.peer || 'desktop'}
-        {@const tx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer) || txState['ul-' + msg.id]}
-        {@const isDownloaded = (tx && tx.state === 'completed') || (!tx && (isEmbedded ? msg.filePath : msg.downloaded))}
+        {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
+        {@const ulTx = txState['ul-' + msg.id]}
+        {@const isDownloaded = (dlTx && dlTx.state === 'completed') || (!dlTx && (isEmbedded ? msg.filePath : msg.downloaded))}
+        {@const tx = ulTx || dlTx}
         {@const colors = getMessageColors(msg, mine)}
         <div 
           class="message" 
@@ -282,7 +284,7 @@
           <div class="message-main">
             <div class="sender">{msg.sender}</div>
             <div class="bubble" style="position: relative; overflow: hidden;">
-              {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (tx && tx.state === 'running' && tx.id.startsWith('ul-')))}
+              {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
                   position: absolute;
                   top: 0;
@@ -305,14 +307,14 @@
                     <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
                       <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
                     </svg>
-                    {#if tx && tx.state === 'running'}
-                      {currentLang === 'en' ? 'Uploading' : '正在上传'} {tx.percent ?? 0}%
+                    {#if ulTx && ulTx.state === 'running'}
+                      {currentLang === 'en' ? 'Uploading' : '正在上传'} {ulTx.percent ?? 0}%
                     {:else}
                       {currentLang === 'en' ? 'Preparing' : '准备中'}...
                     {/if}
                   </span>
                   <div style="width: 80%; height: 5px; background: rgba(0, 0, 0, 0.08); border-radius: 3.5px; overflow: hidden; margin-top: 2px;">
-                    <div style="width: {tx?.percent ?? 0}%; height: 100%; background: var(--accent-strong); transition: width 0.15s ease-out; border-radius: 3.5px;"></div>
+                    <div style="width: {ulTx?.percent ?? 0}%; height: 100%; background: var(--accent-strong); transition: width 0.15s ease-out; border-radius: 3.5px;"></div>
                   </div>
                 </div>
               {/if}
@@ -403,8 +405,8 @@
                 {:else if msg.type === 'file'}
                   <div class="message-footer-actions">
                     {#if mine}
-                      {#if tx && tx.state === 'running'}
-                        <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
+                      {#if ulTx && ulTx.state === 'running'}
+                        <button class="bubble-action" on:click={() => handleCancel(ulTx.id)} title="Cancel">
                           <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                         </button>
                       {:else}
@@ -454,12 +456,12 @@
                             </button>
                           {/if}
                         </div>
-                      {:else if tx && tx.state === 'running'}
-                        <button class="bubble-action" on:click={() => handleCancel(tx.id)} title="Cancel">
+                      {:else if dlTx && dlTx.state === 'running'}
+                        <button class="bubble-action" on:click={() => handleCancel(dlTx.id)} title="Cancel">
                           <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                         </button>
-                      {:else if tx && tx.state === 'failed'}
-                        <button class="bubble-action error-retry-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title={`${currentLang === 'en' ? 'Download failed:' : '传输失败:'} ${tx.error || (currentLang === 'en' ? 'Unknown error' : '未知错误')}. ${currentLang === 'en' ? 'Click to retry.' : '点击以重试。'}`}>
+                      {:else if dlTx && dlTx.state === 'failed'}
+                        <button class="bubble-action error-retry-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title={`${currentLang === 'en' ? 'Download failed:' : '传输失败:'} ${dlTx.error || (currentLang === 'en' ? 'Unknown error' : '未知错误')}. ${currentLang === 'en' ? 'Click to retry.' : '点击以重试。'}`}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;">
                             <circle cx="12" cy="12" r="10" />
                             <line x1="12" y1="8" x2="12" y2="12" />
