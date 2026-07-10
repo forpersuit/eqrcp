@@ -247,8 +247,8 @@ func TestHandlerDownloadAndChatConcurrency(t *testing.T) {
 		switch ev.Type {
 		case protocol.EventTransferQueued:
 			gotQueued = true
-			if ev.Transfer.ID != "dl-file-123" {
-				t.Fatalf("expected transfer ID dl-file-123, got = %s", ev.Transfer.ID)
+			if !strings.HasPrefix(ev.Transfer.ID, "dl-file-123") {
+				t.Fatalf("expected transfer ID starting with dl-file-123, got = %s", ev.Transfer.ID)
 			}
 		case protocol.EventTransferStarted:
 			gotStarted = true

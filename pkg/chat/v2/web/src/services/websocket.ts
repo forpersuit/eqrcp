@@ -172,19 +172,19 @@ export class ChatWebSocketClient {
       case 'transfer_failed':
       case 'transfer_cancelled':
         if (event.transfer) {
-          // ONLY update local store and UI state if this transfer belongs to us (the downloader client)
-          if (event.transfer.clientId === this.clientPeer) {
-            chatActions.updateTransfer(event.transfer);
-            if (event.transfer.messageId) {
-              if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
-                chatActions.markMessageDownloaded(event.transfer.messageId);
-              }
-              if (event.type === 'transfer_completed') {
-                chatActions.markMessageUploadComplete(event.transfer.messageId);
-              }
+          // Update local store with all transfer events (so we can display active speeds in the roster)
+          chatActions.updateTransfer(event.transfer);
+          
+          // Only mark local message status if this transfer belongs to us (the downloader client)
+          if (event.transfer.clientId === this.clientPeer && event.transfer.messageId) {
+            if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
+              chatActions.markMessageDownloaded(event.transfer.messageId);
             }
-            this.sendLog(`[TRANSFER] Event=${event.type}, messageId=${event.transfer.messageId}, bytes=${event.transfer.bytesDone}/${event.transfer.bytesTotal}, state=${event.transfer.state}`);
+            if (event.type === 'transfer_completed') {
+              chatActions.markMessageUploadComplete(event.transfer.messageId);
+            }
           }
+          this.sendLog(`[TRANSFER] Event=${event.type}, clientId=${event.transfer.clientId}, messageId=${event.transfer.messageId}, bytes=${event.transfer.bytesDone}/${event.transfer.bytesTotal}, state=${event.transfer.state}`);
         }
         break;
 

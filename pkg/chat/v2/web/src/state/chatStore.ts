@@ -52,10 +52,31 @@ export const chatActions = {
   },
 
   updateTransfer(event: TransferEvent) {
-    transfers.update(map => ({
-      ...map,
-      [event.id]: event
-    }));
+    transfers.update(map => {
+      const existing = map[event.id];
+      const startTime = existing?.startTime || Date.now();
+      let speed = existing?.speed || 0;
+      if (event.state === 'running' && event.bytesDone > 0) {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        if (elapsedSec > 0.5) {
+          speed = event.bytesDone / elapsedSec;
+        }
+      } else if (event.state === 'completed' && event.bytesDone > 0) {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        if (elapsedSec > 0) {
+          speed = event.bytesDone / elapsedSec;
+        }
+      }
+      return {
+        ...map,
+        [event.id]: {
+          ...existing,
+          ...event,
+          startTime,
+          speed
+        }
+      };
+    });
   },
 
   setConnectionState(state: 'connecting' | 'connected' | 'disconnected') {

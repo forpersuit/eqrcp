@@ -63,6 +63,9 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 
 	// Create and register the download Job
 	jobID := "dl-" + fileID
+	if clientID != "" {
+		jobID = "dl-" + fileID + "-" + clientID
+	}
 	h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))

@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { transfers, systemMessages, chatActions } from '../state/chatStore';
+  import { transfers, systemMessages, chatActions, currentDevice } from '../state/chatStore';
 
-  // Extract only active transfers (running or queued)
-  $: activeTransfers = Object.values($transfers).filter(tx => tx.state === 'running' || tx.state === 'queued');
+  // Extract only active transfers (running or queued) belonging to this device
+  $: activeTransfers = Object.values($transfers).filter(tx => 
+    (tx.state === 'running' || tx.state === 'queued') && 
+    (tx.clientId === ($currentDevice?.peer || 'desktop'))
+  );
 
   function clearLogs() {
     chatActions.clearSystemMessages();

@@ -93,9 +93,10 @@
       });
     } else if (event.data.type === 'download-success') {
       const { messageId, path } = event.data;
+      const peer = client ? client['clientPeer'] : 'desktop';
       chatActions.updateMessageFilePath(messageId, path);
       chatActions.updateTransfer({
-        id: 'dl-' + messageId,
+        id: 'dl-' + messageId + '-' + peer,
         state: 'completed',
         progress: 100,
         speed: 0,
@@ -103,23 +104,25 @@
       });
     } else if (event.data.type === 'download-failed') {
       const { messageId, error } = event.data;
+      const peer = client ? client['clientPeer'] : 'desktop';
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Download attachment failed: ${error}`
         : `下载附件失败: ${error}`);
       chatActions.updateTransfer({
-        id: 'dl-' + messageId,
+        id: 'dl-' + messageId + '-' + peer,
         state: 'failed',
         progress: -1,
         speed: 0,
         error: error
       });
-      const transferId = 'dl-' + messageId;
+      const transferId = 'dl-' + messageId + '-' + peer;
       if (client) {
         client.cancelTransfer(transferId);
       }
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
-      const transferId = 'dl-' + messageId;
+      const peer = client ? client['clientPeer'] : 'desktop';
+      const transferId = 'dl-' + messageId + '-' + peer;
       if (progress === -1) {
         chatActions.updateTransfer({
           id: transferId,
@@ -416,6 +419,14 @@
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatSpeed(bytes: number): string {
+    if (bytes <= 0) return '0 B/s';
+    const k = 1024;
+    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
   onMount(() => {
     const updateEmbeddedState = () => {
       isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
@@ -613,11 +624,12 @@
     const { messageId, filename, size } = e.detail;
     if (!client) return;
 
-    const transferId = 'dl-' + messageId;
+    const peer = client['clientPeer'] || 'desktop';
+    const transferId = 'dl-' + messageId + '-' + peer;
     client.startTransfer(transferId);
     client.sendLog(`[ACTION] Initiated download for file: ${filename} (Size: ${size} bytes, Message ID: ${messageId})`);
 
-    const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${client['clientPeer']}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
+    const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${peer}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
 
     if (isEmbedded) {
       window.parent.postMessage({
@@ -779,7 +791,18 @@
                     </div>
                     <div style="text-align: left; margin-left: 8px; flex: 1; min-width: 0;">
                       <strong style="display: block; font-size: 13px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
-                      <span style="font-size: 10px; color: #888;">{dev.peer || 'connected'}</span>
+                      {@const activeTx = Object.values($transfers).find(tx => tx.clientId === dev.peer && (tx.state === 'running' || tx.state === 'queued'))}
+                      {#if activeTx}
+                        {#if activeTx.state === 'running'}
+                          <span style="font-size: 10px; color: var(--accent-strong); font-weight: bold;">
+                            传输中: {activeTx.percent ?? 0}% ({formatSpeed(activeTx.speed ?? 0)})
+                          </span>
+                        {:else}
+                          <span style="font-size: 10px; color: #6b7280;">排队等待中...</span>
+                        {/if}
+                      {:else}
+                        <span style="font-size: 10px; color: #888;">{dev.peer || 'connected'}</span>
+                      {/if}
                     </div>
                     {#if isSelf}
                       <span class="device-state">本机</span>
