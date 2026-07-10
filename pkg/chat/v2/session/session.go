@@ -228,6 +228,16 @@ func (s *Session) ClientsCount() int {
 	return len(s.clients)
 }
 
+// GetClientTheme returns the theme assigned to a client peer.
+func (s *Session) GetClientTheme(peer string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.clientThemes == nil {
+		return ""
+	}
+	return s.clientThemes[peer]
+}
+
 // SendSystemMessage broadcasts a system notification text message.
 func (s *Session) SendSystemMessage(text string) {
 	msg := &protocol.Message{
