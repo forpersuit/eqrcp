@@ -62,6 +62,7 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 	}
 	srv.ChatDebug = debugLogEnabled
 	srv.ChatLogDir = settings.LogDir
+	srv.EnableChatV2 = true
 
 	log.Print(`Scan the following URL with a QR reader to join the chat session, press CTRL+C or "q" to exit:`)
 	log.Print(srv.ChatJoinURL())

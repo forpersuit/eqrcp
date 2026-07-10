@@ -149,22 +149,20 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 
 
 ## Chat Mode E2E UI Simulation via Chrome MCP
-### E2E Chat v2 UI Testing Step-by-Step:
+### E2E Chat v2 UI Testing Step-by-Step (3-Device Verification):
 1. **Start Local Service**: Spawn `go run ./cmd/eqt/ chat --port 18081 --bind 127.0.0.1 --keep-alive` asynchronously and parse the terminal output to extract the random URL Token (e.g., `Ic6mFk6TEG74JXumFfF8ZEhB`).
-2. **Open page in Chrome**: Create a new tab with `new_page` navigating to: `http://127.0.0.1:18081/chat-v2/<token>`.
-3. **QR Backdrop Modal Closing**: On initial load, the sharing modal overlay is shown. Locate the close button via selector `button[title="Close"]` and click it using `evaluate_script` to reveal the main chat list and composer.
-4. **Interact and send message**: Submit text by evaluating input events:
-   ```javascript
-   const textarea = document.querySelector('form.composer textarea');
-   textarea.value = 'Hi EQT, test message.';
-   textarea.dispatchEvent(new Event('input', { bubbles: true }));
-   document.querySelector('form.composer').dispatchEvent(new Event('submit', { bubbles: true }));
-   ```
-5. **Verify Bubble & Actions**:
-   - Check that the `.message-footer` actions (Copy and Delete/Recall) are unnested outside `.bubble`, allowing text bubbles to size dynamically according to characters length.
-   - Click the delete button twice to execute the recall. Confirm that the pill-shaped "Edit again" or "Resend" button appears for recalled sender-side messages.
-   - Verify that clicking "Edit again" populates back the text content and automatically delays 50ms to refocus the composer textarea.
-6. **Clean Up**: Terminate the background Go process.
+2. **Open Three Pages in Chrome**:
+   - **Device 1 (GUI Side)**: Open a tab navigating to: `http://127.0.0.1:18081/chat-v2/<token>?peer=desktop`
+   - **Device 2 (Mobile A)**: Open a tab navigating to: `http://127.0.0.1:18081/chat-v2/<token>?peer=peer-A` (Simulates Mobile Client A scanning QR to join)
+   - **Device 3 (Mobile B)**: Open a tab navigating to: `http://127.0.0.1:18081/chat-v2/<token>?peer=peer-B` (Simulates Mobile Client B scanning QR to join)
+3. **QR Backdrop Modal Closing**: For all three opened tabs, locate the close button via selector `button[title="Close"]` and click it using `evaluate_script` to reveal the main chat list and composer.
+4. **Sender & Receiver Display Alignment Test**:
+   - **Step A**: Select Mobile A's tab (Device 2) and send a message "Hello from A". Verify that on Mobile A's screen, the message displays on the right side (`.message.mine` class is present).
+   - **Step B**: Select Mobile B's tab (Device 3). Verify that the message "Hello from A" is received and displays on the left side (no `.mine` class, `.message` only).
+   - **Step C**: Select GUI Side's tab (Device 1). Verify that the message "Hello from A" is received and displays on the left side (no `.mine` class).
+   - **Step D**: Send a message "Reply from GUI" from the GUI Side's tab. Verify that on the GUI side it displays on the right side (`.mine`), and on both Mobile A and Mobile B tabs it displays on the left side.
+   - **Step E (Color Sweep Verification)**: Verify that the theme variables (`--accent`, `--wash`) calculated on each tab are unique and different (e.g., Mobile A gets a different color wash than Mobile B).
+5. **Clean Up**: Terminate the background Go process.
 
 ### Critical Styling & Store Binding Verification Checklist:
 - **CSS Nesting Check**: Ensure no missing closing curly braces `}` in `app.css` (e.g. inside media queries or hover classes) as it leaks nested selector constraints and breaks global backdrop displays (`display: none` overridden to `block`).

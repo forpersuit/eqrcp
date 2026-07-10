@@ -28,13 +28,11 @@ export class ChatWebSocketClient {
     // Auto-generate some local client details if not provided
     this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
     
-    // If URL query parameter 'join' (e.g. qarr, 4ysu, a6hg) is provided, prioritize it as the clientPeer ID in memory.
-    // Otherwise fallback to localStorage cached or auto-generated UUID.
-    if (this.joinParam) {
-      this.clientPeer = this.joinParam;
-      localStorage.setItem('chat_peer', this.clientPeer);
-    } else {
-      this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
+    // Each device must have a unique, persistent clientPeer ID.
+    // We check URL query param 'peer' first (ideal for simulation/multi-tab debugging), then fallback to localStorage or random UUID.
+    this.clientPeer = params.get('peer') || localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
+    // Only persist in localStorage if it was not forced via URL query parameter to avoid multi-tab collisions.
+    if (!params.get('peer')) {
       localStorage.setItem('chat_peer', this.clientPeer);
     }
     

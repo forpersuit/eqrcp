@@ -459,10 +459,10 @@
       token = 'default-room';
     }
 
-    // Persist peer type if passed via URL parameter
+    // Persist peer type if passed via URL parameter (only for desktop to avoid multi-tab collisions)
     const params = new URLSearchParams(window.location.search);
     const urlPeer = params.get('peer');
-    if (urlPeer) {
+    if (urlPeer === 'desktop') {
       localStorage.setItem('chat_peer', urlPeer);
     }
 
