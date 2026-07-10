@@ -58,6 +58,11 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	if startSeq > 0 {
 		events := s.MessageStore.GetSince(startSeq)
 		for _, e := range events {
+			if e.Message != nil && e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
+				if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
+					continue
+				}
+			}
 			c.Send(e)
 		}
 	}
@@ -99,7 +104,13 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
-		c.Send(event)
+		if (event.Type == protocol.EventMessageAdded || event.Type == protocol.EventMessageUpdated) && event.Message != nil && event.Message.Type == protocol.MessageFile && !event.Message.Downloaded {
+			if c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == "" {
+				c.Send(event)
+			}
+		} else {
+			c.Send(event)
+		}
 	}
 }
 

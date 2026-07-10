@@ -70,10 +70,10 @@ func NewHandler(cfg Config) *Handler {
 
 	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
 		sess := sessions.GetOrCreate(token)
-		if ev.MessageID != "" && strings.HasPrefix(ev.ID, "dl-") && (et == protocol.EventTransferStarted || et == protocol.EventTransferProgress || et == protocol.EventTransferCompleted) {
+		if ev.MessageID != "" && strings.HasPrefix(ev.ID, "dl-") && et == protocol.EventTransferCompleted {
 			if msg := sess.MessageStore.MarkDownloaded(ev.MessageID); msg != nil {
-				sess.BroadcastRaw(protocol.EventEnvelope{
-					Type:    protocol.EventMessageUpdated,
+				sess.Broadcast(protocol.EventEnvelope{
+					Type:    protocol.EventMessageAdded,
 					Time:    time.Now(),
 					Message: msg,
 				})

@@ -258,7 +258,7 @@
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isDownloaded = (dlTx && dlTx.state === 'completed') || (!dlTx && (isEmbedded ? msg.filePath : msg.downloaded))}
+        {@const isDownloaded = (dlTx && dlTx.state === 'completed') || (isEmbedded && !dlTx && (msg.filePath || msg.downloaded))}
         {@const tx = ulTx || dlTx}
         {@const colors = getMessageColors(msg, mine)}
         <div 

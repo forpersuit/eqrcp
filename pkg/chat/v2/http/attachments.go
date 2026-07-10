@@ -266,7 +266,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 				Time:    time.Now(),
 				Message: msg,
 			}
-			sess.BroadcastRaw(event)
+			sess.Broadcast(event)
 		}
 		_ = h.transfer.CompleteJob("ul-" + messageID)
 
