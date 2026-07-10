@@ -551,31 +551,77 @@
     formData.append('avatar', $currentDevice?.avatar || '');
     formData.append('peer', localStorage.getItem('chat_peer') || '');
 
-    fetch(uploadUrl, {
-      method: 'POST',
-      body: formData
-    })
-    .then(r => {
-      if (!r.ok) {
-        return r.text().then(t => { throw new Error(t); });
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl, true);
+
+    // Track upload progress locally and update the transfers store
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        transfers.update(map => {
+          map['ul-' + messageId] = {
+            id: 'ul-' + messageId,
+            messageId: messageId,
+            clientId: localStorage.getItem('chat_peer') || '',
+            fileName: file.name,
+            bytesDone: e.loaded,
+            bytesTotal: e.total,
+            percent: percent,
+            state: 'running'
+          };
+          return map;
+        });
       }
-      return r.json();
-    })
-    .then(res => {
-      console.log('File upload succeeded for messageId:', messageId, res);
-      if (client) {
-        client.sendLog(`[ACTION] Completed file upload for: ${file.name} (Message ID: ${messageId})`);
+    };
+
+    // Upload complete handler
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        console.log('File upload succeeded for messageId:', messageId);
+        if (client) {
+          client.sendLog(`[ACTION] Completed file upload for: ${file.name} (Message ID: ${messageId})`);
+        }
+        // Locally clear the transfer progress and mark uploading as complete to lift the mask
+        transfers.update(map => {
+          delete map['ul-' + messageId];
+          return map;
+        });
+        chatActions.markMessageUploadComplete(messageId);
+      } else {
+        handleError(new Error(xhr.responseText || `Upload failed with status ${xhr.status}`));
       }
-    })
-    .catch(err => {
+    };
+
+    // Upload error handler
+    xhr.onerror = () => {
+      handleError(new Error('Network error during upload'));
+    };
+
+    function handleError(err: Error) {
       console.error('File upload failed:', err);
       if (client) {
         client.sendLog(`[ERROR] File upload failed for: ${file.name}: ${err.message}`);
       }
+      transfers.update(map => {
+        map['ul-' + messageId] = {
+          id: 'ul-' + messageId,
+          messageId: messageId,
+          clientId: localStorage.getItem('chat_peer') || '',
+          fileName: file.name,
+          bytesDone: 0,
+          bytesTotal: file.size,
+          percent: -1,
+          state: 'failed',
+          error: err.message
+        };
+        return map;
+      });
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Failed to upload "${file.name}": ${err.message}`
         : `上传文件 "${file.name}" 失败: ${err.message}`);
-    });
+    }
+
+    xhr.send(formData);
   }
 
   function handleSendFile(e: CustomEvent<{ file: File; name: string; size: number; type: string }>) {
