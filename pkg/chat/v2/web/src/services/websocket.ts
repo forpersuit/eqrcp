@@ -27,16 +27,16 @@ export class ChatWebSocketClient {
     // Auto-generate some local client details if not provided
     this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
     
-    // If URL query parameter 'join' (e.g. qarr, 4ysu, a6hg) is provided, prioritize it as the clientPeer ID.
+    // If URL query parameter 'join' (e.g. qarr, 4ysu, a6hg) is provided, prioritize it as the clientPeer ID in memory.
     // Otherwise fallback to localStorage cached or auto-generated UUID.
     if (this.joinParam) {
       this.clientPeer = this.joinParam;
     } else {
       this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
+      localStorage.setItem('chat_peer', this.clientPeer);
     }
     
     localStorage.setItem('chat_label', this.clientLabel);
-    localStorage.setItem('chat_peer', this.clientPeer);
   }
 
   public connect(): void {

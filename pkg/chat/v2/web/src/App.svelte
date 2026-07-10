@@ -646,7 +646,7 @@
         size: file.size,
         sender: $currentDevice?.label || 'Me',
         avatar: $currentDevice?.avatar || '',
-        peer: localStorage.getItem('chat_peer') || ''
+        peer: $currentDevice?.peer || ''
       })
     })
     .then(r => {
