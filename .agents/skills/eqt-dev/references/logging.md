@@ -20,3 +20,21 @@
    - 记录下载更新包与签名时，从云端获取的资产包哈希长度、文件大小。
    - 记录 Ed25519 签名验证明细（如 128 字符 Hex 签名是否解码成功、验签通过/拒绝结果等）。
 3. **静默进程拉起与清理**：记录 Windows 重命名原子更新（`.exe -> .exe.old`）的完整路径重命名步骤、启动新进程 and 清理 `.old` 的状态。
+
+## 3. Chat V2 跨端统一日志系统 (Chat V2 Unified Logging)
+
+当 **DebugLog** 或 **DevMode** 开关启用时，Chat V2 日志系统将启动自动落盘并建立统一的三端（GUI/CLI、服务端、移动浏览器端）融合日志链路：
+
+- **落盘位置**：
+  - **GUI 模式**：所有组件（GUI 后台、服务端 HTTP/WS 诊断、移动浏览器回传日志）一并追加写入统一的 `desktop.log` 中。会话关闭后日志依然保留，可随时通过 About 页的“打开日志文件”按钮打开分析。
+  - **CLI 模式**：自动创建并输出到用户缓存目录下的 `cli.log`（例如 `~/.cache/eqt/cli.log` 或 `%LOCALAPPDATA%/eqt/cli.log`），实现每次启动运行皆可追溯。
+- **移动端 (MOBILE) 离线日志缓冲机制**：
+  - 移动浏览器端的 H5 页面中（`App.svelte` / `websocket.ts`）提供日志队列 `pendingLogs`。
+  - 当 WebSocket 连接断开或尚未就绪时，发生的动作与异常日志先存入队列，防止丢失。在重新连接上 WebSocket 的瞬间（`onopen` 手续完成），批量 Flush 回传给服务端。
+  - 传输完成（下载成功、下载失败）等事件会自动触发 `client.sendLog()` 回传。
+- **服务端日志融合路由**：
+  - 服务端 WebSocket 处理器接收到移动端的 `CommandLog` 后，在写入单独的设备日志外，还会调用 `diag.Emit()` 以 `[MOBILE:<peer>]` 为前缀向主 `diag.Logger` 路由。
+  - 主 `diag.Logger` 自动追加至统一的 `desktop.log`（GUI 模式）或 `cli.log`（CLI 模式）中。
+- **动态开关控制**：
+  - 当用户在 GUI 界面动态关闭“启用调试日志”开关时，`FileLogger` 的 `Write` 方法会自动拦截所有的磁盘写入（降级为 nop），直到用户再次开启，实现完全的实时热切换控制。
+
