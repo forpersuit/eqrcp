@@ -655,6 +655,7 @@
     .then(msg => {
       const msgID = msg.id;
       console.log('Attachment registered successfully, messageID:', msgID);
+      chatActions.addMessage(msg);
       performFileUpload(msgID, file);
     })
     .catch(err => {

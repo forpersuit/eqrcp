@@ -33,6 +33,7 @@ export type EventType =
   | 'heartbeat'
   | 'message_added'
   | 'message_recalled'
+  | 'message_updated'
   | 'presence_changed'
   | 'transfer_queued'
   | 'transfer_started'

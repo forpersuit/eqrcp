@@ -129,5 +129,17 @@ export const chatActions = {
       }
       return m;
     }));
+  },
+
+  updateMessage(updated: Message) {
+    messages.update(list => list.map(m => {
+      if (m.id === updated.id) {
+        return {
+          ...m,
+          ...updated
+        };
+      }
+      return m;
+    }));
   }
 };

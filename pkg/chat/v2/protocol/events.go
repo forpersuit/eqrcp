@@ -10,6 +10,7 @@ const (
 	EventHeartbeat         EventType = "heartbeat"
 	EventMessageAdded      EventType = "message_added"
 	EventMessageRecalled   EventType = "message_recalled"
+	EventMessageUpdated    EventType = "message_updated"
 	EventPresenceChanged   EventType = "presence_changed"
 	EventTransferQueued    EventType = "transfer_queued"
 	EventTransferStarted   EventType = "transfer_started"

@@ -103,6 +103,16 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 	}
 }
 
+// BroadcastRaw broadcasts an event without adding it to the MessageStore history.
+func (s *Session) BroadcastRaw(event protocol.EventEnvelope) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, c := range s.clients {
+		c.Send(event)
+	}
+}
+
 // SendText broadcasts a new text message.
 func (s *Session) SendText(sender *Client, text string, commandID string) {
 	msg := &protocol.Message{

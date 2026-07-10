@@ -164,7 +164,7 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 		Message: msg,
 		Time:    time.Now(),
 	}
-	sess.Broadcast(event)
+	_ = sess.MessageStore.Add(event)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(msg)
@@ -252,7 +252,14 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	if messageID != "" {
 		// Update physical path and complete job
 		sess.AddAttachment(messageID, tempFile.Name())
-		sess.MessageStore.MarkUploadComplete(messageID)
+		if msg := sess.MessageStore.MarkUploadComplete(messageID); msg != nil {
+			event := protocol.EventEnvelope{
+				Type:    protocol.EventMessageAdded,
+				Time:    time.Now(),
+				Message: msg,
+			}
+			sess.BroadcastRaw(event)
+		}
 		_ = h.transfer.CompleteJob("ul-" + messageID)
 
 		w.Header().Set("Content-Type", "application/json")

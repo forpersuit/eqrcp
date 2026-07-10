@@ -146,6 +146,13 @@ export class ChatWebSocketClient {
         }
         break;
 
+      case 'message_updated':
+        if (event.message) {
+          chatActions.updateMessage(event.message);
+          this.sendLog(`[EVENT] Message updated: ID=${event.message.id}, Uploading=${event.message.uploading}`);
+        }
+        break;
+
       case 'message_recalled':
         if (event.message?.id) {
           chatActions.recallMessage(event.message.id);
