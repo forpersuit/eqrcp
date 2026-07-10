@@ -248,7 +248,7 @@
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
-    {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded)) as msg (msg.id)}
+    {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded && (m.uploading || !m.downloaded))) as msg (msg.id)}
       {#if msg.type === 'system'}
         <div class="system-message">
           <span class="system-text">{msg.text}</span>
@@ -428,11 +428,13 @@
                           <button 
                             class="bubble-action completed-btn {redownloadConfirmingId === msg.id ? 'confirm-redownload' : ''}" 
                             on:click={() => handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false)} 
-                            title={redownloadConfirmingId === msg.id 
-                              ? (currentLang === 'en' ? 'Click again to redownload' : '再次点击以重新下载') 
-                              : (currentLang === 'en' ? 'Downloaded (Click to redownload)' : '已下载 (点击重新下载)')}
+                            title={isEmbedded
+                              ? (currentLang === 'en' ? 'Download' : '下载')
+                              : (redownloadConfirmingId === msg.id 
+                                ? (currentLang === 'en' ? 'Click again to redownload' : '再次点击以重新下载') 
+                                : (currentLang === 'en' ? 'Downloaded (Click to redownload)' : '已下载 (点击重新下载)'))}
                           >
-                            {#if redownloadConfirmingId === msg.id}
+                            {#if redownloadConfirmingId === msg.id || isEmbedded}
                               <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                                 <polyline points="7 10 12 15 17 10" />
