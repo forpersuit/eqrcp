@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -29,16 +30,37 @@ import (
 var assets embed.FS
 
 type FileLogger struct {
-	file *os.File
+	mu      sync.RWMutex
+	file    *os.File
+	enabled bool
 }
 
-func NewFileLogger(filePath string) *FileLogger {
+func NewFileLogger(filePath string, enabled bool) *FileLogger {
 	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return &FileLogger{}
+		return &FileLogger{enabled: false}
 	}
-	return &FileLogger{file: f}
+	return &FileLogger{file: f, enabled: enabled}
+}
+
+func (l *FileLogger) SetEnabled(enabled bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.enabled = enabled
+}
+
+func (l *FileLogger) Enabled() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.enabled
+}
+
+func (l *FileLogger) Write(p []byte) (n int, err error) {
+	if l.Enabled() && l.file != nil {
+		return l.file.Write(p)
+	}
+	return len(p), nil
 }
 
 func (l *FileLogger) Close() {
@@ -51,7 +73,7 @@ func (l *FileLogger) log(level string, message string) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	line := fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, message)
 	fmt.Print(line)
-	if l.file != nil {
+	if l.Enabled() && l.file != nil {
 		_, _ = l.file.WriteString(line)
 		_ = l.file.Sync()
 	}
@@ -215,7 +237,15 @@ func checkAndPerformDisasterRollback(fileLogger *FileLogger) bool {
 
 func startWailsGUI() {
 	logPath := desktopLogFilePath()
-	fileLogger := NewFileLogger(logPath)
+	
+	settingsApp := application.New()
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	enabled := false
+	if err == nil {
+		enabled = settings.DebugLog || settings.DevMode
+	}
+	
+	fileLogger := NewFileLogger(logPath, enabled)
 	defer fileLogger.Close()
 
 	fileLogger.Info("EQT GUI Starting...")
@@ -236,7 +266,7 @@ func startWailsGUI() {
 	tray := newTrayController(app)
 
 	// Create application with options
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:             "EQT",
 		Width:             1120,
 		Height:            760,

@@ -3,6 +3,7 @@ package diag
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -52,9 +53,14 @@ type StdLogger struct {
 	log *log.Logger
 }
 
-// NewStdLogger creates a standard diagnostic logger.
+// NewStdLogger creates a standard diagnostic logger writing to os.Stderr.
 func NewStdLogger() *StdLogger {
-	return &StdLogger{log: log.New(os.Stderr, "chat-v2 ", log.LstdFlags)}
+	return NewStdLoggerWithWriter(os.Stderr)
+}
+
+// NewStdLoggerWithWriter creates a standard diagnostic logger writing to custom writer.
+func NewStdLoggerWithWriter(w io.Writer) *StdLogger {
+	return &StdLogger{log: log.New(w, "chat-v2 ", log.LstdFlags)}
 }
 
 func (l *StdLogger) Log(ctx context.Context, event Event) {

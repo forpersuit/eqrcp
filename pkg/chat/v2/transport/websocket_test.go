@@ -109,7 +109,10 @@ func wsURL(httpURL string) string {
 
 func TestWebSocketCommandLog(t *testing.T) {
 	logger := &diag.MemoryLogger{}
-	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger})
+	handler := NewWebSocketHandler(WebSocketConfig{
+		Logger:   logger,
+		DebugLog: func() bool { return true },
+	})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 

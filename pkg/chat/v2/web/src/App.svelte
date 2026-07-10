@@ -94,6 +94,9 @@
     } else if (event.data.type === 'download-success') {
       const { messageId, path } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
+      if (client) {
+        client.sendLog(`[ACTION] Completed download for Message ID: ${messageId}, Path: ${path}`);
+      }
       chatActions.updateMessageFilePath(messageId, path);
       chatActions.updateTransfer({
         id: 'dl-' + messageId + '-' + peer,
@@ -105,6 +108,9 @@
     } else if (event.data.type === 'download-failed') {
       const { messageId, error } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
+      if (client) {
+        client.sendLog(`[ERROR] Download failed for Message ID: ${messageId}, Error: ${error}`);
+      }
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Download attachment failed: ${error}`
         : `下载附件失败: ${error}`);

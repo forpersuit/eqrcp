@@ -28,6 +28,7 @@ import (
 	"eqt/pkg/qr"
 
 	"eqt/pkg/body"
+	"eqt/pkg/chat/v2/diag"
 	chatv2http "eqt/pkg/chat/v2/http"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
@@ -79,6 +80,7 @@ type Server struct {
 	ChatDebug          bool
 	ViewportDebug      bool
 	EnableChatV2       bool
+	ChatV2Logger       diag.Logger
 	Lang               string
 	instance           *http.Server
 	mux                *http.ServeMux

@@ -8,6 +8,7 @@ import (
 	"eqt/pkg/application"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
+	"eqt/pkg/logger"
 	"eqt/pkg/server"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
@@ -168,6 +169,10 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.agent = newDesktopAgent(ctx)
+	a.agent.fileLogger = a.logger
+	if a.logger != nil {
+		a.agent.log = logger.NewWithWriter(a.agent.baseFlags.Quiet, a.logger)
+	}
 	a.downloads = make(map[string]context.CancelFunc)
 	go func() {
 		if err := a.agent.loadHistory(); err != nil {
@@ -867,6 +872,9 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 		return DesktopSettings{}, err
 	}
 	a.setCloseBehavior(saved.CloseBehavior)
+	if a.logger != nil {
+		a.logger.SetEnabled(saved.DebugLog || saved.DevMode)
+	}
 	return saved, nil
 }
 

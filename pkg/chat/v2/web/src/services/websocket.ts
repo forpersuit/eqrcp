@@ -10,6 +10,7 @@ export class ChatWebSocketClient {
   private heartbeatIntervalId: any = null;
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
+  private pendingLogs: string[] = [];
 
   private clientLabel: string;
   private clientPeer: string;
@@ -93,6 +94,7 @@ export class ChatWebSocketClient {
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
+      this.flushPendingLogs();
     };
 
     this.ws.onmessage = (event) => {
@@ -310,6 +312,21 @@ export class ChatWebSocketClient {
         commandId: `log-${Date.now()}`,
         text: text
       });
+    } else {
+      this.pendingLogs.push(text);
+    }
+  }
+
+  private flushPendingLogs(): void {
+    while (this.pendingLogs.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const logText = this.pendingLogs.shift();
+      if (logText) {
+        this.sendCommand({
+          type: 'log',
+          commandId: `log-${Date.now()}`,
+          text: logText
+        });
+      }
     }
   }
 

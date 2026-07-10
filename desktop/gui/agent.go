@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"eqt/pkg/application"
 	"eqt/pkg/body"
+	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/config"
 	"eqt/pkg/logger"
 	"eqt/pkg/server"
@@ -29,6 +31,7 @@ type desktopAgent struct {
 	mu           sync.Mutex
 	baseFlags    application.Flags
 	log          logger.Logger
+	fileLogger   *FileLogger
 	startedAt    time.Time
 	busy         bool
 	current      *TaskRecord
@@ -925,6 +928,11 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	}()
 	srv.ChatDebug = desktopSettings.DebugLog
 	srv.ViewportDebug = desktopSettings.ViewportDebug
+	if agent.fileLogger != nil {
+		srv.ChatV2Logger = diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, agent.fileLogger))
+	} else {
+		srv.ChatV2Logger = diag.NewStdLogger()
+	}
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)

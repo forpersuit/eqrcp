@@ -325,15 +325,22 @@ func (s *Server) Chat() error {
 		w.Header().Set("Content-Length", strconv.Itoa(len(qrBytes)))
 		_, _ = w.Write(qrBytes)
 	})
+	logger := s.ChatV2Logger
+	if logger == nil {
+		logger = diag.NewStdLogger()
+	}
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
 		BasePath: "/chat-v2",
-		Logger:   diag.NewStdLogger(),
+		Logger:   logger,
 		IsPaidOrUnrestricted: func() bool {
 			usage := limiterInstance.GetStatus()
 			return usage.IsPaid || usage.UsedSeconds < 300
 		},
 		HostToken: func() string {
 			return s.ChatHostToken()
+		},
+		DebugLog: func() bool {
+			return s.ChatDebug
 		},
 	})
 	s.chatV2Handler = chatV2Handler

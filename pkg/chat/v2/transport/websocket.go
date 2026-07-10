@@ -43,6 +43,7 @@ type WebSocketConfig struct {
 	Now      func() time.Time
 	Sessions *session.Manager
 	Transfer *transfer.Manager
+	DebugLog func() bool
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
@@ -51,6 +52,7 @@ type WebSocketHandler struct {
 	now      func() time.Time
 	sessions *session.Manager
 	transfer *transfer.Manager
+	debugLog func() bool
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -71,11 +73,16 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 	if transferMgr == nil {
 		transferMgr = transfer.NewManager()
 	}
+	debugLog := cfg.DebugLog
+	if debugLog == nil {
+		debugLog = func() bool { return false }
+	}
 	return &WebSocketHandler{
 		logger:   logger,
 		now:      now,
 		sessions: sessions,
 		transfer: transferMgr,
+		debugLog: debugLog,
 	}
 }
 
@@ -265,6 +272,9 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 		case protocol.CommandLog:
 			if cl != nil {
 				h.writeClientLog(cl.Peer, cmd.Text)
+				if h.debugLog() {
+					diag.Emit(ctx, h.logger, diag.LevelInfo, fmt.Sprintf("[MOBILE:%s] %s", cl.Peer, cmd.Text), nil, fields...)
+				}
 			}
 
 		case protocol.CommandReportProgress:
@@ -342,6 +352,9 @@ func extractToken(path string) string {
 }
 
 func (h *WebSocketHandler) writeClientLog(peer string, text string) {
+	if !h.debugLog() {
+		return
+	}
 	if peer == "" {
 		peer = "unknown"
 	}

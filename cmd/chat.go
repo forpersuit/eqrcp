@@ -2,7 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 
+	"eqt/pkg/application"
+	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/config"
 	"eqt/pkg/logger"
 	"eqt/pkg/qr"
@@ -12,7 +17,34 @@ import (
 )
 
 func chatCmdFunc(command *cobra.Command, args []string) error {
-	log := logger.New(app.Flags.Quiet)
+	settingsApp := application.New()
+	settings, err := config.ReadDesktopSettings(settingsApp)
+	debugLogEnabled := false
+	if err == nil {
+		debugLogEnabled = settings.DebugLog || settings.DevMode
+	}
+
+	var log logger.Logger
+	var logFile *os.File
+	if debugLogEnabled {
+		logDir := filepath.Join(os.TempDir(), "eqt")
+		if cacheDir, err := os.UserCacheDir(); err == nil {
+			logDir = filepath.Join(cacheDir, "eqt")
+		}
+		_ = os.MkdirAll(logDir, 0755)
+		logFile, err = os.OpenFile(filepath.Join(logDir, "cli.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log = logger.NewWithWriter(app.Flags.Quiet, logFile)
+		} else {
+			log = logger.New(app.Flags.Quiet)
+		}
+	} else {
+		log = logger.New(app.Flags.Quiet)
+	}
+	if logFile != nil {
+		defer logFile.Close()
+	}
+
 	cfg, err := config.New(app)
 	if err != nil {
 		return err
@@ -21,6 +53,13 @@ func chatCmdFunc(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if debugLogEnabled && logFile != nil {
+		srv.ChatV2Logger = diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, logFile))
+	} else {
+		srv.ChatV2Logger = diag.NewStdLogger()
+	}
+	srv.ChatDebug = debugLogEnabled
+
 	log.Print(`Scan the following URL with a QR reader to join the chat session, press CTRL+C or "q" to exit:`)
 	log.Print(srv.ChatJoinURL())
 	if err := qr.RenderString(srv.ChatJoinURL(), cfg.Reversed); err != nil {
