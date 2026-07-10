@@ -165,6 +165,11 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 		Time:    time.Now(),
 	}
 	_ = sess.MessageStore.Add(event)
+
+	// Pre-create and start the upload job so clients can report progress immediately
+	h.transfer.CreateJob(token, "ul-"+msgID, msgID, senderID, req.FileName, req.Size)
+	_ = h.transfer.StartJob("ul-" + msgID)
+
 	sess.Broadcast(event)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -257,7 +262,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 		sess.AddAttachment(messageID, tempFile.Name())
 		if msg := sess.MessageStore.MarkUploadComplete(messageID); msg != nil {
 			event := protocol.EventEnvelope{
-				Type:    protocol.EventMessageAdded,
+				Type:    protocol.EventMessageUpdated,
 				Time:    time.Now(),
 				Message: msg,
 			}

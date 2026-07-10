@@ -308,6 +308,18 @@ export class ChatWebSocketClient {
     this.sendLog(msg);
   }
 
+  public reportUploadProgress(messageId: string, bytesDone: number, bytesTotal: number): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendCommand({
+        type: 'report_progress',
+        commandId: `progress-${Date.now()}`,
+        messageId: messageId,
+        bytesDone: bytesDone,
+        bytesTotal: bytesTotal
+      });
+    }
+  }
+
   private sendCommand(command: CommandEnvelope): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(command));

@@ -6,7 +6,8 @@ export type CommandType =
   | 'start_transfer'
   | 'cancel_transfer'
   | 'ack'
-  | 'log';
+  | 'log'
+  | 'report_progress';
 
 export interface ClientInfo {
   token: string;
@@ -26,6 +27,8 @@ export interface CommandEnvelope {
   text?: string;
   messageId?: string;
   transferId?: string;
+  bytesDone?: number;
+  bytesTotal?: number;
 }
 
 export type EventType =

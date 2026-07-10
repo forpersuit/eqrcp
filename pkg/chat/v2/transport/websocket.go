@@ -257,6 +257,18 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.writeClientLog(cl.Peer, cmd.Text)
 			}
 
+		case protocol.CommandReportProgress:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.MessageID == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing messageId")
+				continue
+			}
+			jobID := "ul-" + cmd.MessageID
+			_ = h.transfer.UpdateProgress(jobID, cmd.BytesDone)
+
 		default:
 			event := protocol.EventEnvelope{
 				Type:      protocol.EventError,

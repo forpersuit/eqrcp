@@ -571,6 +571,9 @@
           };
           return map;
         });
+        if (client) {
+          client.reportUploadProgress(messageId, e.loaded, e.total);
+        }
       }
     };
 

@@ -248,7 +248,7 @@
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
-    {#each messages.filter(m => !(m.type === 'file' && m.uploading && !isMine(m) && !isEmbedded)) as msg (msg.id)}
+    {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded)) as msg (msg.id)}
       {#if msg.type === 'system'}
         <div class="system-message">
           <span class="system-text">{msg.text}</span>

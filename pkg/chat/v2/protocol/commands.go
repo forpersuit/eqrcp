@@ -12,6 +12,7 @@ const (
 	CommandCancelTransfer CommandType = "cancel_transfer"
 	CommandAck            CommandType = "ack"
 	CommandLog            CommandType = "log"
+	CommandReportProgress CommandType = "report_progress"
 )
 
 // ClientInfo describes a chat client at connection time.
@@ -37,4 +38,6 @@ type CommandEnvelope struct {
 	Text       string      `json:"text,omitempty"`
 	MessageID  string      `json:"messageId,omitempty"`
 	TransferID string      `json:"transferId,omitempty"`
+	BytesDone  int64       `json:"bytesDone,omitempty"`
+	BytesTotal int64       `json:"bytesTotal,omitempty"`
 }
