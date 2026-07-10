@@ -77,6 +77,21 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 				c.Send(e)
 			}
 		}
+
+		// Sync Compensation: If the client is reconnecting with an incremental sequence number (startSeq > 0),
+		// we scan all historical messages and compensate any fully downloaded/ready files that are older than
+		// the client's reconnection boundary (e.Seq <= startSeq). This covers mobile screen-lock sleep scenarios.
+		if startSeq > 0 {
+			allEvents := s.MessageStore.GetSince(0)
+			for _, e := range allEvents {
+				if e.Message != nil && e.Message.Type == protocol.MessageFile && e.Message.Downloaded {
+					if e.Seq <= startSeq {
+						fmt.Printf("[WebSocket Sync Compensation] Compensating ready file message Seq=%d MsgID=%s to ClientID=%s Peer=%s\n", e.Seq, e.Message.ID, c.ID, c.Peer)
+						c.Send(e)
+					}
+				}
+			}
+		}
 	}
 
 	// Broadcast presence update
