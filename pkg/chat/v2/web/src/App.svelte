@@ -553,9 +553,9 @@
     const formData = new FormData();
     formData.append('file', file);
     formData.append('messageId', messageId);
-    formData.append('sender', $currentDevice?.label || 'Me');
+    formData.append('sender', client?.clientLabel || $currentDevice?.label || 'Me');
     formData.append('avatar', $currentDevice?.avatar || '');
-    formData.append('peer', localStorage.getItem('chat_peer') || '');
+    formData.append('peer', client?.clientPeer || localStorage.getItem('chat_peer') || '');
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl, true);
@@ -650,9 +650,9 @@
       body: JSON.stringify({
         fileName: name,
         size: file.size,
-        sender: $currentDevice?.label || 'Me',
+        sender: client?.clientLabel || $currentDevice?.label || 'Me',
         avatar: $currentDevice?.avatar || '',
-        peer: $currentDevice?.peer || ''
+        peer: client?.clientPeer || localStorage.getItem('chat_peer') || ''
       })
     })
     .then(r => {
@@ -939,13 +939,10 @@
         isEmbedded={isEmbedded}
         isMine={(msg) => {
           const myPeer = client?.clientPeer || localStorage.getItem('chat_peer');
-          if (msg.senderId) {
-            if (msg.senderId === myPeer) return true;
-            if (myPeer === 'desktop' && msg.senderId === 'desktop') return true;
-            return false;
+          if (msg.senderId && myPeer) {
+            return msg.senderId === myPeer || (myPeer === 'desktop' && msg.senderId === 'desktop');
           }
-          const myLabel = client?.clientLabel || $currentDevice?.label || 'Me';
-          return msg.sender === myLabel;
+          return false;
         }}
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}
