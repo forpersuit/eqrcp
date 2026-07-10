@@ -183,7 +183,12 @@ export class ChatWebSocketClient {
           chatActions.updateTransfer(event.transfer);
           
           // Only mark local message status if this transfer belongs to us (the downloader client)
-          if (event.transfer.clientId === this.clientPeer && event.transfer.messageId) {
+          // or if it's an upload job and we are either the sender or the GUI host
+          const isUploadJob = event.transfer.id.startsWith('ul-');
+          const isGuiHost = typeof window !== 'undefined' && window.parent !== window;
+          const isMineOrGui = event.transfer.clientId === this.clientPeer || isGuiHost;
+          
+          if ((event.transfer.clientId === this.clientPeer || (isUploadJob && isMineOrGui)) && event.transfer.messageId) {
             if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
               chatActions.markMessageDownloaded(event.transfer.messageId);
             }

@@ -217,6 +217,8 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	// Wrap copy stream to report progress
 	var pr io.Reader = file
 	if messageID != "" {
+		h.transfer.CreateJob(token, "ul-"+messageID, messageID, peer, header.Filename, header.Size)
+		_ = h.transfer.StartJob("ul-" + messageID)
 		pr = &progressReader{
 			reader:   file,
 			transfer: h.transfer,
