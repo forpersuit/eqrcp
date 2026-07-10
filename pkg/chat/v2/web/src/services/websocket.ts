@@ -19,16 +19,24 @@ export class ChatWebSocketClient {
 
   constructor(token: string) {
     this.token = token;
-    // Auto-generate some local client details if not provided
-    this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
-    this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
-    localStorage.setItem('chat_label', this.clientLabel);
-    localStorage.setItem('chat_peer', this.clientPeer);
-
     // Extract join and theme parameter from URL search query
     const params = new URLSearchParams(window.location.search);
     this.joinParam = params.get('join') || '';
     this.themeParam = params.get('theme') || '';
+
+    // Auto-generate some local client details if not provided
+    this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
+    
+    // If URL query parameter 'join' (e.g. qarr, 4ysu, a6hg) is provided, prioritize it as the clientPeer ID.
+    // Otherwise fallback to localStorage cached or auto-generated UUID.
+    if (this.joinParam) {
+      this.clientPeer = this.joinParam;
+    } else {
+      this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
+    }
+    
+    localStorage.setItem('chat_label', this.clientLabel);
+    localStorage.setItem('chat_peer', this.clientPeer);
   }
 
   public connect(): void {
