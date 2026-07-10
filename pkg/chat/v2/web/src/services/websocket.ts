@@ -143,6 +143,7 @@ export class ChatWebSocketClient {
         if (event.message) {
           chatActions.addMessage(event.message);
           this.sendLog(`[EVENT] Message added: ID=${event.message.id}, Type=${event.message.type}`);
+          this.sendAck(event.message.id);
         }
         break;
 
@@ -150,6 +151,7 @@ export class ChatWebSocketClient {
         if (event.message) {
           chatActions.updateMessage(event.message);
           this.sendLog(`[EVENT] Message updated: ID=${event.message.id}, Uploading=${event.message.uploading}`);
+          this.sendAck(event.message.id);
         }
         break;
 
@@ -316,6 +318,16 @@ export class ChatWebSocketClient {
         messageId: messageId,
         bytesDone: bytesDone,
         bytesTotal: bytesTotal
+      });
+    }
+  }
+
+  public sendAck(messageId: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendCommand({
+        type: 'ack',
+        commandId: `ack-${Date.now()}`,
+        messageId: messageId
       });
     }
   }

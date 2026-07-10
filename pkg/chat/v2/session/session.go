@@ -118,9 +118,17 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 	for _, c := range s.clients {
 		if (event.Type == protocol.EventMessageAdded || event.Type == protocol.EventMessageUpdated) && event.Message != nil && event.Message.Type == protocol.MessageFile && !event.Message.Downloaded {
 			if c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == "" {
+				fmt.Printf("[WebSocket Broadcast Filtered] Sending EventType=%s Seq=%d MsgID=%s to ClientID=%s Peer=%s (MATCHED)\n", event.Type, event.Seq, event.Message.ID, c.ID, c.Peer)
 				c.Send(event)
+			} else {
+				fmt.Printf("[WebSocket Broadcast Filtered] Skipping EventType=%s Seq=%d MsgID=%s for ClientID=%s Peer=%s (SKIPPED)\n", event.Type, event.Seq, event.Message.ID, c.ID, c.Peer)
 			}
 		} else {
+			msgID := ""
+			if event.Message != nil {
+				msgID = event.Message.ID
+			}
+			fmt.Printf("[WebSocket Broadcast All] Sending EventType=%s Seq=%d MsgID=%s to ClientID=%s Peer=%s\n", event.Type, event.Seq, msgID, c.ID, c.Peer)
 			c.Send(event)
 		}
 	}
@@ -132,6 +140,11 @@ func (s *Session) BroadcastRaw(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
+		msgID := ""
+		if event.Message != nil {
+			msgID = event.Message.ID
+		}
+		fmt.Printf("[WebSocket BroadcastRaw All] Sending EventType=%s MsgID=%s to ClientID=%s Peer=%s\n", event.Type, msgID, c.ID, c.Peer)
 		c.Send(event)
 	}
 }
