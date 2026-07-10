@@ -938,12 +938,13 @@
         currentLang={currentLang}
         isEmbedded={isEmbedded}
         isMine={(msg) => {
-          const myPeer = localStorage.getItem('chat_peer');
+          const myPeer = client?.clientPeer || localStorage.getItem('chat_peer');
           if (msg.senderId) {
             if (msg.senderId === myPeer) return true;
             if (myPeer === 'desktop' && msg.senderId === 'desktop') return true;
           }
-          return msg.sender === ($currentDevice?.label || 'Me');
+          const myLabel = client?.clientLabel || $currentDevice?.label || 'Me';
+          return msg.sender === myLabel;
         }}
         on:startDownload={handleStartDownload}
         on:cancelDownload={handleCancelDownload}

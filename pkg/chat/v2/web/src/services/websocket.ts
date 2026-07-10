@@ -12,8 +12,8 @@ export class ChatWebSocketClient {
   private isManualClosed = false;
   private pendingLogs: string[] = [];
 
-  private clientLabel: string;
-  private clientPeer: string;
+  public clientLabel: string;
+  public clientPeer: string;
   private joinParam: string = '';
   private themeParam: string = '';
   public onRequestFileData: ((messageId: string) => void) | null = null;
@@ -32,6 +32,7 @@ export class ChatWebSocketClient {
     // Otherwise fallback to localStorage cached or auto-generated UUID.
     if (this.joinParam) {
       this.clientPeer = this.joinParam;
+      localStorage.setItem('chat_peer', this.clientPeer);
     } else {
       this.clientPeer = localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
       localStorage.setItem('chat_peer', this.clientPeer);
