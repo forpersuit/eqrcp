@@ -43,27 +43,39 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 
 	// Replay missed events safely ensuring we never leak history before joinSeq
 	var startSeq int64 = 0
+	var shouldReplay bool = false
+
 	if afterSeq > 0 && joinSeq > 0 {
 		if afterSeq >= joinSeq {
 			startSeq = afterSeq
 		} else {
 			startSeq = joinSeq
 		}
+		shouldReplay = true
 	} else if afterSeq > 0 {
 		startSeq = afterSeq
+		shouldReplay = true
 	} else if joinSeq > 0 {
 		startSeq = joinSeq
+		shouldReplay = true
+	} else {
+		// Both are 0, meaning a brand new client joined the session.
+		// We replay all existing historical messages to sync state.
+		startSeq = 0
+		shouldReplay = true
 	}
 
-	if startSeq > 0 {
+	if shouldReplay {
 		events := s.MessageStore.GetSince(startSeq)
 		for _, e := range events {
-			if e.Message != nil && e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
-				if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
-					continue
+			if e.Message != nil {
+				if e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
+					if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
+						continue
+					}
 				}
+				c.Send(e)
 			}
-			c.Send(e)
 		}
 	}
 
