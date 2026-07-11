@@ -260,6 +260,8 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	if messageID != "" {
 		// Update physical path and complete job
 		sess.AddAttachment(messageID, tempFile.Name())
+		// Mark as downloaded instantly when caching finishes to enable instant broadcast distribution to peer clients
+		_ = sess.MessageStore.MarkDownloaded(messageID)
 		if msg := sess.MessageStore.MarkUploadComplete(messageID); msg != nil {
 			event := protocol.EventEnvelope{
 				Type:    protocol.EventMessageUpdated,
@@ -283,16 +285,17 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 		}
 
 		msg := &protocol.Message{
-			ID:        msgID,
-			SenderID:  senderID,
-			Sender:    sender,
-			Avatar:    avatar,
-			Theme:     sess.GetClientTheme(senderID),
-			Type:      protocol.MessageFile,
-			FileName:  fileName,
-			Size:      size,
-			MimeType:  mimeType,
-			CreatedAt: time.Now(),
+			ID:         msgID,
+			SenderID:   senderID,
+			Sender:     sender,
+			Avatar:     avatar,
+			Theme:      sess.GetClientTheme(senderID),
+			Type:       protocol.MessageFile,
+			FileName:   fileName,
+			Size:       size,
+			MimeType:   mimeType,
+			Downloaded: true, // Auto-mark downloaded when fallback direct upload caches successfully
+			CreatedAt:  time.Now(),
 		}
 
 		event := protocol.EventEnvelope{

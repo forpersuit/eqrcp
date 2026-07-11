@@ -421,23 +421,7 @@ func TestFileNotificationToBypassDevice(t *testing.T) {
 		t.Fatalf("upload failed status=%d body=%s", respUpload.StatusCode, string(body))
 	}
 
-	// Charlie should still NOT receive EventMessageUpdated (uploading: false, downloaded: false)
-	select {
-	case ev := <-ch:
-		if (ev.Type == protocol.EventMessageUpdated || ev.Type == protocol.EventMessageAdded) && ev.Message != nil && ev.Message.ID == msgID {
-			charlieReceivedMessage = true
-		}
-	case <-time.After(100 * time.Millisecond):
-		// No event, good
-	}
-	if charlieReceivedMessage {
-		t.Fatal("Charlie should NOT receive file message event after upload completion")
-	}
-
-	// 7. Desktop (B) triggers local copy download completion notification
-	handler.NotifyQuickDownload(msgID)
-
-	// 8. Charlie should now receive EventMessageAdded (or EventMessageUpdated) indicating downloaded=true!
+	// Charlie should receive EventMessageUpdated indicating downloaded=true immediately upon upload completion!
 	var targetEvent protocol.EventEnvelope
 	found := false
 	for !found {
@@ -447,12 +431,12 @@ func TestFileNotificationToBypassDevice(t *testing.T) {
 				targetEvent = ev
 				found = true
 			}
-		case <-time.After(1 * time.Second):
-			t.Fatal("Timed out waiting for file message notification on bypass device Charlie")
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("timeout waiting for Charlie to receive file message event after upload completion")
 		}
 	}
 
 	if !targetEvent.Message.Downloaded {
-		t.Fatal("Expected message to be marked downloaded in notification to Charlie")
+		t.Fatalf("expected message to be marked downloaded, got downloaded=%v", targetEvent.Message.Downloaded)
 	}
 }
