@@ -760,12 +760,27 @@ func (a *App) OpenPath(path string) error {
 		}
 	}
 
-	// Try to create the directory if it doesn't exist yet, to ensure explorer can open it directly
-	_ = os.MkdirAll(cleaned, 0755)
+	// Prevent creating the file path itself as a directory.
+	// Determine the directory component to create.
+	targetDir := cleaned
+	info, err := os.Stat(cleaned)
+	if err == nil {
+		if !info.IsDir() {
+			targetDir = filepath.Dir(cleaned)
+		}
+	} else {
+		// Heuristically assume it is a file if it has an extension (like .log)
+		if filepath.Ext(cleaned) != "" {
+			targetDir = filepath.Dir(cleaned)
+		}
+	}
+
+	// Create the target directory safely without generating a directory named after the file (e.g. desktop.log)
+	_ = os.MkdirAll(targetDir, 0755)
 
 	// Determine starting target folder
 	target := cleaned
-	info, err := os.Stat(target)
+	info, err = os.Stat(target)
 	if err != nil || !info.IsDir() {
 		target = filepath.Dir(cleaned)
 	}
