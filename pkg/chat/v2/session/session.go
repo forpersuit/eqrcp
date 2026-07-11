@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
 )
 
@@ -21,6 +23,7 @@ type Session struct {
 	clientThemes     map[string]string // maps client peer ID to allocated theme
 	clientThemeJoins map[string]string // maps client peer ID to last join token
 	attachments      map[string]string // maps fileID/messageID to absolute filePath
+	Logger           diag.Logger       // Structural logger instance
 }
 
 // NewSession creates a new Session.
@@ -71,6 +74,9 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 			if e.Message != nil {
 				if e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
 					if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
+						diag.Emit(context.Background(), s.Logger, diag.LevelDebug, "[WebSocket Replay Filtered]", nil,
+							diag.F("msgID", e.Message.ID), diag.F("clientID", c.ID), diag.F("peer", c.Peer),
+							diag.F("senderID", e.Message.SenderID))
 						continue
 					}
 				}
@@ -117,22 +123,34 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 
 	for _, c := range s.clients {
 		visible := true
+		filterReason := ""
 		if (event.Type == protocol.EventMessageAdded || event.Type == protocol.EventMessageUpdated) && event.Message != nil && event.Message.Type == protocol.MessageFile && !event.Message.Downloaded {
 			visible = c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == ""
+			if !visible {
+				filterReason = fmt.Sprintf("undownloaded FileMessage restriction (SenderID=%s, ClientPeer=%s)", event.Message.SenderID, c.Peer)
+			}
 		}
 		if visible && event.Transfer != nil {
 			visible = s.isTransferEventVisibleTo(c, event)
+			if !visible {
+				filterReason = "isTransferEventVisibleTo restriction"
+			}
+		}
+
+		msgID := ""
+		if event.Message != nil {
+			msgID = event.Message.ID
 		}
 
 		if visible {
-			msgID := ""
-			if event.Message != nil {
-				msgID = event.Message.ID
-			}
-			fmt.Printf("[WebSocket Broadcast All] Sending EventType=%s Seq=%d MsgID=%s to ClientID=%s Peer=%s\n", event.Type, event.Seq, msgID, c.ID, c.Peer)
+			diag.Emit(context.Background(), s.Logger, diag.LevelInfo, "[WebSocket Broadcast All]", nil,
+				diag.F("eventType", event.Type), diag.F("seq", event.Seq), diag.F("msgID", msgID),
+				diag.F("clientID", c.ID), diag.F("peer", c.Peer))
 			c.Send(event)
 		} else {
-			fmt.Printf("[WebSocket Broadcast Filtered] Skipping EventType=%s Seq=%d to ClientID=%s Peer=%s\n", event.Type, event.Seq, c.ID, c.Peer)
+			diag.Emit(context.Background(), s.Logger, diag.LevelDebug, "[WebSocket Broadcast Filtered]", nil,
+				diag.F("eventType", event.Type), diag.F("seq", event.Seq), diag.F("msgID", msgID),
+				diag.F("clientID", c.ID), diag.F("peer", c.Peer), diag.F("reason", filterReason))
 		}
 	}
 }

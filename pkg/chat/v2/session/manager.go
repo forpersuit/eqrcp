@@ -2,12 +2,15 @@ package session
 
 import (
 	"sync"
+
+	"eqt/pkg/chat/v2/diag"
 )
 
 // Manager manages chat room sessions by token.
 type Manager struct {
 	mu       sync.RWMutex
 	sessions map[string]*Session
+	Logger   diag.Logger // Structural logger instance
 }
 
 // NewManager creates a new session Manager.
@@ -25,6 +28,7 @@ func (m *Manager) GetOrCreate(token string) *Session {
 	s, exists := m.sessions[token]
 	if !exists {
 		s = NewSession(token)
+		s.Logger = m.Logger
 		m.sessions[token] = s
 	}
 	return s

@@ -6,8 +6,6 @@
 - use `scripts/git-push-smart.sh` for GitHub pushes in WSL: if direct `ping x.com` works it pushes without proxy; otherwise it uses the Windows host proxy from the commented `~/.bashrc` pattern (`ip route` host + port `10808`) through SSH `ProxyCommand`
 - always base on First Principle
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
-- before handing work to manual Windows acceptance, close running eqt desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
-- keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
 - avoid alert-style prompts (such as browser-level alert dialogs) for user warnings, errors, or size limit messages; always use in-app notifications (e.g., appending system messages to the chat message list) instead
 - replace grep by rg
 - 一旦有功能增加，则小版本号+1
@@ -40,7 +38,6 @@ GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqt-launcher.exe ./
 Manual Windows acceptance deployment:
 
 ```sh
-scripts/deploy-windows-results.sh
 scripts/install-hooks.sh
 ```
 
@@ -82,8 +79,6 @@ When changing product branding, logo, or desktop icons, check every visible and 
 - `pages/assets/favicon.png` and `pages/assets/eqt-logo-mark.png` feed browser templates through server routes; do not inline large PNGs into templates.
 - `desktop/gui/frontend/src/main.js` and `desktop/gui/frontend/src/app.css` control visible in-app logo usage such as the top bar, About panel, and favicon.
 - `desktop/gui/tray.go` embeds `logo-universal.png`; rebuild after replacing that file.
-
-After branding, desktop integration, chat-device, or Windows-facing changes, use `scripts/deploy-windows-results.sh` as the validation and artifact refresh path. It closes existing EQT desktop processes, runs tests, builds the frontend, builds Windows CLI/launcher/desktop artifacts, and writes fresh results to `E:\developer\results` or `/mnt/e/developer/results`.
 
 For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
 

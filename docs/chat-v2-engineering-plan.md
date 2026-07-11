@@ -194,7 +194,6 @@ DoD:
 
 - v1 and v2 can be launched independently
 - v2 can be disabled without affecting v1
-- `scripts/deploy-windows-results.sh` passes and refreshes acceptance artifacts
 
 ## Required Test Matrix
 
@@ -259,5 +258,4 @@ Chat v2 can replace legacy chat only after:
 
 - v2 passes all staged DoD items.
 - Chrome MCP simulation covers text, reconnect, downloads, transfer progress, and responsive layouts.
-- Windows artifacts have been refreshed through `scripts/deploy-windows-results.sh`.
 - v1 remains available behind a fallback switch for at least one release.

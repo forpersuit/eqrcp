@@ -44,7 +44,6 @@ Validation completed:
 
 - `go test ./pkg/chat/v2/...`
 - `go test ./...`
-- pre-commit Windows artifact refresh through `scripts/deploy-windows-results.sh`
 
 ### Phase 1: WebSocket Control Plane
 

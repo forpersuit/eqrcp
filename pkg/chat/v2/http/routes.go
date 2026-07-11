@@ -2,6 +2,7 @@
 package chathttp
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"image/png"
@@ -66,21 +67,34 @@ func NewHandler(cfg Config) *Handler {
 		logger = diag.NopLogger{}
 	}
 	sessions := session.NewManager()
+	sessions.Logger = logger
 	transferMgr := transfer.NewManager()
 	sched := bandwidth.NewScheduler(10 * 1024 * 1024) // 10MB/s default global limit
 	sched.Logger = logger
 
 	transferMgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
 		sess := sessions.GetOrCreate(token)
+		diag.Emit(context.Background(), logger, diag.LevelDebug, "[Callback] Transfer callback triggered", nil,
+			diag.F("token", token), diag.F("eventType", et), diag.F("jobID", ev.ID), diag.F("messageID", ev.MessageID))
+
 		if ev.MessageID != "" && strings.HasPrefix(ev.ID, "dl-") && et == protocol.EventTransferCompleted {
+			diag.Emit(context.Background(), logger, diag.LevelInfo, "[Callback] Download transfer completed, marking as downloaded", nil,
+				diag.F("token", token), diag.F("jobID", ev.ID), diag.F("messageID", ev.MessageID))
 			if msg := sess.MessageStore.MarkDownloaded(ev.MessageID); msg != nil {
+				diag.Emit(context.Background(), logger, diag.LevelInfo, "[Callback] Message marked downloaded, broadcasting EventMessageUpdated", nil,
+					diag.F("token", token), diag.F("messageID", ev.MessageID))
 				sess.Broadcast(protocol.EventEnvelope{
 					Type:    protocol.EventMessageUpdated,
 					Time:    time.Now(),
 					Message: msg,
 				})
+			} else {
+				diag.Emit(context.Background(), logger, diag.LevelWarn, "[Callback] Failed to mark message downloaded, message not found in store", nil,
+					diag.F("token", token), diag.F("messageID", ev.MessageID))
 			}
 		}
+		diag.Emit(context.Background(), logger, diag.LevelDebug, "[Callback] Broadcasting transfer event", nil,
+			diag.F("token", token), diag.F("eventType", et), diag.F("jobID", ev.ID))
 		sess.Broadcast(protocol.EventEnvelope{
 			Type:     et,
 			Transfer: &ev,
@@ -447,13 +461,24 @@ func (h *Handler) GetAttachmentPath(id string) (string, bool) {
 
 // NotifyQuickDownload simulates a transfer job for a fast local copy, triggering broadcast events.
 func (h *Handler) NotifyQuickDownload(messageID string) {
+	fields := []diag.Field{
+		diag.F("messageID", messageID),
+	}
+	diag.Emit(context.Background(), h.logger, diag.LevelInfo, "[NotifyQuickDownload] Entered", nil, fields...)
+
 	if h.sessions == nil || h.transfer == nil {
+		diag.Emit(context.Background(), h.logger, diag.LevelWarn, "[NotifyQuickDownload] Aborted: sessions or transfer manager is nil", nil, fields...)
 		return
 	}
+
 	token, filePath, ok := h.sessions.GetAttachmentTokenAndPath(messageID)
 	if !ok {
+		diag.Emit(context.Background(), h.logger, diag.LevelWarn, "[NotifyQuickDownload] Aborted: GetAttachmentTokenAndPath failed (message not found in any session)", nil, fields...)
 		return
 	}
+
+	fields = append(fields, diag.F("token", token), diag.F("filePath", filePath))
+	diag.Emit(context.Background(), h.logger, diag.LevelInfo, "[NotifyQuickDownload] Attachment resolved successfully", nil, fields...)
 
 	jobID := "dl-" + messageID
 	filename := "download-" + messageID + ".bin"
@@ -461,10 +486,17 @@ func (h *Handler) NotifyQuickDownload(messageID string) {
 	if info, err := os.Stat(filePath); err == nil {
 		filename = info.Name()
 		size = info.Size()
+	} else {
+		diag.Emit(context.Background(), h.logger, diag.LevelWarn, "[NotifyQuickDownload] Failed to stat file, using defaults", err, fields...)
 	}
+
+	fields = append(fields, diag.F("jobID", jobID), diag.F("filename", filename), diag.F("size", size))
+	diag.Emit(context.Background(), h.logger, diag.LevelInfo, "[NotifyQuickDownload] Running simulated transfer job events", nil, fields...)
 
 	// Trigger full event lifecycle to notify all connected clients (e.g. mobile)
 	h.transfer.CreateJob(token, jobID, messageID, "", filename, size)
 	_ = h.transfer.StartJob(jobID)
 	_ = h.transfer.CompleteJob(jobID)
+
+	diag.Emit(context.Background(), h.logger, diag.LevelInfo, "[NotifyQuickDownload] Simulated job events completed successfully", nil, fields...)
 }

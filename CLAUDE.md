@@ -6,8 +6,7 @@
 - git push do not with proxy
 - always base on First Principle
 - unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
-- before handing work to manual Windows acceptance, close running eqt desktop processes and deploy fresh Windows artifacts to `E:\developer\results`
-- keep the acceptance deployment mechanism environment-stable by using `scripts/deploy-windows-results.sh`; do not rely on memory or ad hoc commands
+
 
 ## Project Structure & Module Organization
 
@@ -37,7 +36,6 @@ GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqt-launcher.exe ./
 Manual Windows acceptance deployment:
 
 ```sh
-scripts/deploy-windows-results.sh
 scripts/install-hooks.sh
 ```
 
