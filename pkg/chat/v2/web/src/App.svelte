@@ -7,6 +7,34 @@
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', (e) => {
+      const errorMsg = `[Chat Iframe JS Error] Message: ${e.message} | Source: ${e.filename} | Line: ${e.lineno} | Col: ${e.colno} | Error: ${e.error?.stack || e.error}`;
+      console.error(errorMsg);
+      try {
+        window.parent.postMessage({
+          type: 'iframe-log-error',
+          message: errorMsg
+        }, '*');
+      } catch (err) {
+        // Ignored
+      }
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+      const errorMsg = `[Chat Iframe Promise Rejection] Reason: ${e.reason?.stack || e.reason}`;
+      console.error(errorMsg);
+      try {
+        window.parent.postMessage({
+          type: 'iframe-log-error',
+          message: errorMsg
+        }, '*');
+      } catch (err) {
+        // Ignored
+      }
+    });
+  }
+
   let client: ChatWebSocketClient;
   let token = '';
   let isEmbedded = false;

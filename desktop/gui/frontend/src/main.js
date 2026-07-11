@@ -359,6 +359,11 @@ window.addEventListener('message', (e) => {
             state.settings.chatSender = newName;
             handleAutoSaveSettings().catch(() => {});
         }
+    } else if (e.data.type === 'iframe-log-error') {
+        const errorMsg = String(e.data.message || '');
+        if (errorMsg && typeof LogError === 'function') {
+            LogError(errorMsg);
+        }
     }
 });
 
