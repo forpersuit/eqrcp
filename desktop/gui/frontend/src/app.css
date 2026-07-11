@@ -160,14 +160,17 @@ h2 {
 
 .mode-switch {
     align-items: center;
-    background: #e3e9e2;
+    background: rgba(0, 0, 0, 0.05);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: 10px;
     display: grid;
     gap: 4px;
     grid-template-columns: repeat(3, 1fr);
     height: 38px;
-    padding: 4px;
+    padding: 3px;
+    box-sizing: border-box;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: background-color 0.2s, border-color 0.2s;
 }
 
 .mode-switch button,
@@ -188,16 +191,41 @@ h2 {
     height: 30px;
     justify-content: center;
     line-height: 1;
+    min-height: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
 
 .mode-switch .active {
     background: var(--panel);
-    box-shadow: 0 1px 4px rgba(24, 33, 31, 0.12);
+    color: var(--ink);
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.03);
+    border: 0.5px solid rgba(0, 0, 0, 0.04);
 }
 
 .mode-switch button.disabled-mode {
-    opacity: 0.5;
-    cursor: pointer;
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+:global(.dark) .mode-switch {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+:global(.dark) .mode-switch button {
+    color: #94a3b8;
+}
+
+:global(.dark) .mode-switch .active {
+    background: #1e293b;
+    color: #f8fafc;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .tool-button,
@@ -2615,22 +2643,30 @@ dd {
 }
 
 .topbar-tier-badge {
-    background: var(--accent);
-    color: #ffffff;
-    font-size: 9px;
+    background: var(--accent-wash, rgba(21, 111, 90, 0.06));
+    color: var(--accent-strong, #156f5a);
+    border: 1.5px solid var(--accent, rgba(21, 111, 90, 0.3));
+    font-size: 11px;
     font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
-    margin-right: 4px;
+    letter-spacing: 0.5px;
+    padding: 0 10px;
+    border-radius: 6px;
+    margin-right: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 18px;
+    height: 38px;
+    box-sizing: border-box;
     vertical-align: middle;
     text-transform: uppercase;
     flex-shrink: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1), inset 0 0.5px 0px rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.15);
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+:global(.dark) .topbar-tier-badge {
+    background: rgba(52, 211, 153, 0.08);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.3);
 }
 
 

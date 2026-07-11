@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import { connState } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
@@ -307,7 +307,7 @@
   let confirmingIndex: number | null = null;
   let confirmTimeout: number | null = null;
 
-  function openMessageMenu(msg: Message, bubbleEl: HTMLElement) {
+  async function openMessageMenu(msg: Message, bubbleEl: HTMLElement) {
     if (msg.recalled) return; // 撤回消息不支持右键菜单/滑动
     activeMenuMessage = msg;
     activeBubbleEl = bubbleEl;
@@ -432,7 +432,8 @@
     activeMenuOptions = options;
     showMenu = true;
 
-    setTimeout(adjustMenuPosition, 0);
+    await tick();
+    adjustMenuPosition();
   }
 
   function closeMenu() {
@@ -881,6 +882,8 @@
   .bubble-context-menu {
     position: fixed;
     z-index: 10000;
+    width: max-content;
+    max-width: 280px;
     min-width: 150px;
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
