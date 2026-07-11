@@ -39,12 +39,13 @@ const (
 
 // WebSocketConfig configures the v2 control-plane WebSocket handler.
 type WebSocketConfig struct {
-	Logger   diag.Logger
-	Now      func() time.Time
-	Sessions *session.Manager
-	Transfer *transfer.Manager
-	DebugLog func() bool
-	LogDir   func() string
+	Logger                diag.Logger
+	Now                   func() time.Time
+	Sessions              *session.Manager
+	Transfer              *transfer.Manager
+	DebugLog              func() bool
+	LogDir                func() string
+	DisableSystemMessages bool
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
@@ -70,6 +71,7 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 	sessions := cfg.Sessions
 	if sessions == nil {
 		sessions = session.NewManager()
+		sessions.DisableSystemMessages = cfg.DisableSystemMessages
 	}
 	transferMgr := cfg.Transfer
 	if transferMgr == nil {

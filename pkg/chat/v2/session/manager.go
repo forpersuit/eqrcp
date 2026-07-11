@@ -8,9 +8,10 @@ import (
 
 // Manager manages chat room sessions by token.
 type Manager struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session
-	Logger   diag.Logger // Structural logger instance
+	mu                    sync.RWMutex
+	sessions              map[string]*Session
+	Logger                diag.Logger // Structural logger instance
+	DisableSystemMessages bool
 }
 
 // NewManager creates a new session Manager.
@@ -29,6 +30,7 @@ func (m *Manager) GetOrCreate(token string) *Session {
 	if !exists {
 		s = NewSession(token)
 		s.Logger = m.Logger
+		s.DisableSystemMessages = m.DisableSystemMessages
 		m.sessions[token] = s
 	}
 	return s

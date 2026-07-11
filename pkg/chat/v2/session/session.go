@@ -16,14 +16,15 @@ import (
 
 // Session represents a single chat room / token session.
 type Session struct {
-	Token            string
-	mu               sync.RWMutex
-	clients          map[string]*Client
-	MessageStore     *MessageStore
-	clientThemes     map[string]string // maps client peer ID to allocated theme
-	clientThemeJoins map[string]string // maps client peer ID to last join token
-	attachments      map[string]string // maps fileID/messageID to absolute filePath
-	Logger           diag.Logger       // Structural logger instance
+	Token                 string
+	mu                    sync.RWMutex
+	clients               map[string]*Client
+	MessageStore          *MessageStore
+	clientThemes          map[string]string // maps client peer ID to allocated theme
+	clientThemeJoins      map[string]string // maps client peer ID to last join token
+	attachments           map[string]string // maps fileID/messageID to absolute filePath
+	Logger                diag.Logger       // Structural logger instance
+	DisableSystemMessages bool
 }
 
 // NewSession creates a new Session.
@@ -41,6 +42,13 @@ func NewSession(token string) *Session {
 // Register adds a client to the session, replays missed events, and broadcasts presence.
 func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	s.mu.Lock()
+	var oldClient *Client
+	for _, client := range s.clients {
+		if client.Peer == c.Peer && client.ID != c.ID {
+			oldClient = client
+			break
+		}
+	}
 	s.clients[c.ID] = c
 	s.mu.Unlock()
 
@@ -87,6 +95,24 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 
 	// Broadcast presence update
 	s.broadcastPresence()
+
+	// Broadcast system message for client join / reconnect / rename
+	var sysMsg string
+	if oldClient != nil {
+		if oldClient.Label != c.Label {
+			sysMsg = fmt.Sprintf("%s 修改用户名为 %s", oldClient.Label, c.Label)
+		} else if oldClient.Avatar != c.Avatar {
+			sysMsg = fmt.Sprintf("%s 修改了头像", c.Label)
+		} else {
+			sysMsg = fmt.Sprintf("%s 已重新连接", c.Label)
+		}
+	} else {
+		sysMsg = fmt.Sprintf("%s 已加入会话", c.Label)
+	}
+
+	if sysMsg != "" && !s.DisableSystemMessages {
+		s.broadcastSystemMessage(sysMsg)
+	}
 }
 
 // Unregister removes a client from the session and broadcasts presence.
@@ -96,11 +122,23 @@ func (s *Session) Unregister(c *Client) {
 	if exists {
 		delete(s.clients, c.ID)
 	}
+	// Check if there is still any other client connected with the same Peer
+	hasOther := false
+	for _, client := range s.clients {
+		if client.Peer == c.Peer {
+			hasOther = true
+			break
+		}
+	}
 	s.mu.Unlock()
 
 	if exists {
 		c.Close()
 		s.broadcastPresence()
+
+		if !hasOther && !s.DisableSystemMessages {
+			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label))
+		}
 
 		s.mu.RLock()
 		clientCount := len(s.clients)
@@ -398,4 +436,22 @@ func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelo
 		return c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
 	}
 	return true
+}
+
+func (s *Session) broadcastSystemMessage(text string) {
+	var num int64 = 0
+	if n, err := rand.Int(rand.Reader, big.NewInt(1000000)); err == nil {
+		num = n.Int64()
+	}
+	msg := protocol.Message{
+		ID:        fmt.Sprintf("sys-%d-%d", time.Now().UnixNano(), num),
+		Type:      protocol.MessageSystem,
+		Text:      text,
+		CreatedAt: time.Now(),
+	}
+	s.Broadcast(protocol.EventEnvelope{
+		Type:    protocol.EventMessageAdded,
+		Message: &msg,
+		Time:    time.Now(),
+	})
 }

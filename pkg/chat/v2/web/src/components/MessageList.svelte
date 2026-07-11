@@ -3,7 +3,7 @@
   import { connState } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
-  import { currentDevice } from '../state/chatStore';
+  import { currentDevice, peers } from '../state/chatStore';
 
   const dispatch = createEventDispatcher();
 
@@ -187,6 +187,23 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
+  // Get dynamic identity from peers list if online, fallback to message properties
+  function getSenderIdentity(msg: Message) {
+    if (msg.senderId) {
+      const found = $peers.find(p => p.peer === msg.senderId);
+      if (found) {
+        return {
+          sender: found.label || msg.sender,
+          avatar: found.avatar || msg.avatar || ''
+        };
+      }
+    }
+    return {
+      sender: msg.sender,
+      avatar: msg.avatar || ''
+    };
+  }
+
   function getMessageColors(msg: Message, mine: boolean) {
     if (mine && $currentDevice && $currentDevice.theme) {
       const colors = getThemeColors($currentDevice.theme);
@@ -196,8 +213,9 @@
       const colors = getThemeColors(msg.theme);
       if (colors) return colors;
     }
-    if (msg.sender) {
-      return getSenderThemeColors(msg.sender);
+    const identity = getSenderIdentity(msg);
+    if (identity.sender) {
+      return getSenderThemeColors(identity.sender);
     }
     return { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155' };
   }
@@ -295,6 +313,7 @@
         {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath)}
         {@const tx = mine ? ulTx : dlTx}
         {@const colors = getMessageColors(msg, mine)}
+        {@const identity = getSenderIdentity(msg)}
         <div 
           class="message" 
           class:mine 
@@ -308,7 +327,13 @@
         >
           <div class="avatar-stack">
             <div class="message-avatar">
-              {msg.sender ? msg.sender.slice(0, 2).toUpperCase() : 'DE'}
+              {#if identity.avatar && identity.avatar.startsWith('data:image/')}
+                <img src={identity.avatar} alt={identity.sender} style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;" />
+              {:else if identity.avatar}
+                {identity.avatar}
+              {:else}
+                {identity.sender ? identity.sender.slice(0, 2).toUpperCase() : 'DE'}
+              {/if}
             </div>
             <div class="bubble-time">
               {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -316,7 +341,7 @@
           </div>
 
           <div class="message-main">
-            <div class="sender">{msg.sender}</div>
+            <div class="sender">{identity.sender}</div>
             <div class="bubble" style="position: relative; overflow: hidden;">
               {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
@@ -353,7 +378,7 @@
                 </div>
               {/if}
               {#if msg.recalled}
-                <span class="text recalled">{msg.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
+                <span class="text recalled">{identity.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
                 {#if mine}
                   <div class="recalled-actions">
                     {#if msg.type === 'text'}

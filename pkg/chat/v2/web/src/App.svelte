@@ -931,8 +931,14 @@
                 {@const activeTx = Object.values($transfers).find(tx => tx.clientId === dev.peer && (tx.state === 'running' || tx.state === 'queued'))}
                 <div class="device-item">
                   <button class="device-row-lite roster-row" type="button" on:click={() => toggleDeviceDetail(dev.id)} aria-expanded={selectedDevId === dev.id ? 'true' : 'false'}>
-                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0;">
-                      {dev.label ? dev.label.slice(0, 2).toUpperCase() : 'DE'}
+                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                      {#if dev.avatar && dev.avatar.startsWith('data:image/')}
+                        <img src={dev.avatar} alt={dev.label} style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                      {:else if dev.avatar}
+                        {dev.avatar}
+                      {:else}
+                        {dev.label ? dev.label.slice(0, 2).toUpperCase() : 'DE'}
+                      {/if}
                     </div>
                     <div style="text-align: left; margin-left: 8px; flex: 1; min-width: 0;">
                       <strong style="display: block; font-size: 13px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>

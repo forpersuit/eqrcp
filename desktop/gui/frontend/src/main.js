@@ -3894,6 +3894,8 @@ function bindSettingsControls() {
                     const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                     
                     state.settings.chatAvatar = compressedBase64;
+                    const inputEl = document.querySelector('#settings-chat-avatar');
+                    if (inputEl) inputEl.value = compressedBase64;
                     event.target.value = '';
                     await handleAutoSaveSettings();
                     syncPanelSurface();
@@ -3907,6 +3909,8 @@ function bindSettingsControls() {
     document.querySelector('#btn-avatar-reset')?.addEventListener('click', async () => {
         if (state.settings) {
             state.settings.chatAvatar = '';
+            const inputEl = document.querySelector('#settings-chat-avatar');
+            if (inputEl) inputEl.value = '';
             await handleAutoSaveSettings();
             syncPanelSurface();
         }
@@ -3944,6 +3948,8 @@ function bindSettingsControls() {
             const emojiVal = event.currentTarget.dataset.emoji;
             if (state.settings && emojiVal) {
                 state.settings.chatAvatar = emojiVal;
+                const inputEl = document.querySelector('#settings-chat-avatar');
+                if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
                 syncPanelSurface();
@@ -3976,6 +3982,8 @@ function bindSettingsControls() {
             const emojiVal = cleanChatAvatar(rawVal);
             if (emojiVal) {
                 state.settings.chatAvatar = emojiVal;
+                const inputEl = document.querySelector('#settings-chat-avatar');
+                if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
                 syncPanelSurface();

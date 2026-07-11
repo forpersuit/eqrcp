@@ -21,7 +21,7 @@ import (
 
 func TestHandlerHealth(t *testing.T) {
 	logger := &diag.MemoryLogger{}
-	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger})
+	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger, DisableSystemMessages: true})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/chat-v2/test-token/health", nil)
 
@@ -49,7 +49,7 @@ func TestHandlerHealth(t *testing.T) {
 }
 
 func TestHandlerRootServesHarness(t *testing.T) {
-	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/chat-v2/test-token", nil)
 
@@ -65,7 +65,7 @@ func TestHandlerRootServesHarness(t *testing.T) {
 }
 
 func TestHandlerDoesNotCatchLegacyChatRoute(t *testing.T) {
-	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/chat/test-token/health", nil)
 
@@ -78,7 +78,7 @@ func TestHandlerDoesNotCatchLegacyChatRoute(t *testing.T) {
 
 func TestHandlerMethodErrorUsesJSONPayload(t *testing.T) {
 	logger := &diag.MemoryLogger{}
-	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger})
+	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger, DisableSystemMessages: true})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/chat-v2/test-token/health", nil)
 
@@ -108,7 +108,7 @@ func TestHandlerMethodErrorUsesJSONPayload(t *testing.T) {
 }
 
 func TestHandlerWebSocketRoute(t *testing.T) {
-	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -129,7 +129,7 @@ func TestHandlerWebSocketRoute(t *testing.T) {
 }
 
 func TestHandlerDownloadAndChatConcurrency(t *testing.T) {
-	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -285,7 +285,7 @@ func TestHandlerDownloadAndChatConcurrency(t *testing.T) {
 }
 
 func TestFileNotificationToBypassDevice(t *testing.T) {
-	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 

@@ -29,13 +29,14 @@ const Version = "v2"
 
 // Config controls the experimental chat v2 handler.
 type Config struct {
-	BasePath             string
-	Logger               diag.Logger
-	IsPaidOrUnrestricted func() bool
-	HostToken            func() string
-	DebugLog             func() bool
-	LogDir               func() string
-	GetLicenseTier       func() string
+	BasePath              string
+	Logger                diag.Logger
+	IsPaidOrUnrestricted  func() bool
+	HostToken             func() string
+	DebugLog              func() bool
+	LogDir                func() string
+	GetLicenseTier        func() string
+	DisableSystemMessages bool
 }
 
 type rendezvous struct {
@@ -70,6 +71,7 @@ func NewHandler(cfg Config) *Handler {
 	}
 	sessions := session.NewManager()
 	sessions.Logger = logger
+	sessions.DisableSystemMessages = cfg.DisableSystemMessages
 	transferMgr := transfer.NewManager()
 	sched := bandwidth.NewScheduler(10 * 1024 * 1024) // 10MB/s default global limit
 	sched.Logger = logger

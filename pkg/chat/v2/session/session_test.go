@@ -34,6 +34,7 @@ func TestMessageStoreMonotonicAndGetSince(t *testing.T) {
 
 func TestSessionRegistrationAndPresence(t *testing.T) {
 	sess := NewSession("test-room")
+	sess.DisableSystemMessages = true
 
 	c1 := NewClient(protocol.ClientInfo{
 		Label: "User A",
@@ -67,6 +68,7 @@ func TestSessionRegistrationAndPresence(t *testing.T) {
 
 func TestSessionSendTextAndReplay(t *testing.T) {
 	sess := NewSession("test-room")
+	sess.DisableSystemMessages = true
 
 	c1 := NewClient(protocol.ClientInfo{Label: "User A"}, nil)
 	c2 := NewClient(protocol.ClientInfo{Label: "User B"}, nil)
@@ -108,6 +110,7 @@ func TestSessionSendTextAndReplay(t *testing.T) {
 
 func TestSessionRecallMessage(t *testing.T) {
 	sess := NewSession("test-room")
+	sess.DisableSystemMessages = true
 	c1 := NewClient(protocol.ClientInfo{Label: "User A"}, nil)
 	sess.Register(c1, 0, 0)
 

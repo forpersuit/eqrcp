@@ -24,6 +24,7 @@ func TestWebSocketHelloAndHeartbeat(t *testing.T) {
 		Now: func() time.Time {
 			return now
 		},
+		DisableSystemMessages: true,
 	})
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -68,7 +69,7 @@ func TestWebSocketHelloAndHeartbeat(t *testing.T) {
 }
 
 func TestWebSocketUnsupportedCommandReturnsProtocolError(t *testing.T) {
-	handler := NewWebSocketHandler(WebSocketConfig{})
+	handler := NewWebSocketHandler(WebSocketConfig{DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -110,8 +111,9 @@ func wsURL(httpURL string) string {
 func TestWebSocketCommandLog(t *testing.T) {
 	logger := &diag.MemoryLogger{}
 	handler := NewWebSocketHandler(WebSocketConfig{
-		Logger:   logger,
-		DebugLog: func() bool { return true },
+		Logger:                logger,
+		DebugLog:              func() bool { return true },
+		DisableSystemMessages: true,
 	})
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -185,7 +187,7 @@ func TestWebSocketCommandLog(t *testing.T) {
 
 func TestWebSocketTwoClientsExchangeText(t *testing.T) {
 	logger := &diag.MemoryLogger{}
-	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger})
+	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger, DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -317,7 +319,7 @@ func TestWebSocketTwoClientsExchangeText(t *testing.T) {
 }
 
 func TestWebSocketReconnectRecovery(t *testing.T) {
-	handler := NewWebSocketHandler(WebSocketConfig{})
+	handler := NewWebSocketHandler(WebSocketConfig{DisableSystemMessages: true})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 

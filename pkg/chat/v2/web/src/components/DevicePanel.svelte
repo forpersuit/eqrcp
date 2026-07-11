@@ -17,8 +17,14 @@
     {#each $peers as device (device.id)}
       <div class="device-item" class:is-me={device.id === $currentDevice?.id}>
         <div class="avatar-wrapper">
-          <div class="avatar" style="background: linear-gradient(135deg, #7c3aed, #3b82f6)">
-            {device.label.substring(0, 2).toUpperCase()}
+          <div class="avatar" style="background: linear-gradient(135deg, #7c3aed, #3b82f6); overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            {#if device.avatar && device.avatar.startsWith('data:image/')}
+              <img src={device.avatar} alt={device.label} style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+            {:else if device.avatar}
+              {device.avatar}
+            {:else}
+              {device.label.substring(0, 2).toUpperCase()}
+            {/if}
           </div>
           <span class="online-badge"></span>
         </div>
