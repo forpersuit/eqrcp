@@ -17,12 +17,13 @@ const (
 
 // ClientInfo describes a chat client at connection time.
 type ClientInfo struct {
-	Token  string `json:"token"`
-	Label  string `json:"label,omitempty"`
-	Avatar string `json:"avatar,omitempty"`
-	Theme  string `json:"theme,omitempty"`
-	Peer   string `json:"peer,omitempty"`
-	Join   string `json:"join,omitempty"`
+	Token     string `json:"token"`
+	Label     string `json:"label,omitempty"`
+	Avatar    string `json:"avatar,omitempty"`
+	Theme     string `json:"theme,omitempty"`
+	Peer      string `json:"peer,omitempty"`
+	Join      string `json:"join,omitempty"`
+	IsNewScan bool   `json:"isNewScan,omitempty"`
 }
 
 // CommandEnvelope is the stable JSON shape for client-to-server commands.

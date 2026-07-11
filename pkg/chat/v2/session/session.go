@@ -338,9 +338,11 @@ func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
 	}
 
 	join := strings.TrimSpace(info.Join)
-	if theme := s.clientThemes[c.Peer]; s.validChatTheme(theme) && (join == "" || s.clientThemeJoins[c.Peer] == join) {
-		c.Theme = theme
-		return
+	if !info.IsNewScan {
+		if theme := s.clientThemes[c.Peer]; s.validChatTheme(theme) && (join == "" || s.clientThemeJoins[c.Peer] == join) {
+			c.Theme = theme
+			return
+		}
 	}
 
 	oldTheme := s.clientThemes[c.Peer]

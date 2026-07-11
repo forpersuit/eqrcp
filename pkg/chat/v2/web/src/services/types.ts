@@ -16,6 +16,7 @@ export interface ClientInfo {
   theme?: string;
   peer?: string;
   join?: string;
+  isNewScan?: boolean;
 }
 
 export interface CommandEnvelope {

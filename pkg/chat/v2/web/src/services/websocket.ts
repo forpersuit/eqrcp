@@ -11,6 +11,7 @@ export class ChatWebSocketClient {
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
   private pendingLogs: string[] = [];
+  private isInitialConnect = true;
 
   public clientLabel: string;
   public clientPeer: string;
@@ -89,11 +90,13 @@ export class ChatWebSocketClient {
           avatar: this.clientAvatar,
           peer: this.clientPeer,
           theme: preferredTheme,
-          join: this.joinParam
+          join: this.joinParam,
+          isNewScan: this.isInitialConnect
         },
         afterSeq: savedAfterSeq,
         joinSeq: savedJoinSeq
       });
+      this.isInitialConnect = false;
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
