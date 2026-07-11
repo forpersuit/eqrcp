@@ -261,7 +261,7 @@
         {@const ulTx = txState['ul-' + msg.id]}
         {@const isTxCompleted = dlTx && dlTx.state === 'completed'}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
-        {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !dlTx && (msg.filePath || msg.downloaded))}
+        {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath)}
         {@const tx = ulTx || dlTx}
         {@const colors = getMessageColors(msg, mine)}
         <div 
@@ -350,14 +350,18 @@
                             {formatBytes(msg.size || 0)}
                             {#if tx}
                               {#if tx.state === 'running'}
-                                · 传输中 {tx.percent ?? 0}%
+                                · {currentLang === 'en' ? 'Transferring' : '传输中'} {tx.percent ?? 0}%
                               {:else if tx.state === 'completed'}
-                                · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
+                                · {mine ? (currentLang === 'en' ? 'Shared' : '已分享') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
                               {:else if tx.state === 'failed'}
                                 · <span class="tx-error-text" title={tx.error || (currentLang === 'en' ? 'Unknown error' : '未知传输错误')} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{currentLang === 'en' ? 'Failed' : '传输失败'} ⚠️</span>
                               {/if}
-                            {:else if msg.downloaded}
-                              · {mine ? (currentLang === 'en' ? 'Transmitted' : '已传输') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
+                            {:else}
+                              {#if mine && msg.downloaded}
+                                · {currentLang === 'en' ? 'Shared' : '已分享'}
+                              {:else if !mine && isDownloaded}
+                                · {currentLang === 'en' ? 'Downloaded' : '已下载'}
+                              {/if}
                             {/if}
                           </div>
                         </div>
