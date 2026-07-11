@@ -50,6 +50,7 @@
   }
 
   let lastComposerHeight = 0;
+  let lastTextLength = 0;
 
   async function resizeComposer() {
     await tick();
@@ -68,7 +69,14 @@
     const paddingY = paddingTop + paddingBottom;
     const lineHeight = parseFloat(style.lineHeight || '20');
 
-    textareaEl.style.height = 'auto';
+    // Only reset textarea height to auto if deleting characters to avoid scroll layout jumps on type addition
+    const isDeleting = text.length < lastTextLength || text === '';
+    lastTextLength = text.length;
+
+    if (isDeleting) {
+      textareaEl.style.height = 'auto';
+    }
+
     const rawScrollHeight = textareaEl.scrollHeight;
 
     let lines = Math.round((rawScrollHeight - paddingY) / lineHeight);
@@ -82,6 +90,11 @@
 
     textareaEl.style.height = targetHeight + 'px';
     textareaEl.style.overflowY = lines > maxLines ? 'auto' : 'hidden';
+
+    // Force scrollTop to bottom when lines exceed 5 to keep the typing line visible and push old lines upward
+    if (lines > maxLines) {
+      textareaEl.scrollTop = textareaEl.scrollHeight;
+    }
 
     const finalHeight = composerEl.offsetHeight;
     lastComposerHeight = finalHeight;

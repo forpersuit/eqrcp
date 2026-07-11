@@ -30,11 +30,12 @@ export class ChatWebSocketClient {
     this.localJoin = localJoin || '';
     // Extract join and theme parameter from URL search query
     const params = new URLSearchParams(window.location.search);
-    const hasJoinParam = !!params.get('join');
+    const wasKicked = localStorage.getItem('eqt_kicked_state') === 'true';
 
-    // If join parameter is in the URL, this represents a fresh scan,
-    // so we override past invalid tokens, generate new ones and assign new names.
-    if (hasJoinParam) {
+    // If device was previously kicked out, any page reload/scan represents a manual override join action,
+    // so we fully purge the local registration keys, tokens, and generate clean credentials for a reset device.
+    if (wasKicked) {
+      localStorage.removeItem('eqt_kicked_state');
       localStorage.removeItem('chat_label');
       localStorage.removeItem('chat_avatar');
       localStorage.removeItem('chat_peer');
@@ -191,12 +192,13 @@ export class ChatWebSocketClient {
       }
       if (event.code === 1008 || event.reason === "device was forced offline") {
         this.isManualClosed = true;
+        localStorage.setItem('eqt_kicked_state', 'true');
         chatActions.addSystemMessage('您已被强制下线，无法继续加入本会话。');
         chatActions.addMessage({
           id: `sys-kick-${Date.now()}`,
           sender: 'system',
           type: 'system',
-          text: '您已被强制下线，无法继续在此会话中发送或接收消息。如需重新加入，请更换浏览器或清除应用数据。',
+          text: '您已被强制下线，无法继续在此会话中发送或接收消息。如需重新加入，请使用其他浏览器或重新扫码。',
           createdAt: new Date().toISOString()
         });
         this.sendLog(`[SYSTEM] WebSocket closed: device was forced offline. Stopping reconnect.`);

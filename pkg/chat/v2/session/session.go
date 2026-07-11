@@ -53,7 +53,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	var parentLabel string
 	if c.Join != "" {
 		for _, client := range s.clients {
-			if client.LocalJoin == c.Join && client.ID != c.ID {
+			if client.LocalJoin == c.Join && client.ID != c.ID && client.Peer != "desktop" {
 				parentLabel = client.Label
 				break
 			}
