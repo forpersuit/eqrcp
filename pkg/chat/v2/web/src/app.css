@@ -61,13 +61,14 @@ html.embedded-chat #app {
 }
 html.embedded-chat main {
     max-width: none;
-    padding: 8px;
+    padding: 0 !important;
     height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;
 }
 html.embedded-chat .chat-shell {
-    border-radius: 12px;
+    border: none !important;
+    border-radius: 0 !important;
     height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;

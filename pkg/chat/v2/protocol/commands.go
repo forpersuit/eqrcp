@@ -13,6 +13,7 @@ const (
 	CommandAck            CommandType = "ack"
 	CommandLog            CommandType = "log"
 	CommandReportProgress CommandType = "report_progress"
+	CommandUpdateClient   CommandType = "update_client"
 )
 
 // ClientInfo describes a chat client at connection time.

@@ -7,7 +7,8 @@ export type CommandType =
   | 'cancel_transfer'
   | 'ack'
   | 'log'
-  | 'report_progress';
+  | 'report_progress'
+  | 'update_client';
 
 export interface ClientInfo {
   token: string;

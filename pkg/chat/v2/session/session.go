@@ -71,8 +71,9 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 		shouldReplay = true
 	} else {
 		// Both are 0, meaning a brand new client joined the session.
-		// We replay all existing historical messages to sync state.
-		startSeq = 0
+		// According to the requirement, we do not sync messages sent before joining.
+		// So we set startSeq to the current sequence number.
+		startSeq = s.MessageStore.CurrentSeq()
 		shouldReplay = true
 	}
 
@@ -456,4 +457,29 @@ func (s *Session) broadcastSystemMessage(text string) {
 		Message: &msg,
 		Time:    time.Now(),
 	})
+}
+
+// UpdateClient updates the client's label and avatar under lock, broadcasts presence, and broadcasts a system message.
+func (s *Session) UpdateClient(c *Client, label string, avatar string) {
+	s.mu.Lock()
+	oldLabel := c.Label
+	oldAvatar := c.Avatar
+	c.Label = label
+	c.Avatar = avatar
+	s.mu.Unlock()
+
+	// Broadcast presence update to sync lists across all clients
+	s.broadcastPresence()
+
+	// Broadcast system message for rename/avatar change
+	var sysMsg string
+	if oldLabel != label {
+		sysMsg = fmt.Sprintf("%s 修改用户名为 %s", oldLabel, label)
+	} else if oldAvatar != avatar {
+		sysMsg = fmt.Sprintf("%s 修改了头像", label)
+	}
+
+	if sysMsg != "" && !s.DisableSystemMessages {
+		s.broadcastSystemMessage(sysMsg)
+	}
 }

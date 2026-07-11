@@ -266,6 +266,16 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, err.Error())
 				continue
 			}
+		case protocol.CommandUpdateClient:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.Client.Label == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing label")
+				continue
+			}
+			sess.UpdateClient(cl, cmd.Client.Label, cmd.Client.Avatar)
 
 		case protocol.CommandAck:
 			if cl == nil || sess == nil {

@@ -313,6 +313,20 @@ export class ChatWebSocketClient {
     chatActions.recallMessage(messageId);
   }
 
+  public updateClient(label: string, avatar: string): void {
+    this.clientLabel = label;
+    this.clientAvatar = avatar;
+    this.sendCommand({
+      type: 'update_client',
+      commandId: `upd-${Date.now()}`,
+      client: {
+        token: this.token,
+        label: label,
+        avatar: avatar
+      }
+    });
+  }
+
   public sendLog(text: string): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.sendCommand({

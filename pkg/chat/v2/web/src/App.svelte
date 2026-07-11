@@ -141,11 +141,7 @@
           });
         }
         if (client) {
-          client.close();
-          setTimeout(() => {
-            client = new ChatWebSocketClient(token);
-            client.connect();
-          }, 100);
+          client.updateClient(localStorage.getItem('chat_label') || '', localStorage.getItem('chat_avatar') || '');
         }
       }
     } else if (event.data.type === 'pulse-session-qr') {
@@ -306,7 +302,6 @@
       return d;
     });
 
-    chatActions.addSystemMessage(`本机设备名称已从 "${oldLabel}" 重命名为 "${newLabel}"，正在重新同步。`);
     isEditingName = false;
     selectedDevId = '';
 
@@ -314,13 +309,9 @@
       window.parent.postMessage({ type: 'rename-chat-sender', name: newLabel }, '*');
     }
 
-    // Hot reconnect so the websocket establishes using the fresh custom label
+    // Sync label directly to the backend over WebSocket
     if (client) {
-      client.close();
-      setTimeout(() => {
-        client = new ChatWebSocketClient(token);
-        client.connect();
-      }, 100);
+      client.updateClient(newLabel, localStorage.getItem('chat_avatar') || '');
     }
   }
 
