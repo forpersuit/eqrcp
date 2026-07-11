@@ -48,6 +48,22 @@ import {
     DevSetUsedSeconds,
 } from '../wailsjs/go/main/App';
 
+window.addEventListener('error', (e) => {
+    const errorMsg = `[Uncaught JS Error] Message: ${e.message} | Source: ${e.filename} | Line: ${e.lineno} | Col: ${e.colno} | Error: ${e.error?.stack || e.error}`;
+    console.error(errorMsg);
+    if (typeof LogError === 'function') {
+        LogError(errorMsg);
+    }
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+    const errorMsg = `[Unhandled Promise Rejection] Reason: ${e.reason?.stack || e.reason}`;
+    console.error(errorMsg);
+    if (typeof LogError === 'function') {
+        LogError(errorMsg);
+    }
+});
+
 // Prevent duplicate event listener registration on reused DOM elements due to morphdom patching
 (function() {
     const originalAddEventListener = EventTarget.prototype.addEventListener;
@@ -548,8 +564,12 @@ function render() {
 function syncIdentityToChatFrame() {
     const frame = document.querySelector('#chat-iframe');
     if (!frame) { return; }
-    const name = state.settings?.chatSender || 'Desktop';
-    const avatar = state.settings?.chatAvatar || '';
+    const src = frame.getAttribute('src') || '';
+    if (!src || src === 'about:blank' || (!src.startsWith('http://') && !src.startsWith('https://'))) {
+        return;
+    }
+    const name = (state.settings && state.settings.chatSender) ? state.settings.chatSender : 'Desktop';
+    const avatar = (state.settings && state.settings.chatAvatar) ? state.settings.chatAvatar : '';
     const payload = {
         type: 'update-identity',
         name: name,
@@ -557,7 +577,8 @@ function syncIdentityToChatFrame() {
     };
     const post = () => {
         try {
-            frame.contentWindow?.postMessage(payload, activeChatFrameOrigin() || '*');
+            const origin = activeChatFrameOrigin();
+            frame.contentWindow?.postMessage(payload, origin || '*');
         } catch (e) {
             // Ignored
         }
@@ -3467,6 +3488,7 @@ async function startReceive() {
 }
 
 async function startChat() {
+    LogInfo('[Frontend] startChat: Requesting chat task start...');
     console.log('[Frontend] startChat: Requesting chat task start from Wails App.Chat()...');
     
     // 1. Transition immediately to the chat interface with a loading status for instant UI responsiveness
@@ -3482,23 +3504,35 @@ async function startChat() {
 
     // 2. Run settings saving and chat session startup asynchronously in the background
     run(async () => {
+        LogInfo('[Frontend] startChat: Saving settings data before Chat()...');
         await saveSettingsData();
         state.chatQRPulseArmed = true;
         state.chatQRPromptDismissed = false;
         
-        const finalStatus = await Chat();
-        console.log('[Frontend] startChat: Chat task started. Status response:', finalStatus);
-        
-        state.status = finalStatus;
-        reconcileChatQRState(finalStatus);
-        if (!state.chatQRPulseUntil) {
-            triggerChatQRPulse();
+        LogInfo('[Frontend] startChat: Invoking Wails App.Chat()...');
+        try {
+            const finalStatus = await Chat();
+            LogInfo('[Frontend] startChat: Chat() resolved successfully. Status: ' + JSON.stringify(finalStatus));
+            console.log('[Frontend] startChat: Chat task started. Status response:', finalStatus);
+            
+            state.status = finalStatus;
+            reconcileChatQRState(finalStatus);
+            if (!state.chatQRPulseUntil) {
+                triggerChatQRPulse();
+            }
+            if (state.chatAutoSave) {
+                state.chatSaveDir = await ChatSaveDirectory();
+                LogInfo('[Frontend] startChat: Chat autosave path set to: ' + state.chatSaveDir);
+                console.log('[Frontend] startChat: Chat autosave path set to:', state.chatSaveDir);
+            }
+            render();
+        } catch (err) {
+            const errStr = err?.stack || err;
+            LogError('[Frontend] startChat: Chat() invocation failed: ' + errStr);
+            console.error('[Frontend] startChat: Chat() invocation failed:', err);
+            state.error = 'Failed to start chat session: ' + err;
+            render();
         }
-        if (state.chatAutoSave) {
-            state.chatSaveDir = await ChatSaveDirectory();
-            console.log('[Frontend] startChat: Chat autosave path set to:', state.chatSaveDir);
-        }
-        render();
     }, {busy: false});
 }
 
