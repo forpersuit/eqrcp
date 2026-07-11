@@ -295,6 +295,24 @@
   }
   let completedMap: Record<string, boolean> = {};
 
+  let showTipSystemMessage = false;
+
+  $: {
+    const hasBubbles = messages && messages.some(m => m.type !== 'system');
+    if (hasBubbles) {
+      if (typeof window !== 'undefined' && !window.localStorage.getItem('eqt_chat_bubble_tip_shown')) {
+        showTipSystemMessage = true;
+      }
+    }
+  }
+
+  function handleDismissTip() {
+    showTipSystemMessage = false;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('eqt_chat_bubble_tip_shown', 'true');
+    }
+  }
+
   // Context Menu State
   let showMenu = false;
   let activeMenuMessage: Message | null = null;
@@ -635,6 +653,45 @@
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
+    {#if showTipSystemMessage}
+      <div class="system-message tip-message" style="margin-bottom: 12px; display: flex; justify-content: center; width: 100%;">
+        <span class="system-text" style="
+          background: var(--accent-wash, rgba(21, 111, 90, 0.08)); 
+          border: 1px solid var(--accent, #156f5a)33; 
+          color: var(--accent-strong, #156f5a);
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px 8px 14px;
+          border-radius: 999px;
+          font-size: 12px;
+          line-height: 1.4;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        ">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 14px; height: 14px; flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span>{currentLang === 'en' ? 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.' : '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。'}</span>
+          <button 
+            type="button" 
+            on:click={handleDismissTip} 
+            style="
+              background: transparent; 
+              border: none; 
+              color: var(--accent-strong, #156f5a); 
+              cursor: pointer; 
+              font-weight: bold; 
+              margin-left: 6px; 
+              padding: 0 4px;
+              font-size: 14px;
+              line-height: 1;
+              opacity: 0.7;
+            "
+            on:mouseenter={(e) => e.currentTarget.style.opacity = '1'}
+            on:mouseleave={(e) => e.currentTarget.style.opacity = '0.7'}
+            title="Dismiss"
+          >×</button>
+        </span>
+      </div>
+    {/if}
     {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded && (m.uploading || !m.downloaded))) as msg (msg.id)}
       {#if msg.type === 'system'}
         {@const colors = msg.theme ? getThemeColors(msg.theme) : null}
