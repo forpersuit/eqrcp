@@ -23,9 +23,11 @@ export class ChatWebSocketClient {
   private joinParam: string = '';
   private themeParam: string = '';
   public onRequestFileData: ((messageId: string) => void) | null = null;
+  private localJoin: string = '';
 
-  constructor(token: string) {
+  constructor(token: string, localJoin?: string) {
     this.token = token;
+    this.localJoin = localJoin || '';
     // Extract join and theme parameter from URL search query
     const params = new URLSearchParams(window.location.search);
     this.joinParam = params.get('join') || '';
@@ -131,6 +133,7 @@ export class ChatWebSocketClient {
           peer: this.clientPeer,
           theme: preferredTheme,
           join: this.joinParam,
+          localJoin: this.localJoin,
           isNewScan: isInitialConnect
         },
         afterSeq: savedAfterSeq,
@@ -166,11 +169,15 @@ export class ChatWebSocketClient {
       }
       if (event.code === 1008 || event.reason === "device was forced offline") {
         this.isManualClosed = true;
-        chatActions.addSystemMessage('已被强制下线，请使用其他设备扫描新二维码重新加入。');
+        chatActions.addSystemMessage('您已被强制下线，无法继续加入本会话。');
+        chatActions.addMessage({
+          id: `sys-kick-${Date.now()}`,
+          sender: 'system',
+          type: 'system',
+          text: '您已被强制下线，无法继续在此会话中发送或接收消息。如需重新加入，请更换浏览器或清除应用数据。',
+          createdAt: new Date().toISOString()
+        });
         this.sendLog(`[SYSTEM] WebSocket closed: device was forced offline. Stopping reconnect.`);
-        const key = `eqt-chat-token:${window.location.pathname}`;
-        localStorage.removeItem(key);
-        localStorage.removeItem('chat_token');
         return;
       }
       if (!this.isManualClosed) {

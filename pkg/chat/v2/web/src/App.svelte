@@ -582,7 +582,7 @@
         console.error('Failed to fetch chat v2 info:', err);
       });
 
-    client = new ChatWebSocketClient(token);
+    client = new ChatWebSocketClient(token, joinToken);
     client.onRequestFileData = (messageId) => {
       // 采用预先落盘暂存模式，下载端直接拉取服务器临时文件，不需要实时向发送端请求流数据。
     };
@@ -927,7 +927,7 @@
                 {@const tc = getThemeColors(dev.theme)}
                 <div class="device-item">
                   <button class="device-row-lite roster-row" type="button" on:click={() => toggleDeviceDetail(dev.id)} aria-expanded={selectedDevId === dev.id ? 'true' : 'false'}>
-                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: {getDeviceColor(dev.theme)}; color: #fff; text-align: center; font-weight: bold; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: {getDeviceColor(dev.theme)}; color: #fff; text-align: center; font-weight: bold; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; border: none !important;">
                       {#if dev.avatar && dev.avatar.startsWith('data:image/')}
                         <img src={dev.avatar} alt={dev.label} style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
                       {:else if dev.avatar}
@@ -949,9 +949,9 @@
                       {/if}
                     </div>
                     {#if isSelf}
-                      <span class="device-state">本机</span>
+                      <span class="device-state" style="background: transparent; color: var(--muted); padding: 0;">本机</span>
                     {:else}
-                      <span class="device-state" style="background: {tc ? tc.bg : '#eef5ee'}; color: {tc ? tc.border : 'var(--accent-strong)'};">在线</span>
+                      <span class="device-state" style="background: transparent; color: {tc ? tc.border : 'var(--accent-strong)'}; padding: 0;">在线</span>
                     {/if}
                   </button>
 

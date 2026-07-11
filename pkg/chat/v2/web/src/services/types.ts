@@ -18,6 +18,7 @@ export interface ClientInfo {
   theme?: string;
   peer?: string;
   join?: string;
+  localJoin?: string;
   isNewScan?: boolean;
 }
 

@@ -50,6 +50,15 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 			break
 		}
 	}
+	var parentLabel string
+	if c.Join != "" {
+		for _, client := range s.clients {
+			if client.LocalJoin == c.Join && client.ID != c.ID {
+				parentLabel = client.Label
+				break
+			}
+		}
+	}
 	s.clients[c.ID] = c
 	s.mu.Unlock()
 
@@ -109,7 +118,11 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 			sysMsg = fmt.Sprintf("%s 已重新连接", c.Label)
 		}
 	} else {
-		sysMsg = fmt.Sprintf("%s 已加入会话", c.Label)
+		if parentLabel != "" {
+			sysMsg = fmt.Sprintf("%s 通过 %s 加入了会话", c.Label, parentLabel)
+		} else {
+			sysMsg = fmt.Sprintf("%s 已加入会话", c.Label)
+		}
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {

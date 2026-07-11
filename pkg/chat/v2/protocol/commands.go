@@ -25,6 +25,7 @@ type ClientInfo struct {
 	Theme     string `json:"theme,omitempty"`
 	Peer      string `json:"peer,omitempty"`
 	Join      string `json:"join,omitempty"`
+	LocalJoin string `json:"localJoin,omitempty"`
 	IsNewScan bool   `json:"isNewScan,omitempty"`
 }
 
