@@ -30,6 +30,19 @@ export class ChatWebSocketClient {
     this.localJoin = localJoin || '';
     // Extract join and theme parameter from URL search query
     const params = new URLSearchParams(window.location.search);
+    const hasJoinParam = !!params.get('join');
+
+    // If join parameter is in the URL, this represents a fresh scan,
+    // so we override past invalid tokens, generate new ones and assign new names.
+    if (hasJoinParam) {
+      localStorage.removeItem('chat_label');
+      localStorage.removeItem('chat_avatar');
+      localStorage.removeItem('chat_peer');
+      const key = `eqt-chat-token:${window.location.pathname}`;
+      localStorage.removeItem(key);
+      localStorage.removeItem('chat_token');
+    }
+
     this.joinParam = params.get('join') || '';
     this.themeParam = params.get('theme') || '';
 
@@ -140,6 +153,15 @@ export class ChatWebSocketClient {
         joinSeq: savedJoinSeq
       });
       isInitialConnect = false;
+
+      // Clean query 'join' parameter from address bar to distinguish future page refreshes from a fresh scan
+      if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('join')) {
+          url.searchParams.delete('join');
+          window.history.replaceState({}, document.title, url.pathname + url.search);
+        }
+      }
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);

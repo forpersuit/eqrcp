@@ -66,15 +66,27 @@
       wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
     }
 
-    const max = 124; // Cap height to maximum 5 lines (44px + 20px * 4 = 124px)
-    const min = 44;
-
     const style = window.getComputedStyle(textareaEl);
     const border = parseFloat(style.borderTopWidth || '0') + parseFloat(style.borderBottomWidth || '0');
+    const paddingTop = parseFloat(style.paddingTop || '11');
+    const paddingBottom = parseFloat(style.paddingBottom || '11');
+    const paddingY = paddingTop + paddingBottom;
+    const lineHeight = parseFloat(style.lineHeight || '20');
 
     textareaEl.style.height = 'auto';
-    textareaEl.style.height = Math.max(min, Math.min(textareaEl.scrollHeight + border, max)) + 'px';
-    textareaEl.style.overflowY = textareaEl.scrollHeight + border > max ? 'auto' : 'hidden';
+    const rawScrollHeight = textareaEl.scrollHeight;
+
+    let lines = Math.round((rawScrollHeight - paddingY) / lineHeight);
+    if (isNaN(lines) || lines < 1) {
+      lines = 1;
+    }
+
+    const maxLines = 5;
+    const effectiveLines = Math.min(lines, maxLines);
+    const targetHeight = paddingY + (effectiveLines * lineHeight) + border;
+
+    textareaEl.style.height = targetHeight + 'px';
+    textareaEl.style.overflowY = lines > maxLines ? 'auto' : 'hidden';
 
     const finalHeight = composerEl.offsetHeight;
     lastComposerHeight = finalHeight;
