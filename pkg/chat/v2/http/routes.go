@@ -40,6 +40,7 @@ type Config struct {
 	DisableSystemMessages bool
 	IsClientKicked        func(token string) bool
 	IsJoinKicked          func(join string) bool
+	KickClient            func(token string, join string)
 }
 
 type rendezvous struct {
@@ -60,6 +61,7 @@ type Handler struct {
 	getLicenseTier       func() string
 	isClientKicked       func(token string) bool
 	isJoinKicked         func(join string) bool
+	kickClient           func(token string, join string)
 	mu                   sync.Mutex
 	rendezvousMap        map[string][]*rendezvous
 }
@@ -131,6 +133,7 @@ func NewHandler(cfg Config) *Handler {
 		LogDir:         cfg.LogDir,
 		IsClientKicked: cfg.IsClientKicked,
 		IsJoinKicked:   cfg.IsJoinKicked,
+		KickClient:     cfg.KickClient,
 	})
 
 	return &Handler{
@@ -145,6 +148,7 @@ func NewHandler(cfg Config) *Handler {
 		getLicenseTier:       getLicenseTier,
 		isClientKicked:       cfg.IsClientKicked,
 		isJoinKicked:         cfg.IsJoinKicked,
+		kickClient:           cfg.KickClient,
 		rendezvousMap:        make(map[string][]*rendezvous),
 	}
 }

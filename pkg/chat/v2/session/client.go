@@ -20,6 +20,8 @@ type Client struct {
 	Avatar   string
 	Theme    string
 	Peer     string
+	Token    string
+	Join     string
 	LastSeen time.Time
 	JoinTime time.Time
 	Kicked   bool
@@ -43,6 +45,8 @@ func NewClient(info protocol.ClientInfo, conn *websocket.Conn) *Client {
 		Avatar:   info.Avatar,
 		Theme:    info.Theme,
 		Peer:     peer,
+		Token:    info.Token,
+		Join:     info.Join,
 		LastSeen: time.Now(),
 		JoinTime: time.Now(),
 		sendChan: make(chan protocol.EventEnvelope, 128),

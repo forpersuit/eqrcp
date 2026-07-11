@@ -48,6 +48,7 @@ type WebSocketConfig struct {
 	DisableSystemMessages bool
 	IsClientKicked        func(token string) bool
 	IsJoinKicked          func(join string) bool
+	KickClient            func(token string, join string)
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
@@ -60,6 +61,7 @@ type WebSocketHandler struct {
 	logDir         func() string
 	isClientKicked func(token string) bool
 	isJoinKicked   func(join string) bool
+	kickClientHost func(token string, join string)
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -98,6 +100,7 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 		logDir:         logDir,
 		isClientKicked: cfg.IsClientKicked,
 		isJoinKicked:   cfg.IsJoinKicked,
+		kickClientHost: cfg.KickClient,
 	}
 }
 
@@ -297,9 +300,10 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
 				continue
 			}
-			if cmd.ClientID == "" {
-				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing clientId")
-				continue
+			if targetClient := sess.GetClient(cmd.ClientID); targetClient != nil {
+				if h.kickClientHost != nil {
+					h.kickClientHost(targetClient.Token, targetClient.Join)
+				}
 			}
 			sess.KickClient(cmd.ClientID)
 

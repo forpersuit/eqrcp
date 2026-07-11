@@ -924,9 +924,10 @@
               {#each $peers as dev}
                 {@const isSelf = dev.id === $currentDevice?.id}
                 {@const activeTx = Object.values($transfers).find(tx => tx.clientId === dev.peer && (tx.state === 'running' || tx.state === 'queued'))}
+                {@const tc = getThemeColors(dev.theme)}
                 <div class="device-item">
                   <button class="device-row-lite roster-row" type="button" on:click={() => toggleDeviceDetail(dev.id)} aria-expanded={selectedDevId === dev.id ? 'true' : 'false'}>
-                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: var(--accent); color: #fff; text-align: center; font-weight: bold; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                    <div class="message-avatar" style="width: 24px; height: 24px; font-size: 10px; line-height: 24px; border-radius: 50%; background: {getDeviceColor(dev.theme)}; color: #fff; text-align: center; font-weight: bold; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;">
                       {#if dev.avatar && dev.avatar.startsWith('data:image/')}
                         <img src={dev.avatar} alt={dev.label} style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
                       {:else if dev.avatar}
@@ -950,7 +951,7 @@
                     {#if isSelf}
                       <span class="device-state">本机</span>
                     {:else}
-                      <span class="device-state" style="background: #eef5ee; color: var(--accent-strong);">在线</span>
+                      <span class="device-state" style="background: {tc ? tc.bg : '#eef5ee'}; color: {tc ? tc.border : 'var(--accent-strong)'};">在线</span>
                     {/if}
                   </button>
 

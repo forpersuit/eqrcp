@@ -513,3 +513,11 @@ func (s *Session) KickClient(clientID string) {
 		c.Close()
 	}
 }
+
+// GetClient retrieves the client with the given ID.
+func (s *Session) GetClient(clientID string) *Client {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clients[clientID]
+}
+

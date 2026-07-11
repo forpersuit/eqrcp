@@ -366,6 +366,15 @@ func (s *Server) Chat() error {
 			}
 			return "FREE"
 		},
+		IsClientKicked: func(clientToken string) bool {
+			return s.chatSession.clientKicked(clientToken)
+		},
+		IsJoinKicked: func(join string) bool {
+			return s.chatSession.joinKicked(join)
+		},
+		KickClient: func(clientToken string, join string) {
+			s.chatSession.kickToken(clientToken, join)
+		},
 	})
 	s.chatV2Handler = chatV2Handler
 	s.mux.Handle("/chat-v2/", chatV2Handler)
@@ -1377,6 +1386,33 @@ func (session *chatSession) kickClient(id string) bool {
 	session.mu.Unlock()
 	return false
 }
+
+func (session *chatSession) kickToken(token string, join string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.kickedClients == nil {
+		session.kickedClients = map[string]struct{}{}
+	}
+	session.kickedClients[token] = struct{}{}
+
+	if join != "" {
+		if session.kickedJoins == nil {
+			session.kickedJoins = map[string]struct{}{}
+		}
+		session.kickedJoins[join] = struct{}{}
+	}
+	if assocJoin, ok := session.clientThemeJoins[token]; ok && assocJoin != "" {
+		if session.kickedJoins == nil {
+			session.kickedJoins = map[string]struct{}{}
+		}
+		session.kickedJoins[assocJoin] = struct{}{}
+	}
+}
+
 
 func (session *chatSession) rejectKickedClient(w http.ResponseWriter, token string) bool {
 	token = strings.TrimSpace(token)
