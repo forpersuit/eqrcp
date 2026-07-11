@@ -294,6 +294,322 @@
     }
   }
   let completedMap: Record<string, boolean> = {};
+
+  // Context Menu State
+  let showMenu = false;
+  let menuX = 0;
+  let menuY = 0;
+  let activeMenuMessage: Message | null = null;
+  let activeMenuOptions: { label: string; action: () => void; danger?: boolean; confirmLabel?: string; disabled?: boolean }[] = [];
+
+  let confirmingIndex: number | null = null;
+  let confirmTimeout: number | null = null;
+
+  function openMessageMenu(msg: Message, x: number, y: number) {
+    activeMenuMessage = msg;
+    confirmingIndex = null;
+    if (confirmTimeout) clearTimeout(confirmTimeout);
+    
+    const mine = isMine(msg);
+    const localPeer = $currentDevice?.peer || 'desktop';
+    const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer);
+    const ulTx = txState['ul-' + msg.id];
+    const isTxCompleted = dlTx && dlTx.state === 'completed';
+    const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath);
+    const tx = mine ? ulTx : dlTx;
+
+    const options: any[] = [];
+
+    if (msg.recalled) {
+      if (mine) {
+        if (msg.type === 'text') {
+          options.push({
+            label: currentLang === 'en' ? 'Edit again' : '再次编辑',
+            action: () => {
+              dispatch('editAgain', msg.text || '');
+              closeMenu();
+            }
+          });
+        } else if (msg.type === 'file') {
+          options.push({
+            label: currentLang === 'en' ? 'Resend' : '再次发送',
+            action: () => {
+              dispatch('resendFile', { name: msg.fileName, size: msg.size });
+              closeMenu();
+            }
+          });
+        }
+      }
+    } else {
+      // 1. Copy text
+      if (msg.type === 'text') {
+        options.push({
+          label: currentLang === 'en' ? 'Copy' : '复制文本',
+          action: () => {
+            handleCopy(msg.id, msg.text || '');
+            closeMenu();
+          }
+        });
+      }
+
+      // 2. File actions
+      if (msg.type === 'file') {
+        if (mine) {
+          if (ulTx && ulTx.state === 'running') {
+            options.push({
+              label: currentLang === 'en' ? 'Cancel Upload' : '取消上传',
+              danger: true,
+              action: () => {
+                handleCancel(ulTx.id);
+                closeMenu();
+              }
+            });
+          } else if (isEmbedded) {
+            options.push({
+              label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
+              action: () => {
+                handleOpenFolder(msg);
+                closeMenu();
+              }
+            });
+          }
+        } else {
+          if (msg.uploading) {
+            options.push({
+              label: currentLang === 'en' ? 'Uploading...' : '对方上传中...',
+              disabled: true,
+              action: () => {}
+            });
+          } else if (isDownloaded) {
+            options.push({
+              label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
+              confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
+              action: () => {
+                handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false);
+                if (isEmbedded) {
+                  closeMenu();
+                }
+              }
+            });
+            if (isEmbedded && (msg.filePath || msg.fileName)) {
+              options.push({
+                label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
+                action: () => {
+                  handleOpenFolder(msg);
+                  closeMenu();
+                }
+              });
+            }
+          } else if (dlTx && dlTx.state === 'running') {
+            options.push({
+              label: currentLang === 'en' ? 'Cancel Download' : '取消下载',
+              danger: true,
+              action: () => {
+                handleCancel(dlTx.id);
+                closeMenu();
+              }
+            });
+          } else if (dlTx && dlTx.state === 'failed') {
+            options.push({
+              label: currentLang === 'en' ? 'Retry Download' : '重试下载',
+              action: () => {
+                handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
+                closeMenu();
+              }
+            });
+          } else {
+            options.push({
+              label: currentLang === 'en' ? 'Download' : '下载文件',
+              action: () => {
+                handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
+                closeMenu();
+              }
+            });
+          }
+        }
+      }
+
+      // 3. Recall
+      if (mine) {
+        if (!(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))) {
+          options.push({
+            label: currentLang === 'en' ? 'Recall' : '撤回消息',
+            confirmLabel: currentLang === 'en' ? 'Confirm Recall' : '确认撤回',
+            danger: true,
+            action: () => {
+              dispatch('recallMessage', msg.id);
+              closeMenu();
+            }
+          });
+        }
+      }
+    }
+
+    if (options.length === 0) return;
+
+    activeMenuOptions = options;
+    menuX = x;
+    menuY = y;
+    showMenu = true;
+
+    setTimeout(adjustMenuPosition, 0);
+  }
+
+  function closeMenu() {
+    showMenu = false;
+    activeMenuMessage = null;
+    activeMenuOptions = [];
+    confirmingIndex = null;
+    if (confirmTimeout) {
+      clearTimeout(confirmTimeout);
+      confirmTimeout = null;
+    }
+  }
+
+  function adjustMenuPosition() {
+    const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
+    if (!menuEl) return;
+    const rect = menuEl.getBoundingClientRect();
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+
+    let adjustedX = menuX;
+    let adjustedY = menuY;
+
+    if (adjustedX + rect.width > winW) {
+      adjustedX = winW - rect.width - 12;
+    }
+    if (adjustedX < 12) adjustedX = 12;
+
+    if (adjustedY + rect.height > winH) {
+      adjustedY = adjustedY - rect.height - 8;
+      if (adjustedY < 12) adjustedY = 12;
+    }
+
+    menuEl.style.left = `${adjustedX}px`;
+    menuEl.style.top = `${adjustedY}px`;
+  }
+
+  function swipeable(node: HTMLElement, msg: Message) {
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let isScrolling = false;
+    let isSliding = false;
+    let longPressTimer: number | null = null;
+    let hasTriggeredLongPress = false;
+    
+    function handleTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isScrolling = false;
+      isSliding = false;
+      hasTriggeredLongPress = false;
+      
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = window.setTimeout(() => {
+        hasTriggeredLongPress = true;
+        const rect = node.getBoundingClientRect();
+        openMessageMenu(msg, startX, rect.bottom + 4);
+        if (window.navigator && window.navigator.vibrate) {
+          try { window.navigator.vibrate(50); } catch(ex) {}
+        }
+      }, 600);
+    }
+    
+    function handleTouchMove(e: TouchEvent) {
+      if (e.touches.length !== 1 || hasTriggeredLongPress) return;
+      currentX = e.touches[0].clientX;
+      currentY = e.touches[0].clientY;
+      
+      const dx = currentX - startX;
+      const dy = currentY - startY;
+      
+      if (!isScrolling && !isSliding) {
+        if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+          isSliding = true;
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        } else if (Math.abs(dy) > Math.abs(dx) * 1.5) {
+          isScrolling = true;
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        }
+      }
+      
+      if (isSliding) {
+        const mine = isMine(msg);
+        const canSlide = (mine && dx < 0) || (!mine && dx > 0);
+        if (canSlide) {
+          if (e.cancelable) e.preventDefault();
+          let offset = dx * 0.4;
+          if (mine && offset < -80) offset = -80;
+          if (!mine && offset > 80) offset = 80;
+          
+          node.style.transition = 'none';
+          node.style.transform = `translateX(${offset}px)`;
+        }
+      }
+    }
+    
+    function handleTouchEnd() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (hasTriggeredLongPress) return;
+      
+      if (isSliding) {
+        const dx = currentX - startX;
+        const mine = isMine(msg);
+        const canSlide = (mine && dx < 0) || (!mine && dx > 0);
+        const absOffset = Math.abs(dx * 0.4);
+        
+        node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+        node.style.transform = '';
+        
+        if (canSlide && absOffset >= 35) {
+          setTimeout(() => {
+            const rect = node.getBoundingClientRect();
+            openMessageMenu(msg, rect.left + rect.width / 2, rect.bottom + 4);
+          }, 50);
+        }
+      }
+    }
+    
+    function handleTouchCancel() {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      node.style.transform = '';
+    }
+
+    node.addEventListener('touchstart', handleTouchStart, { passive: true });
+    node.addEventListener('touchmove', handleTouchMove, { passive: false });
+    node.addEventListener('touchend', handleTouchEnd);
+    node.addEventListener('touchcancel', handleTouchCancel);
+    
+    return {
+      update(newMsg: Message) {
+        msg = newMsg;
+      },
+      destroy() {
+        node.removeEventListener('touchstart', handleTouchStart);
+        node.removeEventListener('touchmove', handleTouchMove);
+        node.removeEventListener('touchend', handleTouchEnd);
+        node.removeEventListener('touchcancel', handleTouchCancel);
+        if (longPressTimer) clearTimeout(longPressTimer);
+      }
+    };
+  }
 </script>
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
@@ -349,7 +665,12 @@
 
           <div class="message-main">
             <div class="sender">{identity.sender}</div>
-            <div class="bubble" style="position: relative; overflow: hidden;">
+            <div 
+              class="bubble" 
+              use:swipeable={msg}
+              on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.clientX, e.clientY)}
+              style="position: relative; overflow: hidden; transform: translateX(0px); transition: transform 0.25s ease;"
+            >
               {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
                   position: absolute;
@@ -386,19 +707,6 @@
               {/if}
               {#if msg.recalled}
                 <span class="text recalled">{identity.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
-                {#if mine}
-                  <div class="recalled-actions">
-                    {#if msg.type === 'text'}
-                      <button class="edit-recalled" type="button" on:click={() => dispatch('editAgain', msg.text || '')}>
-                        {currentLang === 'en' ? 'Edit again' : '再次编辑'}
-                      </button>
-                    {:else if msg.type === 'file'}
-                      <button class="edit-recalled" type="button" on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })}>
-                        {currentLang === 'en' ? 'Resend' : '再次发送'}
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
               {:else}
                 {#if msg.type === 'text'}
                   <span class="text">{msg.text}</span>
@@ -434,147 +742,6 @@
                 {/if}
               {/if}
             </div>
-
-            {#if !msg.recalled}
-              <div class="message-footer" style="
-                margin-top: 4px;
-                --message-action-bg: {colors.bg};
-                --message-action-border: {colors.border};
-                --message-action-text: {colors.text};
-              ">
-                {#if msg.type === 'text'}
-                  <div class="message-footer-actions">
-                    <button class="bubble-action" type="button" on:click={() => handleCopy(msg.id, msg.text || '')} title="Copy">
-                      {#if copiedId === msg.id}
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--message-action-text, var(--accent-strong));">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      {:else}
-                        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <rect x="9" y="9" width="11" height="11" rx="2" ry="2"/>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                        </svg>
-                      {/if}
-                    </button>
-                    {#if mine}
-                      <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
-                        {#if recallConfirmingId === msg.id}
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                        {:else}
-                          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18"></path>
-                            <path d="M8 6V4h8v2"></path>
-                            <path d="M10 11v6"></path>
-                            <path d="M14 11v6"></path>
-                            <path d="M6 6l1 14h10l1-14"></path>
-                          </svg>
-                        {/if}
-                      </button>
-                    {/if}
-                  </div>
-                {:else if msg.type === 'file'}
-                  <div class="message-footer-actions">
-                    {#if mine}
-                      {#if ulTx && ulTx.state === 'running'}
-                        <button class="bubble-action" on:click={() => handleCancel(ulTx.id)} title="Cancel">
-                          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                        </button>
-                      {:else}
-                        {#if isEmbedded}
-                          <button class="bubble-action" on:click={() => handleOpenFolder(msg)} title={currentLang === 'en' ? 'Open in Folder' : '定位文件'}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                            </svg>
-                          </button>
-                        {/if}
-                      {/if}
-                    {:else}
-                      {#if msg.uploading}
-                        <div class="bubble-action disabled-upload" title={currentLang === 'en' ? 'Uploading...' : '对方上传中...'} style="display: flex; align-items: center; justify-content: center; padding: 4px;">
-                          <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; opacity: 0.6;">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
-                          </svg>
-                        </div>
-                      {:else if isDownloaded}
-                        <div style="display: flex; gap: 6px; align-items: center;">
-                          <button 
-                            class="bubble-action completed-btn {redownloadConfirmingId === msg.id ? 'confirm-redownload' : ''}" 
-                            on:click={() => handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false)} 
-                            title={isEmbedded
-                              ? (currentLang === 'en' ? 'Download' : '下载')
-                              : (redownloadConfirmingId === msg.id 
-                                ? (currentLang === 'en' ? 'Click again to redownload' : '再次点击以重新下载') 
-                                : (currentLang === 'en' ? 'Downloaded (Click to redownload)' : '已下载 (点击重新下载)'))}
-                          >
-                            {#if redownloadConfirmingId === msg.id || isEmbedded}
-                              <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                              </svg>
-                            {:else}
-                              <svg class="icon-completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                              <svg class="icon-download icon-download-hover" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                              </svg>
-                            {/if}
-                          </button>
-                          {#if isEmbedded && (msg.filePath || msg.fileName)}
-                            <button class="bubble-action" on:click={() => handleOpenFolder(msg)} title={currentLang === 'en' ? 'Open in Folder' : '定位文件'}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                              </svg>
-                            </button>
-                          {/if}
-                        </div>
-                      {:else if dlTx && dlTx.state === 'running'}
-                        <button class="bubble-action" on:click={() => handleCancel(dlTx.id)} title="Cancel">
-                          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                        </button>
-                      {:else if dlTx && dlTx.state === 'failed'}
-                        <button class="bubble-action error-retry-btn" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title={`${currentLang === 'en' ? 'Download failed:' : '传输失败:'} ${dlTx.error || (currentLang === 'en' ? 'Unknown error' : '未知错误')}. ${currentLang === 'en' ? 'Click to retry.' : '点击以重试。'}`}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                          </svg>
-                        </button>
-                      {:else}
-                        <button class="bubble-action" on:click={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)} title="Download">
-                          <svg class="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        </button>
-                      {/if}
-                    {/if}
-
-                    {#if mine}
-                      {#if !(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))}
-                        <button class="bubble-action {recallConfirmingId === msg.id ? 'confirm-delete' : ''}" type="button" on:click={() => triggerRecall(msg.id)} title="Delete">
-                          {#if recallConfirmingId === msg.id}
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                          {:else}
-                            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M3 6h18"></path>
-                              <path d="M8 6V4h8v2"></path>
-                              <path d="M10 11v6"></path>
-                              <path d="M14 11v6"></path>
-                              <path d="M6 6l1 14h10l1-14"></path>
-                            </svg>
-                          {/if}
-                        </button>
-                      {/if}
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-            {/if}
           </div>
         </div>
       {/if}
@@ -599,6 +766,47 @@
   </button>
 </div>
 
+{#if showMenu}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="menu-backdrop" on:click={closeMenu}></div>
+  
+  <div class="bubble-context-menu" style="display: block;">
+    {#each activeMenuOptions as option, index}
+      {#if !option.disabled}
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div 
+          class="menu-item" 
+          class:danger={option.danger}
+          class:confirming={confirmingIndex === index}
+          on:click={() => {
+            if (option.confirmLabel) {
+              if (confirmingIndex !== index) {
+                confirmingIndex = index;
+                if (confirmTimeout) clearTimeout(confirmTimeout);
+                confirmTimeout = window.setTimeout(() => {
+                  confirmingIndex = null;
+                }, 3000);
+              } else {
+                option.action();
+              }
+            } else {
+              option.action();
+            }
+          }}
+        >
+          {confirmingIndex === index ? option.confirmLabel : option.label}
+        </div>
+      {:else}
+        <div class="menu-item disabled">
+          {option.label}
+        </div>
+      {/if}
+    {/each}
+  </div>
+{/if}
+
 <style>
   /* Rely on global app.css V1 classes */
   @keyframes spin {
@@ -607,5 +815,109 @@
   }
   :global(.icon-uploading-spin) {
     animation: spin 1.5s linear infinite;
+  }
+
+  .menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    background: transparent;
+  }
+
+  .bubble-context-menu {
+    position: fixed;
+    z-index: 10000;
+    min-width: 150px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(21, 111, 90, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: menu-fade-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes menu-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .menu-item {
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s ease, color 0.12s ease;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .menu-item:hover {
+    background: rgba(21, 111, 90, 0.08);
+    color: #156f5a;
+  }
+
+  .menu-item.danger {
+    color: #ef4444;
+  }
+
+  .menu-item.danger:hover {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+
+  .menu-item.confirming {
+    background: #ef4444;
+    color: #ffffff;
+    font-weight: bold;
+    animation: pulse-red 1.5s infinite;
+  }
+
+  @keyframes pulse-red {
+    0% { opacity: 1; }
+    50% { opacity: 0.85; }
+    100% { opacity: 1; }
+  }
+
+  .menu-item.disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
+    background: transparent;
+  }
+  
+  :global(.dark) .bubble-context-menu {
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+  
+  :global(.dark) .menu-item {
+    color: #cbd5e1;
+  }
+  
+  :global(.dark) .menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #34d399;
+  }
+  
+  :global(.dark) .menu-item.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
   }
 </style>
