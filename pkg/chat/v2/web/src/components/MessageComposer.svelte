@@ -55,11 +55,6 @@
     await tick();
     if (!textareaEl || !composerEl) return;
 
-    const currentHeight = composerEl.offsetHeight;
-    if (currentHeight === lastComposerHeight && lastComposerHeight > 0) {
-      return;
-    }
-
     const messagesEl = document.querySelector('.messages');
     let wasNearBottom = false;
     if (messagesEl) {
