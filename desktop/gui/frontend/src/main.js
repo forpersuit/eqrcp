@@ -1924,7 +1924,7 @@ function renderSettingsPanel() {
                         <button type="button" class="btn-mini secondary" id="btn-select-chat-download-dir" style="height: 26px; font-size: 11px; padding: 0 10px; border-radius: 6px; flex-shrink: 0;">${t('choose')}</button>
                     </div>
                 </div>
-                <div class="setting-row">
+                <div class="setting-row" style="display: none;">
                     <div class="setting-copy">
                         <strong>${t('chat_v2')}</strong>
                         <span>${t('chat_v2_desc')}</span>

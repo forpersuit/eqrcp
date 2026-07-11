@@ -130,10 +130,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("showHistory") {
 		showHistory = v.GetBool("showHistory")
 	}
-	enableChatV2 := false
-	if v.IsSet("enableChatV2") {
-		enableChatV2 = v.GetBool("enableChatV2")
-	}
+	enableChatV2 := true
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{

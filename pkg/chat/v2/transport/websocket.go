@@ -198,12 +198,8 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				append(fields, diag.F("eventType", protocol.EventHello))...,
 			)
 
-			isFirstClient := sess.ClientsCount() == 0
 			sess.Register(cl, cmd.AfterSeq, cmd.JoinSeq)
 			fmt.Printf("[WebSocket JOINED] RoomToken=%s, ClientID=%s, Peer=%s, Label=%s\n", token, cl.ID, cl.Peer, cl.Label)
-			if isFirstClient && !isRunningInTest() {
-				sess.SendSystemMessage("Chat session started (Version: V2)")
-			}
 
 		case protocol.CommandHeartbeat:
 			event := protocol.EventEnvelope{

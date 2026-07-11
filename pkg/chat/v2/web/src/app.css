@@ -1011,6 +1011,20 @@ button.file-card:hover {
 .bubble-action.completed-btn .icon-completed {
     color: var(--message-action-text, var(--accent-strong, var(--accent)));
 }
+.bubble-action.completed-btn .icon-download-hover {
+    display: none;
+}
+.bubble-action.completed-btn:hover .icon-completed {
+    display: none !important;
+}
+.bubble-action.completed-btn:hover .icon-download-hover {
+    display: block !important;
+}
+.bubble-action.completed-btn:hover {
+    background: var(--message-action-bg, #ffffff) !important;
+    border-color: var(--message-action-text, var(--accent-strong, var(--accent))) !important;
+    color: var(--message-action-text, var(--accent-strong, var(--accent))) !important;
+}
 .bubble-action:hover {
     background: #ffffff;
     border-color: var(--message-action-text, var(--accent-strong, var(--accent)));
