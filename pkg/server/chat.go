@@ -46,6 +46,7 @@ type chatSession struct {
 	clients          map[string]chatClient
 	clientIDs        map[string]string
 	kickedClients    map[string]struct{}
+	kickedJoins      map[string]struct{}
 	clientThemes     map[string]string
 	clientThemeJoins map[string]string
 	nextID           int64
@@ -175,6 +176,7 @@ func (s *Server) Chat() error {
 		clients:          map[string]chatClient{},
 		clientIDs:        map[string]string{},
 		kickedClients:    map[string]struct{}{},
+		kickedJoins:      map[string]struct{}{},
 		clientThemes:     map[string]string{},
 		clientThemeJoins: map[string]string{},
 		dir:              dir,
@@ -1226,6 +1228,21 @@ func (session *chatSession) clientKicked(token string) bool {
 	return kicked
 }
 
+func (session *chatSession) joinKicked(join string) bool {
+	join = strings.TrimSpace(join)
+	if join == "" {
+		return false
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.kickedJoins == nil {
+		return false
+	}
+	_, kicked := session.kickedJoins[join]
+	return kicked
+}
+
+
 func (session *chatSession) registerClient(token string, label string, peer string, preferredTheme string, join string, fallback string) func() {
 	return session.registerClientWithAvatar(token, label, "", peer, preferredTheme, join, fallback)
 }
@@ -1251,6 +1268,12 @@ func (session *chatSession) registerClientWithAvatar(token string, label string,
 	if _, kicked := session.kickedClients[client]; kicked {
 		session.mu.Unlock()
 		return func() {}
+	}
+	if join != "" {
+		if _, kicked := session.kickedJoins[join]; kicked {
+			session.mu.Unlock()
+			return func() {}
+		}
 	}
 	theme := session.chatThemeForClientLocked(client, label, peer, preferredTheme, join)
 	info := session.clients[client]
@@ -1336,6 +1359,12 @@ func (session *chatSession) kickClient(id string) bool {
 			session.kickedClients = map[string]struct{}{}
 		}
 		session.kickedClients[token] = struct{}{}
+		if join, ok := session.clientThemeJoins[token]; ok && join != "" {
+			if session.kickedJoins == nil {
+				session.kickedJoins = map[string]struct{}{}
+			}
+			session.kickedJoins[join] = struct{}{}
+		}
 		delete(session.clients, token)
 		delete(session.clientIDs, token)
 		session.addSystemMessageLocked(client.Label + " was forced offline.")
@@ -1391,6 +1420,11 @@ func (session *chatSession) chatThemeForClientLocked(token string, label string,
 		return defaultChatThemeID
 	}
 	join = strings.TrimSpace(join)
+	if join != "" {
+		if _, kicked := session.kickedJoins[join]; kicked {
+			return ""
+		}
+	}
 	if theme := session.clientThemes[client]; validChatTheme(theme) && (join == "" || session.clientThemeJoins[client] == join) {
 		return theme
 	}

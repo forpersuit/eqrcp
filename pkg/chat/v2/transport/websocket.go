@@ -46,16 +46,20 @@ type WebSocketConfig struct {
 	DebugLog              func() bool
 	LogDir                func() string
 	DisableSystemMessages bool
+	IsClientKicked        func(token string) bool
+	IsJoinKicked          func(join string) bool
 }
 
 // WebSocketHandler handles v2 control-plane WebSocket connections.
 type WebSocketHandler struct {
-	logger   diag.Logger
-	now      func() time.Time
-	sessions *session.Manager
-	transfer *transfer.Manager
-	debugLog func() bool
-	logDir   func() string
+	logger         diag.Logger
+	now            func() time.Time
+	sessions       *session.Manager
+	transfer       *transfer.Manager
+	debugLog       func() bool
+	logDir         func() string
+	isClientKicked func(token string) bool
+	isJoinKicked   func(join string) bool
 }
 
 // NewWebSocketHandler creates a v2 control-plane WebSocket handler.
@@ -86,12 +90,14 @@ func NewWebSocketHandler(cfg WebSocketConfig) *WebSocketHandler {
 		logDir = func() string { return "" }
 	}
 	return &WebSocketHandler{
-		logger:   logger,
-		now:      now,
-		sessions: sessions,
-		transfer: transferMgr,
-		debugLog: debugLog,
-		logDir:   logDir,
+		logger:         logger,
+		now:            now,
+		sessions:       sessions,
+		transfer:       transferMgr,
+		debugLog:       debugLog,
+		logDir:         logDir,
+		isClientKicked: cfg.IsClientKicked,
+		isJoinKicked:   cfg.IsJoinKicked,
 	}
 }
 
@@ -183,6 +189,16 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			if cl != nil {
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "already connected")
 				continue
+			}
+			if h.isClientKicked != nil && h.isClientKicked(cmd.Client.Token) {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorUnauthorized, "device was forced offline")
+				conn.Close(websocket.StatusPolicyViolation, "device was forced offline")
+				return
+			}
+			if h.isJoinKicked != nil && cmd.Client.Join != "" && h.isJoinKicked(cmd.Client.Join) {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorUnauthorized, "join token expired")
+				conn.Close(websocket.StatusPolicyViolation, "join token expired")
+				return
 			}
 			cl = session.NewClient(cmd.Client, conn)
 			sess = h.sessions.GetOrCreate(token)

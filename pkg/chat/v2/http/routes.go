@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"image/png"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -37,6 +38,8 @@ type Config struct {
 	LogDir                func() string
 	GetLicenseTier        func() string
 	DisableSystemMessages bool
+	IsClientKicked        func(token string) bool
+	IsJoinKicked          func(join string) bool
 }
 
 type rendezvous struct {
@@ -55,6 +58,8 @@ type Handler struct {
 	isPaidOrUnrestricted func() bool
 	hostToken            func() string
 	getLicenseTier       func() string
+	isClientKicked       func(token string) bool
+	isJoinKicked         func(join string) bool
 	mu                   sync.Mutex
 	rendezvousMap        map[string][]*rendezvous
 }
@@ -118,16 +123,28 @@ func NewHandler(cfg Config) *Handler {
 		getLicenseTier = func() string { return "FREE" }
 	}
 
+	ws := transport.NewWebSocketHandler(transport.WebSocketConfig{
+		Logger:         logger,
+		Sessions:       sessions,
+		Transfer:       transferMgr,
+		DebugLog:       debugLogFn,
+		LogDir:         cfg.LogDir,
+		IsClientKicked: cfg.IsClientKicked,
+		IsJoinKicked:   cfg.IsJoinKicked,
+	})
+
 	return &Handler{
 		basePath:             basePath,
 		logger:               logger,
 		sessions:             sessions,
 		transfer:             transferMgr,
 		scheduler:            sched,
-		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr, DebugLog: debugLogFn, LogDir: cfg.LogDir}),
+		ws:                   ws,
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 		hostToken:            cfg.HostToken,
 		getLicenseTier:       getLicenseTier,
+		isClientKicked:       cfg.IsClientKicked,
+		isJoinKicked:         cfg.IsJoinKicked,
 		rendezvousMap:        make(map[string][]*rendezvous),
 	}
 }
@@ -231,6 +248,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch suffix {
 	case "", "/":
+		join := r.URL.Query().Get("join")
+		if h.isJoinKicked != nil && join != "" && h.isJoinKicked(join) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprintln(w, "<html><body style='font-family:system-ui;text-align:center;padding:48px 24px;color:#a63232;'><h2>设备已被强制下线 ⚠️</h2><p style='color:#666;'>该设备的加入凭证已失效。如果需要重新加入，请使用其他设备重新扫描当前电脑上的新二维码。</p></body></html>")
+			return
+		}
 		h.writeSkeleton(w, r, token, fields...)
 	case "/health":
 		h.writeHealth(w, r, token, fields...)
