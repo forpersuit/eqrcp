@@ -250,6 +250,11 @@
   let isEditingName = false;
   let editNameVal = '';
 
+  function getDeviceColor(theme?: string): string {
+    const colors = getThemeColors(theme);
+    return colors ? colors.border : '#333333';
+  }
+
   function toggleDeviceDetail(devId: string) {
     if (selectedDevId === devId) {
       selectedDevId = '';
@@ -931,7 +936,7 @@
                       {/if}
                     </div>
                     <div style="text-align: left; margin-left: 8px; flex: 1; min-width: 0;">
-                      <strong style="display: block; font-size: 13px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
+                      <strong style="display: block; font-size: 13px; color: {getDeviceColor(dev.theme)}; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
                       {#if activeTx}
                         {#if activeTx.state === 'running'}
                           <span style="font-size: 10px; color: var(--accent-strong); font-weight: bold;">
@@ -940,8 +945,6 @@
                         {:else}
                           <span style="font-size: 10px; color: #6b7280;">排队等待中...</span>
                         {/if}
-                      {:else}
-                        <span style="font-size: 10px; color: #888;">{dev.peer || 'connected'}</span>
                       {/if}
                     </div>
                     {#if isSelf}

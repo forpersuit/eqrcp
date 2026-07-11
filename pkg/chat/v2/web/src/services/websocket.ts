@@ -13,6 +13,8 @@ export class ChatWebSocketClient {
   private heartbeatIntervalId: any = null;
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
+  private isSuspended = false;
+  private clientToken = '';
   private pendingLogs: string[] = [];
 
   public clientLabel: string;
@@ -43,6 +45,42 @@ export class ChatWebSocketClient {
     
     localStorage.setItem('chat_label', this.clientLabel);
     localStorage.setItem('chat_avatar', this.clientAvatar);
+
+    // Generate/load client-unique token for session verification
+    const key = `eqt-chat-token:${window.location.pathname}`;
+    let savedToken = localStorage.getItem(key);
+    if (!savedToken) {
+      if (window.crypto && window.crypto.getRandomValues) {
+        const data = new Uint8Array(16);
+        window.crypto.getRandomValues(data);
+        savedToken = Array.from(data).map(v => ('0' + v.toString(16)).slice(-2)).join('');
+      } else {
+        savedToken = String(Date.now()) + '-' + String(Math.random()).slice(2);
+      }
+      localStorage.setItem(key, savedToken);
+    }
+    this.clientToken = savedToken;
+    localStorage.setItem('chat_token', savedToken);
+
+    // Register Page Visibility listener to suspend actively on sleep
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.isSuspended = true;
+          if (this.ws) {
+            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
+            this.ws.close(1000, "page_hidden");
+          }
+        } else if (document.visibilityState === 'visible') {
+          this.isSuspended = false;
+          if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
+            this.reconnectAttempts = 0;
+            this.reconnectDelay = 1000;
+            this.connect();
+          }
+        }
+      });
+    }
   }
 
   public connect(): void {
@@ -87,7 +125,7 @@ export class ChatWebSocketClient {
         type: 'connect',
         commandId: `init-${Date.now()}`,
         client: {
-          token: this.token,
+          token: this.clientToken,
           label: this.clientLabel,
           avatar: this.clientAvatar,
           peer: this.clientPeer,
@@ -122,6 +160,19 @@ export class ChatWebSocketClient {
     this.ws.onclose = (event) => {
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
+      if (this.isSuspended) {
+        this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
+        return;
+      }
+      if (event.code === 1008 || event.reason === "device was forced offline") {
+        this.isManualClosed = true;
+        chatActions.addSystemMessage('已被强制下线，请使用其他设备扫描新二维码重新加入。');
+        this.sendLog(`[SYSTEM] WebSocket closed: device was forced offline. Stopping reconnect.`);
+        const key = `eqt-chat-token:${window.location.pathname}`;
+        localStorage.removeItem(key);
+        localStorage.removeItem('chat_token');
+        return;
+      }
       if (!this.isManualClosed) {
         chatActions.addSystemMessage(`WebSocket closed: ${event.reason || 'No reason given'}. Reconnecting...`);
         this.sendLog(`[SYSTEM] WebSocket closed: reason=${event.reason || 'none'}. Reconnecting...`);

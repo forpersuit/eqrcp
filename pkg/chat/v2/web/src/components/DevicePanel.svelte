@@ -1,5 +1,11 @@
 <script lang="ts">
   import { peers, currentDevice, connState } from '../state/chatStore';
+  import { getThemeColors } from '../services/theme';
+
+  function getDeviceColor(theme?: string): string {
+    const colors = getThemeColors(theme);
+    return colors ? colors.border : 'rgba(255, 255, 255, 0.9)';
+  }
 </script>
 
 <div class="device-panel">
@@ -29,14 +35,11 @@
           <span class="online-badge"></span>
         </div>
         <div class="device-info">
-          <div class="device-name">
+          <div class="device-name" style="color: {getDeviceColor(device.theme)}">
             {device.label}
             {#if device.id === $currentDevice?.id}
               <span class="me-tag">本机</span>
             {/if}
-          </div>
-          <div class="device-sub">
-            {device.peer || 'Unknown IP'}
           </div>
         </div>
       </div>
