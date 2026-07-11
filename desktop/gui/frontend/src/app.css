@@ -18,6 +18,8 @@
     padding: 28px;
     background: var(--bg);
     scrollbar-width: none;
+    display: flex;
+    flex-direction: column;
 }
 
 .shell::-webkit-scrollbar,
@@ -251,7 +253,7 @@ h2 {
     display: grid;
     gap: 22px;
     grid-template-columns: minmax(0, 1fr) 320px;
-    height: calc(100vh - 112px);
+    flex: 1;
     min-height: 0;
 }
 
@@ -1973,7 +1975,7 @@ dd {
     .layout {
         gap: 16px;
         grid-template-columns: 1fr;
-        height: calc(100dvh - 84px);
+        flex: 1;
         min-height: 0;
         align-content: start;
         overflow-y: auto;
@@ -2062,7 +2064,6 @@ dd {
     }
 
     .layout.chat-layout {
-        height: calc(100dvh - 84px);
         overflow: hidden;
         align-content: stretch;
     }

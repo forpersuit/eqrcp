@@ -265,12 +265,11 @@
   }
 
   function handleKickDevice(devId: string, label: string) {
-    // Local list simulation for immediate high fidelity UI feedback
-    peers.update(list => list.filter(p => p.id !== devId));
-    chatActions.addSystemMessage(`已强制设备 "${label}" 退出会话。`);
+    if (client) {
+      client.kickClient(devId);
+    }
     selectedDevId = '';
   }
-
   function handleRenameInputKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
       e.preventDefault();

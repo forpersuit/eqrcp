@@ -276,6 +276,16 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				continue
 			}
 			sess.UpdateClient(cl, cmd.Client.Label, cmd.Client.Avatar)
+		case protocol.CommandKickClient:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			if cmd.ClientID == "" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing clientId")
+				continue
+			}
+			sess.KickClient(cmd.ClientID)
 
 		case protocol.CommandAck:
 			if cl == nil || sess == nil {

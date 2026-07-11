@@ -21,6 +21,8 @@ type Client struct {
 	Theme    string
 	Peer     string
 	LastSeen time.Time
+	JoinTime time.Time
+	Kicked   bool
 
 	sendChan  chan protocol.EventEnvelope
 	done      chan struct{}
@@ -42,6 +44,7 @@ func NewClient(info protocol.ClientInfo, conn *websocket.Conn) *Client {
 		Theme:    info.Theme,
 		Peer:     peer,
 		LastSeen: time.Now(),
+		JoinTime: time.Now(),
 		sendChan: make(chan protocol.EventEnvelope, 128),
 		done:     make(chan struct{}),
 		conn:     conn,

@@ -300,8 +300,13 @@
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
     {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded && (m.uploading || !m.downloaded))) as msg (msg.id)}
       {#if msg.type === 'system'}
+        {@const colors = msg.theme ? getThemeColors(msg.theme) : null}
         <div class="system-message">
-          <span class="system-text">{msg.text}</span>
+          {#if colors}
+            <span class="system-text" style="background: {colors.bg}; border-color: {colors.border}; color: {colors.text};">{msg.text}</span>
+          {:else}
+            <span class="system-text">{msg.text}</span>
+          {/if}
         </div>
       {:else}
         {@const mine = isMine(msg)}

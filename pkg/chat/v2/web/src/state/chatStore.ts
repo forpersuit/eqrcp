@@ -52,8 +52,17 @@ export const chatActions = {
     messages.set([]);
   },
 
-  updatePresence(devices: Device[]) {
-    peers.set(devices);
+  updatePresence(devices: Device[], clientPeer?: string) {
+    if (clientPeer) {
+      const sorted = [...devices].sort((a, b) => {
+        if (a.peer === clientPeer) return -1;
+        if (b.peer === clientPeer) return 1;
+        return 0; // Keep backend chronological sorting for other devices
+      });
+      peers.set(sorted);
+    } else {
+      peers.set(devices);
+    }
   },
 
   updateTransfer(event: TransferEvent) {

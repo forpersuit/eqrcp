@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -112,7 +113,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg)
+		s.broadcastSystemMessage(sysMsg, c.Theme)
 	}
 }
 
@@ -137,8 +138,8 @@ func (s *Session) Unregister(c *Client) {
 		c.Close()
 		s.broadcastPresence()
 
-		if !hasOther && !s.DisableSystemMessages {
-			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label))
+		if !hasOther && !s.DisableSystemMessages && !c.Kicked {
+			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label), c.Theme)
 		}
 
 		s.mu.RLock()
@@ -261,11 +262,21 @@ func (s *Session) RecallMessage(senderID string, messageID string, commandID str
 
 func (s *Session) broadcastPresence() {
 	s.mu.RLock()
-	devices := make([]protocol.Device, 0, len(s.clients))
+	clientList := make([]*Client, 0, len(s.clients))
 	for _, c := range s.clients {
-		devices = append(devices, c.ToDevice())
+		clientList = append(clientList, c)
 	}
 	s.mu.RUnlock()
+
+	// Sort by JoinTime to guarantee a stable chronological list of devices
+	sort.Slice(clientList, func(i, j int) bool {
+		return clientList[i].JoinTime.Before(clientList[j].JoinTime)
+	})
+
+	devices := make([]protocol.Device, 0, len(clientList))
+	for _, c := range clientList {
+		devices = append(devices, c.ToDevice())
+	}
 
 	event := protocol.EventEnvelope{
 		Type: protocol.EventPresenceChanged,
@@ -441,7 +452,7 @@ func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelo
 	return true
 }
 
-func (s *Session) broadcastSystemMessage(text string) {
+func (s *Session) broadcastSystemMessage(text string, theme string) {
 	var num int64 = 0
 	if n, err := rand.Int(rand.Reader, big.NewInt(1000000)); err == nil {
 		num = n.Int64()
@@ -450,6 +461,7 @@ func (s *Session) broadcastSystemMessage(text string) {
 		ID:        fmt.Sprintf("sys-%d-%d", time.Now().UnixNano(), num),
 		Type:      protocol.MessageSystem,
 		Text:      text,
+		Theme:     theme,
 		CreatedAt: time.Now(),
 	}
 	s.Broadcast(protocol.EventEnvelope{
@@ -480,6 +492,24 @@ func (s *Session) UpdateClient(c *Client, label string, avatar string) {
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg)
+		s.broadcastSystemMessage(sysMsg, c.Theme)
+	}
+}
+
+// KickClient closes the connection of the client with the given ID.
+func (s *Session) KickClient(clientID string) {
+	s.mu.Lock()
+	c, exists := s.clients[clientID]
+	if exists {
+		c.Kicked = true
+	}
+	s.mu.Unlock()
+
+	if exists {
+		sysMsg := fmt.Sprintf("已强制设备 %s 退出会话", c.Label)
+		if !s.DisableSystemMessages {
+			s.broadcastSystemMessage(sysMsg, c.Theme)
+		}
+		c.Close()
 	}
 }

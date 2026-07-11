@@ -14,6 +14,7 @@ const (
 	CommandLog            CommandType = "log"
 	CommandReportProgress CommandType = "report_progress"
 	CommandUpdateClient   CommandType = "update_client"
+	CommandKickClient     CommandType = "kick_client"
 )
 
 // ClientInfo describes a chat client at connection time.
@@ -35,6 +36,7 @@ type CommandEnvelope struct {
 	Type       CommandType `json:"type"`
 	CommandID  string      `json:"commandId,omitempty"`
 	Client     ClientInfo  `json:"client,omitempty"`
+	ClientID   string      `json:"clientId,omitempty"`
 	AfterSeq   int64       `json:"afterSeq,omitempty"`
 	JoinSeq    int64       `json:"joinSeq,omitempty"`
 	Text       string      `json:"text,omitempty"`

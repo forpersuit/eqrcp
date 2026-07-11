@@ -8,7 +8,8 @@ export type CommandType =
   | 'ack'
   | 'log'
   | 'report_progress'
-  | 'update_client';
+  | 'update_client'
+  | 'kick_client';
 
 export interface ClientInfo {
   token: string;
@@ -24,6 +25,7 @@ export interface CommandEnvelope {
   type: CommandType;
   commandId?: string;
   client?: ClientInfo;
+  clientId?: string;
   afterSeq?: number;
   joinSeq?: number;
   text?: string;

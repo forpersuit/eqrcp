@@ -182,7 +182,7 @@ export class ChatWebSocketClient {
 
       case 'presence_changed':
         if (event.presence) {
-          chatActions.updatePresence(event.presence.devices);
+          chatActions.updatePresence(event.presence.devices, this.clientPeer);
           // Find our own device in roster
           const me = event.presence.devices.find(d => d.peer === this.clientPeer);
           if (me) {
@@ -324,6 +324,14 @@ export class ChatWebSocketClient {
         label: label,
         avatar: avatar
       }
+    });
+  }
+
+  public kickClient(clientId: string): void {
+    this.sendCommand({
+      type: 'kick_client',
+      commandId: `kick-${Date.now()}`,
+      clientId: clientId
     });
   }
 
