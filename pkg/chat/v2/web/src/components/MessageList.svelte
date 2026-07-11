@@ -466,6 +466,18 @@
     }
   }
 
+  function portal(node: HTMLElement) {
+    if (typeof document === 'undefined') return;
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) {
+          node.parentNode.removeChild(node);
+        }
+      }
+    };
+  }
+
   function initResizeObserver(node: HTMLElement) {
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
@@ -903,6 +915,7 @@
     class="bubble-context-menu" 
     class:above={!menuIsBelow}
     style="display: block; --arrow-x: {arrowXPercent}%;"
+    use:portal
     use:initResizeObserver
   >
     {#each activeMenuOptions as option, index}
