@@ -1,6 +1,9 @@
 import type { CommandEnvelope, EventEnvelope } from './types';
 import { chatActions } from '../state/chatStore';
 
+// Track initial page connection globally across renames within the same page load
+let isInitialConnect = true;
+
 export class ChatWebSocketClient {
   private ws: WebSocket | null = null;
   private token: string;
@@ -11,7 +14,6 @@ export class ChatWebSocketClient {
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
   private pendingLogs: string[] = [];
-  private isInitialConnect = true;
 
   public clientLabel: string;
   public clientPeer: string;
@@ -91,12 +93,12 @@ export class ChatWebSocketClient {
           peer: this.clientPeer,
           theme: preferredTheme,
           join: this.joinParam,
-          isNewScan: this.isInitialConnect
+          isNewScan: isInitialConnect
         },
         afterSeq: savedAfterSeq,
         joinSeq: savedJoinSeq
       });
-      this.isInitialConnect = false;
+      isInitialConnect = false;
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
