@@ -59,6 +59,7 @@
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
+  let copied = false;
   
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
 
