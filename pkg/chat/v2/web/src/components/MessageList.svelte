@@ -98,6 +98,29 @@
     }
   }
 
+  function handleFocusIn(e: FocusEvent) {
+    if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+      if (followLatest && messagesEl) {
+        const scroll = () => {
+          if (followLatest && messagesEl) {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+        };
+        scroll();
+        setTimeout(scroll, 50);
+        setTimeout(scroll, 150);
+        setTimeout(scroll, 300);
+        setTimeout(scroll, 500);
+      }
+    }
+  }
+
+  function handleVisualViewportResize() {
+    if (followLatest && messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  }
+
   function handleWindowResize() {
     if (followLatest && messagesEl) {
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -106,10 +129,18 @@
 
   onMount(() => {
     window.addEventListener('resize', handleWindowResize);
+    document.addEventListener('focusin', handleFocusIn);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleVisualViewportResize);
+    }
   });
 
   onDestroy(() => {
     window.removeEventListener('resize', handleWindowResize);
+    document.removeEventListener('focusin', handleFocusIn);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', handleVisualViewportResize);
+    }
     if (confirmTimer) clearTimeout(confirmTimer);
     if (copiedTimer) clearTimeout(copiedTimer);
     if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);

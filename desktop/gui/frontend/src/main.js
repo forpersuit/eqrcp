@@ -337,6 +337,12 @@ window.addEventListener('message', (e) => {
             });
     } else if (e.data.type === 'stop-chat' || e.data.type === 'close-page') {
         stopChat();
+    } else if (e.data.type === 'rename-chat-sender') {
+        const newName = String(e.data.name || '').trim();
+        if (newName && state.settings) {
+            state.settings.chatSender = newName;
+            handleAutoSaveSettings().catch(() => {});
+        }
     }
 });
 
@@ -466,6 +472,12 @@ function render() {
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
                     ` : ''}
+                    ${(() => {
+                        const isPaid = hasPaidLicense();
+                        const tier = (isPaid && state.license?.tier) ? state.license.tier : 'FREE';
+                        const tierText = (tier === 'PLUS' && state.license?.codeDate === 'LIFETIME') ? 'PLUS U' : tier;
+                        return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
+                    })()}
                     <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}" style="position: relative;">
                         <span class="menu-icon">${settingsIcon()}</span>
                         ${state.settings?.autoUpdateMode !== 'off' && (
@@ -530,6 +542,28 @@ function render() {
 
     updateChatQRPulseButton();
     pulseChatFrameQR();
+    syncIdentityToChatFrame();
+}
+
+function syncIdentityToChatFrame() {
+    const frame = document.querySelector('#chat-iframe');
+    if (!frame) { return; }
+    const name = state.settings?.chatSender || 'Desktop';
+    const avatar = state.settings?.chatAvatar || '';
+    const payload = {
+        type: 'update-identity',
+        name: name,
+        avatar: avatar
+    };
+    const post = () => {
+        try {
+            frame.contentWindow?.postMessage(payload, activeChatFrameOrigin() || '*');
+        } catch (e) {
+            // Ignored
+        }
+    };
+    frame.addEventListener('load', post, {once: true});
+    window.setTimeout(post, 0);
 }
 
 function renderWorkspace() {
@@ -3668,6 +3702,7 @@ async function saveSettingsData() {
     state.chatSaveDir = state.settings.chatDownloadDir || await ChatSaveDirectory();
     state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
     syncViewportDebugToChatFrame();
+    syncIdentityToChatFrame();
 }
 
 function syncViewportDebugToChatFrame() {

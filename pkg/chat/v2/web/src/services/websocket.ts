@@ -14,6 +14,7 @@ export class ChatWebSocketClient {
 
   public clientLabel: string;
   public clientPeer: string;
+  public clientAvatar: string;
   private joinParam: string = '';
   private themeParam: string = '';
   public onRequestFileData: ((messageId: string) => void) | null = null;
@@ -27,6 +28,7 @@ export class ChatWebSocketClient {
 
     // Auto-generate some local client details if not provided
     this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
+    this.clientAvatar = localStorage.getItem('chat_avatar') || '';
     
     // Each device must have a unique, persistent clientPeer ID.
     // We check URL query param 'peer' first (ideal for simulation/multi-tab debugging), then fallback to localStorage or random UUID.
@@ -37,6 +39,7 @@ export class ChatWebSocketClient {
     }
     
     localStorage.setItem('chat_label', this.clientLabel);
+    localStorage.setItem('chat_avatar', this.clientAvatar);
   }
 
   public connect(): void {
@@ -83,6 +86,7 @@ export class ChatWebSocketClient {
         client: {
           token: this.token,
           label: this.clientLabel,
+          avatar: this.clientAvatar,
           peer: this.clientPeer,
           theme: preferredTheme,
           join: this.joinParam

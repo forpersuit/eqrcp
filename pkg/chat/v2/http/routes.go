@@ -35,6 +35,7 @@ type Config struct {
 	HostToken            func() string
 	DebugLog             func() bool
 	LogDir               func() string
+	GetLicenseTier       func() string
 }
 
 type rendezvous struct {
@@ -52,6 +53,7 @@ type Handler struct {
 	ws                   *transport.WebSocketHandler
 	isPaidOrUnrestricted func() bool
 	hostToken            func() string
+	getLicenseTier       func() string
 	mu                   sync.Mutex
 	rendezvousMap        map[string][]*rendezvous
 }
@@ -109,6 +111,11 @@ func NewHandler(cfg Config) *Handler {
 		debugLogFn = func() bool { return false }
 	}
 
+	getLicenseTier := cfg.GetLicenseTier
+	if getLicenseTier == nil {
+		getLicenseTier = func() string { return "FREE" }
+	}
+
 	return &Handler{
 		basePath:             basePath,
 		logger:               logger,
@@ -118,6 +125,7 @@ func NewHandler(cfg Config) *Handler {
 		ws:                   transport.NewWebSocketHandler(transport.WebSocketConfig{Logger: logger, Sessions: sessions, Transfer: transferMgr, DebugLog: debugLogFn, LogDir: cfg.LogDir}),
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
 		hostToken:            cfg.HostToken,
+		getLicenseTier:       getLicenseTier,
 		rendezvousMap:        make(map[string][]*rendezvous),
 	}
 }
@@ -159,6 +167,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if suffix == "/upload" {
 		h.handleUpload(w, r, token, fields...)
+		return
+	}
+
+	if suffix == "/info" {
+		h.handleInfo(w, r, token, fields...)
 		return
 	}
 
@@ -499,4 +512,29 @@ func (h *Handler) NotifyQuickDownload(messageID string) {
 	_ = h.transfer.CompleteJob(jobID)
 
 	diag.Emit(context.Background(), h.logger, diag.LevelInfo, "[NotifyQuickDownload] Simulated job events completed successfully", nil, fields...)
+}
+
+func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	tier := "FREE"
+	if h.getLicenseTier != nil {
+		tier = h.getLicenseTier()
+	}
+
+	response := map[string]interface{}{
+		"licenseTier": tier,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }

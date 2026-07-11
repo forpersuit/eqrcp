@@ -48,6 +48,14 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **Tooltips & Truncation Safe Layouts**:
   - Tooltips with long messages must not use `white-space: nowrap` inside small container margins, as it will get cut off by screen boundaries. Instead, use responsive tooltips with wrapping styles (`white-space: normal; width: 220px;`) and position them to the bottom-left (`.has-tooltip-bottom-left`) to avoid overlapping window margins.
   - To prevent accidental horizontal scrollbars in single-column flex/grid pages, enforce `overflow-x: hidden` on the root workspace `.workspace` and major stages, and ensure that flex text elements use `overflow: hidden; text-overflow: ellipsis; white-space: nowrap;` strictly to avoid text overflows from pushing layout boxes.
+- **Identity & Device Rename Synchronization**:
+  - The desktop GUI and the embedded Svelte chat iframe live in different origins/localStorage spaces.
+  - On GUI settings modification (name or avatar changes), the parent window must push an `update-identity` message to the iframe to sync name/avatar inside the iframe's localStorage and trigger a hot WebSocket reconnection.
+  - On chat roster "self" device renaming, the iframe must check `isEmbedded` and post a `rename-chat-sender` message back to the parent window, allowing the desktop agent to persist the change in its configuration file.
+  - The GUI topbar displays a `topbar-tier-badge` directly to the left of the Settings button with background colored as the theme accent (`var(--accent)`). In this embedded GUI layout, the `limit-status-pill` ("VIP / 无限制") is hidden.
+  - On mobile viewports, the titlebar logo must display the "EQT" brand name next to it (not hidden). The `license-badge` contents must dynamically fetch license status via `/chat-v2/:token/info` and color its background as the theme accent (`var(--accent)`).
+- **Mobile Keyboard Input Track-To-Bottom**:
+  - When mobile input fields (like compose textareas) trigger a focus event or window visual viewport resizing, if the client is currently tracking the latest chat logs (`followLatest` is true), it must trigger multiple delayed scroll adjustments (e.g. at 0ms, 50ms, 150ms, 300ms, 500ms) scrolling the message container exactly to bottom (`messagesEl.scrollTop = messagesEl.scrollHeight`). This keeps the newest messages visible during virtual keyboard popups.
 
 ## Real-time Viewport & Setting Sync (Viewport Debug Toggling)
 - **Problem**: When settings like "Enable Viewport Debug Box" are toggled in the desktop GUI Settings, mobile clients currently connected need to sync this state dynamically without requiring a manual page reload.

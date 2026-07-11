@@ -345,6 +345,25 @@ func (s *Server) Chat() error {
 		LogDir: func() string {
 			return s.ChatLogDir
 		},
+		GetLicenseTier: func() string {
+			rawTier := GetLicenseTier()
+			codeDate := GetCodeDate()
+			if rawTier != "" {
+				switch rawTier {
+				case "PLUS":
+					if codeDate == "LIFETIME" {
+						return "PLUS U"
+					} else {
+						return "PLUS"
+					}
+				case "PRO":
+					return "PRO"
+				default:
+					return strings.ToUpper(rawTier)
+				}
+			}
+			return "FREE"
+		},
 	})
 	s.chatV2Handler = chatV2Handler
 	s.mux.Handle("/chat-v2/", chatV2Handler)

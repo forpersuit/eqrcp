@@ -131,9 +131,8 @@ html.embedded-chat .chat-head-title h1 {
     max-width: 100%;
 }
 .license-badge {
-    background: linear-gradient(135deg, #e5c158 0%, #c69c32 100%);
-    color: #4a3300;
-    text-shadow: 0 0.5px 0px rgba(255,255,255,0.4);
+    background: var(--accent);
+    color: #ffffff;
     font-size: 10px;
     font-weight: 900;
     padding: 2px 7px;
@@ -144,8 +143,8 @@ html.embedded-chat .chat-head-title h1 {
     line-height: 1.2;
     letter-spacing: 0.06em;
     flex-shrink: 0;
-    box-shadow: 0 1px 3px rgba(198,156,50,0.3), inset 0 0.5px 0px rgba(255,255,255,0.6);
-    border: 1px solid rgba(170,124,17,0.25);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15), inset 0 0.5px 0px rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.15);
 }
 .chat-logo {
     flex-shrink: 0;
@@ -668,7 +667,7 @@ h1 {
         width: 30px;
     }
     .chat-title-brand {
-        display: none;
+        display: inline-block;
     }
     .license-badge {
         margin-left: 2px;

@@ -29,8 +29,8 @@
   let showLangPanel = false;
   let showShareModal = false;
   let showUrl = false;
-  let copied = false;
   let composerText = '';
+  let licenseTier = 'FREE';
   
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
 
@@ -83,7 +83,43 @@
 
   function handleMessage(event: MessageEvent) {
     if (!event.data || typeof event.data !== 'object') return;
-    if (event.data.type === 'pulse-session-qr') {
+    if (event.data.type === 'update-identity') {
+      const { name, avatar } = event.data;
+      let updated = false;
+      if (name && name !== localStorage.getItem('chat_label')) {
+        localStorage.setItem('chat_label', name);
+        localStorage.setItem('eqt_device_name', name);
+        updated = true;
+      }
+      if (avatar !== undefined && avatar !== localStorage.getItem('chat_avatar')) {
+        localStorage.setItem('chat_avatar', avatar);
+        updated = true;
+      }
+      if (updated) {
+        if (name) {
+          if (client) client.clientLabel = name;
+        }
+        if (avatar !== undefined) {
+          if (client) client.clientAvatar = avatar;
+        }
+        if ($currentDevice) {
+          currentDevice.update(d => {
+            if (d) {
+              if (name) d.label = name;
+              if (avatar !== undefined) d.avatar = avatar;
+            }
+            return d;
+          });
+        }
+        if (client) {
+          client.close();
+          setTimeout(() => {
+            client = new ChatWebSocketClient(token);
+            client.connect();
+          }, 100);
+        }
+      }
+    } else if (event.data.type === 'pulse-session-qr') {
       const remaining = Math.max(0, Number(event.data.until || 0) - Date.now());
       startQRPulse(remaining);
     } else if (event.data.type === 'selected-files') {
@@ -244,6 +280,10 @@
     chatActions.addSystemMessage(`本机设备名称已从 "${oldLabel}" 重命名为 "${newLabel}"，正在重新同步。`);
     isEditingName = false;
     selectedDevId = '';
+
+    if (isEmbedded) {
+      window.parent.postMessage({ type: 'rename-chat-sender', name: newLabel }, '*');
+    }
 
     // Hot reconnect so the websocket establishes using the fresh custom label
     if (client) {
@@ -506,6 +546,17 @@
       window.visualViewport.addEventListener('scroll', visualViewportHandler);
       visualViewportHandler();
     }
+
+    fetch(`/chat-v2/${token}/info`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.licenseTier) {
+          licenseTier = data.licenseTier;
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch chat v2 info:', err);
+      });
 
     client = new ChatWebSocketClient(token);
     client.onRequestFileData = (messageId) => {
@@ -803,16 +854,23 @@
         <div class="chat-head-title">
           <img class="chat-logo" src="/assets/eqt-logo-mark.png" alt="EQT logo">
           <div class="chat-title-container">
-            <h1 id="chat-title-text"><span class="chat-title-brand">EQT</span><span class="license-badge">VIP</span></h1>
+            <h1 id="chat-title-text">
+              <span class="chat-title-brand">EQT</span>
+              {#if licenseTier}
+                <span class="license-badge">{licenseTier}</span>
+              {/if}
+            </h1>
           </div>
         </div>
 
         <div class="head-actions">
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title="点击查看订阅详情">
-            <span>VIP / 无限制</span>
-          </div>
+          {#if !isEmbedded}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title="点击查看订阅详情">
+              <span>VIP / 无限制</span>
+            </div>
+          {/if}
 
           <button class="device-pill" type="button" on:click|stopPropagation={() => { showDevicePanel = !showDevicePanel; showLangPanel = false; showLicensePanel = false; }} title="Show connected devices">
             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
