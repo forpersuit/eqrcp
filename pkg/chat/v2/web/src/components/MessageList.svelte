@@ -297,16 +297,20 @@
 
   // Context Menu State
   let showMenu = false;
-  let menuX = 0;
-  let menuY = 0;
   let activeMenuMessage: Message | null = null;
+  let activeBubbleEl: HTMLElement | null = null;
   let activeMenuOptions: { label: string; action: () => void; danger?: boolean; confirmLabel?: string; disabled?: boolean }[] = [];
+  
+  let menuIsBelow = true;
+  let arrowXPercent = 50;
 
   let confirmingIndex: number | null = null;
   let confirmTimeout: number | null = null;
 
-  function openMessageMenu(msg: Message, x: number, y: number) {
+  function openMessageMenu(msg: Message, bubbleEl: HTMLElement) {
+    if (msg.recalled) return; // 撤回消息不支持右键菜单/滑动
     activeMenuMessage = msg;
+    activeBubbleEl = bubbleEl;
     confirmingIndex = null;
     if (confirmTimeout) clearTimeout(confirmTimeout);
     
@@ -320,51 +324,57 @@
 
     const options: any[] = [];
 
-    if (msg.recalled) {
+    // 1. Copy text
+    if (msg.type === 'text') {
+      options.push({
+        label: currentLang === 'en' ? 'Copy' : '复制文本',
+        action: () => {
+          handleCopy(msg.id, msg.text || '');
+          closeMenu();
+        }
+      });
+    }
+
+    // 2. File actions
+    if (msg.type === 'file') {
       if (mine) {
-        if (msg.type === 'text') {
+        if (ulTx && ulTx.state === 'running') {
           options.push({
-            label: currentLang === 'en' ? 'Edit again' : '再次编辑',
+            label: currentLang === 'en' ? 'Cancel Upload' : '取消上传',
+            danger: true,
             action: () => {
-              dispatch('editAgain', msg.text || '');
+              handleCancel(ulTx.id);
               closeMenu();
             }
           });
-        } else if (msg.type === 'file') {
+        } else if (isEmbedded) {
           options.push({
-            label: currentLang === 'en' ? 'Resend' : '再次发送',
+            label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
             action: () => {
-              dispatch('resendFile', { name: msg.fileName, size: msg.size });
+              handleOpenFolder(msg);
               closeMenu();
             }
           });
         }
-      }
-    } else {
-      // 1. Copy text
-      if (msg.type === 'text') {
-        options.push({
-          label: currentLang === 'en' ? 'Copy' : '复制文本',
-          action: () => {
-            handleCopy(msg.id, msg.text || '');
-            closeMenu();
-          }
-        });
-      }
-
-      // 2. File actions
-      if (msg.type === 'file') {
-        if (mine) {
-          if (ulTx && ulTx.state === 'running') {
-            options.push({
-              label: currentLang === 'en' ? 'Cancel Upload' : '取消上传',
-              danger: true,
-              action: () => {
-                handleCancel(ulTx.id);
+      } else {
+        if (msg.uploading) {
+          options.push({
+            label: currentLang === 'en' ? 'Uploading...' : '对方上传中...',
+            disabled: true,
+            action: () => {}
+          });
+        } else if (isDownloaded) {
+          options.push({
+            label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
+            confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
+            action: () => {
+              handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false);
+              if (isEmbedded) {
                 closeMenu();
               }
-            });
-          } else if (isEmbedded) {
+            }
+          });
+          if (isEmbedded && (msg.filePath || msg.fileName)) {
             options.push({
               label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
               action: () => {
@@ -373,71 +383,28 @@
               }
             });
           }
-        } else {
-          if (msg.uploading) {
-            options.push({
-              label: currentLang === 'en' ? 'Uploading...' : '对方上传中...',
-              disabled: true,
-              action: () => {}
-            });
-          } else if (isDownloaded) {
-            options.push({
-              label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
-              confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
-              action: () => {
-                handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false);
-                if (isEmbedded) {
-                  closeMenu();
-                }
-              }
-            });
-            if (isEmbedded && (msg.filePath || msg.fileName)) {
-              options.push({
-                label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
-                action: () => {
-                  handleOpenFolder(msg);
-                  closeMenu();
-                }
-              });
-            }
-          } else if (dlTx && dlTx.state === 'running') {
-            options.push({
-              label: currentLang === 'en' ? 'Cancel Download' : '取消下载',
-              danger: true,
-              action: () => {
-                handleCancel(dlTx.id);
-                closeMenu();
-              }
-            });
-          } else if (dlTx && dlTx.state === 'failed') {
-            options.push({
-              label: currentLang === 'en' ? 'Retry Download' : '重试下载',
-              action: () => {
-                handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
-                closeMenu();
-              }
-            });
-          } else {
-            options.push({
-              label: currentLang === 'en' ? 'Download' : '下载文件',
-              action: () => {
-                handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
-                closeMenu();
-              }
-            });
-          }
-        }
-      }
-
-      // 3. Recall
-      if (mine) {
-        if (!(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))) {
+        } else if (dlTx && dlTx.state === 'running') {
           options.push({
-            label: currentLang === 'en' ? 'Recall' : '撤回消息',
-            confirmLabel: currentLang === 'en' ? 'Confirm Recall' : '确认撤回',
+            label: currentLang === 'en' ? 'Cancel Download' : '取消下载',
             danger: true,
             action: () => {
-              dispatch('recallMessage', msg.id);
+              handleCancel(dlTx.id);
+              closeMenu();
+            }
+          });
+        } else if (dlTx && dlTx.state === 'failed') {
+          options.push({
+            label: currentLang === 'en' ? 'Retry Download' : '重试下载',
+            action: () => {
+              handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
+              closeMenu();
+            }
+          });
+        } else {
+          options.push({
+            label: currentLang === 'en' ? 'Download' : '下载文件',
+            action: () => {
+              handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
               closeMenu();
             }
           });
@@ -445,11 +412,24 @@
       }
     }
 
+    // 3. Recall
+    if (mine) {
+      if (!(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))) {
+        options.push({
+          label: currentLang === 'en' ? 'Recall' : '撤回消息',
+          confirmLabel: currentLang === 'en' ? 'Confirm Recall' : '确认撤回',
+          danger: true,
+          action: () => {
+            dispatch('recallMessage', msg.id);
+            closeMenu();
+          }
+        });
+      }
+    }
+
     if (options.length === 0) return;
 
     activeMenuOptions = options;
-    menuX = x;
-    menuY = y;
     showMenu = true;
 
     setTimeout(adjustMenuPosition, 0);
@@ -458,6 +438,7 @@
   function closeMenu() {
     showMenu = false;
     activeMenuMessage = null;
+    activeBubbleEl = null;
     activeMenuOptions = [];
     confirmingIndex = null;
     if (confirmTimeout) {
@@ -468,26 +449,65 @@
 
   function adjustMenuPosition() {
     const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
-    if (!menuEl) return;
-    const rect = menuEl.getBoundingClientRect();
+    if (!menuEl || !activeBubbleEl) return;
+    const menuRect = menuEl.getBoundingClientRect();
+    const bubbleRect = activeBubbleEl.getBoundingClientRect();
     const winW = window.innerWidth;
     const winH = window.innerHeight;
 
-    let adjustedX = menuX;
-    let adjustedY = menuY;
+    const menuW = menuRect.width;
+    const menuH = menuRect.height;
 
-    if (adjustedX + rect.width > winW) {
-      adjustedX = winW - rect.width - 12;
+    // 默认展示在下方
+    let top = bubbleRect.bottom + 8;
+    menuIsBelow = true;
+
+    // 判断如果下方空间不够且上方空间足够，则显示在上方
+    if (top + menuH > winH && bubbleRect.top - menuH - 8 > 0) {
+      top = bubbleRect.top - menuH - 8;
+      menuIsBelow = false;
     }
-    if (adjustedX < 12) adjustedX = 12;
 
-    if (adjustedY + rect.height > winH) {
-      adjustedY = adjustedY - rect.height - 8;
-      if (adjustedY < 12) adjustedY = 12;
+    // 水平居中对齐
+    let left = bubbleRect.left + bubbleRect.width / 2 - menuW / 2;
+
+    // 溢出屏幕左/右侧保护
+    if (left + menuW > winW - 12) {
+      left = winW - menuW - 12;
+    }
+    if (left < 12) {
+      left = 12;
     }
 
-    menuEl.style.left = `${adjustedX}px`;
-    menuEl.style.top = `${adjustedY}px`;
+    // 计算气泡中心点在菜单上的相对 X 坐标百分比（供小箭头对齐气泡中心）
+    const bubbleCenterX = bubbleRect.left + bubbleRect.width / 2;
+    const relativeX = bubbleCenterX - left;
+    arrowXPercent = Math.max(10, Math.min(90, (relativeX / menuW) * 100));
+
+    menuEl.style.left = `${left}px`;
+    menuEl.style.top = `${top}px`;
+  }
+
+  // 全局失焦关闭菜单
+  function handleGlobalPointerDown(e: PointerEvent) {
+    if (!showMenu) return;
+    const target = e.target as HTMLElement;
+    const menuEl = document.querySelector('.bubble-context-menu');
+    if (menuEl && menuEl.contains(target)) return;
+    if (target.closest('.bubble')) return; // 让气泡自带的处理器去处理切换
+    closeMenu();
+  }
+
+  $: {
+    if (showMenu) {
+      if (typeof window !== 'undefined') {
+        window.addEventListener('pointerdown', handleGlobalPointerDown, true);
+      }
+    } else {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
+      }
+    }
   }
 
   function swipeable(node: HTMLElement, msg: Message) {
@@ -501,6 +521,7 @@
     let hasTriggeredLongPress = false;
     
     function handleTouchStart(e: TouchEvent) {
+      if (msg.recalled) return;
       if (e.touches.length !== 1) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
@@ -511,8 +532,7 @@
       if (longPressTimer) clearTimeout(longPressTimer);
       longPressTimer = window.setTimeout(() => {
         hasTriggeredLongPress = true;
-        const rect = node.getBoundingClientRect();
-        openMessageMenu(msg, startX, rect.bottom + 4);
+        openMessageMenu(msg, node);
         if (window.navigator && window.navigator.vibrate) {
           try { window.navigator.vibrate(50); } catch(ex) {}
         }
@@ -520,7 +540,7 @@
     }
     
     function handleTouchMove(e: TouchEvent) {
-      if (e.touches.length !== 1 || hasTriggeredLongPress) return;
+      if (msg.recalled || e.touches.length !== 1 || hasTriggeredLongPress) return;
       currentX = e.touches[0].clientX;
       currentY = e.touches[0].clientY;
       
@@ -559,6 +579,7 @@
     }
     
     function handleTouchEnd() {
+      if (msg.recalled) return;
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
@@ -576,8 +597,7 @@
         
         if (canSlide && absOffset >= 35) {
           setTimeout(() => {
-            const rect = node.getBoundingClientRect();
-            openMessageMenu(msg, rect.left + rect.width / 2, rect.bottom + 4);
+            openMessageMenu(msg, node);
           }, 50);
         }
       }
@@ -668,7 +688,7 @@
             <div 
               class="bubble" 
               use:swipeable={msg}
-              on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.clientX, e.clientY)}
+              on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget)}
               style="position: relative; overflow: hidden; transform: translateX(0px); transition: transform 0.25s ease;"
             >
               {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (ulTx && ulTx.state === 'running'))}
@@ -706,7 +726,48 @@
                 </div>
               {/if}
               {#if msg.recalled}
-                <span class="text recalled">{identity.sender} {currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'}</span>
+                <span class="text recalled">{mine ? (currentLang === 'en' ? 'You recalled a message' : '你撤回了一条消息') : (identity.sender + ' ' + (currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'))}</span>
+                {#if mine}
+                  <div class="recalled-actions" style="margin-top: 6px; display: flex; gap: 8px; justify-content: flex-end;">
+                    {#if msg.type === 'text'}
+                      <button 
+                        class="edit-recalled" 
+                        type="button" 
+                        on:click={() => dispatch('editAgain', msg.text || '')}
+                        style="
+                          background: var(--accent-wash, rgba(21, 111, 90, 0.06));
+                          border: 1px solid var(--accent, #156f5a);
+                          border-radius: 999px;
+                          color: var(--accent-strong, #156f5a);
+                          cursor: pointer;
+                          font-size: 11px;
+                          font-weight: 600;
+                          padding: 3px 8px;
+                        "
+                      >
+                        {currentLang === 'en' ? 'Edit again' : '重新编辑'}
+                      </button>
+                    {:else if msg.type === 'file'}
+                      <button 
+                        class="edit-recalled" 
+                        type="button" 
+                        on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })}
+                        style="
+                          background: var(--accent-wash, rgba(21, 111, 90, 0.06));
+                          border: 1px solid var(--accent, #156f5a);
+                          border-radius: 999px;
+                          color: var(--accent-strong, #156f5a);
+                          cursor: pointer;
+                          font-size: 11px;
+                          font-weight: 600;
+                          padding: 3px 8px;
+                        "
+                      >
+                        {currentLang === 'en' ? 'Resend' : '重新发送'}
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
               {:else}
                 {#if msg.type === 'text'}
                   <span class="text">{msg.text}</span>
@@ -767,11 +828,11 @@
 </div>
 
 {#if showMenu}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="menu-backdrop" on:click={closeMenu}></div>
-  
-  <div class="bubble-context-menu" style="display: block;">
+  <div 
+    class="bubble-context-menu" 
+    class:above={!menuIsBelow}
+    style="display: block; --arrow-x: {arrowXPercent}%;"
+  >
     {#each activeMenuOptions as option, index}
       {#if !option.disabled}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -817,16 +878,6 @@
     animation: spin 1.5s linear infinite;
   }
 
-  .menu-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9999;
-    background: transparent;
-  }
-
   .bubble-context-menu {
     position: fixed;
     z-index: 10000;
@@ -842,6 +893,36 @@
     flex-direction: column;
     gap: 2px;
     animation: menu-fade-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bubble-context-menu::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    z-index: 10001;
+    border-width: 0 6px 6px 6px;
+    border-color: transparent transparent rgba(255, 255, 255, 0.85) transparent;
+    top: -6px;
+    left: var(--arrow-x, 50%);
+    transform: translateX(-50%);
+    transition: left 0.1s ease;
+  }
+
+  :global(.dark) .bubble-context-menu::after {
+    border-color: transparent transparent rgba(15, 23, 42, 0.85) transparent;
+  }
+
+  .bubble-context-menu.above::after {
+    border-width: 6px 6px 0 6px;
+    border-color: rgba(255, 255, 255, 0.85) transparent transparent transparent;
+    top: auto;
+    bottom: -6px;
+  }
+
+  :global(.dark) .bubble-context-menu.above::after {
+    border-color: rgba(15, 23, 42, 0.85) transparent transparent transparent;
   }
 
   @keyframes menu-fade-in {

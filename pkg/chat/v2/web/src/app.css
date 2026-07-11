@@ -807,7 +807,7 @@ h1 {
     transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 .message:not(.system) .bubble {
-    min-width: var(--message-actions-min-width);
+    min-width: 0;
 }
 .message-main,
 .bubble,
