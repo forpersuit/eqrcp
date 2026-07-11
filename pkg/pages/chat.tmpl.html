@@ -60,7 +60,14 @@
             padding: 16px 28px;
         }
         html.embedded-chat body { background: transparent; }
-        html.embedded-chat .chat-viewport { height: 100%; }
+        html.embedded-chat .chat-viewport {
+            height: 100% !important;
+            width: 100% !important;
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            max-height: none !important;
+        }
         html.embedded-chat main {
             max-width: none;
             padding: 8px;
@@ -3277,6 +3284,7 @@
         var scrollCorrectionTimer = null;
         var chatViewportEl = document.getElementById('chat-viewport');
         var viewportDebugEnabled = new URLSearchParams(window.location.search).get('viewportDebug') === '1';
+        var lastHostMetrics = null;
         var viewportDebugEl = document.getElementById('viewport-debug');
         var viewportDebugRoute = '{{.ViewportDebugRoute}}';
         var canManageDevices = {{if .CanStop}}true{{else}}false{{end}};
@@ -3445,13 +3453,14 @@
                     messages: rectData(messagesEl),
                     composer: rectData(composerEl),
                     textarea: rectData(textEl)
-                }
+                },
+                hostMetrics: lastHostMetrics
             };
         }
 
         function formatViewportDebug(snapshot) {
             var visual = snapshot.visualViewport;
-            return [
+            var lines = [
                 'reason=' + snapshot.reason,
                 'time=' + new Date(snapshot.clientTime).toLocaleTimeString(),
                 'ua=' + snapshot.userAgent,
@@ -3476,7 +3485,26 @@
                 'messages ' + rectSummary(snapshot.rects.messages),
                 'composer ' + rectSummary(snapshot.rects.composer),
                 'textarea ' + rectSummary(snapshot.rects.textarea)
-            ].join('\n');
+            ];
+            if (snapshot.hostMetrics) {
+                var hm = snapshot.hostMetrics;
+                lines.push(
+                    'hostInner=' + (hm.inner ? hm.inner.width + 'x' + hm.inner.height : 'n/a'),
+                    'hostWorkspace=' + (hm.workspace ? [
+                        'x=' + hm.workspace.x,
+                        'y=' + hm.workspace.y,
+                        'w=' + hm.workspace.width,
+                        'h=' + hm.workspace.height
+                    ].join(' ') : 'n/a'),
+                    'hostShell=' + (hm.shell ? [
+                        'x=' + hm.shell.x,
+                        'y=' + hm.shell.y,
+                        'w=' + hm.shell.width,
+                        'h=' + hm.shell.height
+                    ].join(' ') : 'n/a')
+                );
+            }
+            return lines.join('\n');
         }
 
         function sendViewportDebug(snapshot) {
@@ -3493,6 +3521,11 @@
 
         function updateViewportDebug(reason) {
             if (!viewportDebugEnabled || !viewportDebugEl) { return; }
+            if (!lastHostMetrics && window.parent !== window) {
+                try {
+                    window.parent.postMessage({ type: 'request-host-metrics' }, '*');
+                } catch (e) {}
+            }
             var snapshot = collectViewportDebug(reason);
             viewportDebugEl.classList.add('open');
             viewportDebugEl.textContent = formatViewportDebug(snapshot);
@@ -5978,8 +6011,9 @@
                 }
                 return;
             }
-            if (event.data.type === 'update-viewport-debug') {
+             if (event.data.type === 'update-viewport-debug') {
                 viewportDebugEnabled = event.data.enabled;
+                lastHostMetrics = event.data.hostMetrics || null;
                 if (viewportDebugEl) {
                     if (viewportDebugEnabled) {
                         viewportDebugEl.classList.add('open');

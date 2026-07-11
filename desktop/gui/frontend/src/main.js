@@ -257,6 +257,12 @@ function stopChatQRPulse() {
     updateChatQRPulseButton();
 }
 
+window.addEventListener('resize', () => {
+    if (state.settings?.viewportDebug) {
+        syncViewportDebugToChatFrame();
+    }
+});
+
 // postMessage bridge: handle native operations requested by the chat iframe.
 window.addEventListener('message', (e) => {
     console.log('[Antigravity Debug] Wails parent received message:', e.data?.type, 'origin:', e.origin, 'data:', e.data);
@@ -265,6 +271,10 @@ window.addEventListener('message', (e) => {
         return;
     }
     const targetOrigin = activeChatFrameOrigin() || '*';
+    if (e.data.type === 'request-host-metrics') {
+        syncViewportDebugToChatFrame();
+        return;
+    }
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
@@ -3748,9 +3758,32 @@ function syncViewportDebugToChatFrame() {
     const frame = document.querySelector('#chat-iframe');
     if (!frame) { return; }
     const enabled = Boolean(state.settings?.viewportDebug ?? false);
+    
+    let hostMetrics = null;
+    if (enabled) {
+        const workspace = document.querySelector('.workspace');
+        const shell = document.querySelector('.shell');
+        hostMetrics = {
+            inner: { width: window.innerWidth, height: window.innerHeight },
+            workspace: workspace ? {
+                x: Math.round(workspace.getBoundingClientRect().left),
+                y: Math.round(workspace.getBoundingClientRect().top),
+                width: Math.round(workspace.getBoundingClientRect().width),
+                height: Math.round(workspace.getBoundingClientRect().height)
+            } : null,
+            shell: shell ? {
+                x: Math.round(shell.getBoundingClientRect().left),
+                y: Math.round(shell.getBoundingClientRect().top),
+                width: Math.round(shell.getBoundingClientRect().width),
+                height: Math.round(shell.getBoundingClientRect().height)
+            } : null
+        };
+    }
+
     const payload = {
         type: 'update-viewport-debug',
-        enabled: enabled
+        enabled: enabled,
+        hostMetrics: hostMetrics
     };
     const post = () => {
         try {

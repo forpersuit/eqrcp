@@ -267,7 +267,9 @@ h2 {
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 12px;
+    box-sizing: border-box;
 }
+
 
 .workspace {
     min-height: 0;
