@@ -56,6 +56,8 @@ export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSett
 
 export function SelectFiles():Promise<Array<string>>;
 
+export function SelectLogDirectory():Promise<string>;
+
 export function SelectReceiveDirectory():Promise<string>;
 
 export function SelectShareDirectory():Promise<string>;

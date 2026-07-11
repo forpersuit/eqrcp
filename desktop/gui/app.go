@@ -969,6 +969,12 @@ func (a *App) SelectReceiveDirectory() (string, error) {
 	})
 }
 
+func (a *App) SelectLogDirectory() (string, error) {
+	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Choose custom log folder",
+	})
+}
+
 type GUIFileInfo struct {
 	Path      string `json:"path"`
 	Name      string `json:"name"`

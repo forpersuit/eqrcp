@@ -135,6 +135,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		enableChatV2 = v.GetBool("enableChatV2")
 	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
+	logDir := v.GetString("logDir")
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
@@ -159,6 +160,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		ShowHistory:              showHistory,
 		EnableChatV2:             enableChatV2,
 		ChatDownloadDir:          chatDownloadDir,
+		LogDir:                   logDir,
 	}, nil
 }
 
@@ -217,6 +219,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("showHistory", settings.ShowHistory)
 	v.Set("enableChatV2", settings.EnableChatV2)
 	v.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
+	v.Set("logDir", strings.TrimSpace(settings.LogDir))
 	fmt.Printf("[Config Debug] WriteDesktopSettings: enableChatV2=%v, configFileUsed=%s\n", settings.EnableChatV2, v.ConfigFileUsed())
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err

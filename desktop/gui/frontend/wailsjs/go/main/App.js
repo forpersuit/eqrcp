@@ -110,6 +110,10 @@ export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
 }
 
+export function SelectLogDirectory() {
+  return window['go']['main']['App']['SelectLogDirectory']();
+}
+
 export function SelectReceiveDirectory() {
   return window['go']['main']['App']['SelectReceiveDirectory']();
 }

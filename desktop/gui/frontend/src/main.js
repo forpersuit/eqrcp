@@ -31,6 +31,7 @@ import {
     ValidateFreeTier,
     SelectReceiveDirectory,
     SelectShareDirectory,
+    SelectLogDirectory,
     RightClickIntegrationStatus,
     Share,
     SetRightClickIntegrationEnabled,
@@ -2177,8 +2178,11 @@ function renderAboutPanel() {
                         <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
                     </label>
                     <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                        <span style="font-weight: 600; font-size: 12px; color: var(--accent);">${t('custom_log_dir') || '自定义日志保存路径 (回车或失焦生效)'}</span>
-                        <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder') || '空白为系统默认缓存路径'}" style="padding: 5px 8px; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 4px; outline: none;" />
+                        <span style="font-weight: 600; font-size: 12px; color: var(--accent);">${t('custom_log_dir') || '自定义日志保存路径'}</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder') || '空白为系统默认缓存路径'}" style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 4px; outline: none;" />
+                            <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 5px 10px; font-size: 12px; height: auto; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
+                        </div>
                     </div>
                     <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
                         ${t('dev_logs_desc')}
@@ -3146,6 +3150,24 @@ function bindPanelEvents() {
         state.appInfo = await AppInfo();
         render();
         openPanel('about');
+    });
+
+    document.querySelector('#dev-select-log-dir')?.addEventListener('click', async () => {
+        try {
+            const selected = await SelectLogDirectory();
+            if (selected) {
+                if (!state.settings) state.settings = {};
+                state.settings.logDir = selected;
+                await saveSettingsData();
+                state.notice = t('log_dir_updated') || '日志保存路径已更新';
+                state.appInfo = await AppInfo();
+                render();
+                openPanel('about');
+            }
+        } catch (error) {
+            state.error = 'Failed to select log directory: ' + error;
+            render();
+        }
     });
 
     document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
