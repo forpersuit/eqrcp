@@ -14,7 +14,7 @@
     --chat-viewport-top: 0px;
     --chat-viewport-left: 0px;
     --chat-head-height: 62px;
-    --message-actions-min-width: 86px;
+    --message-actions-min-width: 70px;
     --messages-bottom-space: clamp(16px, 2.2vh, 22px);
 }
 @supports (height: 100dvh) {
@@ -953,7 +953,9 @@ button.file-card:hover {
     margin-top: 4px;
     min-height: 26px;
     padding: 0 2px;
-    width: 100%;
+    margin-left: -8px;
+    margin-right: -8px;
+    width: calc(100% + 16px);
 }
 .message-footer-meta {
     color: var(--muted);
