@@ -466,16 +466,29 @@
     }
   }
 
+  function initResizeObserver(node: HTMLElement) {
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      adjustMenuPosition();
+    });
+    observer.observe(node);
+    return {
+      destroy() {
+        observer.disconnect();
+      }
+    };
+  }
+
   function adjustMenuPosition() {
     const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
     if (!menuEl || !activeBubbleEl) return;
-    const menuRect = menuEl.getBoundingClientRect();
+    
+    // 使用 offsetWidth 和 offsetHeight，完全不受 CSS transform 缩放动画影响，测量绝对精准！
+    const menuW = menuEl.offsetWidth;
+    const menuH = menuEl.offsetHeight;
     const bubbleRect = activeBubbleEl.getBoundingClientRect();
     const winW = window.innerWidth;
     const winH = window.innerHeight;
-
-    const menuW = menuRect.width;
-    const menuH = menuRect.height;
 
     // 默认展示在下方
     let top = bubbleRect.bottom + 8;
@@ -890,6 +903,7 @@
     class="bubble-context-menu" 
     class:above={!menuIsBelow}
     style="display: block; --arrow-x: {arrowXPercent}%;"
+    use:initResizeObserver
   >
     {#each activeMenuOptions as option, index}
       {#if !option.disabled}
@@ -967,7 +981,6 @@
     top: -6px;
     left: var(--arrow-x, 50%);
     transform: translateX(-50%);
-    transition: left 0.1s ease;
   }
 
   :global(.dark) .bubble-context-menu::after {
