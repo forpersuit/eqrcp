@@ -2064,6 +2064,7 @@ dd {
     .layout.chat-layout {
         height: calc(100dvh - 84px);
         overflow: hidden;
+        align-content: stretch;
     }
 
     .workspace:has(.chat-panel) {

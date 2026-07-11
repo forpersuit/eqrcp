@@ -30,8 +30,8 @@ export class ChatWebSocketClient {
     this.themeParam = params.get('theme') || '';
 
     // Auto-generate some local client details if not provided
-    this.clientLabel = localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
-    this.clientAvatar = localStorage.getItem('chat_avatar') || '';
+    this.clientLabel = params.get('sender') || localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
+    this.clientAvatar = params.get('avatar') || localStorage.getItem('chat_avatar') || '';
     
     // Each device must have a unique, persistent clientPeer ID.
     // We check URL query param 'peer' first (ideal for simulation/multi-tab debugging), then fallback to localStorage or random UUID.
