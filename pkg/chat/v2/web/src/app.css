@@ -1008,11 +1008,7 @@ button.file-card:hover {
     width: 26px;
 }
 .bubble-action svg { fill: none; height: 14px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; width: 14px; }
-.bubble-action.completed-btn .icon-download {
-    display: none !important;
-}
 .bubble-action.completed-btn .icon-completed {
-    display: block !important;
     color: var(--message-action-text, var(--accent-strong, var(--accent)));
 }
 .bubble-action:hover {

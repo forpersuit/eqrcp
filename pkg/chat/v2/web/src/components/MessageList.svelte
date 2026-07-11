@@ -262,7 +262,7 @@
         {@const isTxCompleted = dlTx && dlTx.state === 'completed'}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
         {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath)}
-        {@const tx = ulTx || dlTx}
+        {@const tx = mine ? ulTx : dlTx}
         {@const colors = getMessageColors(msg, mine)}
         <div 
           class="message" 
