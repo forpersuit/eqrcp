@@ -597,6 +597,12 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 	if closeErr != nil {
 		return closeErr
 	}
+
+	// Trigger quick download completion notification for conventional HTTP stream downloads
+	if messageID != "" && a.agent != nil && a.agent.activeServer != nil {
+		a.agent.activeServer.NotifyQuickDownload(messageID)
+	}
+
 	return nil
 }
 
