@@ -137,14 +137,31 @@ export const chatActions = {
   },
 
   updateMessage(updated: Message) {
-    messages.update(list => list.map(m => {
-      if (m.id === updated.id) {
-        return {
-          ...m,
+    if (updated.text) {
+      try {
+        const parsed = JSON.parse(updated.text);
+        if (parsed && parsed.type === 'file') {
+          updated.type = 'file';
+          updated.fileName = parsed.fileName;
+          updated.size = parsed.size;
+          updated.text = '';
+        }
+      } catch (e) {
+        // Leave as regular text message
+      }
+    }
+
+    messages.update(list => {
+      const idx = list.findIndex(m => m.id === updated.id);
+      if (idx !== -1) {
+        const result = [...list];
+        result[idx] = {
+          ...result[idx],
           ...updated
         };
+        return result;
       }
-      return m;
-    }));
+      return [...list, updated].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
   }
 };

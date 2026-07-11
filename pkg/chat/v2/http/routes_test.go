@@ -1,9 +1,11 @@
 package chathttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -279,5 +281,178 @@ func TestHandlerDownloadAndChatConcurrency(t *testing.T) {
 
 	if !gotMessage {
 		t.Fatalf("WebSocket text channel was not responsive or Bob's message was starved during download!")
+	}
+}
+
+func TestFileNotificationToBypassDevice(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2"})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/test-token/ws"
+
+	// 1. Connect Alice (Peer A)
+	connAlice, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connAlice.Close(websocket.StatusNormalClosure, "done")
+	var helloA protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connAlice, &helloA)
+	_ = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-alice",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-A",
+		},
+	})
+	_ = wsjson.Read(ctx, connAlice, &helloA)
+
+	// 2. Connect Desktop (B)
+	connDesktop, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connDesktop.Close(websocket.StatusNormalClosure, "done")
+	var helloD protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connDesktop, &helloD)
+	_ = wsjson.Write(ctx, connDesktop, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-desktop",
+		Client: protocol.ClientInfo{
+			Label: "Desktop",
+			Peer:  "desktop",
+		},
+	})
+	_ = wsjson.Read(ctx, connDesktop, &helloD)
+
+	// 3. Connect Charlie (Bypass Client C)
+	connCharlie, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connCharlie.Close(websocket.StatusNormalClosure, "done")
+	var helloC protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connCharlie, &helloC)
+	_ = wsjson.Write(ctx, connCharlie, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-charlie",
+		Client: protocol.ClientInfo{
+			Label: "Charlie",
+			Peer:  "peer-C",
+		},
+	})
+	_ = wsjson.Read(ctx, connCharlie, &helloC)
+
+	// Flush Charlie's presence events to avoid noise
+	for {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connCharlie, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type == protocol.EventPresenceChanged {
+			break
+		}
+	}
+
+	// 4. Alice initializes file upload via POST /upload/init
+	initBody := `{"fileName":"test-file.txt","size":100,"sender":"Alice","peer":"peer-A"}`
+	resp, err := http.Post(server.URL+"/chat-v2/test-token/upload/init", "application/json", strings.NewReader(initBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("upload/init failed status=%d body=%s", resp.StatusCode, string(body))
+	}
+	var msgInit protocol.Message
+	if err := json.NewDecoder(resp.Body).Decode(&msgInit); err != nil {
+		t.Fatal(err)
+	}
+	msgID := msgInit.ID
+
+	// 5. Charlie should NOT receive EventMessageAdded (uploading: true) for the file.
+	charlieReceivedMessage := false
+	ch := make(chan protocol.EventEnvelope, 100)
+	go func() {
+		for {
+			var ev protocol.EventEnvelope
+			if err := wsjson.Read(ctx, connCharlie, &ev); err != nil {
+				return
+			}
+			ch <- ev
+		}
+	}()
+
+	select {
+	case ev := <-ch:
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil && ev.Message.ID == msgID {
+			charlieReceivedMessage = true
+		}
+	case <-time.After(100 * time.Millisecond):
+		// No event, good
+	}
+	if charlieReceivedMessage {
+		t.Fatal("Charlie should NOT receive file message added event during upload initialization")
+	}
+
+	// 6. Alice uploads file data via POST /upload
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, _ := writer.CreateFormFile("file", "test-file.txt")
+	_, _ = part.Write([]byte("hello world this is a test file"))
+	_ = writer.WriteField("messageId", msgID)
+	_ = writer.WriteField("sender", "Alice")
+	_ = writer.WriteField("peer", "peer-A")
+	_ = writer.Close()
+
+	respUpload, err := http.Post(server.URL+"/chat-v2/test-token/upload", writer.FormDataContentType(), &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respUpload.Body.Close()
+	if respUpload.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(respUpload.Body)
+		t.Fatalf("upload failed status=%d body=%s", respUpload.StatusCode, string(body))
+	}
+
+	// Charlie should still NOT receive EventMessageUpdated (uploading: false, downloaded: false)
+	select {
+	case ev := <-ch:
+		if (ev.Type == protocol.EventMessageUpdated || ev.Type == protocol.EventMessageAdded) && ev.Message != nil && ev.Message.ID == msgID {
+			charlieReceivedMessage = true
+		}
+	case <-time.After(100 * time.Millisecond):
+		// No event, good
+	}
+	if charlieReceivedMessage {
+		t.Fatal("Charlie should NOT receive file message event after upload completion")
+	}
+
+	// 7. Desktop (B) triggers local copy download completion notification
+	handler.NotifyQuickDownload(msgID)
+
+	// 8. Charlie should now receive EventMessageAdded (or EventMessageUpdated) indicating downloaded=true!
+	var targetEvent protocol.EventEnvelope
+	found := false
+	for !found {
+		select {
+		case ev := <-ch:
+			if (ev.Type == protocol.EventMessageAdded || ev.Type == protocol.EventMessageUpdated) && ev.Message != nil && ev.Message.ID == msgID {
+				targetEvent = ev
+				found = true
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("Timed out waiting for file message notification on bypass device Charlie")
+		}
+	}
+
+	if !targetEvent.Message.Downloaded {
+		t.Fatal("Expected message to be marked downloaded in notification to Charlie")
 	}
 }

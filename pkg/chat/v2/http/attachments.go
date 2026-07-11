@@ -166,8 +166,6 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 		Message: msg,
 		Time:    time.Now(),
 	}
-	_ = sess.MessageStore.Add(event)
-
 	// Pre-create and start the upload job so clients can report progress immediately
 	h.transfer.CreateJob(token, "ul-"+msgID, msgID, senderID, req.FileName, req.Size)
 	_ = h.transfer.StartJob("ul-" + msgID)

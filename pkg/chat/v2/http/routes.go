@@ -75,7 +75,7 @@ func NewHandler(cfg Config) *Handler {
 		if ev.MessageID != "" && strings.HasPrefix(ev.ID, "dl-") && et == protocol.EventTransferCompleted {
 			if msg := sess.MessageStore.MarkDownloaded(ev.MessageID); msg != nil {
 				sess.Broadcast(protocol.EventEnvelope{
-					Type:    protocol.EventMessageAdded,
+					Type:    protocol.EventMessageUpdated,
 					Time:    time.Now(),
 					Message: msg,
 				})

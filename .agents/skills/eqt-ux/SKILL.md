@@ -233,3 +233,12 @@ The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试�
   - If a device completes its transfer and the server keeps running (`KeepAlive` is active and `autoStop` is false/pending other devices), the global server status state must transition to `"waiting"` (e.g. `"Transfer completed. Waiting for more files."`) rather than `"completed"` to prevent the Wails GUI from prematurely archiving the session and generating infinite loop notifications.
 - **Desktop Agent State Clean-Up**:
   - In `desktopAgent.observeTransferStatus`, once a session reaches any terminal state (`stopped`, `replaced`, `completed`, `failed`), all ongoing task references (`agent.current`, `agent.busy`, `agent.activeStop`) must be fully cleared. This ensures that final notifications and history writes occur exactly once.
+
+## Bypass Device File Message Synchronization (旁路设备文件消息同步规范)
+- **Problem**: In chat v2 mode, to prevent bypass devices (C) from seeing messy progress indicators, upload messages are filtered on the server and not sent to C. Once B (desktop GUI) finishes downloading, the file becomes ready for everyone.
+- **Rules**:
+  1. **Duplicate Add Avoidance**: In `/upload/init`, do not add the message to the store twice. Let the broadcast mechanism be the sole entry point to avoid sequence duplication.
+  2. **Event Progression**: Upon download completion by B, mark the message as downloaded (`Downloaded = true`) in the store and broadcast `EventMessageUpdated` (not `EventMessageAdded`) to notify all clients.
+  3. **Robust Frontend Insertion**: Since bypass device C did not receive the upload init message, C's local message list is empty. The frontend `updateMessage` store method must dynamically check if the incoming updated message exists; if it does not exist, it must append and sort the message in the list. This ensures C instantly reveals the ready-to-download file bubble.
+  4. **State-level Filter Alignment**: In `MessageList.svelte`, keep `isDownloaded = false` for C (which is `!isEmbedded`) until C itself has finished downloading, rendering the standard download arrow button for C.
+
