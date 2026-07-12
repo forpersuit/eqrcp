@@ -265,6 +265,23 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "missing transferId")
 				continue
 			}
+
+			// Pre-create the download job if it does not exist yet to prevent race conditions
+			if strings.HasPrefix(cmd.TransferID, "dl-") {
+				if _, err := h.transfer.GetJob(cmd.TransferID); err != nil {
+					// Extract message ID from transfer ID (format: dl-<messageId>-<clientId> or dl-<messageId>)
+					fileID := strings.TrimPrefix(cmd.TransferID, "dl-")
+					suffix := "-" + cl.Peer
+					if strings.HasSuffix(fileID, suffix) {
+						fileID = strings.TrimSuffix(fileID, suffix)
+					}
+
+					if msg, exists := sess.MessageStore.Find(fileID); exists && msg != nil {
+						h.transfer.CreateJob(sess.Token, cmd.TransferID, fileID, cl.Peer, msg.FileName, msg.Size)
+					}
+				}
+			}
+
 			err := h.transfer.StartJob(cmd.TransferID)
 			if err != nil {
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, err.Error())

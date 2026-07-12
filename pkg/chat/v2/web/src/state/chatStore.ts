@@ -172,5 +172,9 @@ export const chatActions = {
       }
       return [...list, updated].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     });
+  },
+
+  clearTransfers() {
+    transfers.set({});
   }
 };

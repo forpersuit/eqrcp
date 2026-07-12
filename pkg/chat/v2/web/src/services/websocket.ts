@@ -217,13 +217,14 @@ export class ChatWebSocketClient {
 
   private handleEvent(event: EventEnvelope): void {
     // Record event watermark to ensure reliable reconnection replay
-    if (event.seq !== undefined && event.seq > 0) {
+    if (event.seq !== undefined && event.seq > 0 && event.type !== 'hello') {
       localStorage.setItem(`eqt_after_seq_${this.token}`, event.seq.toString());
     }
 
     switch (event.type) {
       case 'hello':
         chatActions.setConnectionState('connected');
+        chatActions.clearTransfers();
         if (event.commandId && event.commandId.startsWith('init-')) {
           chatActions.addSystemMessage(`Registered presence roster as ${this.clientLabel}.`);
         }

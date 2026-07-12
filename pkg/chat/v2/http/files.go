@@ -61,12 +61,14 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		}
 	}
 
-	// Create and register the download Job
+	// Create and register the download Job if it doesn't exist yet
 	jobID := "dl-" + fileID
 	if clientID != "" {
 		jobID = "dl-" + fileID + "-" + clientID
 	}
-	h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
+	if _, err := h.transfer.GetJob(jobID); err != nil {
+		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
+	}
 
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))

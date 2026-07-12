@@ -90,15 +90,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	if shouldReplay {
 		events := s.MessageStore.GetSince(startSeq)
 		for _, e := range events {
-			if e.Message != nil || e.Transfer != nil {
-				if e.Message != nil && e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
-					if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
-						diag.Emit(context.Background(), s.Logger, diag.LevelDebug, "[WebSocket Replay Filtered]", nil,
-							diag.F("msgID", e.Message.ID), diag.F("clientID", c.ID), diag.F("peer", c.Peer),
-							diag.F("senderID", e.Message.SenderID))
-						continue
-					}
-				}
+			if (e.Message != nil || e.Transfer != nil) && s.isEventVisibleTo(c, e) {
 				c.Send(e)
 			}
 		}
@@ -175,19 +167,10 @@ func (s *Session) Broadcast(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
-		visible := true
+		visible := s.isEventVisibleTo(c, event)
 		filterReason := ""
-		if (event.Type == protocol.EventMessageAdded || event.Type == protocol.EventMessageUpdated) && event.Message != nil && event.Message.Type == protocol.MessageFile && !event.Message.Downloaded {
-			visible = c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == ""
-			if !visible {
-				filterReason = fmt.Sprintf("undownloaded FileMessage restriction (SenderID=%s, ClientPeer=%s)", event.Message.SenderID, c.Peer)
-			}
-		}
-		if visible && event.Transfer != nil {
-			visible = s.isTransferEventVisibleTo(c, event)
-			if !visible {
-				filterReason = "isTransferEventVisibleTo restriction"
-			}
+		if !visible {
+			filterReason = "isEventVisibleTo restriction"
 		}
 
 		msgID := ""
@@ -214,10 +197,7 @@ func (s *Session) BroadcastRaw(event protocol.EventEnvelope) {
 	defer s.mu.RUnlock()
 
 	for _, c := range s.clients {
-		visible := true
-		if event.Transfer != nil {
-			visible = s.isTransferEventVisibleTo(c, event)
-		}
+		visible := s.isEventVisibleTo(c, event)
 
 		if visible {
 			msgID := ""
@@ -462,6 +442,20 @@ func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelo
 		// If not registered yet in message store, fallback to client/desktop bounds
 		return c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
 	}
+	return true
+}
+
+// isEventVisibleTo checks if a generic event envelope is visible to a client.
+func (s *Session) isEventVisibleTo(c *Client, event protocol.EventEnvelope) bool {
+	if event.Transfer != nil {
+		return s.isTransferEventVisibleTo(c, event)
+	}
+
+	if event.Message != nil && event.Message.Type == protocol.MessageFile && event.Message.Uploading {
+		// Limit uploading file messages to sender, desktop, or empty targets
+		return c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == ""
+	}
+
 	return true
 }
 
