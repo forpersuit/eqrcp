@@ -60,6 +60,7 @@
   let showLicensePanel = false;
   let showLangPanel = false;
   let showShareModal = false;
+  let showLeaveConfirm = false;
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
@@ -939,6 +940,13 @@
     }
   }
 
+  function handleLeaveSessionConfirm() {
+    showLeaveConfirm = false;
+    if (client) {
+      client.leaveSession();
+    }
+  }
+
   function setLanguage(lang: string) {
     localStorage.setItem('eqt_lang', lang);
     localStorage.setItem('eqt-page-lang', lang);
@@ -962,6 +970,7 @@
     showDevicePanel = false;
     showLicensePanel = false;
     showLangPanel = false;
+    showLeaveConfirm = false;
   }
 
   function handleDragEnter(e: DragEvent) {
@@ -1027,6 +1036,10 @@
           {#if isEmbedded}
             <button class="icon-button danger" type="button" on:click={handleClose} title="Stop chat">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+            </button>
+          {:else}
+            <button class="icon-button danger" type="button" on:click|stopPropagation={() => { closeAllPanels(); showLeaveConfirm = true; }} title="Exit chat">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             </button>
           {/if}
 
@@ -1192,6 +1205,33 @@
         <button class="session-toggle" type="button" on:click={() => showUrl = !showUrl} style="margin-top: 8px;">
           {showUrl ? '隐藏加入链接' : '显示加入链接'}
         </button>
+      </aside>
+    </div>
+
+    <!-- 退出确认模态框 -->
+    <div class="session-backdrop" class:open={showLeaveConfirm} on:click|self={() => showLeaveConfirm = false}>
+      <aside class="side" style="max-width: 320px; padding: 20px;">
+        <div class="side-section-head">
+          <h1 style="font-size: 16px; font-weight: bold; color: var(--danger);">
+            {currentLang === 'en' ? 'Exit Session' : '退出当前会话'}
+          </h1>
+          <button class="icon-button" type="button" on:click={() => showLeaveConfirm = false} title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <p class="side-note" style="margin-top: 10px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; color: #666;">
+          {currentLang === 'en' 
+            ? 'Are you sure you want to exit the current chat session? Once you exit, your device will be unregistered and you will have to re-scan the QR code to join again.' 
+            : '确定要退出当前聊天会话吗？退出后，您的设备将被注销，且必须重新扫描二维码才能再次加入。'}
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button class="side-btn" style="background: transparent; border: 1px solid var(--line); color: var(--muted);" on:click={() => showLeaveConfirm = false}>
+            {currentLang === 'en' ? 'Cancel' : '取消'}
+          </button>
+          <button class="side-btn" style="background: var(--danger); border-color: var(--danger); color: white;" on:click={handleLeaveSessionConfirm}>
+            {currentLang === 'en' ? 'Exit' : '确定退出'}
+          </button>
+        </div>
       </aside>
     </div>
   </main>

@@ -729,10 +729,6 @@ h1 {
     }
 }
 @media (max-width: 360px) {
-    .chat-head .qr-btn,
-    .chat-head .lang-btn {
-        display: none !important;
-    }
     .chat-head {
         padding: 8px 10px;
         gap: 6px;

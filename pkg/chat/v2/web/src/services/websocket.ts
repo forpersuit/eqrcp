@@ -199,7 +199,7 @@ export class ChatWebSocketClient {
         this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
         return;
       }
-      if (event.code === 1008 || event.reason === "device was forced offline") {
+      if (event.code === 1008 || event.code === 4008 || event.reason === "device was forced offline") {
         this.isManualClosed = true;
         localStorage.setItem('eqt_kicked_state', 'true');
         chatActions.addSystemMessage('您已被强制下线，无法继续加入本会话。');
@@ -491,5 +491,11 @@ export class ChatWebSocketClient {
     this.isManualClosed = true;
     this.stopHeartbeat();
     this.ws?.close();
+  }
+
+  public leaveSession(): void {
+    this.isManualClosed = true;
+    localStorage.setItem('eqt_kicked_state', 'true');
+    this.ws?.close(4008, "device was forced offline");
   }
 }
