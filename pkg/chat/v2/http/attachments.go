@@ -84,17 +84,19 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 	}
 
 	msg := &protocol.Message{
-		ID:        msgID,
-		SenderID:  senderID,
-		Sender:    req.Sender,
-		Avatar:    req.Avatar,
-		Theme:     sess.GetClientTheme(senderID),
-		Type:      protocol.MessageFile,
-		FileName:  fileName,
-		Size:      size,
-		MimeType:  mimeType,
-		FilePath:  req.Path,
-		CreatedAt: time.Now(),
+		ID:         msgID,
+		SenderID:   senderID,
+		Sender:     req.Sender,
+		Avatar:     req.Avatar,
+		Theme:      sess.GetClientTheme(senderID),
+		Type:       protocol.MessageFile,
+		FileName:   fileName,
+		Size:       size,
+		MimeType:   mimeType,
+		FilePath:   req.Path,
+		URL:        fmt.Sprintf("/chat-v2/%s/files/%s", token, msgID),
+		Downloaded: true,
+		CreatedAt:  time.Now(),
 	}
 
 	event := protocol.EventEnvelope{
@@ -294,6 +296,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 			FileName:   fileName,
 			Size:       size,
 			MimeType:   mimeType,
+			URL:        fmt.Sprintf("/chat-v2/%s/files/%s", token, msgID),
 			Downloaded: true, // Auto-mark downloaded when fallback direct upload caches successfully
 			CreatedAt:  time.Now(),
 		}
