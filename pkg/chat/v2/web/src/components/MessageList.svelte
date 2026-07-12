@@ -531,7 +531,7 @@
 
     // 2. 动态计算菜单宽度 (基于最长文字宽度 + 32px menu-item padding + 8px menu container padding + 2px border)
     // 菜单容器左右 padding 各 4px = 8px; border 各 1px = 2px; menu-item 左右 padding 各 16px = 32px; 共 42px
-    const targetW = Math.max(150, Math.min(280, maxTextW + 42));
+    const targetW = Math.max(100, Math.min(280, maxTextW + 42));
     
     // 应用计算宽度
     menuEl.style.width = `${targetW}px`;
@@ -1086,7 +1086,7 @@
     z-index: 10000;
     width: max-content;
     max-width: 280px;
-    min-width: 150px;
+    min-width: 100px;
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
