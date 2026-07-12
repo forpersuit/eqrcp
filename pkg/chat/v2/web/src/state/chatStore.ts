@@ -7,9 +7,13 @@ export const transfers = writable<Record<string, TransferEvent>>({});
 export const connState = writable<'connecting' | 'connected' | 'disconnected'>('disconnected');
 export const currentDevice = writable<Device | null>(null);
 export const systemMessages = writable<string[]>([]); // For in-app notifications
+export const chatSessionStatus = writable<'active' | 'kicked' | 'left'>('active');
 
 // Actions - Only update state through explicit actions
 export const chatActions = {
+  setSessionStatus(status: 'active' | 'kicked' | 'left') {
+    chatSessionStatus.set(status);
+  },
   addMessage(msg: Message) {
     if (msg.text) {
       try {

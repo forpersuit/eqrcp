@@ -31,11 +31,13 @@ export class ChatWebSocketClient {
     // Extract join and theme parameter from URL search query
     const params = new URLSearchParams(window.location.search);
     const wasKicked = localStorage.getItem('eqt_kicked_state') === 'true';
+    const wasLeft = localStorage.getItem('eqt_manual_leave') === 'true';
 
-    // If device was previously kicked out, any page reload/scan represents a manual override join action,
+    // If device was previously kicked out or manually exited, any page reload/scan represents a manual override join action,
     // so we fully purge the local registration keys, tokens, and generate clean credentials for a reset device.
-    if (wasKicked) {
+    if (wasKicked || wasLeft) {
       localStorage.removeItem('eqt_kicked_state');
+      localStorage.removeItem('eqt_manual_leave');
       localStorage.removeItem('chat_label');
       localStorage.removeItem('chat_avatar');
       localStorage.removeItem('chat_peer');
@@ -45,7 +47,11 @@ export class ChatWebSocketClient {
     }
 
     this.joinParam = params.get('join') || '';
-    this.themeParam = params.get('theme') || '';
+    const themeFromUrl = params.get('theme') || '';
+    if (themeFromUrl) {
+      localStorage.setItem('eqt_chat_theme', themeFromUrl);
+    }
+    this.themeParam = localStorage.getItem('eqt_chat_theme') || themeFromUrl || '';
 
     // Auto-generate some local client details if not provided
     let randSuffix = '';
@@ -137,7 +143,7 @@ export class ChatWebSocketClient {
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       
-      let preferredTheme = this.themeParam;
+      let preferredTheme = localStorage.getItem('eqt_chat_theme') || this.themeParam || 'theme-0';
       if (this.clientPeer === 'desktop') {
         preferredTheme = 'theme-0';
       }
@@ -202,15 +208,34 @@ export class ChatWebSocketClient {
       if (event.code === 1008 || event.code === 4008 || event.reason === "device was forced offline") {
         this.isManualClosed = true;
         localStorage.setItem('eqt_kicked_state', 'true');
-        chatActions.addSystemMessage('您已被强制下线，无法继续加入本会话。');
-        chatActions.addMessage({
-          id: `sys-kick-${Date.now()}`,
-          sender: 'system',
-          type: 'system',
-          text: '您已被强制下线，无法继续在此会话中发送或接收消息。如需重新加入，请使用其他浏览器或重新扫码。',
-          createdAt: new Date().toISOString()
-        });
-        this.sendLog(`[SYSTEM] WebSocket closed: device was forced offline. Stopping reconnect.`);
+        const isManualLeave = localStorage.getItem('eqt_manual_leave') === 'true';
+        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+        if (isManualLeave) {
+          chatActions.setSessionStatus('left');
+          chatActions.addSystemMessage(currentLang === 'en' ? 'You have exited the session.' : '您已退出当前会话。');
+          chatActions.addMessage({
+            id: `sys-leave-${Date.now()}`,
+            sender: 'system',
+            type: 'system',
+            text: currentLang === 'en'
+              ? 'You have voluntarily exited the current session. Please scan the QR code again to rejoin.'
+              : '您已主动退出当前会话。如需重新加入，请重新扫码。',
+            createdAt: new Date().toISOString()
+          });
+        } else {
+          chatActions.setSessionStatus('kicked');
+          chatActions.addSystemMessage(currentLang === 'en' ? 'You have been forced offline.' : '您已被强制下线，无法继续加入本会话。');
+          chatActions.addMessage({
+            id: `sys-kick-${Date.now()}`,
+            sender: 'system',
+            type: 'system',
+            text: currentLang === 'en'
+              ? 'You have been forced offline and cannot continue sending or receiving messages. To rejoin, please use another browser or re-scan the QR code.'
+              : '您已被强制下线，无法继续在此会话中发送或接收消息。如需重新加入，请使用其他浏览器或重新扫码。',
+            createdAt: new Date().toISOString()
+          });
+        }
+        this.sendLog(`[SYSTEM] WebSocket closed: device offline. Stopping reconnect.`);
         return;
       }
       if (!this.isManualClosed) {
@@ -496,6 +521,7 @@ export class ChatWebSocketClient {
   public leaveSession(): void {
     this.isManualClosed = true;
     localStorage.setItem('eqt_kicked_state', 'true');
+    localStorage.setItem('eqt_manual_leave', 'true');
     this.ws?.close(4008, "device was forced offline");
   }
 }

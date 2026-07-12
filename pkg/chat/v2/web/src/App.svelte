@@ -3,7 +3,7 @@
   import MessageList from './components/MessageList.svelte';
   import MessageComposer from './components/MessageComposer.svelte';
   import { ChatWebSocketClient } from './services/websocket';
-  import { chatActions, currentDevice, peers, connState, messages, transfers } from './state/chatStore';
+  import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus } from './state/chatStore';
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
 
@@ -67,6 +67,67 @@
   let copied = false;
   
   let currentLang = localStorage.getItem('eqt_lang') || 'zh';
+
+  let isMobileLayout = false;
+  function checkScreenSize() {
+    isMobileLayout = typeof window !== 'undefined' && window.innerWidth <= 820;
+  }
+
+  $: t = currentLang === 'en' ? {
+    vipStatus: 'VIP / Unrestricted',
+    viewSubscription: 'Click to view subscription details',
+    onlineDevices: 'Online Devices',
+    self: 'Self',
+    online: 'Online',
+    inputDeviceName: 'Enter device name',
+    save: 'Save',
+    cancel: 'Cancel',
+    renameDevice: 'Rename device',
+    kickOffline: 'Force offline',
+    noOtherDevices: 'No other online devices',
+    subscriptionDetails: 'Subscription & License Details',
+    vipLifetime: 'VIP Lifetime License',
+    authStatus: 'Auth Status',
+    validLifetime: 'Valid (Lifetime)',
+    speedLimit: 'Speed Limit',
+    unlimitedSpeed: 'Unlimited High Speed',
+    fingerprintCheck: 'Fingerprint Check',
+    passed: 'Passed',
+    selectLanguage: 'Select Language',
+    sessionQR: 'Session QR Code',
+    scanQR: 'Scan the QR code below to join from other devices',
+    copied: 'Copied',
+    copy: 'Copy',
+    hideLink: 'Hide Join Link',
+    showLink: 'Show Join Link'
+  } : {
+    vipStatus: 'VIP / 无限制',
+    viewSubscription: '点击查看订阅详情',
+    onlineDevices: '在线设备',
+    self: '本机',
+    online: '在线',
+    inputDeviceName: '输入设备名称',
+    save: '保存',
+    cancel: '取消',
+    renameDevice: '重命名设备',
+    kickOffline: '强制踢下线',
+    noOtherDevices: '无其他在线设备',
+    subscriptionDetails: '订阅与许可证详情',
+    vipLifetime: 'VIP 永久授权版',
+    authStatus: '授权状态',
+    validLifetime: '有效（永久）',
+    speedLimit: '加速限流',
+    unlimitedSpeed: '无限制极速加速',
+    fingerprintCheck: '指纹校验',
+    passed: '通过',
+    selectLanguage: '选择语言',
+    sessionQR: '会话二维码',
+    scanQR: '扫描下方二维码从其他设备加入会话',
+    copied: '已复制',
+    copy: '复制',
+    hideLink: '隐藏加入链接',
+    showLink: '显示加入链接'
+  };
 
   // React to theme changes and inject CSS variables
   function hexToRgb(hex: string): string | null {
@@ -520,6 +581,11 @@
   }
 
   onMount(() => {
+    chatActions.setSessionStatus('active');
+    checkScreenSize();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkScreenSize);
+    }
     const updateEmbeddedState = () => {
       isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
       if (isEmbedded && !document.documentElement.classList.contains('embedded-chat')) {
@@ -645,6 +711,9 @@
   });
 
   onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', checkScreenSize);
+    }
     document.removeEventListener('contextmenu', handleGlobalContextMenu);
     closeContextMenu();
     window.removeEventListener('message', handleMessage);
@@ -952,7 +1021,6 @@
     localStorage.setItem('eqt-page-lang', lang);
     currentLang = lang;
     showLangPanel = false;
-    window.location.reload();
   }
 
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
@@ -1019,8 +1087,8 @@
           {#if !isEmbedded}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title="点击查看订阅详情">
-              <span>VIP / 无限制</span>
+            <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title={t.viewSubscription}>
+              <span>{t.vipStatus}</span>
             </div>
           {/if}
 
@@ -1037,7 +1105,7 @@
             <button class="icon-button danger" type="button" on:click={handleClose} title="Stop chat">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
             </button>
-          {:else}
+          {:else if $chatSessionStatus === 'active'}
             <button class="icon-button danger" type="button" on:click|stopPropagation={() => { closeAllPanels(); showLeaveConfirm = true; }} title="Exit chat">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             </button>
@@ -1051,7 +1119,7 @@
 
           <!-- Panels -->
           <div class="device-panel" class:open={showDevicePanel} on:click|stopPropagation>
-            <div class="device-panel-title" style="margin-bottom: 8px;">在线设备</div>
+            <div class="device-panel-title" style="margin-bottom: 8px;">{t.onlineDevices}</div>
             <div class="device-roster">
               {#each $peers as dev}
                 {@const isSelf = dev.id === $currentDevice?.id}
@@ -1073,17 +1141,17 @@
                       {#if activeTx}
                         {#if activeTx.state === 'running'}
                           <span style="font-size: 10px; color: var(--accent-strong); font-weight: bold;">
-                            传输中: {activeTx.percent ?? 0}% ({formatSpeed(activeTx.speed ?? 0)})
+                            {currentLang === 'en' ? 'Transferring' : '传输中'}: {activeTx.percent ?? 0}% ({formatSpeed(activeTx.speed ?? 0)})
                           </span>
                         {:else}
-                          <span style="font-size: 10px; color: #6b7280;">排队等待中...</span>
+                          <span style="font-size: 10px; color: #6b7280;">{currentLang === 'en' ? 'Queued...' : '排队等待中...'}</span>
                         {/if}
                       {/if}
                     </div>
                     {#if isSelf}
-                      <span class="device-state" style="background: transparent; color: var(--muted); padding: 0;">本机</span>
+                      <span class="device-state" style="background: transparent; color: var(--muted); padding: 0;">{t.self}</span>
                     {:else}
-                      <span class="device-state" style="background: transparent; color: {tc ? tc.border : 'var(--accent-strong)'}; padding: 0;">在线</span>
+                      <span class="device-state" style="background: transparent; color: {tc ? tc.border : 'var(--accent-strong)'}; padding: 0;">{t.online}</span>
                     {/if}
                   </button>
 
@@ -1092,59 +1160,59 @@
                       {#if isSelf}
                         {#if isEditingName}
                           <div class="device-rename-form">
-                            <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} class="device-rename-input" placeholder="输入设备名称">
+                            <input bind:value={editNameVal} on:keydown={handleRenameInputKeydown} class="device-rename-input" placeholder={t.inputDeviceName}>
                             <div class="device-rename-buttons">
-                              <button class="side-btn device-rename-btn" on:click|preventDefault={handleRenameDevice}>保存</button>
-                              <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>取消</button>
+                              <button class="side-btn device-rename-btn" on:click|preventDefault={handleRenameDevice}>{t.save}</button>
+                              <button class="side-btn device-rename-btn cancel" on:click|preventDefault={() => { if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) { document.activeElement.blur(); } isEditingName = false; }}>{t.cancel}</button>
                             </div>
                           </div>
                         {:else}
-                          <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label} (本机)</strong>
-                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px; flex-shrink: 0;" on:click={() => isEditingName = true} title="重命名设备">
+                          <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label} ({t.self})</strong>
+                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px; flex-shrink: 0;" on:click={() => isEditingName = true} title={t.renameDevice}>
                             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           </button>
                         {/if}
                       {:else}
                         <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
-                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626; flex-shrink: 0;" on:click={() => handleKickDevice(dev.id, dev.label)} title="强制踢下线">
+                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626; flex-shrink: 0;" on:click={() => handleKickDevice(dev.id, dev.label)} title={t.kickOffline}>
                           <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 12h10M17 8l4 4-4 4M15 4H9a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>
                         </button>
                       {/if}
                     </div>
                     <div class="device-detail-meta" style="font-size: 10px; color: #666; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                      <span>状态: 在线</span>
-                      <span>并发连接数: 1</span>
-                      <span>上次活跃时间: {formatDeviceTime(dev.lastSeen)}</span>
+                      <span>{currentLang === 'en' ? 'Status: Online' : '状态: 在线'}</span>
+                      <span>{currentLang === 'en' ? 'Concurrent Connections: 1' : '并发连接数: 1'}</span>
+                      <span>{currentLang === 'en' ? 'Last Active:' : '上次活跃时间:'} {formatDeviceTime(dev.lastSeen)}</span>
                     </div>
                   </div>
                 </div>
               {:else}
-                <div class="device-empty">无其他在线设备</div>
+                <div class="device-empty">{t.noOtherDevices}</div>
               {/each}
             </div>
           </div>
 
           <div class="license-panel" class:open={showLicensePanel} on:click|stopPropagation>
-            <div class="license-panel-title" style="margin-bottom: 8px;">订阅与许可证详情</div>
+            <div class="license-panel-title" style="margin-bottom: 8px;">{t.subscriptionDetails}</div>
             <div class="license-details-box">
-              <div class="license-status-badge success">VIP 永久授权版</div>
+              <div class="license-status-badge success">{t.vipLifetime}</div>
               <div class="license-info-row">
-                <strong>授权状态</strong>
-                <span>有效（永久）</span>
+                <strong>{t.authStatus}</strong>
+                <span>{t.validLifetime}</span>
               </div>
               <div class="license-info-row">
-                <strong>加速限流</strong>
-                <span>无限制极速加速</span>
+                <strong>{t.speedLimit}</strong>
+                <span>{t.unlimitedSpeed}</span>
               </div>
               <div class="license-info-row">
-                <strong>指纹校验</strong>
-                <span>通过</span>
+                <strong>{t.fingerprintCheck}</strong>
+                <span>{t.passed}</span>
               </div>
             </div>
           </div>
 
           <div class="lang-panel" class:open={showLangPanel} on:click|stopPropagation>
-            <div class="lang-panel-title">选择语言</div>
+            <div class="lang-panel-title">{t.selectLanguage}</div>
             <div class="lang-list">
               <button class="lang-option" class:active={currentLang === 'zh'} on:click={() => setLanguage('zh')}>简体中文</button>
               <button class="lang-option" class:active={currentLang === 'en'} on:click={() => setLanguage('en')}>English</button>
@@ -1176,21 +1244,22 @@
 
       <MessageComposer 
         bind:text={composerText}
+        currentLang={currentLang}
         on:sendText={handleSendText}
         on:sendFile={handleSendFile}
       />
     </section>
 
     <!-- QR Backdrop Modal -->
-    <div class="session-backdrop" class:open={showShareModal} on:click|self={() => showShareModal = false}>
+    <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showShareModal} on:click|self={() => showShareModal = false}>
       <aside class="side">
         <div class="side-section-head">
-          <h1 style="font-size: 16px; font-weight: bold;">会话二维码</h1>
+          <h1 style="font-size: 16px; font-weight: bold;">{t.sessionQR}</h1>
           <button class="icon-button" type="button" on:click={() => showShareModal = false} title="Close">
             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
-        <p class="side-note">扫描下方二维码从其他设备加入会话</p>
+        <p class="side-note">{t.scanQR}</p>
         <div class="qr-frame">
           <img class="qr" src={qrImgSrc} alt="Chat QR code">
         </div>
@@ -1198,18 +1267,18 @@
           <div class="url-row" style="margin-top: 8px;">
             <input value={joinUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: monospace; font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
             <button class="side-btn" type="button" on:click={handleCopyUrl} style="flex-shrink: 0;">
-              {copied ? '已复制' : '复制'}
+              {copied ? t.copied : t.copy}
             </button>
           </div>
         </div>
         <button class="session-toggle" type="button" on:click={() => showUrl = !showUrl} style="margin-top: 8px;">
-          {showUrl ? '隐藏加入链接' : '显示加入链接'}
+          {showUrl ? t.hideLink : t.showLink}
         </button>
       </aside>
     </div>
 
     <!-- 退出确认模态框 -->
-    <div class="session-backdrop" class:open={showLeaveConfirm} on:click|self={() => showLeaveConfirm = false}>
+    <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showLeaveConfirm} on:click|self={() => showLeaveConfirm = false}>
       <aside class="side" style="max-width: 320px; padding: 20px;">
         <div class="side-section-head">
           <h1 style="font-size: 16px; font-weight: bold; color: var(--danger);">

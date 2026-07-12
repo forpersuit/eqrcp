@@ -1561,3 +1561,31 @@ input:focus { border-color: var(--accent); outline: none; }
     pointer-events: none;
 }
 
+/* Custom JS computed classes for iframe embedded mobile viewport layout */
+.session-backdrop.mobile-layout.open {
+    display: block;
+    padding: 0;
+}
+.session-backdrop.mobile-layout .side {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    bottom: 0;
+    left: 0;
+    max-height: 82vh;
+    height: auto;
+    padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+    position: absolute;
+    right: 0;
+    top: auto;
+    transform: translateY(100%);
+    width: 100%;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.12);
+    transition: transform 0.28s cubic-bezier(0.32, 0.94, 0.6, 1);
+}
+.session-backdrop.mobile-layout.open .side {
+    transform: translateY(0);
+}
+
+

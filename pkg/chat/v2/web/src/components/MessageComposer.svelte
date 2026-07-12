@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   const dispatch = createEventDispatcher();
   export let text = '';
+  export let currentLang = 'zh';
   let fileInput: HTMLInputElement;
   let textareaEl: HTMLTextAreaElement;
   let composerEl: HTMLFormElement;
@@ -127,18 +128,18 @@
     <div class="compose-row">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <label class="file-label" title="Add attachment" aria-label="Add attachment" on:click={triggerFileInput}>
+      <label class="file-label" title={currentLang === 'en' ? 'Add attachment' : '添加附件'} aria-label={currentLang === 'en' ? 'Add attachment' : '添加附件'} on:click={triggerFileInput}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       </label>
       <textarea 
         bind:this={textareaEl}
         bind:value={text} 
-        placeholder="Message" 
+        placeholder={currentLang === 'en' ? 'Message...' : '输入消息...'} 
         autocomplete="off" 
         rows="1"
       ></textarea>
       <div class="composer-actions-right">
-        <button class="send-button" type="submit" aria-label="Send" disabled={!text.trim()} on:mousedown|preventDefault>
+        <button class="send-button" type="submit" aria-label={currentLang === 'en' ? 'Send' : '发送'} title={currentLang === 'en' ? 'Send' : '发送'} disabled={!text.trim()} on:mousedown|preventDefault>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
         </button>
       </div>
