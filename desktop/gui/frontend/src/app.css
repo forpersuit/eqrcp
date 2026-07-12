@@ -11,6 +11,10 @@
     --bg: #f7f9fb;
 }
 
+body {
+    --wails-drop-target: drop;
+}
+
 .shell {
     box-sizing: border-box;
     height: 100vh;
