@@ -266,6 +266,11 @@ type progressWriter struct {
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
+	if job, err := pw.transfer.GetJob(pw.jobID); err == nil {
+		if job.State == protocol.TransferCancelled {
+			return 0, fmt.Errorf("transfer cancelled by user")
+		}
+	}
 	n, err := pw.writer.Write(p)
 	if n > 0 {
 		pw.written += int64(n)

@@ -613,3 +613,127 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 	}
 }
 
+func TestHandlerDownloadCancellation(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Connect Alice via WS
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/test-token/ws"
+	connAlice, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connAlice.Close(websocket.StatusNormalClosure, "done")
+
+	// Read initial hello
+	var helloA protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connAlice, &helloA); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send connect Command
+	err = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-alice",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-alice",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read hello confirmation
+	if err := wsjson.Read(ctx, connAlice, &helloA); err != nil {
+		t.Fatal(err)
+	}
+
+	// Flush Alice's presence events to avoid test pollution
+	var pres protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connAlice, &pres); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Alice triggers HTTP file download in a separate goroutine
+	// Use large mock size (10MB) so it takes time and we can cancel it midway
+	downloadURL := server.URL + "/chat-v2/test-token/files/file-cancel?mock_size=10485760&clientId=peer-alice&messageId=msg-cancel&filename=test.bin"
+	errChan := make(chan error, 1)
+	
+	// Track download completion or failure state
+	var readBytes int64
+	go func() {
+		resp, err := http.Get(downloadURL)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		defer resp.Body.Close()
+
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := resp.Body.Read(buf)
+			readBytes += int64(n)
+			if err != nil {
+				errChan <- err
+				return
+			}
+		}
+	}()
+
+	// 3. Wait for download progress to start
+	var gotProgress bool
+	var gotCancelled bool
+	
+	for {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connAlice, &ev); err != nil {
+			t.Fatal(err)
+		}
+
+		if ev.Type == protocol.EventTransferProgress {
+			gotProgress = true
+			// Download is actively running, now trigger cancel Command from Alice
+			err = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
+				Type:       protocol.CommandCancelTransfer,
+				CommandID:  "cancel-tx",
+				TransferID: "dl-file-cancel-peer-alice",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else if ev.Type == protocol.EventTransferCancelled {
+			gotCancelled = true
+			break
+		}
+	}
+
+	// 4. Ensure download thread exited with error due to user cancel aborting write stream
+	select {
+	case downloadErr := <-errChan:
+		if downloadErr == nil {
+			t.Fatal("expected download stream to fail due to active cancel, but it finished successfully")
+		}
+		t.Logf("Download aborted successfully with error: %v", downloadErr)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for HTTP GET connection to terminate after cancel")
+	}
+
+	if !gotProgress || !gotCancelled {
+		t.Fatalf("lifecycle mismatch: gotProgress=%t, gotCancelled=%t", gotProgress, gotCancelled)
+	}
+
+	// 5. Verify backend job status is indeed cancelled, and NOT failed
+	job, err := handler.transfer.GetJob("dl-file-cancel-peer-alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != protocol.TransferCancelled {
+		t.Fatalf("expected job state to remain TransferCancelled, got = %s (Error: %s)", job.State, job.Error)
+	}
+}
+

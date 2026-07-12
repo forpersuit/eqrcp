@@ -122,6 +122,11 @@ func (m *Manager) FailJob(id string, err error) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
+	// If job is already cancelled, don't overwrite it with failed status
+	if job.State == protocol.TransferCancelled {
+		return nil
+	}
+
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
