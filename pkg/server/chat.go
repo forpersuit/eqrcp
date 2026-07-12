@@ -326,7 +326,7 @@ func (s *Server) Chat() error {
 		logger = diag.NewStdLogger()
 	}
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
-		BasePath: route,
+		BasePath: "/chat-v2",
 		Logger:   logger,
 		IsPaidOrUnrestricted: func() bool {
 			usage := limiterInstance.GetStatus()
@@ -371,8 +371,23 @@ func (s *Server) Chat() error {
 		},
 	})
 	s.chatV2Handler = chatV2Handler
-	s.mux.Handle(route, chatV2Handler)
-	s.mux.Handle(route+"/", chatV2Handler)
+	s.mux.Handle("/chat-v2/", chatV2Handler)
+
+	// Redirect any legacy /chat requests to /chat-v2
+	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
+		newPath := "/chat-v2" + strings.TrimPrefix(r.URL.Path, route)
+		if r.URL.RawQuery != "" {
+			newPath += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, newPath, http.StatusMovedPermanently)
+	})
+	s.mux.HandleFunc(route+"/", func(w http.ResponseWriter, r *http.Request) {
+		newPath := "/chat-v2" + strings.TrimPrefix(r.URL.Path, route)
+		if r.URL.RawQuery != "" {
+			newPath += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, newPath, http.StatusMovedPermanently)
+	})
 	s.mux.HandleFunc(stopRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
