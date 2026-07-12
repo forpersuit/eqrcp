@@ -2668,6 +2668,14 @@ function bindEvents() {
                 render();
                 return;
             }
+            const restoreBtn = e.target.closest('.restore-share-action');
+            if (restoreBtn) {
+                const taskId = parseInt(restoreBtn.dataset.taskId, 10);
+                if (taskId) {
+                    restoreSharePaths(taskId);
+                }
+                return;
+            }
         });
         
 function shrinkSearchBoxInDOM() {
@@ -4147,6 +4155,46 @@ async function repeatTask(event) {
         state.notice = t('task_repeated', { id });
         render();
     });
+}
+
+function restoreSharePaths(taskId) {
+    const history = state.status?.history || [];
+    const task = history.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const paths = task.paths || [];
+    if (!paths.length) return;
+    
+    if (!state.sharePaths) {
+        state.sharePaths = [];
+    }
+    
+    let addedCount = 0;
+    paths.forEach(p => {
+        const pathStr = typeof p === 'string' ? p : p.path;
+        if (!pathStr) return;
+        
+        const exists = state.sharePaths.some(item => {
+            const itemPath = typeof item === 'string' ? item : item.path;
+            return itemPath === pathStr;
+        });
+        
+        if (!exists) {
+            state.sharePaths.push(pathStr);
+            addedCount++;
+        }
+    });
+    
+    setMode('share');
+    state.shareLimitNotice = '';
+    
+    if (addedCount > 0) {
+        state.notice = t('share_restored_success', { count: addedCount });
+    } else {
+        state.notice = t('share_restored_exists');
+    }
+    
+    render();
 }
 
 async function openQRPage(event) {

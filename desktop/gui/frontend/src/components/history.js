@@ -40,6 +40,13 @@ export function clearIcon() {
     </svg>`;
 }
 
+export function restoreIcon() {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px;">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+    </svg>`;
+}
+
 // ---- 工具函数 ----
 function escapeHTML(value) {
     if (value === null || value === undefined) return '';
@@ -303,6 +310,11 @@ export function renderHistory(history) {
                     ${taskFolder ? `
                         <button class="icon-button-mini open-dir-action path-link" data-open-path="${escapeAttr(taskFolder)}" title="${escapeAttr(t('open_folder_title'))}" style="margin-left: 8px;">
                             ${openFolderIcon()}
+                        </button>
+                    ` : ''}
+                    ${task.action === 'send' ? `
+                        <button class="icon-button-mini restore-share-action" data-task-id="${task.id}" title="${escapeAttr(t('restore_share'))}" style="margin-left: 8px;">
+                            ${restoreIcon()}
                         </button>
                     ` : ''}
                 </div>
