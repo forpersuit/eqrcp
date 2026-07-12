@@ -746,8 +746,9 @@
     {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded && (m.uploading || !m.downloaded))) as msg (msg.id)}
       {#if msg.type === 'system'}
         {@const colors = msg.theme ? getThemeColors(msg.theme) : null}
-        {@const myLabel = $currentDevice?.label}
-        {@const displayText = myLabel && msg.text.includes(myLabel) ? msg.text.replaceAll(myLabel, `我(${myLabel})`) : msg.text}
+        {@const localPeer = $currentDevice?.peer || 'desktop'}
+        {@const isMe = msg.senderId && msg.senderId === localPeer}
+        {@const displayText = isMe && msg.sender && msg.text.includes(msg.sender) ? msg.text.replaceAll(msg.sender, `我(${msg.sender})`) : msg.text}
         <div class="system-message">
           {#if colors}
             <span class="system-text" style="background: {colors.bg}; border-color: {colors.border}; color: {colors.text};">{displayText}</span>

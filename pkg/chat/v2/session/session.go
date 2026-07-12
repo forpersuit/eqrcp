@@ -118,7 +118,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg, c.Theme)
+		s.broadcastSystemMessage(sysMsg, c.Theme, c)
 	}
 }
 
@@ -144,7 +144,7 @@ func (s *Session) Unregister(c *Client) {
 		s.broadcastPresence()
 
 		if !hasOther && !s.DisableSystemMessages && !c.Kicked {
-			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label), c.Theme)
+			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label), c.Theme, c)
 		}
 
 		s.mu.RLock()
@@ -459,7 +459,7 @@ func (s *Session) isEventVisibleTo(c *Client, event protocol.EventEnvelope) bool
 	return true
 }
 
-func (s *Session) broadcastSystemMessage(text string, theme string) {
+func (s *Session) broadcastSystemMessage(text string, theme string, cl *Client) {
 	var num int64 = 0
 	if n, err := rand.Int(rand.Reader, big.NewInt(1000000)); err == nil {
 		num = n.Int64()
@@ -470,6 +470,10 @@ func (s *Session) broadcastSystemMessage(text string, theme string) {
 		Text:      text,
 		Theme:     theme,
 		CreatedAt: time.Now(),
+	}
+	if cl != nil {
+		msg.Sender = cl.Label
+		msg.SenderID = cl.Peer
 	}
 	s.Broadcast(protocol.EventEnvelope{
 		Type:    protocol.EventMessageAdded,
@@ -499,7 +503,7 @@ func (s *Session) UpdateClient(c *Client, label string, avatar string) {
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg, c.Theme)
+		s.broadcastSystemMessage(sysMsg, c.Theme, c)
 	}
 }
 
@@ -515,7 +519,7 @@ func (s *Session) KickClient(clientID string) {
 	if exists {
 		sysMsg := fmt.Sprintf("已强制设备 %s 退出会话", c.Label)
 		if !s.DisableSystemMessages {
-			s.broadcastSystemMessage(sysMsg, c.Theme)
+			s.broadcastSystemMessage(sysMsg, c.Theme, c)
 		}
 		c.Close()
 	}
