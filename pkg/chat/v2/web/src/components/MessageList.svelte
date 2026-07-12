@@ -336,9 +336,9 @@
     const localPeer = $currentDevice?.peer || 'desktop';
     const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer);
     const ulTx = txState['ul-' + msg.id];
-    const isTxCompleted = dlTx && dlTx.state === 'completed';
-    const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath);
-    const tx = mine ? ulTx : dlTx;
+    const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id];
+    const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath);
+    const tx = mine ? ulTx : (isTxCompleted ? null : dlTx);
 
     const options: any[] = [];
 
@@ -734,10 +734,10 @@
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isTxCompleted = dlTx && dlTx.state === 'completed'}
+        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id]}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
-        {@const isDownloaded = isTxCompleted || completedMap[msg.id] || (isEmbedded && !!msg.filePath)}
-        {@const tx = mine ? ulTx : dlTx}
+        {@const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath)}
+        {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
         <div 
