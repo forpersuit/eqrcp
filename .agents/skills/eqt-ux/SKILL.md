@@ -98,6 +98,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
     - **Local Domain Origin Verification Trap**: When comparing `e.origin` with URL origin to verify download trust (e.g. inside `isTrustedChatURL`), local dev configurations might cause loopback address mismatch (e.g. `http://localhost:18081` vs `http://127.0.0.1:18081`). Ensure origin domains are normalized (treating `localhost` and `127.0.0.1` as identical) before making strict equivalence comparisons.
 - **原生二次确认框 (Native Confirmation Dialogs)**:
   - 在需要用户强确认的操作（如切换运行模式）时，严禁使用浏览器原生 `confirm()`。应当在 Go 端通过 `wailsruntime.MessageDialog` 封装一个 RPC 方法（例如 `Confirm`），由 JS 异步调用以呈现操作系统原生的对话框，避免网页弹窗打断与卡死，提升应用的原生质感。
+- **菜单项二次确认与控制器拦截防重叠 (Avoid Double Confirmation Collisions)**:
+  - **成因**：当菜单组件（如 `MessageList.svelte` 右键菜单）中的菜单项使用了自带的确认文案拦截机制（如 `confirmLabel`）时，如果它调用的底层动作函数（如原 `handleRedownloadClick`）内部又有一套基于定时器或变量标识的二次确认逻辑，这会导致两层确认拦截叠加，用户必须点击 3 次才能实际触发下载。
+  - **准则**：在设计交互时必须理顺拦截职责。如果菜单已承载了二次确认流程，则 `action` 逻辑在执行时应直接调用原子操作（如直接派发 `handleDownload`）；如果在其他入口（非菜单界面）需要二次确认，应由各自独立的触发器承载，严禁在同一调用链路中串联两套确认拦截状态。
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
   - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部 of 子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
   - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
