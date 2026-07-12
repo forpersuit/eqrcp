@@ -291,3 +291,58 @@ func TestIntegrationActivateAndLocalVerify(t *testing.T) {
 		t.Fatal("expected unpaid status when fingerprint validation fails")
 	}
 }
+
+func TestPrecomputeFingerprintsNonBlocking(t *testing.T) {
+	// Reset states
+	fingerprintMu.Lock()
+	hasCached = false
+	precomputeStarted = false
+	cachedUUID = ""
+	cachedCPU = ""
+	cachedDisk = ""
+	fingerprintMu.Unlock()
+
+	// 1. When precompute is not started and not cached, it should sync retrieve and block/compute
+	testBoardUUID = "mock_uuid"
+	testCPUSerial = "mock_cpu"
+	testDiskSerial = "mock_disk"
+
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	if uuid != "mock_uuid" || cpu != "mock_cpu" || disk != "mock_disk" {
+		t.Errorf("GetDeviceFingerprintHashes returned unexpected values: %s, %s, %s", uuid, cpu, disk)
+	}
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+
+	// Reset cached state for next step
+	fingerprintMu.Lock()
+	hasCached = false
+	precomputeStarted = false
+	fingerprintMu.Unlock()
+
+	// 2. Mark precomputeStarted as true, and hasCached as false.
+	// It should return empty values immediately without blocking
+	fingerprintMu.Lock()
+	precomputeStarted = true
+	fingerprintMu.Unlock()
+
+	uuid2, cpu2, disk2 := GetDeviceFingerprintHashes()
+	if uuid2 != "" || cpu2 != "" || disk2 != "" {
+		t.Errorf("expected empty hashes in non-blocking precomputing state, got: %s, %s, %s", uuid2, cpu2, disk2)
+	}
+
+	// 3. When background precomputation is completed (hasCached = true), it should return cached values
+	fingerprintMu.Lock()
+	cachedUUID = "cached_uuid"
+	cachedCPU = "cached_cpu"
+	cachedDisk = "cached_disk"
+	hasCached = true
+	fingerprintMu.Unlock()
+
+	uuid3, cpu3, disk3 := GetDeviceFingerprintHashes()
+	if uuid3 != "cached_uuid" || cpu3 != "cached_cpu" || disk3 != "cached_disk" {
+		t.Errorf("expected cached hashes, got: %s, %s, %s", uuid3, cpu3, disk3)
+	}
+}
+

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 var hideWindowAttr *syscall.SysProcAttr
@@ -206,13 +208,31 @@ func PrecomputeDeviceFingerprints() {
 		precomputeStarted = true
 		fingerprintMu.Unlock()
 
+		log.Println("[DRM] Start async precomputing device hardware fingerprints...")
+		startTime := time.Now()
+
 		uuidChan := make(chan string, 1)
 		cpuChan := make(chan string, 1)
 		diskChan := make(chan string, 1)
 
-		go func() { uuidChan <- GetBoardUUID() }()
-		go func() { cpuChan <- GetCPUSerial() }()
-		go func() { diskChan <- GetSystemDiskSerial() }()
+		go func() {
+			t := time.Now()
+			uuid := GetBoardUUID()
+			log.Printf("[DRM] Retrieve Motherboard UUID finished in %v (empty: %t)", time.Since(t), uuid == "")
+			uuidChan <- uuid
+		}()
+		go func() {
+			t := time.Now()
+			cpu := GetCPUSerial()
+			log.Printf("[DRM] Retrieve CPU Serial finished in %v (empty: %t)", time.Since(t), cpu == "")
+			cpuChan <- cpu
+		}()
+		go func() {
+			t := time.Now()
+			disk := GetSystemDiskSerial()
+			log.Printf("[DRM] Retrieve Disk Serial finished in %v (empty: %t)", time.Since(t), disk == "")
+			diskChan <- disk
+		}()
 
 		uuid := <-uuidChan
 		cpu := <-cpuChan
@@ -225,8 +245,12 @@ func PrecomputeDeviceFingerprints() {
 		hasCached = true
 		fingerprintMu.Unlock()
 
+		log.Printf("[DRM] Device hardware fingerprints cached successfully in %v.", time.Since(startTime))
+
 		// 默默在后台触发本地证书校验，完全避免主线程阻塞
-		VerifyLocalLicense()
+		log.Println("[DRM] Background local license verification started...")
+		verified := VerifyLocalLicense()
+		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
 	}()
 }
 
@@ -244,8 +268,10 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 			// If background precomputation is started, return immediately with empty values
 			// to avoid blocking the main thread during startup window loading.
 			// Verification will trigger again asynchronously once background compute completes.
+			log.Println("[DRM] Fingerprints not ready yet. Returning empty hashes to avoid blocking caller thread...")
 			return "", "", ""
 		}
+		log.Println("[DRM] Warning: Sync retrieve fingerprints (precompute not started). Block waiting...")
 		uuid = GetBoardUUID()
 		cpu = GetCPUSerial()
 		disk = GetSystemDiskSerial()
