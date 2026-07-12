@@ -490,13 +490,59 @@
     };
   }
 
+  // 缓存 canvas 实例以提高性能
+  let canvasInstance: HTMLCanvasElement | null = null;
+  function getTextWidth(text: string, font: string): number {
+    if (!canvasInstance) {
+      canvasInstance = document.createElement('canvas');
+    }
+    const context = canvasInstance.getContext('2d');
+    if (context) {
+      context.font = font;
+      return context.measureText(text).width;
+    }
+    return 0;
+  }
+
+  function getElementFont(el: HTMLElement): string {
+    const style = window.getComputedStyle(el);
+    const fontWeight = style.fontWeight || '500';
+    const fontSize = style.fontSize || '14px';
+    const fontFamily = style.fontFamily || 'sans-serif';
+    const fontStyle = style.fontStyle || 'normal';
+    return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
+  }
+
   function adjustMenuPosition() {
     const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
     if (!menuEl || !activeBubbleEl) return;
     
-    // 使用 offsetWidth 和 offsetHeight，完全不受 CSS transform 缩放动画影响，测量绝对精准！
+    // 1. 动态测量子项文本的最大实际宽度
+    let maxTextW = 0;
+    const items = menuEl.querySelectorAll('.menu-item');
+    items.forEach(item => {
+      const text = item.textContent?.trim() || '';
+      const font = getElementFont(item as HTMLElement);
+      const textW = getTextWidth(text, font);
+      if (textW > maxTextW) {
+        maxTextW = textW;
+      }
+    });
+
+    // 2. 动态计算菜单宽度 (基于最长文字宽度 + 32px menu-item padding + 8px menu container padding + 2px border)
+    // 菜单容器左右 padding 各 4px = 8px; border 各 1px = 2px; menu-item 左右 padding 各 16px = 32px; 共 42px
+    const targetW = Math.max(150, Math.min(280, maxTextW + 42));
+    
+    // 应用计算宽度
+    menuEl.style.width = `${targetW}px`;
+
+    // 使用设置后的宽度和高度进行定位计算
     const menuW = menuEl.offsetWidth;
     const menuH = menuEl.offsetHeight;
+
+    // 输出宽度计算结果和菜单内实际文字宽度到控制台日志
+    console.log(`[BubbleMenu] Width calculation result: ${menuW}px, Max item text width: ${maxTextW}px, Target content width: ${targetW}px`);
+
     const bubbleRect = activeBubbleEl.getBoundingClientRect();
     const winW = window.innerWidth;
     const winH = window.innerHeight;
