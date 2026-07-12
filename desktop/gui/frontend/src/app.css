@@ -171,7 +171,8 @@ h2 {
     gap: 4px;
     grid-template-columns: repeat(3, 1fr);
     height: 38px;
-    width: 280px;
+    width: max-content;
+    min-width: 240px;
     padding: 3px;
     box-sizing: border-box;
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
@@ -186,7 +187,7 @@ h2 {
     color: var(--ink);
     cursor: pointer;
     min-height: 30px;
-    padding: 7px 10px;
+    padding: 7px 12px;
 }
 
 .mode-switch button {
