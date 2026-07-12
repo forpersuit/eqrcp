@@ -885,16 +885,10 @@
     showLangPanel = false;
   }
 
-  let isDragging = false;
-  let dragCounter = 0;
-
   function handleDragEnter(e: DragEvent) {
     e.preventDefault();
-    dragCounter++;
-    logToGui(`Svelte dragenter, count: ${dragCounter}`);
-    if (dragCounter > 0) {
-      isDragging = true;
-    }
+    logToGui('Svelte dragenter triggered, posting iframe-drag-active to parent');
+    window.parent.postMessage({ type: 'iframe-drag-active' }, '*');
   }
 
   function handleDragOver(e: DragEvent) {
@@ -903,18 +897,10 @@
 
   function handleDragLeave(e: DragEvent) {
     e.preventDefault();
-    dragCounter--;
-    logToGui(`Svelte dragleave, count: ${dragCounter}`);
-    if (dragCounter <= 0) {
-      isDragging = false;
-    }
   }
 
   function handleDrop(e: DragEvent) {
     e.preventDefault();
-    logToGui('Svelte drop event triggered');
-    dragCounter = 0;
-    isDragging = false;
   }
 </script>
 
@@ -1130,12 +1116,6 @@
       </aside>
     </div>
   </main>
-
-  <div class="chat-drag-overlay" class:active={isDragging} style="--wails-drop-target: drop;">
-    <div class="chat-drag-box">
-      <div class="chat-drag-title">{currentLang === 'en' ? 'Drag & drop files to send' : '拖拽文件到这里发送'}</div>
-    </div>
-  </div>
 </div>
 
 <style>

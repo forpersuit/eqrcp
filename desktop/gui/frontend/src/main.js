@@ -169,6 +169,23 @@ function sendDebugMessageToChat(msg) {
     }
 }
 
+function showChatDragOverlay() {
+    const el = document.getElementById('chat-drag-overlay');
+    if (el) {
+        el.classList.add('active');
+    }
+}
+
+function hideChatDragOverlay() {
+    const el = document.getElementById('chat-drag-overlay');
+    if (el) {
+        el.classList.remove('active');
+    }
+}
+
+window.showChatDragOverlay = showChatDragOverlay;
+window.hideChatDragOverlay = hideChatDragOverlay;
+
 window.addEventListener('dragover', (e) => {
     e.preventDefault();
 });
@@ -289,6 +306,11 @@ window.addEventListener('message', (e) => {
         return;
     }
     const targetOrigin = activeChatFrameOrigin() || '*';
+    if (e.data.type === 'iframe-drag-active') {
+        sendDebugMessageToChat('[Host] Received iframe-drag-active, showing drag overlay');
+        showChatDragOverlay();
+        return;
+    }
     if (e.data.type === 'request-host-metrics') {
         syncViewportDebugToChatFrame();
         return;
@@ -1710,7 +1732,7 @@ function renderChat() {
     return `
         <div class="chat-panel">
             <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write" title="Chat"></iframe>
-            <div class="chat-drag-overlay" id="chat-drag-overlay">
+            <div class="chat-drag-overlay" id="chat-drag-overlay" ondragleave="hideChatDragOverlay()" ondrop="hideChatDragOverlay()">
                 <div class="chat-drag-box">
                     <div class="chat-drag-title">${t('drag_drop_tips')}</div>
                 </div>
