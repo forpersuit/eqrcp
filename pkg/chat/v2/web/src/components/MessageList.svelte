@@ -801,7 +801,7 @@
               on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget)}
               style="position: relative; overflow: hidden; transform: translateX(0px); transition: transform 0.25s ease;"
             >
-              {#if msg.type === 'file' && (mine || isEmbedded) && (msg.uploading || (ulTx && ulTx.state === 'running'))}
+              {#if msg.type === 'file' && (mine || isEmbedded) && !isCancelledFile && !msg.recalled && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
                   position: absolute;
                   top: 0;
