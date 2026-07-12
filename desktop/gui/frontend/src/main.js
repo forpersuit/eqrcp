@@ -156,8 +156,52 @@ window.addEventListener('unhandledrejection', (event) => {
     reportRuntimeErrorToBot(errorMsg, errorStack);
 });
 
-window.addEventListener('dragover', (e) => e.preventDefault());
-window.addEventListener('drop', (e) => e.preventDefault());
+let dragCounter = 0;
+
+function showChatDragOverlay() {
+    const el = document.getElementById('chat-drag-overlay');
+    if (el) {
+        el.style.display = 'flex';
+    }
+}
+
+function hideChatDragOverlay() {
+    const el = document.getElementById('chat-drag-overlay');
+    if (el) {
+        el.style.display = 'none';
+    }
+}
+
+window.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragCounter++;
+    if (state.mode === 'chat' && dragCounter > 0) {
+        showChatDragOverlay();
+    }
+});
+
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+});
+
+window.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dragCounter--;
+    if (state.mode === 'chat' && dragCounter <= 0) {
+        hideChatDragOverlay();
+    }
+});
+
+window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragCounter = 0;
+    hideChatDragOverlay();
+});
+
+window.addEventListener('dragend', (e) => {
+    dragCounter = 0;
+    hideChatDragOverlay();
+});
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 const chatDailyFreeMs = 5 * 60 * 1000;
@@ -1687,6 +1731,11 @@ function renderChat() {
     return `
         <div class="chat-panel">
             <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write" title="Chat"></iframe>
+            <div class="chat-drag-overlay" id="chat-drag-overlay" style="display: none;">
+                <div class="chat-drag-box">
+                    <div class="chat-drag-title">${t('drag_drop_tips')}</div>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -5423,6 +5472,8 @@ function escapeAttr(value) {
 }
 
 OnFileDrop((_x, _y, paths) => {
+    dragCounter = 0;
+    hideChatDragOverlay();
     handleFileDrop(paths);
 }, true);
 
