@@ -16,8 +16,8 @@
   let recallConfirmingId: string | null = null;
   let confirmTimer: number | null = null;
 
-  let redownloadConfirmingId: string | null = null;
-  let redownloadConfirmTimer: number | null = null;
+  let tipCountdown = 5;
+  let tipTimer: number | null = null;
 
   // Copy success indicator
   let copiedId: string | null = null;
@@ -144,26 +144,18 @@
     if (confirmTimer) clearTimeout(confirmTimer);
     if (copiedTimer) clearTimeout(copiedTimer);
     if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);
-    if (redownloadConfirmTimer) clearTimeout(redownloadConfirmTimer);
+    if (tipTimer) clearInterval(tipTimer);
   });
 
-  function handleRedownloadClick(messageId: string, filename: string, size: number, isPaid: boolean) {
-    if (redownloadConfirmingId === messageId) {
-      handleDownload(messageId, filename, size, isPaid);
-      clearRedownloadConfirm();
-    } else {
-      redownloadConfirmingId = messageId;
-      if (redownloadConfirmTimer) clearTimeout(redownloadConfirmTimer);
-      redownloadConfirmTimer = window.setTimeout(clearRedownloadConfirm, 4000);
-    }
-  }
-
-  function clearRedownloadConfirm() {
-    redownloadConfirmingId = null;
-    if (redownloadConfirmTimer) {
-      clearTimeout(redownloadConfirmTimer);
-      redownloadConfirmTimer = null;
-    }
+  function startTipCountdown() {
+    tipCountdown = 5;
+    if (tipTimer) clearInterval(tipTimer);
+    tipTimer = window.setInterval(() => {
+      tipCountdown -= 1;
+      if (tipCountdown <= 0) {
+        handleDismissTip();
+      }
+    }, 1000);
   }
 
   function handleDownload(messageId: string, filename: string, size: number, isPaid: boolean) {
@@ -300,14 +292,19 @@
   $: {
     const hasBubbles = messages && messages.some(m => m.type !== 'system');
     if (hasBubbles) {
-      if (typeof window !== 'undefined' && !window.localStorage.getItem('eqt_chat_bubble_tip_shown')) {
+      if (typeof window !== 'undefined' && !window.localStorage.getItem('eqt_chat_bubble_tip_shown') && !showTipSystemMessage && !tipTimer) {
         showTipSystemMessage = true;
+        startTipCountdown();
       }
     }
   }
 
   function handleDismissTip() {
     showTipSystemMessage = false;
+    if (tipTimer) {
+      clearInterval(tipTimer);
+      tipTimer = null;
+    }
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('eqt_chat_bubble_tip_shown', 'true');
     }
@@ -386,10 +383,8 @@
             label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
             confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
             action: () => {
-              handleRedownloadClick(msg.id, msg.fileName || '', msg.size || 0, false);
-              if (isEmbedded) {
-                closeMenu();
-              }
+              handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
+              closeMenu();
             }
           });
           if (isEmbedded && (msg.filePath || msg.fileName)) {
@@ -693,7 +688,38 @@
           line-height: 1.4;
           box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         ">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 14px; height: 14px; flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <div class="countdown-circle-container" style="
+            position: relative; 
+            width: 14px; 
+            height: 14px; 
+            flex-shrink: 0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+          ">
+            <svg width="14" height="14" viewBox="0 0 20 20" style="transform: rotate(-90deg); width: 100%; height: 100%;">
+              <circle cx="10" cy="10" r="8.5" fill="none" stroke="var(--accent-strong, #156f5a)" stroke-width="2" style="opacity: 0.2;" />
+              <circle 
+                cx="10" 
+                cy="10" 
+                r="8.5" 
+                fill="none" 
+                stroke="var(--accent-strong, #156f5a)" 
+                stroke-width="2" 
+                stroke-dasharray="53.4" 
+                stroke-dashoffset={53.4 * (1 - tipCountdown / 5)} 
+                style="transition: stroke-dashoffset 1s linear;" 
+              />
+            </svg>
+            <span style="
+              position: absolute; 
+              font-size: 8px; 
+              font-weight: bold; 
+              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              line-height: 1;
+              color: var(--accent-strong, #156f5a);
+            ">{tipCountdown}</span>
+          </div>
           <span>{currentLang === 'en' ? 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.' : '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。'}</span>
           <button 
             type="button" 
