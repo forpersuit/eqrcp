@@ -187,11 +187,12 @@ var (
 	testCPUSerial  string
 	testDiskSerial string
 
-	fingerprintMu sync.Mutex
-	cachedUUID    string
-	cachedCPU     string
-	cachedDisk    string
-	hasCached     bool
+	fingerprintMu     sync.Mutex
+	cachedUUID        string
+	cachedCPU         string
+	cachedDisk        string
+	hasCached         bool
+	precomputeStarted bool
 )
 
 // PrecomputeDeviceFingerprints concurrently fetches and caches the motherboard, CPU, and disk fingerprints in background
@@ -202,6 +203,8 @@ func PrecomputeDeviceFingerprints() {
 			fingerprintMu.Unlock()
 			return
 		}
+		precomputeStarted = true
+		fingerprintMu.Unlock()
 
 		uuidChan := make(chan string, 1)
 		cpuChan := make(chan string, 1)
@@ -211,9 +214,14 @@ func PrecomputeDeviceFingerprints() {
 		go func() { cpuChan <- GetCPUSerial() }()
 		go func() { diskChan <- GetSystemDiskSerial() }()
 
-		cachedUUID = <-uuidChan
-		cachedCPU = <-cpuChan
-		cachedDisk = <-diskChan
+		uuid := <-uuidChan
+		cpu := <-cpuChan
+		disk := <-diskChan
+
+		fingerprintMu.Lock()
+		cachedUUID = uuid
+		cachedCPU = cpu
+		cachedDisk = disk
 		hasCached = true
 		fingerprintMu.Unlock()
 
@@ -232,6 +240,12 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 	disk := cachedDisk
 
 	if !hasCached {
+		if precomputeStarted {
+			// If background precomputation is started, return immediately with empty values
+			// to avoid blocking the main thread during startup window loading.
+			// Verification will trigger again asynchronously once background compute completes.
+			return "", "", ""
+		}
 		uuid = GetBoardUUID()
 		cpu = GetCPUSerial()
 		disk = GetSystemDiskSerial()
