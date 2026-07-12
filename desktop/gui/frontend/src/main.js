@@ -4694,6 +4694,16 @@ function connectAgentEvents() {
 
 
 async function handleFileDrop(paths) {
+    if (state.mode === 'chat') {
+        const frame = document.querySelector('#chat-iframe');
+        if (frame && frame.contentWindow) {
+            frame.contentWindow.postMessage({
+                type: 'selected-files',
+                paths: paths || []
+            }, activeChatFrameOrigin() || '*');
+            return;
+        }
+    }
     if (state.mode !== 'share') {
         const activeShare = activeShareTask();
         const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
