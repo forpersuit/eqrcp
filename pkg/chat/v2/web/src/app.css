@@ -1468,29 +1468,37 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     /* Session QR Mobile Adapt */
     .session-backdrop.open {
-        display: block;
-        padding: 0;
+        background: rgba(15,23,42,0.42);
+        display: grid;
+        inset: 0;
+        padding: 16px;
+        place-items: center;
+        position: fixed;
+        z-index: 1000;
     }
     .session-backdrop .side {
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-        border-top-left-radius: 20px;
-        border-top-right-radius: 20px;
-        bottom: 0;
-        left: 0;
-        max-height: 82vh;
+        border-radius: 16px;
+        bottom: auto;
+        left: auto;
+        max-height: calc(100vh - 32px);
         height: auto;
-        padding: 24px 20px max(24px, env(safe-area-inset-bottom));
-        position: absolute;
-        right: 0;
+        padding: 20px;
+        position: relative;
+        right: auto;
         top: auto;
-        transform: translateY(100%);
+        transform: scale(0.95);
+        opacity: 0;
         width: 100%;
-        box-shadow: 0 -10px 40px rgba(0,0,0,0.12);
-        transition: transform 0.28s cubic-bezier(0.32, 0.94, 0.6, 1);
+        max-width: 340px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.16);
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
     }
     .session-backdrop.open .side {
-        transform: translateY(0);
+        transform: scale(1);
+        opacity: 1;
+    }
+    .qr {
+        max-width: 200px;
     }
 }
 
@@ -1563,29 +1571,50 @@ input:focus { border-color: var(--accent); outline: none; }
 
 /* Custom JS computed classes for iframe embedded mobile viewport layout */
 .session-backdrop.mobile-layout.open {
-    display: block;
-    padding: 0;
+    background: rgba(15,23,42,0.42);
+    display: grid;
+    inset: 0;
+    padding: 16px;
+    place-items: center;
+    position: fixed;
+    z-index: 1000;
 }
 .session-backdrop.mobile-layout .side {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
-    bottom: 0;
-    left: 0;
-    max-height: 82vh;
+    border-radius: 16px;
+    bottom: auto;
+    left: auto;
+    max-height: calc(100vh - 32px);
     height: auto;
-    padding: 24px 20px max(24px, env(safe-area-inset-bottom));
-    position: absolute;
-    right: 0;
+    padding: 20px;
+    position: relative;
+    right: auto;
     top: auto;
-    transform: translateY(100%);
+    transform: scale(0.95);
+    opacity: 0;
     width: 100%;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.12);
-    transition: transform 0.28s cubic-bezier(0.32, 0.94, 0.6, 1);
+    max-width: 340px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.16);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
 }
 .session-backdrop.mobile-layout.open .side {
-    transform: translateY(0);
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Disabled state for composer when chat session ended */
+.file-label.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+.composer.session-ended {
+    background: var(--wash) !important;
+    opacity: 0.85;
+}
+.composer.session-ended textarea:disabled {
+    background: transparent;
+    color: var(--muted);
+    cursor: not-allowed;
 }
 
 
