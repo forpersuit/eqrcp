@@ -268,7 +268,8 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 
 			// Pre-create the download job if it does not exist yet to prevent race conditions
 			if strings.HasPrefix(cmd.TransferID, "dl-") {
-				if _, err := h.transfer.GetJob(cmd.TransferID); err != nil {
+				job, err := h.transfer.GetJob(cmd.TransferID)
+				if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
 					// Extract message ID from transfer ID (format: dl-<messageId>-<clientId> or dl-<messageId>)
 					fileID := strings.TrimPrefix(cmd.TransferID, "dl-")
 					suffix := "-" + cl.Peer

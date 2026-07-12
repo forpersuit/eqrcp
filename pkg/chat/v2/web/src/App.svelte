@@ -40,6 +40,7 @@
   let isEmbedded = false;
   let observer: MutationObserver | null = null;
   let visualViewportHandler: (() => void) | null = null;
+  const activeUploads = new Map<string, XMLHttpRequest>();
 
   // Generate a dynamic random joinToken for the lifetime of this session page
   function generateJoinToken(): string {
@@ -650,6 +651,8 @@
     formData.append('peer', client?.clientPeer || localStorage.getItem('chat_peer') || '');
 
     const xhr = new XMLHttpRequest();
+    let isAborted = false;
+    activeUploads.set('ul-' + messageId, xhr);
     xhr.open('POST', uploadUrl, true);
 
     // Track upload progress locally and update the transfers store
@@ -677,6 +680,7 @@
 
     // Upload complete handler
     xhr.onload = () => {
+      activeUploads.delete('ul-' + messageId);
       if (xhr.status >= 200 && xhr.status < 300) {
         console.log('File upload succeeded for messageId:', messageId);
         if (client) {
@@ -693,12 +697,37 @@
       }
     };
 
+    // Upload abort handler
+    xhr.onabort = () => {
+      isAborted = true;
+      activeUploads.delete('ul-' + messageId);
+      transfers.update(map => {
+        map['ul-' + messageId] = {
+          id: 'ul-' + messageId,
+          messageId: messageId,
+          clientId: localStorage.getItem('chat_peer') || '',
+          fileName: file.name,
+          bytesDone: 0,
+          bytesTotal: file.size,
+          percent: 0,
+          state: 'cancelled',
+          error: 'Upload cancelled by user'
+        };
+        return map;
+      });
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `Upload cancelled for: ${file.name}`
+        : `已取消上传文件: ${file.name}`);
+    };
+
     // Upload error handler
     xhr.onerror = () => {
+      activeUploads.delete('ul-' + messageId);
       handleError(new Error('Network error during upload'));
     };
 
     function handleError(err: Error) {
+      if (isAborted) return;
       console.error('File upload failed:', err);
       if (client) {
         client.sendLog(`[ERROR] File upload failed for: ${file.name}: ${err.message}`);
@@ -800,8 +829,14 @@
   }
 
   function handleCancelDownload(e: CustomEvent<string>) {
+    const txId = e.detail;
+    const activeXhr = activeUploads.get(txId);
+    if (activeXhr) {
+      activeXhr.abort();
+      activeUploads.delete(txId);
+    }
     if (client) {
-      client.cancelTransfer(e.detail);
+      client.cancelTransfer(txId);
     }
   }
 

@@ -66,7 +66,8 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 	if clientID != "" {
 		jobID = "dl-" + fileID + "-" + clientID
 	}
-	if _, err := h.transfer.GetJob(jobID); err != nil {
+	job, err := h.transfer.GetJob(jobID)
+	if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
 		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 	}
 

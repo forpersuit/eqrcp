@@ -896,6 +896,8 @@
                                 · {mine ? (currentLang === 'en' ? 'Shared' : '已分享') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
                               {:else if tx.state === 'failed'}
                                 · <span class="tx-error-text" title={tx.error || (currentLang === 'en' ? 'Unknown error' : '未知传输错误')} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{currentLang === 'en' ? 'Failed' : '传输失败'} ⚠️</span>
+                              {:else if tx.state === 'cancelled'}
+                                · <span style="color: var(--muted, #64748b);">{currentLang === 'en' ? 'Cancelled' : '已取消'}</span>
                               {/if}
                             {:else}
                               {#if mine && msg.downloaded}
