@@ -440,3 +440,176 @@ func TestFileNotificationToBypassDevice(t *testing.T) {
 		t.Fatalf("expected message to be marked downloaded, got downloaded=%v", targetEvent.Message.Downloaded)
 	}
 }
+
+func TestReconnectionAfterSeqLeakFix(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/test-token/ws"
+
+	// 1. Connect Alice
+	connAlice, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connAlice.Close(websocket.StatusNormalClosure, "done")
+
+	var helloA protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connAlice, &helloA) // initial raw Hello
+	
+	// Send Connect Command
+	err = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-alice",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-alice",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = wsjson.Read(ctx, connAlice, &helloA) // connection Handshake Hello
+
+	// Alice sends an init message to push seq above 0
+	err = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
+		Type:      protocol.CommandSendText,
+		CommandID: "alice-init-msg",
+		Text:      "Alice init",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var aliceInitEvent protocol.EventEnvelope
+	for {
+		err = wsjson.Read(ctx, connAlice, &aliceInitEvent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if aliceInitEvent.Type == protocol.EventMessageAdded && aliceInitEvent.Message != nil && aliceInitEvent.Message.Text == "Alice init" {
+			break
+		}
+	}
+
+	// Connect Bob
+	connBob, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connBob.Close(websocket.StatusNormalClosure, "done")
+	var helloB protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connBob, &helloB)
+	_ = wsjson.Write(ctx, connBob, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-bob",
+		Client: protocol.ClientInfo{
+			Label: "Bob",
+			Peer:  "peer-bob",
+		},
+	})
+	_ = wsjson.Read(ctx, connBob, &helloB)
+
+	// Keep track of Hello's Seq
+	lastSeqBeforeDisconnect := aliceInitEvent.Seq
+	t.Logf("[DEBUG TEST] lastSeqBeforeDisconnect (Alice init message seq) = %d", lastSeqBeforeDisconnect)
+
+	// 2. Alice disconnects
+	connAlice.Close(websocket.StatusNormalClosure, "disconnecting Alice")
+
+	// Give the server a small moment to unregister
+	time.Sleep(10 * time.Millisecond)
+
+	// 3. Bob sends an offline message during Alice's disconnect state
+	err = wsjson.Write(ctx, connBob, protocol.CommandEnvelope{
+		Type:      protocol.CommandSendText,
+		CommandID: "bob-msg-1",
+		Text:      "Offline message for Alice",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for Bob's message to register and get seq
+	time.Sleep(10 * time.Millisecond)
+
+	// 4. Alice reconnects.
+	// We simulate the sequence leak scenario:
+	// First reconnect (simulating immediate connection and drop where Hello seq is sent but not consumed by watermark)
+	connAliceTemp, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var helloTemp protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connAliceTemp, &helloTemp) // initial hello
+	
+	// Send Connect Command
+	err = wsjson.Write(ctx, connAliceTemp, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-alice-temp",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-alice",
+		},
+		AfterSeq: lastSeqBeforeDisconnect, // normal last seq
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = wsjson.Read(ctx, connAliceTemp, &helloTemp) // Handshake Hello
+	t.Logf("[DEBUG TEST] helloTemp.Seq (first reconnect) = %d", helloTemp.Seq)
+	
+	connAliceTemp.Close(websocket.StatusNormalClosure, "immediate drop")
+	time.Sleep(10 * time.Millisecond)
+
+	// Now Alice reconnects for the second time.
+	// Under the fix, since it excluded 'hello' type from updating watermark on client-side, 
+	// Alice STILL sends lastSeqBeforeDisconnect!
+	connAliceReal, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connAliceReal.Close(websocket.StatusNormalClosure, "done")
+	
+	_ = wsjson.Read(ctx, connAliceReal, &helloA) // initial hello
+	
+	err = wsjson.Write(ctx, connAliceReal, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-alice-real",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-alice",
+		},
+		AfterSeq: lastSeqBeforeDisconnect, // Still sending the correct un-leaked lastSeqBeforeDisconnect
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = wsjson.Read(ctx, connAliceReal, &helloA) // Handshake Hello
+	t.Logf("[DEBUG TEST] helloReal.Seq (second reconnect) = %d", helloA.Seq)
+
+	// 5. Alice MUST receive the offline message during Replay!
+	var gotOfflineMessage bool
+	t.Logf("[DEBUG TEST] Starting to read events for Alice Real. lastSeqBeforeDisconnect = %d", lastSeqBeforeDisconnect)
+	for {
+		var ev protocol.EventEnvelope
+		err = wsjson.Read(ctx, connAliceReal, &ev)
+		if err != nil {
+			t.Logf("[DEBUG TEST] Read error: %v", err)
+			t.Fatal(err)
+		}
+		t.Logf("[DEBUG TEST] Received Event: Type=%s, Seq=%d, Msg=%+v", ev.Type, ev.Seq, ev.Message)
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil && ev.Message.Text == "Offline message for Alice" {
+			gotOfflineMessage = true
+			break
+		}
+	}
+
+	if !gotOfflineMessage {
+		t.Fatal("expected offline message from Bob during replay, but it was not received")
+	}
+}
+
