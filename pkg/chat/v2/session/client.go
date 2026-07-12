@@ -66,9 +66,17 @@ func (c *Client) Send(event protocol.EventEnvelope) bool {
 	case c.sendChan <- event:
 		return true
 	default:
-		// Send queue is full, close client connection to prevent starvation
-		c.Close()
-		return false
+		// Try writing with a 200ms timeout to prevent instant drops during burst events like history replay
+		select {
+		case <-c.done:
+			return false
+		case c.sendChan <- event:
+			return true
+		case <-time.After(200 * time.Millisecond):
+			// Send queue is full and timed out, close client connection to prevent starvation
+			c.Close()
+			return false
+		}
 	}
 }
 

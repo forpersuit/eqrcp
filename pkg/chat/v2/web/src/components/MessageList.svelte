@@ -338,7 +338,7 @@
     const ulTx = txState['ul-' + msg.id];
     const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id];
     const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath);
-    const tx = mine ? ulTx : ((isTxCompleted && dlTx?.state !== 'running') ? null : dlTx);
+    const tx = mine ? ulTx : (isTxCompleted ? null : dlTx);
 
     const options: any[] = [];
 
@@ -737,7 +737,7 @@
         {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id]}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
         {@const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath)}
-        {@const tx = mine ? ulTx : ((isTxCompleted && dlTx?.state !== 'running') ? null : dlTx)}
+        {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
         <div 
