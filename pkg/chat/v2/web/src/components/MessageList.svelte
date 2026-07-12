@@ -336,7 +336,7 @@
     const localPeer = $currentDevice?.peer || 'desktop';
     const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer);
     const ulTx = txState['ul-' + msg.id];
-    const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id];
+    const isTxCompleted = (dlTx && dlTx.state === 'completed') || (mine && msg.downloaded) || completedMap[msg.id];
     const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath);
     const tx = mine ? ulTx : (isTxCompleted ? null : dlTx);
 
@@ -734,7 +734,7 @@
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id]}
+        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || (mine && msg.downloaded) || completedMap[msg.id]}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
         {@const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath)}
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
