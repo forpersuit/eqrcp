@@ -8,8 +8,9 @@ import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
+import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 
-import {ClipboardGetText, ClipboardSetText, EventsOn, OnFileDrop, LogInfo, LogError} from '../wailsjs/runtime/runtime';
+import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
     AgentStatus,
     AppInfo,
@@ -156,43 +157,9 @@ window.addEventListener('unhandledrejection', (event) => {
     reportRuntimeErrorToBot(errorMsg, errorStack);
 });
 
-function sendDebugMessageToChat(msg) {
-    if (typeof LogInfo === 'function') {
-        LogInfo(msg);
-    }
-    const frame = document.querySelector('#chat-iframe');
-    if (frame && frame.contentWindow) {
-        frame.contentWindow.postMessage({
-            type: 'chat-debug-notice',
-            message: msg
-        }, '*');
-    }
-}
 
-function showChatDragOverlay() {
-    const el = document.getElementById('chat-drag-overlay');
-    if (el) {
-        el.classList.add('active');
-    }
-}
 
-function hideChatDragOverlay() {
-    const el = document.getElementById('chat-drag-overlay');
-    if (el) {
-        el.classList.remove('active');
-    }
-}
-
-window.showChatDragOverlay = showChatDragOverlay;
-window.hideChatDragOverlay = hideChatDragOverlay;
-
-window.addEventListener('dragover', (e) => {
-    e.preventDefault();
-});
-
-window.addEventListener('drop', (e) => {
-    e.preventDefault();
-});
+initDragDrop(state, handleFileDrop);
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
 const chatDailyFreeMs = 5 * 60 * 1000;
