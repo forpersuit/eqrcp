@@ -538,7 +538,7 @@ dd {
     justify-content: center;
     padding: 16px;
     z-index: 9999;
-    pointer-events: none;
+    pointer-events: auto;
     box-sizing: border-box;
 }
 
@@ -552,6 +552,7 @@ dd {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+    pointer-events: none;
 }
 
 .chat-drag-title {
@@ -563,6 +564,7 @@ dd {
     border-radius: 20px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     border: 1px solid var(--line, #e2e8e0);
+    pointer-events: none;
 }
 
 .chat-iframe {
