@@ -2457,11 +2457,16 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 
+		clientDone, _ := app.getClientDownloadedAndTotal(clientID)
 		app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
 			state.ActiveConnections++
 			state.State = "transferring"
 			state.Current = downloadName
-			state.BytesDone = rangeInfo.StartByte
+			if !isAlreadyTransferring {
+				state.BytesDone = rangeInfo.StartByte
+			} else {
+				state.BytesDone = clientDone
+			}
 			state.BytesTotal = expectedBytes
 			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 			state.Message = "Sending file to connected device."
@@ -2589,6 +2594,55 @@ func New(cfg *config.Config) (*Server, error) {
 			if isAlreadyFailed {
 				return
 			}
+
+			// If all bytes for this client have been successfully received, mark completed
+			if app.isClientFinished(clientID) {
+				log.Printf("[EQT Server] [Download Completed via Parallel Ranges] clientID=%s, IP=%s, File=%s, Status=SUCCESS",
+					clientID, r.RemoteAddr, downloadName)
+
+				app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+					state.State = "completed"
+					state.BytesDone = state.BytesTotal
+					state.Percent = 100
+					state.Message = "Transfer completed."
+				})
+
+				allDownloaded := false
+				if isMultiFile {
+					if isZipDownload {
+						allDownloaded = app.markItemDownloaded(-1)
+					} else if itemIndexStr != "" {
+						allDownloaded = app.markItemDownloaded(currentIndex)
+					}
+				} else {
+					allDownloaded = app.markItemDownloaded(0)
+				}
+
+				if allDownloaded {
+					app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+						state.State = "completed"
+						state.BytesDone = state.BytesTotal
+						state.Percent = 100
+						state.Message = "Transfer completed."
+					})
+					app.statusMu.Lock()
+					autoStop := app.autoStop
+					app.statusMu.Unlock()
+					if autoStop || !app.KeepAlive {
+						app.setStatus("completed", "Transfer completed.")
+						app.recordStatus()
+						go app.signalStopAfterStatusGrace()
+					} else {
+						app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
+						app.recordStatus()
+					}
+				} else {
+					app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
+					app.recordStatus()
+				}
+				return
+			}
+
 			// Retain current progress, mark state as waiting
 			clientDone, _ := app.getClientDownloadedAndTotal(clientID)
 			app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
