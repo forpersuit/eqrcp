@@ -766,10 +766,11 @@
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
+        {@const isCancelledFile = msg.type === 'file' && ((ulTx && ulTx.state === 'cancelled') || (dlTx && dlTx.state === 'cancelled'))}
         <div 
           class="message" 
           class:mine 
-          class:recalled={msg.recalled}
+          class:recalled={msg.recalled || isCancelledFile}
           style="
             --accent: {colors.border};
             --accent-strong: {colors.text};
@@ -875,6 +876,33 @@
                         {currentLang === 'en' ? 'Resend' : '重新发送'}
                       </button>
                     {/if}
+                  </div>
+                {/if}
+              {:else if isCancelledFile}
+                <span class="text recalled" style="font-style: italic; opacity: 0.85;">
+                  {mine 
+                    ? (currentLang === 'en' ? 'You cancelled sending the file' : '你取消了文件发送') 
+                    : (identity.sender + ' ' + (currentLang === 'en' ? 'cancelled the file transfer' : '对方取消了文件发送'))}
+                </span>
+                {#if mine}
+                  <div class="recalled-actions" style="margin-top: 6px; display: flex; gap: 8px; justify-content: flex-end;">
+                    <button 
+                      class="edit-recalled" 
+                      type="button" 
+                      on:click={() => dispatch('resendFile', { name: msg.fileName, size: msg.size })}
+                      style="
+                        background: var(--accent-wash, rgba(21, 111, 90, 0.06));
+                        border: 1px solid var(--accent, #156f5a);
+                        border-radius: 999px;
+                        color: var(--accent-strong, #156f5a);
+                        cursor: pointer;
+                        font-size: 11px;
+                        font-weight: 600;
+                        padding: 3px 8px;
+                      "
+                    >
+                      {currentLang === 'en' ? 'Resend' : '重新发送'}
+                    </button>
                   </div>
                 {/if}
               {:else}
