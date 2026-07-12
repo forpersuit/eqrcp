@@ -5443,10 +5443,7 @@ function escapeAttr(value) {
     return escapeHTML(value).replace(/`/g, '&#096;');
 }
 
-OnFileDrop((_x, _y, paths) => {
-    sendDebugMessageToChat('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
-    handleFileDrop(paths);
-}, true);
+
 
 EventsOn('eqt:tray-command', handleTrayCommand);
 
