@@ -158,17 +158,30 @@ window.addEventListener('unhandledrejection', (event) => {
 
 let dragCounter = 0;
 
+function sendDebugMessageToChat(msg) {
+    if (typeof LogInfo === 'function') {
+        LogInfo(msg);
+    }
+    const frame = document.querySelector('#chat-iframe');
+    if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage({
+            type: 'chat-debug-notice',
+            message: msg
+        }, '*');
+    }
+}
+
 function showChatDragOverlay() {
     const el = document.getElementById('chat-drag-overlay');
     if (el) {
-        el.style.display = 'flex';
+        el.classList.add('active');
     }
 }
 
 function hideChatDragOverlay() {
     const el = document.getElementById('chat-drag-overlay');
     if (el) {
-        el.style.display = 'none';
+        el.classList.remove('active');
     }
 }
 
@@ -1736,7 +1749,7 @@ function renderChat() {
     return `
         <div class="chat-panel">
             <iframe class="chat-iframe" id="chat-iframe" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write" title="Chat"></iframe>
-            <div class="chat-drag-overlay" id="chat-drag-overlay" style="display: none;">
+            <div class="chat-drag-overlay" id="chat-drag-overlay">
                 <div class="chat-drag-box">
                     <div class="chat-drag-title">${t('drag_drop_tips')}</div>
                 </div>
@@ -4748,24 +4761,18 @@ function connectAgentEvents() {
 
 
 async function handleFileDrop(paths) {
-    if (typeof LogInfo === 'function') {
-        LogInfo('[Chat Drag] handleFileDrop called with paths: ' + JSON.stringify(paths) + ', mode: ' + state.mode);
-    }
+    sendDebugMessageToChat('[Chat Drag] handleFileDrop called with: ' + JSON.stringify(paths) + ', state.mode: ' + state.mode);
     if (state.mode === 'chat') {
         const frame = document.querySelector('#chat-iframe');
         if (frame && frame.contentWindow) {
-            if (typeof LogInfo === 'function') {
-                LogInfo('[Chat Drag] Found chat-iframe, postMessage selected-files');
-            }
+            sendDebugMessageToChat('[Chat Drag] Found chat-iframe, posting selected-files via postMessage');
             frame.contentWindow.postMessage({
                 type: 'selected-files',
                 paths: paths || []
             }, '*');
             return;
         } else {
-            if (typeof LogError === 'function') {
-                LogError('[Chat Drag] chat-iframe or contentWindow not found in chat mode');
-            }
+            sendDebugMessageToChat('[Chat Drag] ERROR: chat-iframe or contentWindow not found in chat mode');
         }
     }
     if (state.mode !== 'share') {
@@ -5487,9 +5494,7 @@ function escapeAttr(value) {
 }
 
 OnFileDrop((_x, _y, paths) => {
-    if (typeof LogInfo === 'function') {
-        LogInfo('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
-    }
+    sendDebugMessageToChat('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
     dragCounter = 0;
     hideChatDragOverlay();
     handleFileDrop(paths);

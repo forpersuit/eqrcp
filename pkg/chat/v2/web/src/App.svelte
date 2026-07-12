@@ -147,8 +147,11 @@
     } else if (event.data.type === 'pulse-session-qr') {
       const remaining = Math.max(0, Number(event.data.until || 0) - Date.now());
       startQRPulse(remaining);
+    } else if (event.data.type === 'chat-debug-notice') {
+      chatActions.addSystemMessage(event.data.message);
     } else if (event.data.type === 'selected-files') {
       const paths: string[] = event.data.paths || [];
+      chatActions.addSystemMessage(`[App] 收到 selected-files 文件消息: ${JSON.stringify(paths)}`);
       logToGui(`handleMessage type selected-files paths: ${JSON.stringify(paths)}`);
       paths.forEach(p => {
         registerLocalAttachment(p);
@@ -222,6 +225,7 @@
   }
 
   function registerLocalAttachment(filePath: string) {
+    chatActions.addSystemMessage(`[App] 开始注册附件: ${filePath}`);
     logToGui(`registerLocalAttachment called with: ${filePath}`);
     const hostToken = localStorage.getItem('chat_host_token') || '';
     const url = `/chat-v2/${token}/attachments/local?hostToken=${encodeURIComponent(hostToken)}`;
@@ -250,11 +254,12 @@
       return r.json();
     })
     .then(message => {
+      chatActions.addSystemMessage(`[App] 注册成功: ${message.fileName}`);
       logToGui(`Successfully registered local attachment response: ${JSON.stringify(message)}`);
     })
     .catch(err => {
+      chatActions.addSystemMessage(`[App] 注册失败: ${err.message}`);
       logToGui(`Failed to register local attachment: ${err.message}`, true);
-      chatActions.addSystemMessage('发送本地附件失败: ' + err.message);
     });
   }
 
