@@ -101,6 +101,12 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **菜单项二次确认与控制器拦截防重叠 (Avoid Double Confirmation Collisions)**:
   - **成因**：当菜单组件（如 `MessageList.svelte` 右键菜单）中的菜单项使用了自带的确认文案拦截机制（如 `confirmLabel`）时，如果它调用的底层动作函数（如原 `handleRedownloadClick`）内部又有一套基于定时器或变量标识的二次确认逻辑，这会导致两层确认拦截叠加，用户必须点击 3 次才能实际触发下载。
   - **准则**：在设计交互时必须理顺拦截职责。如果菜单已承载了二次确认流程，则 `action` 逻辑在执行时应直接调用原子操作（如直接派发 `handleDownload`）；如果在其他入口（非菜单界面）需要二次确认，应由各自独立的触发器承载，严禁在同一调用链路中串联两套确认拦截状态。
+- **物理上行上传物理取消拦截机制 (Physical Upload Active Abort)**:
+  - **问题成因**：在网页端发送附件（上传至 Go 后端）时，虽然通过 WebSocket 向后端发送了 `cancel_transfer` 并且将界面设为了取消状态，但因为上传使用的是浏览器的 `XMLHttpRequest`，若不显式对其调用 `abort()`，底层的上行 TCP 物理流仍然会默默上传直到完成。这会极大消耗发送端（如移动设备）的无线带宽。
+  - **准则**：在客户端发起上传（如 `performFileUpload`）时，应在一个全局 Map/Store 中保留对该 `XMLHttpRequest` 实例的引用（使用 `ul-<messageId>` 作为键）。当捕获到取消指令时，物理调用 `xhr.abort()`，并在 `xhr.onabort` 监听中重置该任务进度状态并打印已取消日志。同时在 `onerror` / `handleError` 中设定 `isAborted` 的拦截屏蔽哨兵，防止 abort 导致的浏览器网络错误继续派发无意义的失败提示。
+- **传输终态下的 Job 自动重建与进度重置机制 (Job Auto-Recreation on Restart)**:
+  - **问题成因**：当一个下载/上传任务已经进入终态（已完成、已取消、已失败）后，如果用户在此文件上再次点击重新下载，由于后端的 `m.jobs` 里仍然保存着该任务的实例，如果 `GetJob` 接口只判断是否存在，就会因为存在而直接复用旧有 Job。因为旧有 Job 保留着之前的 `BytesDone` 等进度状态，会导致前端的重新下载进度条瞬间卡死在 100% 或者被取消前的进度百分比，无法恢复到 0% 重新转动。
+  - **准则**：在接收到客户端的 `start_transfer` 或物理 HTTP 下载请求时，后端不应仅简单地判断 Job 存在。如果发现该 Job 已存在但状态为 `TransferCompleted`、`TransferCancelled` 或 `TransferFailed` 时，判定该 Job 已经结束生命周期，应自动调用 `CreateJob` 重塑并覆盖该 Job 实例，安全重置字节进度，保证下一次传输彻底从 0% 开始计算并推送。
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
   - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部 of 子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
   - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
