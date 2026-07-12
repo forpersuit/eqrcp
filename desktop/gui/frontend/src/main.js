@@ -719,8 +719,8 @@ function renderShareTransfer(task) {
                     👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
-                    <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
-                        ${state.settings?.lang === 'zh' ? '自动结束' : 'Auto Stop'}
+                    <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
+                        ${t('auto_stop_label')}
                     </span>
                     ${renderSwitch('auto-stop-switch', task.transferAutoStop)}
                 </div>
@@ -2544,7 +2544,7 @@ function renderFeedbackPanel() {
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
                 <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
-                    ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? '✓ 发送成功' : (state.feedbackSendResult === 'failed' ? '✗ 发送失败，请重试' : t('btn_send_feedback_now')))}
+                    ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? t('feedback_send_success_short') : (state.feedbackSendResult === 'failed' ? t('feedback_send_failed_short') : t('btn_send_feedback_now')))}
                 </button>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
@@ -3119,7 +3119,7 @@ function bindPanelEvents() {
             if (noticeEl) noticeEl.remove();
         } catch (err) {
             console.error('Failed to compress image:', err);
-            state.feedbackError = '图片压缩失败: ' + err.message;
+            state.feedbackError = t('feedback_compress_error') + err.message;
             render();
             openPanel('feedback');
         }
@@ -4419,7 +4419,7 @@ async function sendFeedback(event) {
     const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
 
     if (!message) {
-        state.feedbackError = '请输入反馈内容';
+        state.feedbackError = t('feedback_empty_error');
         state.feedbackSendResult = 'failed';
         render();
         openPanel('feedback');
@@ -4480,7 +4480,7 @@ async function copyFeedback(event) {
         const feedback = collectFeedback();
         await ClipboardSetText(feedback.body);
         const original = button.textContent;
-        button.textContent = 'Copied';
+        button.textContent = t('copied') || 'Copied';
         button.disabled = true;
         window.setTimeout(() => {
             button.textContent = original;
@@ -4488,7 +4488,7 @@ async function copyFeedback(event) {
         }, 1600);
     } catch (err) {
         console.error('Failed to copy feedback:', err);
-        state.feedbackError = `复制失败: ${err.message || err}`;
+        state.feedbackError = t('copy_failed_prefix') + (err.message || err);
         render();
         openPanel('feedback');
     }
