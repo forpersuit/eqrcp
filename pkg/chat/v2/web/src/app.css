@@ -738,7 +738,8 @@ h1 {
         gap: 6px;
     }
     .chat-logo {
-        display: none !important;
+        height: 24px;
+        width: 24px;
     }
     .chat-head-title h1 {
         font-size: 13px;
