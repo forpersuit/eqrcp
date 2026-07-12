@@ -539,6 +539,7 @@ dd {
     padding: 16px;
     z-index: 9999;
     pointer-events: auto;
+    --wails-drop-target: drop;
     box-sizing: border-box;
 }
 

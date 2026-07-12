@@ -149,6 +149,7 @@
       startQRPulse(remaining);
     } else if (event.data.type === 'selected-files') {
       const paths: string[] = event.data.paths || [];
+      logToGui(`handleMessage type selected-files paths: ${JSON.stringify(paths)}`);
       paths.forEach(p => {
         registerLocalAttachment(p);
       });
@@ -211,13 +212,24 @@
     }
   }
 
+  function logToGui(message: string, isError = false) {
+    if (typeof window !== 'undefined') {
+      window.parent.postMessage({
+        type: isError ? 'iframe-log-error' : 'iframe-log-info',
+        message: `[Chat Iframe] ${message}`
+      }, '*');
+    }
+  }
+
   function registerLocalAttachment(filePath: string) {
+    logToGui(`registerLocalAttachment called with: ${filePath}`);
     const hostToken = localStorage.getItem('chat_host_token') || '';
     const url = `/chat-v2/${token}/attachments/local?hostToken=${encodeURIComponent(hostToken)}`;
     const sender = $currentDevice?.label || 'Me';
     const avatar = $currentDevice?.avatar || '';
     const deviceToken = localStorage.getItem('chat_token') || '';
 
+    logToGui(`registerLocalAttachment sending POST to: ${url}`);
     fetch(url, {
       method: 'POST',
       headers: {
@@ -238,10 +250,10 @@
       return r.json();
     })
     .then(message => {
-      console.log('Successfully registered local attachment:', message);
+      logToGui(`Successfully registered local attachment response: ${JSON.stringify(message)}`);
     })
     .catch(err => {
-      console.error('Failed to register local attachment:', err);
+      logToGui(`Failed to register local attachment: ${err.message}`, true);
       chatActions.addSystemMessage('发送本地附件失败: ' + err.message);
     });
   }

@@ -418,6 +418,11 @@ window.addEventListener('message', (e) => {
         if (errorMsg && typeof LogError === 'function') {
             LogError(errorMsg);
         }
+    } else if (e.data.type === 'iframe-log-info') {
+        const msg = String(e.data.message || '');
+        if (msg && typeof LogInfo === 'function') {
+            LogInfo(msg);
+        }
     }
 });
 
@@ -4743,14 +4748,24 @@ function connectAgentEvents() {
 
 
 async function handleFileDrop(paths) {
+    if (typeof LogInfo === 'function') {
+        LogInfo('[Chat Drag] handleFileDrop called with paths: ' + JSON.stringify(paths) + ', mode: ' + state.mode);
+    }
     if (state.mode === 'chat') {
         const frame = document.querySelector('#chat-iframe');
         if (frame && frame.contentWindow) {
+            if (typeof LogInfo === 'function') {
+                LogInfo('[Chat Drag] Found chat-iframe, postMessage selected-files');
+            }
             frame.contentWindow.postMessage({
                 type: 'selected-files',
                 paths: paths || []
-            }, activeChatFrameOrigin() || '*');
+            }, '*');
             return;
+        } else {
+            if (typeof LogError === 'function') {
+                LogError('[Chat Drag] chat-iframe or contentWindow not found in chat mode');
+            }
         }
     }
     if (state.mode !== 'share') {
@@ -5472,6 +5487,9 @@ function escapeAttr(value) {
 }
 
 OnFileDrop((_x, _y, paths) => {
+    if (typeof LogInfo === 'function') {
+        LogInfo('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
+    }
     dragCounter = 0;
     hideChatDragOverlay();
     handleFileDrop(paths);
