@@ -103,22 +103,26 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	var sysMsg string
 	if oldClient != nil {
 		if oldClient.Label != c.Label {
-			sysMsg = fmt.Sprintf("%s 修改用户名为 %s", oldClient.Label, c.Label)
+			sysMsg = "{oldSender} 修改用户名为 {sender}"
 		} else if oldClient.Avatar != c.Avatar {
-			sysMsg = fmt.Sprintf("%s 修改了头像", c.Label)
+			sysMsg = "{sender} 修改了头像"
 		} else {
-			sysMsg = fmt.Sprintf("%s 已重新连接", c.Label)
+			sysMsg = "{sender} 已重新连接"
 		}
 	} else {
 		if parentLabel != "" {
-			sysMsg = fmt.Sprintf("%s 通过 %s 加入了会话", c.Label, parentLabel)
+			sysMsg = fmt.Sprintf("{sender} 通过 %s 加入了会话", parentLabel)
 		} else {
-			sysMsg = fmt.Sprintf("%s 已加入会话", c.Label)
+			sysMsg = "{sender} 已加入会话"
 		}
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg, c.Theme, c)
+		var oldLabel string
+		if oldClient != nil {
+			oldLabel = oldClient.Label
+		}
+		s.broadcastSystemMessage(sysMsg, c.Theme, c, oldLabel)
 	}
 }
 
@@ -144,7 +148,7 @@ func (s *Session) Unregister(c *Client) {
 		s.broadcastPresence()
 
 		if !hasOther && !s.DisableSystemMessages && !c.Kicked {
-			s.broadcastSystemMessage(fmt.Sprintf("%s 已断开连接", c.Label), c.Theme, c)
+			s.broadcastSystemMessage("{sender} 已断开连接", c.Theme, c, "")
 		}
 
 		s.mu.RLock()
@@ -459,7 +463,7 @@ func (s *Session) isEventVisibleTo(c *Client, event protocol.EventEnvelope) bool
 	return true
 }
 
-func (s *Session) broadcastSystemMessage(text string, theme string, cl *Client) {
+func (s *Session) broadcastSystemMessage(text string, theme string, cl *Client, oldSender string) {
 	var num int64 = 0
 	if n, err := rand.Int(rand.Reader, big.NewInt(1000000)); err == nil {
 		num = n.Int64()
@@ -474,6 +478,7 @@ func (s *Session) broadcastSystemMessage(text string, theme string, cl *Client) 
 	if cl != nil {
 		msg.Sender = cl.Label
 		msg.SenderID = cl.Peer
+		msg.OldSender = oldSender
 	}
 	s.Broadcast(protocol.EventEnvelope{
 		Type:    protocol.EventMessageAdded,
@@ -496,14 +501,16 @@ func (s *Session) UpdateClient(c *Client, label string, avatar string) {
 
 	// Broadcast system message for rename/avatar change
 	var sysMsg string
+	var oldLabelVal string
 	if oldLabel != label {
-		sysMsg = fmt.Sprintf("%s 修改用户名为 %s", oldLabel, label)
+		sysMsg = "{oldSender} 修改用户名为 {sender}"
+		oldLabelVal = oldLabel
 	} else if oldAvatar != avatar {
-		sysMsg = fmt.Sprintf("%s 修改了头像", label)
+		sysMsg = "{sender} 修改了头像"
 	}
 
 	if sysMsg != "" && !s.DisableSystemMessages {
-		s.broadcastSystemMessage(sysMsg, c.Theme, c)
+		s.broadcastSystemMessage(sysMsg, c.Theme, c, oldLabelVal)
 	}
 }
 
@@ -517,9 +524,9 @@ func (s *Session) KickClient(clientID string) {
 	s.mu.Unlock()
 
 	if exists {
-		sysMsg := fmt.Sprintf("已强制设备 %s 退出会话", c.Label)
+		sysMsg := "已强制设备 {sender} 退出会话"
 		if !s.DisableSystemMessages {
-			s.broadcastSystemMessage(sysMsg, c.Theme, c)
+			s.broadcastSystemMessage(sysMsg, c.Theme, c, "")
 		}
 		c.Close()
 	}

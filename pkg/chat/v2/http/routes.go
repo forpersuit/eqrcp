@@ -384,7 +384,7 @@ const harnessHTML = `<!DOCTYPE html>
                     devicesList.textContent = 'Online: ' + devices.length + ' (' + devices.map(d => d.label).join(', ') + ')';
                 } else if (data.type === 'message_added') {
                     const msg = data.message;
-                    appendMessage(msg.sender, msg.text);
+                    appendMessage(msg.sender, msg.text, msg.type, msg.oldSender);
                 } else if (data.type === 'error') {
                     appendSystemMessage('Error: ' + data.error.message);
                 }
@@ -418,10 +418,18 @@ const harnessHTML = `<!DOCTYPE html>
             msgInput.value = '';
         }
 
-        function appendMessage(sender, text) {
+        function appendMessage(sender, text, type, oldSender) {
             const div = document.createElement('div');
-            div.className = 'msg';
-            div.innerHTML = '<span class="msg-sender">' + sender + ':</span><span class="msg-text">' + text + '</span>';
+            if (type === 'system') {
+                div.className = 'msg system';
+                let renderedText = text || '';
+                renderedText = renderedText.replaceAll('{sender}', sender || '');
+                renderedText = renderedText.replaceAll('{oldSender}', oldSender || '');
+                div.textContent = renderedText;
+            } else {
+                div.className = 'msg';
+                div.innerHTML = '<span class="msg-sender">' + sender + ':</span><span class="msg-text">' + text + '</span>';
+            }
             messagesDiv.appendChild(div);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }

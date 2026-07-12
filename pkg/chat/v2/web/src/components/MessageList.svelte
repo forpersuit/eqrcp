@@ -748,7 +748,18 @@
         {@const colors = msg.theme ? getThemeColors(msg.theme) : null}
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const isMe = msg.senderId && msg.senderId === localPeer}
-        {@const displayText = isMe && msg.sender && msg.text.includes(msg.sender) ? msg.text.replaceAll(msg.sender, `我(${msg.sender})`) : msg.text}
+        {@const displayText = (() => {
+          let text = msg.text || '';
+          if (text.includes('{sender}')) {
+            const senderRepl = isMe && msg.sender ? `我(${msg.sender})` : (msg.sender || '');
+            text = text.replaceAll('{sender}', senderRepl);
+          }
+          if (text.includes('{oldSender}')) {
+            const oldSenderRepl = isMe && msg.oldSender ? `我(${msg.oldSender})` : (msg.oldSender || '');
+            text = text.replaceAll('{oldSender}', oldSenderRepl);
+          }
+          return text;
+        })()}
         <div class="system-message">
           {#if colors}
             <span class="system-text" style="background: {colors.bg}; border-color: {colors.border}; color: {colors.text};">{displayText}</span>

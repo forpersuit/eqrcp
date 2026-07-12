@@ -39,6 +39,7 @@ type Message struct {
 	ID         string      `json:"id"`
 	SenderID   string      `json:"senderId,omitempty"`
 	Sender     string      `json:"sender"`
+	OldSender  string      `json:"oldSender,omitempty"`
 	Avatar     string      `json:"avatar,omitempty"`
 	Theme      string      `json:"theme,omitempty"`
 	Type       MessageType `json:"type"`

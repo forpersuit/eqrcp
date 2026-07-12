@@ -48,7 +48,16 @@ export class ChatWebSocketClient {
     this.themeParam = params.get('theme') || '';
 
     // Auto-generate some local client details if not provided
-    this.clientLabel = params.get('sender') || localStorage.getItem('chat_label') || `Device-${Math.random().toString(36).substring(2, 6)}`;
+    let randSuffix = '';
+    try {
+      randSuffix = Math.random().toString(36).substring(2, 6);
+    } catch (e) {
+      // fallback
+    }
+    if (!randSuffix || randSuffix.length < 4) {
+      randSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+    }
+    this.clientLabel = params.get('sender') || localStorage.getItem('chat_label') || `Device-${randSuffix}`;
     this.clientAvatar = params.get('avatar') || localStorage.getItem('chat_avatar') || '';
     
     // Each device must have a unique, persistent clientPeer ID.
