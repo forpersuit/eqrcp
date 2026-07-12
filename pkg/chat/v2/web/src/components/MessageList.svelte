@@ -3,7 +3,7 @@
   import { connState } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
-  import { currentDevice, peers } from '../state/chatStore';
+  import { currentDevice, peers, chatSessionStatus } from '../state/chatStore';
 
   const dispatch = createEventDispatcher();
 
@@ -159,6 +159,7 @@
   }
 
   function handleDownload(messageId: string, filename: string, size: number, isPaid: boolean) {
+    if ($chatSessionStatus !== 'active') return;
     dispatch('startDownload', { messageId, filename, size, isPaid });
   }
 
@@ -382,6 +383,7 @@
           options.push({
             label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
             confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
+            disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
               closeMenu();
@@ -408,6 +410,7 @@
         } else if (dlTx && dlTx.state === 'failed') {
           options.push({
             label: currentLang === 'en' ? 'Retry Download' : '重试下载',
+            disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
               closeMenu();
@@ -416,6 +419,7 @@
         } else {
           options.push({
             label: currentLang === 'en' ? 'Download' : '下载文件',
+            disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
               closeMenu();

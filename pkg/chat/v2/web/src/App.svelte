@@ -911,6 +911,7 @@
   }
 
   function handleStartDownload(e: CustomEvent<{ messageId: string; filename: string; size: number; isPaid: boolean }>) {
+    if ($chatSessionStatus !== 'active') return;
     const { messageId, filename, size } = e.detail;
     if (!client) return;
 
@@ -1092,14 +1093,16 @@
             </div>
           {/if}
 
-          <button class="device-pill" type="button" on:click|stopPropagation={() => { showDevicePanel = !showDevicePanel; showLangPanel = false; showLicensePanel = false; }} title="Show connected devices">
-            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
-            <span id="device-count">{$peers.length}</span>
-          </button>
+          {#if $chatSessionStatus === 'active'}
+            <button class="device-pill" type="button" on:click|stopPropagation={() => { showDevicePanel = !showDevicePanel; showLangPanel = false; showLicensePanel = false; }} title="Show connected devices">
+              <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
+              <span id="device-count">{$peers.length}</span>
+            </button>
 
-          <button class="icon-button qr-btn" class:qr-breathe={isQRPulsing} type="button" on:click|stopPropagation={() => { showShareModal = true; stopQRPulse(); closeAllPanels(); }} title="Show session QR">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
-          </button>
+            <button class="icon-button qr-btn" class:qr-breathe={isQRPulsing} type="button" on:click|stopPropagation={() => { showShareModal = true; stopQRPulse(); closeAllPanels(); }} title="Show session QR">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
+            </button>
+          {/if}
 
           {#if isEmbedded}
             <button class="icon-button danger" type="button" on:click={handleClose} title="Stop chat">
@@ -1264,14 +1267,14 @@
           <img class="qr" src={qrImgSrc} alt="Chat QR code">
         </div>
         <div class="session-collapsible" class:collapsed={!showUrl}>
-          <div class="url-row" style="margin-top: 8px;">
+          <div class="url-row">
             <input value={joinUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: monospace; font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
             <button class="side-btn" type="button" on:click={handleCopyUrl} style="flex-shrink: 0;">
               {copied ? t.copied : t.copy}
             </button>
           </div>
         </div>
-        <button class="session-toggle" type="button" on:click={() => showUrl = !showUrl} style="margin-top: 8px;">
+        <button class="session-toggle" type="button" on:click={() => showUrl = !showUrl}>
           {showUrl ? t.hideLink : t.showLink}
         </button>
       </aside>
@@ -1279,7 +1282,7 @@
 
     <!-- 退出确认模态框 -->
     <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showLeaveConfirm} on:click|self={() => showLeaveConfirm = false}>
-      <aside class="side" style="max-width: 320px; padding: 20px;">
+      <aside class="side" style="max-width: 300px; padding: 16px;">
         <div class="side-section-head">
           <h1 style="font-size: 16px; font-weight: bold; color: var(--danger);">
             {currentLang === 'en' ? 'Exit Session' : '退出当前会话'}
@@ -1288,7 +1291,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
-        <p class="side-note" style="margin-top: 10px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; color: #666;">
+        <p class="side-note" style="margin-top: 4px; margin-bottom: 12px; font-size: 13px; line-height: 1.4; color: var(--muted);">
           {currentLang === 'en' 
             ? 'Are you sure you want to exit the current chat session? Once you exit, your device will be unregistered and you will have to re-scan the QR code to join again.' 
             : '确定要退出当前聊天会话吗？退出后，您的设备将被注销，且必须重新扫描二维码才能再次加入。'}
