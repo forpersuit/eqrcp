@@ -90,8 +90,8 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	if shouldReplay {
 		events := s.MessageStore.GetSince(startSeq)
 		for _, e := range events {
-			if e.Message != nil {
-				if e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
+			if e.Message != nil || e.Transfer != nil {
+				if e.Message != nil && e.Message.Type == protocol.MessageFile && !e.Message.Downloaded {
 					if c.Peer != e.Message.SenderID && c.Peer != "desktop" && c.Peer != "" {
 						diag.Emit(context.Background(), s.Logger, diag.LevelDebug, "[WebSocket Replay Filtered]", nil,
 							diag.F("msgID", e.Message.ID), diag.F("clientID", c.ID), diag.F("peer", c.Peer),
