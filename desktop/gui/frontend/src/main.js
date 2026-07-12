@@ -2570,7 +2570,7 @@ function renderCurrent(task) {
     const percent = task.transferPercent || 0;
     const qrImage = qrImageURL(task.pageUrl);
     const finished = isTerminal(task);
-    const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
+    const actionText = (task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
     return `
         <div class="task-card">
             <div class="task-title">${escapeHTML(actionText)} #${task.id}</div>
@@ -3002,7 +3002,7 @@ function refreshHistoryListInDOM() {
                 filteredHistory = history.filter(task => {
                     if (String(task.id).toLowerCase().includes(query)) return true;
                     
-                    const actionText = (task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
+                    const actionText = ((task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
                     if (actionText.includes(query)) return true;
 
                     const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);

@@ -242,7 +242,7 @@ export function getMatchResults(history, query) {
     const results = [];
     
     history.forEach(task => {
-        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action));
+        const actionText = (task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action));
         const title = `${actionText} #${task.id}`;
         
         // 1. 匹配任务 ID 或动作标题
@@ -297,7 +297,7 @@ export function renderHistory(history) {
     }
     return `<ol class="history">${history.slice(0, 8).map((task) => {
         const taskFolder = getTaskFolder(task);
-        const actionText = task.action === 'send' ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
+        const actionText = (task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : titleCase(task.action)));
         const displayTitle = `${actionText} #${task.id}`;
         return `
         <li id="history-item-${task.id}" style="transition: all 0.22s ease-in-out;">
@@ -312,7 +312,7 @@ export function renderHistory(history) {
                             ${openFolderIcon()}
                         </button>
                     ` : ''}
-                    ${task.action === 'send' ? `
+                    ${(task.action === 'share' || task.action === 'send') ? `
                         <button class="icon-button-mini restore-share-action" data-task-id="${task.id}" title="${escapeAttr(t('restore_share'))}" style="margin-left: 8px;">
                             ${restoreIcon()}
                         </button>
