@@ -884,11 +884,48 @@
     showLicensePanel = false;
     showLangPanel = false;
   }
+
+  let isDragging = false;
+  let dragCounter = 0;
+
+  function handleDragEnter(e: DragEvent) {
+    e.preventDefault();
+    dragCounter++;
+    logToGui(`Svelte dragenter, count: ${dragCounter}`);
+    if (dragCounter > 0) {
+      isDragging = true;
+    }
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    e.preventDefault();
+    dragCounter--;
+    logToGui(`Svelte dragleave, count: ${dragCounter}`);
+    if (dragCounter <= 0) {
+      isDragging = false;
+    }
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    logToGui('Svelte drop event triggered');
+    dragCounter = 0;
+    isDragging = false;
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="chat-viewport" on:click={closeAllPanels}>
+<div class="chat-viewport" on:click={closeAllPanels}
+  on:dragenter={handleDragEnter}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
+>
   <main>
     <section class="chat-shell">
       <header class="chat-head" class:offline={$connState !== 'connected'}>
@@ -1093,6 +1130,12 @@
       </aside>
     </div>
   </main>
+
+  <div class="chat-drag-overlay" class:active={isDragging} style="--wails-drop-target: drop;">
+    <div class="chat-drag-box">
+      <div class="chat-drag-title">{currentLang === 'en' ? 'Drag & drop files to send' : '拖拽文件到这里发送'}</div>
+    </div>
+  </div>
 </div>
 
 <style>

@@ -156,8 +156,6 @@ window.addEventListener('unhandledrejection', (event) => {
     reportRuntimeErrorToBot(errorMsg, errorStack);
 });
 
-let dragCounter = 0;
-
 function sendDebugMessageToChat(msg) {
     if (typeof LogInfo === 'function') {
         LogInfo(msg);
@@ -171,49 +169,12 @@ function sendDebugMessageToChat(msg) {
     }
 }
 
-function showChatDragOverlay() {
-    const el = document.getElementById('chat-drag-overlay');
-    if (el) {
-        el.classList.add('active');
-    }
-}
-
-function hideChatDragOverlay() {
-    const el = document.getElementById('chat-drag-overlay');
-    if (el) {
-        el.classList.remove('active');
-    }
-}
-
-window.addEventListener('dragenter', (e) => {
-    e.preventDefault();
-    dragCounter++;
-    if (state.mode === 'chat' && dragCounter > 0) {
-        showChatDragOverlay();
-    }
-});
-
 window.addEventListener('dragover', (e) => {
     e.preventDefault();
 });
 
-window.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    dragCounter--;
-    if (state.mode === 'chat' && dragCounter <= 0) {
-        hideChatDragOverlay();
-    }
-});
-
 window.addEventListener('drop', (e) => {
     e.preventDefault();
-    dragCounter = 0;
-    hideChatDragOverlay();
-});
-
-window.addEventListener('dragend', (e) => {
-    dragCounter = 0;
-    hideChatDragOverlay();
 });
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
@@ -5495,8 +5456,6 @@ function escapeAttr(value) {
 
 OnFileDrop((_x, _y, paths) => {
     sendDebugMessageToChat('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
-    dragCounter = 0;
-    hideChatDragOverlay();
     handleFileDrop(paths);
 }, true);
 
