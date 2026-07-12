@@ -1424,7 +1424,6 @@ input:focus { border-color: var(--accent); outline: none; }
         top: var(--chat-viewport-top);
         width: var(--chat-viewport-width);
         z-index: 0;
-        transition: height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), max-height 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
     main {
         display: grid;

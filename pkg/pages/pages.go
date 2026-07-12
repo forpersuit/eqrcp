@@ -9,10 +9,6 @@ import _ "embed"
 //go:embed qr.tmpl.html
 var QR string
 
-// Chat page
-//
-//go:embed chat.tmpl.html
-var Chat string
 
 // Upload page
 //

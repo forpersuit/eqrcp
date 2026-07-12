@@ -40,6 +40,9 @@
   let isEmbedded = false;
   let observer: MutationObserver | null = null;
   let visualViewportHandler: (() => void) | null = null;
+  let windowScrollHandler: (() => void) | null = null;
+  let aggressiveScrollTimer: any = null;
+  let handleGlobalFocusIn: ((e: FocusEvent) => void) | null = null;
   const activeUploads = new Map<string, XMLHttpRequest>();
 
   // Generate a dynamic random joinToken for the lifetime of this session page
@@ -553,6 +556,38 @@
       localStorage.setItem('chat_host_token', hostToken);
     }
 
+    const runAggressiveScrollCorrection = () => {
+      let count = 0;
+      if (aggressiveScrollTimer) clearInterval(aggressiveScrollTimer);
+      aggressiveScrollTimer = setInterval(() => {
+        if (window.scrollY !== 0) {
+          window.scrollTo(0, 0);
+        }
+        count++;
+        if (count > 12) {
+          clearInterval(aggressiveScrollTimer);
+          aggressiveScrollTimer = null;
+        }
+      }, 50);
+    };
+
+    handleGlobalFocusIn = (e: FocusEvent) => {
+      const activeEl = e.target as HTMLElement;
+      if (activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea')) {
+        runAggressiveScrollCorrection();
+      }
+    };
+    document.addEventListener('focusin', handleGlobalFocusIn);
+
+    if (typeof window !== 'undefined') {
+      windowScrollHandler = () => {
+        if (window.scrollY !== 0) {
+          window.scrollTo(0, 0);
+        }
+      };
+      window.addEventListener('scroll', windowScrollHandler);
+    }
+
     if (typeof window !== 'undefined' && window.visualViewport) {
       visualViewportHandler = () => {
         const vv = window.visualViewport;
@@ -618,6 +653,15 @@
     if (visualViewportHandler && typeof window !== 'undefined' && window.visualViewport) {
       window.visualViewport.removeEventListener('resize', visualViewportHandler);
       window.visualViewport.removeEventListener('scroll', visualViewportHandler);
+    }
+    if (windowScrollHandler && typeof window !== 'undefined') {
+      window.removeEventListener('scroll', windowScrollHandler);
+    }
+    if (handleGlobalFocusIn) {
+      document.removeEventListener('focusin', handleGlobalFocusIn);
+    }
+    if (aggressiveScrollTimer) {
+      clearInterval(aggressiveScrollTimer);
     }
     if (qrPulseTimer) {
       clearTimeout(qrPulseTimer);

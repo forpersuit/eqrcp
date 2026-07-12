@@ -23,9 +23,7 @@ import (
 
 	diag "eqt/pkg/chat/v2/diag"
 	chatv2http "eqt/pkg/chat/v2/http"
-	"eqt/pkg/pages"
 	"eqt/pkg/qr"
-	"eqt/pkg/version"
 
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
@@ -141,13 +139,9 @@ func (s *Server) Chat() error {
 		return fmt.Errorf("invalid chat URL %q", s.ChatURL)
 	}
 	imageRoute := route + "/qr/image"
-	eventsRoute := route + "/events"
-	messagesRoute := route + "/messages"
 	attachmentsRoute := route + "/attachments"
-	clientsRoute := route + "/clients"
 	stopRoute := route + "/stop"
 	healthRoute := route + "/health"
-	viewportDebugRoute := route + "/viewport-debug"
 	payRoute := route + "/pay"
 	viewportDebugLog := chatViewportDebugLogPath()
 	tusTmpDir := filepath.Join(dir, ".tus-tmp")
@@ -332,7 +326,7 @@ func (s *Server) Chat() error {
 		logger = diag.NewStdLogger()
 	}
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
-		BasePath: "/chat-v2",
+		BasePath: route,
 		Logger:   logger,
 		IsPaidOrUnrestricted: func() bool {
 			usage := limiterInstance.GetStatus()
@@ -377,84 +371,8 @@ func (s *Server) Chat() error {
 		},
 	})
 	s.chatV2Handler = chatV2Handler
-	s.mux.Handle("/chat-v2/", chatV2Handler)
-
-	s.mux.HandleFunc(route, func(w http.ResponseWriter, r *http.Request) {
-		if handleChatCORS(w, r, http.MethodGet) {
-			return
-		}
-		if r.URL.Path != route {
-			http.NotFound(w, r)
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		licenseTierDisplay := ""
-		rawTier := GetLicenseTier()
-		codeDate := GetCodeDate()
-		if rawTier != "" {
-			switch rawTier {
-			case "PLUS":
-				if codeDate == "LIFETIME" {
-					licenseTierDisplay = "PLUS U"
-				} else {
-					licenseTierDisplay = "PLUS"
-				}
-			case "PRO":
-				licenseTierDisplay = "PRO"
-			default:
-				licenseTierDisplay = strings.ToUpper(rawTier)
-			}
-		}
-
-		variables := struct {
-			URL                string
-			QRImageRoute       string
-			EventsRoute        string
-			MessagesRoute      string
-			AttachmentsRoute   string
-			ClientsRoute       string
-			StopRoute          string
-			HealthRoute        string
-			ViewportDebugRoute string
-			HostToken          string
-			CanStop            bool
-			Version            string
-			PayRoute           string
-			LicenseTier        string
-		}{
-			URL:                s.ChatJoinURL(),
-			QRImageRoute:       imageRoute,
-			EventsRoute:        eventsRoute,
-			MessagesRoute:      messagesRoute,
-			AttachmentsRoute:   attachmentsRoute,
-			ClientsRoute:       clientsRoute,
-			StopRoute:          stopRoute,
-			HealthRoute:        healthRoute,
-			ViewportDebugRoute: viewportDebugRoute,
-			HostToken:          session.hostToken,
-			CanStop:            session.validHostToken(r.URL.Query().Get("hostToken")),
-			Version:            version.String(),
-			PayRoute:           payRoute,
-			LicenseTier:        licenseTierDisplay,
-		}
-		if err := serveTemplate("chat", pages.Chat, w, variables); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Template error: %v\n", err)
-			s.signalStop()
-		}
-	})
-	s.mux.HandleFunc(eventsRoute, session.handleEvents)
-	s.mux.HandleFunc(messagesRoute, session.handleMessages)
-	s.mux.HandleFunc(messagesRoute+"/", session.handleMessageAction)
-	s.mux.HandleFunc(attachmentsRoute, session.handleAttachmentUpload)
-	s.mux.HandleFunc(attachmentsRoute+"/tus/", session.handleTusUpload)
-	s.mux.HandleFunc(attachmentsRoute+"/local", session.handleLocalAttachmentRegister)
-	s.mux.HandleFunc(attachmentsRoute+"/", session.handleAttachmentDownload)
-	s.mux.HandleFunc(clientsRoute+"/", session.handleClientAction)
-	s.mux.HandleFunc(viewportDebugRoute, session.handleViewportDebug)
+	s.mux.Handle(route, chatV2Handler)
+	s.mux.Handle(route+"/", chatV2Handler)
 	s.mux.HandleFunc(stopRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

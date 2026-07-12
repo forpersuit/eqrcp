@@ -57,6 +57,12 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **Real-time System Presence Notifications**: Real-time transitions (join, reconnect, disconnect, rename) are broadcast from the Go backend as `MessageSystem` events. The client dynamically maps messages to their sender's latest online label and avatar (supporting base64 images and emojis) from the live roster, rendering them non-intrusively in-app within the chat stream.
 - **Mobile Keyboard Input Track-To-Bottom**:
   - When mobile input fields (like compose textareas) trigger a focus event or window visual viewport resizing, if the client is currently tracking the latest chat logs (`followLatest` is true), it must trigger multiple delayed scroll adjustments (e.g. at 0ms, 50ms, 150ms, 300ms, 500ms) scrolling the message container exactly to bottom (`messagesEl.scrollTop = messagesEl.scrollHeight`). This keeps the newest messages visible during virtual keyboard popups.
+- **Android Virtual Keyboard Layout Correction**:
+  - In Android WebViews/browsers, focusing on a text input element triggers native keyboard adjustments that can push the layout viewport upwards, leaving a large white space between the keyboard and the chat composer (causing `window.scrollY > 0`).
+  - **Rule**:
+    1. To prevent layout resize lag and jitter, remove CSS height animations (`transition: height`) from the main viewports (e.g. `.chat-viewport`) in mobile-specific styles.
+    2. Register a global `scroll` listener that immediately resets `window.scrollY` to `0` when scrolling occurs on the window.
+    3. Register a global `focusin` listener on input/textarea elements to initiate an aggressive scroll correction routine. The routine should continuously call `window.scrollTo(0, 0)` at a high frequency (e.g., every 50ms) for a short duration (e.g., 600ms) to counteract the browser's native asynchronous scrolling adjustments when the virtual keyboard emerges.
 
 ## Real-time Viewport & Setting Sync (Viewport Debug Toggling)
 - **Problem**: When settings like "Enable Viewport Debug Box" are toggled in the desktop GUI Settings, mobile clients currently connected need to sync this state dynamically without requiring a manual page reload.
