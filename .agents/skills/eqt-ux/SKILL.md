@@ -161,7 +161,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - Once transfer (upload/download) is finished, keep the color of the description text as the highlight theme color (`fillClr`) instead of reverting it to the default muted gray (`var(--muted)`), establishing a persistent visual cue for successfully transferred attachments.
 - **WebSocket 掉线/重连期间 Transfer 任务事件的重放与进度恢复**:
   - **问题成因**：当接收端设备发生锁屏、息屏等行为时，前台 WebSocket 连接会被系统强制挂起/中断，但后台的 HTTP 物理下载仍可能继续进行直至传输完成。这会导致客户端错过了服务端广播的 `EventTransferCompleted` 完成事件。当客户端重新亮屏重连（携带 `afterSeq`）时，若后端事件重放机制中将非 Message 类型的纯传输任务事件（即 `e.Message == nil` 但 `e.Transfer != nil` 的事件）拦截过滤，客户端就无法恢复重载期间错过的传输状态，导致其前端气泡进度永远死锁在断线前的数值（如 59%）。
-  - **解决方案**：在后端的 WebSocket 历史事件重放循环中，必须对带有 `Transfer` 负载的事件予以放行（`if e.Message != nil || e.Transfer != nil`），使其能与常规 Message 消息同步重放。这样，重连的客户端可以瞬间更新状态、将进度条推向 100% 并标记完成。
+  - **解决方案**：
+    1. **后端事件重放放行**：在后端的 WebSocket 历史事件重放循环中，必须对带有 `Transfer` 负载的事件予以放行（`if e.Message != nil || e.Transfer != nil`），使其能与常规 Message 消息同步重放。
+    2. **前端下载完结状态自愈与假死屏蔽**：在前端渲染层计算已下载完结 `isTxCompleted` 时，除任务状态 `dlTx.state === 'completed'` 外，必须同步检查消息本身的 `msg.downloaded`（重连重放的消息已下载标记）及已完成图 `completedMap[msg.id]`。当此状态成立时，说明物理传输早已成功结束，前端在获取当前渲染任务对象 `tx` 时，必须强制将 `tx` 置为 `null` 屏蔽过滤（`tx = mine ? ulTx : (isTxCompleted ? null : dlTx)`），主动将 UI 从假死/悬空的“传输中”状态自愈纠正为已下载就绪状态。
 
 
 ## Chat Mode E2E UI Simulation via Chrome MCP
