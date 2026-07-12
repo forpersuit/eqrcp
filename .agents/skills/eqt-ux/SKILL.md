@@ -101,6 +101,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 - **WebView 物理文件拖拽稳定性 (Reliable Webview Drag & Drop)**:
   - **问题成因**：在 Wails 应用中，即使在容器上声明了 `style="--wails-drop-target: drop"`，拖拽文件时如果落在该容器内部 of 子元素（如文字标题、小图标）上，拖放事件仍极易被 WebView 吃掉导致失效。
   - **解决方案**：除了在容器（如 `.drop-target`）上设置 `--wails-drop-target` 外，必须通过 CSS 给其内部所有子元素配置 `pointer-events: none;`（例如 `.drop-target * { pointer-events: none; }`）。这能够强行将拖拽焦点和鼠标事件穿透到父级拖拽容器，实现平滑、稳定地接收桌面物理文件。
+  - **跨域 Iframe 拖拽穿透与 OLE 句柄常驻稳定拦截**：当主视口被 100% 高宽的跨域内嵌子页面（如 iframe 中的 chat 页面）占据时，Wails 宿主窗口注册的拖拽句柄会失效。为解决此问题，需：
+    1. 给主窗口 `body` 加上 `--wails-drop-target: drop` 并维持常驻渲染树（不可使用 `display: none` 隐藏蒙版以防 OLE 句柄被卸载）。
+    2. 子 iframe 页面通过 `dragenter` 监听器，在拖拽进入时向父窗口 `postMessage` 发送 `iframe-drag-active` 信号。
+    3. 父窗口在收到信号后瞬时拉起位于上层的遮罩蒙版（`opacity: 1; pointer-events: auto;`），后续拖动（ondrop/ondragleave）事件将自然触发在宿主父元素上，完美唤醒 Wails 的 `OnFileDrop` 回调，同时阻断 WebView2 的默认文件播放跳转行为。
 - **嵌入式 iframe 的高度塌陷与拉伸自适应 (Embedded iframe Height Resizing stability)**:
   - **问题成因**：在 Wails 桌面端，Chat v2 等界面运行在嵌入式的 iframe 中。当用户拖拽窗口边缘调整大小时，如果子页面的 `html` / `body` / `#app` 等容器没有强制 `100%` 高度，或者受限于浏览器的高度循环计算，在窗口被拉小后再拉大时，iframe 极易在变矮时的物理像素高度上“死锁”，导致消息区域塌陷缩小且无法自动复原。同时，在输入框因多行输入或 resize 变高时，若消息历史区域（`.messages`）的底边距写死（未关联 `--composer-height`），将导致底部最新消息被输入框遮挡。此外，若 resize 发生时消息历史区域没有同步滚动到底部，会导致上方出现大量空白，并给用户造成区域塌陷的视觉假象。
   - **解决方案**：
@@ -155,6 +159,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - Use Flexbox `row-reverse` dynamically via CSS `.mine` structure to handle this layout switch automatically by simply placing the percentage element immediately after the description element in HTML.
 - **Finished State Visual Persistence**:
   - Once transfer (upload/download) is finished, keep the color of the description text as the highlight theme color (`fillClr`) instead of reverting it to the default muted gray (`var(--muted)`), establishing a persistent visual cue for successfully transferred attachments.
+- **WebSocket 掉线/重连期间 Transfer 任务事件的重放与进度恢复**:
+  - **问题成因**：当接收端设备发生锁屏、息屏等行为时，前台 WebSocket 连接会被系统强制挂起/中断，但后台的 HTTP 物理下载仍可能继续进行直至传输完成。这会导致客户端错过了服务端广播的 `EventTransferCompleted` 完成事件。当客户端重新亮屏重连（携带 `afterSeq`）时，若后端事件重放机制中将非 Message 类型的纯传输任务事件（即 `e.Message == nil` 但 `e.Transfer != nil` 的事件）拦截过滤，客户端就无法恢复重载期间错过的传输状态，导致其前端气泡进度永远死锁在断线前的数值（如 59%）。
+  - **解决方案**：在后端的 WebSocket 历史事件重放循环中，必须对带有 `Transfer` 负载的事件予以放行（`if e.Message != nil || e.Transfer != nil`），使其能与常规 Message 消息同步重放。这样，重连的客户端可以瞬间更新状态、将进度条推向 100% 并标记完成。
 
 
 ## Chat Mode E2E UI Simulation via Chrome MCP
