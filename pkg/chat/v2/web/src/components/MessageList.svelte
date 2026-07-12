@@ -876,8 +876,6 @@
                                 · {currentLang === 'en' ? 'Shared' : '已分享'}
                               {:else if !mine && isDownloaded}
                                 · {currentLang === 'en' ? 'Downloaded' : '已下载'}
-                              {:else if !mine && msg.downloaded}
-                                · {currentLang === 'en' ? 'Cached' : '已缓存'}
                               {/if}
                             {/if}
                           </div>
