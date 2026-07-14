@@ -6,6 +6,7 @@ import './app.css';
 import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
+import shareIllustrationURL from './assets/images/share.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
@@ -651,7 +652,8 @@ function renderShare() {
     const isStartShareEnabled = !state.busy && hasItems && !state.shareLimitNotice;
     return `
         <div class="dropzone" style="--wails-drop-target: drop">
-            <div class="drop-target" style="pointer-events: none;">
+            <div class="drop-target" style="pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <img src="${shareIllustrationURL}" alt="Share Onboarding" style="width: 140px; height: auto; margin-bottom: 16px; pointer-events: none; user-select: none; opacity: 0.85;" />
                 <div class="drop-title" style="pointer-events: none;">${t('drag_drop_tips')}</div>
                 <div class="drop-subtitle" style="pointer-events: none;">${hasItems ? `${state.sharePaths.length} ${t('items_ready')}` : t('or_click_to')}</div>
             </div>
