@@ -7,6 +7,7 @@ import faviconURL from './assets/images/favicon.png';
 import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import shareIllustrationURL from './assets/images/share.png';
+import receiveIllustrationURL from './assets/images/receive.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
@@ -968,6 +969,9 @@ function renderReceive() {
     }
     const output = state.receiveDir || state.settings?.output || '';
     return `
+        <div class="receive-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin-bottom: 16px; margin-top: 4px;">
+            <img src="${receiveIllustrationURL}" alt="Receive Onboarding" style="width: 180px; height: auto; pointer-events: none; user-select: none; opacity: 0.85;" />
+        </div>
         <div class="receive-box">
             <label>${t('receive_dir')}</label>
             <div class="directory-row">
