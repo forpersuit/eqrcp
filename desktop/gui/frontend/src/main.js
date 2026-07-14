@@ -651,9 +651,11 @@ function renderShare() {
     const hasItems = state.sharePaths.length > 0;
     const isStartShareEnabled = !state.busy && hasItems && !state.shareLimitNotice;
     return `
+        <div class="share-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin-bottom: 16px; margin-top: 4px;">
+            <img src="${shareIllustrationURL}" alt="Share Onboarding" style="width: 180px; height: auto; pointer-events: none; user-select: none; opacity: 0.85;" />
+        </div>
         <div class="dropzone" style="--wails-drop-target: drop">
-            <div class="drop-target" style="pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <img src="${shareIllustrationURL}" alt="Share Onboarding" style="width: 140px; height: auto; margin-bottom: 16px; pointer-events: none; user-select: none; opacity: 0.85;" />
+            <div class="drop-target" style="pointer-events: none;">
                 <div class="drop-title" style="pointer-events: none;">${t('drag_drop_tips')}</div>
                 <div class="drop-subtitle" style="pointer-events: none;">${hasItems ? `${state.sharePaths.length} ${t('items_ready')}` : t('or_click_to')}</div>
             </div>
