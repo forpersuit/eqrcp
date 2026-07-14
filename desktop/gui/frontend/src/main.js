@@ -8,6 +8,7 @@ import horizontalLogoURL from './assets/images/logo-horizontal.png';
 import logoMarkURL from './assets/images/logo-mark.png';
 import shareIllustrationURL from './assets/images/share.png';
 import receiveIllustrationURL from './assets/images/receive.png';
+import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
@@ -1665,6 +1666,9 @@ function renderChat() {
                 <div>
                     <div class="eyebrow">${t('session_mode')}</div>
                     <p id="chat-quota-text">${chatQuotaText()}</p>
+                </div>
+                <div class="chat-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin: 16px 0;">
+                    <img src="${chatIllustrationURL}" alt="Chat Onboarding" style="width: 180px; height: auto; pointer-events: none; user-select: none; opacity: 0.85;" />
                 </div>
                 <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${chatStartButtonText()}</button>
             </div>
