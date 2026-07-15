@@ -147,10 +147,18 @@
 </nav>
 <!-- Trailing Action -->
 <div class="flex items-center gap-md">
-    <button id="lang-toggle" class="flex items-center gap-xs px-sm py-xs md:px-md md:py-sm glass-panel border-white/10 hover:border-secondary text-on-surface-variant hover:text-secondary rounded font-label-md text-label-md transition-all">
-        <span class="material-symbols-outlined text-base">language</span>
-        <span id="lang-text" class="hidden sm:inline">English</span>
-    </button>
+    <div class="relative flex items-center gap-xs px-xs md:px-sm glass-panel border-white/10 hover:border-secondary text-on-surface-variant hover:text-secondary rounded transition-all">
+        <span class="material-symbols-outlined text-base pointer-events-none ml-xs">language</span>
+        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-secondary py-xs md:py-sm pl-xs pr-md rounded font-label-md text-label-md transition-all cursor-pointer outline-none appearance-none">
+            <option value="en" class="bg-background text-on-surface">English</option>
+            <option value="zh" class="bg-background text-on-surface">简体中文</option>
+            <option value="ja" class="bg-background text-on-surface">日本語</option>
+            <option value="ko" class="bg-background text-on-surface">한국어</option>
+            <option value="es" class="bg-background text-on-surface">Español</option>
+            <option value="de" class="bg-background text-on-surface">Deutsch</option>
+            <option value="fr" class="bg-background text-on-surface">Français</option>
+        </select>
+    </div>
     <a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-[#a855f7] text-white rounded font-label-md text-label-md hover:shadow-[0_0_10px_#a855f7] transition-shadow active:scale-95" href="https://pub.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe" data-i18n="nav_download">
         Download Client
     </a>
@@ -356,10 +364,7 @@
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/privacy.html" data-i18n="comp_privacy">Privacy Policy</a>
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/terms.html" data-i18n="comp_terms">Terms of Service</a>
 </div>
-</div>
-</footer>
-<script>
-    const translations = {
+<    const translations = {
         en: {
             "nav_features": "Features",
             "nav_pricing": "Pricing",
@@ -451,7 +456,7 @@
             "feat3_title": "P2P 加密聊天",
             "feat3_desc": "在局域网内安全沟通。端到端加密的文本和文件分享，云端零留痕。",
             "feat4_title": "跨平台支持",
-            "feat4_desc": "各主流操作系统无缝运行。接收端无需安装任何专用移动 App。",
+            "feat4_desc": "Seamless operation across operating systems. No dedicated mobile app installation required for receivers.",
             "pricing_title": "透明授权",
             "pricing_subtitle": "选择适合您工作流的方案。",
             "price_free_title": "免费版",
@@ -501,6 +506,171 @@
             "desc_app_receive": "动态管理接收的文件目录，并实时掌控所有历史传输明细。",
             "paddle_disclosure_title": "官方授权支付代理",
             "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。"
+        },
+        ja: {
+            "nav_features": "機能特徴",
+            "nav_pricing": "料金プラン",
+            "nav_compliance": "規約",
+            "nav_support": "サポート",
+            "nav_download": "ダウンロード",
+            "hero_version": "バージョン 2.0 リリース",
+            "hero_title": "QRコードによる<br/>高速ローカルファイル転送 &amp; <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">安全なチャット</span>",
+            "hero_desc": "PCとモバイル間の超高速ローカルネットワークP2P転送ツール。クラウドなし、遅延なし、スキャンして送るだけ。",
+            "hero_download_win": "Windows版ダウンロード",
+            "hero_download_mac_linux": "macOS &amp; Linux",
+            "features_title": "速度とセキュリティのための設計",
+            "features_subtitle": "ローカルデータ交換を再定義するコア機能。",
+            "pricing_title": "透明性のあるライセンス",
+            "pricing_subtitle": "ワークフローに合ったプランをお選びください。",
+            "price_free_title": "無料版",
+            "price_free_period": "/ 永久",
+            "price_free_btn": "今すぐ開始",
+            "price_lifetime_badge": "最もお得",
+            "price_lifetime_title": "終身Plus版",
+            "price_lifetime_period": "/ 一回払い",
+            "price_lifetime_btn": "終身版を購入",
+            "price_yearly_title": "年付Plus版",
+            "price_yearly_period": "/ 年",
+            "price_yearly_btn": "年間購読",
+            "compliance_title": "コンプライアンスと規約",
+            "comp_privacy": "プライバシーポリシー",
+            "comp_terms": "利用規約",
+            "gallery_title": "スクリーンショット",
+            "gallery_subtitle": "様々な利用シーンのインターフェースをご覧ください。",
+            "paddle_disclosure_title": "決済リセラーとMoR",
+            "paddle_disclosure": "注文プロセスは、当社のオンラインリセラーであるPaddle.comによって行われます。Paddle.comは、すべての注文のMerchant of Record（MoR）です。Paddleは、カスタマーサポートや返品対応を提供します。"
+        },
+        ko: {
+            "nav_features": "기능 특징",
+            "nav_pricing": "가격 정책",
+            "nav_compliance": "준수 정책",
+            "nav_support": "지원",
+            "nav_download": "클라이언트 다운로드",
+            "hero_version": "버전 2.0 출시",
+            "hero_title": "QR 코드를 통한<br/>빠른 로컬 파일 전송 및 <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">안전한 채팅</span>",
+            "hero_desc": "PC와 모바일 간의 초고속 로컬 네트워크 P2P 전송 도구입니다. 클라우드도 지연도 없이 스캔하여 전송하세요.",
+            "hero_download_win": "Windows용 다운로드",
+            "hero_download_mac_linux": "macOS 및 Linux",
+            "features_title": "속도와 보안을 위한 설계",
+            "features_subtitle": "로컬 데이터 전송을 재정의하는 핵심 기능.",
+            "pricing_title": "투명한 라이선스 정책",
+            "pricing_subtitle": "워크플로우에 적합한 요금제를 선택하세요.",
+            "price_free_title": "무료",
+            "price_free_period": "/ 평생",
+            "price_free_btn": "시작하기",
+            "price_lifetime_badge": "최고의 가치",
+            "price_lifetime_title": "플러스 평생권",
+            "price_lifetime_period": "/ 일회성 결제",
+            "price_lifetime_btn": "평생권 구매",
+            "price_yearly_title": "플러스 연간권",
+            "price_yearly_period": "/ 년",
+            "price_yearly_btn": "연간 구독",
+            "compliance_title": "준수 정책 및 판매 조건",
+            "comp_privacy": "개인정보 처리방침",
+            "comp_terms": "서비스 이용약관",
+            "gallery_title": "제품 갤러리",
+            "gallery_subtitle": "다양한 시나리오에서의 EQT 인터페이스를 확인해 보세요.",
+            "paddle_disclosure_title": "공식 결제 대행사 (MoR)",
+            "paddle_disclosure": "주문 및 결제 절차는 당사의 공식 리셀러인 Paddle.com에 의해 처리됩니다. Paddle.com은 모든 주문의 가맹점(Merchant of Record)으로, 결제 관련 고객 지원 및 환불을 직접 담당합니다."
+        },
+        es: {
+            "nav_features": "Características",
+            "nav_pricing": "Precios",
+            "nav_compliance": "Cumplimiento",
+            "nav_support": "Soporte",
+            "nav_download": "Descargar cliente",
+            "hero_version": "Versión 2.0 activa",
+            "hero_title": "Transferencia instantánea de archivos locales y <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">chat seguro</span> mediante código QR",
+            "hero_desc": "Herramienta de transferencia P2P rápida en red local entre PC y móvil. Sin nube, sin retrasos, escanee y envíe.",
+            "hero_download_win": "Descargar para Windows",
+            "hero_download_mac_linux": "macOS y Linux",
+            "features_title": "Diseñado para velocidad y seguridad",
+            "features_subtitle": "Capacidades principales que redefinen el intercambio local de datos.",
+            "pricing_title": "Licencias transparentes",
+            "pricing_subtitle": "Elija el plan que mejor se adapte a su flujo de trabajo.",
+            "price_free_title": "Gratis",
+            "price_free_period": "/para siempre",
+            "price_free_btn": "Empezar",
+            "price_lifetime_badge": "MEJOR VALOR",
+            "price_lifetime_title": "Plus Vitalicio",
+            "price_lifetime_period": "/pago único",
+            "price_lifetime_btn": "Comprar Vitalicio",
+            "price_yearly_title": "Plus Anual",
+            "price_yearly_period": "/año",
+            "price_yearly_btn": "Suscribirse anualmente",
+            "compliance_title": "Cumplimiento y Políticas",
+            "comp_privacy": "Política de Privacidad",
+            "comp_terms": "Condiciones de Servicio",
+            "gallery_title": "Galería de imágenes",
+            "gallery_subtitle": "Explore la interfaz de EQT en diferentes escenarios.",
+            "paddle_disclosure_title": "Distribuidor y MoR oficial",
+            "paddle_disclosure": "El proceso de pedido es gestionado por nuestro distribuidor oficial Paddle.com, que actúa como el Merchant of Record de todas nuestras transacciones. Paddle se encarga del servicio de atención al cliente y devoluciones."
+        },
+        de: {
+            "nav_features": "Funktionen",
+            "nav_pricing": "Preise",
+            "nav_compliance": "Compliance",
+            "nav_support": "Support",
+            "nav_download": "Client herunterladen",
+            "hero_version": "Version 2.0 Live",
+            "hero_title": "Sofortige lokale Dateiübertragung &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">sicherer Chat</span> per QR-Code",
+            "hero_desc": "Superschnelles lokales P2P-Übertragungstool zwischen PC und Mobilgerät. Keine Cloud, keine Verzögerung.",
+            "hero_download_win": "Für Windows herunterladen",
+            "hero_download_mac_linux": "macOS &amp; Linux",
+            "features_title": "Entwickelt für Geschwindigkeit &amp; Sicherheit",
+            "features_subtitle": "Kernfunktionen, die den lokalen Datenaustausch neu definieren.",
+            "pricing_title": "Transparente Lizenzierung",
+            "pricing_subtitle": "Wählen Sie das Modell, das zu Ihrem Workflow passt.",
+            "price_free_title": "Kostenlos",
+            "price_free_period": "/dauerhaft",
+            "price_free_btn": "Loslegen",
+            "price_lifetime_badge": "BESTES ANGEBOT",
+            "price_lifetime_title": "Plus Lebenslang",
+            "price_lifetime_period": "/einmalig",
+            "price_lifetime_btn": "Lebenslang kaufen",
+            "price_yearly_title": "Plus Jährlich",
+            "price_yearly_period": "/Jahr",
+            "price_yearly_btn": "Jährlich abonnieren",
+            "compliance_title": "Richtlinien &amp; Compliance",
+            "comp_privacy": "Datenschutzerklärung",
+            "comp_terms": "Nutzungsbedingungen",
+            "gallery_title": "Produkt-Galerie",
+            "gallery_subtitle": "Entdecken Sie die EQT-Benutzeroberfläche für verschiedene Szenarien.",
+            "paddle_disclosure_title": "Zahlungs-Reseller &amp; MoR",
+            "paddle_disclosure": "Unser Bestellprozess wird durch unseren Online-Reseller Paddle.com durchgeführt. Paddle.com ist der Merchant of Record (MoR) für all unsere Bestellungen. Paddle bietet Kundensupport und Rückabwicklung an."
+        },
+        fr: {
+            "nav_features": "Fonctionnalités",
+            "nav_pricing": "Tarifs",
+            "nav_compliance": "Conformité",
+            "nav_support": "Support",
+            "nav_download": "Télécharger le client",
+            "hero_version": "Version 2.0 disponible",
+            "hero_title": "Transfert instantané de fichiers locaux &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">chat sécurisé</span> via QR code",
+            "hero_desc": "Outil de transfert P2P ultra-rapide en réseau local entre PC et mobile. Pas de cloud, pas de latence.",
+            "hero_download_win": "Télécharger pour Windows",
+            "hero_download_mac_linux": "macOS &amp; Linux",
+            "features_title": "Conçu pour la vitesse et la sécurité",
+            "features_subtitle": "Fonctionnalités clés qui redéfinissent l'échange local.",
+            "pricing_title": "Licences transparentes",
+            "pricing_subtitle": "Choisissez l'offre qui correspond à vos besoins.",
+            "price_free_title": "Gratuit",
+            "price_free_period": "/toujours",
+            "price_free_btn": "Démarrer",
+            "price_lifetime_badge": "MEILLEUR CHOIX",
+            "price_lifetime_title": "Plus À vie",
+            "price_lifetime_period": "/paiement unique",
+            "price_lifetime_btn": "Acheter la version à vie",
+            "price_yearly_title": "Plus Annuel",
+            "price_yearly_period": "/an",
+            "price_yearly_btn": "S'abonner à l'année",
+            "compliance_title": "Conformité &amp; Politiques",
+            "comp_privacy": "Politique de Confidentialité",
+            "comp_terms": "Conditions d'Utilisation",
+            "gallery_title": "Galerie d'Images",
+            "gallery_subtitle": "Découvrez l'interface d'EQT à travers différents scénarios.",
+            "paddle_disclosure_title": "Distributeur &amp; MoR officiel",
+            "paddle_disclosure": "Notre processus de commande est géré par notre distributeur en ligne Paddle.com. Paddle.com est le Merchant of Record (MoR) pour toutes nos commandes. Paddle gère le service client et les retours."
         }
     };
 
@@ -523,27 +693,37 @@
     function applyLang(lang) {
         document.documentElement.lang = lang;
         
+        // Load fallback first (English)
+        const fallback = translations['en'];
+        const current = translations[lang] || {};
+        
         // Update elements with data-i18n attribute
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
-            if (translations[lang] && translations[lang][key] !== undefined) {
-                el.innerHTML = translations[lang][key];
+            let text = current[key];
+            if (text === undefined) {
+                text = fallback[key];
+            }
+            if (text !== undefined) {
+                el.innerHTML = text;
             }
         });
 
         // Update title and meta description
-        if (translations[lang] && translations[lang]["meta_title"]) {
-            document.title = translations[lang]["meta_title"];
+        let title = current["meta_title"] || fallback["meta_title"];
+        if (title) {
+            document.title = title;
         }
         const metaDesc = document.querySelector('meta[name="description"]');
-        if (metaDesc && translations[lang] && translations[lang]["meta_desc"]) {
-            metaDesc.setAttribute('content', translations[lang]["meta_desc"]);
+        let desc = current["meta_desc"] || fallback["meta_desc"];
+        if (metaDesc && desc) {
+            metaDesc.setAttribute('content', desc);
         }
 
-        // Update language toggle text
-        const langTextEl = document.getElementById('lang-text');
-        if (langTextEl) {
-            langTextEl.textContent = lang === 'zh' ? '中文' : 'English';
+        // Update the select menu value to match current lang
+        const selectEl = document.getElementById('lang-select');
+        if (selectEl) {
+            selectEl.value = lang;
         }
     }
 
@@ -557,8 +737,9 @@
             lang = (navLang && navLang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
         }
         
-        // Final fallback
-        if (lang !== 'zh' && lang !== 'en') {
+        // Final fallback to supported list
+        const supported = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
+        if (!supported.includes(lang)) {
             lang = 'en';
         }
 
@@ -617,8 +798,14 @@
                     if (captionEl) {
                         captionEl.setAttribute('data-i18n', data.captionKey);
                         const lang = document.documentElement.lang || 'en';
-                        if (translations[lang] && translations[lang][data.captionKey] !== undefined) {
-                            captionEl.innerHTML = translations[lang][data.captionKey];
+                        const fallback = translations['en'];
+                        const current = translations[lang] || {};
+                        let val = current[data.captionKey];
+                        if (val === undefined) {
+                            val = fallback[data.captionKey];
+                        }
+                        if (val !== undefined) {
+                            captionEl.innerHTML = val;
                         }
                     }
                 }
@@ -626,13 +813,11 @@
         });
     }
 
-    // Toggle button handler
-    const toggleBtn = document.getElementById('lang-toggle');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-            const currentLang = document.documentElement.lang || 'en';
-            const newLang = currentLang === 'zh' ? 'en' : 'zh';
-            
+    // Select change handler
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) {
+        langSelect.addEventListener('change', (e) => {
+            const newLang = e.target.value;
             localStorage.setItem('eqt-lang', newLang);
             setCookie('eqt-lang', newLang, 365);
             applyLang(newLang);
@@ -651,8 +836,16 @@
                 };
                 const captionKey = galleryData[type];
                 const captionEl = document.getElementById('gallery-caption');
-                if (captionEl && captionKey && translations[newLang] && translations[newLang][captionKey] !== undefined) {
-                    captionEl.innerHTML = translations[newLang][captionKey];
+                if (captionEl && captionKey) {
+                    const fallback = translations['en'];
+                    const current = translations[newLang] || {};
+                    let val = current[captionKey];
+                    if (val === undefined) {
+                        val = fallback[captionKey];
+                    }
+                    if (val !== undefined) {
+                        captionEl.innerHTML = val;
+                    }
                 }
             }
         });
