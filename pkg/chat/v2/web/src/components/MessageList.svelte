@@ -1031,8 +1031,8 @@
     {:else}
       <div class="messages-empty">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-3.658A8.967 8.967 0 013 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>
-        <strong>开始聊天吧！</strong>
-        <span>向其他已连接设备发送文本或局限大文件。</span>
+        <strong>{currentLang === 'en' ? 'Start chatting!' : '开始聊天吧！'}</strong>
+        <span>{currentLang === 'en' ? 'Send text or local large files to other connected devices.' : '向其他已连接设备发送文本或局限大文件。'}</span>
       </div>
     {/each}
   </div>

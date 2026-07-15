@@ -222,7 +222,9 @@
       chatActions.addSystemMessage(event.data.message);
     } else if (event.data.type === 'selected-files') {
       const paths: string[] = event.data.paths || [];
-      chatActions.addSystemMessage(`[App] 收到 selected-files 文件消息: ${JSON.stringify(paths)}`);
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `[App] Received selected-files message: ${JSON.stringify(paths)}`
+        : `[App] 收到 selected-files 文件消息: ${JSON.stringify(paths)}`);
       logToGui(`handleMessage type selected-files paths: ${JSON.stringify(paths)}`);
       paths.forEach(p => {
         registerLocalAttachment(p);
@@ -296,7 +298,9 @@
   }
 
   function registerLocalAttachment(filePath: string) {
-    chatActions.addSystemMessage(`[App] 开始注册附件: ${filePath}`);
+    chatActions.addSystemMessage(currentLang === 'en'
+      ? `[App] Started registering attachment: ${filePath}`
+      : `[App] 开始注册附件: ${filePath}`);
     logToGui(`registerLocalAttachment called with: ${filePath}`);
     const hostToken = localStorage.getItem('chat_host_token') || '';
     const url = `/chat-v2/${token}/attachments/local?hostToken=${encodeURIComponent(hostToken)}`;
@@ -325,11 +329,15 @@
       return r.json();
     })
     .then(message => {
-      chatActions.addSystemMessage(`[App] 注册成功: ${message.fileName}`);
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `[App] Registration success: ${message.fileName}`
+        : `[App] 注册成功: ${message.fileName}`);
       logToGui(`Successfully registered local attachment response: ${JSON.stringify(message)}`);
     })
     .catch(err => {
-      chatActions.addSystemMessage(`[App] 注册失败: ${err.message}`);
+      chatActions.addSystemMessage(currentLang === 'en'
+        ? `[App] Registration failed: ${err.message}`
+        : `[App] 注册失败: ${err.message}`);
       logToGui(`Failed to register local attachment: ${err.message}`, true);
     });
   }
@@ -571,9 +579,9 @@
   }
 
   function formatDeviceTime(timeStr?: string): string {
-    if (!timeStr) return '刚刚';
+    if (!timeStr) return currentLang === 'en' ? 'just now' : '刚刚';
     const date = new Date(timeStr);
-    if (isNaN(date.getTime())) return '刚刚';
+    if (isNaN(date.getTime())) return currentLang === 'en' ? 'just now' : '刚刚';
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 

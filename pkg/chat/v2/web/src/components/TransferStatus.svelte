@@ -1,6 +1,8 @@
 <script lang="ts">
   import { transfers, systemMessages, chatActions, currentDevice } from '../state/chatStore';
 
+  export let currentLang = 'zh';
+
   // Extract only active transfers (running or queued) belonging to this device
   $: activeTransfers = Object.values($transfers).filter(tx => 
     (tx.state === 'running' || tx.state === 'queued') && 
@@ -15,7 +17,7 @@
 <div class="status-panel">
   <!-- Active Transfers Section -->
   <div class="section-box">
-    <h3>活跃传输任务 ({activeTransfers.length})</h3>
+    <h3>{currentLang === 'en' ? 'Active Transfers' : '活跃传输任务'} ({activeTransfers.length})</h3>
     <div class="transfers-container">
       {#each activeTransfers as tx (tx.id)}
         <div class="tx-row">
@@ -28,7 +30,7 @@
           </div>
         </div>
       {:else}
-        <div class="tx-empty">无进行中传输</div>
+        <div class="tx-empty">{currentLang === 'en' ? 'No active transfers' : '无进行中传输'}</div>
       {/each}
     </div>
   </div>
@@ -36,16 +38,16 @@
   <!-- System Console Logs Section -->
   <div class="section-box log-section">
     <div class="section-header">
-      <h3>系统通知日志</h3>
+      <h3>{currentLang === 'en' ? 'System Notifications' : '系统通知日志'}</h3>
       {#if $systemMessages.length > 0}
-        <button class="clear-btn" on:click={clearLogs}>清空</button>
+        <button class="clear-btn" on:click={clearLogs}>{currentLang === 'en' ? 'Clear' : '清空'}</button>
       {/if}
     </div>
     <div class="log-container">
       {#each $systemMessages as log, idx (idx)}
         <div class="log-line">{log}</div>
       {:else}
-        <div class="log-empty">暂无系统消息</div>
+        <div class="log-empty">{currentLang === 'en' ? 'No system messages' : '暂无系统消息'}</div>
       {/each}
     </div>
   </div>
