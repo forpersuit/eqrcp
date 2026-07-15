@@ -2,6 +2,13 @@
 
 <html class="dark scroll-smooth" lang="en"><head>
 <meta charset="utf-8"/>
+    <script>
+        if (window.location.hostname !== 'www.eqt.net.im' && 
+            window.location.hostname !== 'localhost' && 
+            !window.location.hostname.startsWith('127.0.0.1')) {
+            window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+        }
+    </script>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>EQT - Easy QR Transfer | LAN File Transfer & Secure Chat via QR Code</title>
 <meta name="description" content="EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux."/>

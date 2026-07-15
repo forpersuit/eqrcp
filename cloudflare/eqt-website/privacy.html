@@ -2,6 +2,13 @@
 <html class="dark scroll-smooth" lang="en">
 <head>
     <meta charset="utf-8"/>
+    <script>
+        if (window.location.hostname !== 'www.eqt.net.im' && 
+            window.location.hostname !== 'localhost' && 
+            !window.location.hostname.startsWith('127.0.0.1')) {
+            window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+        }
+    </script>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Privacy Policy - EQT (Easy QR Transfer)</title>
     <!-- Google Fonts: Outfit -->
