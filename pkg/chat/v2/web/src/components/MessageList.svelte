@@ -800,12 +800,33 @@
         {@const isMe = msg.senderId && msg.senderId === localPeer}
         {@const displayText = (() => {
           let text = msg.text || '';
+          if (currentLang === 'en') {
+            if (text === '{sender} 已加入会话') {
+              text = '{sender} joined the session';
+            } else if (text === '{sender} 已重新连接') {
+              text = '{sender} reconnected';
+            } else if (text === '{oldSender} 修改用户名为 {sender}') {
+              text = '{oldSender} renamed to {sender}';
+            } else if (text === '{sender} 修改了头像') {
+              text = '{sender} changed avatar';
+            } else if (text === '已强制设备 {sender} 退出会话') {
+              text = 'Device {sender} has been forced to exit the session';
+            } else if (text === '{sender} 已断开连接') {
+              text = '{sender} disconnected';
+            } else if (text.startsWith('{sender} 通过 ') && text.endsWith(' 加入了会话')) {
+              const platform = text.substring('{sender} 通过 '.length, text.length - ' 加入了会话'.length);
+              text = `{sender} joined the session via ${platform}`;
+            }
+          }
+
           if (text.includes('{sender}')) {
-            const senderRepl = isMe && msg.sender ? `我(${msg.sender})` : (msg.sender || '');
+            const meText = currentLang === 'en' ? `Me (${msg.sender})` : `我(${msg.sender})`;
+            const senderRepl = isMe && msg.sender ? meText : (msg.sender || '');
             text = text.replaceAll('{sender}', senderRepl);
           }
           if (text.includes('{oldSender}')) {
-            const oldSenderRepl = isMe && msg.oldSender ? `我(${msg.oldSender})` : (msg.oldSender || '');
+            const meText = currentLang === 'en' ? `Me (${msg.oldSender})` : `我(${msg.oldSender})`;
+            const oldSenderRepl = isMe && msg.oldSender ? meText : (msg.oldSender || '');
             text = text.replaceAll('{oldSender}', oldSenderRepl);
           }
           return text;
