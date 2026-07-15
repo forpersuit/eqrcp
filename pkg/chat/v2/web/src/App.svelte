@@ -75,7 +75,6 @@
   }
 
   $: t = {
-    vipStatus: getTranslation('vipStatus', currentLang),
     viewSubscription: getTranslation('viewSubscription', currentLang),
     onlineDevices: getTranslation('onlineDevices', currentLang),
     self: getTranslation('self', currentLang),
@@ -1080,7 +1079,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title={t.viewSubscription}>
-              <span>{t.vipStatus}</span>
+              <span>{licenseTier === 'FREE' ? getTranslation('freeTier', currentLang) : licenseTier}</span>
             </div>
           {/if}
 

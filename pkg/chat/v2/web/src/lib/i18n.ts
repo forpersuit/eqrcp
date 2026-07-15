@@ -2,14 +2,14 @@ export type Lang = 'zh' | 'en' | 'ja' | 'ko' | 'es' | 'de' | 'fr';
 
 export const translations: Record<string, Record<Lang, string>> = {
   // App.svelte base translations
-  vipStatus: {
-    zh: 'VIP / 无限制',
-    en: 'VIP / Unrestricted',
-    ja: 'VIP / 制限なし',
-    ko: 'VIP / 제한 없음',
-    es: 'VIP / Sin restricciones',
-    de: 'VIP / Unbeschränkt',
-    fr: 'VIP / Sans restriction'
+  freeTier: {
+    zh: '免费版',
+    en: 'Free',
+    ja: '無料版',
+    ko: '무료 버전',
+    es: 'Gratis',
+    de: 'Kostenlos',
+    fr: 'Gratuit'
   },
   viewSubscription: {
     zh: '点击查看订阅详情',
