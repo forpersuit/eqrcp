@@ -178,7 +178,12 @@
 
   function handleMessage(event: MessageEvent) {
     if (!event.data || typeof event.data !== 'object') return;
-    if (event.data.type === 'update-identity') {
+    if (event.data.type === 'update-lang') {
+      const { lang } = event.data;
+      if (lang) {
+        setLanguage(lang);
+      }
+    } else if (event.data.type === 'update-identity') {
       const { name, avatar } = event.data;
       let updated = false;
       if (name && name !== localStorage.getItem('chat_label')) {
@@ -613,6 +618,10 @@
 
     // Persist peer type if passed via URL parameter (only for desktop to avoid multi-tab collisions)
     const params = new URLSearchParams(window.location.search);
+    const urlLang = params.get('lang');
+    if (urlLang) {
+      setLanguage(urlLang);
+    }
     const urlPeer = params.get('peer');
     if (urlPeer === 'desktop') {
       localStorage.setItem('chat_peer', urlPeer);
