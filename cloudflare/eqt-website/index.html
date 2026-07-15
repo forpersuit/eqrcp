@@ -295,8 +295,9 @@
 <div class="font-display-lg text-display-lg text-on-surface mb-lg">$0<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_free_period">/forever</span></div>
 <ul class="space-y-md mb-xl flex-grow">
 <li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat1">Basic local transfer</span></li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat2">Community support</span></li>
-<li class="flex items-center gap-sm text-on-surface-variant opacity-50"><span class="material-symbols-outlined text-sm">close</span> <span data-i18n="price_free_feat3">Priority bandwidth</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat2">10 minutes daily session limit</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat3">Max 5 files &amp; 50MB per file</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant opacity-50"><span class="material-symbols-outlined text-sm">close</span> <span data-i18n="price_free_feat4">Uncapped local full speed</span></li>
 </ul>
 <button class="w-full py-md glass-panel text-on-surface rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md" data-i18n="price_free_btn">Get Started</button>
 </div>
@@ -309,6 +310,7 @@
 <li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat1">All Plus features forever</span></li>
 <li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat2">No recurring fees</span></li>
 <li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
+<li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat4">Uncapped speed &amp; unlimited size</span></li>
 </ul>
 <button class="w-full py-md bg-[#a855f7] text-white rounded-lg hover:shadow-[0_0_15px_#a855f7] transition-all font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
 </div>
@@ -317,9 +319,9 @@
 <h3 class="font-headline-md text-headline-md text-on-surface mb-xs" data-i18n="price_yearly_title">Plus</h3>
 <div class="font-display-lg text-display-lg text-on-surface mb-lg">$11.99<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_yearly_period">/year</span></div>
 <ul class="space-y-md mb-xl flex-grow">
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat1">High-speed priority</span></li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat2">Encrypted chat</span></li>
-<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat3">Priority support</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat1">Uncapped local full speed</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat2">Unlimited session time &amp; files</span></li>
+<li class="flex items-center gap-sm text-on-surface-variant"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat3">Priority customer support</span></li>
 </ul>
 <button class="w-full py-md glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md" data-i18n="price_yearly_btn">Subscribe Yearly</button>
 </div>
@@ -364,7 +366,7 @@
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/privacy.html" data-i18n="comp_privacy">Privacy Policy</a>
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/terms.html" data-i18n="comp_terms">Terms of Service</a>
 </div>
-<    const translations = {
+    const translations = {
         en: {
             "nav_features": "Features",
             "nav_pricing": "Pricing",
@@ -381,7 +383,7 @@
             "feat1_title": "QR-Based Transfer",
             "feat1_desc": "Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.",
             "feat2_title": "Local Speed Limitless",
-            "feat2_desc": "Utilize full network potential. Achieve 10MB/s - 100MB/s local bandwidth bypassing ISP bottlenecks.",
+            "feat2_desc": "Utilize local area network (LAN) potential. Transfer files at full hardware limits (10MB/s - 100MB/s+), completely independent of your ISP internet speed.",
             "feat3_title": "P2P Encrypted Chat",
             "feat3_desc": "Communicate securely over local networks. End-to-end encrypted text and file sharing with zero cloud footprint.",
             "feat4_title": "Cross-Platform",
@@ -391,8 +393,9 @@
             "price_free_title": "Free",
             "price_free_period": "/forever",
             "price_free_feat1": "Basic local transfer",
-            "price_free_feat2": "Community support",
-            "price_free_feat3": "Priority bandwidth",
+            "price_free_feat2": "10 minutes daily session limit",
+            "price_free_feat3": "Max 5 files &amp; 50MB per file",
+            "price_free_feat4": "Uncapped local full speed",
             "price_free_btn": "Get Started",
             "price_lifetime_badge": "BEST VALUE",
             "price_lifetime_title": "Plus Lifetime",
@@ -400,12 +403,13 @@
             "price_lifetime_feat1": "All Plus features forever",
             "price_lifetime_feat2": "No recurring fees",
             "price_lifetime_feat3": "Lifetime updates",
+            "price_lifetime_feat4": "Uncapped speed &amp; unlimited size",
             "price_lifetime_btn": "Buy Lifetime",
             "price_yearly_title": "Plus",
             "price_yearly_period": "/year",
-            "price_yearly_feat1": "High-speed priority",
-            "price_yearly_feat2": "Encrypted chat",
-            "price_yearly_feat3": "Priority support",
+            "price_yearly_feat1": "Uncapped local full speed",
+            "price_yearly_feat2": "Unlimited session time &amp; files",
+            "price_yearly_feat3": "Priority customer support",
             "price_yearly_btn": "Subscribe Yearly",
             "compliance_title": "Merchant Policy &amp; Compliance",
             "comp_feat1_title": "Fulfillment &amp; Delivery",
@@ -452,7 +456,7 @@
             "feat1_title": "扫码即传",
             "feat1_desc": "即时生成一次性二维码。任何设备扫码即可开启发送/接收协议，无需配对。",
             "feat2_title": "极速局域网",
-            "feat2_desc": "充分释放网络带宽潜力。突破运营商网络限制，局域网传输速度可达 10MB/s - 100MB/s。",
+            "feat2_desc": "充分释放本地局域网（LAN）物理带宽。文件传输速度完全取决于您的硬件极限（可达 10MB/s - 100MB/s+），彻底脱离运营商外网宽带的速度限制。",
             "feat3_title": "P2P 加密聊天",
             "feat3_desc": "在局域网内安全沟通。端到端加密的文本和文件分享，云端零留痕。",
             "feat4_title": "跨平台支持",
@@ -462,8 +466,9 @@
             "price_free_title": "免费版",
             "price_free_period": "/ 永久",
             "price_free_feat1": "基础本地传输",
-            "price_free_feat2": "社区支持",
-            "price_free_feat3": "高速通道限制",
+            "price_free_feat2": "每日 10 分钟免费会话限额",
+            "price_free_feat3": "单次限 5 个文件且单文件最大 50MB",
+            "price_free_feat4": "解锁局域网物理满速",
             "price_free_btn": "立即开始",
             "price_lifetime_badge": "最划算",
             "price_lifetime_title": "终身专业版",
@@ -471,12 +476,13 @@
             "price_lifetime_feat1": "永久享有所有专业版功能",
             "price_lifetime_feat2": "无后续订阅费用",
             "price_lifetime_feat3": "终身免费升级",
+            "price_lifetime_feat4": "无限制文件大小与传输速度",
             "price_lifetime_btn": "购买终身版",
             "price_yearly_title": "年付专业版",
             "price_yearly_period": "/ 年",
-            "price_yearly_feat1": "高速传输特权",
-            "price_yearly_feat2": "局域网加密聊天",
-            "price_yearly_feat3": "优先技术支持",
+            "price_yearly_feat1": "解锁局域网物理满速",
+            "price_yearly_feat2": "无限传输时间与文件数量",
+            "price_yearly_feat3": "优先技术支持服务",
             "price_yearly_btn": "按年订阅",
             "compliance_title": "商家政策与合规性",
             "comp_feat1_title": "交付服务",
@@ -524,13 +530,24 @@
             "pricing_subtitle": "ワークフローに合ったプランをお選びください。",
             "price_free_title": "無料版",
             "price_free_period": "/ 永久",
+            "price_free_feat1": "基本的なローカル転送",
+            "price_free_feat2": "1日10分間のセッション制限",
+            "price_free_feat3": "最大5個のファイル、単一ファイル最大50MB",
+            "price_free_feat4": "制限なしのローカル速度",
             "price_free_btn": "今すぐ開始",
             "price_lifetime_badge": "最もお得",
             "price_lifetime_title": "終身Plus版",
             "price_lifetime_period": "/ 一回払い",
+            "price_lifetime_feat1": "永久にすべてのPlus機能を利用可能",
+            "price_lifetime_feat2": "追加料金なし",
+            "price_lifetime_feat3": "生涯アップデート無料",
+            "price_lifetime_feat4": "速度制限なし、容量制限なし",
             "price_lifetime_btn": "終身版を購入",
             "price_yearly_title": "年付Plus版",
             "price_yearly_period": "/ 年",
+            "price_yearly_feat1": "制限なしのローカル速度",
+            "price_yearly_feat2": "無制限のセッション時間とファイル数",
+            "price_yearly_feat3": "優先サポートサービス",
             "price_yearly_btn": "年間購読",
             "compliance_title": "コンプライアンスと規約",
             "comp_privacy": "プライバシーポリシー",
@@ -557,13 +574,24 @@
             "pricing_subtitle": "워크플로우에 적합한 요금제를 선택하세요.",
             "price_free_title": "무료",
             "price_free_period": "/ 평생",
+            "price_free_feat1": "기본 로컬 전송",
+            "price_free_feat2": "일일 10분 세션 시간 제한",
+            "price_free_feat3": "최대 5개 파일, 파일당 최대 50MB 제한",
+            "price_free_feat4": "무제한 로컬 전송 속도",
             "price_free_btn": "시작하기",
             "price_lifetime_badge": "최고의 가치",
             "price_lifetime_title": "플러스 평생권",
             "price_lifetime_period": "/ 일회성 결제",
+            "price_lifetime_feat1": "모든 플러스 기능을 평생 사용",
+            "price_lifetime_feat2": "추가 결제 없음",
+            "price_lifetime_feat3": "평생 업데이트 제공",
+            "price_lifetime_feat4": "속도 및 파일 크기 무제한",
             "price_lifetime_btn": "평생권 구매",
             "price_yearly_title": "플러스 연간권",
             "price_yearly_period": "/ 년",
+            "price_yearly_feat1": "무제한 로컬 전송 속도",
+            "price_yearly_feat2": "세션 시간 및 파일 개수 무제한",
+            "price_yearly_feat3": "우선 기술 지원 제공",
             "price_yearly_btn": "연간 구독",
             "compliance_title": "준수 정책 및 판매 조건",
             "comp_privacy": "개인정보 처리방침",
@@ -590,13 +618,24 @@
             "pricing_subtitle": "Elija el plan que mejor se adapte a su flujo de trabajo.",
             "price_free_title": "Gratis",
             "price_free_period": "/para siempre",
+            "price_free_feat1": "Transferencia local básica",
+            "price_free_feat2": "Límite de sesión de 10 minutos al día",
+            "price_free_feat3": "Máximo 5 archivos y 50 MB por archivo",
+            "price_free_feat4": "Velocidad local ilimitada sin límites",
             "price_free_btn": "Empezar",
             "price_lifetime_badge": "MEJOR VALOR",
             "price_lifetime_title": "Plus Vitalicio",
             "price_lifetime_period": "/pago único",
+            "price_lifetime_feat1": "Todas las funciones Plus para siempre",
+            "price_lifetime_feat2": "Sin tarifas recurrentes",
+            "price_lifetime_feat3": "Actualizaciones de por vida",
+            "price_lifetime_feat4": "Velocidad ilimitada y tamaño sin tope",
             "price_lifetime_btn": "Comprar Vitalicio",
             "price_yearly_title": "Plus Anual",
             "price_yearly_period": "/año",
+            "price_yearly_feat1": "Velocidad local ilimitada sin límites",
+            "price_yearly_feat2": "Tiempo de sesión y archivos ilimitados",
+            "price_yearly_feat3": "Servicio de soporte prioritario",
             "price_yearly_btn": "Suscribirse anualmente",
             "compliance_title": "Cumplimiento y Políticas",
             "comp_privacy": "Política de Privacidad",
@@ -623,13 +662,24 @@
             "pricing_subtitle": "Wählen Sie das Modell, das zu Ihrem Workflow passt.",
             "price_free_title": "Kostenlos",
             "price_free_period": "/dauerhaft",
+            "price_free_feat1": "Basis-Lokalübertragung",
+            "price_free_feat2": "Täglich 10 Minuten Sitzungslimit",
+            "price_free_feat3": "Max. 5 Dateien und 50 MB pro Datei",
+            "price_free_feat4": "Unbegrenzte lokale Geschwindigkeit",
             "price_free_btn": "Loslegen",
             "price_lifetime_badge": "BESTES ANGEBOT",
             "price_lifetime_title": "Plus Lebenslang",
             "price_lifetime_period": "/einmalig",
+            "price_lifetime_feat1": "Alle Plus-Funktionen für immer",
+            "price_lifetime_feat2": "Keine wiederkehrenden Gebühren",
+            "price_lifetime_feat3": "Lebenslange Updates",
+            "price_lifetime_feat4": "Unbegrenzte Geschwindigkeit &amp; Größe",
             "price_lifetime_btn": "Lebenslang kaufen",
             "price_yearly_title": "Plus Jährlich",
             "price_yearly_period": "/Jahr",
+            "price_yearly_feat1": "Unbegrenzte lokale Geschwindigkeit",
+            "price_yearly_feat2": "Unbegrenzte Sitzungszeit &amp; Dateien",
+            "price_yearly_feat3": "Priorisierter Support-Service",
             "price_yearly_btn": "Jährlich abonnieren",
             "compliance_title": "Richtlinien &amp; Compliance",
             "comp_privacy": "Datenschutzerklärung",
