@@ -1015,8 +1015,8 @@
   }
 
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
-  $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme;
-  $: qrImgSrc = `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}`;
+  $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme + "&lang=" + currentLang;
+  $: qrImgSrc = `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(joinUrl).then(() => {
