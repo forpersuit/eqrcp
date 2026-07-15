@@ -57,7 +57,7 @@
         <div class="glass-panel rounded-2xl p-8 md:p-12 space-y-8">
             <div class="border-b border-white/10 pb-6">
                 <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2">Privacy Policy / 隐私政策</h1>
-                <p class="text-on-surface-variant text-sm">Last updated: June 25, 2026</p>
+                <p class="text-on-surface-variant text-sm">Last updated: July 15, 2026</p>
             </div>
 
             <!-- English version -->
@@ -66,14 +66,21 @@
                 <div class="space-y-4 text-on-surface-variant text-sm leading-relaxed">
                     <p>At EQT (Easy QR Transfer), accessible from eqt.net.im, one of our main priorities is the privacy of our visitors and users. This Privacy Policy document contains types of information that is collected and recorded by EQT and how we use it.</p>
                     
-                    <h3 class="text-white font-medium text-base mt-4">Local Network Operation (No Cloud Storage)</h3>
-                    <p>EQT is designed as a peer-to-peer (P2P) local network file transfer utility. All file transfers and communications between your devices occur strictly within your local area network (LAN). Your files and messages are transferred directly from one device to another and are <strong>never uploaded to any external servers, databases, or cloud environments</strong>.</p>
+                    <h3 class="text-white font-medium text-base mt-4">Local Network Operation (Zero Cloud Storage)</h3>
+                    <p>EQT is designed as a peer-to-peer (P2P) local network file transfer utility. All file transfers and communications between your devices occur strictly within your local area network (LAN). Your files, texts, and messages are transferred directly from one device to another and are <strong>never uploaded to any external servers, databases, or cloud environments</strong>. We do not collect, read, or store any files or chat logs transferred via EQT.</p>
 
                     <h3 class="text-white font-medium text-base mt-4">Licensing & Device Fingerprinting</h3>
-                    <p>For activation of Plus licenses, EQT communicates with our serverless DRM API located at Cloudflare to verify license validity. This check transmits a non-reversible cryptographic hash of your hardware fingerprint to ensure license limits are respected. This data does not contain any personally identifiable information (PII) and is stored securely in our databases.</p>
+                    <p>For activation of Plus licenses, EQT communicates with our serverless DRM API located at Cloudflare to verify license validity. This check transmits a non-reversible cryptographic hash of your hardware fingerprint (constructed from motherboard UUID, CPU serial, and disk serial) to ensure license limits are respected. This data does not contain any personally identifiable information (PII), is completely anonymized, and is stored securely in our database.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">Third-Party Payment Reseller (Paddle)</h3>
+                    <p>We use <strong>Paddle.com</strong> as our online reseller and Merchant of Record (MoR) for all Plus licenses and subscription payments. When you purchase EQT Plus, your payment checkout is handled directly by Paddle. Paddle collects personal and financial transaction data, including your name, email, billing address, and payment credentials. Paddle's checkout process and data handling are governed by Paddle's own Privacy Policy, which you can review on their official site.</p>
+                    <p>Paddle shares basic non-sensitive order details (such as your email address, purchase date, order status, and license type) with EQT so we can issue your license code and provide customer support. We do not store or have access to your credit card details or bank credentials.</p>
 
                     <h3 class="text-white font-medium text-base mt-4">Cookies</h3>
-                    <p>This website uses cookies to store visitor language preferences. We do not use tracking or advertising cookies.</p>
+                    <p>This website uses cookies to store visitor language preferences. We do not use tracking, marketing, or advertising cookies.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">Contact us</h3>
+                    <p>If you have additional questions or require more information about our Privacy Policy, do not hesitate to contact us at <a href="mailto:support@eqt.net.im" class="text-secondary hover:underline">support@eqt.net.im</a>.</p>
                 </div>
             </section>
 
@@ -86,13 +93,20 @@
                     <p>在 EQT (Easy QR Transfer)（可通过 eqt.net.im 访问），我们非常重视用户的隐私。本隐私政策详细说明了 EQT 收集和记录的信息类型以及我们的使用方式。</p>
                     
                     <h3 class="text-white font-medium text-base mt-4">本地局域网物理运行（零云端存储）</h3>
-                    <p>EQT 是一款纯粹的局域网点对点（P2P）文件传输与聊天工具。您的所有文件传输和即时通信均完全限制在您的本地局域网（LAN）内部。您的文件与聊天记录直接在发送设备与接收设备之间流动，<strong>绝对不会上传到任何外部服务器、第三方数据库或云端存储介质中</strong>。</p>
+                    <p>EQT 是一款纯粹的局域网点对点（P2P）文件传输与聊天工具。您的所有文件传输和即时通信均完全限制在您的本地局域网（LAN）内部。您的文件与聊天记录直接在发送设备与接收设备之间流动，<strong>绝对不会上传到任何外部服务器、第三方数据库或云端存储介质中</strong>。我们绝不会收集、读取或存储您传输的任何文件或聊天日志。</p>
 
                     <h3 class="text-white font-medium text-base mt-4">软件授权与设备指纹</h3>
-                    <p>当您激活专业版（Plus）授权时，客户端将与我们在 Cloudflare 上的许可证 API 服务通信以验证有效性。此过程将提交经过不可逆加密（Hash）的设备特征指纹，用以比对授权限制。该数据不包含任何可识别个人身份的信息，且将被安全存储。</p>
+                    <p>当您激活专业版（Plus）授权时，客户端将与我们在 Cloudflare 上的许可证 API 服务通信以验证有效性。此过程将提交经过不可逆哈希加密（Hash）的设备特征指纹（由主板 UUID、CPU 序列号和系统盘物理序列号合成），用以比对授权设备限制。该数据不包含任何可识别个人身份的敏感隐私信息（PII），完全匿名化且被安全存储。</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">第三方支付服务代理商 (Paddle)</h3>
+                    <p>我们使用 <strong>Paddle.com</strong> 作为我们专业版授权和订阅服务的官方在线分销商和官方记录商家 (Merchant of Record)。当您购买 EQT Plus 时，您的付款流程由 Paddle 直接承接。Paddle 将收集您的交易个人与财务信息（如姓名、邮箱、账单地址、卡号信息）。Paddle 在结账流程中的数据处理应遵守 Paddle 自身的隐私政策规范。</p>
+                    <p>Paddle 会向 EQT 共享必要的基本订单详情（如您的电子邮箱、购买时间、交易状态和购买类型），以供我们生成许可证并提供售后服务。我们绝不会存储、也无法访问您的信用卡卡号或任何银行支付凭证等敏感信息。</p>
 
                     <h3 class="text-white font-medium text-base mt-4">Cookie 声明</h3>
-                    <p>本官网仅使用轻量级 Cookie 来持久化保存您所选择的页面语言偏好，不包含任何第三方广告或行为追踪 Cookie。</p>
+                    <p>本官网仅使用轻量级 Cookie 来持久化保存您所选择的页面语言偏好，不包含任何第三方广告或个人行为追踪 Cookie。</p>
+
+                    <h3 class="text-white font-medium text-base mt-4">联系我们</h3>
+                    <p>如果您对本隐私政策有任何疑问或需要更多信息，请随时通过邮箱联系我们：<a href="mailto:support@eqt.net.im" class="text-secondary hover:underline">support@eqt.net.im</a>。</p>
                 </div>
             </section>
         </div>

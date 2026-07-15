@@ -190,7 +190,7 @@
 <div class="absolute inset-0 bg-primary/20 blur-[100px] rounded-full"></div>
 <!-- Glass Frame -->
 <div class="relative w-full glass-panel rounded-2xl p-sm glow-primary">
-<img alt="EQT Application Interface" class="w-full h-auto rounded-xl object-cover border border-white/5" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDh6oVl4RaTrcCBCDOZ1XCKw_rrBmW7-f7CJD7Ln0V0gs6sb96B-USlX99N2pep-B6in4R46zfM52Po996GXSTqQcKzYdx5x4y2lp2xW8agEz0l-OAEuk070QUIX6bkDEtGm6rWP_4Z27HicJ2q4oJnGCbzW3XYAgsdOGtdBnobqx60LqRaE4mqvCsJj-0QfdWo6tGfvkCxyc06QdgEG4Ih511b1p2XW3TqeC3jy8n5W2VQ2BT8iWqaUaUftl2v46pjpOnE_-IAh_Q"/>
+<img alt="EQT Application Interface" class="w-full h-auto rounded-xl object-cover border border-white/5" src="assets/app-chat-2-chatting.png"/>
 </div>
 </div>
 </section>
@@ -234,6 +234,45 @@
 <p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat4_desc">Seamless operation across operating systems. No dedicated mobile app installation required for receivers.</p>
 </div>
 </div>
+</section>
+<!-- Screenshots Gallery Section -->
+<section class="space-y-xl pt-xxl" id="screenshots">
+    <div class="text-center space-y-sm">
+        <h2 class="font-headline-lg text-headline-lg text-on-surface" data-i18n="gallery_title">Product Gallery</h2>
+        <p class="font-body-md text-body-md text-on-surface-variant" data-i18n="gallery_subtitle">Explore the EQT interface across different platforms.</p>
+    </div>
+    
+    <div class="glass-panel rounded-2xl p-md md:p-lg max-w-4xl mx-auto space-y-lg">
+        <!-- Tabs -->
+        <div class="flex flex-wrap justify-center gap-xs md:gap-sm border-b border-white/10 pb-md">
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 bg-white/5 text-primary active-tab" data-screenshot="chat-start">
+                <span data-i18n="tab_chat_start">1. Start Session</span>
+            </button>
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 text-on-surface-variant hover:text-on-surface hover:bg-white/5" data-screenshot="chat-live">
+                <span data-i18n="tab_chat_live">2. Secure Chatting</span>
+            </button>
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 text-on-surface-variant hover:text-on-surface hover:bg-white/5" data-screenshot="chat-qr">
+                <span data-i18n="tab_chat_qr">3. QR Connection</span>
+            </button>
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 text-on-surface-variant hover:text-on-surface hover:bg-white/5" data-screenshot="mobile-ui">
+                <span data-i18n="tab_mobile_ui">4. Mobile Web View</span>
+            </button>
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 text-on-surface-variant hover:text-on-surface hover:bg-white/5" data-screenshot="app-share">
+                <span data-i18n="tab_app_share">5. File Sharing</span>
+            </button>
+            <button class="gallery-tab px-md py-sm rounded-lg font-label-md text-label-md transition-all border border-white/5 text-on-surface-variant hover:text-on-surface hover:bg-white/5" data-screenshot="app-receive">
+                <span data-i18n="tab_app_receive">6. Received Files</span>
+            </button>
+        </div>
+        
+        <!-- Image display area -->
+        <div class="relative w-full aspect-[16/10] md:aspect-[16/9] flex items-center justify-center overflow-hidden rounded-xl bg-background/50 border border-white/5 group">
+            <img id="gallery-image" src="assets/app-chat-1-start.png" alt="EQT Start Session" class="max-h-full w-auto object-contain transition-transform duration-500 group-hover:scale-105" />
+            <div id="gallery-caption" class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/80 to-transparent p-md text-center text-xs md:text-sm text-on-surface-variant" data-i18n="desc_chat_start">
+                Initialize EQT as a desktop sender or setup local receiver node.
+            </div>
+        </div>
+    </div>
 </section>
 <!-- Pricing Section -->
 <section class="space-y-xl pt-xxl" id="pricing">
@@ -289,6 +328,11 @@
 <div class="glass-panel p-md rounded-lg">
 <h4 class="font-label-md text-label-md text-primary mb-xs" data-i18n="comp_feat2_title">Refund &amp; Cancellation</h4>
 <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="comp_feat2_desc">14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.</p>
+</div>
+<!-- Paddle Reseller & MoR Disclosure -->
+<div class="glass-panel p-md rounded-lg md:col-span-2">
+<h4 class="font-label-md text-label-md text-primary mb-xs" data-i18n="paddle_disclosure_title">Payment Reseller &amp; MoR</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-xs" data-i18n="paddle_disclosure">Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns.</p>
 </div>
 <a href="/privacy.html" class="glass-panel p-md rounded-lg hover:bg-surface-bright/50 transition-colors block">
 <h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center"><span data-i18n="comp_privacy">Privacy Policy</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
@@ -369,7 +413,23 @@
             "footer_support": "Support: support@eqt.net.im",
             "footer_github": "GitHub",
             "meta_title": "EQT - Easy QR Transfer | LAN File Transfer &amp; Secure Chat via QR Code",
-            "meta_desc": "EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux."
+            "meta_desc": "EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux.",
+            "gallery_title": "Product Gallery",
+            "gallery_subtitle": "Explore EQT interfaces across different platform scenarios.",
+            "tab_chat_start": "1. Start Session",
+            "tab_chat_live": "2. Secure Chatting",
+            "tab_chat_qr": "3. QR Connection",
+            "tab_mobile_ui": "4. Mobile Web View",
+            "tab_app_share": "5. File Sharing",
+            "tab_app_receive": "6. Received Files",
+            "desc_chat_start": "Initialize EQT as a desktop sender or setup local receiver node.",
+            "desc_chat_live": "Send and receive files/text seamlessly with end-to-end local network encryption.",
+            "desc_chat_qr": "Easily scan the generated QR code with mobile camera to connect to the session.",
+            "desc_mobile_ui": "Responsive, zero-install mobile web page to upload files and download shares.",
+            "desc_app_share": "Share multiple files with physical storage size controls and DRM limitations.",
+            "desc_app_receive": "Manage received files and monitor transfer history dynamically.",
+            "paddle_disclosure_title": "Payment Reseller &amp; MoR",
+            "paddle_disclosure": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns."
         },
         zh: {
             "nav_features": "功能特点",
@@ -424,7 +484,23 @@
             "footer_support": "支持邮箱: support@eqt.net.im",
             "footer_github": "GitHub",
             "meta_title": "EQT - 极速扫码文件传输 | 局域网传输与二维码安全聊天工具",
-            "meta_desc": "EQT 是一款电脑与手机之间的局域网 P2P 文件传输工具，通过二维码扫码，以 10-100 MB/s 的局域网满速进行传输。无需云端，免安装 App。支持局域网加密 P2P 聊天。支持 Windows、macOS 和 Linux。"
+            "meta_desc": "EQT 是一款电脑与手机之间的局域网 P2P 文件传输工具，通过二维码扫码，以 10-100 MB/s 的局域网满速进行传输。无需云端，免安装 App。支持局域网加密 P2P 聊天。支持 Windows、macOS 和 Linux。",
+            "gallery_title": "功能界面截图",
+            "gallery_subtitle": "探索 EQT 在不同平台场景下的直观操作界面。",
+            "tab_chat_start": "1. 启动会话",
+            "tab_chat_live": "2. 安全传输聊天",
+            "tab_chat_qr": "3. 二维码连接",
+            "tab_mobile_ui": "4. 移动端适配",
+            "tab_app_share": "5. 分享控制",
+            "tab_app_receive": "6. 接收管理",
+            "desc_chat_start": "在桌面端启动 EQT 会话并创建本地文件收发节点。",
+            "desc_chat_live": "享受端到端本地局域网加密，文件和文本随发随收，顺畅自如。",
+            "desc_chat_qr": "移动端摄像头轻松扫描自动生成的二维码，瞬间加入局域网会话。",
+            "desc_mobile_ui": "响应式移动端网页，免去安装 App 烦恼，快速上传文件与接收分享。",
+            "desc_app_share": "支持多文件分享、物理体积限制，以及完善的专业版 DRM 额度验证。",
+            "desc_app_receive": "动态管理接收的文件目录，并实时掌控所有历史传输明细。",
+            "paddle_disclosure_title": "官方授权支付代理",
+            "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。"
         }
     };
 
@@ -489,6 +565,67 @@
         applyLang(lang);
     }
 
+    function initGallery() {
+        const galleryData = {
+            "chat-start": {
+                src: "assets/app-chat-1-start.png",
+                captionKey: "desc_chat_start"
+            },
+            "chat-live": {
+                src: "assets/app-chat-2-chatting.png",
+                captionKey: "desc_chat_live"
+            },
+            "chat-qr": {
+                src: "assets/app-chat-3-qr2join.png",
+                captionKey: "desc_chat_qr"
+            },
+            "mobile-ui": {
+                src: "assets/app-chat-4-mobile.png",
+                captionKey: "desc_mobile_ui"
+            },
+            "app-share": {
+                src: "assets/app-share.png",
+                captionKey: "desc_app_share"
+            },
+            "app-receive": {
+                src: "assets/app-receive.png",
+                captionKey: "desc_app_receive"
+            }
+        };
+
+        document.querySelectorAll('.gallery-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active styles from all tabs
+                document.querySelectorAll('.gallery-tab').forEach(t => {
+                    t.classList.remove('bg-white/5', 'text-primary', 'active-tab');
+                    t.classList.add('text-on-surface-variant', 'hover:text-on-surface', 'hover:bg-white/5');
+                });
+                
+                // Add active styles to clicked tab
+                tab.classList.add('bg-white/5', 'text-primary', 'active-tab');
+                tab.classList.remove('text-on-surface-variant', 'hover:text-on-surface', 'hover:bg-white/5');
+                
+                const type = tab.getAttribute('data-screenshot');
+                const data = galleryData[type];
+                if (data) {
+                    const imgEl = document.getElementById('gallery-image');
+                    const captionEl = document.getElementById('gallery-caption');
+                    
+                    if (imgEl) {
+                        imgEl.src = data.src;
+                    }
+                    if (captionEl) {
+                        captionEl.setAttribute('data-i18n', data.captionKey);
+                        const lang = document.documentElement.lang || 'en';
+                        if (translations[lang] && translations[lang][data.captionKey] !== undefined) {
+                            captionEl.innerHTML = translations[lang][data.captionKey];
+                        }
+                    }
+                }
+            });
+        });
+    }
+
     // Toggle button handler
     const toggleBtn = document.getElementById('lang-toggle');
     if (toggleBtn) {
@@ -499,11 +636,33 @@
             localStorage.setItem('eqt-lang', newLang);
             setCookie('eqt-lang', newLang, 365);
             applyLang(newLang);
+            
+            // Sync gallery caption translations on lang switch
+            const activeTab = document.querySelector('.gallery-tab.active-tab');
+            if (activeTab) {
+                const type = activeTab.getAttribute('data-screenshot');
+                const galleryData = {
+                    "chat-start": "desc_chat_start",
+                    "chat-live": "desc_chat_live",
+                    "chat-qr": "desc_chat_qr",
+                    "mobile-ui": "desc_mobile_ui",
+                    "app-share": "desc_app_share",
+                    "app-receive": "desc_app_receive"
+                };
+                const captionKey = galleryData[type];
+                const captionEl = document.getElementById('gallery-caption');
+                if (captionEl && captionKey && translations[newLang] && translations[newLang][captionKey] !== undefined) {
+                    captionEl.innerHTML = translations[newLang][captionKey];
+                }
+            }
         });
     }
 
     // Run on load
-    window.addEventListener('DOMContentLoaded', initLang);
+    window.addEventListener('DOMContentLoaded', () => {
+        initLang();
+        initGallery();
+    });
 </script>
 </body></html>
 
