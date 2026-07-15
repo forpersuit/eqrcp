@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+  import { getTranslation } from '../lib/i18n';
   import { connState } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
@@ -417,8 +418,8 @@
             }
           });
         } else {
-          options.push({
-            label: currentLang === 'en' ? 'Download' : '下载文件',
+        options.push({
+            label: getTranslation('downloadFile', currentLang),
             disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
@@ -433,8 +434,8 @@
     if (mine) {
       if (!(msg.type === 'file' && ((tx && (tx.state === 'running' || tx.state === 'completed')) || msg.downloaded || msg.uploading))) {
         options.push({
-          label: currentLang === 'en' ? 'Recall' : '撤回消息',
-          confirmLabel: currentLang === 'en' ? 'Confirm Recall' : '确认撤回',
+          label: getTranslation('recallMessage', currentLang),
+          confirmLabel: getTranslation('confirmRecall', currentLang),
           danger: true,
           action: () => {
             dispatch('recallMessage', msg.id);
@@ -770,7 +771,7 @@
               color: var(--accent-strong, #156f5a);
             ">{tipCountdown}</span>
           </div>
-          <span>{currentLang === 'en' ? 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.' : '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。'}</span>
+          <span>{getTranslation('desktopTip', currentLang)}</span>
           <button 
             type="button" 
             on:click={handleDismissTip} 
@@ -800,32 +801,30 @@
         {@const isMe = msg.senderId && msg.senderId === localPeer}
         {@const displayText = (() => {
           let text = msg.text || '';
-          if (currentLang === 'en') {
-            if (text === '{sender} 已加入会话') {
-              text = '{sender} joined the session';
-            } else if (text === '{sender} 已重新连接') {
-              text = '{sender} reconnected';
-            } else if (text === '{oldSender} 修改用户名为 {sender}') {
-              text = '{oldSender} renamed to {sender}';
-            } else if (text === '{sender} 修改了头像') {
-              text = '{sender} changed avatar';
-            } else if (text === '已强制设备 {sender} 退出会话') {
-              text = 'Device {sender} has been forced to exit the session';
-            } else if (text === '{sender} 已断开连接') {
-              text = '{sender} disconnected';
-            } else if (text.startsWith('{sender} 通过 ') && text.endsWith(' 加入了会话')) {
-              const platform = text.substring('{sender} 通过 '.length, text.length - ' 加入了会话'.length);
-              text = `{sender} joined the session via ${platform}`;
-            }
+          if (text === '{sender} 已加入会话') {
+            text = getTranslation('sysJoined', currentLang);
+          } else if (text === '{sender} 已重新连接') {
+            text = getTranslation('sysReconnected', currentLang);
+          } else if (text === '{oldSender} 修改用户名为 {sender}') {
+            text = getTranslation('sysRenamed', currentLang);
+          } else if (text === '{sender} 修改了头像') {
+            text = getTranslation('sysChangedAvatar', currentLang);
+          } else if (text === '已强制设备 {sender} 退出会话') {
+            text = getTranslation('sysForcedExit', currentLang);
+          } else if (text === '{sender} 已断开连接') {
+            text = getTranslation('sysDisconnected', currentLang);
+          } else if (text.startsWith('{sender} 通过 ') && text.endsWith(' 加入了会话')) {
+            const platform = text.substring('{sender} 通过 '.length, text.length - ' 加入了会话'.length);
+            text = getTranslation('sysJoinedVia', currentLang).replaceAll('{platform}', platform);
           }
 
           if (text.includes('{sender}')) {
-            const meText = currentLang === 'en' ? `Me (${msg.sender})` : `我(${msg.sender})`;
+            const meText = getTranslation('me', currentLang) + ` (${msg.sender})`;
             const senderRepl = isMe && msg.sender ? meText : (msg.sender || '');
             text = text.replaceAll('{sender}', senderRepl);
           }
           if (text.includes('{oldSender}')) {
-            const meText = currentLang === 'en' ? `Me (${msg.oldSender})` : `我(${msg.oldSender})`;
+            const meText = getTranslation('me', currentLang) + ` (${msg.oldSender})`;
             const oldSenderRepl = isMe && msg.oldSender ? meText : (msg.oldSender || '');
             text = text.replaceAll('{oldSender}', oldSenderRepl);
           }
@@ -908,9 +907,9 @@
                       <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
                     </svg>
                     {#if ulTx && ulTx.state === 'running'}
-                      {currentLang === 'en' ? 'Uploading' : '正在上传'} {ulTx.percent ?? 0}%
+                      {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
                     {:else}
-                      {currentLang === 'en' ? 'Preparing' : '准备中'}...
+                      {getTranslation('preparing', currentLang)}...
                     {/if}
                   </span>
                   <div style="width: 80%; height: 5px; background: rgba(0, 0, 0, 0.08); border-radius: 3.5px; overflow: hidden; margin-top: 2px;">
@@ -919,7 +918,7 @@
                 </div>
               {/if}
               {#if msg.recalled}
-                <span class="text recalled">{mine ? (currentLang === 'en' ? 'You recalled a message' : '你撤回了一条消息') : (identity.sender + ' ' + (currentLang === 'en' ? 'recalled a message' : '撤回了一条消息'))}</span>
+                <span class="text recalled">{mine ? getTranslation('recalledMsgYou', currentLang) : (identity.sender + ' ' + getTranslation('recalledMsgOther', currentLang))}</span>
                 {#if mine}
                   <div class="recalled-actions" style="margin-top: 6px; display: flex; gap: 8px; justify-content: flex-end;">
                     {#if msg.type === 'text'}
@@ -938,7 +937,7 @@
                           padding: 3px 8px;
                         "
                       >
-                        {currentLang === 'en' ? 'Edit again' : '重新编辑'}
+                        {getTranslation('editAgain', currentLang)}
                       </button>
                     {:else if msg.type === 'file'}
                       <button 
@@ -956,7 +955,7 @@
                           padding: 3px 8px;
                         "
                       >
-                        {currentLang === 'en' ? 'Resend' : '重新发送'}
+                        {getTranslation('resend', currentLang)}
                       </button>
                     {/if}
                   </div>
@@ -964,8 +963,8 @@
               {:else if isCancelledFile}
                 <span class="text recalled" style="font-style: italic; opacity: 0.85;">
                   {mine 
-                    ? (currentLang === 'en' ? 'You cancelled sending the file' : '你取消了文件发送') 
-                    : (identity.sender + ' ' + (currentLang === 'en' ? 'cancelled the file transfer' : '对方取消了文件发送'))}
+                    ? getTranslation('cancelSendYou', currentLang) 
+                    : (identity.sender + ' ' + getTranslation('cancelSendOther', currentLang))}
                 </span>
                 {#if mine}
                   <div class="recalled-actions" style="margin-top: 6px; display: flex; gap: 8px; justify-content: flex-end;">
@@ -984,7 +983,7 @@
                         padding: 3px 8px;
                       "
                     >
-                      {currentLang === 'en' ? 'Resend' : '重新发送'}
+                      {getTranslation('resend', currentLang)}
                     </button>
                   </div>
                 {/if}
@@ -1002,13 +1001,13 @@
                             {formatBytes(msg.size || 0)}
                             {#if tx}
                               {#if tx.state === 'running'}
-                                · {currentLang === 'en' ? 'Transferring' : '传输中'} {tx.percent ?? 0}%
+                                · {getTranslation('transferring', currentLang)} {tx.percent ?? 0}%
                               {:else if tx.state === 'completed'}
-                                · {mine ? (currentLang === 'en' ? 'Shared' : '已分享') : (currentLang === 'en' ? 'Downloaded' : '已下载')}
+                                · {mine ? getTranslation('shared', currentLang) : getTranslation('downloaded', currentLang)}
                               {:else if tx.state === 'failed'}
-                                · <span class="tx-error-text" title={tx.error || (currentLang === 'en' ? 'Unknown error' : '未知传输错误')} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{currentLang === 'en' ? 'Failed' : '传输失败'} ⚠️</span>
+                                · <span class="tx-error-text" title={tx.error || getTranslation('unknownError', currentLang)} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{getTranslation('transferFailed', currentLang)} ⚠️</span>
                               {:else if tx.state === 'cancelled'}
-                                · <span style="color: var(--muted, #64748b);">{currentLang === 'en' ? 'Cancelled' : '已取消'}</span>
+                                · <span style="color: var(--muted, #64748b);">{getTranslation('cancelled', currentLang)}</span>
                               {/if}
                             {:else}
                               {#if mine && msg.downloaded}

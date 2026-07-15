@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
+  import { getTranslation } from '../lib/i18n';
   import { chatSessionStatus } from '../state/chatStore';
   const dispatch = createEventDispatcher();
   export let text = '';
@@ -131,19 +132,19 @@
     <div class="compose-row">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <label class="file-label" class:disabled={$chatSessionStatus !== 'active'} title={currentLang === 'en' ? 'Add attachment' : '添加附件'} aria-label={currentLang === 'en' ? 'Add attachment' : '添加附件'} on:click={triggerFileInput}>
+      <label class="file-label" class:disabled={$chatSessionStatus !== 'active'} title={getTranslation('addAttachment', currentLang)} aria-label={getTranslation('addAttachment', currentLang)} on:click={triggerFileInput}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       </label>
       <textarea 
         bind:this={textareaEl}
         bind:value={text} 
-        placeholder={$chatSessionStatus !== 'active' ? (currentLang === 'en' ? 'Session ended' : '会话已结束') : (currentLang === 'en' ? 'Message...' : '输入消息...')} 
+        placeholder={$chatSessionStatus !== 'active' ? getTranslation('sessionEnded', currentLang) : getTranslation('inputMessage', currentLang)} 
         autocomplete="off" 
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
       ></textarea>
       <div class="composer-actions-right">
-        <button class="send-button" type="submit" aria-label={currentLang === 'en' ? 'Send' : '发送'} title={currentLang === 'en' ? 'Send' : '发送'} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown|preventDefault>
+        <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown|preventDefault>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
         </button>
       </div>

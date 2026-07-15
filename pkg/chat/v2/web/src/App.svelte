@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import MessageList from './components/MessageList.svelte';
   import MessageComposer from './components/MessageComposer.svelte';
+  import { getTranslation } from './lib/i18n';
   import { ChatWebSocketClient } from './services/websocket';
   import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus } from './state/chatStore';
   import { getThemeColors } from './services/types';
@@ -73,60 +74,33 @@
     isMobileLayout = typeof window !== 'undefined' && window.innerWidth <= 820;
   }
 
-  $: t = currentLang === 'en' ? {
-    vipStatus: 'VIP / Unrestricted',
-    viewSubscription: 'Click to view subscription details',
-    onlineDevices: 'Online Devices',
-    self: 'Self',
-    online: 'Online',
-    inputDeviceName: 'Enter device name',
-    save: 'Save',
-    cancel: 'Cancel',
-    renameDevice: 'Rename device',
-    kickOffline: 'Force offline',
-    noOtherDevices: 'No other online devices',
-    subscriptionDetails: 'Subscription & License Details',
-    vipLifetime: 'VIP Lifetime License',
-    authStatus: 'Auth Status',
-    validLifetime: 'Valid (Lifetime)',
-    speedLimit: 'Speed Limit',
-    unlimitedSpeed: 'Unlimited High Speed',
-    fingerprintCheck: 'Fingerprint Check',
-    passed: 'Passed',
-    selectLanguage: 'Select Language',
-    sessionQR: 'Session QR Code',
-    scanQR: 'Scan the QR code below to join from other devices',
-    copied: 'Copied',
-    copy: 'Copy',
-    hideLink: 'Hide Join Link',
-    showLink: 'Show Join Link'
-  } : {
-    vipStatus: 'VIP / 无限制',
-    viewSubscription: '点击查看订阅详情',
-    onlineDevices: '在线设备',
-    self: '本机',
-    online: '在线',
-    inputDeviceName: '输入设备名称',
-    save: '保存',
-    cancel: '取消',
-    renameDevice: '重命名设备',
-    kickOffline: '强制踢下线',
-    noOtherDevices: '无其他在线设备',
-    subscriptionDetails: '订阅与许可证详情',
-    vipLifetime: 'VIP 永久授权版',
-    authStatus: '授权状态',
-    validLifetime: '有效（永久）',
-    speedLimit: '加速限流',
-    unlimitedSpeed: '无限制极速加速',
-    fingerprintCheck: '指纹校验',
-    passed: '通过',
-    selectLanguage: '选择语言',
-    sessionQR: '会话二维码',
-    scanQR: '扫描下方二维码从其他设备加入会话',
-    copied: '已复制',
-    copy: '复制',
-    hideLink: '隐藏加入链接',
-    showLink: '显示加入链接'
+  $: t = {
+    vipStatus: getTranslation('vipStatus', currentLang),
+    viewSubscription: getTranslation('viewSubscription', currentLang),
+    onlineDevices: getTranslation('onlineDevices', currentLang),
+    self: getTranslation('self', currentLang),
+    online: getTranslation('online', currentLang),
+    inputDeviceName: getTranslation('inputDeviceName', currentLang),
+    save: getTranslation('save', currentLang),
+    cancel: getTranslation('cancel', currentLang),
+    renameDevice: getTranslation('renameDevice', currentLang),
+    kickOffline: getTranslation('kickOffline', currentLang),
+    noOtherDevices: getTranslation('noOtherDevices', currentLang),
+    subscriptionDetails: getTranslation('subscriptionDetails', currentLang),
+    vipLifetime: getTranslation('vipLifetime', currentLang),
+    authStatus: getTranslation('authStatus', currentLang),
+    validLifetime: getTranslation('validLifetime', currentLang),
+    speedLimit: getTranslation('speedLimit', currentLang),
+    unlimitedSpeed: getTranslation('unlimitedSpeed', currentLang),
+    fingerprintCheck: getTranslation('fingerprintCheck', currentLang),
+    passed: getTranslation('passed', currentLang),
+    selectLanguage: getTranslation('selectLanguage', currentLang),
+    sessionQR: getTranslation('sessionQR', currentLang),
+    scanQR: getTranslation('scanQR', currentLang),
+    copied: getTranslation('copied', currentLang),
+    copy: getTranslation('copy', currentLang),
+    hideLink: getTranslation('hideLink', currentLang),
+    showLink: getTranslation('showLink', currentLang)
   };
 
   // React to theme changes and inject CSS variables
