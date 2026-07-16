@@ -163,18 +163,33 @@
 </nav>
 <!-- Trailing Action -->
 <div class="flex items-center gap-md">
-    <div class="relative flex items-center gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-full transition-all duration-300 cursor-pointer">
-        <span class="material-symbols-outlined text-base pointer-events-none">language</span>
-        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-primary py-0 pl-xs pr-sm font-label-md text-label-md cursor-pointer outline-none appearance-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0">
-            <option value="en" class="bg-background text-on-surface">English</option>
-            <option value="zh" class="bg-background text-on-surface">简体中文</option>
-            <option value="ja" class="bg-background text-on-surface">日本語</option>
-            <option value="ko" class="bg-background text-on-surface">한국어</option>
-            <option value="es" class="bg-background text-on-surface">Español</option>
-            <option value="de" class="bg-background text-on-surface">Deutsch</option>
-            <option value="fr" class="bg-background text-on-surface">Français</option>
+    <div class="relative" id="lang-dropdown-wrapper">
+        <button id="lang-btn" class="flex items-center gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-full transition-all duration-300 outline-none focus:outline-none focus:ring-0">
+            <span class="material-symbols-outlined text-base">language</span>
+            <span id="current-lang-txt" class="font-label-md text-label-md">English</span>
+            <span class="material-symbols-outlined text-xs opacity-50 transition-transform duration-300" id="lang-arrow">expand_more</span>
+        </button>
+        <!-- Custom Dropdown Panel -->
+        <div id="lang-dropdown-panel" class="hidden absolute right-0 top-full mt-2 w-36 py-xs bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50">
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="es">Español</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="de">Deutsch</button>
+            <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="fr">Français</button>
+        </div>
+        
+        <!-- Hidden select for compatibility -->
+        <select id="lang-select" style="display: none;">
+            <option value="en">English</option>
+            <option value="zh">简体中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="es">Español</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
         </select>
-        <span class="material-symbols-outlined text-xs pointer-events-none -ml-xs opacity-50">expand_more</span>
     </div>
     <!-- Mobile Menu Toggle (Visual only for this static demo) -->
     <button class="md:hidden text-on-surface-variant">
@@ -897,6 +912,19 @@
         if (selectEl) {
             selectEl.value = lang;
         }
+        const langCurrentTxt = document.getElementById('current-lang-txt');
+        const langTextMap = {
+            'en': 'English',
+            'zh': '简体中文',
+            'ja': '日本語',
+            'ko': '한국어',
+            'es': 'Español',
+            'de': 'Deutsch',
+            'fr': 'Français'
+        };
+        if (langCurrentTxt && langTextMap[lang]) {
+            langCurrentTxt.textContent = langTextMap[lang];
+        }
     }
 
     function initLang() {
@@ -1020,6 +1048,46 @@
                     }
                 }
             }
+        });
+    }
+
+    // Custom dropdown handler
+    const langDropdownBtn = document.getElementById('lang-btn');
+    const langDropdownPanel = document.getElementById('lang-dropdown-panel');
+    const langDropdownArrow = document.getElementById('lang-arrow');
+
+    if (langDropdownBtn && langDropdownPanel) {
+        langDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = langDropdownPanel.classList.contains('hidden');
+            if (isHidden) {
+                langDropdownPanel.classList.remove('hidden');
+                langDropdownArrow.classList.add('rotate-180');
+            } else {
+                langDropdownPanel.classList.add('hidden');
+                langDropdownArrow.classList.remove('rotate-180');
+            }
+        });
+
+        document.addEventListener('click', () => {
+            langDropdownPanel.classList.add('hidden');
+            langDropdownArrow.classList.remove('rotate-180');
+        });
+
+        langDropdownPanel.querySelectorAll('button[data-lang]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const lang = btn.getAttribute('data-lang');
+                localStorage.setItem('eqt-lang', lang);
+                setCookie('eqt-lang', lang, 365);
+                applyLang(lang);
+                
+                // Sync the hidden select tag and trigger change to sync gallery captions
+                const nativeSelect = document.getElementById('lang-select');
+                if (nativeSelect) {
+                    nativeSelect.value = lang;
+                    nativeSelect.dispatchEvent(new Event('change'));
+                }
+            });
         });
     }
 
