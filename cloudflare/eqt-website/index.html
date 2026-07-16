@@ -163,9 +163,9 @@
 </nav>
 <!-- Trailing Action -->
 <div class="flex items-center gap-md">
-    <div class="relative flex items-center gap-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+    <div class="relative flex items-center gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-full transition-all duration-300 cursor-pointer">
         <span class="material-symbols-outlined text-base pointer-events-none">language</span>
-        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-primary py-xs pl-xs pr-sm rounded font-label-md text-label-md transition-colors cursor-pointer outline-none appearance-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0">
+        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-primary py-0 pl-xs pr-sm font-label-md text-label-md cursor-pointer outline-none appearance-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0">
             <option value="en" class="bg-background text-on-surface">English</option>
             <option value="zh" class="bg-background text-on-surface">简体中文</option>
             <option value="ja" class="bg-background text-on-surface">日本語</option>
@@ -174,10 +174,8 @@
             <option value="de" class="bg-background text-on-surface">Deutsch</option>
             <option value="fr" class="bg-background text-on-surface">Français</option>
         </select>
+        <span class="material-symbols-outlined text-xs pointer-events-none -ml-xs opacity-50">expand_more</span>
     </div>
-    <a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-gradient-to-r from-secondary to-primary text-white font-bold rounded font-label-md text-label-md hover:shadow-[0_0_15px_rgba(57,229,182,0.4)] transition-shadow active:scale-95" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe" data-i18n="nav_download">
-        Download Client
-    </a>
     <!-- Mobile Menu Toggle (Visual only for this static demo) -->
     <button class="md:hidden text-on-surface-variant">
         <span class="material-symbols-outlined">menu</span>
@@ -312,7 +310,7 @@
 </div>
 <!-- Plus Lifetime (Highlighted) -->
 <div class="glass-panel p-xl rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80">
-<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-[#490080] px-sm py-xs rounded-full font-label-sm text-label-sm" data-i18n="price_lifetime_badge">BEST VALUE</div>
+<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-secondary font-bold px-sm py-xs rounded-full font-label-sm text-label-sm" data-i18n="price_lifetime_badge">BEST VALUE</div>
 <h3 class="font-headline-md text-headline-md text-primary mb-xs" data-i18n="price_lifetime_title">Plus Lifetime</h3>
 <div class="font-display-lg text-display-lg text-on-surface mb-lg">$29.99<span class="text-body-md font-body-md text-on-surface-variant" data-i18n="price_lifetime_period">/one-time</span></div>
 <ul class="space-y-md mb-xl flex-grow">
@@ -321,7 +319,7 @@
 <li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
 <li class="flex items-center gap-sm text-on-surface"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat4">Uncapped speed &amp; unlimited size</span></li>
 </ul>
-<button class="w-full py-md bg-[#a855f7] text-white rounded-lg hover:shadow-[0_0_15px_#a855f7] transition-all font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
+<button class="w-full py-md bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
 </div>
 <!-- Plus Yearly -->
 <div class="glass-panel p-xl rounded-2xl flex flex-col h-full border-t border-t-white/5">
@@ -367,7 +365,7 @@
 <div class="max-w-container-max mx-auto px-lg flex flex-col md:flex-row justify-between items-start gap-lg">
 <div class="space-y-sm">
 <div class="font-headline-md text-headline-md text-on-surface">EQT</div>
-<p class="font-body-md text-body-md text-tertiary opacity-70" data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+<p class="font-body-md text-body-md text-primary font-medium" data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
 </div>
 <div class="flex flex-col md:flex-row gap-lg md:gap-xl">
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.net.im" data-i18n="footer_support">Support: support@eqt.net.im</a>
