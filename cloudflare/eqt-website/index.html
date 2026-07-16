@@ -19,6 +19,8 @@
 <meta property="og:type" content="website"/>
 <link rel="canonical" href="https://eqt.net.im"/>
 
+<link rel="icon" href="assets/favicon.png" type="image/png"/>
+
 <!-- Google Fonts: Outfit -->
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -134,6 +136,13 @@
         .glow-primary {
             box-shadow: 0 0 20px rgba(221, 183, 255, 0.2);
         }
+        #lang-select, #lang-select:focus, #lang-select:active, #lang-select:focus-visible {
+            outline: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            ring: 0 !important;
+            outline-offset: 0 !important;
+        }
     </style>
 </head>
 <body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-x-hidden selection:bg-primary selection:text-on-primary min-h-screen flex flex-col">
@@ -154,9 +163,9 @@
 </nav>
 <!-- Trailing Action -->
 <div class="flex items-center gap-md">
-    <div class="relative flex items-center gap-xs px-xs md:px-sm glass-panel border-white/10 hover:border-secondary text-on-surface-variant hover:text-secondary rounded transition-all">
-        <span class="material-symbols-outlined text-base pointer-events-none ml-xs">language</span>
-        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-secondary py-xs md:py-sm pl-xs pr-md rounded font-label-md text-label-md transition-all cursor-pointer outline-none appearance-none">
+    <div class="relative flex items-center gap-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+        <span class="material-symbols-outlined text-base pointer-events-none">language</span>
+        <select id="lang-select" class="bg-transparent border-none text-on-surface-variant hover:text-primary py-xs pl-xs pr-sm rounded font-label-md text-label-md transition-colors cursor-pointer outline-none appearance-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0">
             <option value="en" class="bg-background text-on-surface">English</option>
             <option value="zh" class="bg-background text-on-surface">简体中文</option>
             <option value="ja" class="bg-background text-on-surface">日本語</option>
@@ -166,7 +175,7 @@
             <option value="fr" class="bg-background text-on-surface">Français</option>
         </select>
     </div>
-    <a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-[#a855f7] text-white rounded font-label-md text-label-md hover:shadow-[0_0_10px_#a855f7] transition-shadow active:scale-95" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe" data-i18n="nav_download">
+    <a class="hidden md:inline-flex items-center justify-center px-lg py-sm bg-gradient-to-r from-secondary to-primary text-white font-bold rounded font-label-md text-label-md hover:shadow-[0_0_15px_rgba(57,229,182,0.4)] transition-shadow active:scale-95" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe" data-i18n="nav_download">
         Download Client
     </a>
     <!-- Mobile Menu Toggle (Visual only for this static demo) -->
