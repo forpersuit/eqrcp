@@ -37,6 +37,119 @@ function matchFingerprint(
   return matches >= 2;
 }
 
+// Helper to fetch latest release from GitHub
+async function fetchLatestRelease(env: Env): Promise<any> {
+  const repo = env.GITHUB_REPO || "forpersuit/eqrcp";
+  const ghUrl = `https://api.github.com/repos/${repo}/releases/latest`;
+  
+  const headers: Record<string, string> = {
+    "User-Agent": "EQT-Update-Worker",
+    "Accept": "application/vnd.github+json",
+  };
+  
+  if (env.GITHUB_TOKEN) {
+    headers["Authorization"] = `Bearer ${env.GITHUB_TOKEN}`;
+  }
+
+  const ghRes = await fetch(ghUrl, { headers });
+  if (!ghRes.ok) {
+    return { error: `Failed to fetch latest release from GitHub: ${ghRes.statusText}` };
+  }
+
+  return await ghRes.json();
+}
+
+// Handler for requests targeted to download.eqt.net.im
+async function handleDownloadDomain(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  corsHeaders: any
+): Promise<Response> {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  // 1. Root path -> Redirect to official homepage
+  if (pathname === "/" || pathname === "") {
+    return Response.redirect("https://www.eqt.net.im", 302);
+  }
+
+  // 2. GET /update-metadata.json
+  if (pathname === "/update-metadata.json" && request.method === "GET") {
+    const cacheKey = new Request(url.toString(), request);
+    const cache = caches.default;
+    let response = await cache.match(cacheKey);
+    if (response) {
+      return response;
+    }
+
+    const latestRelease = await fetchLatestRelease(env);
+    if (latestRelease.error) {
+      return new Response(JSON.stringify({ error: latestRelease.error }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const version = latestRelease.tag_name;
+    const result = {
+      version: version,
+      published_at: latestRelease.published_at,
+      changelog: latestRelease.body || "",
+      assets: (latestRelease.assets || []).map((asset: any) => {
+        return {
+          name: asset.name,
+          download_url: `https://download.eqt.net.im/downloads/${version}/${asset.name}`,
+          size: asset.size
+        };
+      })
+    };
+
+    response = new Response(JSON.stringify(result), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Cache-Control": "public, s-maxage=60" // Cache in edge for 1 minute
+      }
+    });
+
+    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+    return response;
+  }
+
+  // 3. GET /downloads/:version/:filename
+  // Pattern: /downloads/([^/]+)/(.+)
+  const downloadMatch = pathname.match(/^\/downloads\/([^/]+)\/(.+)$/);
+  if (downloadMatch && request.method === "GET") {
+    let version = downloadMatch[1];
+    const filename = downloadMatch[2];
+
+    if (version === "latest") {
+      const latestRelease = await fetchLatestRelease(env);
+      if (latestRelease.error) {
+        return new Response(JSON.stringify({ error: latestRelease.error }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      version = latestRelease.tag_name;
+    }
+
+    let redirectUrl = `https://github.com/forpersuit/eqrcp/releases/download/${version}/${filename}`;
+    if (env.R2_PUBLIC_URL) {
+      const base = env.R2_PUBLIC_URL.endsWith('/') ? env.R2_PUBLIC_URL.slice(0, -1) : env.R2_PUBLIC_URL;
+      redirectUrl = `${base}/downloads/${version}/${filename}`;
+    }
+    return Response.redirect(redirectUrl, 302);
+  }
+
+  return new Response(JSON.stringify({ error: "Not Found" }), {
+    status: 404,
+    headers: { ...corsHeaders, "Content-Type": "application/json" }
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -53,6 +166,11 @@ export default {
     }
 
     try {
+      // Route request to download handler if host is download.eqt.net.im
+      if (url.hostname === "download.eqt.net.im") {
+        return await handleDownloadDomain(request, env, ctx, corsHeaders);
+      }
+
       // 1. Activating a device
       if (url.pathname === "/api/v1/activate" && request.method === "POST") {
         const body: any = await request.json();

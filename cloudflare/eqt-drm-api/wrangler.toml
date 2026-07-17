@@ -16,6 +16,7 @@ database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 # ADMIN_SECRET = "your_admin_secret_key"
 
 routes = [
-  { pattern = "lic.eqt.net.im", custom_domain = true }
+  { pattern = "lic.eqt.net.im", custom_domain = true },
+  { pattern = "download.eqt.net.im", custom_domain = true }
 ]
 
