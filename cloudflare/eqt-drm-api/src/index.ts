@@ -144,10 +144,8 @@ async function handleDownloadDomain(
     return Response.redirect(redirectUrl, 302);
   }
 
-  return new Response(JSON.stringify({ error: "Not Found" }), {
-    status: 404,
-    headers: { ...corsHeaders, "Content-Type": "application/json" }
-  });
+  // Fallback: redirect any unmatched downloads domain requests to the main website
+  return Response.redirect("https://www.eqt.net.im", 302);
 }
 
 export default {
