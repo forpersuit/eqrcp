@@ -213,7 +213,7 @@
                 </p>
 <div class="flex flex-wrap items-center gap-md pt-md">
 <a class="inline-flex items-center justify-center gap-sm px-lg py-md bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg font-label-md text-label-md hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe">
-<span class="material-symbols-outlined">download</span> <span data-i18n="hero_download_win">Download for Windows</span>
+<span class="material-symbols-outlined">download</span> <span id="download-btn-text" data-i18n="hero_download_win">Download for Windows</span>
                     </a>
 </div>
 </div>
@@ -898,6 +898,14 @@
             }
         });
 
+        // Append version number to download button if available
+        if (window.latestVersion) {
+            const btnTextEl = document.getElementById('download-btn-text');
+            if (btnTextEl) {
+                btnTextEl.innerHTML = btnTextEl.innerHTML + ` (${window.latestVersion})`;
+            }
+        }
+
         // Update title and meta description
         let title = current["meta_title"] || fallback["meta_title"];
         if (title) {
@@ -1093,10 +1101,31 @@
         });
     }
 
+    // Global variable to hold version
+    window.latestVersion = "";
+
+    async function fetchLatestVersion() {
+        try {
+            const res = await fetch('https://download.eqt.net.im/update-metadata.json');
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.version) {
+                    window.latestVersion = data.version;
+                    // Apply language again to force refreshing the download button text with version
+                    let lang = localStorage.getItem('eqt-lang') || getCookie('eqt-lang') || 'en';
+                    applyLang(lang);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch latest version:", e);
+        }
+    }
+
     // Run on load
     window.addEventListener('DOMContentLoaded', () => {
         initLang();
         initGallery();
+        fetchLatestVersion();
     });
 </script>
 </body></html>

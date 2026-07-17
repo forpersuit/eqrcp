@@ -65,6 +65,7 @@ jobs:
       - name: Generate static update-metadata.json
         run: |
           go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out cloudflare/eqt-website/update-metadata.json
+          cp cloudflare/eqt-website/update-metadata.json out/update-metadata.json
       - name: Copy download assets to website static folder
         run: |
           mkdir -p cloudflare/eqt-website/downloads/latest
@@ -86,3 +87,22 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      - name: Deploy to Cloudflare R2
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            BUCKET="${R2_BUCKET_NAME:-eqt-downloads}"
+            echo "Uploading artifacts to Cloudflare R2 bucket: $BUCKET"
+            for file in out/*; do
+              filename=$(basename "$file")
+              echo "Uploading $filename to downloads/${{ github.ref_name }}/$filename ..."
+              npx wrangler r2 object put "$BUCKET/downloads/${{ github.ref_name }}/$filename" --file "$file"
+              echo "Uploading $filename to downloads/latest/$filename ..."
+              npx wrangler r2 object put "$BUCKET/downloads/latest/$filename" --file "$file"
+            done
+          else
+            echo "CLOUDFLARE_API_TOKEN is not set, skipping R2 deployment."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}

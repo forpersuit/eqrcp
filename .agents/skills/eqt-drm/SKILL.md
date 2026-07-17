@@ -74,10 +74,13 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 若配置了此变量，`/api/v1/update/check` 返回的 `download_url` 将被自动改写为 R2 的加速直链。
   - 若未配置，则回退使用私有 GitHub Releases 直链。
 - **静态网页直链**：产品介绍页面（`cloudflare/eqt-website/index.html`）应始终使用指向 R2 存储桶的公共直链（如 `https://pub.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe`），从而免受 GitHub 私有库 404 限制及免去 Worker 的 CPU 超时影响。
-- **分发下载域名接管模式**：为规避 Pages master 全量部署对 `downloads/` 目录的覆盖、以及 Pages 的 25MB 单文件上限，`download.eqt.net.im` 的解析已被合并路由到 `eqt-drm-api` Worker 下。Worker 会通过拦截 `download.eqt.net.im` 主机的流量：
-  - 将 `/update-metadata.json` 解析并生成带一分钟边缘缓存的动态 JSON。
-  - 将 `/downloads/:version/:filename` 转换并 302 重定向到 GitHub Releases 或 R2 存储。
-  这确保了发布新版本时大文件托管免受 Pages 单文件限制，并且任何时候推送代码至 master 均不会造成下载大文件丢失。
+- **分发下载域名接管模式**：为规避 Pages master 全量部署对 `downloads/` 目录的覆盖、以及 Pages 的 25MB 单文件上限，`download.eqt.net.im` 的解析已被合并路由到 `eqt-drm-api` Worker 下。
+  - **R2 自动化上传**：大文件二进制与签名资产在 GitHub Actions `release.yml` 阶段会通过 `wrangler r2 object put` 自动化同步发布到 R2 存储桶中，供国内或非 GitHub 地区高速直连下载。
+  - **动态官网版本显示**：官网页面 `index.html` 采用非阻塞异步 fetch 机制获取 `/update-metadata.json` 中的最新版本号并动态渲染到下载按钮中。此机制在 `applyLang` 底部绑定，确保用户切换多语言时版本号显示不会被重置覆盖。
+  - **302 重定向**：Worker 拦截 `download.eqt.net.im` 流量并处理请求：
+    - 将 `/update-metadata.json` 解析并生成带一分钟边缘缓存的动态 JSON（支持 CORS 供官网请求）。
+    - 将 `/downloads/:version/:filename` 动态 302 重定向到配置的 R2 存储加速域名，若无 R2 环境变量则回退重定向到 GitHub Releases。
+    这确保了发布新版本时大文件托管免受 Pages 单文件限制，并且任何时候推送代码至 master 均不会造成下载大文件丢失。
 
 ---
 
