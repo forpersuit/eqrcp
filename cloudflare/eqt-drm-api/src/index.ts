@@ -75,7 +75,7 @@ async function handleDownloadDomain(
   }
 
   // 2. GET /update-metadata.json
-  if (pathname === "/update-metadata.json" && request.method === "GET") {
+  if (pathname === "/update-metadata.json" && (request.method === "GET" || request.method === "HEAD")) {
     const cacheKey = new Request(url.toString(), request);
     const cache = caches.default;
     let response = await cache.match(cacheKey);
@@ -121,7 +121,7 @@ async function handleDownloadDomain(
   // 3. GET /downloads/:version/:filename
   // Pattern: /downloads/([^/]+)/(.+)
   const downloadMatch = pathname.match(/^\/downloads\/([^/]+)\/(.+)$/);
-  if (downloadMatch && request.method === "GET") {
+  if (downloadMatch && (request.method === "GET" || request.method === "HEAD")) {
     let version = downloadMatch[1];
     const filename = downloadMatch[2];
 
@@ -166,8 +166,16 @@ export default {
     }
 
     try {
-      // Route request to download handler if host is download.eqt.net.im
-      if (url.hostname === "download.eqt.net.im") {
+      // Route request to download handler if host matches download.eqt.net.im,
+      // or if pathname matches download routes (to support dev/testing on workers.dev or localhost).
+      if (
+        url.hostname === "download.eqt.net.im" ||
+        url.hostname.endsWith(".workers.dev") ||
+        url.hostname === "localhost" ||
+        url.hostname === "127.0.0.1" ||
+        url.pathname === "/update-metadata.json" ||
+        url.pathname.startsWith("/downloads/")
+      ) {
         return await handleDownloadDomain(request, env, ctx, corsHeaders);
       }
 
