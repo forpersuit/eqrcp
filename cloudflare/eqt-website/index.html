@@ -212,7 +212,7 @@
                     Super fast local-network direct transfer tool between PC and Mobile. No cloud, no lag, just scan and send. Experience seamless local integration and network-isolated local data transfer.
                 </p>
 <div class="flex flex-wrap items-center gap-md pt-md">
-<a class="inline-flex items-center justify-center gap-sm px-lg py-md bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg font-label-md text-label-md hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe">
+<a id="download-link" class="inline-flex items-center justify-center gap-sm px-lg py-md bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg font-label-md text-label-md hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300" href="https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe">
 <span class="material-symbols-outlined">download</span> <span id="download-btn-text" data-i18n="hero_download_win">Download for Windows</span>
                     </a>
 </div>
@@ -1111,6 +1111,18 @@
                 const data = await res.json();
                 if (data && data.version) {
                     window.latestVersion = data.version;
+                    // Find target asset from assets array, or fallback to auto-assembled version
+                    let downloadUrl = `https://download.eqt.net.im/downloads/${data.version}/eqt-desktop-windows-amd64.exe`;
+                    if (data.assets && Array.isArray(data.assets)) {
+                        const targetAsset = data.assets.find(a => a.name === 'eqt-desktop-windows-amd64.exe');
+                        if (targetAsset && targetAsset.download_url) {
+                            downloadUrl = targetAsset.download_url;
+                        }
+                    }
+                    const downloadLinkEl = document.getElementById('download-link');
+                    if (downloadLinkEl) {
+                        downloadLinkEl.href = downloadUrl;
+                    }
                     // Apply language again to force refreshing the download button text with version
                     let lang = localStorage.getItem('eqt-lang') || getCookie('eqt-lang') || 'en';
                     applyLang(lang);
