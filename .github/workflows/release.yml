@@ -24,6 +24,11 @@ jobs:
           cache-dependency-path: desktop/gui/frontend/package-lock.json
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build Chat v2 frontend
+        working-directory: pkg/chat/v2/web
+        run: |
+          npm ci
+          npm run build
       - name: Build Wails (windows/amd64)
         working-directory: desktop/gui
         run: wails build -clean -platform windows/amd64
