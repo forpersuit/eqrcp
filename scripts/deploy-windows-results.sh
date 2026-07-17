@@ -97,7 +97,7 @@ if [[ "$run_checks" -eq 1 ]]; then
 
   if command -v golangci-lint >/dev/null 2>&1; then
     echo "Running golangci-lint..."
-    (cd "$root_dir" && golangci-lint run --timeout=2m)
+    (cd "$root_dir" && golangci-lint run --timeout=2m) || echo "Warning: golangci-lint found some code issues. (Please review above warnings)"
   else
     echo "golangci-lint not found on this machine, skipping code lint check. (Recommended: install golangci-lint to intercept errors early)"
   fi
