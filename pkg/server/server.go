@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image/png"
 	"io"
@@ -1077,9 +1076,6 @@ func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
 	}
 }
 
-func interruptedTransferError(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, io.ErrUnexpectedEOF)
-}
 
 func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

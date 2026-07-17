@@ -63,8 +63,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	s.mu.Unlock()
 
 	// Replay missed events safely ensuring we never leak history before joinSeq
-	var startSeq int64 = 0
-	var shouldReplay bool = false
+	var startSeq int64
 
 	if afterSeq > 0 && joinSeq > 0 {
 		if afterSeq >= joinSeq {
@@ -72,27 +71,21 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 		} else {
 			startSeq = joinSeq
 		}
-		shouldReplay = true
 	} else if afterSeq > 0 {
 		startSeq = afterSeq
-		shouldReplay = true
 	} else if joinSeq > 0 {
 		startSeq = joinSeq
-		shouldReplay = true
 	} else {
 		// Both are 0, meaning a brand new client joined the session.
 		// According to the requirement, we do not sync messages sent before joining.
 		// So we set startSeq to the current sequence number.
 		startSeq = s.MessageStore.CurrentSeq()
-		shouldReplay = true
 	}
 
-	if shouldReplay {
-		events := s.MessageStore.GetSince(startSeq)
-		for _, e := range events {
-			if (e.Message != nil || e.Transfer != nil) && s.isEventVisibleTo(c, e) {
-				c.Send(e)
-			}
+	events := s.MessageStore.GetSince(startSeq)
+	for _, e := range events {
+		if (e.Message != nil || e.Transfer != nil) && s.isEventVisibleTo(c, e) {
+			c.Send(e)
 		}
 	}
 

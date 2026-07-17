@@ -1,3 +1,4 @@
+//nolint:unused
 package server
 
 import (
@@ -65,7 +66,6 @@ type chatSession struct {
 	tusUploadsDone   map[string]int64
 	tusUploadsTotal  map[string]int64
 	tusUploadClients map[string]string
-	tusMu            sync.Mutex
 }
 
 // ChatStatusSnapshot represents the current state of a chat session.

@@ -13,7 +13,7 @@ func (l Logger) Print(args ...interface{}) {
 	}
 	if l.w != nil {
 		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-		_, _ = fmt.Fprint(l.w, fmt.Sprintf("[%s] [PRINT] %s\n", timestamp, fmt.Sprint(args...)))
+		_, _ = fmt.Fprintf(l.w, "[%s] [PRINT] %s\n", timestamp, fmt.Sprint(args...))
 	}
 }
 
@@ -24,7 +24,7 @@ func (l Logger) Printf(format string, args ...interface{}) {
 	}
 	if l.w != nil {
 		timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-		_, _ = fmt.Fprint(l.w, fmt.Sprintf("[%s] [PRINT] %s\n", timestamp, fmt.Sprintf(format, args...)))
+		_, _ = fmt.Fprintf(l.w, "[%s] [PRINT] %s\n", timestamp, fmt.Sprintf(format, args...))
 	}
 }
 
@@ -36,7 +36,7 @@ func (l Logger) Infof(format string, args ...interface{}) {
 		fmt.Printf("[%s] [INFO] %s\n", timestamp, msg)
 	}
 	if l.w != nil {
-		_, _ = fmt.Fprint(l.w, fmt.Sprintf("[%s] [INFO] %s\n", timestamp, msg))
+		_, _ = fmt.Fprintf(l.w, "[%s] [INFO] %s\n", timestamp, msg)
 	}
 }
 
@@ -48,7 +48,7 @@ func (l Logger) Errorf(format string, args ...interface{}) {
 		fmt.Printf("[%s] [ERROR] %s\n", timestamp, msg)
 	}
 	if l.w != nil {
-		_, _ = fmt.Fprint(l.w, fmt.Sprintf("[%s] [ERROR] %s\n", timestamp, msg))
+		_, _ = fmt.Fprintf(l.w, "[%s] [ERROR] %s\n", timestamp, msg)
 	}
 }
 
@@ -60,7 +60,7 @@ func (l Logger) Debugf(format string, args ...interface{}) {
 		fmt.Printf("[%s] [DEBUG] %s\n", timestamp, msg)
 	}
 	if l.w != nil {
-		_, _ = fmt.Fprint(l.w, fmt.Sprintf("[%s] [DEBUG] %s\n", timestamp, msg))
+		_, _ = fmt.Fprintf(l.w, "[%s] [DEBUG] %s\n", timestamp, msg)
 	}
 }
 

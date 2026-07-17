@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,19 +18,6 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-func isRunningInTest() bool {
-	if os.Getenv("EQT_TESTING") == "true" {
-		return true
-	}
-	if flag.Lookup("test.v") != nil {
-		return true
-	}
-	exe := filepath.Base(os.Args[0])
-	if strings.Contains(exe, ".test") || strings.HasPrefix(exe, "test") {
-		return true
-	}
-	return false
-}
 
 const (
 	DefaultReadLimit = 64 << 10
@@ -273,9 +259,7 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 					// Extract message ID from transfer ID (format: dl-<messageId>-<clientId> or dl-<messageId>)
 					fileID := strings.TrimPrefix(cmd.TransferID, "dl-")
 					suffix := "-" + cl.Peer
-					if strings.HasSuffix(fileID, suffix) {
-						fileID = strings.TrimSuffix(fileID, suffix)
-					}
+					fileID = strings.TrimSuffix(fileID, suffix)
 
 					if msg, exists := sess.MessageStore.Find(fileID); exists && msg != nil {
 						h.transfer.CreateJob(sess.Token, cmd.TransferID, fileID, cl.Peer, msg.FileName, msg.Size)
