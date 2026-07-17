@@ -422,7 +422,7 @@ func (h *WebSocketHandler) writeClientLog(token string, peer string, text string
 		peer = "unknown"
 	}
 	safePeer := sanitizeFilename(peer)
-	
+
 	var logDir string
 	if h.logDir != nil {
 		logDir = h.logDir()

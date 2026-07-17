@@ -9,7 +9,6 @@ import _ "embed"
 //go:embed qr.tmpl.html
 var QR string
 
-
 // Upload page
 //
 //go:embed upload.tmpl.html

@@ -72,14 +72,14 @@ func main() {
 			end = len(allLines)
 		}
 		pageNum := (i / linesPerPage) + 1
-		
+
 		mdContent.WriteString(fmt.Sprintf("### %s | 第 %d 页\n\n", softwareName, pageNum))
 		mdContent.WriteString("```go\n")
 		for _, line := range allLines[i:end] {
 			mdContent.WriteString(line + "\n")
 		}
 		mdContent.WriteString("```\n\n")
-		
+
 		// Add page break for PDF exports
 		if end < len(allLines) {
 			mdContent.WriteString("<div style=\"page-break-after: always;\"></div>\n\n")
@@ -147,9 +147,9 @@ func fileOrder(path string) int {
 		"cmd/desktop_integration.go":              19,
 		"cmd/desktop_agent_background_windows.go": 20,
 		"cmd/desktop_agent_background_other.go":   21,
-		"cmd/eqt-launcher/main.go":              25,
-		"cmd/eqt-launcher/launcher_windows.go":  26,
-		"cmd/eqt-launcher/launcher_other.go":    27,
+		"cmd/eqt-launcher/main.go":                25,
+		"cmd/eqt-launcher/launcher_windows.go":    26,
+		"cmd/eqt-launcher/launcher_other.go":      27,
 		"config/config.go":                        30,
 		"config/settings.go":                      31,
 		"config/migrate.go":                       32,

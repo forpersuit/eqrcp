@@ -538,4 +538,3 @@ func (s *Session) GetClient(clientID string) *Client {
 	defer s.mu.Unlock()
 	return s.clients[clientID]
 }
-

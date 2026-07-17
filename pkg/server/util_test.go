@@ -250,7 +250,7 @@ func TestReceivePageRendering(t *testing.T) {
 	}
 }
 
-func TestChatPageIncludesMessagingRoutes(t *testing.T) {}
+func TestChatPageIncludesMessagingRoutes(t *testing.T)   {}
 func TestChatPageHidesStopWithoutHostToken(t *testing.T) {}
 
 func TestChatMessagesAndAttachments(t *testing.T) {}

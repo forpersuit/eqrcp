@@ -92,6 +92,19 @@ echo "Closing running eqt desktop processes..."
 close_eqt_processes
 
 if [[ "$run_checks" -eq 1 ]]; then
+  echo "Running go fmt..."
+  (cd "$root_dir" && go fmt ./...)
+
+  if command -v golangci-lint >/dev/null 2>&1; then
+    echo "Running golangci-lint..."
+    (cd "$root_dir" && golangci-lint run --timeout=2m)
+  else
+    echo "golangci-lint not found on this machine, skipping code lint check. (Recommended: install golangci-lint to intercept errors early)"
+  fi
+
+  echo "Running go vet on root module..."
+  (cd "$root_dir" && go vet ./...)
+
   echo "Running Go tests..."
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
   if wails_cmd="$(find_wails)"; then
@@ -104,6 +117,10 @@ if [[ "$run_checks" -eq 1 ]]; then
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
   echo "Building Chat v2 frontend..."
   (cd "$root_dir/pkg/chat/v2/web" && npm run build)
+
+  echo "Running go vet on desktop module..."
+  (cd "$root_dir/desktop/gui" && go vet ./...)
+
   echo "Running GUI Go tests..."
   (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test ./...)
 fi

@@ -1184,7 +1184,6 @@ func (session *chatSession) joinKicked(join string) bool {
 	return kicked
 }
 
-
 func (session *chatSession) registerClient(token string, label string, peer string, preferredTheme string, join string, fallback string) func() {
 	return session.registerClientWithAvatar(token, label, "", peer, preferredTheme, join, fallback)
 }
@@ -1345,7 +1344,6 @@ func (session *chatSession) kickToken(token string, join string) {
 		session.kickedJoins[assocJoin] = struct{}{}
 	}
 }
-
 
 func (session *chatSession) rejectKickedClient(w http.ResponseWriter, token string) bool {
 	token = strings.TrimSpace(token)

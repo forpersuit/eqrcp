@@ -34,7 +34,7 @@ func updatePlan(oldVer, newVer string) {
 	updated := strings.ReplaceAll(string(content), "软件版本: "+oldVer, "软件版本: "+newVer)
 	updated = strings.ReplaceAll(updated, "软件版本号: "+oldVer, "软件版本号: "+newVer)
 	updated = strings.ReplaceAll(updated, "source-code-"+oldVer+".pdf", "source-code-"+newVer+".pdf")
-	
+
 	err = os.WriteFile(path, []byte(updated), 0644)
 	if err != nil {
 		fmt.Printf("Error writing %s: %v\n", path, err)
@@ -74,12 +74,12 @@ func generateDesignDoc(oldVer, newVer, owner string) {
 		return
 	}
 	updated := string(content)
-	
+
 	// Inject owner and update version
 	targetLine := "**软件版本**: " + oldVer
 	replacement := "**软件版本**: " + newVer + "  \n**著作权人**: " + owner
 	updated = strings.ReplaceAll(updated, targetLine, replacement)
-	
+
 	// Global title replacement
 	updated = strings.ReplaceAll(updated, "局域网文件传输系统V1.0", "局域网文件传输系统"+newVer)
 
@@ -100,7 +100,7 @@ func generateUserDoc(oldVer, newVer, owner string) {
 		return
 	}
 	updated := string(content)
-	
+
 	// Inject owner and update version
 	targetLine := "**软件版本**: " + oldVer
 	replacement := "**软件版本**: " + newVer + "  \n**著作权人**: " + owner

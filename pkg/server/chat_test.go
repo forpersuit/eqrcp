@@ -244,14 +244,14 @@ func TestChatThemeChangesForNewJoinWithoutChangingDeviceIdentity(t *testing.T) {
 	}
 }
 
-func TestChatPageMergesIncrementalSSEUpdates(t *testing.T) {}
-func TestChatPageKeepsDeviceCacheAcrossRescans(t *testing.T) {}
-func TestChatPageUsesMeasuredMobileViewport(t *testing.T) {}
-func TestChatPageStopsSessionQRPulse(t *testing.T) {}
-func TestChatPageOutsideActionsStayVisible(t *testing.T) {}
+func TestChatPageMergesIncrementalSSEUpdates(t *testing.T)                         {}
+func TestChatPageKeepsDeviceCacheAcrossRescans(t *testing.T)                       {}
+func TestChatPageUsesMeasuredMobileViewport(t *testing.T)                          {}
+func TestChatPageStopsSessionQRPulse(t *testing.T)                                 {}
+func TestChatPageOutsideActionsStayVisible(t *testing.T)                           {}
 func TestChatPageUsesAvatarForMessagesRosterAndDesktopClipboardPaste(t *testing.T) {}
-func TestChatPageUsesNativeFileBridgeInWails(t *testing.T) {}
-func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T) {}
+func TestChatPageUsesNativeFileBridgeInWails(t *testing.T)                         {}
+func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T)             {}
 
 func TestDesktopChatBridgeSelectsNativeFiles(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("..", "..", "desktop", "gui", "frontend", "src", "main.js"))
@@ -334,11 +334,11 @@ func TestChatMessagesAfterSeqStartsAtJoinBoundaryAndIncludesVisibleRecall(t *tes
 	}
 }
 
-func TestChatRecallRequiresOwnerToken(t *testing.T) {}
-func TestChatStopRequiresHostToken(t *testing.T) {}
-func TestChatRejectsWritesAfterTerminalState(t *testing.T) {}
-func TestChatRejectsCrossOriginWrites(t *testing.T) {}
-func TestChatAllowsTrustedWailsOriginWrites(t *testing.T) {}
+func TestChatRecallRequiresOwnerToken(t *testing.T)                     {}
+func TestChatStopRequiresHostToken(t *testing.T)                        {}
+func TestChatRejectsWritesAfterTerminalState(t *testing.T)              {}
+func TestChatRejectsCrossOriginWrites(t *testing.T)                     {}
+func TestChatAllowsTrustedWailsOriginWrites(t *testing.T)               {}
 func TestChatAttachmentActiveContentDownloadsAsAttachment(t *testing.T) {}
 
 func TestChatHistoryTrimRemovesPrunedAttachments(t *testing.T) {
@@ -517,9 +517,9 @@ func TestServerShutdownChatUsesRequestedTerminalState(t *testing.T) {
 	}
 }
 
-func TestChatRenameDevice(t *testing.T) {}
-func TestAcceptanceMockStates(t *testing.T) {}
-func TestAcceptanceWailsWebViewURL(t *testing.T) {}
+func TestChatRenameDevice(t *testing.T)                                         {}
+func TestAcceptanceMockStates(t *testing.T)                                     {}
+func TestAcceptanceWailsWebViewURL(t *testing.T)                                {}
 func TestChatAttachmentDownloadDoesNotMutateSharedMessageProgress(t *testing.T) {}
 
 func TestChatVideoMetadataHandling(t *testing.T) {

@@ -345,4 +345,3 @@ func TestPrecomputeFingerprintsNonBlocking(t *testing.T) {
 		t.Errorf("expected cached hashes, got: %s, %s, %s", uuid3, cpu3, disk3)
 	}
 }
-

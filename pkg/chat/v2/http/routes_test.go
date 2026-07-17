@@ -460,7 +460,7 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 
 	var helloA protocol.EventEnvelope
 	_ = wsjson.Read(ctx, connAlice, &helloA) // initial raw Hello
-	
+
 	// Send Connect Command
 	err = wsjson.Write(ctx, connAlice, protocol.CommandEnvelope{
 		Type:      protocol.CommandConnect,
@@ -545,7 +545,7 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 	}
 	var helloTemp protocol.EventEnvelope
 	_ = wsjson.Read(ctx, connAliceTemp, &helloTemp) // initial hello
-	
+
 	// Send Connect Command
 	err = wsjson.Write(ctx, connAliceTemp, protocol.CommandEnvelope{
 		Type:      protocol.CommandConnect,
@@ -561,21 +561,21 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 	}
 	_ = wsjson.Read(ctx, connAliceTemp, &helloTemp) // Handshake Hello
 	t.Logf("[DEBUG TEST] helloTemp.Seq (first reconnect) = %d", helloTemp.Seq)
-	
+
 	connAliceTemp.Close(websocket.StatusNormalClosure, "immediate drop")
 	time.Sleep(10 * time.Millisecond)
 
 	// Now Alice reconnects for the second time.
-	// Under the fix, since it excluded 'hello' type from updating watermark on client-side, 
+	// Under the fix, since it excluded 'hello' type from updating watermark on client-side,
 	// Alice STILL sends lastSeqBeforeDisconnect!
 	connAliceReal, _, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer connAliceReal.Close(websocket.StatusNormalClosure, "done")
-	
+
 	_ = wsjson.Read(ctx, connAliceReal, &helloA) // initial hello
-	
+
 	err = wsjson.Write(ctx, connAliceReal, protocol.CommandEnvelope{
 		Type:      protocol.CommandConnect,
 		CommandID: "conn-alice-real",
@@ -663,7 +663,7 @@ func TestHandlerDownloadCancellation(t *testing.T) {
 	// Use large mock size (10MB) so it takes time and we can cancel it midway
 	downloadURL := server.URL + "/chat-v2/test-token/files/file-cancel?mock_size=10485760&clientId=peer-alice&messageId=msg-cancel&filename=test.bin"
 	errChan := make(chan error, 1)
-	
+
 	// Track download completion or failure state
 	var readBytes int64
 	go func() {
@@ -688,7 +688,7 @@ func TestHandlerDownloadCancellation(t *testing.T) {
 	// 3. Wait for download progress to start
 	var gotProgress bool
 	var gotCancelled bool
-	
+
 	for {
 		var ev protocol.EventEnvelope
 		if err := wsjson.Read(ctx, connAlice, &ev); err != nil {
@@ -736,4 +736,3 @@ func TestHandlerDownloadCancellation(t *testing.T) {
 		t.Fatalf("expected job state to remain TransferCancelled, got = %s (Error: %s)", job.State, job.Error)
 	}
 }
-

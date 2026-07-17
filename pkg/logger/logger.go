@@ -84,4 +84,3 @@ func NewWithWriter(quiet bool, w io.Writer) Logger {
 		w:     w,
 	}
 }
-
