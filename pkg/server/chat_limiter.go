@@ -374,7 +374,6 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 	return usage
 }
 
-
 // GetUsedSeconds returns the current daily chat usage seconds.
 func GetUsedSeconds() int {
 	return limiterInstance.GetStatus().UsedSeconds

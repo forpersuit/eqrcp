@@ -733,7 +733,7 @@ export const translations: Record<string, Record<Lang, string>> = {
 };
 
 export function getTranslation(key: string, currentLang: string): string {
-  const langKey = (currentLang || 'zh').toLowerCase() as Lang;
+  const langKey = (currentLang || 'zh').toLowerCase().split('-')[0] as Lang;
   const supportedLangs: Lang[] = ['zh', 'en', 'ja', 'ko', 'es', 'de', 'fr'];
   
   // Safely fallback to 'zh' if langKey is unsupported

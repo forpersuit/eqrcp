@@ -823,7 +823,7 @@ function renderDeviceProgressHtml(task) {
 
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || '设备传输进度'}</strong>
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%; overflow: hidden;">${listItems}</ul>
                 </div>
@@ -832,9 +832,9 @@ function renderDeviceProgressHtml(task) {
     } else {
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || '设备传输进度'}</strong>
                 <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
-                    ${state.settings?.lang === 'zh' ? '暂无设备连接，开始下载后在此显示进度' : 'No devices connected. Progress will show here once downloading starts.'}
+                    ${t('no_devices_download')}
                 </div>
             </div>
         `;
@@ -1027,8 +1027,8 @@ function renderReceiveTransfer(task) {
                     👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
-                    <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(state.settings?.lang === 'zh' ? '所有设备都传输完成后，自动停止本次传输任务' : 'Automatically stop the transfer task when all devices finish downloading')}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
-                        ${state.settings?.lang === 'zh' ? '自动结束' : 'Auto Stop'}
+                    <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
+                        ${t('auto_stop_label')}
                     </span>
                     ${renderSwitch('auto-stop-switch', task.transferAutoStop)}
                 </div>
@@ -1054,7 +1054,7 @@ function renderReceiveDeviceProgressHtml(task) {
     const recvDir = state.receiveDir || state.settings?.output || '';
     const headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">📱 ${t('devices_progress') || '设备传输进度'}</strong>
+            <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || '设备传输进度'}</strong>
             ${recvDir ? `
                 <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || '打开接收文件夹')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
                     ${openFolderIcon()}
@@ -1300,7 +1300,7 @@ function renderReceiveDeviceProgressHtml(task) {
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
                 ${headerHtml}
                 <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
-                    ${state.settings?.lang === 'zh' ? '暂无设备连接，开始上传后在此显示进度' : 'No devices connected. Progress will show here once uploading starts.'}
+                    ${t('no_devices_upload')}
                 </div>
             </div>
         `;

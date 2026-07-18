@@ -767,7 +767,13 @@
 
         var currentLang = 'en';
         var savedLang = window.localStorage.getItem('eqt_lang') || window.localStorage.getItem('eqt-page-lang');
+        if (savedLang) {
+            savedLang = savedLang.toLowerCase().split('-')[0];
+        }
         var cfCookie = getCookie('eqt-lang');
+        if (cfCookie) {
+            cfCookie = cfCookie.toLowerCase().split('-')[0];
+        }
         var userLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
         var supportedLangs = ['zh', 'en', 'ja', 'ko', 'es', 'de', 'fr'];
         
@@ -786,21 +792,44 @@
             
             var headerEl = document.getElementById('header-text');
             if (headerEl) {
-                var key = headerEl.getAttribute('data-i18n');
-                headerEl.textContent = dict[key] || dict.header;
+                if (isCompleted) {
+                    headerEl.textContent = dict.success_header || 'Transfer Complete';
+                } else {
+                    var key = headerEl.getAttribute('data-i18n') || 'header';
+                    headerEl.textContent = dict[key] || dict.header;
+                }
             }
             
             var summaryEl = document.getElementById('summary-text');
             if (summaryEl) {
-                var key = summaryEl.getAttribute('data-i18n');
-                summaryEl.textContent = dict[key] || dict.wait_tips;
+                if (isCompleted) {
+                    var count = {{.Count}};
+                    if (count === 1) {
+                        summaryEl.textContent = dict.success_summary_single || '1 file has been downloaded successfully.';
+                    } else {
+                        var tmpl = dict.success_summary_multiple || '{count} files have been downloaded successfully.';
+                        summaryEl.textContent = tmpl.replace('{count}', count);
+                    }
+                } else {
+                    var key = summaryEl.getAttribute('data-i18n') || 'wait_tips';
+                    summaryEl.textContent = dict[key] || dict.wait_tips;
+                }
             }
             
             var wifiTipsEl = document.querySelector('[data-i18n="wifi_tips"]');
             if (wifiTipsEl) wifiTipsEl.textContent = dict.wifi_tips;
 
             var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
-            if (savedFileTitle) savedFileTitle.textContent = dict.saved_file;
+            if (savedFileTitle) {
+                if (isCompleted && totalCount > 1) {
+                    savedFileTitle.textContent = dict.zip_contents || 'Files included in the ZIP:';
+                    savedFileTitle.style.display = 'block';
+                } else if (isCompleted && totalCount <= 1) {
+                    savedFileTitle.style.display = 'none';
+                } else {
+                    savedFileTitle.textContent = dict.saved_file;
+                }
+            }
             
             var count = {{.Count}};
             if (count > 1) {
@@ -820,7 +849,13 @@
             }
 
             var hintEl = document.querySelector('[data-i18n="close_hint"]');
-            if (hintEl) hintEl.textContent = dict.close_hint;
+            if (hintEl) {
+                if (isCompleted) {
+                    hintEl.textContent = dict.success_tips_all || 'The transfer has completed successfully. You can close this page now.';
+                } else {
+                    hintEl.textContent = dict.close_hint;
+                }
+            }
 
             var notifEl = document.getElementById('download-notification-tips');
             if (notifEl) notifEl.textContent = dict.notification_tips || pageTranslations.zh.notification_tips;
@@ -828,6 +863,16 @@
             var btnStopEl = document.getElementById('btn-action-stop');
             if (btnStopEl) {
                 btnStopEl.textContent = dict.btn_stop || 'Stop Sharing';
+            }
+            
+            var progressStatusEl = document.getElementById('download-progress-status');
+            if (progressStatusEl && isCompleted) {
+                progressStatusEl.textContent = dict.success_header || 'Transfer Complete';
+            }
+            
+            var downloadedFilesTitle = document.querySelector('[data-i18n="downloaded_files_title"]');
+            if (downloadedFilesTitle) {
+                downloadedFilesTitle.textContent = dict.downloaded_files_title || 'Downloaded Files:';
             }
             
             document.title = dict.title;
@@ -1067,11 +1112,6 @@
                     if (fillEl) fillEl.style.width = '100%';
                     var percentEl = document.getElementById('download-progress-percent');
                     if (percentEl) percentEl.innerText = '100%';
-                    var statusEl = document.getElementById('download-progress-status');
-                    if (statusEl) {
-                        var dict = pageTranslations[currentLang] || pageTranslations['en'];
-                        statusEl.innerText = dict.success_header || 'Transfer Complete';
-                    }
                     
                     var panel = document.getElementById('downloaded-files-panel');
                     var listContainer = document.getElementById('downloaded-files-list');
@@ -1120,26 +1160,6 @@
             var stoppedIcon = document.getElementById('status-icon-stopped');
             if (stoppedIcon) stoppedIcon.style.display = 'none';
 
-            var dict = pageTranslations[currentLang] || pageTranslations['en'];
-            
-            var headerEl = document.getElementById('header-text');
-            if (headerEl) {
-                headerEl.removeAttribute('data-i18n');
-                headerEl.textContent = dict.success_header || 'Transfer Complete';
-            }
-            
-            var summaryEl = document.getElementById('summary-text');
-            if (summaryEl) {
-                summaryEl.removeAttribute('data-i18n');
-                var count = {{.Count}};
-                if (count === 1) {
-                    summaryEl.textContent = dict.success_summary_single || '1 file has been downloaded successfully.';
-                } else {
-                    var tmpl = dict.success_summary_multiple || '{count} files have been downloaded successfully.';
-                    summaryEl.textContent = tmpl.replace('{count}', count);
-                }
-            }
-
             var fileItems = document.querySelectorAll('.file-item-row');
             fileItems.forEach(function(item) {
                 item.classList.add('transferred');
@@ -1160,27 +1180,16 @@
             var btnRow = document.getElementById('action-btn-row');
             if (btnRow) btnRow.style.display = 'none';
 
-            var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
             var filesListContainer = document.getElementById('files-list-container');
             if (totalCount > 1) {
-                if (savedFileTitle) {
-                    savedFileTitle.removeAttribute('data-i18n');
-                    savedFileTitle.textContent = dict.zip_contents || 'Files included in the ZIP:';
-                    savedFileTitle.style.display = 'block';
-                }
                 if (filesListContainer) {
                     filesListContainer.style.display = 'block';
                 }
             } else {
-                if (savedFileTitle) savedFileTitle.style.display = 'none';
                 if (filesListContainer) filesListContainer.style.display = 'none';
             }
 
-            var hintEl = document.querySelector('[data-i18n="close_hint"]');
-            if (hintEl) {
-                hintEl.removeAttribute('data-i18n');
-                hintEl.textContent = dict.success_tips_all || 'The transfer has completed successfully. You can close this page now.';
-            }
+            applyLanguage();
         }
 
         function stopSharing() {

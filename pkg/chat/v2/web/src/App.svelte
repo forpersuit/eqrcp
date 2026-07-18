@@ -67,7 +67,16 @@
   let licenseTier = 'FREE';
   let copied = false;
   
-  let currentLang = localStorage.getItem('eqt_lang') || 'zh';
+  let rawLang = localStorage.getItem('eqt_lang') || '';
+  if (!rawLang) {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      rawLang = params.get('lang') || navigator.language || 'zh';
+    } else {
+      rawLang = 'zh';
+    }
+  }
+  let currentLang = rawLang.toLowerCase().split('-')[0];
 
   let isMobileLayout = false;
   function checkScreenSize() {
@@ -1008,9 +1017,10 @@
   }
 
   function setLanguage(lang: string) {
-    localStorage.setItem('eqt_lang', lang);
-    localStorage.setItem('eqt-page-lang', lang);
-    currentLang = lang;
+    const normLang = lang.toLowerCase().split('-')[0];
+    localStorage.setItem('eqt_lang', normLang);
+    localStorage.setItem('eqt-page-lang', normLang);
+    currentLang = normLang;
     showLangPanel = false;
   }
 
@@ -1208,6 +1218,11 @@
             <div class="lang-panel-title">{t.selectLanguage}</div>
             <div class="lang-list">
               <button class="lang-option" class:active={currentLang === 'en'} on:click={() => setLanguage('en')}>English</button>
+              <button class="lang-option" class:active={currentLang === 'ja'} on:click={() => setLanguage('ja')}>日本語</button>
+              <button class="lang-option" class:active={currentLang === 'ko'} on:click={() => setLanguage('ko')}>한국어</button>
+              <button class="lang-option" class:active={currentLang === 'es'} on:click={() => setLanguage('es')}>Español</button>
+              <button class="lang-option" class:active={currentLang === 'de'} on:click={() => setLanguage('de')}>Deutsch</button>
+              <button class="lang-option" class:active={currentLang === 'fr'} on:click={() => setLanguage('fr')}>Français</button>
               <button class="lang-option" class:active={currentLang === 'zh'} on:click={() => setLanguage('zh')}>简体中文</button>
             </div>
           </div>

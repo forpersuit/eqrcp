@@ -410,7 +410,8 @@
                 err_reason_network: '网络连接已中断。请确保两台设备都连接到同一个 Wi-Fi（局域网），并且接收端电脑上已启动 EQT。',
                 err_reason_too_large: '文件太大，超出了传输限制。',
                 err_reason_server: '接收端电脑保存文件失败。磁盘可能已满，或者写权限被拒绝。',
-                err_reason_default: '发生未知错误，无法完成传输。'
+                err_reason_default: '发生未知错误，无法完成传输。',
+                badge_left: '剩余'
             },
             en: {
                 title: 'Send from this device',
@@ -441,7 +442,8 @@
                 err_free_limit_files_global: 'Free full-feature quota exceeded: Exceeded 5 files limit per transfer. Upgrade to Plus to unlock.',
                 err_free_limit_size_global: 'Free full-feature quota exceeded: File size exceeds 50MB limit. Upgrade to Plus to unlock.',
                 quota_info: 'Currently Free tier, daily remaining full-feature quota: {remaining}',
-                quota_exceeded: 'Daily free full-feature quota exceeded. Upgrade to Plus on receiver to unlock unlimited transfers.'
+                quota_exceeded: 'Daily free full-feature quota exceeded. Upgrade to Plus on receiver to unlock unlimited transfers.',
+                badge_left: 'left'
             },
             ja: {
                 title: 'このデバイスから送信',
@@ -472,7 +474,8 @@
                 err_free_limit_files_global: '無料枠超過：1回あたり最大5ファイル制限を超えています。Plusプランを購入して解除。',
                 err_free_limit_size_global: '無料枠超過：50MBサイズ制限を超えるファイルがあります。Plusプランを購入して解除。',
                 quota_info: '現在無料版、本日の残り受信回数：{remaining} 回',
-                quota_exceeded: '本日の無料受信制限に達しました。無制限で転送するには、レシーバーでPlusにアップグレードしてください。'
+                quota_exceeded: '本日の無料受信制限に達しました。無制限で転送するには、レシーバーでPlusにアップグレードしてください。',
+                badge_left: '残り'
             },
             ko: {
                 title: '이 기기에서 전송',
@@ -503,7 +506,8 @@
                 err_free_limit_files_global: '무료 용량 초과: 전송당 최대 5개 파일 제한을 초과했습니다. Plus를 구매하여 제한을 해제하십시오.',
                 err_free_limit_size_global: '무료 용량 초과: 50MB 용량 제한을 초과하는 파일이 존재합니다. Plus를 구매하여 제한을 해제하십시오.',
                 quota_info: '현재 무료 버전을 사용 중입니다. 오늘 남은 수신 횟수: {remaining}회',
-                quota_exceeded: '오늘 무료 수신 한도를 초과했습니다. 무제한 전송을 사용하려면 수신 기기에서 Plus로 업그레이드하십시오.'
+                quota_exceeded: '오늘 무료 수신 한도를 초과했습니다. 무제한 전송을 사용하려면 수신 기기에서 Plus로 업그레이드하십시오.',
+                badge_left: '남음'
             },
             es: {
                 title: 'Enviar desde este dispositivo',
@@ -534,7 +538,8 @@
                 err_free_limit_files_global: 'Límite gratuito excedido: Supera el límite de 5 archivos por transferencia. Compre Plus para desbloquear.',
                 err_free_limit_size_global: 'Límite gratuito excedido: Hay archivos que superan el límite de 50MB. Compre Plus para desbloquear.',
                 quota_info: 'Actualmente en plan gratuito, transferencias diarias restantes: {remaining}',
-                quota_exceeded: 'Se ha agotado el límite de recepción gratuito. Actualice a Plus para desbloquear.'
+                quota_exceeded: 'Se ha agotado el límite de recepción gratuito. Actualice a Plus para desbloquear.',
+                badge_left: 'restan'
             },
             de: {
                 title: 'Von diesem Gerät senden',
@@ -565,7 +570,8 @@
                 err_free_limit_files_global: 'Kostenloses Limit überschritten: Limit von 5 Dateien pro Übertragung überschritten. Kaufen Sie Plus zum Freischalten.',
                 err_free_limit_size_global: 'Kostenloses Limit überschritten: Datei überschreitet das 50MB-Limit. Kaufen Sie Plus zum Freischalten.',
                 quota_info: 'Derzeit Free-Tarif, verbleibende tägliche Empfangsbeschränkung: {remaining}',
-                quota_exceeded: 'Tägliches Freiguthaben erschöpft. Aktualisieren Sie auf Plus, um unbegrenzte Übertragungen freizuschalten.'
+                quota_exceeded: 'Tägliches Freiguthaben erschöpft. Aktualisieren Sie auf Plus, um unbegrenzte Übertragungen freizuschalten.',
+                badge_left: 'übrig'
             },
             fr: {
                 title: 'Envoyer depuis cet appareil',
@@ -596,7 +602,8 @@
                 err_free_limit_files_global: 'Offre gratuite dépassée : Limite de 5 fichiers par transfert dépassée. Achetez Plus pour débloquer.',
                 err_free_limit_size_global: 'Offre gratuite dépassée : Fichier dépasse la limite de 50 Mo. Achetez Plus pour débloquer.',
                 quota_info: 'Forfait gratuit actuel, quota restant aujourd\'hui : {remaining} fois',
-                quota_exceeded: 'Limite quotidienne de transfert gratuit atteinte. Mettez à niveau vers Plus sur le récepteur pour débloquer les transferts illimités.'
+                quota_exceeded: 'Limite quotidienne de transfert gratuit atteinte. Mettez à niveau vers Plus sur le récepteur pour débloquer les transferts illimités.',
+                badge_left: 'restant'
             }
         };
 
@@ -626,6 +633,9 @@
             currentLang = 'en';
         }
         var savedLang = window.localStorage.getItem('eqt-page-lang') || window.localStorage.getItem('eqt_lang');
+        if (savedLang) {
+            savedLang = savedLang.toLowerCase().split('-')[0];
+        }
         if (savedLang && supportedLangs[savedLang]) {
             currentLang = savedLang;
         }
@@ -1465,7 +1475,7 @@
                 var remaining = Math.max(0, 5 - usedTransfers);
                 if (remaining > 0) {
                     countdownEl.style.display = 'inline-flex';
-                    countdownEl.innerHTML = 'left<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">' + remaining + '</span>';
+                    countdownEl.innerHTML = t('badge_left') + '<span style="font-size: 15px; font-weight: 900; margin-top: 2px; color: var(--danger);">' + remaining + '</span>';
                 } else {
                     countdownEl.style.display = 'none';
                 }

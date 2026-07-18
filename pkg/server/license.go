@@ -31,10 +31,10 @@ type LicenseCertificate struct {
 	UUIDHash           string `json:"uuid_hash"`
 	CPUHash            string `json:"cpu_hash"`
 	DiskHash           string `json:"disk_hash"`
-	ExpiresAt          string `json:"expires_at"`          // ISO string or "LIFETIME"
-	MaxDevices         int    `json:"max_devices"`         // Maximum activation count
-	ActivatedDevices   int    `json:"activated_devices"`   // Current activated devices count
-	Signature          string `json:"signature"`           // Ed25519 signature in hex
+	ExpiresAt          string `json:"expires_at"`                      // ISO string or "LIFETIME"
+	MaxDevices         int    `json:"max_devices"`                     // Maximum activation count
+	ActivatedDevices   int    `json:"activated_devices"`               // Current activated devices count
+	Signature          string `json:"signature"`                       // Ed25519 signature in hex
 	LastOnlineSyncTime string `json:"last_online_sync_time,omitempty"` // ISO string
 	LastSeenLocalTime  string `json:"last_seen_local_time,omitempty"`  // ISO string
 	VerifySignature    string `json:"verify_signature,omitempty"`      // Ed25519 signature of the sync status

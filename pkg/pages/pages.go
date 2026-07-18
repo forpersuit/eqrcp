@@ -2,7 +2,7 @@ package pages
 
 import _ "embed"
 
-// Trigger compilation recache for embed assets
+// Trigger compilation recache for embed assets: 2026-07-18
 
 // QR page
 //
