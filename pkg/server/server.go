@@ -2523,6 +2523,47 @@ func New(cfg *config.Config) (*Server, error) {
 		itemWritten := rangeInfo.StartByte + atomic.LoadInt64(&writtenInThisRequest)
 
 		if progressWriter.err != nil {
+			if app.isClientFinished(clientID) {
+				log.Printf("[EQT Server] [Download Completed despite network reset] clientID=%s, IP=%s, File=%s, Status=SUCCESS",
+					clientID, r.RemoteAddr, downloadName)
+
+				app.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+					state.State = "completed"
+					state.BytesDone = state.BytesTotal
+					state.Percent = 100
+					state.Message = "Transfer completed."
+				})
+
+				allDownloaded := false
+				if isMultiFile {
+					if isZipDownload {
+						allDownloaded = app.markItemDownloaded(-1)
+					} else if itemIndexStr != "" {
+						allDownloaded = app.markItemDownloaded(currentIndex)
+					}
+				} else {
+					allDownloaded = app.markItemDownloaded(0)
+				}
+
+				if allDownloaded {
+					app.statusMu.Lock()
+					autoStop := app.autoStop
+					app.statusMu.Unlock()
+					if autoStop || !app.KeepAlive {
+						app.setStatus("completed", "Transfer completed.")
+						app.recordStatus()
+						go app.signalStopAfterStatusGrace()
+					} else {
+						app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
+						app.recordStatus()
+					}
+				} else {
+					app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
+					app.recordStatus()
+				}
+				return
+			}
+
 			// Output dynamic device-identified interrupt log
 			log.Printf("[EQT Server] [Download Interrupt] clientID=%s, IP=%s, File=%s, WrittenInThisRequest=%d, TotalWritten=%d/%d, Error=%v",
 				clientID, r.RemoteAddr, downloadName, atomic.LoadInt64(&writtenInThisRequest), itemWritten, expectedBytes, progressWriter.err)

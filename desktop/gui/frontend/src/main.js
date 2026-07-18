@@ -757,7 +757,7 @@ function renderDeviceProgressHtml(task) {
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
     if (clients.length > 0) {
         const listItems = clients.map(client => {
-            const devName = client.deviceName || 'Device';
+            const devName = client.deviceName || t('device') || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
             if (!displayName.includes('(') && clientID) {
@@ -804,7 +804,7 @@ function renderDeviceProgressHtml(task) {
                     <!-- 第一行: 设备名 与 传输文件名同一行 -->
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <span style="color: var(--text-primary); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; min-width: 0;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
-                            📱 ${escapeHTML(displayName)}${client.current ? ` <span style="color: var(--text-secondary); font-weight: 500; font-size: 11px; margin-left: 4px;">- ${escapeHTML(client.current)}</span>` : ''}
+                            ${escapeHTML(displayName)}${client.current ? ` <span style="color: var(--text-secondary); font-weight: 500; font-size: 11px; margin-left: 4px;">- ${escapeHTML(client.current)}</span>` : ''}
                         </span>
                     </div>
                     <!-- 第二行: 进度条, 大小和状态 -->
@@ -1066,7 +1066,7 @@ function renderReceiveDeviceProgressHtml(task) {
         state.deviceFilesExpanded = state.deviceFilesExpanded || {};
 
         const listItems = clients.map(client => {
-            const devName = client.deviceName || 'Device';
+            const devName = client.deviceName || t('device') || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
             if (!displayName.includes('(') && clientID) {
@@ -1269,7 +1269,7 @@ function renderReceiveDeviceProgressHtml(task) {
                 <li id="receive-client-li-${escapeAttr(clientID)}" data-expanded="${isFilesExpanded}" style="padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 6px; box-sizing: border-box; width: 100%; overflow: hidden; border: 1.2px solid var(--line); list-style: none;">
                     <div class="device-header-toggle" data-client-id="${escapeAttr(clientID)}" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; min-width: 0;">
                         <span id="receive-client-name-${escapeAttr(clientID)}" style="color: var(--text-primary); font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; display: flex; align-items: center; min-width: 0;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
-                            ${arrowSvg}📱 <span id="receive-client-name-text-${escapeAttr(clientID)}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">${escapeHTML(displayName)}</span>
+                            ${arrowSvg}<span id="receive-client-name-text-${escapeAttr(clientID)}" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;">${escapeHTML(displayName)}</span>
                         </span>
                         <div id="receive-client-status-badge-${escapeAttr(clientID)}" style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             <span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${stateText}</span>
