@@ -1207,8 +1207,8 @@
           <div class="lang-panel" class:open={showLangPanel} on:click|stopPropagation>
             <div class="lang-panel-title">{t.selectLanguage}</div>
             <div class="lang-list">
-              <button class="lang-option" class:active={currentLang === 'zh'} on:click={() => setLanguage('zh')}>简体中文</button>
               <button class="lang-option" class:active={currentLang === 'en'} on:click={() => setLanguage('en')}>English</button>
+              <button class="lang-option" class:active={currentLang === 'zh'} on:click={() => setLanguage('zh')}>简体中文</button>
             </div>
           </div>
         </div>

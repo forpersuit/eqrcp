@@ -18,7 +18,6 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-
 const (
 	DefaultReadLimit = 64 << 10
 )

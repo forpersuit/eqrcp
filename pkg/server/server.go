@@ -1076,7 +1076,6 @@ func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
 	}
 }
 
-
 func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
