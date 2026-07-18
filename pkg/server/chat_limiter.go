@@ -155,71 +155,11 @@ func getNetworkTimeOrStartFetch() time.Time {
 }
 
 func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
-	now := time.Now().Unix()
-
-	// 1. Time anti-rollback verification
-	if usage.LastTime > 0 && now < usage.LastTime-600 {
-		usage.ClockTampered = true
-	}
-
-	if !usage.ClockTampered && now > usage.LastTime {
-		usage.LastTime = now
-	}
-
-	// 2. Validate cryptographic local license (.lic) if exists
-	licPath := getLicenseFilePath()
-	var hasValidLic bool
-	var cert LicenseCertificate
-
-	if os.Getenv("EQT_TESTING") == "true" {
-		// In testing environment, if no .lic file exists, fallback to JSON config paid status
-		if _, err := os.Stat(licPath); os.IsNotExist(err) {
-			hasValidLic = usage.IsPaid
-			cert.Tier = usage.LicenseTier
-			cert.ExpiresAt = usage.CodeDate
-		}
-	}
-
-	if !hasValidLic {
-		if data, err := os.ReadFile(licPath); err == nil {
-			if err := json.Unmarshal(data, &cert); err == nil {
-				// Verify signature, fingerprint, and expiration
-				sigOk := VerifyLicenseSignature(cert)
-				fpOk := VerifyFingerprint(cert)
-
-				expOk := true
-				if cert.ExpiresAt != "LIFETIME" {
-					if expiry, err := time.Parse(time.RFC3339, cert.ExpiresAt); err == nil {
-						currentTime := getNetworkTimeOrStartFetch()
-						if currentTime.After(expiry) {
-							expOk = false
-						}
-					} else {
-						expOk = false
-					}
-				}
-
-				if sigOk && fpOk && expOk {
-					hasValidLic = true
-				}
-			}
-		}
-	}
-
-	if hasValidLic {
-		usage.IsPaid = true
-		usage.LicenseTier = cert.Tier
-		usage.CodeDate = cert.ExpiresAt
-	} else {
-		// No valid license certificate found on the machine. Revoke paid status.
-		usage.IsPaid = false
-		usage.LicenseTier = ""
-	}
-
-	// Force lock paid features if client clock was manipulated
-	if usage.ClockTampered {
-		usage.IsPaid = false
-	}
+	// Align status dynamically with single source of truth (license.go)
+	usage.IsPaid = GetPaidStatus()
+	usage.LicenseTier = GetLicenseTier()
+	usage.CodeDate = GetCodeDate()
+	usage.ClockTampered = GetClockTamperedStatus()
 }
 
 func getMockUsageForAcceptance() *ChatUsage {
@@ -318,17 +258,6 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		}
 	}
 
-	if !readOk {
-		if backupPath := getHiddenBackupFilePath(); backupPath != "" {
-			if backupData, err := os.ReadFile(backupPath); err == nil && len(backupData) > 0 {
-				decrypted := xorObfuscate(backupData)
-				if errJson := json.Unmarshal(decrypted, &usage); errJson == nil && usage.Date != "" {
-					readOk = true
-				}
-			}
-		}
-	}
-
 	dateChanged := false
 	if !readOk || usage.Date != today {
 		usage.Date = today
@@ -340,11 +269,10 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 	oldPaid := usage.IsPaid
 	oldTampered := usage.ClockTampered
-	oldLastTime := usage.LastTime
 
 	l.checkLicenseValidity(&usage)
 
-	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || usage.LastTime != oldLastTime {
+	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered {
 		l.saveUsageLocked(usage)
 	} else {
 		l.cachedUsage = usage
@@ -360,11 +288,6 @@ func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
 	data, err := json.Marshal(usage)
 	if err == nil {
 		_ = writeAtomic(path, data, 0644)
-
-		if backupPath := getHiddenBackupFilePath(); backupPath != "" {
-			obfuscated := xorObfuscate(data)
-			_ = writeAtomic(backupPath, obfuscated, 0600)
-		}
 	}
 
 	l.cachedUsage = usage
@@ -398,6 +321,17 @@ func (l *ChatLimiter) GetStatus() ChatUsage {
 
 // SetPaidDetails updates the payment status and license metadata.
 func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate string, tier string) ChatUsage {
+	// Sync memory caches in license.go first to align dynamic validation checks
+	paidStateMu.Lock()
+	cachedIsPaid = paid
+	cachedTier = tier
+	cachedCodeDate = codeDate
+	if !paid {
+		cachedTier = ""
+		cachedCodeDate = ""
+	}
+	paidStateMu.Unlock()
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -440,30 +374,6 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 	return usage
 }
 
-// SetPaidStatus updates the payment status globally.
-func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
-	limiterInstance.SetPaidDetails(paid, redeemedAt, codeDate, tier)
-}
-
-// GetPaidStatus returns whether the premium status is activated.
-func GetPaidStatus() bool {
-	return limiterInstance.GetStatus().IsPaid
-}
-
-// GetLicenseTier returns the current license tier (e.g. PLUS, PRO).
-func GetLicenseTier() string {
-	return limiterInstance.GetStatus().LicenseTier
-}
-
-// GetCodeDate returns the current license code issue date or "LIFETIME".
-func GetCodeDate() string {
-	return limiterInstance.GetStatus().CodeDate
-}
-
-// GetClockTamperedStatus returns whether the system clock has been tampered.
-func GetClockTamperedStatus() bool {
-	return limiterInstance.GetStatus().ClockTampered
-}
 
 // GetUsedSeconds returns the current daily chat usage seconds.
 func GetUsedSeconds() int {

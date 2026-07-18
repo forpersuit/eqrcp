@@ -251,11 +251,18 @@ func PrecomputeDeviceFingerprints() {
 		log.Println("[DRM] Background local license verification started...")
 		verified := VerifyLocalLicense()
 		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
+		if verified {
+			StartOnlineLicenseSync()
+		}
 	}()
 }
 
 // GetDeviceFingerprintHashes returns the current motherboard, CPU, and disk SHA-256 hashes.
 func GetDeviceFingerprintHashes() (string, string, string) {
+	if testBoardUUID != "" || testCPUSerial != "" || testDiskSerial != "" {
+		return testBoardUUID, testCPUSerial, testDiskSerial
+	}
+
 	fingerprintMu.Lock()
 	defer fingerprintMu.Unlock()
 

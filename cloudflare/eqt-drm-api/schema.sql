@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS licenses (
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'suspended', 'revoked'
     max_devices INTEGER DEFAULT 2,
     expires_at TEXT,             -- ISO format time, or 'LIFETIME'
+    duration_days INTEGER DEFAULT NULL,
+    buyer_email_hash TEXT DEFAULT NULL,
     created_at TEXT NOT NULL
 );
 

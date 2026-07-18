@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 // The hex seed of our Ed25519 private key (same as generated in scratch script)
@@ -26,6 +27,22 @@ func signTestPayload(cert LicenseCertificate) string {
 		cert.DiskHash,
 		cert.ExpiresAt,
 		cert.MaxDevices,
+	)
+	payloadData := []byte(payloadStr)
+	sigBytes := ed25519.Sign(privKey, payloadData)
+	return hex.EncodeToString(sigBytes)
+}
+
+func signTestVerifyPayload(cert LicenseCertificate) string {
+	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
+	privKey := ed25519.NewKeyFromSeed(seedBytes)
+
+	payloadStr := fmt.Sprintf("OK|%s|%s|%s|%s|%s",
+		cert.LicenseCode,
+		cert.UUIDHash,
+		cert.CPUHash,
+		cert.DiskHash,
+		cert.LastOnlineSyncTime,
 	)
 	payloadData := []byte(payloadStr)
 	sigBytes := ed25519.Sign(privKey, payloadData)
@@ -207,6 +224,8 @@ func TestIntegrationActivateAndLocalVerify(t *testing.T) {
 			ExpiresAt:   "LIFETIME",
 			MaxDevices:  2,
 		}
+		cert.LastOnlineSyncTime = time.Now().Format(time.RFC3339)
+		cert.VerifySignature = signTestVerifyPayload(cert)
 		cert.Signature = signTestPayload(cert)
 
 		w.Header().Set("Content-Type", "application/json")

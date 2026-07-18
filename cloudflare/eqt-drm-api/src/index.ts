@@ -208,7 +208,10 @@ export default {
           });
         }
 
-        if (license.expires_at && license.expires_at !== "LIFETIME") {
+        let baseExpiresAt = license.expires_at || "LIFETIME";
+        if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0) {
+          baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
+        } else if (license.expires_at && license.expires_at !== "LIFETIME") {
           const expires = new Date(license.expires_at);
           if (expires.getTime() < Date.now()) {
             return new Response(JSON.stringify({ error: "License has expired" }), {
@@ -286,7 +289,7 @@ export default {
           }
         }
 
-        let finalExpiresAt = license.expires_at || "LIFETIME";
+        let finalExpiresAt = baseExpiresAt;
         if (finalExpiresAt !== "LIFETIME" && remainingMs > 0) {
           const newExpDate = new Date(finalExpiresAt);
           // Accumulate the remaining time of the old license
@@ -324,6 +327,13 @@ export default {
         const signatureBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
         const signatureHex = bufToHex(signatureBuf);
 
+        // Generate verification signature for sync/lease check (unified with verify endpoint)
+        const currentTime = new Date().toISOString();
+        const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${currentTime}`;
+        const verifyPayloadData = encoder.encode(verifyPayloadStr);
+        const verifySignatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
+        const verifySignatureHex = bufToHex(verifySignatureBuf);
+
         // Calculate the actual activated devices count (including this one)
         let activatedCount = activations.length;
         if (!isAlreadyActivated) {
@@ -340,6 +350,102 @@ export default {
           expires_at: finalExpiresAt,
           max_devices: license.max_devices,
           activated_devices: activatedCount,
+          signature: signatureHex,
+          // New verification fields for always-sync 7-day grace period
+          last_online_sync_time: currentTime,
+          verify_signature: verifySignatureHex
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 1.5. Verifying / Syncing license status (Always-Sync & 7-day grace period verification)
+      if (url.pathname === "/api/v1/verify" && request.method === "POST") {
+        const body: any = await request.json();
+        const { license_code, uuid_hash, cpu_hash, disk_hash } = body;
+
+        if (!license_code) {
+          return new Response(JSON.stringify({ error: "Missing license_code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Query the license status
+        const license = await env.DB.prepare(
+          "SELECT * FROM licenses WHERE license_code = ?"
+        ).bind(license_code).first<any>();
+
+        if (!license) {
+          return new Response(JSON.stringify({ error: "Invalid license code" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        if (license.status !== "active") {
+          return new Response(JSON.stringify({ error: "License is suspended or revoked" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Check if this device is registered/activated under this license (3-of-2 matching check)
+        const { results: activations } = await env.DB.prepare(
+          "SELECT * FROM activations WHERE license_code = ?"
+        ).bind(license_code).all<any>();
+
+        let isActivatedDevice = false;
+        for (const act of activations) {
+          if (matchFingerprint(
+            uuid_hash || "", cpu_hash || "", disk_hash || "",
+            act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
+          )) {
+            isActivatedDevice = true;
+            break;
+          }
+        }
+
+        if (!isActivatedDevice) {
+          return new Response(JSON.stringify({ error: "This device is not activated under the provided license" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Generate verification signature containing server timestamp
+        const currentTime = new Date().toISOString();
+        // Formulate the raw verify payload: OK|license_code|uuid_hash|cpu_hash|disk_hash|current_time
+        const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${currentTime}`;
+        const encoder = new TextEncoder();
+        const verifyPayloadData = encoder.encode(verifyPayloadStr);
+
+        // Import the private key (Ed25519)
+        const privateKeyHex = env.ED25519_PRIVATE_KEY;
+        if (!privateKeyHex) {
+          throw new Error("ED25519_PRIVATE_KEY is not configured in Workers Environment Variables");
+        }
+        const privateKeyBytes = hexToUint8Array(privateKeyHex);
+        const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
+        pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+        pkcs8Bytes.set(privateKeyBytes, 16);
+
+        const key = await crypto.subtle.importKey(
+          "pkcs8",
+          pkcs8Bytes,
+          { name: "Ed25519" },
+          true,
+          ["sign"]
+        );
+
+        const signatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
+        const signatureHex = bufToHex(signatureBuf);
+
+        return new Response(JSON.stringify({
+          status: "OK",
+          license_code: license_code,
+          current_time: currentTime,
           signature: signatureHex
         }), {
           status: 200,
@@ -358,7 +464,7 @@ export default {
         }
 
         const body: any = await request.json();
-        const { tier, max_devices, expires_in_days } = body;
+        const { tier, max_devices, expires_in_days, duration_days } = body;
 
         if (tier !== "PLUS" && tier !== "PRO") {
           return new Response(JSON.stringify({ error: "Invalid tier. Must be 'PLUS' or 'PRO'" }), {
@@ -382,15 +488,17 @@ export default {
         }
 
         const maxDev = max_devices ? Number(max_devices) : 2;
+        const durDays = duration_days !== undefined ? Number(duration_days) : null;
 
         await env.DB.prepare(
-          "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+          "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           licenseCode,
           tier,
           "active",
           maxDev,
           expiresAt,
+          durDays,
           new Date().toISOString()
         ).run();
 
@@ -399,6 +507,7 @@ export default {
           tier: tier,
           max_devices: maxDev,
           expires_at: expiresAt,
+          duration_days: durDays,
           status: "active"
         }), {
           status: 200,
