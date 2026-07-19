@@ -2339,7 +2339,7 @@ function renderPlanComparisonPanel() {
     const xRed = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fc0035" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
     return `
-        <div class="plan-comparison-panel" style="max-height: calc(100vh - 150px); overflow-y: auto; padding: 4px; box-sizing: border-box;">
+        <div class="plan-comparison-panel" style="max-height: calc(100vh - 150px); overflow-y: auto; padding: 12px 6px 6px; box-sizing: border-box;">
             <div class="plan-cards-container" style="display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 20px;">
                 <!-- 体验卡片 -->
                 <div class="plan-card" style="border: 1px solid var(--line); border-radius: 12px; padding: 22px; background: var(--bg); display: flex; flex-direction: column; text-align: left; transition: all 0.2s ease;">
@@ -2367,21 +2367,21 @@ function renderPlanComparisonPanel() {
 
                 <!-- PLUS / PLUS U 付费卡片 -->
                 <div class="plan-card featured" style="border: 2px solid var(--accent); border-radius: 12px; padding: 22px; background: var(--bg); display: flex; flex-direction: column; text-align: left; position: relative; box-shadow: 0 8px 30px rgba(47, 158, 115, 0.06); transition: all 0.2s ease;">
-                    <div style="position: absolute; top: -11px; right: 16px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Recommended</div>
+                    <div style="position: absolute; top: -9px; right: 16px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Recommended</div>
                     <div style="margin-bottom: 12px;">
-                        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em;">Pro Upgrade</span>
+                        <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em;">Plus Upgrade</span>
                         <h3 style="font-size: 20px; margin: 4px 0; font-weight: 700; color: var(--ink);">PLUS / PLUS U</h3>
                         <p style="font-size: 12px; color: var(--muted); margin: 6px 0 12px; min-height: 32px;">${t('plan_plus_desc_short') || '解除局域网 Chat 及文件传输的全部大小与频率限制。'}</p>
                         
                         <!-- 价格区分 -->
                         <div style="display: flex; gap: 16px; margin: 8px 0 16px; border-bottom: 1px dashed var(--line); padding-bottom: 12px;">
                             <div style="flex: 1;">
-                                <div style="font-size: 11px; color: var(--muted); font-weight: 600;">PLUS (年度版)</div>
-                                <div style="font-size: 18px; font-weight: 800; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 400; color: var(--muted);">/ 年</span></div>
+                                <div style="font-size: 11px; color: var(--muted); font-weight: 600;">${t('plus_annual_label') || 'PLUS (年度版)'}</div>
+                                <div style="font-size: 18px; font-weight: 800; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 400; color: var(--muted);">/ ${t('year_unit') || '年'}</span></div>
                             </div>
                             <div style="flex: 1; border-left: 1px solid var(--line); padding-left: 16px;">
-                                <div style="font-size: 11px; color: var(--muted); font-weight: 600;">PLUS U (永久版)</div>
-                                <div style="font-size: 18px; font-weight: 800; color: var(--ink);">$29.99 <span style="font-size: 11px; font-weight: 400; color: var(--muted);">/ 买断</span></div>
+                                <div style="font-size: 11px; color: var(--muted); font-weight: 600;">${t('plus_lifetime_label') || 'PLUS U (永久版)'}</div>
+                                <div style="font-size: 18px; font-weight: 800; color: var(--ink);">$29.99 <span style="font-size: 11px; font-weight: 400; color: var(--muted);">/ ${t('buyout_unit') || '买断'}</span></div>
                             </div>
                         </div>
                     </div>
