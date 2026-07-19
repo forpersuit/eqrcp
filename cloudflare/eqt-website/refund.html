@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html class="dark scroll-smooth" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <script>
+        if (window.location.hostname !== 'www.eqt.net.im' && 
+            window.location.hostname !== 'localhost' && 
+            !window.location.hostname.startsWith('127.0.0.1')) {
+            window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+        }
+    </script>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Refund Policy - EQT (Easy QR Transfer)</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png"/>
+
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#080e0c",
+                        "surface": "#080e0c",
+                        "surface-variant": "#17231f",
+                        "primary": "#39e5b6",
+                        "secondary": "#156f5a",
+                        "on-surface": "#dae7e3",
+                        "on-surface-variant": "#a5b9b2",
+                        "outline": "#677e74",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-md">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
+            <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
+                <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
+                <span>EQT</span>
+            </a>
+            
+            <div class="flex items-center gap-md">
+                <!-- Lang select dropdown -->
+                <div class="relative w-36" id="lang-dropdown-wrapper">
+                    <button id="lang-btn" class="w-full flex items-center justify-between gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-lg transition-all duration-300 outline-none focus:outline-none focus:ring-0">
+                        <div class="flex items-center gap-xs">
+                            <span class="material-symbols-outlined text-base">language</span>
+                            <span id="current-lang-txt" class="font-label-md text-label-md">English</span>
+                        </div>
+                        <span class="material-symbols-outlined text-xs opacity-50 transition-transform duration-300" id="lang-arrow">expand_more</span>
+                    </button>
+                    <!-- Custom Dropdown Panel -->
+                    <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-xs bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="es">Español</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="de">Deutsch</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="fr">Français</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
+                    </div>
+                    <!-- Hidden select for compatibility -->
+                    <select id="lang-select" style="display: none;">
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="ko">한국어</option>
+                        <option value="es">Español</option>
+                        <option value="de">Deutsch</option>
+                        <option value="fr">Français</option>
+                        <option value="zh">简体中文</option>
+                    </select>
+                </div>
+                
+                <a class="flex items-center gap-1 text-sm text-secondary hover:underline" href="/">
+                    <span class="material-symbols-outlined text-base">arrow_back</span> <span data-i18n="back_to_home">Back to Home</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow max-w-4xl mx-auto px-6 py-12 w-full">
+        <div class="glass-panel rounded-2xl p-8 md:p-12 space-y-8">
+            <div class="border-b border-white/10 pb-6">
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2" data-i18n="refund_title">Refund Policy</h1>
+                <p class="text-on-surface-variant text-sm"><span data-i18n="refund_last_updated">Last updated: July 19, 2026</span></p>
+            </div>
+
+            <section class="space-y-6">
+                <div class="space-y-4 text-on-surface-variant text-sm leading-relaxed" id="policy-content">
+                    <p data-i18n="refund_intro">At EQT (Easy QR Transfer), we want to make sure that you are 100% satisfied with your purchase. We offer a transparent return and refund framework managed under our online payment reseller Paddle.com.</p>
+                    
+                    <h3 class="text-white font-medium text-base mt-6" data-i18n="refund_h1">14-Day Money-Back Guarantee</h3>
+                    <p data-i18n="refund_p1">We provide a <strong>14-day money-back guarantee</strong> for all license key purchases (including Plus Lifetime and Plus Yearly subscription plans) under the following conditions:</p>
+                    <ul class="list-disc pl-6 space-y-2">
+                        <li data-i18n="refund_li1">The license key has not been activated or synced on more than 1 device.</li>
+                        <li data-i18n="refund_li2">You encountered technical difficulties or system incompatibilities that our technical support team was unable to resolve within 7 days of contact.</li>
+                    </ul>
+
+                    <h3 class="text-white font-medium text-base mt-6" data-i18n="refund_h2">Subscription Cancellations</h3>
+                    <p data-i18n="refund_p2">If you have subscribed to the <strong>Plus Yearly</strong> plan, you may cancel your subscription at any time. Upon cancellation:</p>
+                    <ul class="list-disc pl-6 space-y-2">
+                        <li data-i18n="refund_li3">Your license will remain active and premium features unlocked until the end of your current billing period.</li>
+                        <li data-i18n="refund_li4">You will not be charged for the next billing cycle. No partial refunds are issued for the remaining days of a active billing cycle.</li>
+                    </ul>
+
+                    <h3 class="text-white font-medium text-base mt-6" data-i18n="refund_h3">Processing Refunds (Via Paddle)</h3>
+                    <p data-i18n="refund_p3">All EQT payments, orders, and refund requests are processed officially by our Merchant of Record, <strong>Paddle.com</strong>. To request a refund, you can:</p>
+                    <ul class="list-disc pl-6 space-y-2">
+                        <li data-i18n="refund_li5">Contact EQT support at <a href="mailto:support@eqt.net.im" class="text-secondary hover:underline">support@eqt.net.im</a> with your order details (purchase email and transaction ID). 我们会在 2 个工作日内处理审核并向 Paddle 提交退款申请。</li>
+                        <li data-i18n="refund_li6">Or use the Paddle checkout assistant/billing page directly to submit your refund request.</li>
+                    </ul>
+                    <p data-i18n="refund_p4">Once approved, refunds generally take 5 to 10 business days to appear on your bank statement or credit card balance, depending on your financial institution.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-6 bg-background border-t border-white/10 text-center text-xs text-on-surface-variant">
+        <p data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+    </footer>
+
+    <!-- Script -->
+    <script>
+        const translations = {
+            "en": {
+                "back_to_home": "Back to Home",
+                "refund_title": "Refund Policy",
+                "refund_last_updated": "Last updated: July 19, 2026",
+                "refund_intro": "At EQT (Easy QR Transfer), we want to make sure that you are 100% satisfied with your purchase. We offer a transparent return and refund framework managed under our online payment reseller Paddle.com.",
+                "refund_h1": "14-Day Money-Back Guarantee",
+                "refund_p1": "We provide a 14-day money-back guarantee for all license key purchases (including Plus Lifetime and Plus Yearly subscription plans) under the following conditions:",
+                "refund_li1": "The license key has not been activated or synced on more than 1 device.",
+                "refund_li2": "You encountered technical difficulties or system incompatibilities that our technical support team was unable to resolve within 7 days of contact.",
+                "refund_h2": "Subscription Cancellations",
+                "refund_p2": "If you have subscribed to the Plus Yearly plan, you may cancel your subscription at any time. Upon cancellation:",
+                "refund_li3": "Your license will remain active and premium features unlocked until the end of your current billing period.",
+                "refund_li4": "You will not be charged for the next billing cycle. No partial refunds are issued for the remaining days of an active billing cycle.",
+                "refund_h3": "Processing Refunds (Via Paddle)",
+                "refund_p3": "All EQT payments, orders, and refund requests are processed officially by our Merchant of Record, Paddle.com. To request a refund, you can:",
+                "refund_li5": "Contact EQT support at support@eqt.net.im with your order details (purchase email and transaction ID). We will review it within 2 business days and submit the refund request to Paddle.",
+                "refund_li6": "Or use the Paddle checkout assistant/billing page directly to submit your refund request.",
+                "refund_p4": "Once approved, refunds generally take 5 to 10 business days to appear on your bank statement or credit card balance, depending on your financial institution.",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "zh": {
+                "back_to_home": "返回主页",
+                "refund_title": "退款与取消政策",
+                "refund_last_updated": "最后更新日期: 2026年7月19日",
+                "refund_intro": "在 EQT (Easy QR Transfer)，我们希望确保您对购买完全满意。我们通过在线支付代理商 Paddle.com 提供透明、合规的退款与订单取消体系。",
+                "refund_h1": "14 天无条件退款保障",
+                "refund_p1": "我们为购买的所有软件许可证密钥（包括终身专业版和年付专业版）提供 14 天的退款保证，但需符合以下条件：",
+                "refund_li1": "该许可证密钥尚未在超过 1 台以上的设备上进行激活。",
+                "refund_li2": "您遇到了技术障碍或系统兼容性问题，且我们的技术支持团队在您联系后的 7 天内无法协助解决。",
+                "refund_h2": "订阅服务取消",
+                "refund_p2": "如果您订阅了年付专业版（Plus Yearly），您可以随时取消订阅。取消后：",
+                "refund_li3": "您的专业版授权将保持有效，直到当前的计费周期结束。",
+                "refund_li4": "您将不会被收取下一个周期的费用。对于当前计费周期内的剩余天数，我们不提供部分退款。",
+                "refund_h3": "退款处理流程 (通过 Paddle)",
+                "refund_p3": "EQT 的所有订单、付款及退款申请均由官方记录商家 Paddle.com 处理。如需申请退款，您可以：",
+                "refund_li5": "联系 EQT 技术支持邮箱 support@eqt.net.im，并提供您的订单详情（购买邮箱及交易 ID）。我们会在 2 个工作日内进行核对并向 Paddle 发起退款请求。",
+                "refund_li6": "或者直接访问 Paddle 的账单协助页面提交退款表单申请。",
+                "refund_p4": "退款申请批准后，退款通常需要 5 到 10 个工作日退回到您的银行账户或信用卡，具体取决于您的发卡行处理速度。",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。"
+            },
+            "ja": {
+                "back_to_home": "ホームに戻る",
+                "refund_title": "返金ポリシー",
+                "refund_last_updated": "最終更新日: 2026年7月19日",
+                "refund_intro": "EQT (Easy QR Transfer) では、購入にご満足いただけるよう努めています。オンライン決済代理店である Paddle.com の管理下で、透明性の高い返金フレームワークを提供しています。",
+                "refund_h1": "14日間の返金保証",
+                "refund_p1": "すべてのライセンスキー（終身Plus版および年付Plus版を含む）の購入について、以下の条件下で14日間の返金保証を提供しています：",
+                "refund_li1": "ライセンスキーが2台以上のデバイスでアクティベーションまたは同期されていないこと。",
+                "refund_li2": "技術的な問題やシステム互換性の問題が発生し、サポートチームが連絡から7日以内に解決できなかった場合。",
+                "refund_h2": "サブスクリプションの解約",
+                "refund_p2": "年付Plus版をご利用の場合、いつでもサブスクリプションを解約できます。解約後：",
+                "refund_li3": "ライセンスは現在の請求期間が終了するまで有効であり、Plus機能を引き続きご利用いただけます。",
+                "refund_li4": "次の請求サイクルから料金は発生しません。有効な請求サイクルの残存期間に対する日割り返金は行われません。",
+                "refund_h3": "返金処理（Paddle経由）",
+                "refund_p3": "EQTのすべての支払、注文、および返金リクエストは、Merchant of RecordであるPaddle.comによって正式に処理されます。返金を請求するには、次の方法があります：",
+                "refund_li5": "注文の詳細（購入時のメールアドレスと取引ID）を記載して、EQTサポート（support@eqt.net.im）にご連絡ください。2営業日以内に審査し、Paddleに返金申請を提出します。",
+                "refund_li6": "または、Paddleの決済アシスタント/請求ページを直接使用して、返金リクエストを送信してください。",
+                "refund_p4": "承認された返金は、金融機関によって異なりますが、通常5〜10営業日で銀行口座またはクレジットカードに反映されます。",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "ko": {
+                "back_to_home": "홈으로 돌아가기",
+                "refund_title": "환불 규정",
+                "refund_last_updated": "최근 업데이트: 2026년 7월 19일",
+                "refund_intro": "EQT (Easy QR Transfer)는 고객이 구매에 100% 만족할 수 있도록 최선을 다하고 있습니다. 당사의 공식 리셀러인 Paddle.com의 거래 조건에 따라 투명한 환불 정책을 운영하고 있습니다.",
+                "refund_h1": "14일 환불 보장",
+                "refund_p1": "구매하신 모든 라이센스(평생권 및 연간 구독권 포함)에 대해 다음 조건 하에 14일 이내 환불을 보장합니다:",
+                "refund_li1": "구매하신 라이센스 키가 2대 이상의 기기에서 활성화 또는 동기화되지 않은 경우.",
+                "refund_li2": "사용 도중 기술적 결함이나 시스템 호환성 문제가 발생하였고, 고객센터 접수 후 7일 이내에 기술 지원팀이 이를 해결하지 못한 경우.",
+                "refund_h2": "구독 해지",
+                "refund_p2": "플러스 연간 구독을 이용하시는 경우 언제든지 해지할 수 있습니다. 구독 해지 시:",
+                "refund_li3": "현재 결제된 남은 구독 기간까지는 라이센스가 활성 상태로 유지되며 플러스 기능을 사용하실 수 있습니다.",
+                "refund_li4": "다음 결제 주기부터는 요금이 청구되지 않습니다. 이미 결제된 주기의 잔여 기간에 대한 부분 환불은 불가합니다.",
+                "refund_h3": "환불 신청 처리 (Paddle 대행)",
+                "refund_p3": "EQT 결제 및 환불 처리는 공식 대행사(Merchant of Record)인 Paddle.com에서 공식 처리됩니다. 환불 신청 방법:",
+                "refund_li5": "EQT 고객지원 이메일 support@eqt.net.im으로 주문 내역(구매 이메일 및 거래 ID)을 보내주시면 영업일 기준 2일 이내에 확인하여 Paddle에 환불 처리를 요청합니다.",
+                "refund_li6": "또는 Paddle의 결제 지원 페이지를 통해 직접 환불 요청서를 제출하실 수 있습니다.",
+                "refund_p4": "환불 신청이 승인되면 이용하시는 금융기관에 따라 일반적으로 영업일 기준 5~10일 이내에 카드 대금 환급 또는 계좌 입금이 완료됩니다.",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "es": {
+                "back_to_home": "Volver al inicio",
+                "refund_title": "Política de Reembolso",
+                "refund_last_updated": "Última actualización: 19 de julio de 2026",
+                "refund_intro": "En EQT (Easy QR Transfer), queremos asegurarnos de que esté 100% satisfecho con su compra. Ofrecemos un marco transparente de devoluciones y reembolsos gestionado a través de nuestro distribuidor Paddle.com.",
+                "refund_h1": "Garantía de reembolso de 14 días",
+                "refund_p1": "Ofrecemos una garantía de reembolso de 14 días para todas las compras de claves de licencia (incluidos los planes PLUS Vitalicio y Plus Anual de suscripción) bajo las siguientes condiciones:",
+                "refund_li1": "La clave de licencia no ha sido activada o sincronizada en más de 1 dispositivo.",
+                "refund_li2": "Ha experimentado dificultades técnicas o incompatibilidades del sistema que nuestro equipo de soporte técnico no pudo resolver dentro de los 7 días posteriores al contacto.",
+                "refund_h2": "Cancelaciones de suscripciones",
+                "refund_p2": "Si está suscrito al plan Plus Anual, puede cancelar su suscripción en cualquier momento. Tras la cancelación:",
+                "refund_li3": "Su licencia permanecerá activa y las funciones Premium desbloqueadas hasta el final de su período de facturación actual.",
+                "refund_li4": "No se le cobrará en el siguiente ciclo de facturación. No se emiten reembolsos parciales por los días restantes de un ciclo de facturación activo.",
+                "refund_h3": "Procesamiento de reembolsos (A través de Paddle)",
+                "refund_p3": "Todos los pagos, pedidos y solicitudes de reembolso de EQT se procesan oficialmente a través de nuestro Merchant of Record, Paddle.com. Para solicitar un reembolso, puede:",
+                "refund_li5": "Póngase en contacto con el soporte de EQT en support@eqt.net.im con los detalles del pedido (correo electrónico de compra e ID de transacción). Lo revisaremos dentro de 2 días hábiles y enviaremos la solicitud a Paddle.",
+                "refund_li6": "O bien, utilice el asistente de facturación de Paddle directamente para enviar su solicitud de reembolso.",
+                "refund_p4": "Una vez aprobado, los reembolsos generalmente tardan entre 5 und 10 días hábiles en aparecer en su extracto bancario o saldo de tarjeta, dependiendo de su entidad financiera.",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "de": {
+                "back_to_home": "Zurück zur Startseite",
+                "refund_title": "Erstattungsrichtlinie",
+                "refund_last_updated": "Zuletzt aktualisiert: 19. Juli 2026",
+                "refund_intro": "Wir bei EQT (Easy QR Transfer) möchten sicherstellen, dass Sie mit Ihrem Kauf zu 100% zufrieden sind. Wir bieten eine transparente Erstattungs- und Rückgabe-Richtlinie an, die über unseren Online-Reseller Paddle.com abgewickelt wird.",
+                "refund_h1": "14-tägige Geld-zurück-Garantie",
+                "refund_p1": "Wir bieten eine 14-tägige Geld-zurück-Garantie für alle Käufe von Lizenzschlüsseln (einschließlich Plus-Lebenslang und Plus-Jährlich) unter folgenden Bedingungen an:",
+                "refund_li1": "Der Lizenzschlüssel wurde auf nicht mehr als 1 Gerät aktiviert oder synchronisiert.",
+                "refund_li2": "Es sind technische Probleme oder Systeminkompatibilitäten aufgetreten, die unser Support-Team nicht innerhalb von 7 Tagen nach Kontaktaufnahme beheben konnte.",
+                "refund_h2": "Kündigung von Abonnements",
+                "refund_p2": "Wenn Sie das jährliche Plus-Abonnement abgeschlossen haben, können Sie dieses jederzeit kündigen. Nach der Kündigung:",
+                "refund_li3": "Ihre Lizenz bleibt bis zum Ende Ihres aktuellen Abrechnungszeitraums aktiv und die Premium-Funktionen freigeschaltet.",
+                "refund_li4": "Für den nächsten Abrechnungszeitraum fallen keine Kosten mehr an. Für die verbleibenden Tage eines aktiven Abrechnungszeitraums wird keine anteilige Erstattung gewährt.",
+                "refund_h3": "Rückerstattungsprozess (über Paddle)",
+                "refund_p3": "Alle Zahlungen, Bestellungen und Erstattungsanträge für EQT werden offiziell von unserem Merchant of Record, Paddle.com, abgewickelt. Um eine Rückerstattung zu beantragen, können Sie:",
+                "refund_li5": "Kontaktieren Sie den EQT-Support unter support@eqt.net.im mit Ihren Bestelldetails (Kauf-E-Mail und Transaktions-ID). Wir prüfen dies innerhalb von 2 Werktagen und leiten den Erstattungsantrag an Paddle weiter.",
+                "refund_li6": "Oder nutzen Sie direkt die Support-Seite von Paddle, um Ihren Erstattungsantrag einzureichen.",
+                "refund_p4": "Nach der Genehmigung dauert es in der Regel 5 bis 10 Werktage, bis die Rückerstattung auf Ihrem Bankkonto oder Ihrer Kreditkarte verbucht wird – je nach Ihrem Finanzinstitut.",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "fr": {
+                "back_to_home": "Retour à l'accueil",
+                "refund_title": "Politique de Remboursement",
+                "refund_last_updated": "Dernière mise à jour: 19 juillet 2026",
+                "refund_intro": "Chez EQT (Easy QR Transfer), nous voulons nous assurer que vous êtes satisfait à 100% de votre achat. Nous offrons un cadre de remboursement et d'annulation transparent géré par notre revendeur officiel Paddle.com.",
+                "refund_h1": "Garantie de remboursement de 14 jours",
+                "refund_p1": "Nous offrons une garantie de remboursement de 14 jours pour tout achat de clé de licence (y compris les plans Plus À vie et Plus Annuel) aux conditions suivantes :",
+                "refund_li1": "La clé de licence n'a pas été activée ou synchronisée sur plus de 1 appareil.",
+                "refund_li2": "Vous rencontrez des difficultés techniques ou des incompatibilités de système que notre équipe de support technique n'a pas pu résoudre dans les 7 jours suivant le contact.",
+                "refund_h2": "Annulation d'abonnement",
+                "refund_p2": "Si vous avez souscrit au plan Plus Annuel, vous pouvez annuler votre abonnement à tout moment. Après annulation :",
+                "refund_li3": "Votre licence restera active et les fonctionnalités Premium débloquées jusqu'à la fin de la période de facturation en cours.",
+                "refund_li4": "Vous ne serez pas facturé pour le cycle suivant. Aucun remboursement partiel n'est accordé pour les jours restants d'un cycle de facturation actif.",
+                "refund_h3": "Traitement des remboursements (via Paddle)",
+                "refund_p3": "Tous les paiements, commandes et demandes de remboursement d'EQT sont traités officiellement par notre Merchant of Record, Paddle.com. Pour demander un remboursement, vous pouvez :",
+                "refund_li5": "Contacter le support d'EQT à support@eqt.net.im avec vos détails de commande (e-mail d'achat et ID de transaction). Nous l'examinerons sous 2 jours ouvrables et soumettrons la demande de remboursement à Paddle.",
+                "refund_li6": "Ou utiliser directement la page d'assistance de facturation de Paddle pour soumettre votre demande.",
+                "refund_p4": "Une fois approuvé, les remboursements prennent généralement 5 à 10 jours ouvrés pour apparaître sur votre relevé bancaire ou solde de carte, selon votre institution financière.",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            }
+        };
+
+        function getCookie(name) {
+            const value = "; " + document.cookie;
+            const parts = value.split("; " + name + "=");
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+        }
+
+        function applyLang(lang) {
+            document.documentElement.lang = lang;
+            
+            const fallback = translations['en'];
+            const current = translations[lang] || {};
+            
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                let text = current[key];
+                if (text === undefined) {
+                    text = fallback[key];
+                }
+                if (text !== undefined) {
+                    el.innerHTML = text;
+                }
+            });
+
+            // Update title
+            let title = current["refund_title"] || fallback["refund_title"];
+            if (title) {
+                document.title = title + " - EQT (Easy QR Transfer)";
+            }
+
+            // Sync dropdown select text
+            const selectEl = document.getElementById('lang-select');
+            if (selectEl) {
+                selectEl.value = lang;
+            }
+            const langCurrentTxt = document.getElementById('current-lang-txt');
+            const langTextMap = {
+                'en': 'English',
+                'zh': '简体中文',
+                'ja': '日本語',
+                'ko': '한국어',
+                'es': 'Español',
+                'de': 'Deutsch',
+                'fr': 'Français'
+            };
+            if (langCurrentTxt && langTextMap[lang]) {
+                langCurrentTxt.textContent = langTextMap[lang];
+            }
+        }
+
+        function initLang() {
+            let lang = localStorage.getItem('eqt-lang');
+            if (!lang) {
+                lang = getCookie('eqt-lang');
+            }
+            if (!lang) {
+                const navLang = navigator.language || navigator.userLanguage;
+                lang = (navLang && navLang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
+            }
+            
+            const supported = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
+            if (!supported.includes(lang)) {
+                lang = 'en';
+            }
+
+            applyLang(lang);
+        }
+
+        // Custom dropdown interaction
+        const langDropdownBtn = document.getElementById('lang-btn');
+        const langDropdownPanel = document.getElementById('lang-dropdown-panel');
+        const langDropdownArrow = document.getElementById('lang-arrow');
+
+        if (langDropdownBtn && langDropdownPanel) {
+            langDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = langDropdownPanel.classList.contains('hidden');
+                if (isHidden) {
+                    langDropdownPanel.classList.remove('hidden');
+                    langDropdownArrow.classList.add('rotate-180');
+                } else {
+                    langDropdownPanel.classList.add('hidden');
+                    langDropdownArrow.classList.remove('rotate-180');
+                }
+            });
+
+            document.addEventListener('click', () => {
+                langDropdownPanel.classList.add('hidden');
+                langDropdownArrow.classList.remove('rotate-180');
+            });
+
+            langDropdownPanel.querySelectorAll('button[data-lang]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const lang = btn.getAttribute('data-lang');
+                    localStorage.setItem('eqt-lang', lang);
+                    setCookie('eqt-lang', lang, 365);
+                    applyLang(lang);
+                });
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initLang();
+        });
+    </script>
+</body>
+</html>
