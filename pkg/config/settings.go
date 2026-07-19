@@ -91,8 +91,8 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		output = DefaultDesktopOutputDirectory()
 	}
 	devMode := false
-	if v.IsSet("devMode") {
-		devMode = v.GetBool("devMode")
+	if strings.TrimSpace(v.GetString("dev")) == "liyuelong" {
+		devMode = true
 	}
 	debugLog := false
 	if v.IsSet("debugLog") {
@@ -205,6 +205,9 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("chatSender", strings.TrimSpace(settings.ChatSender))
 	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
 	v.Set("devMode", settings.DevMode)
+	if !settings.DevMode {
+		v.Set("dev", "")
+	}
 	v.Set("debugLog", settings.DebugLog)
 	v.Set("viewportDebug", settings.ViewportDebug)
 	v.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))

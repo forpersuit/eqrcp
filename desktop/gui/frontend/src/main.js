@@ -2116,9 +2116,60 @@ function renderSettingsPanel() {
                             <option value="24" ${state.settings?.updateCheckIntervalHours === 24 || !state.settings?.updateCheckIntervalHours ? 'selected' : ''}>${t('hours_24')}</option>
                             <option value="48" ${state.settings?.updateCheckIntervalHours === 48 ? 'selected' : ''}>${t('hours_48')}</option>
                         </select>
+            </details>
+            ${state.settings?.devMode ? `
+            <details class="settings-advanced-details dev-details" style="margin-top: 16px; border-color: rgba(47, 158, 115, 0.3);" ${state.settingsDevOpen ? 'open' : ''}>
+                <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">${t('dev_options') || '开发者选项'}</summary>
+                <div class="settings-advanced-content">
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>${t('enable_debug_logs')}</strong>
+                            <span>${t('dev_logs_desc')}</span>
+                        </div>
+                        <div class="setting-control-stack">
+                            ${renderSwitch('dev-debug-log', state.settings?.debugLog)}
+                        </div>
                     </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>${t('enable_viewport_debug')}</strong>
+                            <span>${t('enable_viewport_debug_desc') || '在右下角悬浮显示当前视口的物理像素和逻辑像素测量值'}</span>
+                        </div>
+                        <div class="setting-control-stack">
+                            ${renderSwitch('dev-viewport-debug', state.settings?.viewportDebug)}
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin: 8px 0 16px; box-sizing: border-box; width: 100%;">
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('custom_log_dir') || '自定义日志保存路径'}</div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px; width: 100%;">
+                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder') || '空白为系统默认缓存路径'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; box-sizing: border-box;" readonly />
+                            <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4; margin-bottom: 4px;">
+                            ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--text-primary); font-family: monospace;">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
+                        </div>
+                        <div style="font-size: 11px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 8px 12px; margin-top: 8px; line-height: 1.45; text-align: left;">
+                            ⚠️ <strong>${t('privacy_warning_title') || '隐私与安全提示'}</strong>：${t('privacy_warning_desc') || '调试日志会记录局域网内 Chat 窗口发送/接收的明文消息交互、文件名以及完整的底层网络传输日志。请勿在未脱敏的情况下将日志目录发给无关第三方，以防个人会话及网络隐私泄露。'}
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 12px; width: 100%;">
+                        <button type="button" class="ghost" id="dev-open-log" style="flex: 1; padding: 8px 12px; font-size: 12px; border-radius: 6px; font-weight: 600;">${t('btn_open_log_file')}</button>
+                        <button type="button" class="ghost" id="dev-open-dir" style="flex: 1; padding: 8px 12px; font-size: 12px; border-radius: 6px; font-weight: 600;">${t('btn_open_log_dir')}</button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; width: 100%;">
+                        <button type="button" class="ghost" id="dev-reset-quota" style="padding: 8px 10px; font-size: 11.5px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置每日计时'}</button>
+                        <button type="button" class="ghost" id="dev-max-quota" style="padding: 8px 10px; font-size: 11.5px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '快速达到10分钟'}</button>
+                    </div>
+                    
+                    <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
+                        ${t('btn_exit_dev_mode') || '退出开发者模式'}
+                    </button>
                 </div>
             </details>
+            ` : ''}
         </div>
     `;
 }
@@ -2257,47 +2308,6 @@ function renderAboutPanel() {
         }
     }
     
-    let devSection = '';
-    if (state.settings?.devMode) {
-        devSection = `
-            <div class="dev-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line);">
-                <h3 style="font-size: 14px; margin-bottom: 8px; color: var(--accent-strong);">${t('dev_options')}</h3>
-                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>${t('enable_debug_logs')}</span>
-                        <input type="checkbox" id="dev-debug-log" ${state.settings?.debugLog ? 'checked' : ''} />
-                    </label>
-                    <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                        <span>${t('enable_viewport_debug')}</span>
-                        <input type="checkbox" id="dev-viewport-debug" ${state.settings?.viewportDebug ? 'checked' : ''} />
-                    </label>
-                    <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                        <span style="font-weight: 600; font-size: 12px; color: var(--accent);">${t('custom_log_dir') || '自定义日志保存路径'}</span>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder') || '空白为系统默认缓存路径'}" style="flex: 1; min-width: 0; padding: 5px 8px; font-size: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 4px; outline: none;" />
-                            <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 5px 10px; font-size: 12px; height: auto; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
-                        </div>
-                    </div>
-                    <div style="color: var(--muted); font-size: 11px; margin-top: -4px; line-height: 1.4;">
-                        ${t('dev_logs_desc')}
-                        <br>${t('dev_logs_path')} <strong style="word-break: break-all;">${escapeHTML(info.logPath || 'Temp directory')}</strong>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="ghost" id="dev-open-log" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_file')}</button>
-                        <button class="ghost" id="dev-open-dir" style="flex: 1; padding: 4px 8px; font-size: 11px;">${t('btn_open_log_dir')}</button>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="ghost" id="dev-reset-quota" style="flex: 1; padding: 4px 8px; font-size: 11px; color: var(--accent); border-color: var(--accent);">${t('dev_reset_quota') || '重置每日计时'}</button>
-                        <button class="ghost" id="dev-max-quota" style="flex: 1; padding: 4px 8px; font-size: 11px; color: var(--danger); border-color: var(--danger);">${t('dev_max_quota') || '快速达到10分钟'}</button>
-                    </div>
-                    <button class="danger inline" id="dev-disable-mode" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; width: 100%;">
-                        ${t('btn_exit_dev_mode')}
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
     return `
         <div class="about-panel">
             ${warningBox}
@@ -2344,7 +2354,6 @@ function renderAboutPanel() {
                     <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">MIT license. Forked from qrcp.</span>
                 </div>
             </div>
-            ${devSection}
         </div>
     `;
 }
@@ -3232,153 +3241,9 @@ function bindPanelEvents() {
         render();
     });
 
-    // About logo click helper for dev mode
-    let clickCount = 0;
-    let clickTimer = null;
-    document.querySelector('.about-logo')?.addEventListener('click', async () => {
-        clickCount++;
-        if (clickCount >= 5) {
-            clickCount = 0;
-            if (clickTimer) clearTimeout(clickTimer);
-            if (!state.settings) state.settings = {};
-            state.settings.devMode = !state.settings.devMode;
-            if (state.settings.devMode) {
-                state.settings.debugLog = true;
-                state.settings.viewportDebug = true;
-            }
-            await saveSettingsData();
-            state.notice = state.settings.devMode ? t('dev_mode_enabled') : t('dev_mode_disabled');
-            render();
-            openPanel('about');
-        } else {
-            if (clickTimer) clearTimeout(clickTimer);
-            clickTimer = setTimeout(() => {
-                clickCount = 0;
-            }, 1500);
-        }
-    });
 
-    // Dev mode controls
-    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event) => {
-        if (!state.settings) state.settings = {};
-        state.settings.debugLog = Boolean(event.currentTarget.checked);
-        await saveSettingsData();
-        state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
-        render();
-        openPanel('about');
-    });
 
-    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event) => {
-        if (!state.settings) state.settings = {};
-        state.settings.viewportDebug = Boolean(event.currentTarget.checked);
-        await saveSettingsData();
-        state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
-        render();
-        openPanel('about');
-    });
 
-    document.querySelector('#dev-log-dir')?.addEventListener('change', async (event) => {
-        if (!state.settings) state.settings = {};
-        state.settings.logDir = event.currentTarget.value.trim();
-        await saveSettingsData();
-        state.notice = t('log_dir_updated') || '日志保存路径已更新';
-        state.appInfo = await AppInfo();
-        render();
-        openPanel('about');
-    });
-
-    document.querySelector('#dev-select-log-dir')?.addEventListener('click', async () => {
-        try {
-            const selected = await SelectLogDirectory();
-            if (selected) {
-                if (!state.settings) state.settings = {};
-                state.settings.logDir = selected;
-                await saveSettingsData();
-                state.notice = t('log_dir_updated') || '日志保存路径已更新';
-                state.appInfo = await AppInfo();
-                render();
-                openPanel('about');
-            }
-        } catch (error) {
-            state.error = 'Failed to select log directory: ' + error;
-            render();
-        }
-    });
-
-    document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
-        const logPath = state.appInfo?.logPath;
-        if (logPath) {
-            try {
-                await OpenPath(logPath);
-            } catch (error) {
-                state.error = 'Failed to open log: ' + error;
-                render();
-            }
-        }
-    });
-
-    document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {
-        const logPath = state.appInfo?.logPath;
-        if (logPath) {
-            try {
-                const separator = logPath.includes('\\') ? '\\' : '/';
-                const parts = logPath.split(separator);
-                parts.pop();
-                const logDir = parts.join(separator);
-                await OpenPath(logDir);
-            } catch (error) {
-                state.error = 'Failed to open log directory: ' + error;
-                render();
-            }
-        }
-    });
-
-    document.querySelector('#dev-reset-quota')?.addEventListener('click', async () => {
-        try {
-            state.status = await DevSetUsedSeconds(0);
-            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-            try {
-                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-            } catch (e) {
-                state.shareLimitNotice = '';
-            }
-            state.notice = t('dev_quota_reset_success') || '已重置每日计时为 0s';
-            render();
-            openPanel('about');
-        } catch (error) {
-            state.error = 'Failed to reset quota: ' + error;
-            render();
-        }
-    });
-
-    document.querySelector('#dev-max-quota')?.addEventListener('click', async () => {
-        try {
-            state.status = await DevSetUsedSeconds(600);
-            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-            try {
-                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-            } catch (e) {
-                state.shareLimitNotice = '';
-            }
-            state.notice = t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)';
-            render();
-            openPanel('about');
-        } catch (error) {
-            state.error = 'Failed to max quota: ' + error;
-            render();
-        }
-    });
-
-    document.querySelector('#dev-disable-mode')?.addEventListener('click', async () => {
-        if (!state.settings) state.settings = {};
-        state.settings.devMode = false;
-        state.settings.debugLog = false;
-        state.settings.viewportDebug = false;
-        await saveSettingsData();
-        state.notice = t('dev_mode_disabled');
-        render();
-        openPanel('about');
-    });
 }
 
 function bindChatQRPanelEvents() {
@@ -4127,6 +3992,129 @@ function bindSettingsControls() {
             state.settingsAdvancedOpen = event.currentTarget.open;
         });
     }
+
+    const devDetails = document.querySelector('.settings-advanced-details.dev-details');
+    if (devDetails) {
+        devDetails.addEventListener('toggle', (event) => {
+            state.settingsDevOpen = event.currentTarget.open;
+        });
+    }
+
+    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event) => {
+        if (!state.settings) state.settings = {};
+        state.settings.debugLog = Boolean(event.currentTarget.checked);
+        await saveSettingsData();
+        state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
+        render();
+        openPanel('settings');
+    });
+
+    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event) => {
+        if (!state.settings) state.settings = {};
+        state.settings.viewportDebug = Boolean(event.currentTarget.checked);
+        await saveSettingsData();
+        state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
+        render();
+        openPanel('settings');
+    });
+
+    document.querySelector('#dev-select-log-dir')?.addEventListener('click', async () => {
+        try {
+            const selected = await SelectLogDirectory();
+            if (selected) {
+                if (!state.settings) state.settings = {};
+                state.settings.logDir = selected;
+                await saveSettingsData();
+                state.notice = t('log_dir_updated') || '日志保存路径已更新';
+                state.appInfo = await AppInfo();
+                render();
+                openPanel('settings');
+            }
+        } catch (error) {
+            state.error = 'Failed to select log directory: ' + error;
+            render();
+            openPanel('settings');
+        }
+    });
+
+    document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
+        const logPath = state.appInfo?.logPath;
+        if (logPath) {
+            try {
+                await OpenPath(logPath);
+            } catch (error) {
+                state.error = 'Failed to open log: ' + error;
+                render();
+                openPanel('settings');
+            }
+        }
+    });
+
+    document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {
+        const logPath = state.appInfo?.logPath;
+        if (logPath) {
+            try {
+                const separator = logPath.includes('\\') ? '\\' : '/';
+                const parts = logPath.split(separator);
+                parts.pop();
+                const logDir = parts.join(separator);
+                await OpenPath(logDir);
+            } catch (error) {
+                state.error = 'Failed to open log directory: ' + error;
+                render();
+                openPanel('settings');
+            }
+        }
+    });
+
+    document.querySelector('#dev-reset-quota')?.addEventListener('click', async () => {
+        try {
+            state.status = await DevSetUsedSeconds(0);
+            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+            try {
+                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+            } catch (e) {
+                state.shareLimitNotice = '';
+            }
+            state.notice = t('dev_quota_reset_success') || '已重置每日计时为 0s';
+            render();
+            openPanel('settings');
+        } catch (error) {
+            state.error = 'Failed to reset quota: ' + error;
+            render();
+            openPanel('settings');
+        }
+    });
+
+    document.querySelector('#dev-max-quota')?.addEventListener('click', async () => {
+        try {
+            state.status = await DevSetUsedSeconds(600);
+            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+            try {
+                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+            } catch (e) {
+                state.shareLimitNotice = '';
+            }
+            state.notice = t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)';
+            render();
+            openPanel('settings');
+        } catch (error) {
+            state.error = 'Failed to max quota: ' + error;
+            render();
+            openPanel('settings');
+        }
+    });
+
+    document.querySelector('#dev-disable-mode')?.addEventListener('click', async () => {
+        if (!state.settings) state.settings = {};
+        state.settings.devMode = false;
+        state.settings.debugLog = false;
+        state.settings.viewportDebug = false;
+        await saveSettingsData();
+        state.notice = t('dev_mode_disabled');
+        render();
+        openPanel('settings');
+    });
 
     document.querySelector('#btn-manual-update-check')?.addEventListener('click', runManualUpdateCheck);
 }
