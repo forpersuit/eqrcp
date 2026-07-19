@@ -1875,9 +1875,15 @@ function renderSettingsPanel() {
     if (!state.settings) {
         return '';
     }
-    const options = (state.settings.interfaceOptions || []).map((option) => `
-        <option value="${escapeAttr(option.name)}" ${option.name === state.settings.interface ? 'selected' : ''}>${escapeHTML(option.label || option.name)}</option>
-    `).join('');
+    const options = (state.settings.interfaceOptions || []).map((option) => {
+        let label = option.label || option.name;
+        if (option.isRecommended) {
+            label += t('likely_phone_lan') || ' (Recommended LAN)';
+        }
+        return `
+            <option value="${escapeAttr(option.name)}" ${option.name === state.settings.interface ? 'selected' : ''}>${escapeHTML(label)}</option>
+        `;
+    }).join('');
     const chatSender = state.settings.chatSender || '';
     const chatAvatar = state.settings.chatAvatar || '';
     const chatAvatarPreview = cleanChatAvatar(chatAvatar) || (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase();
@@ -2133,7 +2139,7 @@ function renderSettingsPanel() {
                     <div class="setting-row">
                         <div class="setting-copy">
                             <strong>${t('enable_viewport_debug')}</strong>
-                            <span>${t('enable_viewport_debug_desc') || '在右下角悬浮显示当前视口的物理像素和逻辑像素测量值'}</span>
+                            <span>${t('enable_viewport_debug_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
                             ${renderSwitch('dev-viewport-debug', state.settings?.viewportDebug)}
@@ -2141,16 +2147,16 @@ function renderSettingsPanel() {
                     </div>
                     
                     <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin: 8px 0 16px; box-sizing: border-box; width: 100%;">
-                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('custom_log_dir') || '自定义日志保存路径'}</div>
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('custom_log_dir')}</div>
                         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px; width: 100%;">
-                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder') || '空白为系统默认缓存路径'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; box-sizing: border-box;" readonly />
+                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder')}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; box-sizing: border-box;" readonly />
                             <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
                         </div>
                         <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4; margin-bottom: 4px;">
                             ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--text-primary); font-family: monospace;">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
                         </div>
                         <div style="font-size: 11px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 8px 12px; margin-top: 8px; line-height: 1.45; text-align: left;">
-                            ⚠️ <strong>${t('privacy_warning_title') || '隐私与安全提示'}</strong>：${t('privacy_warning_desc') || '调试日志会记录局域网内 Chat 窗口发送/接收的明文消息交互、文件名以及完整的底层网络传输日志。请勿在未脱敏的情况下将日志目录发给无关第三方，以防个人会话及网络隐私泄露。'}
+                            ⚠️ <strong>${t('privacy_warning_title')}</strong>：${t('privacy_warning_desc')}
                         </div>
                     </div>
 

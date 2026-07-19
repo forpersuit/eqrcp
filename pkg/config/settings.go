@@ -45,9 +45,10 @@ const (
 )
 
 type DesktopInterfaceOption struct {
-	Name  string `json:"name"`
-	IP    string `json:"ip"`
-	Label string `json:"label"`
+	Name          string `json:"name"`
+	IP            string `json:"ip"`
+	Label         string `json:"label"`
+	IsRecommended bool   `json:"isRecommended"`
 }
 
 func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
@@ -323,14 +324,15 @@ func desktopInterfaceOptions(listAll bool) ([]DesktopInterfaceOption, error) {
 	})
 	for _, name := range names {
 		ip := interfaces[name]
-		label := fmt.Sprintf("%s (%s)", name, ip)
+		isRecommended := false
 		if desktopInterfaceScore(name, ip) > 0 {
-			label += " - likely phone LAN"
+			isRecommended = true
 		}
 		options = append(options, DesktopInterfaceOption{
-			Name:  name,
-			IP:    ip,
-			Label: label,
+			Name:          name,
+			IP:            ip,
+			Label:         fmt.Sprintf("%s (%s)", name, ip),
+			IsRecommended: isRecommended,
 		})
 	}
 	return options, nil
