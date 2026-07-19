@@ -285,3 +285,15 @@ The user can trigger this validation by asking: "执行 Chrome MCP 仿真测试�
      - The server-side cache status `msg.downloaded` is not used directly to show 'Downloaded' ('已下载') text or complete layouts for recipients, keeping these status bubbles clean until download is physical.
      - Sender-side (`mine = true`) shows 'Shared' ('已分享') instead of 'Transmitted' ('已传输') once the server cache status `msg.downloaded` is true.
 
+
+## About & Plan Modal Redesign Constraints (关于与套餐对照面板设计规范)
+- **Metadata Grid replacing DL lists**:
+  - The traditional definition lists (`<dl>`) look cluttered and raw.
+  - Reconstruct system meta details (Product name, version, platform architecture, temp free space, license legal terms) as a clean **2-column Metadata Tag Grid** (`display: grid; grid-template-columns: repeat(2, 1fr)`). Wrap each attribute block in a dedicated capsule chip (`border-radius: 8px; padding: 10px; background: var(--bg-hover)`) to present a dashboard-style fidelity.
+- **Asymmetric Cards & Interactive Hover Glow**:
+  - To guide users visually, distinguish the hierarchy of plan options:
+    - *Free Tier Card*: Uses a thin border (`1.2px solid var(--line)`) and is filled with `var(--bg-hover)`. It displays a list of standard features, with unavailable VIP features crossed out using semi-transparent red markers (`opacity: 0.6; stroke: #ef4444`) to highlight limitations.
+    - *Plus Card (Featured)*: Uses a prominent green border (`2px solid var(--accent)`), elevated card shadows (`box-shadow`), a gradient Recommended badge (`linear-gradient(135deg, var(--accent) 0%, #34d399 100%)`), and bold checkmarks.
+  - Apply smooth, spring-like transition dynamics on cards (`transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1)`) so that hovering over cards triggers a physical translateY lift (`transform: translateY(-4px)`) and a glowing shadow expansion.
+- **Physical Price Slots**:
+  - In the Featured card, present the Annual and Lifetime prices inside two separate metadata slots/sub-chips rather than inline text. Highlight the Annual price with the theme accent (`var(--accent)`) and partition slots with dynamic layout margins to align with the visual weight of other modules.
