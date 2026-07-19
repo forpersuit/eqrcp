@@ -17,6 +17,37 @@ This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp). The
 - Use HTTPS with a supplied certificate and key.
 - Use the EQT desktop app, tray menu, and Windows Explorer entries with a shared product icon.
 - Generate shell completion for Bash, Zsh, Fish, and PowerShell.
+- Automatically deliver secure software updates over Cloudflare Workers and R2 storage.
+- Robust DRM system featuring Ed25519 signed license validation and system clock rollback detection.
+
+## Free Limitations & Licensing
+
+EQT is offered in two editions: **Free** and **Premium (PLUS / PRO)**.
+
+### Free Edition Limitations
+
+To ensure sustainable development while keeping core functionalities available to everyone, the Free edition has the following boundaries:
+- **Chat Mode**: Daily usage is limited to **5 minutes (300 seconds)** per day. Once exceeded, chat messaging is suspended.
+- **Share & Receive Mode**: You can fully experience the transfer speed and unlimited size for the first 5 transfers of each day. After the 5 free transfers are exhausted:
+  - The tool restricts transfers to a maximum of **5 files per request**.
+  - The maximum size of any single file is capped at **50 MB**.
+  - Requests exceeding these boundaries will be automatically intercepted.
+
+### Premium Edition (PLUS & PRO)
+
+Activating EQT with a valid license key unlocks the full power of the application:
+- **Unlimited Usage**: No daily time limit on Chat mode.
+- **Unlimited File Transfer**: Send and receive files of any size and count, with high-speed parallel download scheduling.
+- **Enhanced Security**: Unlock TLS (HTTPS) customization, custom hostname bindings, and advanced multi-device host controls.
+- **Enterprise Controls**: Dedicated support, custom branding options, and unattended automated deployment features.
+
+### Cryptographic DRM & Security
+
+EQT's license enforcement system is designed with security and offline functionality in mind:
+- **Offline Signature Verification**: Licenses (`license.lic`) are signed using the **Ed25519** signature scheme, serving as the Single Source of Truth (SSOT).
+- **Weighted Device Fingerprinting**: Uses a 3-out-of-2 hardware verification algorithm (matching Motherboard UUID, CPU Serial Number, and Primary Disk Serial Number) to prevent key sharing.
+- **System Clock Tampering Lock**: Automatically records a secure history of operation timestamps. If the local system clock is rolled back to bypass expiration, the application instantly locks down premium features.
+- **Grace Period**: Supports up to 7 days of complete offline usage before requiring a silent online sync check.
 
 ## Build
 
@@ -208,4 +239,5 @@ Planning documents:
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+- **Core CLI & Networking engine**: Open-source and licensed under the MIT License (inherited from [qrcp](https://github.com/claudiodangelis/qrcp)). See [LICENSE](LICENSE) for details.
+- **Desktop GUI, Automatic Updater, and DRM modules**: Proprietary commercial software. Premium features require purchasing a license key.
