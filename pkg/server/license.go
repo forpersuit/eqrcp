@@ -34,6 +34,7 @@ type LicenseCertificate struct {
 	ExpiresAt          string `json:"expires_at"`                      // ISO string or "LIFETIME"
 	MaxDevices         int    `json:"max_devices"`                     // Maximum activation count
 	ActivatedDevices   int    `json:"activated_devices"`               // Current activated devices count
+	BuyerEmail         string `json:"buyer_email,omitempty"`           // Buyer email address
 	Signature          string `json:"signature"`                       // Ed25519 signature in hex
 	LastOnlineSyncTime string `json:"last_online_sync_time,omitempty"` // ISO string
 	LastSeenLocalTime  string `json:"last_seen_local_time,omitempty"`  // ISO string

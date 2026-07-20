@@ -2329,6 +2329,7 @@ function renderAboutPanel() {
                         </span>
                         <strong>${escapeHTML(plan)}</strong>
                         <small>${escapeHTML(redeemDetail)}</small>
+                        ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
                         ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
                     </div>
                     <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">

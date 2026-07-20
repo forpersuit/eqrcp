@@ -69,10 +69,12 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 	var maxDev int
 	var actDev int
 	var expiresAt string
+	var buyerEmail string
 	if cert, ok := server.GetLocalLicenseInfo(); ok {
 		maxDev = cert.MaxDevices
 		actDev = cert.ActivatedDevices
 		expiresAt = cert.ExpiresAt
+		buyerEmail = cert.BuyerEmail
 	}
 
 	response := AgentStatus{
@@ -91,6 +93,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		UsedTransfers:        server.GetUsedTransfers(),
 		UsedReceiveTransfers: server.GetUsedReceiveTransfers(),
 		LicenseExpiresAt:     expiresAt,
+		BuyerEmail:           buyerEmail,
 	}
 	if agent.busy {
 		response.State = "busy"

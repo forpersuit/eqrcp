@@ -899,6 +899,7 @@ export default {
           expires_at: finalExpiresAt,
           max_devices: license.max_devices,
           activated_devices: activatedCount,
+          buyer_email: license.buyer_email || "",
           signature: signatureHex,
           // New verification fields for always-sync 7-day grace period
           last_online_sync_time: currentTime,
@@ -1242,8 +1243,8 @@ export default {
           await env.DB.prepare(`
             INSERT INTO licenses (
               license_code, tier, status, max_devices, expires_at, duration_days,
-              buyer_email_hash, paddle_transaction_id, paddle_subscription_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             licenseCode,
             tier,
@@ -1252,6 +1253,7 @@ export default {
             expiresAt,
             durationDays,
             emailHash || null,
+            buyerEmail || null,
             transactionId,
             subscriptionId,
             new Date().toISOString()
