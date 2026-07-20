@@ -135,3 +135,22 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
    echo -n "pdl_ntfset_xxxxxx" | npx wrangler secret put PADDLE_WEBHOOK_SECRET
    ```
 
+---
+
+## 6. 许可证查询与退款自服务门户 (License Portal & Self-service Refund)
+
+我们实现了一个支持多语言、现代化的许可证管理与自助退款自服务门户（`cloudflare/eqt-website/portal.html`）以及配套的后端验证/退款 API（在 `eqt-drm-api` 中）。
+
+### 6.1 D1 表结构扩展
+为支持安全的无密码邮箱验证码登录，追加了以下表结构：
+* `verification_codes`: 存放临时生成的 6 位发信验证码及其有效期。
+* `user_sessions`: 存放用户成功校验后颁发的 24 小时过期 Session Token。
+
+### 6.2 极简 Workers 内置 SMTPS 发信
+利用 Workers `connect` API 通过 465 端口（Implicit TLS）直接与外部 SMTP 邮件服务器建立安全 TCP 连接进行握手和发信：
+* **TLS 握手**：`connect({ hostname: host, port: 465 }, { secureTransport: "on" })` 在连接的同时发起 TLS 握手。
+* **SMTP 协议流**：依次读取欢迎响应并发送 `EHLO` -> `AUTH LOGIN` -> Base64(User) -> Base64(Pass) -> `MAIL FROM` -> `RCPT TO` -> `DATA` -> 数据帧及句点点断 `.` -> `QUIT`。此方案无任何第三方 NPM 依赖包，完全自包含且极度稳定。
+
+### 6.3 Paddle Adjustments API 退款细节
+* **API 地址自动转换**：通过检测 `PADDLE_API_KEY` 前缀（`pdl_sdbx_`）自动路由至沙箱 `sandbox-api.paddle.com` 或生产 API `api.paddle.com`。
+* **退款行项 ID 陷阱**：在创建退款（`POST /adjustments`）时，其 `items` 数组的 `item_id` 属性格式为 `txnitm_...`。该 ID **不能**从 `GET /transactions/{id}` 的 `data.items` 列表中直接提取（items 数组仅有 price schema，无 item ID）；**必须**从 `data.details.line_items` 数组里读取每个 item 的 `id` (以 `txnitm_` 开头)，否则将报 items 校验失败及 item_id 缺失错误。

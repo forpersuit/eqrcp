@@ -1,3 +1,5 @@
+import { connect } from 'cloudflare:sockets';
+
 export interface Env {
   DB: D1Database;
   ED25519_PRIVATE_KEY: string; // 64-char hex string (32 bytes raw private key)
@@ -6,6 +8,12 @@ export interface Env {
   GITHUB_REPO?: string;        // Optional repository path, default 'forpersuit/eqrcp'
   R2_PUBLIC_URL?: string;      // Optional public CDN url for R2 assets download redirection
   PADDLE_WEBHOOK_SECRET?: string; // Webhook secret key from Paddle notifications dashboard
+  MAIL_SENDER?: string;
+  MAIL_SENDER_PASSWORD?: string;
+  MAIL_SEND_SERVER?: string;
+  MAIL_SEND_SAFE_PORT?: string;
+  TEST_MAIL_RECEIVER?: string;
+  PADDLE_API_KEY?: string;
 }
 
 const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3";
@@ -78,6 +86,107 @@ function hexToUint8Array(hex: string): Uint8Array {
 function bufToHex(buffer: ArrayBuffer): string {
   return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join('');
 }
+
+interface MailOptions {
+  sender: string;
+  senderPass: string;
+  host: string;
+  port: number;
+  to: string;
+  subject: string;
+  html: string;
+}
+
+// SMTP over TLS client implementing SMTP protocol over secure connect() socket
+async function sendMailViaSmtp(options: MailOptions): Promise<void> {
+  const socket = connect({ hostname: options.host, port: options.port }, { secureTransport: "on" });
+  
+  const writer = socket.writable.getWriter();
+  const reader = socket.readable.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  let buffer = "";
+
+  async function readLine(): Promise<string> {
+    while (true) {
+      const idx = buffer.indexOf("\r\n");
+      if (idx !== -1) {
+        const line = buffer.substring(0, idx);
+        buffer = buffer.substring(idx + 2);
+        return line;
+      }
+      const { value, done } = await reader.read();
+      if (done) {
+        if (buffer.length > 0) {
+          const line = buffer;
+          buffer = "";
+          return line;
+        }
+        throw new Error("SMTP server closed connection unexpectedly");
+      }
+      buffer += decoder.decode(value, { stream: true });
+    }
+  }
+
+  async function readResponse(): Promise<{ code: number; lines: string[] }> {
+    const lines: string[] = [];
+    while (true) {
+      const line = await readLine();
+      lines.push(line);
+      if (line.match(/^\d{3} /)) {
+        const code = parseInt(line.substring(0, 3));
+        return { code, lines };
+      }
+    }
+  }
+
+  async function sendCmd(cmd: string, expectedCode: number): Promise<void> {
+    await writer.write(encoder.encode(cmd + "\r\n"));
+    const resp = await readResponse();
+    if (resp.code !== expectedCode) {
+      throw new Error(`SMTP command '${cmd.split(' ')[0]}' failed. Expected ${expectedCode}, got ${resp.code}: ${resp.lines.join("; ")}`);
+    }
+  }
+
+  try {
+    const greet = await readResponse();
+    if (greet.code !== 220) {
+      throw new Error(`SMTP connection greeting failed: ${greet.lines.join("; ")}`);
+    }
+
+    await sendCmd("EHLO eqt-drm-api", 250);
+    await sendCmd("AUTH LOGIN", 334);
+    
+    const userBase64 = btoa(options.sender);
+    await sendCmd(userBase64, 334);
+
+    const passBase64 = btoa(options.senderPass);
+    await sendCmd(passBase64, 235);
+
+    await sendCmd(`MAIL FROM:<${options.sender}>`, 250);
+    await sendCmd(`RCPT TO:<${options.to}>`, 250);
+    await sendCmd("DATA", 354);
+
+    const bodyLines = [
+      `From: "EQT" <${options.sender}>`,
+      `To: <${options.to}>`,
+      `Subject: ${options.subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/html; charset="utf-8"`,
+      ``,
+      options.html,
+      `.`
+    ];
+    await sendCmd(bodyLines.join("\r\n"), 250);
+    await sendCmd("QUIT", 221);
+  } finally {
+    writer.releaseLock();
+    reader.releaseLock();
+    await socket.close();
+  }
+}
+
 
 // Perform 3-of-2 matching check between client hashes and a stored activation record
 function matchFingerprint(
@@ -272,14 +381,334 @@ export default {
       // Route request to download handler if host matches download.eqt.net.im,
       // or if pathname matches download routes (to support dev/testing on workers.dev or localhost).
       if (
-        url.hostname === "download.eqt.net.im" ||
-        url.hostname.endsWith(".workers.dev") ||
-        url.hostname === "localhost" ||
-        url.hostname === "127.0.0.1" ||
-        url.pathname === "/update-metadata.json" ||
-        url.pathname.startsWith("/downloads/")
+        (url.hostname === "download.eqt.net.im" ||
+         url.hostname.endsWith(".workers.dev") ||
+         url.hostname === "localhost" ||
+         url.hostname === "127.0.0.1" ||
+         url.pathname === "/update-metadata.json" ||
+         url.pathname.startsWith("/downloads/")) &&
+        !url.pathname.startsWith("/api/v1/")
       ) {
         return await handleDownloadDomain(request, env, ctx, corsHeaders);
+      }
+
+      // 0.1 Send email verification code
+      if (url.pathname === "/api/v1/auth/send-code" && request.method === "POST") {
+        const body: any = await request.json();
+        let email = body.email;
+        if (!email) {
+          return new Response(JSON.stringify({ error: "Missing email" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        email = email.trim().toLowerCase();
+
+        // Generate 6 digit verification code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // Valid for 5 minutes
+
+        // Insert code into DB
+        await env.DB.prepare(
+          "INSERT OR REPLACE INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)"
+        ).bind(email, code, expiresAt).run();
+
+        // Send mail via SMTPS
+        const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
+        const mailSenderPassword = env.MAIL_SENDER_PASSWORD || "q4W62}bWtR";
+        const mailSendServer = env.MAIL_SEND_SERVER || "smtpserver.301098.xyz";
+        const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
+        
+        const targetEmail = env.TEST_MAIL_RECEIVER || email;
+
+        try {
+          await sendMailViaSmtp({
+            sender: mailSender,
+            senderPass: mailSenderPassword,
+            host: mailSendServer,
+            port: mailSendPort,
+            to: targetEmail,
+            subject: "[EQT] Login Verification Code",
+            html: `<p>Your EQT login verification code is: <strong style="font-size: 18px; color: #6200ee;">${code}</strong></p><p>This code is valid for 5 minutes. If you did not request this, please ignore this email.</p>`
+          });
+        } catch (mailErr: any) {
+          console.error("Mail Send Error:", mailErr);
+          return new Response(JSON.stringify({ 
+            error: "Failed to send verification email: " + mailErr.message,
+            code: env.TEST_MAIL_RECEIVER ? code : undefined 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: "Verification code sent successfully",
+          code: env.TEST_MAIL_RECEIVER ? code : undefined 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 0.2 Verify email verification code and issue session token
+      if (url.pathname === "/api/v1/auth/verify-code" && request.method === "POST") {
+        const body: any = await request.json();
+        let { email, code } = body;
+        if (!email || !code) {
+          return new Response(JSON.stringify({ error: "Missing email or code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        email = email.trim().toLowerCase();
+        code = code.trim();
+
+        const record = await env.DB.prepare(
+          "SELECT * FROM verification_codes WHERE email = ?"
+        ).bind(email).first<any>();
+
+        if (!record || record.code !== code) {
+          return new Response(JSON.stringify({ error: "Invalid verification code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const expiresAt = new Date(record.expires_at).getTime();
+        if (expiresAt < Date.now()) {
+          return new Response(JSON.stringify({ error: "Verification code expired" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Delete verification code
+        await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run();
+
+        // Generate session token
+        const sessionBytes = new Uint8Array(16);
+        crypto.getRandomValues(sessionBytes);
+        const sessionToken = Array.from(sessionBytes, b => ('00' + b.toString(16)).slice(-2)).join('');
+        const sessionExpiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24 hours validity
+
+        // Insert user session
+        await env.DB.prepare(
+          "INSERT OR REPLACE INTO user_sessions (session_token, email, expires_at) VALUES (?, ?, ?)"
+        ).bind(sessionToken, email, sessionExpiresAt).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          session_token: sessionToken,
+          email: email
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 0.3 Get user licenses history and status
+      if (url.pathname === "/api/v1/user/licenses" && request.method === "GET") {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        const token = authHeader.substring(7);
+
+        const session = await env.DB.prepare(
+          "SELECT * FROM user_sessions WHERE session_token = ?"
+        ).bind(token).first<any>();
+
+        if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+          return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const email = session.email;
+        const encoder = new TextEncoder();
+        const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email));
+        const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+
+        const { results: licenses } = await env.DB.prepare(
+          "SELECT * FROM licenses WHERE buyer_email_hash = ? ORDER BY created_at DESC"
+        ).bind(emailHash).all<any>();
+
+        const list: any[] = [];
+        for (const lic of licenses) {
+          const { results: activations } = await env.DB.prepare(
+            "SELECT * FROM activations WHERE license_code = ?"
+          ).bind(lic.license_code).all<any>();
+          
+          list.push({
+            ...lic,
+            activations: activations
+          });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          email: email,
+          licenses: list
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 0.4 Refund license
+      if (url.pathname === "/api/v1/user/refund" && request.method === "POST") {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        const token = authHeader.substring(7);
+
+        const session = await env.DB.prepare(
+          "SELECT * FROM user_sessions WHERE session_token = ?"
+        ).bind(token).first<any>();
+
+        if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+          return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const body: any = await request.json();
+        const { license_code } = body;
+        if (!license_code) {
+          return new Response(JSON.stringify({ error: "Missing license_code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const license = await env.DB.prepare(
+          "SELECT * FROM licenses WHERE license_code = ?"
+        ).bind(license_code).first<any>();
+
+        if (!license) {
+          return new Response(JSON.stringify({ error: "License not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const encoder = new TextEncoder();
+        const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(session.email));
+        const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+
+        if (license.buyer_email_hash !== emailHash) {
+          return new Response(JSON.stringify({ error: "You do not own this license" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        if (license.status === "revoked") {
+          return new Response(JSON.stringify({ error: "License is already refunded or revoked" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const transactionId = license.paddle_transaction_id;
+        if (!transactionId) {
+          return new Response(JSON.stringify({ error: "No associated Paddle transaction found for this license" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const paddleApiKey = env.PADDLE_API_KEY;
+        if (!paddleApiKey) {
+          return new Response(JSON.stringify({ error: "Paddle API Key is not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+        const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+
+        try {
+          // Fetch transaction details
+          const txRes = await fetch(`${paddleBaseUrl}/transactions/${transactionId}`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${paddleApiKey}`
+            }
+          });
+
+          if (!txRes.ok) {
+            const errBody = await txRes.text();
+            throw new Error(`Failed to fetch transaction details from Paddle: ${errBody}`);
+          }
+
+          const txData: any = await txRes.json();
+          const lineItems = txData.data.details?.line_items || [];
+          if (lineItems.length === 0) {
+            throw new Error("No line items found in transaction to refund");
+          }
+
+          const refundItems = lineItems.map((item: any) => ({
+            item_id: item.id,
+            type: "full"
+          }));
+
+          // Create adjustment refund
+          const adjRes = await fetch(`${paddleBaseUrl}/adjustments`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${paddleApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              action: "refund",
+              transaction_id: transactionId,
+              reason: "requested_by_customer",
+              items: refundItems
+            })
+          });
+
+          if (!adjRes.ok) {
+            const errBody = await adjRes.text();
+            throw new Error(`Paddle refund creation failed: ${errBody}`);
+          }
+
+          const adjData = await adjRes.json();
+
+          // Revoke local license immediately
+          await env.DB.prepare(
+            "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
+          ).bind(license_code).run();
+
+          return new Response(JSON.stringify({
+            success: true,
+            message: "Refund processed successfully",
+            adjustment: adjData
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+
+        } catch (paddleErr: any) {
+          console.error("Paddle Refund Error:", paddleErr);
+          return new Response(JSON.stringify({
+            error: "Failed to process refund with Paddle: " + paddleErr.message
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
 
       // 1. Activating a device

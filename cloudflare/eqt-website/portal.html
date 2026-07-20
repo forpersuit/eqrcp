@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html class="dark scroll-smooth" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Customer Portal - EQT (Easy QR Transfer)</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png"/>
+
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#080e0c",
+                        "surface": "#080e0c",
+                        "surface-variant": "#17231f",
+                        "primary": "#39e5b6",
+                        "secondary": "#156f5a",
+                        "on-surface": "#dae7e3",
+                        "on-surface-variant": "#a5b9b2",
+                        "outline": "#677e74",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(23, 35, 31, 0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .toast-active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-4">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
+            <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
+                <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
+                <span>EQT</span>
+            </a>
+            
+            <div class="flex items-center gap-4">
+                <!-- Lang select dropdown -->
+                <div class="relative w-36" id="lang-dropdown-wrapper">
+                    <button id="lang-btn" class="w-full flex items-center justify-between gap-1 px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-lg transition-all duration-300 outline-none focus:outline-none">
+                        <div class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-base">language</span>
+                            <span id="current-lang-txt" class="text-sm">English</span>
+                        </div>
+                        <span class="material-symbols-outlined text-xs opacity-50 transition-transform duration-300" id="lang-arrow">expand_more</span>
+                    </button>
+                    <!-- Dropdown Panel -->
+                    <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-1 bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
+                    </div>
+                </div>
+                
+                <a class="flex items-center gap-1 text-sm text-secondary hover:underline" href="/">
+                    <span class="material-symbols-outlined text-base">arrow_back</span> <span data-i18n="back_to_home">Back to Home</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-4xl mx-auto px-6 py-12 w-full flex items-center justify-center">
+        
+        <!-- Login Card -->
+        <div id="login-section" class="w-full max-w-md glass-panel rounded-2xl p-8 space-y-6 shadow-2xl">
+            <div class="text-center space-y-2">
+                <h1 class="text-2xl font-bold text-white" data-i18n="login_title">Customer Portal</h1>
+                <p class="text-on-surface-variant text-sm" data-i18n="login_desc">Login via email code to manage your licenses</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2" data-i18n="email_label">Email Address</label>
+                    <div class="relative">
+                        <input id="login-email" type="email" placeholder="you@example.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" />
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <div class="flex-grow">
+                        <input id="login-code" type="text" placeholder="Verification Code" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
+                    </div>
+                    <button id="send-code-btn" class="bg-white/5 hover:bg-white/10 border border-white/10 text-primary px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap" data-i18n="send_code_btn">Send Code</button>
+                </div>
+
+                <button id="login-submit-btn" class="w-full bg-primary hover:bg-primary/90 text-background py-3.5 rounded-xl font-semibold transition-all duration-300 active:scale-[0.98] shadow-lg shadow-primary/20 flex justify-center items-center gap-2" disabled>
+                    <span data-i18n="login_btn">Verify & Login</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Section (Hidden initially) -->
+        <div id="dashboard-section" class="w-full glass-panel rounded-2xl p-6 md:p-8 space-y-6 shadow-2xl hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-white" data-i18n="portal_title">License Portal</h1>
+                    <p class="text-on-surface-variant text-sm mt-1"><span data-i18n="logged_in_as">Logged in as:</span> <strong id="logged-email-text" class="text-primary font-medium"></strong></p>
+                </div>
+                <button id="logout-btn" class="flex items-center gap-1 bg-white/5 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 border border-white/10 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300">
+                    <span class="material-symbols-outlined text-base">logout</span>
+                    <span data-i18n="logout_btn">Logout</span>
+                </button>
+            </div>
+
+            <!-- Licenses List -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-semibold text-white" data-i18n="your_licenses">Your Licenses</h2>
+                <div id="licenses-container" class="space-y-4">
+                    <!-- Dynamic Items -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-6 bg-background border-t border-white/10 text-center text-xs text-on-surface-variant">
+        <p data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+    </footer>
+
+    <!-- Custom Toast Notification System -->
+    <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-2"></div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
+        <div class="w-full max-w-md bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-6 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="space-y-2">
+                <h3 class="text-xl font-bold text-white" data-i18n="refund_confirm_title">Request Refund?</h3>
+                <p class="text-on-surface-variant text-sm leading-relaxed" data-i18n="refund_confirm_desc">Are you sure you want to request a refund? Once refunded, this license will be permanently revoked and your activated devices will immediately lose premium status.</p>
+            </div>
+            <div class="flex gap-3">
+                <button id="confirm-cancel-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Cancel</button>
+                <button id="confirm-ok-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-medium transition-all duration-300 active:scale-95 shadow-lg shadow-red-500/20" data-i18n="confirm_refund_btn">Yes, Refund</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script>
+        // Language dictionaries
+        const translations = {
+            "en": {
+                "back_to_home": "Back to Home",
+                "login_title": "Customer License Portal",
+                "login_desc": "Manage your EQT Plus keys and subscriptions",
+                "email_label": "Purchase Email Address",
+                "send_code_btn": "Send Code",
+                "login_btn": "Verify & Login",
+                "portal_title": "Customer License Portal",
+                "logged_in_as": "Logged in as:",
+                "logout_btn": "Logout",
+                "your_licenses": "Your Licenses",
+                "no_licenses": "No licenses found associated with this email address.",
+                "license_code": "License Code",
+                "tier": "Tier",
+                "status": "Status",
+                "created_at": "Purchased On",
+                "paddle_transaction": "Transaction ID",
+                "paddle_subscription": "Subscription ID",
+                "activations": "Activated Devices",
+                "device_id": "Device Key",
+                "activated_on": "Activated On",
+                "request_refund": "Request Refund",
+                "refund_pending": "Refund Processing...",
+                "refund_confirm_title": "Confirm Refund",
+                "refund_confirm_desc": "Are you sure you want to request a refund? The license code will be suspended immediately and all active devices will revert to the free version.",
+                "cancel_btn": "Cancel",
+                "confirm_refund_btn": "Confirm & Refund",
+                "toast_code_sent": "Verification code sent to your email (and shown in debugging logs).",
+                "toast_login_success": "Successfully logged in!",
+                "toast_refund_success": "Refund adjustment created successfully! Local status updated.",
+                "toast_error": "An error occurred:",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "zh": {
+                "back_to_home": "返回主页",
+                "login_title": "自助服务与退款门户",
+                "login_desc": "登录邮箱以查询许可证状态或申请自助退款",
+                "email_label": "购买时填写的邮箱地址",
+                "send_code_btn": "发送验证码",
+                "login_btn": "验证并登录",
+                "portal_title": "软件授权管理门户",
+                "logged_in_as": "已登录账号:",
+                "logout_btn": "退出登录",
+                "your_licenses": "您的许可证列表",
+                "no_licenses": "没有找到与此邮箱关联的许可证记录。",
+                "license_code": "激活码",
+                "tier": "套餐级别",
+                "status": "状态",
+                "created_at": "购买日期",
+                "paddle_transaction": "交易单号",
+                "paddle_subscription": "订阅单号",
+                "activations": "已绑定的设备",
+                "device_id": "设备物理指纹",
+                "activated_on": "激活时间",
+                "request_refund": "申请退款",
+                "refund_pending": "正在处理退款...",
+                "refund_confirm_title": "确认申请退款？",
+                "refund_confirm_desc": "您确定要对这笔交易申请退款吗？退款提交后，此激活码将被永久吊销，绑定的所有设备将在下次联网对账时自动降级为免费版。",
+                "cancel_btn": "取消",
+                "confirm_refund_btn": "确认并退款",
+                "toast_code_sent": "验证码已成功发往您的邮箱（调试模式下也将呈现在接口返回中）。",
+                "toast_login_success": "登录成功！",
+                "toast_refund_success": "退款成功！授权已被吊销，退款金额将在 5-10 个工作日内原路退回。",
+                "toast_error": "发生错误：",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。"
+            }
+        };
+
+        // Determine API Host
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.0.0.1')
+            ? 'http://localhost:8787'
+            : 'https://lic.eqt.net.im';
+
+        // Global state
+        let state = {
+            lang: 'en',
+            email: '',
+            token: '',
+            licenses: [],
+            refundPendingCode: null,
+            timer: null
+        };
+
+        // Setup i18n
+        function initLanguage() {
+            let userLang = localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
+            if (!userLang) {
+                // Read from cookies
+                const match = document.cookie.match(/eqt-lang=([^;]+)/);
+                if (match) userLang = match[1];
+            }
+            if (!userLang) {
+                userLang = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+            }
+            setLanguage(userLang === 'zh' ? 'zh' : 'en');
+        }
+
+        function setLanguage(lang) {
+            state.lang = lang;
+            localStorage.setItem('eqt_lang', lang);
+            localStorage.setItem('eqt-page-lang', lang);
+            document.cookie = `eqt-lang=${lang}; max-age=${365 * 24 * 3600}; path=/`;
+            
+            // Render translated tags
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[lang] && translations[lang][key]) {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        el.setAttribute('placeholder', translations[lang][key]);
+                    } else {
+                        el.textContent = translations[lang][key];
+                    }
+                }
+            });
+
+            // Update header lang dropdown
+            document.getElementById('current-lang-txt').textContent = lang === 'zh' ? '简体中文' : 'English';
+            
+            // Re-render licences list to update tier/status labels dynamically
+            if (state.token) {
+                renderLicenses();
+            }
+        }
+
+        // Show Toast Notifications
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `glass-panel px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border transition-all duration-300 translate-y-2 opacity-0 max-w-sm ${
+                type === 'error' ? 'border-red-500/30 text-red-400 bg-red-950/20' : 'border-primary/30 text-primary bg-emerald-950/20'
+            }`;
+            
+            const icon = type === 'error' ? 'error' : 'check_circle';
+            toast.innerHTML = `
+                <span class="material-symbols-outlined text-lg">${icon}</span>
+                <span class="text-sm font-medium">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.add('toast-active');
+            }, 50);
+
+            // Remove after 4s
+            setTimeout(() => {
+                toast.classList.remove('toast-active');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Send validation code
+        async function handleSendCode() {
+            const emailInput = document.getElementById('login-email');
+            const email = emailInput.value.trim();
+            if (!email) return;
+
+            const sendBtn = document.getElementById('send-code-btn');
+            sendBtn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/auth/send-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                showToast(translations[state.lang].toast_code_sent);
+                
+                // Enable inputs
+                document.getElementById('login-code').disabled = false;
+                document.getElementById('login-submit-btn').disabled = false;
+                
+                // If code is returned (mock testing), auto fill for debugging convenience
+                if (data.code) {
+                    document.getElementById('login-code').value = data.code;
+                    console.log("[DEBUG] Autocompleted verification code:", data.code);
+                }
+
+                // Start cooldown timer
+                let cooldown = 60;
+                sendBtn.textContent = `${cooldown}s`;
+                state.timer = setInterval(() => {
+                    cooldown--;
+                    if (cooldown <= 0) {
+                        clearInterval(state.timer);
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = translations[state.lang].send_code_btn;
+                    } else {
+                        sendBtn.textContent = `${cooldown}s`;
+                    }
+                }, 1000);
+                
+            } catch (err) {
+                sendBtn.disabled = false;
+                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+            }
+        }
+
+        // Login submit
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value.trim();
+            const code = document.getElementById('login-code').value.trim();
+            if (!email || !code) return;
+
+            const submitBtn = document.getElementById('login-submit-btn');
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/auth/verify-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                showToast(translations[state.lang].toast_login_success);
+                
+                // Save auth to state
+                state.email = data.email;
+                state.token = data.session_token;
+                localStorage.setItem('eqt_portal_token', state.token);
+                localStorage.setItem('eqt_portal_email', state.email);
+
+                // Show Dashboard
+                document.getElementById('logged-email-text').textContent = state.email;
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
+
+                // Load licenses
+                await loadLicenses();
+                
+            } catch (err) {
+                submitBtn.disabled = false;
+                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+            }
+        }
+
+        // Load user licenses
+        async function loadLicenses() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/user/licenses`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${state.token}`
+                    }
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                state.licenses = data.licenses || [];
+                renderLicenses();
+
+            } catch (err) {
+                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+                if (err.message.includes('Session')) {
+                    handleLogout();
+                }
+            }
+        }
+
+        // Render licenses list
+        function renderLicenses() {
+            const container = document.getElementById('licenses-container');
+            container.innerHTML = '';
+
+            if (state.licenses.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-on-surface-variant text-sm">
+                        <span class="material-symbols-outlined text-4xl opacity-30 mb-2">drafts</span>
+                        <p>${translations[state.lang].no_licenses}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            state.licenses.forEach(lic => {
+                const card = document.createElement('div');
+                card.className = 'bg-surface-variant/40 border border-white/10 rounded-xl p-6 space-y-4';
+
+                const statusColor = lic.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30';
+                const createdDate = new Date(lic.created_at).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                // Render activations
+                let activationsHtml = '';
+                if (lic.activations && lic.activations.length > 0) {
+                    activationsHtml = `
+                        <div class="mt-3 pt-3 border-t border-white/5 space-y-2">
+                            <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${translations[state.lang].activations} (${lic.activations.length}/${lic.max_devices})</h4>
+                            <div class="grid gap-2 text-xs">
+                                ${lic.activations.map(act => `
+                                    <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5">
+                                        <span class="font-mono text-white/70">${act.uuid_hash.slice(0, 8)}... (CPU: ${act.cpu_hash.slice(0, 4)})</span>
+                                        <span class="text-on-surface-variant">${new Date(act.activated_at).toLocaleDateString()}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Check action button
+                let actionBtnHtml = '';
+                if (lic.status === 'active') {
+                    actionBtnHtml = `
+                        <button class="refund-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <span class="material-symbols-outlined text-sm">history_toggle_off</span>
+                            <span>${translations[state.lang].request_refund}</span>
+                        </button>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-bold font-mono tracking-wide select-all">${lic.license_code}</span>
+                            <button class="copy-license-btn text-on-surface-variant hover:text-primary transition-colors outline-none focus:outline-none" data-code="${lic.license_code}">
+                                <span class="material-symbols-outlined text-base">content_copy</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${lic.status.toUpperCase()}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">${lic.tier}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-6 text-xs text-on-surface-variant">
+                        <div><span class="font-medium text-white/50">${translations[state.lang].created_at}:</span> ${createdDate}</div>
+                        <div><span class="font-medium text-white/50">${translations[state.lang].paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
+                        ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${translations[state.lang].paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
+                    </div>
+
+                    ${activationsHtml}
+
+                    <div class="flex justify-end pt-2">
+                        ${actionBtnHtml}
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+
+            // Wire copy buttons
+            container.querySelectorAll('.copy-license-btn').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    const code = btn.getAttribute('data-code');
+                    navigator.clipboard.writeText(code).then(() => {
+                        const originalHtml = btn.innerHTML;
+                        btn.innerHTML = `<span class="material-symbols-outlined text-base text-emerald-400">done</span>`;
+                        setTimeout(() => btn.innerHTML = originalHtml, 1500);
+                    });
+                });
+            });
+
+            // Wire refund buttons
+            container.querySelectorAll('.refund-trigger-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const license = btn.getAttribute('data-license');
+                    showConfirmModal(license);
+                });
+            });
+        }
+
+        // Show Confirm Modal
+        function showConfirmModal(license) {
+            state.refundPendingCode = license;
+            const modal = document.getElementById('confirm-modal');
+            const box = modal.querySelector('div');
+            
+            modal.classList.remove('pointer-events-none');
+            modal.classList.add('opacity-100');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        // Hide Confirm Modal
+        function hideConfirmModal() {
+            state.refundPendingCode = null;
+            const modal = document.getElementById('confirm-modal');
+            const box = modal.querySelector('div');
+            
+            modal.classList.add('pointer-events-none');
+            modal.classList.remove('opacity-100');
+            box.classList.add('scale-95');
+            box.classList.remove('scale-100');
+        }
+
+        // Confirm ok
+        async function handleConfirmRefund() {
+            const license = state.refundPendingCode;
+            if (!license) return;
+
+            hideConfirmModal();
+            showToast(translations[state.lang].refund_pending);
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/user/refund`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ license_code: license })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+
+                showToast(translations[state.lang].toast_refund_success);
+                
+                // Reload data
+                await loadLicenses();
+
+            } catch (err) {
+                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+            }
+        }
+
+        // Logout
+        function handleLogout() {
+            state.email = '';
+            state.token = '';
+            localStorage.removeItem('eqt_portal_token');
+            localStorage.removeItem('eqt_portal_email');
+            
+            if (state.timer) clearInterval(state.timer);
+            
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-code').value = '';
+            document.getElementById('login-code').disabled = true;
+            document.getElementById('login-submit-btn').disabled = true;
+            
+            const sendBtn = document.getElementById('send-code-btn');
+            sendBtn.disabled = false;
+            sendBtn.textContent = translations[state.lang].send_code_btn;
+
+            document.getElementById('dashboard-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // Lang selector toggle
+            const langBtn = document.getElementById('lang-btn');
+            const langPanel = document.getElementById('lang-dropdown-panel');
+            const langArrow = document.getElementById('lang-arrow');
+
+            langBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                langPanel.classList.toggle('hidden');
+                langArrow.classList.toggle('rotate-180');
+            });
+
+            document.addEventListener('click', () => {
+                langPanel.classList.add('hidden');
+                langArrow.classList.remove('rotate-180');
+            });
+
+            langPanel.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const selectedLang = btn.getAttribute('data-lang');
+                    setLanguage(selectedLang);
+                });
+            });
+
+            // Send code
+            document.getElementById('send-code-btn').addEventListener('click', handleSendCode);
+
+            // Submit Login
+            document.getElementById('login-submit-btn').addEventListener('click', handleLogin);
+            
+            // Press Enter to submit in verification code field
+            document.getElementById('login-code').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleLogin();
+                }
+            });
+
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+            // Confirm refund modal
+            document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirmModal);
+            document.getElementById('confirm-ok-btn').addEventListener('click', handleConfirmRefund);
+        }
+
+        // Check active session
+        async function checkSession() {
+            const savedToken = localStorage.getItem('eqt_portal_token');
+            const savedEmail = localStorage.getItem('eqt_portal_email');
+            
+            if (savedToken && savedEmail) {
+                state.token = savedToken;
+                state.email = savedEmail;
+                
+                // Show dashboard
+                document.getElementById('logged-email-text').textContent = state.email;
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
+
+                await loadLicenses();
+            }
+        }
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            initLanguage();
+            setupEventListeners();
+            checkSession();
+        });
+    </script>
+</body>
+</html>

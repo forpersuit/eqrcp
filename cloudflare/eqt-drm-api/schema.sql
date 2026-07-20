@@ -25,3 +25,15 @@ CREATE TABLE IF NOT EXISTS activations (
 
 -- Indexing for speed
 CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);
+
+CREATE TABLE IF NOT EXISTS verification_codes (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+    session_token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
