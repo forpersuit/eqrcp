@@ -307,7 +307,20 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "Support: support@eqt.net.im",
                 "paddle_disclosure_title": "Payment Reseller &amp; MoR",
-                "paddle_disclosure": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns."
+                "paddle_disclosure": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns.",
+                "modal_loading_title": "Confirming Transaction...",
+                "modal_loading_desc": "We are verifying your payment and generating your license key. Please do not close this window.",
+                "modal_success_title": "Payment Successful!",
+                "modal_success_desc": "Your EQT Plus license key is ready.",
+                "modal_copy": "Copy",
+                "modal_copied": "Copied!",
+                "modal_how_to_use": "How to activate:",
+                "modal_step1": "Open EQT Desktop App",
+                "modal_step2": "Go to settings and click \"Upgrade/License\"",
+                "modal_step3": "Paste the code and click \"Activate\"",
+                "modal_ok": "Get Started",
+                "modal_error_title": "Fulfillment Delayed",
+                "modal_error_desc": "We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support."
             },
             "zh": {
                 "back_to_home": "返回主页",
@@ -345,7 +358,20 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。",
                 "footer_support": "支持邮箱: support@eqt.net.im",
                 "paddle_disclosure_title": "官方授权支付代理",
-                "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。"
+                "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。",
+                "modal_loading_title": "正在确认交易...",
+                "modal_loading_desc": "我们正在验证您的支付并生成许可证激活码。请不要关闭此窗口。",
+                "modal_success_title": "支付成功！",
+                "modal_success_desc": "您的 EQT Plus 许可证激活码已生成完毕。",
+                "modal_copy": "复制",
+                "modal_copied": "已复制！",
+                "modal_how_to_use": "如何激活：",
+                "modal_step1": "打开 EQT 桌面端客户端",
+                "modal_step2": "进入设置页面，点击“升级/授权管理”",
+                "modal_step3": "粘贴您的激活码并点击“激活”",
+                "modal_ok": "开始使用",
+                "modal_error_title": "激活码生成延迟",
+                "modal_error_desc": "您的付款已确认，但授权码生成超时。激活码将在数分钟内自动发送至您的邮箱。如有疑问请联系支持邮箱。"
             },
             "ja": {
                 "back_to_home": "ホームに戻る",
@@ -643,7 +669,15 @@
             if (typeof Paddle !== 'undefined') {
                 Paddle.Environment.set(PADDLE_ENV);
                 Paddle.Initialize({
-                    token: PADDLE_TOKEN
+                    token: PADDLE_TOKEN,
+                    eventCallback: function(data) {
+                        if (data.name === "checkout.completed") {
+                            const transactionId = data.data.transaction_id || data.data.id;
+                            if (transactionId) {
+                                openModalAndStartPoll(transactionId);
+                            }
+                        }
+                    }
                 });
 
                 const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
@@ -671,10 +705,169 @@
             }
         }
 
+        // Modal elements control
+        const modalEl = document.getElementById('license-modal');
+        const loadingState = document.getElementById('modal-loading-state');
+        const successState = document.getElementById('modal-success-state');
+        const errorState = document.getElementById('modal-error-state');
+        const codeDisplay = document.getElementById('license-code-display');
+
+        function openModalAndStartPoll(transactionId) {
+            if (!modalEl) return;
+            
+            // Show modal with loading state
+            loadingState.classList.remove('hidden');
+            successState.classList.add('hidden');
+            errorState.classList.add('hidden');
+            
+            modalEl.classList.remove('hidden');
+            // Trigger animation
+            setTimeout(() => {
+                modalEl.classList.remove('opacity-0');
+                modalEl.querySelector('.transform').classList.remove('scale-95');
+            }, 50);
+
+            // Start polling
+            let attempts = 0;
+            const maxAttempts = 30; // Poll for 30 seconds
+            const queryUrl = `https://lic.eqt.net.im/api/v1/paddle/license-query?transaction_id=${transactionId}`;
+            
+            const interval = setInterval(() => {
+                attempts++;
+                fetch(queryUrl)
+                    .then(res => {
+                        if (res.ok) return res.json();
+                        throw new Error("Pending");
+                    })
+                    .then(data => {
+                        clearInterval(interval);
+                        // Show success state
+                        loadingState.classList.add('hidden');
+                        errorState.classList.add('hidden');
+                        successState.classList.remove('hidden');
+                        if (codeDisplay) {
+                            codeDisplay.textContent = data.license_code;
+                        }
+                    })
+                    .catch(() => {
+                        if (attempts >= maxAttempts) {
+                            clearInterval(interval);
+                            // Show error/timeout state
+                            loadingState.classList.add('hidden');
+                            successState.classList.add('hidden');
+                            errorState.classList.remove('hidden');
+                        }
+                    });
+            }, 1000);
+        }
+
+        function closeModal() {
+            if (!modalEl) return;
+            modalEl.classList.add('opacity-0');
+            modalEl.querySelector('.transform').classList.add('scale-95');
+            setTimeout(() => {
+                modalEl.classList.add('hidden');
+            }, 300);
+        }
+
+        // Bind modal close buttons
+        const closeBtn = document.getElementById('close-modal-btn');
+        const okBtn = document.getElementById('modal-ok-btn');
+        const errOkBtn = document.getElementById('modal-err-ok-btn');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (okBtn) okBtn.addEventListener('click', closeModal);
+        if (errOkBtn) errOkBtn.addEventListener('click', closeModal);
+
+        // Copy license code functionality
+        const copyBtn = document.getElementById('copy-code-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                if (codeDisplay) {
+                    navigator.clipboard.writeText(codeDisplay.textContent).then(() => {
+                        const copyTxt = document.getElementById('copy-text');
+                        const copyIcon = document.getElementById('copy-icon');
+                        if (copyTxt) {
+                            const currentLang = localStorage.getItem('eqt-lang') || 'en';
+                            copyTxt.textContent = (currentLang === 'zh') ? '已复制！' : 'Copied!';
+                        }
+                        if (copyIcon) {
+                            copyIcon.textContent = 'check';
+                        }
+                        setTimeout(() => {
+                            if (copyTxt) {
+                                const currentLang = localStorage.getItem('eqt-lang') || 'en';
+                                copyTxt.textContent = (currentLang === 'zh') ? '复制' : 'Copy';
+                            }
+                            if (copyIcon) {
+                                copyIcon.textContent = 'content_copy';
+                            }
+                        }, 2000);
+                    });
+                }
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
             initPaddle();
         });
     </script>
+
+    <!-- License Success / Loader Modal -->
+    <div id="license-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
+        <div class="glass-panel max-w-md w-full p-8 rounded-2xl border border-primary/30 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-6">
+            <button id="close-modal-btn-top" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeModal()">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            
+            <!-- State 1: Loading -->
+            <div id="modal-loading-state" class="text-center py-6 space-y-4">
+                <div class="inline-block w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <h3 class="font-headline-md text-headline-md text-white text-lg font-bold" data-i18n="modal_loading_title">Confirming Transaction...</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="modal_loading_desc">We are verifying your payment and generating your license key. Please do not close this window.</p>
+            </div>
+            
+            <!-- State 2: Success -->
+            <div id="modal-success-state" class="hidden space-y-6">
+                <div class="text-center space-y-2">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/20 text-primary mb-2">
+                        <span class="material-symbols-outlined text-2xl font-bold">check_circle</span>
+                    </div>
+                    <h3 class="font-headline-md text-headline-md text-white text-xl font-bold" data-i18n="modal_success_title">Payment Successful!</h3>
+                    <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="modal_success_desc">Your EQT Plus license key is ready.</p>
+                </div>
+                
+                <div class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-4">
+                    <code id="license-code-display" class="font-mono text-primary text-base font-bold select-all tracking-wider">EQT-PLUS-XXXXX</code>
+                    <button id="copy-code-btn" class="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs rounded transition-all">
+                        <span class="material-symbols-outlined text-sm" id="copy-icon">content_copy</span>
+                        <span id="copy-text" data-i18n="modal_copy">Copy</span>
+                    </button>
+                </div>
+                
+                <div class="space-y-sm text-xs text-on-surface-variant leading-relaxed">
+                    <p class="font-medium text-white/80" data-i18n="modal_how_to_use">How to activate:</p>
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li data-i18n="modal_step1">Open EQT Desktop App</li>
+                        <li data-i18n="modal_step2">Go to settings and click "Upgrade/License"</li>
+                        <li data-i18n="modal_step3">Paste the code and click "Activate"</li>
+                    </ol>
+                </div>
+                
+                <button id="modal-ok-btn" class="w-full py-2.5 bg-primary text-secondary hover:shadow-[0_0_15px_rgba(57,229,182,0.3)] font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Get Started</button>
+            </div>
+            
+            <!-- State 3: Error / Timeout -->
+            <div id="modal-error-state" class="hidden text-center py-4 space-y-4">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500/20 text-red-400">
+                    <span class="material-symbols-outlined text-2xl font-bold">warning</span>
+                </div>
+                <h3 class="font-headline-md text-headline-md text-white text-lg font-bold" data-i18n="modal_error_title">Fulfillment Delayed</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="modal_error_desc">We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support.</p>
+                <button id="modal-err-ok-btn" class="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Done</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

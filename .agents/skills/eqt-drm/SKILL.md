@@ -102,3 +102,36 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 2. `YYYYMMDD`: 8 位当前日期。
 3. `RANDOM`: 6 位随机大写字符。
 4. `CHECK`: 前 3 项拼接后取 MD5 前 4 位大写字符，用以校验防错漏。
+
+---
+
+## 5. Paddle 支付履约 Webhook 与 License 查询对账 (Paddle Webhook & License Query Integration)
+
+为了打通自动支付履约和退款/取消订阅吊销授权码的业务流，我们在 Cloudflare Workers (`eqt-drm-api`) 和 D1 数据库中实现了专有通道：
+
+### 5.1 D1 数据库字段扩展
+对 `licenses` 表追加了以下两个字段：
+- `paddle_transaction_id TEXT DEFAULT NULL`: 关联的 Paddle 交易 ID，唯一履约凭证。
+- `paddle_subscription_id TEXT DEFAULT NULL`: 关联的 Paddle 订阅 ID，唯一维护和续期凭证。
+
+### 5.2 核心云端路由设计
+1. **`/api/v1/paddle/webhook` (POST)**:
+   - **签名校验**：接收 `Paddle-Signature` 头部，利用 `HMAC-SHA256` 以及 Webhook Secret 验证包体完整性（允许最大 5 分钟的时钟偏差）。
+   - **履约 (`transaction.completed`)**：提取交易中的 `price_id`，对比 `PRICE_LIFETIME_ID` 或 `PRICE_YEARLY_ID`：
+     - 若为 Lifetime，则生成无有效期的 `PLUS` 授权（`LIFETIME`）。
+     - 若为 Yearly，则生成有效天数为 `365` 天的 `PLUS` 授权，并计算一年的到期日。
+     - 将买家邮箱散列哈希存入 `buyer_email_hash`，并关联写入 D1 `licenses`。
+   - **退款与吊销 (`transaction.refunded` / `subscription.canceled`)**：
+     - 捕获退款或订阅中止（`canceled` / `past_due` / `paused`）事件，并执行 SQL：`UPDATE licenses SET status = 'revoked' WHERE paddle_transaction_id = ? OR paddle_subscription_id = ?`。这使得客户端在下一次 `/api/v1/verify` 对账同步时收到 403 强制擦除离线密钥。
+2. **`/api/v1/paddle/license-query` (GET)**:
+   - 接收 `transaction_id` 参数。
+   - 提供安全、只读的对账查询，用于前端支付完成（`checkout.completed`）时的即时轮询，在网页端无需刷新即可向用户优雅弹出新生成的授权兑换码。
+
+### 5.3 生产环境部署依赖
+部署 Webhook 到线上之前，必须完成以下配置：
+1. 登录 Paddle Dashboard 创建 Webhook 目的地指往 `https://lic.eqt.net.im/api/v1/paddle/webhook`，并订阅 `transaction.completed`, `transaction.refunded`, `subscription.canceled`, `subscription.updated` 事件。
+2. 提取生成的 Webhook Secret 并作为敏感变量存入 Worker：
+   ```sh
+   echo -n "pdl_ntfset_xxxxxx" | npx wrangler secret put PADDLE_WEBHOOK_SECRET
+   ```
+

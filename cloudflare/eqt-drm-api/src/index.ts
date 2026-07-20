@@ -5,6 +5,60 @@ export interface Env {
   GITHUB_TOKEN?: string;       // Optional token to prevent GitHub Rate Limit
   GITHUB_REPO?: string;        // Optional repository path, default 'forpersuit/eqrcp'
   R2_PUBLIC_URL?: string;      // Optional public CDN url for R2 assets download redirection
+  PADDLE_WEBHOOK_SECRET?: string; // Webhook secret key from Paddle notifications dashboard
+}
+
+const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3";
+const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
+
+// Helper to verify Paddle Billing webhook signatures
+async function verifyPaddleSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secretKey: string
+): Promise<boolean> {
+  if (!signatureHeader || !secretKey) return false;
+
+  const parts = signatureHeader.split(";");
+  if (parts.length !== 2) return false;
+
+  const timestampPart = parts.find(p => p.startsWith("ts="));
+  const signaturePart = parts.find(p => p.startsWith("h1="));
+
+  if (!timestampPart || !signaturePart) return false;
+
+  const ts = timestampPart.split("=")[1];
+  const h1 = signaturePart.split("=")[1];
+
+  if (!ts || !h1) return false;
+
+  // Validate timestamp drift (5 minutes / 300 seconds limit)
+  const timestampInt = parseInt(ts) * 1000;
+  if (isNaN(timestampInt)) return false;
+  const currentTime = Date.now();
+  if (Math.abs(currentTime - timestampInt) > 300 * 1000) {
+    return false;
+  }
+
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secretKey);
+  const messageData = encoder.encode(`${ts}:${rawBody}`);
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+
+  const signatureBuf = await crypto.subtle.sign("HMAC", key, messageData);
+  const signatureHex = Array.prototype.map.call(
+    new Uint8Array(signatureBuf),
+    (x: number) => ('00' + x.toString(16)).slice(-2)
+  ).join('');
+
+  return signatureHex === h1;
 }
 
 // Helper to convert hex string to Uint8Array
@@ -578,6 +632,193 @@ export default {
 
         ctx.waitUntil(cache.put(cacheKey, response.clone()));
         return response;
+      }
+
+      // 3.5.1 Paddle Webhook: fulfillment and cancellation/refund
+      if (url.pathname === "/api/v1/paddle/webhook" && request.method === "POST") {
+        const rawBody = await request.text();
+        const signature = request.headers.get("paddle-signature");
+        const webhookSecret = env.PADDLE_WEBHOOK_SECRET;
+
+        if (!webhookSecret) {
+          return new Response(JSON.stringify({ error: "Paddle Webhook secret is not configured" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const isValid = await verifyPaddleSignature(rawBody, signature, webhookSecret);
+        if (!isValid) {
+          return new Response(JSON.stringify({ error: "Invalid signature" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const event = JSON.parse(rawBody);
+        const eventType = event.event_type;
+        const data = event.data;
+
+        if (eventType === "transaction.completed") {
+          const transactionId = data.id;
+          const subscriptionId = data.subscription_id || null;
+          const buyerEmail = data.customer?.email || data.billing_details?.email_address || "";
+
+          // Check if already processed
+          const existing = await env.DB.prepare(
+            "SELECT license_code FROM licenses WHERE paddle_transaction_id = ?"
+          ).bind(transactionId).first<any>();
+
+          if (existing) {
+            return new Response(JSON.stringify({ message: "Transaction already processed", license_code: existing.license_code }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+
+          // Extract Price ID
+          const items = data.items || [];
+          let matchedPriceId = "";
+          for (const item of items) {
+            const priceId = item.price?.id || item.price_id;
+            if (priceId === PRICE_LIFETIME_ID || priceId === PRICE_YEARLY_ID) {
+              matchedPriceId = priceId;
+              break;
+            }
+          }
+
+          if (!matchedPriceId) {
+            return new Response(JSON.stringify({ message: "No matching EQT pricing items in transaction" }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+
+          // Set Tier and expiration based on price ID
+          const tier = "PLUS";
+          let expiresAt = "LIFETIME";
+          let durationDays: number | null = null;
+
+          if (matchedPriceId === PRICE_YEARLY_ID) {
+            durationDays = 365;
+            expiresAt = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
+          }
+
+          // Generate license code
+          const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+          const charSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+          let randStr = "";
+          const randBytes = new Uint8Array(6);
+          crypto.getRandomValues(randBytes);
+          for (let i = 0; i < 6; i++) {
+            randStr += charSet[randBytes[i] % charSet.length];
+          }
+
+          const checkSumPayload = `${tier}-${todayStr}-${randStr}`;
+          const encoder = new TextEncoder();
+          const checkHashBuf = await crypto.subtle.digest("MD5", encoder.encode(checkSumPayload));
+          const checkHex = Array.prototype.map.call(new Uint8Array(checkHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('').slice(0, 4).toUpperCase();
+          const licenseCode = `EQT-${tier}-${todayStr}-${randStr}-${checkHex}`;
+
+          // Hash email for buyer_email_hash
+          let emailHash = "";
+          if (buyerEmail) {
+            const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(buyerEmail.trim().toLowerCase()));
+            emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+          }
+
+          // Write to DB
+          await env.DB.prepare(`
+            INSERT INTO licenses (
+              license_code, tier, status, max_devices, expires_at, duration_days,
+              buyer_email_hash, paddle_transaction_id, paddle_subscription_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            licenseCode,
+            tier,
+            "active",
+            2,
+            expiresAt,
+            durationDays,
+            emailHash || null,
+            transactionId,
+            subscriptionId,
+            new Date().toISOString()
+          ).run();
+
+          return new Response(JSON.stringify({ message: "License generated and fulfilled", license_code: licenseCode }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Revoke license on refund
+        if (eventType === "transaction.refunded") {
+          const transactionId = data.id;
+          await env.DB.prepare(
+            "UPDATE licenses SET status = 'revoked' WHERE paddle_transaction_id = ?"
+          ).bind(transactionId).run();
+
+          return new Response(JSON.stringify({ message: "License revoked due to refund" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Revoke license on subscription cancel / suspend
+        if (eventType === "subscription.canceled" || eventType === "subscription.updated") {
+          const subscriptionId = data.id;
+          const status = data.status;
+
+          // If subscription is canceled, or updated to unpaid states
+          if (eventType === "subscription.canceled" || status === "canceled" || status === "past_due" || status === "paused") {
+            await env.DB.prepare(
+              "UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?"
+            ).bind(subscriptionId).run();
+
+            return new Response(JSON.stringify({ message: "License revoked due to subscription cancellation or non-payment" }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+
+        return new Response(JSON.stringify({ message: `Webhook event '${eventType}' acknowledged` }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 3.5.2 Client License Query (polling to fetch license code instantly after web payment completion)
+      if (url.pathname === "/api/v1/paddle/license-query" && request.method === "GET") {
+        const transactionId = url.searchParams.get("transaction_id");
+        if (!transactionId) {
+          return new Response(JSON.stringify({ error: "Missing transaction_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const license = await env.DB.prepare(
+          "SELECT license_code, tier, expires_at, status FROM licenses WHERE paddle_transaction_id = ?"
+        ).bind(transactionId).first<any>();
+
+        if (!license) {
+          return new Response(JSON.stringify({ error: "License not generated yet, pending payment confirmation" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        return new Response(JSON.stringify({
+          status: license.status,
+          license_code: license.license_code,
+          tier: license.tier,
+          expires_at: license.expires_at
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
 
       // 4. Health check or basic index
