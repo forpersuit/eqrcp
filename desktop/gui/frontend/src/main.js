@@ -2331,6 +2331,13 @@ function renderAboutPanel() {
                         <small>${escapeHTML(redeemDetail)}</small>
                         ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
                         ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
+                        ${!hasPaidLicense() ? `
+                            <div style="margin-top: 6px;">
+                                <a href="#" id="buy-license-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
+                                    ${t('buy_license_portal')}
+                                </a>
+                            </div>
+                        ` : ''}
                         ${license ? `
                             <div style="margin-top: 6px;">
                                 <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
@@ -3248,6 +3255,10 @@ function bindPanelEvents() {
     document.querySelector('#manage-license-portal-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
         window.runtime.BrowserOpenURL('https://www.eqt.net.im/portal.html');
+    });
+    document.querySelector('#buy-license-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.runtime.BrowserOpenURL('https://www.eqt.net.im/');
     });
 
     document.querySelector('#plan-back-to-about')?.addEventListener('click', () => {
