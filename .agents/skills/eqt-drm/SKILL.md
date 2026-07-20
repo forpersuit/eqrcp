@@ -160,3 +160,18 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 * **数据落盘**：在 D1 的 `licenses` 表中追加了 `buyer_email` 字段。在 Webhook 履约时保存真实邮箱。在客户端激活时明文带回，并写入本地 `license.lic` 中的 `buyer_email` 字段。
 * **签名兼容（零退化原则）**：客户端 Ed25519 的离线验签 payload 依然保持原有的 7 字段拼接模式（即不包含 `buyer_email`），从而彻底避免了修改签名串格式导致线上已激活的老客户端本地证书验签失败的风险。
 
+---
+
+## 7. 全生命周期邮件提醒通知设计 (Full Lifecycle Email Notifications)
+
+为了提升激活码使用的安全防范并提供即时订单反馈，DRM 服务端集成了付费、新设备绑定激活、退款及订阅注销的全生命周期邮件提醒机制：
+
+- **发信时机与触发点**：
+  1. **付款成功（新购买）**：在 `/api/v1/paddle/webhook` 的 `transaction.completed` 事件下触发，向用户发送包含激活码、套餐详情和客户端激活指引的邮件。
+  2. **新设备激活（绑定增加）**：在 `/api/v1/activate`（POST）接口中，当判定 `!isAlreadyActivated` 为真（新设备首次绑定）且 activations 记录成功写入数据库后触发。发送激活成功与安全防盗刷邮件，包含脱敏后的设备指纹（仅显示前 6 位以保护隐私），并提供自服务门户链接。
+  3. **退款吊销与失效**：在 `/api/v1/user/refund` 用户自助退款、以及 Webhook 的 `transaction.refunded`（退款事件）和 `subscription.canceled`（订阅注销）中状态变更为 `revoked` 时触发，发送失效警示邮件，通知客户端将在下次联网时强制擦除本地证书降级。
+- **Serverless 后台异步执行规范**：
+  - 所有的 DRM 邮件发送（调用 `sendDRMEmail`）均需包裹在 Workers 的 `ctx.waitUntil(...)` 中异步执行。
+  - 绝对禁止同步阻塞 HTTP 核心请求主线程，以保证 Webhook 握手在毫秒级内返回 200，并避免因 SMTP 服务交互时延引发 Paddle 履约重试或客户端请求超时。
+
+
