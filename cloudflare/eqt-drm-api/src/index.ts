@@ -658,6 +658,7 @@ export default {
         const event = JSON.parse(rawBody);
         const eventType = event.event_type;
         const data = event.data;
+        console.log("PADDLE_WEBHOOK_EVENT:", JSON.stringify(event));
 
         if (eventType === "transaction.completed") {
           const transactionId = data.id;
