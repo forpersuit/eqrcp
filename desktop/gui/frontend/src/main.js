@@ -2331,6 +2331,13 @@ function renderAboutPanel() {
                         <small>${escapeHTML(redeemDetail)}</small>
                         ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
                         ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
+                        ${license ? `
+                            <div style="margin-top: 6px;">
+                                <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
+                                    ${t('manage_license_portal')}
+                                </a>
+                            </div>
+                        ` : ''}
                     </div>
                     <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
                         <span class="plan-info-icon-wrapper" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}">
@@ -3238,6 +3245,10 @@ function bindPanelEvents() {
         render();
     });
     document.querySelector('#refresh-license-btn')?.addEventListener('click', triggerManualRefresh);
+    document.querySelector('#manage-license-portal-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.runtime.BrowserOpenURL('https://www.eqt.net.im/portal.html');
+    });
 
     document.querySelector('#plan-back-to-about')?.addEventListener('click', () => {
         state.activePanel = 'about';
