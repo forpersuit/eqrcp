@@ -187,6 +187,34 @@ async function sendMailViaSmtp(options: MailOptions): Promise<void> {
   }
 }
 
+async function sendDRMEmail(env: Env, to: string, subject: string, html: string): Promise<void> {
+  const host = env.MAIL_SEND_SERVER;
+  const pass = env.MAIL_SENDER_PASSWORD;
+  const sender = env.MAIL_SENDER;
+  const portStr = env.MAIL_SEND_SAFE_PORT;
+
+  if (!host || !pass || !sender || !portStr) {
+    console.warn("DRM SMTP Send Warning: SMTP credentials are not fully configured in env, skipping email delivery.");
+    return;
+  }
+
+  const port = parseInt(portStr) || 465;
+  try {
+    await sendMailViaSmtp({
+      sender,
+      senderPass: pass,
+      host,
+      port,
+      to,
+      subject,
+      html
+    });
+    console.log(`DRM SMTP Send Success: Email successfully sent to ${to} with subject "${subject}"`);
+  } catch (err: any) {
+    console.error(`DRM SMTP Send Error to ${to}:`, err.message || err);
+  }
+}
+
 
 // Perform 3-of-2 matching check between client hashes and a stored activation record
 function matchFingerprint(
@@ -691,6 +719,36 @@ export default {
             "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
           ).bind(license_code).run();
 
+          // Send revocation email notification to the buyer asynchronously
+          if (license.buyer_email) {
+            const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+            const emailHtml = `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                <h2 style="color: #ef4444;">您的 EQT 许可证授权已吊销</h2>
+                <p>您的退款申请已处理完成，或授权订阅因中止而被注销。以下是受影响的许可证明细：</p>
+                <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 14px; text-decoration: line-through; color: #888;">${license_code}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">当前状态 (Status)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; color: #ef4444; font-weight: bold;">已吊销 (Revoked)</td>
+                  </tr>
+                </table>
+                <p><strong>注意：</strong>该激活码下的所有已激活设备在下次联网同步（或最迟 7 天租约过期）时，软件将自动注销降级至免费体验版。</p>
+                <p>感谢您曾经使用 EQT，如果您有任何其他问题或需要重新激活服务，欢迎随时前往我们的官网。</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。</p>
+              </div>
+            `;
+            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销与退款通知", emailHtml));
+          }
+
           return new Response(JSON.stringify({
             success: true,
             message: "Refund processed successfully",
@@ -805,6 +863,55 @@ export default {
             disk_hash || "",
             new Date().toISOString()
           ).run();
+
+          // Send activation notification email to the buyer asynchronously
+          if (license.buyer_email) {
+            const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+            const currentDevicesCount = activations.length + 1;
+            const actTimeStr = new Date().toLocaleString();
+            
+            // Mask hashes for user privacy, show only first 6 chars
+            const shortUUID = uuid_hash ? uuid_hash.substring(0, 6) + "..." : "无";
+            const shortCPU = cpu_hash ? cpu_hash.substring(0, 6) + "..." : "无";
+            const shortDisk = disk_hash ? disk_hash.substring(0, 6) + "..." : "无";
+
+            const emailHtml = `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                <h2 style="color: #3b82f6;">您的 EQT 激活码绑定了新设备</h2>
+                <p>我们检测到您的激活码在新的客户端进行了设备激活绑定。以下是激活事件明细：</p>
+                <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码 (License Code)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace;">${license_code}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">授权级别 (Tier)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活时间 (Time)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${actTimeStr}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活设备特征 (Hashes)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">
+                      UUID: ${shortUUID}<br/>
+                      CPU: ${shortCPU}<br/>
+                      Disk: ${shortDisk}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">设备占用状态</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #3b82f6;">${currentDevicesCount} / ${license.max_devices} (台设备已使用)</td>
+                  </tr>
+                </table>
+                <p><strong>注意：</strong>如果这并非由您本人操作，可能说明您的激活码已被他人盗用，请立即前往我们的 <a href="https://www.eqt.net.im/portal.html" target="_blank" style="color: #3b82f6; text-decoration: none; font-weight: bold;">许可证自服务门户</a> 申请退款或重置授权，以保护您的权益！</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请安全使用您的激活码。</p>
+              </div>
+            `;
+            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】新设备授权激活提醒通知", emailHtml));
+          }
         }
 
         // Calculate dynamic expiration if the device has other active and unexpired license activations
@@ -1259,6 +1366,44 @@ export default {
             new Date().toISOString()
           ).run();
 
+          // Send confirmation email to the buyer asynchronously
+          if (buyerEmail) {
+            const planName = tier === "PLUS" ? "EQT Plus" : (tier === "PRO" ? "EQT Pro" : tier);
+            const expiresStr = expiresAt === "LIFETIME" ? "Lifetime (买断永久版)" : new Date(expiresAt).toLocaleDateString();
+            const emailHtml = `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                <h2 style="color: #10b981;">感谢您购买 EQT Easy QR Transfer！</h2>
+                <p>您的付费订单已处理完成。以下是您的付费授权激活码明细：</p>
+                <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${licenseCode}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有效期限 (Expires)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大激活设备数</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">2 台设备</td>
+                  </tr>
+                </table>
+                <p><strong>如何激活：</strong></p>
+                <ol>
+                  <li>打开 EQT 客户端，前往设置或关于面板。</li>
+                  <li>点击“输入激活码”并输入上述激活码，然后点击确认即可激活您的 EQT Plus/Pro 尊享功能！</li>
+                </ol>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。如有疑问，请访问官网或联系技术支持。</p>
+              </div>
+            `;
+            ctx.waitUntil(sendDRMEmail(env, buyerEmail, "【EQT】您的购买激活码与服务明细", emailHtml));
+          }
+
           return new Response(JSON.stringify({ message: "License generated and fulfilled", license_code: licenseCode }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -1268,9 +1413,44 @@ export default {
         // Revoke license on refund
         if (eventType === "transaction.refunded") {
           const transactionId = data.id;
+
+          // Query the email of the license owner
+          const license = await env.DB.prepare(
+            "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
+          ).bind(transactionId).first<any>();
+
           await env.DB.prepare(
             "UPDATE licenses SET status = 'revoked' WHERE paddle_transaction_id = ?"
           ).bind(transactionId).run();
+
+          if (license && license.buyer_email) {
+            const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+            const emailHtml = `
+              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                <h2 style="color: #ef4444;">您的 EQT 许可证授权已吊销</h2>
+                <p>您的退款申请已处理完成，或授权订阅因中止而被注销。以下是受影响的许可证明细：</p>
+                <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 14px; text-decoration: line-through; color: #888;">${license.license_code}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">当前状态 (Status)</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; color: #ef4444; font-weight: bold;">已吊销 (Revoked)</td>
+                  </tr>
+                </table>
+                <p><strong>注意：</strong>该激活码下的所有已激活设备在下次联网同步（或最迟 7 天租约过期）时，软件将自动注销降级至免费体验版。</p>
+                <p>感谢您曾经使用 EQT，如果您有任何其他问题或需要重新激活服务，欢迎随时前往我们的官网。</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。</p>
+              </div>
+            `;
+            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销与退款通知", emailHtml));
+          }
 
           return new Response(JSON.stringify({ message: "License revoked due to refund" }), {
             status: 200,
@@ -1285,9 +1465,43 @@ export default {
 
           // If subscription is canceled, or updated to unpaid states
           if (eventType === "subscription.canceled" || status === "canceled" || status === "past_due" || status === "paused") {
+            // Query the email of the license owner
+            const license = await env.DB.prepare(
+              "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
+            ).bind(subscriptionId).first<any>();
+
             await env.DB.prepare(
               "UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?"
             ).bind(subscriptionId).run();
+
+            if (license && license.buyer_email) {
+              const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+              const emailHtml = `
+                <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+                  <h2 style="color: #ef4444;">您的 EQT 订阅许可证已失效</h2>
+                  <p>您的 EQT 尊享服务订阅已中止，授权已失效。以下是受影响的许可证明细：</p>
+                  <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                    <tr>
+                      <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
+                      <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
+                      <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 14px; text-decoration: line-through; color: #888;">${license.license_code}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">原因 (Reason)</td>
+                      <td style="padding: 10px; border: 1px solid #ddd;">订阅已取消或扣款失败</td>
+                    </tr>
+                  </table>
+                  <p><strong>注意：</strong>该激活码下的所有已激活设备在下一次联网同步时，软件将自动降级至免费体验版。</p>
+                  <p>感谢您曾经使用 EQT，如果您有任何其他问题或需要重新激活服务，欢迎随时前往我们的官网进行续费。</p>
+                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+                  <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。</p>
+                </div>
+              `;
+              ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权失效通知", emailHtml));
+            }
 
             return new Response(JSON.stringify({ message: "License revoked due to subscription cancellation or non-payment" }), {
               status: 200,
