@@ -2331,13 +2331,6 @@ function renderAboutPanel() {
                         <small>${escapeHTML(redeemDetail)}</small>
                         ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
                         ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
-                        ${!hasPaidLicense() ? `
-                            <div style="margin-top: 6px;">
-                                <a href="#" id="buy-license-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
-                                    ${t('buy_license_portal')}
-                                </a>
-                            </div>
-                        ` : ''}
                         ${license ? `
                             <div style="margin-top: 6px;">
                                 <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
@@ -2468,6 +2461,11 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <span>${t('plan_feature_support') || '尊享专属技术支持通道'}</span>
                         </li>
                     </ul>
+                    ${!hasPaidLicense() ? `
+                        <button class="primary" id="buy-license-btn" style="width: 100%; padding: 10px 14px; font-weight: 700; margin-top: 14px; font-size: 13.5px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.15); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                            ${t('buy_license_portal')}
+                        </button>
+                    ` : ''}
                 </div>
             </div>
 
