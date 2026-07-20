@@ -491,7 +491,7 @@ export default {
 
         // Rate limit: check if a code was sent in the last 60 seconds
         const recentCode = await env.DB.prepare(
-          "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY id DESC LIMIT 1"
+          "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
         ).bind(email, new Date().toISOString()).first<any>();
 
         if (recentCode) {
@@ -538,7 +538,7 @@ export default {
         code = code.trim();
 
         const record = await env.DB.prepare(
-          "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND expires_at > ? ORDER BY id DESC LIMIT 1"
+          "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
         ).bind(email, code, new Date().toISOString()).first<any>();
 
         if (!record) {
