@@ -154,3 +154,9 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 ### 6.3 Paddle Adjustments API 退款细节
 * **API 地址自动转换**：通过检测 `PADDLE_API_KEY` 前缀（`pdl_sdbx_`）自动路由至沙箱 `sandbox-api.paddle.com` 或生产 API `api.paddle.com`。
 * **退款行项 ID 陷阱**：在创建退款（`POST /adjustments`）时，其 `items` 数组的 `item_id` 属性格式为 `txnitm_...`。该 ID **不能**从 `GET /transactions/{id}` 的 `data.items` 列表中直接提取（items 数组仅有 price schema，无 item ID）；**必须**从 `data.details.line_items` 数组里读取每个 item 的 `id` (以 `txnitm_` 开头)，否则将报 items 校验失败及 item_id 缺失错误。
+
+### 6.4 激活邮箱传输与离线签名兼容性设计
+为了在 EQT 软件的激活状态中显示购买授权对应的邮箱，采用了**非签名的明文元数据传输**设计，以达成 100% 的向后兼容性（Zero Regression）：
+* **数据落盘**：在 D1 的 `licenses` 表中追加了 `buyer_email` 字段。在 Webhook 履约时保存真实邮箱。在客户端激活时明文带回，并写入本地 `license.lic` 中的 `buyer_email` 字段。
+* **签名兼容（零退化原则）**：客户端 Ed25519 的离线验签 payload 依然保持原有的 7 字段拼接模式（即不包含 `buyer_email`），从而彻底避免了修改签名串格式导致线上已激活的老客户端本地证书验签失败的风险。
+
