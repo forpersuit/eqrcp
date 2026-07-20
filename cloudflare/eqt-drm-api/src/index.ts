@@ -215,6 +215,61 @@ async function sendDRMEmail(env: Env, to: string, subject: string, html: string)
   }
 }
 
+// Multi-language dictionary for purchase checkout email verification
+const CHECKOUT_EMAIL_I18N: Record<string, { subject: string; title: string; bodyHtml: string }> = {
+  zh: {
+    subject: "【EQT】您的购买邮箱验证码",
+    title: "购买邮箱验证",
+    bodyHtml: "感谢您选择 EQT 尊享服务。您当前正在验证购买邮箱，验证码为："
+  },
+  en: {
+    subject: "【EQT】Your Purchase Email Verification Code",
+    title: "Verify Your Purchase Email",
+    bodyHtml: "Thank you for choosing EQT Premium. Your verification code for purchase is:"
+  },
+  ja: {
+    subject: "【EQT】ご購入用メールアドレス認証コード",
+    title: "ご購入メールアドレスの確認",
+    bodyHtml: "EQT プレミアムサービスをご選択いただきありがとうございます。認証コード："
+  },
+  ko: {
+    subject: "【EQT】구매 이메일 인증 코드",
+    title: "구매 이메일 인증",
+    bodyHtml: "EQT 프리미엄 서비스를 선택해 주셔서 감사합니다. 귀하의 인증 코드는 다음과 같습니다:"
+  },
+  es: {
+    subject: "【EQT】Código de verificación para su compra",
+    title: "Verificación de correo para la compra",
+    bodyHtml: "Gracias por elegir EQT Premium. Su código de verificación para la compra es:"
+  },
+  de: {
+    subject: "【EQT】Ihr Bestätigungscode für den Kauf",
+    title: "Bestätigung der E-Mail-Adresse",
+    bodyHtml: "Vielen Dank, dass Sie sich für EQT Premium entschieden haben. Ihr Bestätigungscode lautet:"
+  },
+  fr: {
+    subject: "【EQT】Votre code de vérification d'achat",
+    title: "Vérification de l'e-mail d'achat",
+    bodyHtml: "Merci d'avoir choisi EQT Premium. Votre code de vérification est :"
+  }
+};
+
+function buildCheckoutEmailHtml(lang: string, code: string): { subject: string; html: string } {
+  const targetLang = (lang && CHECKOUT_EMAIL_I18N[lang]) ? lang : "en";
+  const t = CHECKOUT_EMAIL_I18N[targetLang];
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333; max-width: 500px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+      <h2 style="color: #10b981; margin-top: 0;">${t.title}</h2>
+      <p style="font-size: 14px; color: #555;">${t.bodyHtml}</p>
+      <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+        <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #10b981; font-family: monospace;">${code}</span>
+      </div>
+      <p style="font-size: 12px; color: #888; margin-bottom: 0;">验证码有效期为 10 分钟 (Valid for 10 minutes)。请勿透露给他人。</p>
+    </div>
+  `;
+  return { subject: t.subject, html };
+}
+
 
 // Perform 3-of-2 matching check between client hashes and a stored activation record
 function matchFingerprint(
@@ -418,6 +473,85 @@ export default {
         !url.pathname.startsWith("/api/v1/")
       ) {
         return await handleDownloadDomain(request, env, ctx, corsHeaders);
+      }
+
+      // 0.0 Send checkout email verification code (supports multi-language)
+      if (url.pathname === "/api/v1/checkout/send-code" && request.method === "POST") {
+        const body: any = await request.json();
+        let email = body.email;
+        const lang = body.lang || "en";
+
+        if (!email || typeof email !== "string" || !email.includes("@")) {
+          return new Response(JSON.stringify({ error: "Invalid email address" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        email = email.trim().toLowerCase();
+
+        // Rate limit: check if a code was sent in the last 60 seconds
+        const recentCode = await env.DB.prepare(
+          "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY id DESC LIMIT 1"
+        ).bind(email, new Date().toISOString()).first<any>();
+
+        if (recentCode) {
+          const createdAt = new Date(recentCode.created_at).getTime();
+          if (Date.now() - createdAt < 60000) {
+            return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+
+        // Generate 6-digit random code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+        await env.DB.prepare(
+          "INSERT INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+        ).bind(email, code, expiresAt, new Date().toISOString()).run();
+
+        // Build localized email
+        const { subject, html } = buildCheckoutEmailHtml(lang, code);
+        ctx.waitUntil(sendDRMEmail(env, email, subject, html));
+
+        return new Response(JSON.stringify({ success: true, message: "Verification code sent to your email" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 0.01 Verify checkout email code
+      if (url.pathname === "/api/v1/checkout/verify-code" && request.method === "POST") {
+        const body: any = await request.json();
+        let email = body.email;
+        let code = body.code;
+
+        if (!email || !code) {
+          return new Response(JSON.stringify({ error: "Missing email or verification code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        email = email.trim().toLowerCase();
+        code = code.trim();
+
+        const record = await env.DB.prepare(
+          "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND expires_at > ? ORDER BY id DESC LIMIT 1"
+        ).bind(email, code, new Date().toISOString()).first<any>();
+
+        if (!record) {
+          return new Response(JSON.stringify({ error: "Invalid or expired verification code" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, message: "Email verified successfully" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
 
       // 0.1 Send email verification code

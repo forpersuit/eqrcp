@@ -320,7 +320,19 @@
                 "modal_step3": "Paste the code and click \"Activate\"",
                 "modal_ok": "Get Started",
                 "modal_error_title": "Fulfillment Delayed",
-                "modal_error_desc": "We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support."
+                "modal_error_desc": "We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support.",
+                "verify_email_modal_step1": "Security Check",
+                "verify_email_modal_title": "Verify Email Before Checkout",
+                "verify_email_modal_desc": "Please verify your purchase email address to ensure your license code will be delivered safely and accurately.",
+                "email_address": "Email Address",
+                "code_label": "Verification Code (6-digit)",
+                "send_code_btn": "Send Code",
+                "sending_code": "Sending...",
+                "verify_and_pay_btn": "Verify & Proceed to Payment",
+                "verifying_btn": "Verifying...",
+                "invalid_email_err": "Please enter a valid email address",
+                "invalid_code_err": "Please enter 6-digit verification code",
+                "code_sent_success": "Verification code sent to your email!"
             },
             "zh": {
                 "back_to_home": "返回主页",
@@ -371,7 +383,19 @@
                 "modal_step3": "粘贴您的激活码并点击“激活”",
                 "modal_ok": "开始使用",
                 "modal_error_title": "激活码生成延迟",
-                "modal_error_desc": "您的付款已确认，但授权码生成超时。激活码将在数分钟内自动发送至您的邮箱。如有疑问请联系支持邮箱。"
+                "modal_error_desc": "您的付款已确认，但授权码生成超时。激活码将在数分钟内自动发送至您的邮箱。如有疑问请联系支持邮箱。",
+                "verify_email_modal_step1": "安全验证",
+                "verify_email_modal_title": "结账前邮箱验证",
+                "verify_email_modal_desc": "请先验证您的接收邮箱，以确保付款成功后激活码能够准确无误地送达。",
+                "email_address": "购买电子邮箱",
+                "code_label": "6 位验证码",
+                "send_code_btn": "发送验证码",
+                "sending_code": "发送中...",
+                "verify_and_pay_btn": "验证邮箱并去支付",
+                "verifying_btn": "验证中...",
+                "invalid_email_err": "请输入有效的电子邮箱地址",
+                "invalid_code_err": "请输入 6 位数字验证码",
+                "code_sent_success": "验证码已成功发送至您的邮箱！"
             },
             "ja": {
                 "back_to_home": "ホームに戻る",
@@ -680,30 +704,158 @@
                     }
                 });
 
+                let pendingPriceId = null;
+                let verifiedEmail = null;
+
                 const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
                 const buyYearlyBtn = document.getElementById('buy-yearly-btn');
 
                 if (buyLifetimeBtn) {
                     buyLifetimeBtn.addEventListener('click', () => {
-                        Paddle.Checkout.open({
-                            items: [
-                                { priceId: PRICE_LIFETIME_ID, quantity: 1 }
-                            ]
-                        });
+                        pendingPriceId = PRICE_LIFETIME_ID;
+                        openVerifyModal();
                     });
                 }
 
                 if (buyYearlyBtn) {
                     buyYearlyBtn.addEventListener('click', () => {
-                        Paddle.Checkout.open({
-                            items: [
-                                { priceId: PRICE_YEARLY_ID, quantity: 1 }
-                            ]
-                        });
+                        pendingPriceId = PRICE_YEARLY_ID;
+                        openVerifyModal();
                     });
                 }
             }
         }
+
+        // Email Verification Modal Control
+        const verifyModalEl = document.getElementById('verify-email-modal');
+        const emailInputEl = document.getElementById('checkout-email-input');
+        const codeInputEl = document.getElementById('checkout-code-input');
+        const sendCodeBtn = document.getElementById('send-checkout-code-btn');
+        const verifyPayBtn = document.getElementById('verify-and-pay-btn');
+        const statusMsgEl = document.getElementById('verify-modal-status-msg');
+
+        let cooldownTimer = null;
+
+        function openVerifyModal() {
+            if (!verifyModalEl) return;
+            statusMsgEl.classList.add('hidden');
+            statusMsgEl.textContent = '';
+            verifyModalEl.classList.remove('hidden');
+            setTimeout(() => {
+                verifyModalEl.classList.remove('opacity-0');
+                verifyModalEl.querySelector('.transform')?.classList.remove('scale-95');
+            }, 50);
+        }
+
+        function closeVerifyModal() {
+            if (!verifyModalEl) return;
+            verifyModalEl.classList.add('opacity-0');
+            verifyModalEl.querySelector('.transform')?.classList.add('scale-95');
+            setTimeout(() => {
+                verifyModalEl.classList.add('hidden');
+            }, 300);
+        }
+
+        // Send verification code
+        sendCodeBtn?.addEventListener('click', async () => {
+            const email = emailInputEl.value.trim();
+            if (!email || !email.includes('@')) {
+                showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
+                return;
+            }
+
+            sendCodeBtn.disabled = true;
+            sendCodeBtn.textContent = translations[currentLang]?.sending_code || 'Sending...';
+
+            try {
+                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, lang: currentLang })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to send code');
+                }
+
+                showVerifyStatus(translations[currentLang]?.code_sent_success || 'Verification code sent to your email!', false);
+                startSendCooldown(60);
+            } catch (err) {
+                showVerifyStatus(err.message, true);
+                sendCodeBtn.disabled = false;
+                sendCodeBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
+            }
+        });
+
+        function startSendCooldown(seconds) {
+            let remaining = seconds;
+            sendCodeBtn.disabled = true;
+            sendCodeBtn.textContent = `${remaining}s`;
+            if (cooldownTimer) clearInterval(cooldownTimer);
+            cooldownTimer = setInterval(() => {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(cooldownTimer);
+                    sendCodeBtn.disabled = false;
+                    sendCodeBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
+                } else {
+                    sendCodeBtn.textContent = `${remaining}s`;
+                }
+            }, 1000);
+        }
+
+        function showVerifyStatus(msg, isError) {
+            statusMsgEl.textContent = msg;
+            statusMsgEl.classList.remove('hidden', 'text-red-400', 'text-primary');
+            statusMsgEl.classList.add(isError ? 'text-red-400' : 'text-primary');
+        }
+
+        // Verify code and proceed to Paddle checkout
+        verifyPayBtn?.addEventListener('click', async () => {
+            const email = emailInputEl.value.trim();
+            const code = codeInputEl.value.trim();
+
+            if (!email || !email.includes('@')) {
+                showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
+                return;
+            }
+            if (!code || code.length !== 6) {
+                showVerifyStatus(translations[currentLang]?.invalid_code_err || 'Please enter 6-digit code', true);
+                return;
+            }
+
+            verifyPayBtn.disabled = true;
+            verifyPayBtn.innerHTML = `<span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
+
+            try {
+                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Verification failed');
+                }
+
+                verifiedEmail = email;
+                closeVerifyModal();
+
+                // Open Paddle Checkout with pre-filled verified customer email
+                setTimeout(() => {
+                    Paddle.Checkout.open({
+                        items: [{ priceId: pendingPriceId, quantity: 1 }],
+                        customer: { email: verifiedEmail }
+                    });
+                }, 350);
+
+            } catch (err) {
+                showVerifyStatus(err.message, true);
+            } finally {
+                verifyPayBtn.disabled = false;
+                verifyPayBtn.innerHTML = `<span>${translations[currentLang]?.verify_and_pay_btn || 'Verify & Proceed to Payment'}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
+            }
+        });
 
         // Modal elements control
         const modalEl = document.getElementById('license-modal');
@@ -813,6 +965,50 @@
             initPaddle();
         });
     </script>
+
+    <!-- Email Verification Before Checkout Modal -->
+    <div id="verify-email-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
+        <div class="glass-panel max-w-md w-full p-6 md:p-8 rounded-2xl border border-primary/40 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-5">
+            <button id="close-verify-modal-btn" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeVerifyModal()">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            
+            <div class="space-y-1">
+                <div class="inline-flex items-center gap-1.5 text-primary font-bold text-xs">
+                    <span class="material-symbols-outlined text-sm">mark_email_read</span>
+                    <span data-i18n="verify_email_modal_step1">Security Check</span>
+                </div>
+                <h3 class="font-headline-md text-headline-md text-white text-xl font-bold" data-i18n="verify_email_modal_title">Verify Email Before Checkout</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-xs leading-relaxed" data-i18n="verify_email_modal_desc">Please verify your purchase email address to ensure your license code will be delivered safely and accurately.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Email input & Send Code button -->
+                <div class="space-y-1 text-left">
+                    <label class="block text-xs font-medium text-on-surface-variant" data-i18n="email_address">Email Address</label>
+                    <div class="flex gap-2">
+                        <input type="email" id="checkout-email-input" class="flex-grow bg-black/40 border border-white/15 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-colors" placeholder="user@example.com" />
+                        <button id="send-checkout-code-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]" data-i18n="send_code_btn">Send Code</button>
+                    </div>
+                </div>
+                
+                <!-- Code input -->
+                <div class="space-y-1 text-left">
+                    <label class="block text-xs font-medium text-on-surface-variant" data-i18n="code_label">Verification Code (6-digit)</label>
+                    <input type="text" id="checkout-code-input" maxlength="6" class="w-full bg-black/40 border border-white/15 focus:border-primary text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2 outline-none transition-colors" placeholder="123456" />
+                </div>
+                
+                <!-- Status / Error message -->
+                <div id="verify-modal-status-msg" class="text-xs min-h-[18px] font-medium hidden text-left"></div>
+                
+                <!-- Submit button -->
+                <button id="verify-and-pay-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 text-sm flex items-center justify-center gap-2">
+                    <span data-i18n="verify_and_pay_btn">Verify &amp; Proceed to Payment</span>
+                    <span class="material-symbols-outlined text-sm">lock_open</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- License Success / Loader Modal -->
     <div id="license-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
