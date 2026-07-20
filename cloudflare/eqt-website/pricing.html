@@ -127,6 +127,8 @@
             box-shadow: 0 0 20px rgba(221, 183, 255, 0.2);
         }
     </style>
+    <!-- Include Paddle.js SDK -->
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
     <!-- Header -->
@@ -211,7 +213,7 @@
                         <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
                         <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat4">Uncapped speed &amp; unlimited size</span></li>
                     </ul>
-                    <button class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
+                    <button id="buy-lifetime-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
                 </div>
 
                 <!-- Plus Yearly -->
@@ -223,7 +225,7 @@
                         <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat2">Unlimited session time &amp; files</span></li>
                         <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat3">Priority customer support</span></li>
                     </ul>
-                    <button class="w-full py-3 glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md font-medium" data-i18n="price_yearly_btn">Subscribe Yearly</button>
+                    <button id="buy-yearly-btn" class="w-full py-3 glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md font-medium" data-i18n="price_yearly_btn">Subscribe Yearly</button>
                 </div>
             </div>
         </section>
@@ -631,8 +633,47 @@
             });
         }
 
+        // ====== PADDLE BILLING INTEGRATION ======
+        const PADDLE_ENV = "sandbox"; // Switch to 'production' for live environment
+        const PADDLE_TOKEN = "test_7d279f61a3499fed520f7cd8c08"; // Replace with your own client-side token
+        const PRICE_LIFETIME_ID = "pri_01gsz8ntc6z7npqqp6j4ys0w1w"; // Replace with your Lifetime Price ID
+        const PRICE_YEARLY_ID = "pri_01h1vjfevh5etwq3rb416a23h2"; // Replace with your Yearly Price ID
+
+        function initPaddle() {
+            if (typeof Paddle !== 'undefined') {
+                Paddle.Environment.set(PADDLE_ENV);
+                Paddle.Initialize({
+                    token: PADDLE_TOKEN
+                });
+
+                const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
+                const buyYearlyBtn = document.getElementById('buy-yearly-btn');
+
+                if (buyLifetimeBtn) {
+                    buyLifetimeBtn.addEventListener('click', () => {
+                        Paddle.Checkout.open({
+                            items: [
+                                { priceId: PRICE_LIFETIME_ID, quantity: 1 }
+                            ]
+                        });
+                    });
+                }
+
+                if (buyYearlyBtn) {
+                    buyYearlyBtn.addEventListener('click', () => {
+                        Paddle.Checkout.open({
+                            items: [
+                                { priceId: PRICE_YEARLY_ID, quantity: 1 }
+                            ]
+                        });
+                    });
+                }
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
+            initPaddle();
         });
     </script>
 </body>
