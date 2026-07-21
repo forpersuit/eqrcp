@@ -417,6 +417,79 @@ function buildCheckoutEmailHtml(lang: string, code: string): { subject: string; 
   return { subject: t.subject, html };
 }
 
+const DEVICE_NOTIFICATION_I18N: Record<string, {
+  boundSubject: string;
+  boundTitle: string;
+  boundBody: (lic: string, time: string, devHash: string, current: number, max: number) => string;
+  unboundSubject: string;
+  unboundTitle: string;
+  unboundBody: (lic: string, time: string, remainingUnbinds: number) => string;
+}> = {
+  zh: {
+    boundSubject: "【EQT 授权安全提醒】您的授权码已绑定新设备",
+    boundTitle: "新设备激活通知",
+    boundBody: (lic, time, devHash, current, max) => `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">新设备激活成功</h2>
+        <p style="color: #475569;">尊敬的用户，您的 EQT 授权码已在新的硬件设备上完成绑定：</p>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>绑定时间：</strong> ${time}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>设备特征摘要：</strong> ${devHash}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>已用设备数：</strong> ${current} / ${max}</p>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">若非您本人操作，请及时前往用户自服务门户解绑非法设备。</p>
+      </div>`,
+    unboundSubject: "【EQT 授权安全提醒】您的授权码已成功解绑一台设备",
+    unboundTitle: "设备解绑成功通知",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">设备解绑成功</h2>
+        <p style="color: #475569;">尊敬的用户，您的 EQT 授权码已成功解绑一台硬件设备：</p>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>解绑时间：</strong> ${time}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>过去365天剩余解绑额度：</strong> ${remainingUnbinds} 次</p>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">空出的设备额度现可用于绑定新的设备。</p>
+      </div>`
+  },
+  en: {
+    boundSubject: "[EQT Security Alert] New Device Bound to Your License",
+    boundTitle: "New Device Activated",
+    boundBody: (lic, time, devHash, current, max) => `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">New Device Activated Successfully</h2>
+        <p style="color: #475569;">Hello, a new hardware device has been bound to your EQT license:</p>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>Activated At:</strong> ${time}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>Device Hash:</strong> ${devHash}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>Devices In Use:</strong> ${current} / ${max}</p>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">If you did not authorize this action, please visit the self-service portal to unbind unknown devices.</p>
+      </div>`,
+    unboundSubject: "[EQT Security Alert] Device Unbound from Your License",
+    unboundTitle: "Device Unbound Successfully",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">Device Unbound Successfully</h2>
+        <p style="color: #475569;">Hello, a device has been unbound from your EQT license:</p>
+        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>Unbound At:</strong> ${time}</p>
+          <p style="margin: 4px 0; color: #334155;"><strong>Remaining Yearly Unbind Quota:</strong> ${remainingUnbinds}</p>
+        </div>
+        <p style="color: #64748b; font-size: 13px;">The freed device slot is now available for new device activations.</p>
+      </div>`
+  }
+};
+
+function getDeviceNoticeTemplate(lang: string) {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  return DEVICE_NOTIFICATION_I18N[norm] || DEVICE_NOTIFICATION_I18N['zh'] || DEVICE_NOTIFICATION_I18N['en'];
+}
+
 
 // Perform 3-of-2 matching check between client hashes and a stored activation record
 function matchFingerprint(
@@ -972,6 +1045,19 @@ export default {
         await env.DB.prepare(
           "INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)"
         ).bind(license_code, activation_id, nowIso).run();
+
+        // Send unbind security email notification asynchronously
+        const targetEmail = session.email || license.buyer_email;
+        if (targetEmail) {
+          const t = getDeviceNoticeTemplate(reqLang);
+          const remainingUnbinds = MAX_YEARLY_UNBINDS - (unbindCount + 1);
+          ctx.waitUntil(sendDRMEmail(
+            env,
+            targetEmail,
+            t.unboundSubject,
+            t.unboundBody(license_code, nowIso, remainingUnbinds)
+          ));
+        }
 
         return new Response(JSON.stringify({
           success: true,
