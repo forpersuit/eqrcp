@@ -2346,21 +2346,23 @@ function renderAboutPanel() {
                     </div>
 
                     <div class="about-plan-footer">
+                        <div class="about-plan-subtext">
+                            ${hasPaidLicense() ? (t('plan_active_subtext') || '已激活尊享无限制极速传输与高级特权') : (t('plan_free_subtext') || '升级解锁局域网 Chat 与无限大文件传输')}
+                        </div>
                         <div class="about-plan-actions">
                             ${license ? `
-                                <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; font-weight: 700; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                                    <span>${t('manage_license_portal')}</span>
+                                <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
+                                    ${licenseManagerIcon()}
                                 </a>
                             ` : `
-                                <a href="#" id="buy-license-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; font-weight: 700; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                                    <span>${t('buy_license_portal')}</span>
+                                <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
+                                    ${cartUpgradeIcon()}
                                 </a>
                             `}
+                            <button class="about-plan-icon-btn" id="toggle-plan-info" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}" aria-label="${escapeAttr(t('plan_desc_title'))}">
+                                ${diamondIcon()}
+                            </button>
                         </div>
-                        <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 4px 10px; height: 26px; border-radius: 13px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.08); cursor: pointer; color: var(--accent-strong, #16a34a); font-size: 11px; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='var(--accent-strong)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(22, 163, 74, 0.08)'; this.style.color='var(--accent-strong)';">
-                            <span style="width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
-                            <span>${t('tooltip_popover_comparsion') || '对比权益'}</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -5521,6 +5523,14 @@ function closeIcon() {
 
 function editIcon() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
+}
+
+function licenseManagerIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-2-2l2 2M13 11l-4 4M9 15l-2-2M7 17l-2-2M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path></svg>';
+}
+
+function cartUpgradeIcon() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>';
 }
 
 function shortName(path) {
