@@ -3356,18 +3356,54 @@ function closePanel() {
     render();
 }
 
+function shouldProtectActiveInput() {
+    const activeEl = document.activeElement;
+    if (!activeEl) return false;
+
+    // 1. 如果用户正在 Settings 或弹窗面板的输入框/文本域/下拉框中打字编辑
+    if (state.activePanel && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) {
+        return true;
+    }
+
+    // 2. 如果用户正在历史搜索框中打字
+    if (activeEl.id === 'history-search-input' || activeEl.closest('.search-input-box')) {
+        return true;
+    }
+
+    return false;
+}
+
+function updateSettingsBadgeUI() {
+    const btn = document.querySelector('#open-settings');
+    if (!btn) return;
+    let badge = btn.querySelector('.badge-dot');
+    const shouldShow = state.settings?.autoUpdateMode !== 'off' && (
+        (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
+        ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
+    );
+    if (shouldShow) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'badge-dot';
+            badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
+            btn.appendChild(badge);
+        }
+    } else {
+        if (badge) {
+            badge.remove();
+        }
+    }
+}
+
 function syncManualUpdateCheckUI() {
+    updateSettingsBadgeUI();
     const statusEl = document.querySelector('#update-check-status');
     const btnEl = document.querySelector('#btn-manual-update-check');
-    console.log('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl:', statusEl, 'btnEl:', btnEl, 'updateStatusText:', state.updateStatusText, 'updateBtnText:', state.updateBtnText);
-    LogInfo('[Antigravity Debug] syncManualUpdateCheckUI called, statusEl: ' + (statusEl ? 'found' : 'null') + ', btnEl: ' + (btnEl ? 'found' : 'null') + ', updateStatusText: ' + state.updateStatusText + ', updateBtnText: ' + state.updateBtnText);
     if (statusEl && btnEl) {
         statusEl.textContent = state.updateStatusText || t('manual_check_tips');
         btnEl.textContent = state.updateBtnText || t('manual_check_btn');
         btnEl.disabled = Boolean(state.updateBtnDisabled);
-    } else {
-        console.log('[Antigravity Debug] syncManualUpdateCheckUI fallback to syncPanelSurface');
-        LogInfo('[Antigravity Debug] syncManualUpdateCheckUI fallback to syncPanelSurface');
+    } else if (state.activePanel === 'settings' && !shouldProtectActiveInput()) {
         syncPanelSurface();
     }
 }
@@ -4601,8 +4637,8 @@ async function loadSettings() {
 
         // Query integration status asynchronously in the background so it doesn't block startup
         loadIntegrationStatusData().then(() => {
-            if (state.activePanel === 'settings') {
-                render();
+            if (state.activePanel === 'settings' && !shouldProtectActiveInput()) {
+                syncPanelSurface();
             }
         }).catch((e) => {
             console.error('Failed to load integration status in background:', e);
@@ -4663,7 +4699,7 @@ function applyStatusData(nextStatus) {
     }
 
     if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode) {
-        if (state.activePanel) {
+        if (state.activePanel || shouldProtectActiveInput()) {
             return;
         }
         render();
@@ -4777,7 +4813,7 @@ function connectAgentEvents() {
                 updateChatQRPulseButton();
                 return;
             }
-            if (state.activePanel) {
+            if (state.activePanel || shouldProtectActiveInput()) {
                 return;
             }
             // 如果处于 share 模式或 receive 模式下的 activeTask 传输界面，直接进行局部渲染更新，从而避免全局 render 导致 tooltip 气泡闪烁

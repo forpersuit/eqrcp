@@ -32,6 +32,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
       1. **判定骨架重建**：只有当设备连接状态变化（如 `clientID` 集合增减）、文件条目数等结构化元数据发生改变时，才允许执行一次性的 `innerHTML` 骨架重构。
       2. **精准就地更新**：若结构化骨架未发生改变，禁止以任何形式重写外层容器的 `innerHTML`，必须为需要变动的文本、进度条、状态徽章等高频波动节点预埋带唯一标识（如 `clientID`）的 HTML `id`。在状态监听分发处，通过 `document.getElementById` 直接定位对应 DOM 节点，精准局部刷新其 `textContent`、`style.cssText` 或局部 `innerHTML`（仅限内部细微徽章）。
       3. **未来适配要求**：未来在开发任何包含高频状态流（如传输进度、连接数、性能指标）的 UI 界面时，均需以此就地静默更新机制为标准，绝对禁止暴力覆载容器 innerHTML。
+  - **Active Input & Search Typing Protection (活动文本框与搜索打字焦点保护)**：
+    - **避坑准则**：在后台推送（如 `agent-status`）、心跳同步（`applyStatusData`）以及异步插件装载等回调中，在准备触发全屏 `render()` 之前，必须通过 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 是否正在弹窗输入框、文本域或历史记录搜索框中打字编辑。如果是，必须挂起全屏 DOM 重绘，将最新状态留存在内存中，切勿重新加载/替换包含活动光标的 DOM 容器，以防导致焦点剥离、输入选区清空或搜索框强制折叠。
+  - **Incremental Badge & Stage Text Patching (红点与阶段文本就地补丁)**：
+    - **避坑准则**：对于自动更新检测阶段变化（如后台默默下好更新变为 `ready`），禁止通过全屏 `render()` 来更新设置按钮上的小红点。应用通过 `updateSettingsBadgeUI()` 直接寻找 `#open-settings` 并增量 append/remove `.badge-dot` 节点，并在弹窗未打开时直接跳过 `syncPanelSurface()`，极大节约渲染开销并杜绝微顿感。
 
   - **Avoiding High-frequency Lock Contention on UI Feeds**:
     - **Issue**: High-frequency updates on write streams (e.g. updating `BytesDone` inside `onWrite` per network write chunk) trigger severe lock contention on status mutexes (`statusMu` / `clientStatesMu`) up to thousands of times per second. This starves the desktop GUI's main thread status retrieval, locking/freezing the interface (making Wails GUI non-scrollable and unresponsive).
