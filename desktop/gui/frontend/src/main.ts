@@ -676,24 +676,25 @@ function render(): void {
         </main>
     `;
 
-    const nextFrame = document.createElement('div');
-    nextFrame.innerHTML = html;
-
-    morphdom(appEl, nextFrame.firstElementChild || nextFrame, {
-        onBeforeElUpdated(fromEl: HTMLElement, toEl: HTMLElement) {
-            if (fromEl.id === 'chat-iframe' && toEl.id === 'chat-iframe') {
-                if (canKeepChatFrame(previousChatURL)) {
-                    return false;
+    if (!appEl.firstElementChild) {
+        appEl.innerHTML = html;
+    } else {
+        morphdom(appEl.firstElementChild, html, {
+            onBeforeElUpdated(fromEl: HTMLElement, toEl: HTMLElement) {
+                if (fromEl.id === 'chat-iframe' && toEl.id === 'chat-iframe') {
+                    if (canKeepChatFrame(previousChatURL)) {
+                        return false;
+                    }
                 }
-            }
-            if (fromEl.tagName === 'INPUT' || fromEl.tagName === 'TEXTAREA' || fromEl.tagName === 'SELECT') {
-                if (document.activeElement === fromEl) {
-                    return false;
+                if (fromEl.tagName === 'INPUT' || fromEl.tagName === 'TEXTAREA' || fromEl.tagName === 'SELECT') {
+                    if (document.activeElement === fromEl) {
+                        return false;
+                    }
                 }
-            }
-            return true;
-        },
-    });
+                return true;
+            },
+        });
+    }
 
     bindEvents();
     syncManualUpdateCheckUI();
@@ -718,17 +719,39 @@ function bindEvents(): void {
         const target = e.target as HTMLElement | null;
         if (!target) return;
 
-        if (target.id === 'tab-share') setMode('share');
-        if (target.id === 'tab-receive') setMode('receive');
-        if (target.id === 'tab-chat') setMode('chat');
+        if (target.closest('#tab-share, [data-mode="share"]')) setMode('share');
+        if (target.closest('#tab-receive, [data-mode="receive"]')) setMode('receive');
+        if (target.closest('#tab-chat, [data-mode="chat"]')) setMode('chat');
 
         if (target.closest('#open-settings')) openPanel('settings');
         if (target.closest('#open-about')) openPanel('about');
         if (target.closest('#open-plans')) openPanel('plans');
         if (target.closest('#open-redeem')) openPanel('redeem');
         if (target.closest('#open-feedback')) openPanel('feedback');
+        if (target.closest('#close-panel, .close-button')) closePanel();
 
-        if (target.id === 'choose-files') {
+        if (target.closest('#cancel-switch')) {
+            if (confirmSwitchResolve) {
+                confirmSwitchResolve(false);
+                confirmSwitchResolve = null;
+            }
+            state.pendingSwitchMode = null;
+            render();
+        }
+
+        if (target.closest('#confirm-switch')) {
+            if (confirmSwitchResolve) {
+                confirmSwitchResolve(true);
+                confirmSwitchResolve = null;
+            }
+            if (state.pendingSwitchMode) {
+                state.mode = state.pendingSwitchMode;
+                state.pendingSwitchMode = null;
+            }
+            render();
+        }
+
+        if (target.closest('#choose-files')) {
             try {
                 const files = await SelectFiles();
                 if (files && files.length > 0) {
@@ -746,7 +769,7 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'choose-folder') {
+        if (target.closest('#choose-folder')) {
             try {
                 const dir = await SelectShareDirectory();
                 if (dir) {
@@ -768,7 +791,7 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'choose-receive') {
+        if (target.closest('#choose-receive')) {
             try {
                 const dir = await SelectReceiveDirectory();
                 if (dir) {
@@ -780,7 +803,7 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'start-share') {
+        if (target.closest('#start-share')) {
             if (!state.sharePaths.length) return;
             state.busy = true;
             render();
@@ -795,13 +818,13 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'clear-share') {
+        if (target.closest('#clear-share')) {
             state.sharePaths = [];
             state.shareLimitNotice = '';
             render();
         }
 
-        if (target.id === 'start-receive') {
+        if (target.closest('#start-receive')) {
             if (!state.receiveDir) return;
             state.busy = true;
             render();
@@ -815,7 +838,7 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'start-chat') {
+        if (target.closest('#start-chat')) {
             state.busy = true;
             render();
             try {
@@ -846,21 +869,21 @@ function bindEvents(): void {
             }
         }
 
-        if (target.id === 'confirm-redeem') {
+        if (target.closest('#confirm-redeem')) {
             confirmRedeem({ render, loadStatusData, stopChatUsage });
         }
 
-        if (target.id === 'reset-license') {
+        if (target.closest('#reset-license')) {
             state.confirmResetPending = true;
             render();
         }
 
-        if (target.id === 'cancel-reset-license') {
+        if (target.closest('#cancel-reset-license')) {
             state.confirmResetPending = false;
             render();
         }
 
-        if (target.id === 'confirm-reset-license') {
+        if (target.closest('#confirm-reset-license')) {
             state.confirmResetPending = false;
             resetLicense({ render, loadStatusData, startChatUsage });
         }
