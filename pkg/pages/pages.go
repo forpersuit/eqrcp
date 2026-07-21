@@ -43,3 +43,15 @@ var Favicon []byte
 //
 //go:embed assets/tus.min.js
 var TusMinJS []byte
+
+// MobileWebJS is the Svelte 5 mobile web client application bundle.
+//
+//go:embed web/dist/eqt-mobile-web.umd.js
+var MobileWebJS []byte
+
+// MobileWebCSS is the Svelte 5 mobile web client styles.
+//
+//go:embed web/dist/pages-web.css
+var MobileWebCSS []byte
+
+
