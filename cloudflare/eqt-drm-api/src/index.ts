@@ -215,10 +215,24 @@ async function sendMailViaSmtp(options: MailOptions): Promise<void> {
     await sendCmd(`RCPT TO:<${options.to}>`, 250);
     await sendCmd("DATA", 354);
 
+    function encodeRFC2047(str: string): string {
+      if (/^[\x00-\x7F]*$/.test(str)) {
+        return str;
+      }
+      const bytes = new TextEncoder().encode(str);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return `=?UTF-8?B?${btoa(binary)}?=`;
+    }
+
+    const encodedSubject = encodeRFC2047(options.subject);
+
     const bodyLines = [
       `From: "EQT" <${options.sender}>`,
       `To: <${options.to}>`,
-      `Subject: ${options.subject}`,
+      `Subject: ${encodedSubject}`,
       `MIME-Version: 1.0`,
       `Content-Type: text/html; charset="utf-8"`,
       ``,
