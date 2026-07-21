@@ -329,7 +329,7 @@ h2 {
     display: flex;
     justify-content: center;
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     margin-top: 0;
 }
 
@@ -337,7 +337,7 @@ h2 {
 .receive-illustration-wrapper img,
 .chat-illustration-wrapper img {
     height: auto;
-    max-height: clamp(50px, 12vh, 105px);
+    max-height: clamp(90px, 16vh, 140px);
     max-width: 100%;
     width: auto;
     transition: max-height 0.2s ease;

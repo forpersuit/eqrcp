@@ -6,12 +6,18 @@ export function initDragDrop(appState, onFileDropped) {
     stateRef = appState;
 
     // Listen to physical file drops forwarded by Wails Win32 handles
-    OnFileDrop((_x, _y, paths) => {
-        sendDebugMessageToChat('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
-        if (typeof onFileDropped === 'function') {
-            onFileDropped(paths);
+    if (typeof OnFileDrop === 'function') {
+        try {
+            OnFileDrop((_x, _y, paths) => {
+                sendDebugMessageToChat('[Wails Drag] OnFileDrop triggered: ' + JSON.stringify(paths));
+                if (typeof onFileDropped === 'function') {
+                    onFileDropped(paths);
+                }
+            }, true);
+        } catch (err) {
+            console.warn('[DragDrop] Wails OnFileDrop not supported in standard browser preview');
         }
-    }, true);
+    }
 
     // Message bridge listener for child iframe events
     window.addEventListener('message', (e) => {
