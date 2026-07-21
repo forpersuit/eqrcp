@@ -2324,9 +2324,6 @@ function renderAboutPanel() {
                                 <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
                             </button>
                         </div>
-                        <div class="about-plan-badge ${hasPaidLicense() ? '' : 'free'}">
-                            <span>${hasPaidLicense() ? '✦ ' + escapeHTML(plan) : 'FREE'}</span>
-                        </div>
                     </div>
                     
                     <div class="about-plan-body">
@@ -5526,7 +5523,7 @@ function editIcon() {
 }
 
 function licenseManagerIcon() {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-2-2l2 2M13 11l-4 4M9 15l-2-2M7 17l-2-2M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"></path></svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="m10.7 12.3 8.8-8.8m-3 0 3 3m-5-1 3 3"></path></svg>';
 }
 
 function cartUpgradeIcon() {
