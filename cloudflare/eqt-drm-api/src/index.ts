@@ -1508,7 +1508,24 @@ export default {
         if (eventType === "transaction.completed") {
           const transactionId = data.id;
           const subscriptionId = data.subscription_id || null;
-          const buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || "";
+          let buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || data.custom_data?.buyer_email || data.custom_data?.buyerEmail || "";
+
+          const customerId = data.customer_id || (typeof data.customer === 'string' ? data.customer : null);
+          if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
+            try {
+              const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
+              const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+              const custRes = await fetch(`${paddleBaseUrl}/customers/${customerId}`, {
+                headers: { "Authorization": `Bearer ${env.PADDLE_API_KEY}` }
+              });
+              if (custRes.ok) {
+                const custData: any = await custRes.json();
+                buyerEmail = custData.data?.email || "";
+              }
+            } catch (cErr) {
+              console.error("Failed to fetch customer email from Paddle API:", cErr);
+            }
+          }
 
           // Check if already processed
           const existing = await env.DB.prepare(
