@@ -1,6 +1,7 @@
 /**
  * EQT Checkout Email Verification Module
- * State-driven modular component for purchase pre-verification.
+ * State-driven modular component with dynamic DOM binding, full i18n adaptation,
+ * and auto-verification on 6-digit input completion.
  */
 
 (function (window) {
@@ -14,10 +15,12 @@
             this.cooldownRemaining = 0;
             this.pendingPriceId = '';
             this.verifiedEmail = '';
+            this.isInitialized = false;
+            this.autoVerifyDebounce = null;
         }
 
-        init() {
-            this.dom = {
+        getDom() {
+            return {
                 modal: document.getElementById('verify-email-modal'),
                 emailInput: document.getElementById('checkout-email-input'),
                 emailErrorMsg: document.getElementById('email-field-error-msg'),
@@ -28,15 +31,20 @@
                 statusCard: document.getElementById('verify-modal-status-msg'),
                 closeBtn: document.getElementById('close-verify-modal-btn')
             };
+        }
 
-            if (!this.dom.modal) return;
+        init() {
+            const dom = this.getDom();
+            if (!dom.modal) return;
+            if (this.isInitialized) return;
 
             this.bindEvents();
+            this.isInitialized = true;
             this.updateButtonState();
         }
 
         getLang() {
-            return localStorage.getItem('eqt-lang') || 'en';
+            return window.currentLang || localStorage.getItem('eqt-lang') || 'en';
         }
 
         getTranslation(key, defaultVal) {
@@ -44,25 +52,36 @@
             if (window.translations && window.translations[lang] && window.translations[lang][key]) {
                 return window.translations[lang][key];
             }
+            if (window.translations && window.translations['en'] && window.translations['en'][key]) {
+                return window.translations['en'][key];
+            }
             return defaultVal;
         }
 
         bindEvents() {
-            // Real-time email validation
-            this.dom.emailInput?.addEventListener('input', () => this.onEmailInput());
-            this.dom.emailInput?.addEventListener('blur', () => this.onEmailInput());
+            const dom = this.getDom();
 
-            // Real-time code validation
-            this.dom.codeInput?.addEventListener('input', () => this.onCodeInput());
+            // Real-time email input validation
+            dom.emailInput?.addEventListener('input', () => this.onEmailInput());
+            dom.emailInput?.addEventListener('blur', () => this.onEmailInput());
 
-            // Send Code action
-            this.dom.sendBtn?.addEventListener('click', () => this.sendCode());
+            // Real-time code validation & auto-verify on 6 digits
+            dom.codeInput?.addEventListener('input', () => this.onCodeInput());
+
+            // Send Code button click action
+            dom.sendBtn?.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.sendCode();
+            });
 
             // Verify & Pay action
-            this.dom.payBtn?.addEventListener('click', () => this.verifyAndPay());
+            dom.payBtn?.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.verifyAndPay();
+            });
 
             // Close Modal action
-            this.dom.closeBtn?.addEventListener('click', () => this.close());
+            dom.closeBtn?.addEventListener('click', () => this.close());
         }
 
         onEmailInput() {
@@ -70,8 +89,17 @@
         }
 
         onCodeInput() {
-            const code = this.dom.codeInput ? this.dom.codeInput.value.trim() : '';
-            if (code.length > 0 && code.length < 6) {
+            const dom = this.getDom();
+            const code = dom.codeInput ? dom.codeInput.value.trim() : '';
+
+            if (code.length === 6) {
+                this.hideCodeFieldError();
+                // Auto verify on 6-digit complete
+                if (this.autoVerifyDebounce) clearTimeout(this.autoVerifyDebounce);
+                this.autoVerifyDebounce = setTimeout(() => {
+                    this.verifyAndPay();
+                }, 200);
+            } else if (code.length > 0 && code.length < 6) {
                 this.showCodeFieldError(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'));
             } else {
                 this.hideCodeFieldError();
@@ -79,7 +107,8 @@
         }
 
         validateEmail() {
-            const email = this.dom.emailInput ? this.dom.emailInput.value.trim() : '';
+            const dom = this.getDom();
+            const email = dom.emailInput ? dom.emailInput.value.trim() : '';
             if (!email || !EMAIL_REGEX.test(email)) {
                 this.showEmailFieldError(this.getTranslation('invalid_email_err', 'Please enter a valid email address'));
                 return false;
@@ -89,63 +118,67 @@
         }
 
         showEmailFieldError(msg) {
-            if (this.dom.emailErrorMsg) {
-                this.dom.emailErrorMsg.innerHTML = `<span class="material-symbols-outlined text-xs">error</span><span>${msg}</span>`;
-                this.dom.emailErrorMsg.classList.remove('hidden');
+            const dom = this.getDom();
+            if (dom.emailErrorMsg) {
+                dom.emailErrorMsg.innerHTML = `<span class="material-symbols-outlined text-xs">error</span><span>${msg}</span>`;
+                dom.emailErrorMsg.classList.remove('hidden');
             }
-            if (this.dom.emailInput) {
-                this.dom.emailInput.className = 'flex-grow bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-sm rounded-lg px-3 py-2.5 outline-none transition-all';
+            if (dom.emailInput) {
+                dom.emailInput.className = 'flex-grow bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-sm rounded-lg px-3 py-2.5 outline-none transition-all';
             }
         }
 
         hideEmailFieldError() {
-            if (this.dom.emailErrorMsg) {
-                this.dom.emailErrorMsg.classList.add('hidden');
+            const dom = this.getDom();
+            if (dom.emailErrorMsg) {
+                dom.emailErrorMsg.classList.add('hidden');
             }
-            if (this.dom.emailInput) {
-                this.dom.emailInput.className = 'flex-grow bg-black/40 border border-emerald-500/60 focus:border-primary text-white text-sm rounded-lg px-3 py-2.5 outline-none transition-all';
+            if (dom.emailInput) {
+                dom.emailInput.className = 'flex-grow bg-black/40 border border-emerald-500/60 focus:border-primary text-white text-sm rounded-lg px-3 py-2.5 outline-none transition-all';
             }
         }
 
         showCodeFieldError(msg) {
-            if (this.dom.codeErrorMsg) {
-                this.dom.codeErrorMsg.innerHTML = `<span class="material-symbols-outlined text-xs">error</span><span>${msg}</span>`;
-                this.dom.codeErrorMsg.classList.remove('hidden');
+            const dom = this.getDom();
+            if (dom.codeErrorMsg) {
+                dom.codeErrorMsg.innerHTML = `<span class="material-symbols-outlined text-xs">error</span><span>${msg}</span>`;
+                dom.codeErrorMsg.classList.remove('hidden');
             }
-            if (this.dom.codeInput) {
-                this.dom.codeInput.className = 'w-full bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2.5 outline-none transition-all';
+            if (dom.codeInput) {
+                dom.codeInput.className = 'w-full bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2.5 outline-none transition-all';
             }
         }
 
         hideCodeFieldError() {
-            if (this.dom.codeErrorMsg) {
-                this.dom.codeErrorMsg.classList.add('hidden');
+            const dom = this.getDom();
+            if (dom.codeErrorMsg) {
+                dom.codeErrorMsg.classList.add('hidden');
             }
-            if (this.dom.codeInput) {
-                this.dom.codeInput.className = 'w-full bg-black/40 border border-white/15 focus:border-primary text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2.5 outline-none transition-all';
+            if (dom.codeInput) {
+                dom.codeInput.className = 'w-full bg-black/40 border border-white/15 focus:border-primary text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2.5 outline-none transition-all';
             }
         }
 
         updateButtonState() {
-            const email = this.dom.emailInput ? this.dom.emailInput.value.trim() : '';
+            const dom = this.getDom();
+            const email = dom.emailInput ? dom.emailInput.value.trim() : '';
             const isValid = EMAIL_REGEX.test(email);
 
             if (this.cooldownRemaining > 0) {
-                // In cooldown
-                if (this.dom.sendBtn) {
-                    this.dom.sendBtn.disabled = true;
-                    this.dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
-                    this.dom.sendBtn.textContent = `${this.cooldownRemaining}s`;
+                if (dom.sendBtn) {
+                    dom.sendBtn.disabled = true;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
+                    dom.sendBtn.textContent = `${this.cooldownRemaining}s`;
                 }
                 return;
             }
 
             if (!isValid) {
-                // Invalid email - disable send button (置灰不可点击)
-                if (this.dom.sendBtn) {
-                    this.dom.sendBtn.disabled = true;
-                    this.dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-white/30 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-50 border border-white/5';
-                    this.dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
+                // Invalid email format: disable button & show warning
+                if (dom.sendBtn) {
+                    dom.sendBtn.disabled = true;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-white/30 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-50 border border-white/5';
+                    dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
                 }
                 if (email.length > 0) {
                     this.showEmailFieldError(this.getTranslation('invalid_email_err', 'Please enter a valid email address'));
@@ -153,26 +186,27 @@
                     this.hideEmailFieldError();
                 }
             } else {
-                // Valid email - enable send button with high-contrast primary glow (高亮可用)
+                // Valid email format: enable button with high-contrast primary glow
                 this.hideEmailFieldError();
-                if (this.dom.sendBtn) {
-                    this.dom.sendBtn.disabled = false;
-                    this.dom.sendBtn.className = 'px-4 py-2.5 bg-primary hover:bg-primary/90 active:scale-95 text-surface-dim text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-primary/25 cursor-pointer';
-                    this.dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
+                if (dom.sendBtn) {
+                    dom.sendBtn.disabled = false;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-primary hover:bg-primary/90 active:scale-95 text-surface-dim text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-primary/25 cursor-pointer';
+                    dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
                 }
             }
         }
 
         showStatusCard(msg, isError) {
-            if (!this.dom.statusCard) return;
-            this.dom.statusCard.style.display = 'block';
-            this.dom.statusCard.classList.remove('hidden');
+            const dom = this.getDom();
+            if (!dom.statusCard) return;
+            dom.statusCard.style.display = 'block';
+            dom.statusCard.classList.remove('hidden');
             const iconName = isError ? 'gpp_bad' : 'mark_email_read';
             const colorClasses = isError
                 ? 'bg-red-500/15 border-red-500/40 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
                 : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
 
-            this.dom.statusCard.innerHTML = `<div class="p-3 rounded-xl border ${colorClasses} text-xs font-medium flex items-center gap-2.5 transition-all duration-300 animate-fadeIn">
+            dom.statusCard.innerHTML = `<div class="p-3 rounded-xl border ${colorClasses} text-xs font-medium flex items-center gap-2.5 transition-all duration-300 animate-fadeIn">
                 <span class="material-symbols-outlined text-lg shrink-0">${iconName}</span>
                 <span class="leading-relaxed text-left flex-1">${msg}</span>
             </div>`;
@@ -189,17 +223,18 @@
         }
 
         async sendCode() {
+            const dom = this.getDom();
             if (!this.validateEmail()) {
-                this.triggerShake(this.dom.emailInput);
+                this.triggerShake(dom.emailInput);
                 return;
             }
 
-            const email = this.dom.emailInput.value.trim();
+            const email = dom.emailInput.value.trim();
 
-            if (this.dom.sendBtn) {
-                this.dom.sendBtn.disabled = true;
-                this.dom.sendBtn.className = 'px-4 py-2.5 bg-primary/20 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-80 flex items-center justify-center';
-                this.dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1.5"></span> <span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
+            if (dom.sendBtn) {
+                dom.sendBtn.disabled = true;
+                dom.sendBtn.className = 'px-4 py-2.5 bg-primary/20 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-80 flex items-center justify-center';
+                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1.5"></span> <span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
             }
 
             try {
@@ -210,13 +245,14 @@
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    throw new Error(data.error || 'Failed to send verification code');
+                    throw new Error(data.error || this.getTranslation('send_code_failed', 'Failed to send verification code'));
                 }
 
                 this.showStatusCard(this.getTranslation('code_sent_success', 'Verification code sent to your email! Please check your inbox.'), false);
                 this.startCooldown(60);
+                dom.codeInput?.focus();
             } catch (err) {
-                this.triggerShake(this.dom.emailInput);
+                this.triggerShake(dom.emailInput);
                 this.showStatusCard(err.message, true);
                 this.cooldownRemaining = 0;
                 this.updateButtonState();
@@ -240,24 +276,25 @@
         }
 
         async verifyAndPay() {
+            const dom = this.getDom();
             if (!this.validateEmail()) {
-                this.triggerShake(this.dom.emailInput);
+                this.triggerShake(dom.emailInput);
                 return;
             }
 
-            const email = this.dom.emailInput.value.trim();
-            const code = this.dom.codeInput ? this.dom.codeInput.value.trim() : '';
+            const email = dom.emailInput.value.trim();
+            const code = dom.codeInput ? dom.codeInput.value.trim() : '';
 
             if (!code || code.length !== 6) {
                 this.showCodeFieldError(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'));
-                this.triggerShake(this.dom.codeInput);
+                this.triggerShake(dom.codeInput);
                 this.showStatusCard(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'), true);
                 return;
             }
 
-            if (this.dom.payBtn) {
-                this.dom.payBtn.disabled = true;
-                this.dom.payBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> <span>${this.getTranslation('verifying_btn', 'Verifying...')}</span>`;
+            if (dom.payBtn) {
+                dom.payBtn.disabled = true;
+                dom.payBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> <span>${this.getTranslation('verifying_btn', 'Verifying...')}</span>`;
             }
 
             try {
@@ -268,13 +305,13 @@
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                    throw new Error(data.error || 'Verification failed. Please check your code.');
+                    throw new Error(data.error || this.getTranslation('verify_failed', 'Verification failed. Please check your code.'));
                 }
 
                 this.verifiedEmail = email;
                 this.close();
 
-                // Proceed to Paddle Checkout with pre-filled verified customer email
+                // Open Paddle Checkout with pre-filled verified customer email
                 setTimeout(() => {
                     if (typeof Paddle !== 'undefined') {
                         Paddle.Checkout.open({
@@ -282,56 +319,62 @@
                             customer: { email: this.verifiedEmail }
                         });
                     } else {
-                        this.showStatusCard('Billing component is loading or blocked by network.', true);
+                        this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true);
                     }
                 }, 350);
 
             } catch (err) {
                 this.showCodeFieldError(err.message);
-                this.triggerShake(this.dom.codeInput);
+                this.triggerShake(dom.codeInput);
                 this.showStatusCard(err.message, true);
             } finally {
-                if (this.dom.payBtn) {
-                    this.dom.payBtn.disabled = false;
-                    this.dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
+                if (dom.payBtn) {
+                    dom.payBtn.disabled = false;
+                    dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
                 }
             }
         }
 
+        updateI18n() {
+            this.updateButtonState();
+        }
+
         open(priceId) {
             this.pendingPriceId = priceId || '';
-            if (!this.dom.modal) this.init();
-            if (!this.dom.modal) return;
+            const dom = this.getDom();
+            this.init();
+            if (!dom.modal) return;
 
-            if (this.dom.statusCard) {
-                this.dom.statusCard.style.display = 'none';
-                this.dom.statusCard.classList.add('hidden');
-                this.dom.statusCard.innerHTML = '';
+            if (dom.statusCard) {
+                dom.statusCard.style.display = 'none';
+                dom.statusCard.classList.add('hidden');
+                dom.statusCard.innerHTML = '';
             }
 
             this.hideEmailFieldError();
             this.hideCodeFieldError();
             this.updateButtonState();
 
-            this.dom.modal.classList.remove('hidden');
+            dom.modal.classList.remove('hidden');
             setTimeout(() => {
-                this.dom.modal.classList.remove('opacity-0');
-                this.dom.modal.querySelector('.transform')?.classList.remove('scale-95');
-                this.dom.emailInput?.focus();
+                dom.modal.classList.remove('opacity-0');
+                dom.modal.querySelector('.transform')?.classList.remove('scale-95');
+                dom.emailInput?.focus();
             }, 50);
         }
 
         close() {
-            if (!this.dom.modal) return;
-            this.dom.modal.classList.add('opacity-0');
-            this.dom.modal.querySelector('.transform')?.classList.add('scale-95');
+            const dom = this.getDom();
+            if (!dom.modal) return;
+            dom.modal.classList.add('opacity-0');
+            dom.modal.querySelector('.transform')?.classList.add('scale-95');
             setTimeout(() => {
-                this.dom.modal.classList.add('hidden');
+                dom.modal.classList.add('hidden');
             }, 300);
         }
     }
 
-    // Export singleton instance
+    // Single instance export
     window.checkoutVerifyComp = new CheckoutVerifyComponent();
 
     window.openVerifyModal = function(priceId) {

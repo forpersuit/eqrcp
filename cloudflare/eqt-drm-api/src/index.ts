@@ -509,7 +509,7 @@ export default {
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
 
         await env.DB.prepare(
-          "INSERT INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+          "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
         ).bind(email, code, expiresAt, new Date().toISOString()).run();
 
         // Build localized email
@@ -538,15 +538,27 @@ export default {
         code = code.trim();
 
         const record = await env.DB.prepare(
-          "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
-        ).bind(email, code, new Date().toISOString()).first<any>();
+          "SELECT * FROM verification_codes WHERE email = ? AND code = ? ORDER BY expires_at DESC LIMIT 1"
+        ).bind(email, code).first<any>();
 
         if (!record) {
-          return new Response(JSON.stringify({ error: "Invalid or expired verification code" }), {
+          return new Response(JSON.stringify({ error: "Invalid verification code. Please check and try again." }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
+
+        const now = new Date().getTime();
+        const exp = new Date(record.expires_at).getTime();
+        if (isNaN(exp) || exp < now) {
+          return new Response(JSON.stringify({ error: "Verification code has expired. Please send a new code." }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Clean up verified code to prevent re-use
+        ctx.waitUntil(env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run());
 
         return new Response(JSON.stringify({ success: true, message: "Email verified successfully" }), {
           status: 200,
