@@ -126,6 +126,14 @@
         .glow-primary {
             box-shadow: 0 0 20px rgba(221, 183, 255, 0.2);
         }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
     </style>
     <!-- Include Paddle.js SDK -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
@@ -769,13 +777,40 @@
         function initVerifyModalEvents() {
             const { emailInput, codeInput, sendBtn, payBtn } = getVerifyModalEls();
 
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            function validateEmailFormat() {
+                const email = emailInput ? emailInput.value.trim() : '';
+                const fieldErrorEl = document.getElementById('email-field-error-msg');
+                if (!email || !emailRegex.test(email)) {
+                    if (fieldErrorEl) {
+                        fieldErrorEl.textContent = translations[currentLang]?.invalid_email_err || 'Please enter a valid email address';
+                        fieldErrorEl.classList.remove('hidden');
+                    }
+                    if (emailInput) {
+                        emailInput.className = 'flex-grow bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-sm rounded-lg px-3 py-2 outline-none transition-all';
+                    }
+                    return false;
+                } else {
+                    if (fieldErrorEl) {
+                        fieldErrorEl.classList.add('hidden');
+                    }
+                    if (emailInput) {
+                        emailInput.className = 'flex-grow bg-black/40 border border-emerald-500/60 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-all';
+                    }
+                    return true;
+                }
+            }
+
+            emailInput?.addEventListener('input', validateEmailFormat);
+            emailInput?.addEventListener('blur', validateEmailFormat);
+
             // Send verification code
             sendBtn?.addEventListener('click', async () => {
-                const email = emailInput ? emailInput.value.trim() : '';
-                if (!email || !email.includes('@')) {
+                if (!validateEmailFormat()) {
                     showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
                     return;
                 }
+                const email = emailInput.value.trim();
 
                 sendBtn.disabled = true;
                 sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1"></span> <span>${translations[currentLang]?.sending_code || 'Sending...'}</span>`;
@@ -804,20 +839,21 @@
 
             // Verify code and proceed to Paddle checkout
             payBtn?.addEventListener('click', async () => {
-                const email = emailInput ? emailInput.value.trim() : '';
-                const code = codeInput ? codeInput.value.trim() : '';
-
-                if (!email || !email.includes('@')) {
+                if (!validateEmailFormat()) {
                     showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
                     return;
                 }
+                const email = emailInput.value.trim();
+                const code = codeInput ? codeInput.value.trim() : '';
+
                 if (!code || code.length !== 6) {
+                    triggerCodeInputShake();
                     showVerifyStatus(translations[currentLang]?.invalid_code_err || 'Please enter 6-digit code', true);
                     return;
                 }
 
                 payBtn.disabled = true;
-                payBtn.innerHTML = `<span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
+                payBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> <span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
 
                 try {
                     const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
@@ -846,12 +882,22 @@
                     }, 350);
 
                 } catch (err) {
+                    triggerCodeInputShake();
                     showVerifyStatus(err.message, true);
                 } finally {
                     payBtn.disabled = false;
                     payBtn.innerHTML = `<span>${translations[currentLang]?.verify_and_pay_btn || 'Verify & Proceed to Payment'}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
                 }
             });
+        }
+
+        function triggerCodeInputShake() {
+            const { codeInput } = getVerifyModalEls();
+            if (!codeInput) return;
+            codeInput.className = 'w-full bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2 outline-none animate-shake';
+            setTimeout(() => {
+                codeInput.classList.remove('animate-shake');
+            }, 450);
         }
 
         function startSendCooldown(seconds) {
@@ -1023,9 +1069,10 @@
                 <div class="space-y-1 text-left">
                     <label class="block text-xs font-medium text-on-surface-variant" data-i18n="email_address">Email Address</label>
                     <div class="flex gap-2">
-                        <input type="email" id="checkout-email-input" class="flex-grow bg-black/40 border border-white/15 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-colors" placeholder="user@example.com" />
+                        <input type="email" id="checkout-email-input" class="flex-grow bg-black/40 border border-white/15 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-all" placeholder="user@example.com" />
                         <button id="send-checkout-code-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]" data-i18n="send_code_btn">Send Code</button>
                     </div>
+                    <p id="email-field-error-msg" class="text-[11px] text-red-400 hidden mt-1 text-left flex items-center gap-1"></p>
                 </div>
                 
                 <!-- Code input -->
