@@ -97,6 +97,9 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **状态驱动翻译更新**：对于在传输过程中以及完成后有不同界面文案的页面，不要在进入成功/失败状态时通过 `removeAttribute('data-i18n')` 物理剥离标记。应该让 `applyLanguage()` 统一根据当前的传输阶段状态（例如 `isCompleted`）动态映射对应的词条，从而确保在状态变更后或完成页面上，切换语种依然无缝生效。
   - **Chat 消息右键与滑动菜单国际化规范**：Chat 模式下的消息气泡操作菜单（右键/长按/左右滑动触发）中所有菜单项文字（如复制文本、取消上传、定位文件、重新下载、确认重新下载、取消下载、重试下载等）严禁使用 `currentLang === 'en' ? ... : '中文'` 二元硬编码。必须统一通过 `getTranslation(key, currentLang)`（在桌面端通过 `t('save_as')`）进行 7 种语言（zh/en/ja/ko/es/de/fr）的动态多语言映射。
   - **Iframe 地址稳定性与切语种消息防丢失规范**：桌面端 `renderChat()` 在渲染内嵌 `#chat-iframe` 容器时，绝对禁止将 `state.settings.lang` 动态拼接进 `iframe` 的 `src` URL 查询参数中。因为 DOM 重绘（`morphdom`）检测到 `src` 改变时会强制重新导航加载 iframe，导致页面内 Svelte 应用内存状态清空与聊天历史消息丢失。宿主与 iframe 之间的语种同步必须完全依托于 `postMessage({ type: 'update-lang', lang })` 无刷新静默推送完成。
+  - **TypeScript 多语言模块化与 `satisfies` 强契约规范**：桌面端 GUI 前端的多语言字典在 `src/locales/` 目录下按语种做独立模块化拆分（`zh.ts`, `en.ts`, `ja.ts` ...）。以 `en.ts` 作为基准推导 `TranslationSchema = typeof en` 强类型契约，所有非基准语种统一声明 `satisfies TranslationSchema`。如果出现 Key 漏写、拼写错误或类型不匹配，TypeScript 编译器与 Vite 静态检查必须直接拦截抛错，实现 100% 词条结构强对齐。
+
+
 
 ## 移动端接收管理与限额特权及状态展示规范 (Mobile Upload Management, Quota Banner & Limits Handling)
 - **传输异常友好呈现**：文件上传失败或异常（网络中断、大小超限、服务端 500 写入失败）时，严禁使用原生弹窗或直接把 raw 错误文本打在表单下方。必须直接将整个界面重绘为带有红色“✕”圆形徽章的“传输失败卡片”（样式与 Done 成功卡片对称），给普通用户呈现易懂的本地化解释（如局域网未联通、磁盘满、或文件超大等提示），并提供醒目的“返回并重试”按钮以快速重载页面恢复输入状态。
