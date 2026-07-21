@@ -193,6 +193,10 @@
                 "refund_confirm_desc": "Are you sure you want to request a refund? The license code will be suspended immediately and all active devices will revert to the free version.",
                 "cancel_btn": "Cancel",
                 "confirm_refund_btn": "Confirm & Refund",
+                "unbind_btn": "Unbind",
+                "unbind_confirm_desc": "Are you sure you want to unbind this device?",
+                "unbinding": "Unbinding...",
+                "unbind_success": "Device unbound successfully!",
                 "toast_code_sent": "Verification code sent to your email.",
                 "toast_login_success": "Successfully logged in!",
                 "toast_refund_success": "Refund adjustment created successfully!",
@@ -228,6 +232,10 @@
                 "refund_confirm_desc": "您确定要对这笔交易申请退款吗？退款提交后，此激活码将被永久吊销，绑定的所有设备将在下次联网对账时自动降级为免费版。",
                 "cancel_btn": "取消",
                 "confirm_refund_btn": "确认并退款",
+                "unbind_btn": "解绑",
+                "unbind_confirm_desc": "确定要解绑此设备吗？解绑后该设备将失去付费授权。",
+                "unbinding": "解绑中...",
+                "unbind_success": "设备解绑成功！",
                 "toast_code_sent": "验证码已成功发往您的邮箱。",
                 "toast_login_success": "登录成功！",
                 "toast_refund_success": "退款成功！授权已被吊销。",
@@ -263,6 +271,10 @@
                 "refund_confirm_desc": "返金を申請するとライセンスは無効化され、すべてのデバイスが無料版にダウングレードされます。",
                 "cancel_btn": "キャンセル",
                 "confirm_refund_btn": "返金を確定",
+                "unbind_btn": "解除",
+                "unbind_confirm_desc": "このデバイスの連携を解除しますか？",
+                "unbinding": "解除中...",
+                "unbind_success": "デバイスの解除に成功しました！",
                 "toast_code_sent": "認証コードをメールに送信しました。",
                 "toast_login_success": "ログインに成功しました！",
                 "toast_refund_success": "返金申請が完了しました。",
@@ -298,6 +310,10 @@
                 "refund_confirm_desc": "환불 시 라이선스가 즉시 해제되며 연결된 모든 기기가 무료 버전으로 전환됩니다.",
                 "cancel_btn": "취소",
                 "confirm_refund_btn": "환불 확정",
+                "unbind_btn": "해제",
+                "unbind_confirm_desc": "이 기기의 연동을 해제하시겠습니까?",
+                "unbinding": "해제 중...",
+                "unbind_success": "기기 해제 성공!",
                 "toast_code_sent": "이메일로 인증 코드가 전송되었습니다.",
                 "toast_login_success": "로그인 성공!",
                 "toast_refund_success": "환불 신청이 완료되었습니다.",
@@ -333,6 +349,10 @@
                 "refund_confirm_desc": "Una vez reembolsada, la licencia se revocará de inmediato y todos los dispositivos volverán a la versión gratuita.",
                 "cancel_btn": "Cancelar",
                 "confirm_refund_btn": "Confirmar reembolso",
+                "unbind_btn": "Desvincular",
+                "unbind_confirm_desc": "¿Seguro que deseas desvincular este dispositivo?",
+                "unbinding": "Desvinculando...",
+                "unbind_success": "¡Dispositivo desvinculado con éxito!",
                 "toast_code_sent": "Código enviado a tu correo.",
                 "toast_login_success": "¡Sesión iniciada con éxito!",
                 "toast_refund_success": "Reembolso procesado correctamente.",
@@ -368,6 +388,10 @@
                 "refund_confirm_desc": "Nach der Rückerstattung wird die Lizenz sofort gesperrt und alle aktiven Geräte kehren zur kostenlosen Version zurück.",
                 "cancel_btn": "Abbrechen",
                 "confirm_refund_btn": "Rückerstattung bestätigen",
+                "unbind_btn": "Trennen",
+                "unbind_confirm_desc": "Möchten Sie dieses Gerät wirklich trennen?",
+                "unbinding": "Trennen...",
+                "unbind_success": "Gerät erfolgreich getrennt!",
                 "toast_code_sent": "Bestätigungscode an Ihre E-Mail gesendet.",
                 "toast_login_success": "Erfolgreich angemeldet!",
                 "toast_refund_success": "Rückerstattung erfolgreich erstellt.",
@@ -403,6 +427,10 @@
                 "refund_confirm_desc": "Une fois remboursée, la licence sera révoquée et tous les appareils reviendront à la version gratuite.",
                 "cancel_btn": "Annuler",
                 "confirm_refund_btn": "Confirmer le remboursement",
+                "unbind_btn": "Délier",
+                "unbind_confirm_desc": "Voulez-vous vraiment délier cet appareil ?",
+                "unbinding": "Déliaison...",
+                "unbind_success": "Appareil délié avec succès !",
                 "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
                 "toast_login_success": "Connexion réussie !",
                 "toast_refund_success": "Demande de remboursement créée !",
@@ -662,9 +690,17 @@
                             <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${translations[state.lang].activations} (${lic.activations.length}/${lic.max_devices})</h4>
                             <div class="grid gap-2 text-xs">
                                 ${lic.activations.map(act => `
-                                    <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5">
-                                        <span class="font-mono text-white/70">${act.uuid_hash.slice(0, 8)}... (CPU: ${act.cpu_hash.slice(0, 4)})</span>
-                                        <span class="text-on-surface-variant">${new Date(act.activated_at).toLocaleDateString()}</span>
+                                    <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5 gap-2">
+                                        <div class="flex flex-col">
+                                            <span class="font-mono text-white/80 font-medium">${act.uuid_hash.slice(0, 8)}... (CPU: ${act.cpu_hash.slice(0, 4)})</span>
+                                            <span class="text-on-surface-variant text-[10px]">${translations[state.lang].activated_on}: ${new Date(act.activated_at).toLocaleDateString()}</span>
+                                        </div>
+                                        ${lic.status === 'active' ? `
+                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}">
+                                                <span class="material-symbols-outlined text-xs">link_off</span>
+                                                <span>${translations[state.lang].unbind_btn || 'Unbind'}</span>
+                                            </button>
+                                        ` : ''}
                                     </div>
                                 `).join('')}
                             </div>
@@ -722,6 +758,46 @@
                         btn.innerHTML = `<span class="material-symbols-outlined text-base text-emerald-400">done</span>`;
                         setTimeout(() => btn.innerHTML = originalHtml, 1500);
                     });
+                });
+            });
+
+            // Wire unbind buttons
+            container.querySelectorAll('.unbind-device-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const licenseCode = btn.getAttribute('data-license');
+                    const activationId = btn.getAttribute('data-activation');
+                    const confirmMsg = translations[state.lang].unbind_confirm_desc || 'Are you sure you want to unbind this device?';
+                    if (!confirm(confirmMsg)) return;
+
+                    btn.disabled = true;
+                    btn.innerHTML = `<span class="material-symbols-outlined text-xs animate-spin">refresh</span><span>${translations[state.lang].unbinding || 'Unbinding...'}</span>`;
+
+                    try {
+                        const res = await fetch(`${API_BASE}/api/v1/user/unbind-device`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${state.token}`
+                            },
+                            body: JSON.stringify({
+                                license_code: licenseCode,
+                                activation_id: Number(activationId)
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            showToast(data.message || translations[state.lang].unbind_success || 'Device unbound successfully!', 'success');
+                            await loadLicenses();
+                        } else {
+                            showToast(data.error || 'Failed to unbind device', 'error');
+                            btn.disabled = false;
+                            btn.innerHTML = `<span class="material-symbols-outlined text-xs">link_off</span><span>${translations[state.lang].unbind_btn || 'Unbind'}</span>`;
+                        }
+                    } catch (err) {
+                        showToast('Network error: ' + err.message, 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = `<span class="material-symbols-outlined text-xs">link_off</span><span>${translations[state.lang].unbind_btn || 'Unbind'}</span>`;
+                    }
                 });
             });
 
@@ -862,10 +938,34 @@
             const urlParams = new URLSearchParams(window.location.search);
             const emailParam = urlParams.get('email');
             if (emailParam) {
+                const cleanEmail = emailParam.trim();
                 const emailInput = document.getElementById('login-email');
                 if (emailInput) {
-                    emailInput.value = emailParam.trim();
-                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    emailInput.value = cleanEmail;
+                    
+                    // If session email conflicts with URL email, clear old session to display requested email
+                    const savedEmail = localStorage.getItem('eqt_portal_email');
+                    if (savedEmail && savedEmail.toLowerCase() !== cleanEmail.toLowerCase()) {
+                        localStorage.removeItem('eqt_portal_token');
+                        localStorage.removeItem('eqt_portal_email');
+                        state.token = '';
+                        state.email = '';
+                        document.getElementById('dashboard-section').classList.add('hidden');
+                        document.getElementById('login-section').classList.remove('hidden');
+                    }
+
+                    // Enable send code button if valid email format
+                    const sendBtn = document.getElementById('send-code-btn');
+                    if (sendBtn && cleanEmail.includes('@')) {
+                        sendBtn.disabled = false;
+                        sendBtn.classList.remove('opacity-50');
+                    }
+
+                    // Enable verification code input
+                    const codeInput = document.getElementById('login-code');
+                    if (codeInput) {
+                        codeInput.disabled = false;
+                    }
                 }
             }
         }
@@ -892,8 +992,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             initLanguage();
             setupEventListeners();
-            applyUrlEmailAutoFill();
             checkSession();
+            applyUrlEmailAutoFill();
+            setTimeout(applyUrlEmailAutoFill, 100);
         });
     </script>
 </body>
