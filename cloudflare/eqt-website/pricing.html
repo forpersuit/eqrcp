@@ -639,6 +639,10 @@
             if (langCurrentTxt && langTextMap[lang]) {
                 langCurrentTxt.textContent = langTextMap[lang];
             }
+            window.currentLang = lang;
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.updateI18n();
+            }
         }
 
         function initLang() {
@@ -945,18 +949,24 @@
         const codeDisplay = document.getElementById('license-code-display');
 
         function openModalAndStartPoll(transactionId) {
+            const modalEl = document.getElementById('fulfillment-modal');
+            const loadingState = document.getElementById('modal-loading');
+            const successState = document.getElementById('modal-success');
+            const errorState = document.getElementById('modal-error');
+            const codeDisplay = document.getElementById('license-code-display');
+
             if (!modalEl) return;
             
             // Show modal with loading state
-            loadingState.classList.remove('hidden');
-            successState.classList.add('hidden');
-            errorState.classList.add('hidden');
+            loadingState?.classList.remove('hidden');
+            successState?.classList.add('hidden');
+            errorState?.classList.add('hidden');
             
             modalEl.classList.remove('hidden');
             // Trigger animation
             setTimeout(() => {
                 modalEl.classList.remove('opacity-0');
-                modalEl.querySelector('.transform').classList.remove('scale-95');
+                modalEl.querySelector('.transform')?.classList.remove('scale-95');
             }, 50);
 
             // Start polling
@@ -974,11 +984,12 @@
                     .then(data => {
                         clearInterval(interval);
                         // Show success state
-                        loadingState.classList.add('hidden');
-                        errorState.classList.add('hidden');
-                        successState.classList.remove('hidden');
-                        if (codeDisplay) {
-                            codeDisplay.textContent = data.license_code;
+                        document.getElementById('modal-loading')?.classList.add('hidden');
+                        document.getElementById('modal-error')?.classList.add('hidden');
+                        document.getElementById('modal-success')?.classList.remove('hidden');
+                        const codeDisplayEl = document.getElementById('license-code-display');
+                        if (codeDisplayEl) {
+                            codeDisplayEl.textContent = data.license_code;
                         }
                     })
                     .catch(() => {
@@ -1039,6 +1050,8 @@
                 }
             });
         }
+
+        window.openModalAndStartPoll = openModalAndStartPoll;
 
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
