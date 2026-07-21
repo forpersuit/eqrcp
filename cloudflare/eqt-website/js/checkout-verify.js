@@ -17,6 +17,8 @@
             this.verifiedEmail = '';
             this.isInitialized = false;
             this.autoVerifyDebounce = null;
+            this.isSending = false;
+            this.lastClickTime = 0;
         }
 
         getDom() {
@@ -68,9 +70,12 @@
             // Real-time code validation & auto-verify on 6 digits
             dom.codeInput?.addEventListener('input', () => this.onCodeInput());
 
-            // Send Code button click action
+            // Send Code button click action with debounce & lock
             dom.sendBtn?.addEventListener('click', (e) => {
                 e.preventDefault();
+                const now = Date.now();
+                if (now - this.lastClickTime < 300) return; // Debounce 300ms
+                this.lastClickTime = now;
                 this.sendCode();
             });
 
@@ -92,7 +97,7 @@
             const dom = this.getDom();
             const code = dom.codeInput ? dom.codeInput.value.trim() : '';
 
-            if (code.length === 6) {
+            if (/^\d{6}$/.test(code)) {
                 this.hideCodeFieldError();
                 // Auto verify on 6-digit complete
                 if (this.autoVerifyDebounce) clearTimeout(this.autoVerifyDebounce);
@@ -164,6 +169,8 @@
             const email = dom.emailInput ? dom.emailInput.value.trim() : '';
             const isValid = EMAIL_REGEX.test(email);
 
+            if (this.isSending) return;
+
             if (this.cooldownRemaining > 0) {
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = true;
@@ -174,10 +181,10 @@
             }
 
             if (!isValid) {
-                // Invalid email format: disable button & show warning
+                // Allow button click to trigger validate email warning if email is entered
                 if (dom.sendBtn) {
-                    dom.sendBtn.disabled = true;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-white/30 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-50 border border-white/5';
+                    dom.sendBtn.disabled = false;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer';
                     dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
                 }
                 if (email.length > 0) {
@@ -232,12 +239,14 @@
 
         async sendCode() {
             const dom = this.getDom();
+            if (this.isSending) return;
             if (!this.validateEmail()) {
                 this.triggerShake(dom.emailInput);
                 return;
             }
 
             const email = dom.emailInput.value.trim();
+            this.isSending = true;
 
             if (dom.sendBtn) {
                 dom.sendBtn.disabled = true;
@@ -264,7 +273,10 @@
                 const safeMsg = this.filterFriendlyMsg(err.message, 'send_code_failed', 'Failed to send verification code. Please try again later.');
                 this.showStatusCard(safeMsg, true);
                 this.cooldownRemaining = 0;
+                this.isSending = false;
                 this.updateButtonState();
+            } finally {
+                this.isSending = false;
             }
         }
 
@@ -320,7 +332,7 @@
                 this.verifiedEmail = email;
                 this.close();
 
-                // Open Paddle Checkout with pre-filled verified customer email
+                // Open Paddle Checkout with pre-filled verified customer email & customData fallback
                 setTimeout(() => {
                     if (typeof Paddle !== 'undefined') {
                         if (typeof window.initPaddle === 'function') {
@@ -329,7 +341,8 @@
                         try {
                             Paddle.Checkout.open({
                                 items: [{ priceId: this.pendingPriceId, quantity: 1 }],
-                                customer: { email: this.verifiedEmail }
+                                customer: { email: this.verifiedEmail },
+                                customData: { buyer_email: this.verifiedEmail }
                             });
                         } catch (pErr) {
                             console.error("Paddle Open Error:", pErr);
