@@ -135,8 +135,9 @@
             animation: shake 0.4s ease-in-out;
         }
     </style>
-    <!-- Include Paddle.js SDK -->
+    <!-- Include Paddle.js SDK & Verification Component -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+    <script src="js/checkout-verify.js"></script>
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
     <!-- Header -->
@@ -723,15 +724,13 @@
 
             if (buyLifetimeBtn) {
                 buyLifetimeBtn.addEventListener('click', () => {
-                    pendingPriceId = PRICE_LIFETIME_ID;
-                    openVerifyModal();
+                    openVerifyModal(PRICE_LIFETIME_ID);
                 });
             }
 
             if (buyYearlyBtn) {
                 buyYearlyBtn.addEventListener('click', () => {
-                    pendingPriceId = PRICE_YEARLY_ID;
-                    openVerifyModal();
+                    openVerifyModal(PRICE_YEARLY_ID);
                 });
             }
         }
@@ -750,7 +749,8 @@
 
         let cooldownTimer = null;
 
-        function openVerifyModal() {
+        function openVerifyModal(priceId) {
+            pendingPriceId = priceId;
             const { modal, statusMsg } = getVerifyModalEls();
             if (!modal) return;
             if (statusMsg) {
