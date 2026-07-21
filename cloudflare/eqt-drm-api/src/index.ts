@@ -19,6 +19,92 @@ export interface Env {
 const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3";
 const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
 
+// Business Logic Constants (Eliminating Magic Numbers)
+const MAX_YEARLY_UNBINDS = 4;
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+// Dynamic API i18n Dictionary (Supporting 7 Languages with graceful Fallback)
+const API_I18N: Record<string, Record<string, string>> = {
+  unbind_limit_reached: {
+    zh: "该授权码过去365天内已达到4次解绑设备上限，无法继续解绑。",
+    en: "Unbind limit reached (maximum 4 device unbinds allowed per 365 days).",
+    ja: "過去365日以内のデバイス解除上限（最大4回）に達しました。",
+    ko: "지난 365일 동안 최대 4회의 기기 해제 한도에 도달했습니다.",
+    es: "Se alcanzó el límite de desvinculación (máximo 4 desvinculaciones por año).",
+    de: "Entkopplungslimit erreicht (maximal 4 Geräteentkopplungen pro 365 Tage).",
+    fr: "Limite de dissociation atteinte (maximum 4 dissociations par 365 jours)."
+  },
+  unbind_success: {
+    zh: "设备已成功解绑",
+    en: "Device unbound successfully",
+    ja: "デバイスの解除が完了しました",
+    ko: "기기 해제가 완료되었습니다",
+    es: "Dispositivo desvinculado con éxito",
+    de: "Gerät erfolgreich entkoppelt",
+    fr: "Appareil dissocié avec succès"
+  },
+  unauthorized: {
+    zh: "身份验证失败，请重新登录",
+    en: "Unauthorized, please sign in again.",
+    ja: "認証に失敗しました。再ログインしてください。",
+    ko: "인증에 실패했습니다. 다시 로그인해 주세요.",
+    es: "No autorizado, por favor inicie sesión de nuevo.",
+    de: "Nicht autorisiert, bitte melden Sie sich erneut an.",
+    fr: "Non autorisé, veuillez vous reconnecter."
+  },
+  session_expired: {
+    zh: "会话已过期，请重新获取验证码登录",
+    en: "Session expired or invalid. Please sign in again.",
+    ja: "セッションの期限が切れました。再度ログインしてください。",
+    ko: "세션이 만료되었습니다. 다시 로그인해 주세요.",
+    es: "Sesión expirada o inválida. Inicie sesión de nuevo.",
+    de: "Sitzung abgelaufen oder ungültig. Bitte erneut anmelden.",
+    fr: "Session expirée ou invalide. Veuillez vous reconnecter."
+  },
+  missing_params: {
+    zh: "请求参数缺失",
+    en: "Missing required parameters",
+    ja: "必修パラメータが不足しています",
+    ko: "필수 매개변수가 누락되었습니다",
+    es: "Faltan parámetros requeridos",
+    de: "Erforderliche Parameter fehlen",
+    fr: "Paramètres requis manquants"
+  },
+  license_not_found: {
+    zh: "未找到对应的授权码",
+    en: "License code not found",
+    ja: "ライセンスコードが見つかりません",
+    ko: "라이선스 코드를 찾을 수 없습니다",
+    es: "Código de licencia no encontrado",
+    de: "Lizenzcode nicht gefunden",
+    fr: "Code de licence introuvable"
+  }
+};
+
+function extractRequestLang(request: Request, body?: any): string {
+  if (body && typeof body.lang === 'string' && body.lang.trim()) {
+    return body.lang.trim();
+  }
+  const acceptLang = request.headers.get("Accept-Language");
+  if (acceptLang) {
+    const primary = acceptLang.split(",")[0].trim().toLowerCase();
+    if (primary.startsWith("zh")) return "zh";
+    if (primary.startsWith("ja")) return "ja";
+    if (primary.startsWith("ko")) return "ko";
+    if (primary.startsWith("es")) return "es";
+    if (primary.startsWith("de")) return "de";
+    if (primary.startsWith("fr")) return "fr";
+  }
+  return "en";
+}
+
+function getApiTranslation(key: string, lang: string): string {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  const dict = API_I18N[key];
+  if (!dict) return key;
+  return dict[norm] || dict['zh'] || dict['en'] || key;
+}
+
 // Helper to verify Paddle Billing webhook signatures
 async function verifyPaddleSignature(
   rawBody: string,
@@ -816,11 +902,14 @@ export default {
         });
       }
 
-      // 0.3.5 Unbind device with yearly 4 times limit
+      // 0.3.5 Unbind device with yearly limit & full i18n
       if (url.pathname === "/api/v1/user/unbind-device" && request.method === "POST") {
+        const body: any = await request.json().catch(() => ({}));
+        const reqLang = extractRequestLang(request, body);
+
         const authHeader = request.headers.get("Authorization");
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
@@ -832,16 +921,15 @@ export default {
         ).bind(token).first<any>();
 
         if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-          return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+          return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
-        const body: any = await request.json();
         const { license_code, activation_id } = body;
         if (!license_code || !activation_id) {
-          return new Response(JSON.stringify({ error: "Missing license_code or activation_id" }), {
+          return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
@@ -852,22 +940,22 @@ export default {
         ).bind(license_code).first<any>();
 
         if (!license) {
-          return new Response(JSON.stringify({ error: "License not found" }), {
+          return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
-        // Check 1-year rolling window unbind limit (max 4 times)
-        const oneYearAgoISO = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
+        // Check 1-year rolling window unbind limit using constant
+        const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
         const unbindCheck = await env.DB.prepare(
           "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
         ).bind(license_code, oneYearAgoISO).first<any>();
 
         const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
-        if (unbindCount >= 4) {
+        if (unbindCount >= MAX_YEARLY_UNBINDS) {
           return new Response(JSON.stringify({
-            error: "该授权码过去365天内已达到4次解绑设备上限，无法继续解绑。"
+            error: getApiTranslation("unbind_limit_reached", reqLang)
           }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -887,8 +975,8 @@ export default {
 
         return new Response(JSON.stringify({
           success: true,
-          message: "设备已成功解绑",
-          remaining_unbinds: 4 - (unbindCount + 1)
+          message: getApiTranslation("unbind_success", reqLang),
+          remaining_unbinds: MAX_YEARLY_UNBINDS - (unbindCount + 1)
         }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
