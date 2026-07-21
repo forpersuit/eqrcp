@@ -195,6 +195,24 @@ If a structural or design conflict is detected, stop immediately and raise it fo
   - **How it was verified**: The exact commands run and a deterministic statement of runtime behaviors observed.
   - **Skills Updated**: Clear declaration of updated custom skills or explicit rationale for why no changes were required.
 
+## Rule 16 — TypeScript Strict Engineering Standards (TypeScript 严格工程规范)
+1. **Zero `any` Tolerance (零 any 容忍)**：
+   - 绝对禁止使用 `any` 类型！无法确定类型时必须使用 `unknown` 并配合类型守卫 (Type Guard) 收窄。
+   - 外部异步数据或复杂 JSON 必须定义显式的 `interface` 或 `type`。
+
+2. **Schema Driven & `satisfies` First (契约驱动与 `satisfies` 校验)**：
+   - 字典、状态表、配置对象必须基于基准源推导类型（如 `type Schema = typeof base`）。
+   - 字面量配置统一使用 TS 4.9+ 的 `satisfies Schema` 声明，实现 100% 词条结构自动对齐与缺漏拦截。
+
+3. **Strict DOM & Event Typing (精准 DOM 与事件类型)**：
+   - 所有 DOM 事件回调必须使用明确类型（如 `e: DragEvent`, `e: MouseEvent`）。
+   - DOM 节点查询必须使用泛型显式标注（如 `document.querySelector<HTMLInputElement>('#id')`），禁止使用 `as any` 强转。
+
+4. **Explicit Return Types & Null Protection (显式返回类型与防呆)**：
+   - 导出的公共 API 和状态工具方法必须显式标注返回值类型。
+   - 显式处理 `null` / `undefined` 边界，严禁未经防呆判空直接链式调用。
+
+
 
 
 
