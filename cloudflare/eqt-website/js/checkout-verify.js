@@ -323,11 +323,21 @@
                 // Open Paddle Checkout with pre-filled verified customer email
                 setTimeout(() => {
                     if (typeof Paddle !== 'undefined') {
-                        Paddle.Checkout.open({
-                            items: [{ priceId: this.pendingPriceId, quantity: 1 }],
-                            customer: { email: this.verifiedEmail }
-                        });
+                        if (typeof window.initPaddle === 'function') {
+                            window.initPaddle();
+                        }
+                        try {
+                            Paddle.Checkout.open({
+                                items: [{ priceId: this.pendingPriceId, quantity: 1 }],
+                                customer: { email: this.verifiedEmail }
+                            });
+                        } catch (pErr) {
+                            console.error("Paddle Open Error:", pErr);
+                            this.open(this.pendingPriceId);
+                            this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true);
+                        }
                     } else {
+                        this.open(this.pendingPriceId);
                         this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true);
                     }
                 }, 350);

@@ -707,20 +707,26 @@
 
         function initPaddle() {
             if (typeof Paddle !== 'undefined') {
-                Paddle.Environment.set(PADDLE_ENV);
-                Paddle.Initialize({
-                    token: PADDLE_TOKEN,
-                    eventCallback: function(data) {
-                        if (data.name === "checkout.completed") {
-                            const transactionId = data.data.transaction_id || data.data.id;
-                            if (transactionId) {
-                                openModalAndStartPoll(transactionId);
+                try {
+                    Paddle.Environment.set(PADDLE_ENV);
+                    Paddle.Initialize({
+                        token: PADDLE_TOKEN,
+                        eventCallback: function(data) {
+                            console.log("Paddle Event:", data);
+                            if (data.name === "checkout.completed") {
+                                const transactionId = data.data.transaction_id || data.data.id;
+                                if (transactionId) {
+                                    openModalAndStartPoll(transactionId);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                } catch (e) {
+                    console.error("Failed to initialize Paddle:", e);
+                }
             }
         }
+        window.initPaddle = initPaddle;
 
         function initCheckoutButtons() {
             const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
