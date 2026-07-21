@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS activations (
     uuid_hash TEXT,
     cpu_hash TEXT,
     disk_hash TEXT,
+    device_id TEXT DEFAULT NULL,
     activated_at TEXT NOT NULL,
     FOREIGN KEY (license_code) REFERENCES licenses(license_code)
 );

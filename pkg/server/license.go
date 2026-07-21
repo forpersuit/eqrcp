@@ -233,6 +233,7 @@ func ActivateLicenseOnline(licenseCode string) error {
 		"uuid_hash":    uuid,
 		"cpu_hash":     cpu,
 		"disk_hash":    disk,
+		"device_id":    GetDeviceStableID(),
 	})
 
 	apiURL := fmt.Sprintf("%s/api/v1/activate", getLicenseServer())

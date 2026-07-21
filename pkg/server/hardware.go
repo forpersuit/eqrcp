@@ -299,3 +299,38 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 	}
 	return uuid, cpu, disk
 }
+
+// GetDeviceStableID returns a stable 12-char hex ID derived from hardware fingerprints.
+// It collects the non-empty values of uuid_hash, cpu_hash, disk_hash, sorts them, and
+// SHA256-hashes their "|"-joined string. The result never changes unless hardware changes.
+func GetDeviceStableID() string {
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+
+	// Collect non-empty fingerprint values and sort for determinism
+	parts := []string{}
+	if uuid != "" {
+		parts = append(parts, uuid)
+	}
+	if cpu != "" {
+		parts = append(parts, cpu)
+	}
+	if disk != "" {
+		parts = append(parts, disk)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Sort for determinism (order doesn't matter, only content)
+	for i := 0; i < len(parts)-1; i++ {
+		for j := i + 1; j < len(parts); j++ {
+			if parts[i] > parts[j] {
+				parts[i], parts[j] = parts[j], parts[i]
+			}
+		}
+	}
+
+	joined := strings.Join(parts, "|")
+	sum := sha256.Sum256([]byte(joined))
+	return hex.EncodeToString(sum[:])[:12]
+}

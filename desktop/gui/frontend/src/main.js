@@ -2331,6 +2331,14 @@ function renderAboutPanel() {
                         <div class="about-plan-meta">
                             ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
                             ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
+                            ${state.status?.deviceID ? `
+                                <span class="email-copy-wrapper" data-copy-text="${escapeAttr(state.status.deviceID)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制')}">
+                                    <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">Device ID: ${escapeHTML(state.status.deviceID)}</span>
+                                    <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                        ✓ ${escapeHTML(t('copied') || '已复制')}
+                                    </span>
+                                </span>
+                            ` : ''}
                             ${(hasPaidLicense() && state.status?.buyerEmail) ? `
                                 <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
                                     <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
@@ -3281,13 +3289,13 @@ function bindPanelEvents() {
     document.querySelectorAll('.email-copy-wrapper').forEach(wrapper => {
         wrapper.addEventListener('click', (e) => {
             e.preventDefault();
-            const email = wrapper.getAttribute('data-email');
-            if (!email) return;
+            const textToCopy = wrapper.getAttribute('data-copy-text') || wrapper.getAttribute('data-email');
+            if (!textToCopy) return;
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(email);
+                navigator.clipboard.writeText(textToCopy);
             } else {
                 const input = document.createElement('input');
-                input.value = email;
+                input.value = textToCopy;
                 document.body.appendChild(input);
                 input.select();
                 document.execCommand('copy');

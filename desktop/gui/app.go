@@ -105,6 +105,7 @@ type AgentStatus struct {
 	UsedReceiveTransfers int          `json:"usedReceiveTransfers"`
 	LicenseExpiresAt     string       `json:"licenseExpiresAt,omitempty"`
 	BuyerEmail           string       `json:"buyerEmail,omitempty"`
+	DeviceID             string       `json:"deviceID,omitempty"`
 }
 
 type DesktopSettings struct {

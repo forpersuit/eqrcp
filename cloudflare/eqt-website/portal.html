@@ -691,8 +691,8 @@
                             <div class="grid gap-2 text-xs">
                                 ${lic.activations.map(act => `
                                     <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5 gap-2">
-                                        <div class="flex flex-col">
-                                            <span class="font-mono text-white/80 font-medium">${act.uuid_hash.slice(0, 8)}... (CPU: ${act.cpu_hash.slice(0, 4)})</span>
+                                        <div class="flex flex-col gap-0.5">
+                                            <span class="font-mono text-white font-semibold tracking-widest text-[13px]">${act.device_id || (act.uuid_hash ? act.uuid_hash.slice(0, 12) : '------')}</span>
                                             <span class="text-on-surface-variant text-[10px]">${translations[state.lang].activated_on}: ${new Date(act.activated_at).toLocaleDateString()}</span>
                                         </div>
                                         ${lic.status === 'active' ? `

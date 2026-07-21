@@ -173,6 +173,14 @@ async function ensureAuditLogTable(env: Env): Promise<void> {
   }
 }
 
+async function ensureDeviceIdColumn(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare("ALTER TABLE activations ADD COLUMN device_id TEXT DEFAULT NULL").run();
+  } catch (err) {
+    // Column already exists or table does not exist yet; ignore safely
+  }
+}
+
 async function logSystemError(
   env: Env,
   category: string,
@@ -1251,8 +1259,9 @@ export default {
 
       // 1. Activating a device
       if (url.pathname === "/api/v1/activate" && request.method === "POST") {
+        await ensureDeviceIdColumn(env);
         const body: any = await request.json();
-        const { license_code, uuid_hash, cpu_hash, disk_hash } = body;
+        const { license_code, uuid_hash, cpu_hash, disk_hash, device_id } = body;
 
         if (!license_code) {
           return new Response(JSON.stringify({ error: "Missing license_code" }), {
@@ -1335,12 +1344,13 @@ export default {
 
           // Insert new activation record
           await env.DB.prepare(
-            "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, activated_at) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at) VALUES (?, ?, ?, ?, ?, ?)"
           ).bind(
             license_code,
             uuid_hash || "",
             cpu_hash || "",
             disk_hash || "",
+            device_id || "",
             new Date().toISOString()
           ).run();
 
