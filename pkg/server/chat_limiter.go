@@ -228,6 +228,8 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		l.checkLicenseValidity(&usage)
 		if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
 			usage.UsedSeconds = 600
+			usage.UsedTransfers = 5
+			usage.UsedReceiveTransfers = 5
 		}
 		return usage
 	}
@@ -274,6 +276,8 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 	if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
 		usage.UsedSeconds = 600
+		usage.UsedTransfers = 5
+		usage.UsedReceiveTransfers = 5
 	}
 
 	return usage

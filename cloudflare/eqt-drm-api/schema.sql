@@ -38,3 +38,14 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     email TEXT NOT NULL,
     expires_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS unbind_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_code TEXT NOT NULL,
+    activation_id INTEGER NOT NULL,
+    unbound_at TEXT NOT NULL,
+    FOREIGN KEY (license_code) REFERENCES licenses(license_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_unbind_license ON unbind_records(license_code);
+

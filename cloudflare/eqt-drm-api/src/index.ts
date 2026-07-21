@@ -816,6 +816,85 @@ export default {
         });
       }
 
+      // 0.3.5 Unbind device with yearly 4 times limit
+      if (url.pathname === "/api/v1/user/unbind-device" && request.method === "POST") {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        const token = authHeader.substring(7);
+
+        const session = await env.DB.prepare(
+          "SELECT * FROM user_sessions WHERE session_token = ?"
+        ).bind(token).first<any>();
+
+        if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+          return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const body: any = await request.json();
+        const { license_code, activation_id } = body;
+        if (!license_code || !activation_id) {
+          return new Response(JSON.stringify({ error: "Missing license_code or activation_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const license = await env.DB.prepare(
+          "SELECT * FROM licenses WHERE license_code = ?"
+        ).bind(license_code).first<any>();
+
+        if (!license) {
+          return new Response(JSON.stringify({ error: "License not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Check 1-year rolling window unbind limit (max 4 times)
+        const oneYearAgoISO = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
+        const unbindCheck = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
+        ).bind(license_code, oneYearAgoISO).first<any>();
+
+        const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
+        if (unbindCount >= 4) {
+          return new Response(JSON.stringify({
+            error: "该授权码过去365天内已达到4次解绑设备上限，无法继续解绑。"
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Delete activation record
+        await env.DB.prepare(
+          "DELETE FROM activations WHERE id = ? AND license_code = ?"
+        ).bind(activation_id, license_code).run();
+
+        // Record unbind history log
+        const nowIso = new Date().toISOString();
+        await env.DB.prepare(
+          "INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)"
+        ).bind(license_code, activation_id, nowIso).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: "设备已成功解绑",
+          remaining_unbinds: 4 - (unbindCount + 1)
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       // 0.4 Refund license
       if (url.pathname === "/api/v1/user/refund" && request.method === "POST") {
         const authHeader = request.headers.get("Authorization");
