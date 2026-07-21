@@ -168,7 +168,7 @@ func fileOrder(path string) int {
 		"desktop/gui/main.go":                     110,
 		"desktop/gui/app.go":                      111,
 		"desktop/gui/tray.go":                     112,
-		"desktop/gui/frontend/src/main.js":        120,
+		"desktop/gui/frontend/src/main.ts":        120,
 		"desktop/gui/frontend/src/app.css":        121,
 		"desktop/gui/frontend/src/style.css":      122,
 		"pages/chat.tmpl.html":                    130,

@@ -255,7 +255,7 @@ func TestChatPageUsesNativeFileBridgeInWails(t *testing.T)                      
 func TestChatPageKeepsDownloadProgressLocalAndPersistent(t *testing.T)             {}
 
 func TestDesktopChatBridgeSelectsNativeFiles(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join("..", "..", "desktop", "gui", "frontend", "src", "main.js"))
+	source, err := os.ReadFile(filepath.Join("..", "..", "desktop", "gui", "frontend", "src", "main.ts"))
 	if err != nil {
 		t.Fatal(err)
 	}
