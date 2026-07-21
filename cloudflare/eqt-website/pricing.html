@@ -729,139 +729,167 @@
         }
 
         // Email Verification Modal Control
-        const verifyModalEl = document.getElementById('verify-email-modal');
-        const emailInputEl = document.getElementById('checkout-email-input');
-        const codeInputEl = document.getElementById('checkout-code-input');
-        const sendCodeBtn = document.getElementById('send-checkout-code-btn');
-        const verifyPayBtn = document.getElementById('verify-and-pay-btn');
-        const statusMsgEl = document.getElementById('verify-modal-status-msg');
+        function getVerifyModalEls() {
+            return {
+                modal: document.getElementById('verify-email-modal'),
+                emailInput: document.getElementById('checkout-email-input'),
+                codeInput: document.getElementById('checkout-code-input'),
+                sendBtn: document.getElementById('send-checkout-code-btn'),
+                payBtn: document.getElementById('verify-and-pay-btn'),
+                statusMsg: document.getElementById('verify-modal-status-msg')
+            };
+        }
 
         let cooldownTimer = null;
 
         function openVerifyModal() {
-            if (!verifyModalEl) return;
-            statusMsgEl.classList.add('hidden');
-            statusMsgEl.textContent = '';
-            verifyModalEl.classList.remove('hidden');
+            const { modal, statusMsg } = getVerifyModalEls();
+            if (!modal) return;
+            if (statusMsg) {
+                statusMsg.classList.add('hidden');
+                statusMsg.textContent = '';
+            }
+            modal.classList.remove('hidden');
             setTimeout(() => {
-                verifyModalEl.classList.remove('opacity-0');
-                verifyModalEl.querySelector('.transform')?.classList.remove('scale-95');
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.transform')?.classList.remove('scale-95');
             }, 50);
         }
 
         function closeVerifyModal() {
-            if (!verifyModalEl) return;
-            verifyModalEl.classList.add('opacity-0');
-            verifyModalEl.querySelector('.transform')?.classList.add('scale-95');
+            const { modal } = getVerifyModalEls();
+            if (!modal) return;
+            modal.classList.add('opacity-0');
+            modal.querySelector('.transform')?.classList.add('scale-95');
             setTimeout(() => {
-                verifyModalEl.classList.add('hidden');
+                modal.classList.add('hidden');
             }, 300);
         }
 
-        // Send verification code
-        sendCodeBtn?.addEventListener('click', async () => {
-            const email = emailInputEl.value.trim();
-            if (!email || !email.includes('@')) {
-                showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
-                return;
-            }
+        function initVerifyModalEvents() {
+            const { emailInput, codeInput, sendBtn, payBtn } = getVerifyModalEls();
 
-            sendCodeBtn.disabled = true;
-            sendCodeBtn.textContent = translations[currentLang]?.sending_code || 'Sending...';
-
-            try {
-                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/send-code', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, lang: currentLang })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || 'Failed to send code');
+            // Send verification code
+            sendBtn?.addEventListener('click', async () => {
+                const email = emailInput ? emailInput.value.trim() : '';
+                if (!email || !email.includes('@')) {
+                    showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
+                    return;
                 }
 
-                showVerifyStatus(translations[currentLang]?.code_sent_success || 'Verification code sent to your email!', false);
-                startSendCooldown(60);
-            } catch (err) {
-                showVerifyStatus(err.message, true);
-                sendCodeBtn.disabled = false;
-                sendCodeBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
-            }
-        });
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1"></span> <span>${translations[currentLang]?.sending_code || 'Sending...'}</span>`;
+                sendBtn.className = 'px-4 py-2 bg-primary/20 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-80 flex items-center justify-center';
+
+                try {
+                    const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/send-code', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, lang: currentLang })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to send code');
+                    }
+
+                    showVerifyStatus(translations[currentLang]?.code_sent_success || 'Verification code sent to your email!', false);
+                    startSendCooldown(60);
+                } catch (err) {
+                    showVerifyStatus(err.message, true);
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = translations[currentLang]?.send_code_btn || 'Send Code';
+                    sendBtn.className = 'px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]';
+                }
+            });
+
+            // Verify code and proceed to Paddle checkout
+            payBtn?.addEventListener('click', async () => {
+                const email = emailInput ? emailInput.value.trim() : '';
+                const code = codeInput ? codeInput.value.trim() : '';
+
+                if (!email || !email.includes('@')) {
+                    showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
+                    return;
+                }
+                if (!code || code.length !== 6) {
+                    showVerifyStatus(translations[currentLang]?.invalid_code_err || 'Please enter 6-digit code', true);
+                    return;
+                }
+
+                payBtn.disabled = true;
+                payBtn.innerHTML = `<span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
+
+                try {
+                    const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, code })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Verification failed');
+                    }
+
+                    verifiedEmail = email;
+                    closeVerifyModal();
+
+                    // Open Paddle Checkout with pre-filled verified customer email
+                    setTimeout(() => {
+                        if (typeof Paddle !== 'undefined') {
+                            Paddle.Checkout.open({
+                                items: [{ priceId: pendingPriceId, quantity: 1 }],
+                                customer: { email: verifiedEmail }
+                            });
+                        } else {
+                            showVerifyStatus('Billing component is loading or blocked by network.', true);
+                        }
+                    }, 350);
+
+                } catch (err) {
+                    showVerifyStatus(err.message, true);
+                } finally {
+                    payBtn.disabled = false;
+                    payBtn.innerHTML = `<span>${translations[currentLang]?.verify_and_pay_btn || 'Verify & Proceed to Payment'}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
+                }
+            });
+        }
 
         function startSendCooldown(seconds) {
+            const { sendBtn } = getVerifyModalEls();
+            if (!sendBtn) return;
             let remaining = seconds;
-            sendCodeBtn.disabled = true;
-            sendCodeBtn.textContent = `${remaining}s`;
+            sendBtn.disabled = true;
+            sendBtn.className = 'px-4 py-2 bg-white/5 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
+            sendBtn.textContent = `${remaining}s`;
             if (cooldownTimer) clearInterval(cooldownTimer);
             cooldownTimer = setInterval(() => {
                 remaining--;
                 if (remaining <= 0) {
                     clearInterval(cooldownTimer);
-                    sendCodeBtn.disabled = false;
-                    sendCodeBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
+                    sendBtn.disabled = false;
+                    sendBtn.className = 'px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]';
+                    sendBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
                 } else {
-                    sendCodeBtn.textContent = `${remaining}s`;
+                    sendBtn.textContent = `${remaining}s`;
                 }
             }, 1000);
         }
 
         function showVerifyStatus(msg, isError) {
-            statusMsgEl.textContent = msg;
-            statusMsgEl.classList.remove('hidden', 'text-red-400', 'text-primary');
-            statusMsgEl.classList.add(isError ? 'text-red-400' : 'text-primary');
+            const { statusMsg } = getVerifyModalEls();
+            if (!statusMsg) return;
+            statusMsg.style.display = 'block';
+            statusMsg.classList.remove('hidden');
+            const iconName = isError ? 'error' : 'mark_email_read';
+            const colorClasses = isError
+                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
+
+            statusMsg.innerHTML = `<div class="p-2.5 rounded-lg border ${colorClasses} text-xs flex items-center gap-2 transition-all duration-300">
+                <span class="material-symbols-outlined text-base shrink-0">${iconName}</span>
+                <span class="leading-tight">${msg}</span>
+            </div>`;
         }
-
-        // Verify code and proceed to Paddle checkout
-        verifyPayBtn?.addEventListener('click', async () => {
-            const email = emailInputEl.value.trim();
-            const code = codeInputEl.value.trim();
-
-            if (!email || !email.includes('@')) {
-                showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
-                return;
-            }
-            if (!code || code.length !== 6) {
-                showVerifyStatus(translations[currentLang]?.invalid_code_err || 'Please enter 6-digit code', true);
-                return;
-            }
-
-            verifyPayBtn.disabled = true;
-            verifyPayBtn.innerHTML = `<span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
-
-            try {
-                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || 'Verification failed');
-                }
-
-                verifiedEmail = email;
-                closeVerifyModal();
-
-                // Open Paddle Checkout with pre-filled verified customer email
-                setTimeout(() => {
-                    if (typeof Paddle !== 'undefined') {
-                        Paddle.Checkout.open({
-                            items: [{ priceId: pendingPriceId, quantity: 1 }],
-                            customer: { email: verifiedEmail }
-                        });
-                    } else {
-                        showVerifyStatus('Billing component is loading or blocked by network.', true);
-                    }
-                }, 350);
-
-            } catch (err) {
-                showVerifyStatus(err.message, true);
-            } finally {
-                verifyPayBtn.disabled = false;
-                verifyPayBtn.innerHTML = `<span>${translations[currentLang]?.verify_and_pay_btn || 'Verify & Proceed to Payment'}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
-            }
-        });
 
         // Modal elements control
         const modalEl = document.getElementById('license-modal');
@@ -969,6 +997,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
             initCheckoutButtons();
+            initVerifyModalEvents();
             initPaddle();
         });
     </script>
