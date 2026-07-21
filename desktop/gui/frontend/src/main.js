@@ -1691,9 +1691,6 @@ function renderChat() {
     let src = chatUrl;
     try {
         const urlObj = new URL(src);
-        if (state.settings?.lang) {
-            urlObj.searchParams.set('lang', state.settings.lang);
-        }
         if (state.settings?.viewportDebug) {
             urlObj.searchParams.set('viewportDebug', '1');
         } else {
