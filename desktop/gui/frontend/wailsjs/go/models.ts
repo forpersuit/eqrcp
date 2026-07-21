@@ -101,6 +101,7 @@ export namespace main {
 	    usedTransfers: number;
 	    usedReceiveTransfers: number;
 	    licenseExpiresAt?: string;
+	    buyerEmail?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentStatus(source);
@@ -125,6 +126,7 @@ export namespace main {
 	        this.usedTransfers = source["usedTransfers"];
 	        this.usedReceiveTransfers = source["usedReceiveTransfers"];
 	        this.licenseExpiresAt = source["licenseExpiresAt"];
+	        this.buyerEmail = source["buyerEmail"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

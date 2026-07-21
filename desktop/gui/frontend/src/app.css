@@ -280,16 +280,13 @@ h2 {
     width: 100%;
 }
 
-.menu-label {
-    white-space: nowrap;
-}
-
 .layout {
     display: grid;
-    gap: 22px;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
     flex: 1;
     min-height: 0;
+    height: 100%;
 }
 
 .layout.chat-layout,
@@ -304,7 +301,6 @@ h2 {
     border-radius: 12px;
     box-sizing: border-box;
 }
-
 
 .workspace {
     min-height: 0;
@@ -360,9 +356,9 @@ h2 {
     border: 2px dashed #9eb1a8;
     border-radius: 8px;
     display: grid;
-    gap: 18px;
-    min-height: 250px;
-    padding: 22px;
+    gap: 14px;
+    min-height: clamp(140px, 22vh, 220px);
+    padding: clamp(14px, 2vh, 22px);
     text-align: center;
 }
 
@@ -370,7 +366,7 @@ h2 {
     align-content: center;
     border-radius: 6px;
     display: grid;
-    min-height: 160px;
+    min-height: clamp(90px, 14vh, 140px);
     place-items: center;
 }
 
@@ -1255,12 +1251,12 @@ dd {
     border: 1px solid var(--line);
     border-radius: 6px;
     height: auto;
-    max-height: 280px;
+    max-height: clamp(140px, 28vh, 280px);
     image-rendering: pixelated;
     object-fit: contain;
     padding: 10px;
     width: 100%;
-    max-width: 280px;
+    max-width: clamp(140px, 28vh, 280px);
 }
 
 .transfer-progress {
@@ -2054,7 +2050,7 @@ dd {
     width: 100%;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 768px) {
     .shell {
         padding: 16px;
     }
@@ -2088,7 +2084,8 @@ dd {
     }
 
     .history {
-        overflow-y: visible;
+        max-height: 280px;
+        overflow-y: auto;
         flex: none;
     }
 
@@ -2186,6 +2183,24 @@ dd {
     .modal {
         max-height: calc(100dvh - 36px);
         padding: 16px;
+    }
+}
+
+@media (max-height: 720px) {
+    .shell {
+        padding: 16px 22px;
+    }
+
+    .topbar {
+        margin-bottom: 10px;
+    }
+
+    .workspace {
+        padding: 16px 18px;
+    }
+
+    .side {
+        gap: 10px;
     }
 }
 
