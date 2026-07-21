@@ -2317,38 +2317,51 @@ function renderAboutPanel() {
             <div class="about-hero">
                 <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
                 <div class="about-plan">
-                    <div class="about-plan-left">
-                        <span style="display: inline-flex; align-items: center; gap: 6px;">
-                            ${t('plan_label')}
-                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''}>
+                    <div class="about-plan-header">
+                        <div class="about-plan-tag">
+                            <span>${t('plan_label')}</span>
+                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh') || '刷新状态')}">
                                 <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
                             </button>
-                        </span>
-                        <strong>${escapeHTML(plan)}</strong>
-                        <small>${escapeHTML(redeemDetail)}</small>
-                        ${(hasPaidLicense() && state.status?.buyerEmail) ? `
-                            <small class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; margin: 3px 0 1px 0; border-radius: 4px; border: 1px dashed var(--line); background: var(--bg-hover); transition: border-color 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
-                                <span style="font-size: 11px; color: var(--text-secondary);">${t('license_buyer_email') || '激活邮箱'}：</span>
-                                <span style="font-size: 11px; font-weight: 600; color: var(--text-primary);">${escapeHTML(state.status.buyerEmail)}</span>
-                                <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
-                                    ✓ ${escapeHTML(t('copied') || '已复制')}
-                                </span>
-                            </small>
-                        ` : ''}
-                        ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
-                        ${license ? `
-                            <div style="margin-top: 6px;">
-                                <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
-                                    ${t('manage_license_portal')}
-                                </a>
-                            </div>
-                        ` : ''}
+                        </div>
+                        <div class="about-plan-badge ${hasPaidLicense() ? '' : 'free'}">
+                            <span>${hasPaidLicense() ? '✦ ' + escapeHTML(plan) : 'FREE'}</span>
+                        </div>
                     </div>
-                    <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
-                        <span class="plan-info-icon-wrapper" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}">
-                            <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
-                        </span>
-                    </button>
+                    
+                    <div class="about-plan-body">
+                        <div class="about-plan-title">${escapeHTML(plan)}</div>
+                        <div class="about-plan-meta">
+                            ${redeemDetail ? `<span class="about-plan-pill">⚡ ${escapeHTML(redeemDetail)}</span>` : ''}
+                            ${expiryDetail ? `<span class="about-plan-pill">📅 ${escapeHTML(expiryDetail)}</span>` : ''}
+                            ${(hasPaidLicense() && state.status?.buyerEmail) ? `
+                                <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
+                                    <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">✉ ${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
+                                    <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                        ✓ ${escapeHTML(t('copied') || '已复制')}
+                                    </span>
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="about-plan-footer">
+                        <div class="about-plan-actions">
+                            ${license ? `
+                                <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; font-weight: 700; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                                    <span>${t('manage_license_portal')}</span>
+                                </a>
+                            ` : `
+                                <a href="#" id="buy-license-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; font-weight: 700; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                                    <span>${t('buy_license_portal')}</span>
+                                </a>
+                            `}
+                        </div>
+                        <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 4px 10px; height: 26px; border-radius: 13px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.08); cursor: pointer; color: var(--accent-strong, #16a34a); font-size: 11px; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='var(--accent-strong)'; this.style.color='#fff';" onmouseout="this.style.background='rgba(22, 163, 74, 0.08)'; this.style.color='var(--accent-strong)';">
+                            <span style="width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
+                            <span>${t('tooltip_popover_comparsion') || '对比权益'}</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
