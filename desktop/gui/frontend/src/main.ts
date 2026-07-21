@@ -17,7 +17,11 @@ import {
 import { buildDiagnostics, collectFeedback, feedbackMailto } from './controllers/feedbackController';
 import { saveLicense, validateRedeemCode, licenseStorageKey } from './controllers/licenseController';
 
+import { mount, unmount } from 'svelte';
+import SettingsModal from './components/SettingsModal.svelte';
+
 import { renderSettingsView } from './views/settingsView';
+
 import {
     syncSettingsFromDOM,
     saveSettingsData,
@@ -535,21 +539,35 @@ function renderConfirmSwitchPanel(): string {
     `;
 }
 
+let svelteSettingsApp: any = null;
+
+function syncSvelteSettingsModal(): void {
+    const container = document.querySelector<HTMLElement>('#svelte-settings-container');
+    if (!container) {
+        if (svelteSettingsApp) {
+            try { unmount(svelteSettingsApp); } catch {}
+            svelteSettingsApp = null;
+        }
+        return;
+    }
+    if (!svelteSettingsApp) {
+        svelteSettingsApp = mount(SettingsModal, {
+            target: container,
+            props: {
+                onClose: () => {
+                    closePanel();
+                },
+                onSaveSuccess: () => {
+                    render();
+                    syncIdentityToChatFrame();
+                },
+            },
+        });
+    }
+}
+
 function renderSettingsPanel(): string {
-    return renderSettingsView({
-        escapeHTML,
-        escapeAttr,
-        renderStatusBadge,
-        renderSwitch,
-        renderAvatarMarkup,
-        cleanChatAvatar,
-        cleanChatProfileName,
-        integrationStatusText,
-        checkIcon,
-        closeIcon,
-        editIcon,
-        openFolderIcon,
-    });
+    return `<div id="svelte-settings-container"></div>`;
 }
 
 function renderAboutPanel(): string {
@@ -698,6 +716,7 @@ function render(): void {
 
     bindEvents();
     syncManualUpdateCheckUI();
+    syncSvelteSettingsModal();
 }
 
 function ensureFavicon(): void {
