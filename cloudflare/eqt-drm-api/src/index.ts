@@ -1120,14 +1120,6 @@ export default {
                     <td style="padding: 10px; border: 1px solid #ddd;">${actTimeStr}</td>
                   </tr>
                   <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活设备特征 (Hashes)</td>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-size: 13px;">
-                      UUID: ${shortUUID}<br/>
-                      CPU: ${shortCPU}<br/>
-                      Disk: ${shortDisk}
-                    </td>
-                  </tr>
-                  <tr>
                     <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">设备占用状态</td>
                     <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #3b82f6;">${currentDevicesCount} / ${license.max_devices} (台设备已使用)</td>
                   </tr>
