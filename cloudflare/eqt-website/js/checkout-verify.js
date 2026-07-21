@@ -342,7 +342,8 @@
                             Paddle.Checkout.open({
                                 items: [{ priceId: this.pendingPriceId, quantity: 1 }],
                                 customer: { email: this.verifiedEmail },
-                                customData: { buyer_email: this.verifiedEmail }
+                                customData: { buyer_email: this.verifiedEmail },
+                                settings: { allowLogout: false }
                             });
                         } catch (pErr) {
                             console.error("Paddle Open Error:", pErr);
