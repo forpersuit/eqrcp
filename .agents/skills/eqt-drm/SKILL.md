@@ -30,9 +30,11 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - 应用拉起时（通过 `hardware.go` 后台线程）静默触发异步联网对账 `StartOnlineLicenseSync()`。为防频繁网络交互，触发对账具有 12 小时的最低间隔限制。
   - 对账网络超时失败不影响使用。客户端支持 7 天内静默免网脱机运行，计算公式为：`time.Now() - LastOnlineSyncTime <= 7 * 24 * time.Hour`。若超时则自动强行降级。
   - 对账返回 403/404（授权被吊销或设备解绑）则立即执行 `ResetLicense()` 擦除证书并降级为 Unpaid 免费版。
-- **极简单向时钟防回拨**：
+- **极简单向时钟防回拨与网络时间防篡改**：
   - 证书内元数据字段 `LastSeenLocalTime` 记录最后一次运行时间。每次成功校验后（若距离上次写入超过 1 分钟，以减少磁盘 IO），客户端自动更新并原子性落盘。
   - 本地校验时，若判定当前系统时间倒流（`time.Now() < LastSeenLocalTime - 10 minutes`），立刻判定为篡改并调用 `SetClockTampered(true)` 降级并永久锁死高级付费功能。
+  - **联网配额与防篡改对齐**：未激活免费版用户在脱机断网状态下只提供基础 Free 传输功能（不授予每日 10 分钟高级限额全功能）；在线状态下系统自动通过 `getNetworkTimeOrStartFetch()` 获取准确网络时间 Date 标头。若检测到本地系统时间与网络时间偏差超过 10 分钟，自动判定为 `ClockTampered` 并锁死。
+  - **废弃死代码清理**：彻底物理清理了 `~/.eqt_sys_state` 隐藏暗记文件及 XOR 混淆死代码，坚决保持 `.lic` 作为离线授权唯一可信源 (SSOT)。
 - **测试兼容模式**：在单元测试或 mock 状态下（`os.Getenv("EQT_TESTING") == "true"`），若本地没有 `.lic` 文件，必须自动降级到传统模式，支持模拟付费判定，不可在测试环境中强求真实公私钥签名，且自动豁免 7天租约及防时钟回拨的强制性检查，以免破坏基础 CI。
 - **Share/Receive 模式防规避与防呆拦截机制**：
   - **无物理时限中断**：为了保障用户体验连贯性，在 10 分钟（600秒）限额内，如果某次传输任务（如移动端上传 POST 或桌面端 Share）在启动那一刻 `usedSeconds < 600`，本次传输必须被允许无限制传输完毕，不得强行调用 `signalStop()` 在中途物理切断。
