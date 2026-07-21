@@ -616,41 +616,64 @@ function render(): void {
     const history = state.status?.history || [];
     const matchResults = getMatchResults(history, searchQuery);
 
+    const activeShare = activeShareTask();
+    const activeRecv = activeReceiveTask();
+    const activeChat = activeChatTask();
+    let runningMode: string | null = null;
+    if (activeShare) {
+        runningMode = 'share';
+    } else if (activeRecv) {
+        runningMode = 'receive';
+    } else if (activeChat) {
+        runningMode = 'chat';
+    }
+
     const html = `
-        <div class="shell ${state.activePanel ? 'panel-open' : ''}">
-            <header class="top-bar">
-                <div class="brand">
-                    <img src="${logoMarkURL}" alt="EQT Mark" class="logo-mark" />
-                    <span class="brand-name">EQT</span>
-                </div>
-                <nav class="mode-tabs">
-                    <button class="tab ${state.mode === 'share' ? 'active' : ''}" id="tab-share">${t('tab_share')}</button>
-                    <button class="tab ${state.mode === 'receive' ? 'active' : ''}" id="tab-receive">${t('tab_receive')}</button>
-                    <button class="tab ${state.mode === 'chat' ? 'active' : ''}" id="tab-chat">${t('tab_chat')}</button>
+        <main class="shell">
+            <header class="topbar">
+                <nav class="mode-switch" aria-label="Transfer modes">
+                    <button class="${state.mode === 'share' ? 'active' : (runningMode && runningMode !== 'share' ? 'disabled-mode' : '')}" data-mode="share" id="tab-share">${t('share')}</button>
+                    <button class="${state.mode === 'receive' ? 'active' : (runningMode && runningMode !== 'receive' ? 'disabled-mode' : '')}" data-mode="receive" id="tab-receive">${t('receive')}</button>
+                    <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat" id="tab-chat">${t('chat')}</button>
                 </nav>
-                <div class="top-actions">
-                    <button class="icon-button" id="open-plans" title="${escapeAttr(t('plans_title'))}">${diamondIcon()}</button>
-                    <button class="icon-button" id="open-redeem" title="${escapeAttr(t('redeem_title'))}">${giftIcon()}</button>
-                    <button class="icon-button" id="open-feedback" title="${escapeAttr(t('feedback_title'))}">${feedbackIcon()}</button>
-                    <button class="icon-button" id="open-about" title="${escapeAttr(t('about_title'))}">${aboutIcon()}</button>
-                    <button class="icon-button" id="open-settings" title="${escapeAttr(t('settings_title'))}">${settingsIcon()}</button>
+                <div class="top-actions" role="menubar" aria-label="Application menu">
+                    ${!hasPaidLicense() ? `
+                        <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
+                            <span class="menu-icon">${giftIcon()}</span>
+                        </button>
+                    ` : ''}
+                    ${(() => {
+                        const isPaid = hasPaidLicense();
+                        const tier = (isPaid && state.license?.tier) ? state.license.tier : 'FREE';
+                        const tierText = (tier === 'PLUS' && state.license?.codeDate === 'LIFETIME') ? 'PLUS U' : tier;
+                        return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
+                    })()}
+                    <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}" style="position: relative;">
+                        <span class="menu-icon">${settingsIcon()}</span>
+                        ${state.settings?.autoUpdateMode !== 'off' && (
+                            (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
+                            ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
+                        ) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                    </button>
+                    <button class="menu-button" id="open-about" title="${t('about')}" aria-label="${t('about')}">
+                        <span class="menu-icon">${aboutIcon()}</span>
+                    </button>
+                    <button class="menu-button" id="open-feedback" title="${t('feedback')}" aria-label="${t('feedback')}">
+                        <span class="menu-icon">${feedbackIcon()}</span>
+                    </button>
                 </div>
             </header>
 
-            ${renderCurrent(activeTask)}
-
-            <main class="main-body">
-                ${renderSide({ state, showSearchInput, showSearchDropdown, searchQuery, matchResults })}
-                <section class="workspace">
+            <section class="layout ${state.mode === 'chat' ? 'chat-layout' : ''} ${state.settings?.showHistory === false ? 'no-history-layout' : ''}">
+                <div class="workspace">
                     ${renderWorkspace()}
-                </section>
-            </main>
-
+                    ${state.notice ? `<div class="notice success">${escapeHTML(state.notice)}</div>` : ''}
+                    ${state.error ? `<div class="notice error">${escapeHTML(state.error)}</div>` : ''}
+                </div>
+                ${renderSide({ state, showSearchInput, showSearchDropdown, searchQuery, matchResults })}
+            </section>
             ${renderPanel()}
-            
-            ${state.notice ? `<div class="toast-notice">${escapeHTML(state.notice)}</div>` : ''}
-            ${state.error ? `<div class="toast-error">${escapeHTML(state.error)}</div>` : ''}
-        </div>
+        </main>
     `;
 
     const nextFrame = document.createElement('div');
