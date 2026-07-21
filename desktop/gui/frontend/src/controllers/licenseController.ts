@@ -15,11 +15,11 @@ export function saveLicense(license: Record<string, unknown> | null): void {
 export function validateRedeemCode(code: string): { ok: boolean; tier?: string; codeDate?: string; error?: string } {
     const raw = String(code || '').trim().toUpperCase();
     if (!raw) {
-        return { ok: false, error: t('redeem_empty') || 'Please enter activation code.' };
+        return { ok: false, error: (t as any)('redeem_empty') || 'Please enter activation code.' };
     }
     const match = raw.match(/^EQT-(PLUS|PRO)-(\d{8})-[A-Z0-9]{4}-CHECK$/);
     if (!match) {
-        return { ok: false, error: t('redeem_invalid_format') || 'Invalid code format. Expected: EQT-PLUS-YYYYMMDD-XXXX-CHECK' };
+        return { ok: false, error: (t as any)('redeem_invalid_format') || 'Invalid code format. Expected: EQT-PLUS-YYYYMMDD-XXXX-CHECK' };
     }
     return {
         ok: true,

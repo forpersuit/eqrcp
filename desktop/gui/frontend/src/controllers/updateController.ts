@@ -62,7 +62,7 @@ export async function triggerDownloadUpdate(updateMessagesSurfaceFn?: () => void
     syncManualUpdateCheckUI();
 
     try {
-        await (window as unknown as { go: { main: { App: { DownloadUpdate: (res: unknown) => Promise<void> } } } }).go.main.App.DownloadUpdate(checkRes);
+        await (window as unknown as { go: { main: { App: { DownloadUpdate: (res: unknown) => Promise<void> } } } }).go?.main.App.DownloadUpdate(checkRes);
         state.updateStage = 'ready';
         const version = String(checkRes.version || '');
         state.updateStatusText = t('update_ready_restart', { version });
@@ -121,11 +121,12 @@ export async function runAutoUpdateCheck(force = false, updateMessagesSurfaceFn?
     }
 
     state.updateStage = 'checking';
-    state.updateStatusText = t('check_updates_auto');
+    state.updateStatusText = (t as any)('check_updates_auto') || t('checking_updates');
     syncManualUpdateCheckUI();
 
     try {
-        const app = (window as unknown as { go: { main: { App: { CheckForUpdates: () => Promise<Record<string, unknown>> } } } }).go.main.App;
+        const app = (window as unknown as { go: { main: { App: { CheckForUpdates: () => Promise<Record<string, unknown>> } } } }).go?.main.App;
+        if (!app) return;
         const checkRes = await app.CheckForUpdates();
         state.updateCheckRes = checkRes;
         state.updateBackoffCount = 0;
@@ -157,13 +158,13 @@ export async function runAutoUpdateCheck(force = false, updateMessagesSurfaceFn?
         } else {
             if (state.status?.state === 'busy') {
                 state.updateStage = 'available';
-                state.updateStatusText = t('postponed_transfer', { version });
+                state.updateStatusText = (t as any)('postponed_transfer', { version }) || t('version_available', { version });
                 syncManualUpdateCheckUI();
                 reschedule();
                 return;
             }
             await triggerDownloadUpdate(updateMessagesSurfaceFn);
-            if (state.updateStage === 'ready') {
+            if ((state.updateStage as string) === 'ready') {
                 if (mode === 'download') {
                     state.notice = t('update_ready_restart', { version });
                     if (typeof updateMessagesSurfaceFn === 'function') {
@@ -184,7 +185,7 @@ export async function runAutoUpdateCheck(force = false, updateMessagesSurfaceFn?
 }
 
 export async function runManualUpdateCheck(syncSettingsFromDOMFn?: () => void): Promise<void> {
-    if (state.updateStage === 'checking' || state.updateStage === 'downloading' || state.updateStage === 'installing') {
+    if (state.updateStage === 'checking' || state.updateStage === 'downloading' || (state.updateStage as string) === 'installing') {
         return;
     }
 
@@ -208,7 +209,8 @@ export async function runManualUpdateCheck(syncSettingsFromDOMFn?: () => void): 
         syncManualUpdateCheckUI();
 
         try {
-            const app = (window as unknown as { go: { main: { App: { CheckForUpdates: () => Promise<Record<string, unknown>> } } } }).go.main.App;
+            const app = (window as unknown as { go: { main: { App: { CheckForUpdates: () => Promise<Record<string, unknown>> } } } }).go?.main.App;
+            if (!app) return;
             const checkRes = await app.CheckForUpdates();
             state.updateCheckRes = checkRes;
 
@@ -224,7 +226,8 @@ export async function runManualUpdateCheck(syncSettingsFromDOMFn?: () => void): 
             const mode = state.settings?.autoUpdateMode || 'download';
             if (mode === 'off' || mode === 'notify') {
                 state.updateStage = 'available';
-                state.updateStatusText = t('version_available', { version: checkRes.version });
+                const version = String(checkRes.version || '');
+                state.updateStatusText = t('version_available', { version });
                 state.updateBtnText = t('btn_download_now');
                 state.updateBtnDisabled = false;
                 syncManualUpdateCheckUI();
@@ -260,7 +263,7 @@ export async function runManualUpdateCheck(syncSettingsFromDOMFn?: () => void): 
 
         try {
             const assetName = String(state.updateCheckRes?.asset_name || '');
-            await (window as unknown as { go: { main: { App: { InstallUpdate: (asset: string) => Promise<void> } } } }).go.main.App.InstallUpdate(assetName);
+            await (window as unknown as { go: { main: { App: { InstallUpdate: (asset: string) => Promise<void> } } } }).go?.main.App.InstallUpdate(assetName);
         } catch (err) {
             state.updateStage = 'ready';
             const cleanedErr = cleanLocalAddressError(err);

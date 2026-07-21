@@ -35,13 +35,13 @@ export function renderSettingsView(helpers: {
         openFolderIcon,
     } = helpers;
 
-    const options = (state.settings.interfaceOptions || []).map((option) => {
+    const options = (state.settings.interfaceOptions || []).map((option: any) => {
         let label = option.label || option.name;
         if (option.isRecommended) {
             label += t('likely_phone_lan') || ' (Recommended LAN)';
         }
         return `
-            <option value="${escapeAttr(option.name)}" ${option.name === state.settings.interface ? 'selected' : ''}>${escapeHTML(label)}</option>
+            <option value="${escapeAttr(option.name)}" ${option.name === state.settings?.interface ? 'selected' : ''}>${escapeHTML(label)}</option>
         `;
     }).join('');
 
@@ -179,7 +179,7 @@ export function renderSettingsView(helpers: {
                                 ` : ''}
                             </div>
                             ${state.showEmojiPicker ? (() => {
-                                const allCulturalEmojis = Object.values(culturalEmojis).flatMap(g => g.emojis);
+                                const allCulturalEmojis = Object.values(culturalEmojis as Record<string, { emojis: string[] }>).flatMap(g => g.emojis);
                                 const combined = [...allCulturalEmojis, ...allEmojis];
                                 const uniqueEmojis = Array.from(new Set(combined));
                                 return `
@@ -272,7 +272,7 @@ export function renderSettingsView(helpers: {
                             <span>${t('dev_logs_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
-                            ${renderSwitch('dev-debug-log', state.settings?.debugLog)}
+                            ${renderSwitch('dev-debug-log', Boolean(state.settings?.debugLog))}
                         </div>
                     </div>
                     <div class="setting-row">
@@ -281,7 +281,7 @@ export function renderSettingsView(helpers: {
                             <span>${t('enable_viewport_debug_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
-                            ${renderSwitch('dev-viewport-debug', state.settings?.viewportDebug)}
+                            ${renderSwitch('dev-viewport-debug', Boolean(state.settings?.viewportDebug))}
                         </div>
                     </div>
                     
@@ -328,7 +328,7 @@ export function renderSettingsView(helpers: {
                     </div>
                     <select id="settings-close-behavior">
                         <option value="tray" ${state.closeBehavior !== 'quit' ? 'selected' : ''}>${t('keep_tray')}</option>
-                        <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>${t('direct_exit')}</option>
+                        <option value="quit" ${state.closeBehavior === 'quit' ? 'selected' : ''}>${(t as any)('direct_exit') || t('quit_app')}</option>
                     </select>
                 </div>
             </section>

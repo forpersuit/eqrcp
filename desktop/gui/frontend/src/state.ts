@@ -4,10 +4,24 @@ export interface DesktopSettings {
     autoStop?: boolean;
     qrPort?: number;
     chatHistorySavePath?: string;
-    autoUpdateMode?: 'notify' | 'download' | 'silent' | 'off';
+    autoUpdateMode?: 'notify' | 'download' | 'silent' | 'off' | string;
     lastUpdateCheckTime?: number;
-    closeBehavior?: 'tray' | 'exit' | 'ask';
-    [key: string]: unknown;
+    closeBehavior?: 'tray' | 'exit' | 'ask' | 'quit' | string;
+    interface?: string;
+    interfaceOptions?: Array<{ name: string; label?: string; isRecommended?: boolean }>;
+    chatSender?: string;
+    chatAvatar?: string;
+    chatDownloadDir?: string;
+    enableChatV2?: boolean;
+    showHistory?: boolean;
+    debugLog?: boolean;
+    viewportDebug?: boolean;
+    logDir?: string;
+    configPath?: string;
+    updateCheckIntervalHours?: number;
+    devMode?: boolean;
+    output?: string;
+    [key: string]: any;
 }
 
 export interface IntegrationStatus {
@@ -21,28 +35,34 @@ export interface LicenseStatus {
     tier?: string;
     paidStatus?: boolean;
     verified?: boolean;
-    [key: string]: unknown;
+    redeemedAt?: string;
+    codeDate?: string;
+    [key: string]: any;
 }
 
 export interface AgentStatusData {
     state?: string;
-    current?: Record<string, unknown>;
-    chat?: Record<string, unknown>;
-    clients?: Record<string, unknown>;
-    [key: string]: unknown;
+    current?: any;
+    chat?: any;
+    clients?: any;
+    version?: string;
+    history?: any[];
+    [key: string]: any;
 }
+
+export type SharePathItem = string | { path: string; name?: string; size?: string };
 
 export interface AppState {
     mode: 'share' | 'receive' | 'chat';
-    sharePaths: string[];
+    sharePaths: SharePathItem[];
     shareLimitNotice: string;
     receiveDir: string;
     chatSaveDir: string;
-    status: AgentStatusData | null;
-    settings: DesktopSettings | null;
+    status: AgentStatusData | any;
+    settings: DesktopSettings | any;
     rightClickIntegration: IntegrationStatus | null;
     startupIntegration: IntegrationStatus | null;
-    appInfo: Record<string, unknown> | null;
+    appInfo: any;
     activePanel: string;
     error: string;
     notice: string;
@@ -64,7 +84,7 @@ export interface AppState {
     updateStatusText: string;
     updateBtnText: string;
     updateBtnDisabled: boolean;
-    updateCheckRes: Record<string, unknown> | null;
+    updateCheckRes: any;
     updateStage: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'installing';
     license: LicenseStatus | null;
     redeemMessage: string;
@@ -83,6 +103,12 @@ export interface AppState {
     showEmojiPicker: boolean;
     updateBackoffCount: number;
     deviceFilesExpanded?: Record<string, boolean>;
+    settingsAdvancedOpen?: boolean;
+    settingsDevOpen?: boolean;
+    tempRedeemCode?: string;
+    isActivating?: boolean;
+    pendingSwitchMode?: 'share' | 'receive' | 'chat' | null;
+    [key: string]: any;
 }
 
 export const state: AppState = {
@@ -135,4 +161,10 @@ export const state: AppState = {
     confirmResetPending: false,
     showEmojiPicker: false,
     updateBackoffCount: 0,
+    deviceFilesExpanded: {},
+    settingsAdvancedOpen: false,
+    settingsDevOpen: false,
+    tempRedeemCode: '',
+    isActivating: false,
+    pendingSwitchMode: null,
 };

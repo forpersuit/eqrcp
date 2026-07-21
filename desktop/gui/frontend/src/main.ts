@@ -5,6 +5,9 @@ import { recalculateUpdateTexts, syncManualUpdateCheckUI, cleanLocalAddressError
 import { buildDiagnostics, collectFeedback, feedbackMailto } from './controllers/feedbackController';
 import { saveLicense, validateRedeemCode, licenseStorageKey } from './controllers/licenseController';
 import { renderSettingsView } from './views/settingsView';
+import { renderAboutView } from './views/aboutView';
+import { renderPlanComparisonView } from './views/planComparisonView';
+import { renderFeedbackView } from './views/feedbackView';
 import { allEmojis, culturalEmojis, getCategoryLocalizedName } from './emojis.js';
 import './style.css';
 import './app.css';
@@ -242,7 +245,7 @@ function pulseChatFrameQR() {
     if (state.chatQRPromptDismissed || state.chatQRPulseUntil <= Date.now()) {
         return;
     }
-    const frame = document.querySelector('#chat-iframe');
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (!frame) { return; }
     const payload = {type: 'pulse-session-qr', until: state.chatQRPulseUntil};
     const post = () => {
@@ -274,7 +277,7 @@ window.addEventListener('resize', () => {
 });
 
 // postMessage bridge: handle native operations requested by the chat iframe.
-window.addEventListener('message', (e) => {
+window.addEventListener('message', (e: MessageEvent) => {
     console.log('[Antigravity Debug] Wails parent received message:', e.data?.type, 'origin:', e.origin, 'data:', e.data);
     if (!isTrustedChatFrameMessage(e)) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage validation failed for origin:', e.origin);
@@ -283,7 +286,6 @@ window.addEventListener('message', (e) => {
     const targetOrigin = activeChatFrameOrigin() || '*';
     if (e.data.type === 'iframe-drag-active') {
         sendDebugMessageToChat('[Host] Received iframe-drag-active, showing drag overlay');
-        showChatDragOverlay();
         return;
     }
     if (e.data.type === 'request-host-metrics') {
@@ -293,14 +295,14 @@ window.addEventListener('message', (e) => {
     if (e.data.type === 'save-file') {
         const url = String(e.data.url || '');
         if (!isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
-        SaveChatAttachmentAs(url, String(e.data.name || 'attachment')).catch(() => {});
+        (window as any).go?.main.App.SaveChatAttachmentAs(url, String(e.data.name || 'attachment')).catch(() => {});
     } else if (e.data.type === 'auto-save-file') {
         const url = String(e.data.url || '');
         const id = String(e.data.id || url);
         if (!state.chatAutoSave || autoSavedAttachments.has(id) || !isTrustedChatURL(url, activeChatFrameOrigin())) { return; }
         autoSavedAttachments.add(id);
-        DownloadChatAttachment(url, String(e.data.name || 'attachment'))
-            .then((path) => {
+        (window as any).go?.main.App.DownloadChatAttachment(url, String(e.data.name || 'attachment'))
+            .then((path: string) => {
                 if (path) {
                     state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
                 }
@@ -317,64 +319,64 @@ window.addEventListener('message', (e) => {
             return;
         }
         console.log('[Antigravity Debug] Triggering SaveChatAttachmentAs API...');
-        SaveChatAttachmentAs(url, String(e.data.name || 'attachment'))
-            .then((path) => {
+        (window as any).go?.main.App.SaveChatAttachmentAs(url, String(e.data.name || 'attachment'))
+            .then((path: string) => {
                 console.log('[Antigravity Debug] SaveChatAttachmentAs success. Save path:', path);
                 if (path) {
                     state.chatSaveDir = path.replace(/[\\/][^\\/]*$/, '');
-                    e.source?.postMessage({
+                    (e.source as Window)?.postMessage({
                         type: 'download-success',
                         messageId: messageId,
                         path: path
-                    }, targetOrigin);
+                    }, targetOrigin as any);
                 }
             })
-            .catch((err) => {
+            .catch((err: any) => {
                 console.error('[Antigravity Debug] DownloadChatAttachment backend error:', err);
-                e.source?.postMessage({
+                (e.source as Window)?.postMessage({
                     type: 'download-failed',
                     messageId: messageId,
                     error: String(err?.message || err || 'download failed')
-                }, targetOrigin);
+                }, targetOrigin as any);
             });
     } else if (e.data.type === 'cancel-download') {
         const messageId = String(e.data.messageId || '');
         if (messageId) {
-            CancelChatDownload(messageId).catch(() => {});
+            (window as any).go?.main.App.CancelChatDownload(messageId).catch(() => {});
         }
     } else if (e.data.type === 'open-file') {
-        OpenFile(String(e.data.path || '')).catch(() => {});
+        (window as any).go?.main.App.OpenFile(String(e.data.path || '')).catch(() => {});
     } else if (e.data.type === 'open-path') {
-        OpenPath(String(e.data.path || '')).catch(() => {});
+        (window as any).go?.main.App.OpenPath(String(e.data.path || '')).catch(() => {});
     } else if (e.data.type === 'open-chat-file') {
         const filename = String(e.data.filename || '');
-        ChatSaveDirectory()
-            .then((dir) => {
+        (window as any).go?.main.App.ChatSaveDirectory()
+            .then((dir: string) => {
                 if (dir) {
                     const fullPath = dir + '/' + filename;
-                    OpenPath(fullPath).catch(() => {});
+                    (window as any).go?.main.App.OpenPath(fullPath).catch(() => {});
                 }
             })
             .catch(() => {});
     } else if (e.data.type === 'read-clipboard-text') {
         const requestId = String(e.data.requestId || '');
         if (!requestId) { return; }
-        ClipboardGetText()
-            .then((text) => {
-                e.source?.postMessage({type: 'clipboard-text', requestId, text: String(text || '')}, targetOrigin);
+        (window as any).go?.main.App.ClipboardGetText()
+            .then((text: string) => {
+                (e.source as Window)?.postMessage({type: 'clipboard-text', requestId, text: String(text || '')}, targetOrigin as any);
             })
             .catch(() => {
-                e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, targetOrigin);
+                (e.source as Window)?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, targetOrigin as any);
             });
     } else if (e.data.type === 'select-files') {
         const requestId = String(e.data.requestId || '');
         if (!requestId) { return; }
-        SelectFiles()
-            .then((paths) => {
-                e.source?.postMessage({type: 'selected-files', requestId, paths: paths || []}, targetOrigin);
+        (window as any).go?.main.App.SelectFiles()
+            .then((paths: string[]) => {
+                (e.source as Window)?.postMessage({type: 'selected-files', requestId, paths: paths || []}, targetOrigin as any);
             })
-            .catch((err) => {
-                e.source?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, targetOrigin);
+            .catch((err: any) => {
+                (e.source as Window)?.postMessage({type: 'selected-files', requestId, paths: [], error: String(err?.message || err || 'select failed')}, targetOrigin as any);
             });
     } else if (e.data.type === 'stop-chat' || e.data.type === 'close-page') {
         stopChat();
@@ -386,31 +388,31 @@ window.addEventListener('message', (e) => {
         }
     } else if (e.data.type === 'iframe-log-error') {
         const errorMsg = String(e.data.message || '');
-        if (errorMsg && typeof LogError === 'function') {
-            LogError(errorMsg);
+        if (errorMsg) {
+            (window as any).go?.main.App.LogError(errorMsg);
         }
     } else if (e.data.type === 'iframe-log-info') {
         const msg = String(e.data.message || '');
-        if (msg && typeof LogInfo === 'function') {
-            LogInfo(msg);
+        if (msg) {
+            (window as any).go?.main.App.LogInfo(msg);
         }
     }
 });
 
-function activeChatFrameOrigin() {
-    const frame = document.querySelector('#chat-iframe');
+function activeChatFrameOrigin(): string {
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (!frame?.src) { return ''; }
     try { return new URL(frame.src).origin; } catch { return ''; }
 }
 
-function isTrustedChatFrameMessage(event) {
-    const frame = document.querySelector('#chat-iframe');
+function isTrustedChatFrameMessage(event: MessageEvent): boolean {
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (!frame) {
         console.warn('[Antigravity Debug] isTrustedChatFrameMessage: iframe #chat-iframe not found');
         return false;
     }
     const origin = activeChatFrameOrigin();
-    const normalizeOrigin = (orig) => {
+    const normalizeOrigin = (orig: string) => {
         if (!orig) return '';
         return orig.replace('://localhost', '://127.0.0.1');
     };
@@ -597,7 +599,7 @@ function render() {
 }
 
 function syncIdentityToChatFrame() {
-    const frame = document.querySelector('#chat-iframe');
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (!frame) { return; }
     const src = frame.getAttribute('src') || '';
     if (!src || src === 'about:blank' || (!src.startsWith('http://') && !src.startsWith('https://'))) {
@@ -761,7 +763,8 @@ function renderDeviceProgressHtml(task) {
     let deviceProgressHtml = '';
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
     if (clients.length > 0) {
-        const listItems = clients.map(client => {
+        const listItems = clients.map((clientObj: any) => {
+            const client = clientObj;
             const devName = client.deviceName || t('device') || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
@@ -882,11 +885,11 @@ function updateShareTransferActiveUI(task) {
     // 2. 设备数
     const countEl = document.getElementById('current-devices-count');
     if (countEl) {
-        countEl.textContent = task.clientStates ? Object.keys(task.clientStates).length : 0;
+        countEl.textContent = String(task.clientStates ? Object.keys(task.clientStates).length : 0);
     }
 
     // 3. 自动结束开关
-    const switchEl = document.getElementById('auto-stop-switch');
+    const switchEl = document.getElementById('auto-stop-switch') as HTMLInputElement | null;
     if (switchEl) {
         switchEl.checked = !!task.transferAutoStop;
     }
@@ -1070,7 +1073,8 @@ function renderReceiveDeviceProgressHtml(task) {
     if (clients.length > 0) {
         state.deviceFilesExpanded = state.deviceFilesExpanded || {};
 
-        const listItems = clients.map(client => {
+        const listItems = clients.map((clientObj: any) => {
+            const client = clientObj;
             const devName = client.deviceName || t('device') || 'Device';
             const clientID = client.clientID || '';
             let displayName = devName;
@@ -1321,17 +1325,17 @@ function updateReceiveTransferActiveUI(task) {
 
     const countEl = document.getElementById('current-devices-count');
     if (countEl) {
-        countEl.textContent = task.clientStates ? Object.keys(task.clientStates).length : 0;
+        countEl.textContent = String(task.clientStates ? Object.keys(task.clientStates).length : 0);
     }
 
-    const switchEl = document.getElementById('auto-stop-switch');
+    const switchEl = document.getElementById('auto-stop-switch') as HTMLInputElement | null;
     if (switchEl) {
         switchEl.checked = !!task.transferAutoStop;
     }
 
     const devicesWrapper = document.getElementById('receive-devices-progress-wrapper');
     if (devicesWrapper) {
-        const clients = task.clientStates ? Object.values(task.clientStates) : [];
+        const clients = task.clientStates ? Object.values(task.clientStates) as any[] : [];
         const hasSkeleton = !!devicesWrapper.querySelector('.devices-scroll-container');
         
         const needsRebuild = () => {
@@ -1368,7 +1372,8 @@ function updateReceiveTransferActiveUI(task) {
                 newScrollContainer.scrollTop = scrollTop;
             }
         } else {
-            clients.forEach(client => {
+            clients.forEach((clientObj: any) => {
+                const client = clientObj;
                 const clientID = client.clientID;
                 const devName = client.deviceName || 'Device';
                 let displayName = devName;
@@ -1937,265 +1942,24 @@ function integrationStatusText(status, fallback) {
 }
 
 function renderAboutPanel() {
-    const info = state.appInfo || {};
-    const license = state.license || loadLicense();
-    let plan = '';
-    if (license?.tier) {
-        if (license.tier === 'PLUS' && (license.codeDate === 'LIFETIME' || state.status?.licenseExpiresAt === 'LIFETIME')) {
-            plan = 'PLUS U';
-        } else {
-            plan = license.tier.toUpperCase();
-        }
-    } else {
-        plan = t('free_quota');
-    }
-    const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
-    let expiryText = '';
-    if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a') {
-        const expiryDate = new Date(expiresAt);
-        const now = new Date();
-        const diffMs = expiryDate - now;
-        if (diffMs <= 0) {
-            expiryText = t('license_expired');
-        } else {
-            const diffSecs = Math.floor(diffMs / 1000);
-            if (diffSecs < 60) {
-                expiryText = t('license_expires_in_secs', { secs: diffSecs });
-            } else if (diffSecs < 3600) {
-                const mins = Math.floor(diffSecs / 60);
-                const secs = diffSecs % 60;
-                expiryText = t('license_expires_in_mins', { mins: mins, secs: secs });
-            } else if (diffSecs < 86400) {
-                const hrs = Math.floor(diffSecs / 3600);
-                expiryText = t('license_expires_in_hours', { hours: hrs });
-            } else {
-                const days = Math.ceil(diffSecs / 86400);
-                expiryText = t('license_expires_in_days', { days: days });
-            }
-        }
-    }
-
-    let redeemDetail = '';
-    let expiryDetail = '';
-    if (license?.redeemedAt) {
-        redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
-        let expVal = '';
-        if (expiresAt === 'LIFETIME') {
-            expVal = t('lifetime') || '永久';
-        } else if (expiresAt) {
-            try {
-                expVal = new Date(expiresAt).toLocaleDateString();
-            } catch {
-                expVal = expiresAt;
-            }
-        }
-        if (expVal) {
-            expiryDetail = `${t('expiry_label') || '有效期'}：${expVal}`;
-            if (expiryText) {
-                expiryDetail += ` (${expiryText})`;
-            }
-        }
-    } else {
-        redeemDetail = chatQuotaText();
-    }
-    
-    let warningBox = '';
-    const isPaid = hasPaidLicense();
-    if (state.status) {
-        if (state.status.clockTampered) {
-            plan = t('paid_locked_clock');
-            redeemDetail = t('locked_rollback');
-            expiryDetail = '';
-            warningBox = `
-                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                    <strong>⚠️ ${t('locked_rollback')}：</strong>
-                    ${t('locked_rollback_desc')}
-                </div>
-            `;
-        } else if (license?.tier && !isPaid) {
-            plan = `${license.tier.toUpperCase()} ${t('license_locked_limit')}`;
-            redeemDetail = t('license_locked_server');
-            expiryDetail = '';
-            warningBox = `
-                <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                    <strong>⚠️ ${t('license_verify_failed')}</strong>
-                    ${t('license_verify_failed_desc', { tier: license.tier.toUpperCase() })}
-                </div>
-            `;
-        }
-    }
-    
-    return `
-        <div class="about-panel">
-            ${warningBox}
-            <div class="about-hero">
-                <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
-                <div class="about-plan">
-                    <div class="about-plan-left">
-                        <span style="display: inline-flex; align-items: center; gap: 6px;">
-                            ${t('plan_label')}
-                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''}>
-                                <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
-                            </button>
-                        </span>
-                        <strong>${escapeHTML(plan)}</strong>
-                        <small>${escapeHTML(redeemDetail)}</small>
-                        ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
-                        ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
-                        ${license ? `
-                            <div style="margin-top: 6px;">
-                                <a href="#" id="manage-license-portal-btn" style="color: var(--accent-strong); font-size: 11px; display: inline-block; text-decoration: none; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='var(--accent-strong-hover || #15803d)'" onmouseout="this.style.color='var(--accent-strong)'">
-                                    ${t('manage_license_portal')}
-                                </a>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <button class="tool-button" id="toggle-plan-info" aria-label="${t('plan_desc_title')}" style="padding: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); flex-shrink: 0;">
-                        <span class="plan-info-icon-wrapper" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}">
-                            <span style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">${diamondIcon()}</span>
-                        </span>
-                    </button>
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
-                <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('product') || 'Product'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}">${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</span>
-                </div>
-                <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('version') || 'Version'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.version || 'Unknown')}</span>
-                </div>
-                <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('platform') || 'Platform'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr([info.os, info.arch].filter(Boolean).join(' / ')) || 'Unknown'}">${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</span>
-                </div>
-                <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('temp_space_available') || 'Temp Space'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.uploadDirFreeSpace || 'Unknown')}</span>
-                </div>
-                <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
-                    <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">MIT license. Forked from qrcp.</span>
-                </div>
-            </div>
-        </div>
-    `;
+    return renderAboutView({
+        loadLicense,
+        getLicenseDisplayName,
+        chatQuotaText,
+        escapeHTML,
+        horizontalLogoURL,
+        sparklesIcon: () => diamondIcon(),
+    });
 }
 
 function renderPlanComparisonPanel() {
-    const checkGreen = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-    const xRed = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px; opacity:0.6;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-
-    return `
-        <div class="plan-comparison-panel" style="max-height: calc(100vh - 140px); overflow-y: auto; padding: 16px 8px 8px; box-sizing: border-box;">
-            <style>
-                .plan-card-premium {
-                    transform: translateY(0);
-                    will-change: transform, box-shadow;
-                }
-                .plan-card-premium:hover {
-                    transform: translateY(-4px);
-                }
-                .plan-card-premium.featured:hover {
-                    box-shadow: 0 16px 36px rgba(47, 158, 115, 0.14), 0 3px 10px rgba(47, 158, 115, 0.06) !important;
-                }
-            </style>
-            <div class="plan-cards-container" style="display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 20px;">
-                <!-- 体验卡片 -->
-                <div class="plan-card plan-card-premium" style="border: 1.2px solid var(--line); border-radius: 16px; padding: 24px; background: var(--bg-hover); display: flex; flex-direction: column; text-align: left; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
-                    <div style="margin-bottom: 16px; border-bottom: 1.2px solid var(--line); padding-bottom: 14px;">
-                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">Free Tier</span>
-                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('free_quota') || '体验版'}</h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('free_tier_desc') || '局域网极速协作与传输体验版。'}</p>
-                        <div style="font-size: 26px; font-weight: 900; color: var(--text-primary); margin-top: 14px;">¥0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">${t('lifetime') || '永久'}</span></div>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_lan_transfer') || '局域网极速文件传输 (无网/离线可用)'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_drag_and_drop') || '支持拖拽发送、历史保存、文件夹选择'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_chat_free') || 'Chat 模式限制：每日限额满速。超额后强力限速及限额'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_share_free') || 'Share 电脑发送限制：每日免费 5 次。超额后限制大小'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_receive_free') || 'Receive 移动端上传限制：每日免费 5 次。超额后限额阻断'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_future_upgrade') || '主板授权生命周期迁移支持'}</span>
-                        </li>
-                    </ul>
-                </div>
-
-                <!-- PLUS / PLUS U 付费卡片 -->
-                <div class="plan-card plan-card-premium featured" style="border: 2px solid var(--accent); border-radius: 16px; padding: 24px; background: var(--bg); display: flex; flex-direction: column; text-align: left; position: relative; box-shadow: 0 10px 30px rgba(47, 158, 115, 0.08), 0 2px 8px rgba(47, 158, 115, 0.03); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
-                    <div style="position: absolute; top: -9px; right: 20px; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; font-size: 9.5px; font-weight: 900; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.2);">Recommended</div>
-                    <div style="margin-bottom: 16px;">
-                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">Plus Upgrade</span>
-                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">PLUS / PLUS U</h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_plus_desc_short') || '解除局域网 Chat 及文件传输的全部大小与频率限制。'}</p>
-                        
-                        <!-- 价格区分小卡片 -->
-                        <div style="display: flex; gap: 12px; margin: 14px 0 6px; box-sizing: border-box; width: 100%;">
-                            <div style="flex: 1; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_annual_label') || 'PLUS (年度版)'}</div>
-                                <div style="font-size: 18px; font-weight: 900; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('year_unit') || '年'}</span></div>
-                            </div>
-                            <div style="flex: 1; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_lifetime_label') || 'PLUS U (永久版)'}</div>
-                                <div style="font-size: 18px; font-weight: 900; color: var(--text-primary);">$29.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('buyout_unit') || '买断'}</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <strong>${t('plan_feature_chat_unlimit') || '无限量 Chat 时间（绝不限额）'}</strong>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <strong>${t('plan_feature_unlimit_transfer') || '高并发无限度极速发送与接收文件'}</strong>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_device_bind') || '绑定当前主板与系统指纹，稳定可靠'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_clock_check') || '本地密码学独立验签，支持离线脱机校验'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_future_upgrade') || '终身免费主板授权升级与迁移支持'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_support') || '尊享专属技术支持通道'}</span>
-                        </li>
-                    </ul>
-                    ${!hasPaidLicense() ? `
-                        <button class="primary" id="buy-license-btn" style="width: 100%; padding: 10px 14px; font-weight: 700; margin-top: 14px; font-size: 13.5px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.15); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-                            ${t('buy_license_portal')}
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-
-            <!-- 说明与跳转部分 -->
-            <div style="background: var(--bg-hover); border-radius: 12px; padding: 14px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 8px;">
-                <div>💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
-                <div>🎁 <strong>${t('free_tier_rules') || '额度与刷新'}</strong>：${t('free_tier_rules_desc')}</div>
-            </div>
-            
-            <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                <button class="ghost" id="plan-back-to-about" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_about') || '返回关于'}</button>
-                <button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>
-            </div>
-        </div>
-    `;
+    return renderPlanComparisonView({
+        hasPaidLicense,
+    });
 }
 
 function ensureFavicon() {
-    let icon = document.querySelector('link[rel="icon"]');
+    let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!icon) {
         icon = document.createElement('link');
         icon.rel = 'icon';
@@ -2288,52 +2052,12 @@ function renderRedeemPanel() {
 }
 
 function renderFeedbackPanel() {
-    const diagnostics = buildDiagnostics();
-    const mailto = feedbackMailto(diagnostics);
-    return `
-        <div class="feedback-panel">
-            ${state.feedbackNotice ? `<div class="notice success compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackNotice)}</div>` : ''}
-            ${state.feedbackError ? `<div class="notice error compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackError)}</div>` : ''}
-            <label>${t('feedback_category')}</label>
-            <select id="feedback-category">
-                <option value="bug">${t('feedback_bug')}</option>
-                <option value="transfer">${t('feedback_transfer_fail')}</option>
-                <option value="gui">${t('feedback_gui_issue')}</option>
-                <option value="feature">${t('feedback_feature_req')}</option>
-                <option value="license">${t('feedback_license_issue')}</option>
-                <option value="other">${t('feedback_other')}</option>
-            </select>
-            <label>${t('feedback_contact')}</label>
-            <input id="feedback-contact" type="email" placeholder="${t('feedback_optional')}" value="${escapeAttr(state.feedbackContact || '')}" />
-            <label>${t('feedback_message')}</label>
-            <textarea id="feedback-message" rows="5" placeholder="${t('feedback_placeholder')}">${escapeHTML(state.feedbackMessage || '')}</textarea>
-            
-            <label>${t('feedback_image')}</label>
-            <div class="feedback-image-uploader">
-                <input id="feedback-image-input" type="file" accept="image/*" style="display:none;" />
-                <button class="ghost" id="btn-select-image" type="button">
-                    <span style="font-size: 15px; margin-right: 6px;">📷</span> ${t('btn_select_image')}
-                </button>
-                <div id="feedback-image-preview-container" style="${state.feedbackImageBase64 ? 'display:block;' : 'display:none;'} margin-top: 8px; position: relative; width: fit-content;">
-                    <img id="feedback-image-preview" src="${state.feedbackImageBase64 || ''}" style="max-width: 100%; max-height: 120px; border-radius: 6px; border: 1px solid var(--line);" />
-                    <button id="btn-clear-image" type="button" style="position: absolute; top: -6px; right: -6px; background: var(--bg); border: 1px solid var(--line); border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text);">✕</button>
-                </div>
-            </div>
-
-            <label class="check">
-                <input id="feedback-diagnostics" type="checkbox" checked />
-                ${t('feedback_include_diag')}
-            </label>
-            <div class="feedback-note">${t('feedback_diag_note')}</div>
-            <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
-            <div class="feedback-actions">
-                <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
-                    ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? t('feedback_send_success_short') : (state.feedbackSendResult === 'failed' ? t('feedback_send_failed_short') : t('btn_send_feedback_now')))}
-                </button>
-                <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
-            </div>
-        </div>
-    `;
+    return renderFeedbackView({
+        buildDiagnostics,
+        feedbackMailto,
+        escapeHTML,
+        escapeAttr,
+    });
 }
 
 function getTranslatedState(s) {
@@ -2441,20 +2165,21 @@ function bindEvents() {
     // 通过事件委托绑定动态按钮，只绑定一次，避免每次 render 后重复叠加监听器
     if (!_staticDelegationBound) {
         _staticDelegationBound = true;
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('.toggle-qr-expand-action')) {
+        document.addEventListener('click', (e: MouseEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('.toggle-qr-expand-action')) {
                 qrExpandedManual = !qrExpandedManual;
                 render();
                 return;
             }
-            if (e.target.closest('.toggle-devices-expand')) {
+            if (target?.closest('.toggle-devices-expand')) {
                 state.devicesExpanded = !state.devicesExpanded;
                 render();
                 return;
             }
-            const restoreBtn = e.target.closest('.restore-share-action');
+            const restoreBtn = target?.closest<HTMLElement>('.restore-share-action');
             if (restoreBtn) {
-                const taskId = parseInt(restoreBtn.dataset.taskId, 10);
+                const taskId = parseInt(restoreBtn.dataset.taskId || '', 10);
                 if (taskId) {
                     restoreSharePaths(taskId);
                 }
@@ -2463,19 +2188,19 @@ function bindEvents() {
         });
         
 function shrinkSearchBoxInDOM() {
-    const title = document.querySelector('.panel-title');
-    const refreshBtn = document.querySelector('#refresh');
-    const clearBtn = document.querySelector('#clear-history');
-    const searchBox = document.querySelector('.search-input-box');
-    const searchInput = document.querySelector('#history-search-input');
-    const toggleSearch = document.querySelector('#toggle-search');
+    const title = document.querySelector<HTMLElement>('.panel-title');
+    const refreshBtn = document.querySelector<HTMLElement>('#refresh');
+    const clearBtn = document.querySelector<HTMLElement>('#clear-history');
+    const searchBox = document.querySelector<HTMLElement>('.search-input-box');
+    const searchInput = document.querySelector<HTMLInputElement>('#history-search-input');
+    const toggleSearch = document.querySelector<HTMLElement>('#toggle-search');
     
     if (showSearchInput) {
         toggleSearchInput(); // 这会把 showSearchInput 设为 false，searchQuery 设为 ''
     }
     toggleSearchDropdown(false);
     
-    const panel = document.querySelector('.side .panel');
+    const panel = document.querySelector<HTMLElement>('.side .panel');
     if (panel) {
         panel.classList.remove('search-active');
     }
@@ -2511,7 +2236,7 @@ function shrinkSearchBoxInDOM() {
         toggleSearch.style.color = 'inherit';
     }
     
-    const zone = document.querySelector('#search-results-expand-zone');
+    const zone = document.querySelector<HTMLElement>('#search-results-expand-zone');
     if (zone) {
         zone.style.display = 'none';
         zone.innerHTML = '';
@@ -2549,26 +2274,27 @@ function refreshHistoryListInDOM() {
     }
 }
 
-        document.addEventListener('pointerdown', (e) => {
-            if (showSearchInput) {
-                const inSearchBox = e.target.closest('.search-input-box') || 
-                                    e.target.closest('#toggle-search') || 
-                                    e.target.closest('#history-search-input') ||
-                                    e.target.closest('.history-search-dropdown');
+        document.addEventListener('pointerdown', (e: PointerEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (showSearchInput && target) {
+                const inSearchBox = target.closest('.search-input-box') || 
+                                    target.closest('#toggle-search') || 
+                                    target.closest('#history-search-input') ||
+                                    target.closest('.history-search-dropdown');
                 if (!inSearchBox) {
                     shrinkSearchBoxInDOM();
                     return;
                 }
             }
 
-            const devHeader = e.target.closest('.device-header-toggle');
+            const devHeader = target?.closest<HTMLElement>('.device-header-toggle');
             if (devHeader) {
                 const clientID = devHeader.dataset.clientId;
                 if (clientID) {
                     state.deviceFilesExpanded = state.deviceFilesExpanded || {};
                     state.deviceFilesExpanded[clientID] = !state.deviceFilesExpanded[clientID];
                     
-                    // 局部更新 UI 替代全局 render()，以防打断或闪烁
+                    // 局部更新 UI 替代全局 render()，以防打动或闪烁
                     const transferStage = document.querySelector('.transfer-stage');
                     if (transferStage) {
                         if (state.mode === 'share') {
@@ -2590,9 +2316,9 @@ function refreshHistoryListInDOM() {
             }
         });
     }
-    document.querySelectorAll('[data-mode]').forEach((button) => {
+    document.querySelectorAll<HTMLElement>('[data-mode]').forEach((button) => {
         button.addEventListener('click', async () => {
-            const targetMode = button.dataset.mode;
+            const targetMode = button.dataset.mode || 'share';
             if (state.mode === targetMode) {
                 return;
             }
@@ -2609,9 +2335,9 @@ function refreshHistoryListInDOM() {
                         return;
                     }
                     if (activeChat) {
-                        await StopChat();
+                        await (window as any).go?.main.App.StopChat();
                     } else {
-                        await StopCurrent();
+                        await (window as any).go?.main.App.StopCurrent();
                     }
                     if (state.status) {
                         state.status.current = null;
@@ -2629,9 +2355,9 @@ function refreshHistoryListInDOM() {
             render();
         });
     });
-    document.querySelector('#refresh')?.addEventListener('click', refreshStatus);
+    document.querySelector('#refresh')?.addEventListener('click', () => refreshStatus(false));
     document.querySelectorAll('.refresh-action').forEach((button) => {
-        button.addEventListener('click', refreshStatus);
+        button.addEventListener('click', () => refreshStatus(false));
     });
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
     document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
@@ -2652,10 +2378,11 @@ function refreshHistoryListInDOM() {
     document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
       // 悬浮匹配结果 Hover 滚动定位到对应大卡片项
-    document.addEventListener('mouseover', (e) => {
-        const dropdownItem = e.target.closest('.search-dropdown-item');
+    document.addEventListener('mouseover', (e: MouseEvent) => {
+        const target = e.target as HTMLElement | null;
+        const dropdownItem = target?.closest<HTMLElement>('.search-dropdown-item');
         if (dropdownItem) {
-            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+            const taskId = parseInt(dropdownItem.dataset.targetId || '', 10);
             if (taskId) {
                 const targetLi = document.getElementById(`history-item-${taskId}`);
                 if (targetLi) {
@@ -2669,15 +2396,16 @@ function refreshHistoryListInDOM() {
     });
 
     // 点击某条搜索记录，收起结果列表，滚动到对应项，但不关闭搜索框，保持关键字高亮
-    document.addEventListener('click', (e) => {
-        const dropdownItem = e.target.closest('.search-dropdown-item');
+    document.addEventListener('click', (e: MouseEvent) => {
+        const target = e.target as HTMLElement | null;
+        const dropdownItem = target?.closest<HTMLElement>('.search-dropdown-item');
         if (dropdownItem) {
-            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+            const taskId = parseInt(dropdownItem.dataset.targetId || '', 10);
             if (taskId) {
                 lastFocusedTaskId = taskId;
                 // 1. 关闭下拉面板
                 toggleSearchDropdown(false);
-                const zone = document.querySelector('#search-results-expand-zone');
+                const zone = document.querySelector<HTMLElement>('#search-results-expand-zone');
                 if (zone) {
                     zone.style.display = 'none';
                     zone.innerHTML = '';
@@ -2695,8 +2423,9 @@ function refreshHistoryListInDOM() {
         }
     });
 
-    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
-        const val = e.target.value;
+    document.querySelector('#history-search-input')?.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLInputElement | null;
+        const val = target?.value || '';
         updateSearchQuery(val);
         
         const historyListWrapper = document.querySelector('.history-list-wrapper');
@@ -2705,7 +2434,7 @@ function refreshHistoryListInDOM() {
             historyListWrapper.innerHTML = renderHistory(history);
         }
         
-        const zone = document.querySelector('#search-results-expand-zone');
+        const zone = document.querySelector<HTMLElement>('#search-results-expand-zone');
         if (zone) {
             if (val.trim()) {
                 toggleSearchDropdown(true);
@@ -2738,16 +2467,17 @@ function refreshHistoryListInDOM() {
             }
         }
     });
-    document.querySelector('#receive-dir')?.addEventListener('input', (e) => {
-        state.receiveDir = e.target.value;
-        const val = e.target.value.trim();
-        const startBtn = document.querySelector('#start-receive');
+    document.querySelector('#receive-dir')?.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLInputElement | null;
+        const val = target?.value || '';
+        state.receiveDir = val;
+        const startBtn = document.querySelector<HTMLButtonElement>('#start-receive');
         if (startBtn) {
-            startBtn.disabled = state.busy || !val;
+            startBtn.disabled = state.busy || !val.trim();
         }
-        const saveBtn = document.querySelector('#save-receive-dir');
+        const saveBtn = document.querySelector<HTMLButtonElement>('#save-receive-dir');
         if (saveBtn) {
-            saveBtn.disabled = !val;
+            saveBtn.disabled = !val.trim();
         }
     });
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
@@ -2767,7 +2497,7 @@ function refreshHistoryListInDOM() {
         toggleSearchInput();
         render();
         if (showSearchInput) {
-            const inputEl = document.querySelector('#history-search-input');
+            const inputEl = document.querySelector<HTMLInputElement>('#history-search-input');
             if (inputEl) {
                 inputEl.focus();
                 const val = inputEl.value;
@@ -2778,8 +2508,9 @@ function refreshHistoryListInDOM() {
             lastFocusedTaskId = null;
         }
     });
-    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
-        const val = e.target.value;
+    document.querySelector('#history-search-input')?.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLInputElement | null;
+        const val = target?.value || '';
         updateSearchQuery(val);
         
         const historyListWrapper = document.querySelector('.history-list-wrapper');
@@ -2803,7 +2534,7 @@ function refreshHistoryListInDOM() {
                     }
 
                     if (task.clientStates) {
-                        for (const client of Object.values(task.clientStates)) {
+                        for (const client of Object.values(task.clientStates) as any[]) {
                             const clientName = client.deviceName || client.clientID || '';
                             if (clientName.toLowerCase().includes(query)) {
                                 return true;
@@ -2835,7 +2566,7 @@ function refreshHistoryListInDOM() {
         document.addEventListener('pointerdown', closeChatQROnOutside);
     }
 
-    const chatIframe = document.querySelector('#chat-iframe');
+    const chatIframe = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (chatIframe) {
         chatIframe.addEventListener('load', () => {
             const lang = state.settings?.lang;
@@ -2856,8 +2587,9 @@ function refreshHistoryListInDOM() {
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#close-panel')?.addEventListener('click', closePanel);
-    document.querySelector('.overlay')?.addEventListener('click', (event) => {
-        if (event.target.classList.contains('overlay')) {
+    document.querySelector('.overlay')?.addEventListener('click', (event: MouseEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.classList.contains('overlay')) {
             closePanel();
         }
     });
@@ -2881,32 +2613,33 @@ function bindPanelEvents() {
     document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
 
     // Feedback image uploader events
-    const imageInput = document.querySelector('#feedback-image-input');
-    const selectImageBtn = document.querySelector('#btn-select-image');
-    const clearImageBtn = document.querySelector('#btn-clear-image');
-    const previewContainer = document.querySelector('#feedback-image-preview-container');
-    const previewImg = document.querySelector('#feedback-image-preview');
+    const imageInput = document.querySelector<HTMLInputElement>('#feedback-image-input');
+    const selectImageBtn = document.querySelector<HTMLButtonElement>('#btn-select-image');
+    const clearImageBtn = document.querySelector<HTMLButtonElement>('#btn-clear-image');
+    const previewContainer = document.querySelector<HTMLElement>('#feedback-image-preview-container');
+    const previewImg = document.querySelector<HTMLImageElement>('#feedback-image-preview');
 
     selectImageBtn?.addEventListener('click', () => {
         imageInput?.click();
     });
 
-    imageInput?.addEventListener('change', async (event) => {
-        const file = event.target.files?.[0];
+    imageInput?.addEventListener('change', async (event: Event) => {
+        const target = event.target as HTMLInputElement | null;
+        const file = target?.files?.[0];
         if (!file) return;
 
         try {
             const result = await compressImageToWebP(file);
-            state.feedbackImageBase64 = result.dataUrl;
-            state.feedbackImageFormat = result.format;
+            state.feedbackImageBase64 = (result as any).dataUrl;
+            state.feedbackImageFormat = (result as any).format;
             
-            if (previewImg) previewImg.src = result.dataUrl;
+            if (previewImg) previewImg.src = (result as any).dataUrl;
             if (previewContainer) previewContainer.style.display = 'block';
             state.feedbackError = '';
             // Render to update potential error displays without losing inputs since fields aren't data-bound to state
             const noticeEl = document.querySelector('.feedback-panel .notice.error');
             if (noticeEl) noticeEl.remove();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to compress image:', err);
             state.feedbackError = t('feedback_compress_error') + err.message;
             render();
@@ -2923,27 +2656,29 @@ function bindPanelEvents() {
         if (previewImg) previewImg.src = '';
     });
 
-    const fbMessage = document.querySelector('#feedback-message');
-    fbMessage?.addEventListener('input', (e) => {
-        state.feedbackMessage = e.target.value;
+    const fbMessage = document.querySelector<HTMLTextAreaElement>('#feedback-message');
+    fbMessage?.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLTextAreaElement | null;
+        if (target) state.feedbackMessage = target.value;
         state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
+        state.feedbackError = '';
+        state.feedbackNotice = '';
     });
 
-    const fbContact = document.querySelector('#feedback-contact');
-    fbContact?.addEventListener('input', (e) => {
-        state.feedbackContact = e.target.value;
+    const fbContact = document.querySelector<HTMLInputElement>('#feedback-contact');
+    fbContact?.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLInputElement | null;
+        if (target) state.feedbackContact = target.value;
         state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
+        state.feedbackError = '';
+        state.feedbackNotice = '';
     });
 
-    const fbCategory = document.querySelector('#feedback-category');
+    const fbCategory = document.querySelector<HTMLSelectElement>('#feedback-category');
     fbCategory?.addEventListener('change', () => {
         state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
+        state.feedbackError = '';
+        state.feedbackNotice = '';
     });
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', () => {
@@ -2991,7 +2726,7 @@ function bindPanelEvents() {
 
 function bindChatQRPanelEvents() {
     document.querySelectorAll('.refresh-action').forEach((button) => {
-        button.addEventListener('click', refreshStatus);
+        button.addEventListener('click', () => refreshStatus(false));
     });
     document.querySelectorAll('.open-qr').forEach((button) => {
         button.addEventListener('click', openQRPage);
@@ -3016,13 +2751,13 @@ function syncAndSaveSettingsInBackground() {
     }
 }
 
-function openPanel(panel) {
+function openPanel(panel: string) {
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
     if (panel === 'settings') {
-        ChatSaveDirectory().then((dir) => {
+        (window as any).go?.main.App.ChatSaveDirectory().then((dir: string) => {
             state.chatSaveDir = dir;
-            const btn = document.querySelector('#open-chat-save');
+            const btn = document.querySelector<HTMLElement>('#open-chat-save');
             if (btn) {
                 btn.dataset.openPath = dir;
             }
@@ -3288,9 +3023,9 @@ function showToast(message) {
 
 
 
-function applyLanguageChange(newLang) {
+function applyLanguageChange(newLang: string) {
     recalculateUpdateTexts();
-    const frame = document.querySelector('#chat-iframe');
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (frame) {
         const payload = {
             type: 'update-lang',
@@ -3333,21 +3068,21 @@ async function saveSettings() {
 
 function syncSettingsFromDOM() {
     if (!state.settings) return;
-    const receiveInput = document.querySelector('#receive-dir');
-    const receiveBrowser = document.querySelector('#browser-open');
-    const sideBrowser = document.querySelector('#settings-browser');
-    const chatAutoSave = document.querySelector('#settings-chat-autosave');
-    const chatDownloadDir = document.querySelector('#settings-chat-download-dir');
-    const enableChatV2 = document.querySelector('#settings-chat-v2');
-    const closeBehavior = document.querySelector('#settings-close-behavior');
-    const iface = document.querySelector('#settings-interface');
-    const port = document.querySelector('#settings-port');
-    const chatSender = document.querySelector('#settings-chat-sender');
-    const chatAvatar = document.querySelector('#settings-chat-avatar');
-    const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
-    const updateInterval = document.querySelector('#settings-update-interval');
-    const lang = document.querySelector('#settings-lang');
-    const showHistory = document.querySelector('#settings-show-history');
+    const receiveInput = document.querySelector<HTMLInputElement>('#receive-dir');
+    const receiveBrowser = document.querySelector<HTMLInputElement>('#browser-open');
+    const sideBrowser = document.querySelector<HTMLInputElement>('#settings-browser');
+    const chatAutoSave = document.querySelector<HTMLInputElement>('#settings-chat-autosave');
+    const chatDownloadDir = document.querySelector<HTMLInputElement>('#settings-chat-download-dir');
+    const enableChatV2 = document.querySelector<HTMLInputElement>('#settings-chat-v2');
+    const closeBehavior = document.querySelector<HTMLSelectElement>('#settings-close-behavior');
+    const iface = document.querySelector<HTMLInputElement | HTMLSelectElement>('#settings-interface');
+    const port = document.querySelector<HTMLInputElement>('#settings-port');
+    const chatSender = document.querySelector<HTMLInputElement>('#settings-chat-sender');
+    const chatAvatar = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
+    const autoUpdateMode = document.querySelector<HTMLSelectElement>('#settings-auto-update-mode');
+    const updateInterval = document.querySelector<HTMLSelectElement>('#settings-update-interval');
+    const lang = document.querySelector<HTMLSelectElement>('#settings-lang');
+    const showHistory = document.querySelector<HTMLInputElement>('#settings-show-history');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -3357,7 +3092,7 @@ function syncSettingsFromDOM() {
     if (chatDownloadDir) state.settings.chatDownloadDir = chatDownloadDir.value;
     if (enableChatV2) state.settings.enableChatV2 = enableChatV2.checked;
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
-    const logDir = document.querySelector('#dev-log-dir');
+    const logDir = document.querySelector<HTMLInputElement>('#dev-log-dir');
     if (logDir) state.settings.logDir = logDir.value.trim();
     if (iface) state.settings.interface = iface.value;
     if (port) state.settings.port = Number(port.value);
@@ -3394,7 +3129,7 @@ async function saveSettingsData() {
 }
 
 function syncViewportDebugToChatFrame() {
-    const frame = document.querySelector('#chat-iframe');
+    const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
     if (!frame) { return; }
     const enabled = Boolean(state.settings?.viewportDebug ?? false);
     
@@ -3436,30 +3171,36 @@ function syncViewportDebugToChatFrame() {
 }
 
 
-async function toggleRightClickIntegration(event) {
-    const enabled = Boolean(event.currentTarget?.checked);
-    event.currentTarget.disabled = true;
+async function toggleRightClickIntegration(event: Event) {
+    const target = event.currentTarget as HTMLInputElement | null;
+    const enabled = Boolean(target?.checked);
+    if (target) target.disabled = true;
     try {
-        state.rightClickIntegration = await SetRightClickIntegrationEnabled(enabled);
+        state.rightClickIntegration = await (window as any).go?.main.App.SetRightClickIntegrationEnabled(enabled);
         updateIntegrationRow('right-click');
-    } catch (error) {
+    } catch (error: any) {
         state.error = error?.message || String(error);
-        event.currentTarget.checked = !enabled;
-        event.currentTarget.disabled = false;
+        if (target) {
+            target.checked = !enabled;
+            target.disabled = false;
+        }
         render();
     }
 }
 
-async function toggleStartupIntegration(event) {
-    const enabled = Boolean(event.currentTarget?.checked);
-    event.currentTarget.disabled = true;
+async function toggleStartupIntegration(event: Event) {
+    const target = event.currentTarget as HTMLInputElement | null;
+    const enabled = Boolean(target?.checked);
+    if (target) target.disabled = true;
     try {
-        state.startupIntegration = await SetStartupEnabled(enabled);
+        state.startupIntegration = await (window as any).go?.main.App.SetStartupEnabled(enabled);
         updateIntegrationRow('startup');
-    } catch (error) {
+    } catch (error: any) {
         state.error = error?.message || String(error);
-        event.currentTarget.checked = !enabled;
-        event.currentTarget.disabled = false;
+        if (target) {
+            target.checked = !enabled;
+            target.disabled = false;
+        }
         render();
     }
 }
@@ -3471,9 +3212,9 @@ function bindSettingsControls() {
     document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
     document.querySelector('#btn-select-chat-download-dir')?.addEventListener('click', async () => {
         try {
-            const dir = await SelectReceiveDirectory();
+            const dir = await (window as any).go?.main.App.SelectReceiveDirectory();
             if (dir) {
-                const input = document.querySelector('#settings-chat-download-dir');
+                const input = document.querySelector<HTMLInputElement>('#settings-chat-download-dir');
                 if (input) {
                     input.value = dir;
                     syncSettingsFromDOM();
@@ -3490,7 +3231,7 @@ function bindSettingsControls() {
     document.querySelector('.edit-chat-sender')?.addEventListener('click', () => {
         state.isEditingChatSender = true;
         syncPanelSurface();
-        const inputEl = document.querySelector('#settings-chat-sender');
+        const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-sender');
         if (inputEl) {
             inputEl.focus();
             inputEl.select();
@@ -3503,7 +3244,7 @@ function bindSettingsControls() {
     });
 
     document.querySelector('.save-chat-sender')?.addEventListener('click', async () => {
-        const inputEl = document.querySelector('#settings-chat-sender');
+        const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-sender');
         if (inputEl && state.settings) {
             const newName = cleanChatProfileName(inputEl.value);
             state.settings.chatSender = newName;
@@ -3513,21 +3254,22 @@ function bindSettingsControls() {
         }
     });
 
-    const chatSenderInput = document.querySelector('#settings-chat-sender');
+    const chatSenderInput = document.querySelector<HTMLInputElement>('#settings-chat-sender');
     if (chatSenderInput) {
-        chatSenderInput.addEventListener('keydown', async (event) => {
+        chatSenderInput.addEventListener('keydown', async (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                document.querySelector('.save-chat-sender')?.click();
+                document.querySelector<HTMLButtonElement>('.save-chat-sender')?.click();
             } else if (event.key === 'Escape') {
                 event.preventDefault();
-                document.querySelector('.cancel-chat-sender')?.click();
+                document.querySelector<HTMLButtonElement>('.cancel-chat-sender')?.click();
             }
         });
-        chatSenderInput.addEventListener('input', (event) => {
+        chatSenderInput.addEventListener('input', (event: Event) => {
+            const target = event.target as HTMLInputElement | null;
             const previewEl = document.querySelector('.avatar-preview');
-            if (previewEl) {
-                const cleaned = cleanChatProfileName(event.target.value);
+            if (previewEl && target) {
+                const cleaned = cleanChatProfileName(target.value);
                 const avatarVal = state.settings?.chatAvatar || '';
                 previewEl.innerHTML = renderAvatarMarkup(avatarVal, (cleaned.charAt(0) || 'D').toUpperCase());
             }
@@ -3536,14 +3278,15 @@ function bindSettingsControls() {
 
     // Avatar upload/reset and presets
     document.querySelector('#btn-avatar-upload')?.addEventListener('click', () => {
-        document.querySelector('#settings-avatar-file')?.click();
+        document.querySelector<HTMLInputElement>('#settings-avatar-file')?.click();
     });
 
-    document.querySelector('#settings-avatar-file')?.addEventListener('change', (event) => {
-        const file = event.target.files?.[0];
-        if (file && state.settings) {
+    document.querySelector('#settings-avatar-file')?.addEventListener('change', (event: Event) => {
+        const target = event.target as HTMLInputElement | null;
+        const file = target?.files?.[0];
+        if (file && state.settings && target) {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = (e: ProgressEvent<FileReader>) => {
                 const img = new Image();
                 img.onload = async () => {
                     const canvas = document.createElement('canvas');
@@ -3562,17 +3305,17 @@ function bindSettingsControls() {
                     canvas.width = w;
                     canvas.height = h;
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
+                    ctx?.drawImage(img, 0, 0, w, h);
                     const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                     
                     state.settings.chatAvatar = compressedBase64;
-                    const inputEl = document.querySelector('#settings-chat-avatar');
+                    const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
                     if (inputEl) inputEl.value = compressedBase64;
-                    event.target.value = '';
+                    target.value = '';
                     await handleAutoSaveSettings();
                     syncPanelSurface();
                 };
-                img.src = e.target.result;
+                img.src = String(e.target?.result || '');
             };
             reader.readAsDataURL(file);
         }
@@ -3581,26 +3324,29 @@ function bindSettingsControls() {
     document.querySelector('#btn-avatar-reset')?.addEventListener('click', async () => {
         if (state.settings) {
             state.settings.chatAvatar = '';
-            const inputEl = document.querySelector('#settings-chat-avatar');
+            const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
             if (inputEl) inputEl.value = '';
             await handleAutoSaveSettings();
             syncPanelSurface();
         }
     });
 
-    const avatarInput = document.querySelector('#settings-chat-avatar');
+    const avatarInput = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
     if (avatarInput) {
-        avatarInput.addEventListener('input', (event) => {
-            const cleaned = cleanChatAvatar(event.target.value);
+        avatarInput.addEventListener('input', (event: Event) => {
+            const target = event.target as HTMLInputElement | null;
+            if (!target) return;
+            const cleaned = cleanChatAvatar(target.value);
             const previewEl = document.querySelector('.avatar-preview');
             if (previewEl) {
                 const sender = state.settings?.chatSender || '';
                 previewEl.innerHTML = renderAvatarMarkup(cleaned, (cleanChatProfileName(sender).charAt(0) || 'D').toUpperCase());
             }
         });
-        avatarInput.addEventListener('change', async (event) => {
-            if (state.settings) {
-                state.settings.chatAvatar = cleanChatAvatar(event.target.value);
+        avatarInput.addEventListener('change', async (event: Event) => {
+            const target = event.target as HTMLInputElement | null;
+            if (state.settings && target) {
+                state.settings.chatAvatar = cleanChatAvatar(target.value);
                 await handleAutoSaveSettings();
                 syncPanelSurface();
             }
@@ -3615,12 +3361,13 @@ function bindSettingsControls() {
     });
 
     document.querySelectorAll('.emoji-picker-item').forEach(btn => {
-        btn.addEventListener('click', async (event) => {
+        btn.addEventListener('click', async (event: Event) => {
             event.stopPropagation();
-            const emojiVal = event.currentTarget.dataset.emoji;
+            const target = event.currentTarget as HTMLElement | null;
+            const emojiVal = target?.dataset.emoji;
             if (state.settings && emojiVal) {
                 state.settings.chatAvatar = emojiVal;
-                const inputEl = document.querySelector('#settings-chat-avatar');
+                const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
                 if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
@@ -3629,15 +3376,15 @@ function bindSettingsControls() {
         });
     });
 
-    const customEmojiInput = document.querySelector('#emoji-picker-custom-input');
+    const customEmojiInput = document.querySelector<HTMLInputElement>('#emoji-picker-custom-input');
     if (customEmojiInput) {
         customEmojiInput.addEventListener('click', (event) => {
             event.stopPropagation();
         });
-        customEmojiInput.addEventListener('keydown', async (event) => {
+        customEmojiInput.addEventListener('keydown', async (event: KeyboardEvent) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                document.querySelector('#btn-emoji-picker-custom-submit')?.click();
+                document.querySelector<HTMLButtonElement>('#btn-emoji-picker-custom-submit')?.click();
             } else if (event.key === 'Escape') {
                 event.preventDefault();
                 state.showEmojiPicker = false;
@@ -3648,13 +3395,13 @@ function bindSettingsControls() {
 
     document.querySelector('#btn-emoji-picker-custom-submit')?.addEventListener('click', async (event) => {
         event.stopPropagation();
-        const inputEl = document.querySelector('#emoji-picker-custom-input');
+        const inputEl = document.querySelector<HTMLInputElement>('#emoji-picker-custom-input');
         if (inputEl && state.settings) {
             const rawVal = inputEl.value.trim();
             const emojiVal = cleanChatAvatar(rawVal);
             if (emojiVal) {
                 state.settings.chatAvatar = emojiVal;
-                const inputEl = document.querySelector('#settings-chat-avatar');
+                const inputEl = document.querySelector<HTMLInputElement>('#settings-chat-avatar');
                 if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
@@ -3677,7 +3424,7 @@ function bindSettingsControls() {
         '#settings-show-history'
     ];
     inputs.forEach(selector => {
-        const el = document.querySelector(selector);
+        const el = document.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
         if (el) {
             el.addEventListener('change', async () => {
                 syncSettingsFromDOM();
@@ -3695,32 +3442,36 @@ function bindSettingsControls() {
         }
     });
 
-    const advDetails = document.querySelector('.settings-advanced-details');
+    const advDetails = document.querySelector<HTMLDetailsElement>('.settings-advanced-details');
     if (advDetails) {
-        advDetails.addEventListener('toggle', (event) => {
-            state.settingsAdvancedOpen = event.currentTarget.open;
+        advDetails.addEventListener('toggle', (event: Event) => {
+            const target = event.currentTarget as HTMLDetailsElement | null;
+            if (target) state.settingsAdvancedOpen = target.open;
         });
     }
 
-    const devDetails = document.querySelector('.settings-advanced-details.dev-details');
+    const devDetails = document.querySelector<HTMLDetailsElement>('.settings-advanced-details.dev-details');
     if (devDetails) {
-        devDetails.addEventListener('toggle', (event) => {
-            state.settingsDevOpen = event.currentTarget.open;
+        devDetails.addEventListener('toggle', (event: Event) => {
+            const target = event.currentTarget as HTMLDetailsElement | null;
+            if (target) state.settingsDevOpen = target.open;
         });
     }
 
-    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event) => {
+    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event: Event) => {
+        const target = event.currentTarget as HTMLInputElement | null;
         if (!state.settings) state.settings = {};
-        state.settings.debugLog = Boolean(event.currentTarget.checked);
+        if (target) state.settings.debugLog = Boolean(target.checked);
         await saveSettingsData();
         state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
         render();
         openPanel('settings');
     });
 
-    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event) => {
+    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event: Event) => {
+        const target = event.currentTarget as HTMLInputElement | null;
         if (!state.settings) state.settings = {};
-        state.settings.viewportDebug = Boolean(event.currentTarget.checked);
+        if (target) state.settings.viewportDebug = Boolean(target.checked);
         await saveSettingsData();
         state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
         render();
@@ -4074,12 +3825,13 @@ function showHelpTooltip(event) {
     positionHelpTooltip(event);
 }
 
-function positionHelpTooltip(event) {
-    const tip = document.querySelector('.help-tooltip');
+function positionHelpTooltip(event: MouseEvent) {
+    const tip = document.querySelector<HTMLElement>('.help-tooltip');
     if (!tip) {
         return;
     }
-    const anchor = event.currentTarget?.getBoundingClientRect?.() || {left: event.clientX || 0, bottom: event.clientY || 0};
+    const target = event.currentTarget as HTMLElement | null;
+    const anchor = target?.getBoundingClientRect?.() || {left: event.clientX || 0, bottom: event.clientY || 0};
     const x = typeof event.clientX === 'number' && event.clientX > 0 ? event.clientX : anchor.left + 12;
     const y = typeof event.clientY === 'number' && event.clientY > 0 ? event.clientY : anchor.bottom;
     const margin = 8;
@@ -4155,10 +3907,10 @@ async function openExternal(event) {
 }
 
 async function sendFeedback(event) {
-    const message = document.querySelector('#feedback-message')?.value.trim() || '';
-    const category = document.querySelector('#feedback-category')?.value || 'other';
-    const contact = document.querySelector('#feedback-contact')?.value.trim() || '';
-    const includeDiagnostics = Boolean(document.querySelector('#feedback-diagnostics')?.checked);
+    const message = document.querySelector<HTMLTextAreaElement>('#feedback-message')?.value.trim() || '';
+    const category = document.querySelector<HTMLSelectElement>('#feedback-category')?.value || 'other';
+    const contact = document.querySelector<HTMLInputElement>('#feedback-contact')?.value.trim() || '';
+    const includeDiagnostics = Boolean(document.querySelector<HTMLInputElement>('#feedback-diagnostics')?.checked);
 
     if (!message) {
         state.feedbackError = t('feedback_empty_error');
@@ -4169,8 +3921,8 @@ async function sendFeedback(event) {
     }
 
     state.isSendingFeedback = true;
-    state.feedbackError = null;
-    state.feedbackNotice = null;
+    state.feedbackError = '';
+    state.feedbackNotice = '';
     state.feedbackSendResult = '';
     render();
     openPanel('feedback');
@@ -4182,7 +3934,7 @@ async function sendFeedback(event) {
 
     try {
         // Call the Go backend method exported via Wails bindings to avoid CORS issues and enable detailed logs.
-        await SubmitFeedback(
+        await (window as any).go?.main.App.SubmitFeedback(
             category,
             contact,
             fullMessage,
@@ -4199,13 +3951,13 @@ async function sendFeedback(event) {
         state.feedbackImageFormat = null;
         
         // Clear actual DOM values as well
-        const msgEl = document.querySelector('#feedback-message');
+        const msgEl = document.querySelector<HTMLTextAreaElement>('#feedback-message');
         if (msgEl) msgEl.value = '';
-        const contactEl = document.querySelector('#feedback-contact');
+        const contactEl = document.querySelector<HTMLInputElement>('#feedback-contact');
         if (contactEl) contactEl.value = '';
-    } catch (err) {
+    } catch (err: any) {
         console.error('Failed to submit feedback to Worker:', err);
-        state.feedbackError = t('feedback_failed') + ` (${err.message || err})`;
+        state.feedbackError = t('feedback_failed') + ` (${err?.message || err})`;
         state.feedbackSendResult = 'failed';
     } finally {
         state.isSendingFeedback = false;
@@ -4214,21 +3966,21 @@ async function sendFeedback(event) {
     }
 }
 
-async function copyFeedback(event) {
-    const button = event.currentTarget;
+async function copyFeedback(event: MouseEvent) {
+    const button = event.currentTarget as HTMLButtonElement | null;
     if (!button) return;
 
     try {
         const feedback = collectFeedback();
-        await ClipboardSetText(feedback.body);
+        await (window as any).go?.main.App.ClipboardSetText(feedback.body);
         const original = button.textContent;
-        button.textContent = t('copied') || 'Copied';
+        button.textContent = (t as any)('copied') || 'Copied';
         button.disabled = true;
         window.setTimeout(() => {
             button.textContent = original;
             button.disabled = false;
         }, 1600);
-    } catch (err) {
+    } catch (err: any) {
         console.error('Failed to copy feedback:', err);
         state.feedbackError = t('copy_failed_prefix') + (err.message || err);
         render();
@@ -4350,7 +4102,7 @@ function applyStatusData(nextStatus) {
     }
 }
 
-async function run(fn, options = {}) {
+async function run(fn: () => Promise<any>, options: { busy?: boolean } = {}) {
     const showBusy = options.busy !== false;
     state.error = '';
     if (showBusy) {
@@ -4359,7 +4111,7 @@ async function run(fn, options = {}) {
     }
     try {
         await fn();
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Frontend] run: execution failed:', error);
         state.error = error?.message || String(error);
         render();
@@ -4372,7 +4124,7 @@ async function run(fn, options = {}) {
 }
 
 function renderBusy() {
-    const primary = document.querySelector('.primary');
+    const primary = document.querySelector<HTMLButtonElement>('.primary');
     if (primary) {
         primary.disabled = true;
     }
@@ -4434,9 +4186,9 @@ function connectAgentEvents() {
         return;
     }
     agentEventsSubscribed = true;
-    EventsOn('chat-download-progress', (eventData) => {
+    EventsOn('chat-download-progress', (eventData: any) => {
         try {
-            const frame = document.querySelector('#chat-iframe');
+            const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
             if (frame && frame.contentWindow) {
                 frame.contentWindow.postMessage({
                     type: 'chat-download-progress',
@@ -4448,7 +4200,7 @@ function connectAgentEvents() {
             console.error('Failed to forward chat download progress:', e);
         }
     });
-    EventsOn('agent-status', (nextStatus) => {
+    EventsOn('agent-status', (nextStatus: any) => {
         try {
             const previousChatURL = activeChatPageURL();
             applyStatusData(nextStatus);
@@ -4495,10 +4247,10 @@ function connectAgentEvents() {
 }
 
 
-async function handleFileDrop(paths) {
+async function handleFileDrop(paths: string[]) {
     sendDebugMessageToChat('[Chat Drag] handleFileDrop called with: ' + JSON.stringify(paths) + ', state.mode: ' + state.mode);
     if (state.mode === 'chat') {
-        const frame = document.querySelector('#chat-iframe');
+        const frame = document.querySelector<HTMLIFrameElement>('#chat-iframe');
         if (frame && frame.contentWindow) {
             sendDebugMessageToChat('[Chat Drag] Found chat-iframe, posting selected-files via postMessage');
             frame.contentWindow.postMessage({
@@ -4660,7 +4412,7 @@ function updateChatQuotaSurface() {
     if (text) {
         text.textContent = chatQuotaText();
     }
-    const button = document.querySelector('#start-chat');
+    const button = document.querySelector<HTMLButtonElement>('#start-chat');
     if (button) {
         button.disabled = state.busy;
         button.textContent = chatStartButtonText();
@@ -4791,7 +4543,7 @@ function loadLicense() {
 
 
 function confirmRedeem() {
-    const input = document.querySelector('#redeem-code');
+    const input = document.querySelector<HTMLInputElement>('#redeem-code');
     const code = String(input?.value || '').trim().toUpperCase();
     state.tempRedeemCode = code; // Save current input value so it's not cleared on re-render
     const result = validateRedeemCode(code);
@@ -4828,9 +4580,9 @@ function confirmRedeem() {
 }
 
 function resetLicense() {
-    const button = document.querySelector('#reset-license');
+    const button = document.querySelector<HTMLButtonElement>('#reset-license');
     if (button) button.disabled = true;
-    ResetLicense().then(async function() {
+    (window as any).go?.main.App.ResetLicense().then(async function() {
         window.localStorage.removeItem(licenseStorageKey);
         state.license = null;
         state.redeemMessage = 'Activation reset on this device.';
@@ -4840,7 +4592,7 @@ function resetLicense() {
         }
         await loadStatusData();
         render();
-    }).catch(function(e) {
+    }).catch(function(e: any) {
         state.redeemError = e || 'Failed to reset activation.';
         render();
     }).finally(function() {
@@ -5183,33 +4935,34 @@ loadSettings().then(() => {
 });
 
 // Register one-time global event delegations for opening history files & folders
-document.addEventListener('click', (event) => {
+document.addEventListener('click', (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
     if (state.showEmojiPicker) {
         const picker = document.getElementById('emoji-picker-popover');
         const trigger = document.getElementById('btn-emoji-more');
-        if (picker && !picker.contains(event.target) && !trigger?.contains(event.target)) {
+        if (picker && target && !picker.contains(target) && !trigger?.contains(target)) {
             state.showEmojiPicker = false;
             syncPanelSurface();
         }
     }
 
-    const pathLink = event.target.closest('.path-link');
+    const pathLink = target?.closest<HTMLElement>('.path-link');
     if (pathLink && pathLink.id !== 'open-chat-save') {
         const path = pathLink.dataset.openPath;
         if (path) {
             run(async () => {
-                await OpenPath(path);
+                await (window as any).go?.main.App.OpenPath(path);
             }, {busy: false});
         }
         return;
     }
 
-    const fileLink = event.target.closest('[data-open-file]');
+    const fileLink = target?.closest<HTMLElement>('[data-open-file]');
     if (fileLink) {
         const file = fileLink.dataset.openFile;
         if (file) {
             run(async () => {
-                await OpenFile(file);
+                await (window as any).go?.main.App.OpenFile(file);
             }, {busy: false});
         }
         return;
@@ -5217,8 +4970,9 @@ document.addEventListener('click', (event) => {
 });
 
 // Register a global event delegation for the auto-stop switch change
-document.addEventListener('change', async (event) => {
-    const autoStopSwitch = event.target.closest('#auto-stop-switch');
+document.addEventListener('change', async (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    const autoStopSwitch = target?.closest<HTMLInputElement>('#auto-stop-switch');
     if (autoStopSwitch) {
         const enabled = autoStopSwitch.checked;
         await run(async () => {
@@ -5246,7 +5000,7 @@ document.addEventListener('change', async (event) => {
 function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 1200) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = (e: ProgressEvent<FileReader>) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -5278,7 +5032,7 @@ function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 
                 resolve({ dataUrl, format });
             };
             img.onerror = () => reject(new Error('Failed to load image'));
-            img.src = e.target.result;
+            img.src = String(e.target?.result || '');
         };
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
@@ -5290,8 +5044,8 @@ window.render = render;
 window.state = state;
 
 // 全局 input/textarea 的右键菜单支持 (Context menu for text elements)
-document.addEventListener('contextmenu', (e) => {
-    const target = e.target;
+document.addEventListener('contextmenu', (e: MouseEvent) => {
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
         const isReadOnly = target.readOnly || target.disabled;
         const type = target.getAttribute('type') || 'text';

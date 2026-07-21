@@ -34,8 +34,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
       3. **未来适配要求**：未来在开发任何包含高频状态流（如传输进度、连接数、性能指标）的 UI 界面时，均需以此就地静默更新机制为标准，绝对禁止暴力覆载容器 innerHTML。
   - **Active Input & Search Typing Protection (活动文本框与搜索打字焦点保护)**：
     - **避坑准则**：在后台推送（如 `agent-status`）、心跳同步（`applyStatusData`）以及异步插件装载等回调中，在准备触发全屏 `render()` 之前，必须通过 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 是否正在弹窗输入框、文本域或历史记录搜索框中打字编辑。如果是，必须挂起全屏 DOM 重绘，将最新状态留存在内存中，切勿重新加载/替换包含活动光标的 DOM 容器，以防导致焦点剥离、输入选区清空或搜索框强制折叠。
-  - **Incremental Badge & Stage Text Patching (红点与阶段文本就地补丁)**：
-    - **避坑准则**：对于自动更新检测阶段变化（如后台默默下好更新变为 `ready`），禁止通过全屏 `render()` 来更新设置按钮上的小红点。应用通过 `updateSettingsBadgeUI()` 直接寻找 `#open-settings` 并增量 append/remove `.badge-dot` 节点，并在弹窗未打开时直接跳过 `syncPanelSurface()`，极大节约渲染开销并杜绝微顿感。
+  - **TypeScript Strict Engineering & Zero-Error Check (TypeScript 严格工程与 0 报错验证)**：
+    - **tsconfig.json & Ambient Types**: 任何 TypeScript 重构或模块拆分，必须在前端根路径下引入配置完整的 `tsconfig.json` 并配置 `src/env.d.ts` 环境类型声明（涵盖 asset 模块、DOM 扩展、Wails 绑定及全量 `state` 接口类型）。
+    - **Zero `any` & Element Generic Assertions**: DOM 元素选择器查询（如 `document.querySelector<HTMLInputElement>`）必须标注显式泛型类型，严禁使用 `any` 强转。DOM 事件回调必须显式推导与转型 `(e.target as HTMLElement)` / `(e.currentTarget as HTMLButtonElement)`。
+    - **Deterministic Type Verification**: 任务结束前必须执行 `npx tsc --noEmit`，确保无任何红线与类型警告，实现 TypeScript 100% 0 报错全量编译通过。
 
   - **Avoiding High-frequency Lock Contention on UI Feeds**:
     - **Issue**: High-frequency updates on write streams (e.g. updating `BytesDone` inside `onWrite` per network write chunk) trigger severe lock contention on status mutexes (`statusMu` / `clientStatesMu`) up to thousands of times per second. This starves the desktop GUI's main thread status retrieval, locking/freezing the interface (making Wails GUI non-scrollable and unresponsive).
