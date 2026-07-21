@@ -982,7 +982,7 @@ function renderReceive() {
         </div>
         <div class="primary-row" style="width: 100%; display: flex; justify-content: center; gap: 12px; margin-top: 18px;">
             <button class="primary" id="start-receive" ${state.busy || !output.trim() ? 'disabled' : ''} style="width: 180px; flex: none;">${state.busy ? t('working') : t('start_receive')}</button>
-            <button class="ghost" id="save-receive-dir" style="width: 180px; flex: none;">${t('save_dir')}</button>
+            <button class="ghost" id="save-receive-dir" ${!output.trim() ? 'disabled' : ''} style="width: 180px; flex: none;">${t('save_dir')}</button>
         </div>
     `;
 }
@@ -3029,9 +3029,14 @@ function refreshHistoryListInDOM() {
     });
     document.querySelector('#receive-dir')?.addEventListener('input', (e) => {
         state.receiveDir = e.target.value;
+        const val = e.target.value.trim();
         const startBtn = document.querySelector('#start-receive');
         if (startBtn) {
-            startBtn.disabled = state.busy || !e.target.value.trim();
+            startBtn.disabled = state.busy || !val;
+        }
+        const saveBtn = document.querySelector('#save-receive-dir');
+        if (saveBtn) {
+            saveBtn.disabled = !val;
         }
     });
     document.querySelector('#start-receive')?.addEventListener('click', startReceive);
@@ -5896,6 +5901,8 @@ function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 
 }
 
 window.renderReceiveDeviceProgressHtml = renderReceiveDeviceProgressHtml;
+window.render = render;
+window.state = state;
 
 // 全局 input/textarea 的右键菜单支持 (Context menu for text elements)
 document.addEventListener('contextmenu', (e) => {

@@ -336,10 +336,12 @@ h2 {
 .share-illustration-wrapper img,
 .receive-illustration-wrapper img,
 .chat-illustration-wrapper img {
-    height: auto;
-    max-height: clamp(100px, 20vh, 170px);
+    height: 155px;
+    max-height: 165px;
+    min-height: 110px;
     max-width: 100%;
     width: auto;
+    object-fit: contain;
     transition: max-height 0.2s ease;
 }
 
