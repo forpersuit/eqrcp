@@ -337,7 +337,7 @@ h2 {
 .receive-illustration-wrapper img,
 .chat-illustration-wrapper img {
     height: auto;
-    max-height: clamp(90px, 16vh, 140px);
+    max-height: clamp(100px, 20vh, 170px);
     max-width: 100%;
     width: auto;
     transition: max-height 0.2s ease;
