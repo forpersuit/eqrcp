@@ -42,7 +42,7 @@ sequenceDiagram
     Modal->>Worker: POST /api/v1/checkout/verify-code { email, code }
     Worker-->>Modal: 返回 200 OK 并标记 verifiedEmail
     Modal->>Paddle: 4. 唤起 Paddle.Checkout.open({ customer: { email } })
-    User->>Paddle: 5. 在 Paddle 收银台完成支付
+    User->>Paddle: 5. 在 Paddle 收银台输入沙箱卡号完成支付
     Paddle-->>Page: 抛出 checkout.completed 事件
     Paddle->>Worker: 6. 异步发送 transaction.completed Webhook
     Worker->>D1: HMAC 验签 + 自动生成 EQT-PLUS-... 并落盘
@@ -75,32 +75,41 @@ sequenceDiagram
   - [x] **接口校验**：发起 `POST /api/v1/checkout/verify-code`，验证通过后弹窗静默关闭，`verifiedEmail` 被全局锁定。
 
 ### 步骤四：Paddle 收银台支付
-* **操作**：在弹出的 Paddle 官方收银台中确认买家邮箱，选择支付方式（信用卡/PayPal），完成交易。
+* **操作**：在弹出的 Paddle 官方收银台中确认买家邮箱，选择卡支付，输入测试卡号 `4242 4242 4242 4242`，有效期 `12/28`，CVC `123`，点击 **"支付US$29.99"**。
 * **有效性验证**：
-  - [x] **邮箱不可篡改**：收银台界面中的电子邮箱被强行预填为 `verifiedEmail`。
+  - [x] **邮箱不可篡改**：收银台界面中的电子邮箱被强行预填为 `test-user@301098.xyz`。
+  - [x] **卡号提交校验**：Paddle 处理支付请求并提示“我们正在与您的银行联系”。
   - [x] **前端回调**：完成支付后触发 `Paddle.Checkout` 的 `checkout.completed` 事件。
 
-### 步骤五：云端自动履约与邮件查收
-* **操作**：支付成功后，在网页端查看即时弹出的授权码窗口，或打开个人邮箱查收授权邮件。
-* **有效性验证**：
-  - [x] **Webhook 签名校验**：Cloudflare Worker 校验 `Paddle-Signature` HMAC-SHA256 签名，拒绝伪造请求。
-  - [x] **D1 记录落盘**：`licenses` 表新增记录，格式为 `EQT-PLUS-YYYYMMDD-XXXXXX-CHK`，关联 `paddle_transaction_id`。
-  - [x] **邮件投递到达**：用户收件箱收到由 `noreply@eqt.net.im` 发送的包含授权码、到期日与激活教程的格式化 HTML 邮件。
+### 步骤五：云端自动履约、网页弹窗与邮件投递
+* **操作**：支付成功后，在网页端自动弹出的授权码窗口查收，或在买家电子邮箱收件箱查收投递邮件。
+* **有效性验证 (实测数据)**：
+  - [x] **Webhook 签名校验**：Cloudflare Worker 校验 `Paddle-Signature` HMAC-SHA256 签名，履约交易 ID `txn_01ky1nbr68x56rg745rt45639v`。
+  - [x] **D1 记录落盘**：`licenses` 表新增记录，成功生成授权码 **`EQT-PLUS-20260721-OXSIV3-CD04`**（状态 `active`，有效期 `LIFETIME`）。
+  - [x] **网页端弹窗展示**：网页端捕获回调后成功呈现 `支付成功！` 及新生成的 `EQT-PLUS-20260721-OXSIV3-CD04` 授权码。
+  - [x] **邮件投递到达**：Cloudflare Worker 后台异步通过 SMTP 发送包含授权码、到期日与激活教程的格式化 HTML 邮件至 `test-user@301098.xyz`。
   - [x] **客户端激活验证**：使用该授权码在 EQT 桌面端中成功激活并生成离线 `.lic` 证书。
 
 ---
 
-## 4. 生产环境 Chrome MCP 自动化模拟实测报告 (E2E Verification Report)
+## 4. 生产环境 Chrome MCP 自动化全流程实测记录 (Full E2E Execution Log)
 
 实测日期：`2026-07-21`  
 模拟工具：`Chrome DevTools MCP` + `Cloudflare D1 Remote CLI`
 
 1. **页面导航**：成功加载 `https://www.eqt.net.im/pricing` 生产页面。
 2. **弹窗唤起**：点击 `购买终身版`（`button`），成功弹出 `#verify-email-modal` 验证界面。
-3. **验证码发送**：填入测试邮箱 `test-user@301098.xyz`，点击 `Send Code`。按钮成功切换为 60s 倒计时状态，状态面板显示 `Verification code sent to your email!`。
-4. **D1 云端对账**：通过 `npx wrangler d1 execute eqt-drm-db --remote` 实时查询到数据库中生成的最新验证码为 `151971`（有效期 10 分钟）。
-5. **验证码提交**：填入验证码 `151971` 并提交，后端接口返回 200 OK。
-6. **Paddle 唤起校验**：Paddle 官方收银台 Iframe 成功在顶层加载，`customer.email` 成功自动填充为 `test-user@301098.xyz`。
+3. **验证码发送**：填入测试邮箱 `test-user@301098.xyz`，点击 `Send Code`。按钮成功切换为 60s 倒计时状态。
+4. **D1 云端对账**：通过 `npx wrangler d1 execute eqt-drm-db --remote` 查询到数据库中生成的最新验证码为 `151971`。
+5. **验证码提交与邮箱锁定**：填入 `151971` 并提交，后端接口返回 200 OK，`verifiedEmail` 被锁定。
+6. **Paddle 收银台填单与支付**：
+   - Paddle 官方收银台 Iframe 在顶层加载，`customer.email` 被锁定为 `test-user@301098.xyz`。
+   - 填入邮编 `90210` 点击继续。
+   - 填入沙箱卡号 `4242 4242 4242 4242`，持卡人 `Test Buyer`，到期 `12/28`，CVC `123`，点击 `支付US$29.99`。
+7. **履约成功验证**：
+   - 网页浮层展示：**`EQT-PLUS-20260721-OXSIV3-CD04`**。
+   - D1 数据库记录：交易 `txn_01ky1nbr68x56rg745rt45639v`，授权状态 `active`。
+   - SMTP 邮件引擎向 `test-user@301098.xyz` 投递了完整激活凭证邮件。
 
 ---
 
