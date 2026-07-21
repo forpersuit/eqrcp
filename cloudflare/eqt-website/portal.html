@@ -165,6 +165,7 @@
         // Language dictionaries
         const translations = {
             "en": {
+                "device_id_hint": "Find your Device ID at the bottom of the About panel in EQT client",
                 "back_to_home": "Back to Home",
                 "login_title": "Customer License Portal",
                 "login_desc": "Manage your EQT Plus keys and subscriptions",
@@ -204,6 +205,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
             },
             "zh": {
+                "device_id_hint": "可在 EQT 客户端「关于」界面底部找到本机的 Device ID",
                 "back_to_home": "返回主页",
                 "login_title": "自助服务与退款门户",
                 "login_desc": "登录邮箱以查询许可证状态或申请自助退款",
@@ -243,6 +245,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。"
             },
             "ja": {
+                "device_id_hint": "EQT クライアントの「バージョン情報」パネル下部でデバイス ID を確認できます",
                 "back_to_home": "ホームに戻る",
                 "login_title": "ライセンス管理ポータル",
                 "login_desc": "メールコードでログインしてライセンスを管理",
@@ -282,6 +285,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
             },
             "ko": {
+                "device_id_hint": "EQT 클라이언트 '정보' 패널 하단에서 기기 ID를 확인할 수 있습니다",
                 "back_to_home": "홈으로 돌아가기",
                 "login_title": "고객 라이선스 포털",
                 "login_desc": "이메일 인증으로 라이선스 및 구독 관리",
@@ -321,6 +325,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
             },
             "es": {
+                "device_id_hint": "Encuentre el ID del dispositivo en la parte inferior del panel 'Acerca de' en EQT",
                 "back_to_home": "Volver al inicio",
                 "login_title": "Portal de Licencias",
                 "login_desc": "Inicia sesión con tu correo para gestionar licencias",
@@ -360,6 +365,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). Todos los derechos reservados."
             },
             "de": {
+                "device_id_hint": "Sie finden die Geräte-ID unten im 'Über'-Feld des EQT-Clients",
                 "back_to_home": "Zurück zur Startseite",
                 "login_title": "Kunden-Lizenzportal",
                 "login_desc": "Verwalten Sie Ihre EQT-Schlüssel und Abonnements",
@@ -399,6 +405,7 @@
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). Alle Rechte vorbehalten."
             },
             "fr": {
+                "device_id_hint": "Retrouvez l'ID de l'appareil au bas du panneau 'À propos' du client EQT",
                 "back_to_home": "Retour à l'accueil",
                 "login_title": "Portail Client Licences",
                 "login_desc": "Gérez vos clés et abonnements EQT Plus",
@@ -687,7 +694,13 @@
                 if (lic.activations && lic.activations.length > 0) {
                     activationsHtml = `
                         <div class="mt-3 pt-3 border-t border-white/5 space-y-2">
-                            <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${translations[state.lang].activations} (${lic.activations.length}/${lic.max_devices})</h4>
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                                <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${translations[state.lang].activations} (${lic.activations.length}/${lic.max_devices})</h4>
+                                <span class="text-[11px] text-on-surface-variant/70 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[13px]">info</span>
+                                    <span>${translations[state.lang].device_id_hint || ''}</span>
+                                </span>
+                            </div>
                             <div class="grid gap-2 text-xs">
                                 ${lic.activations.map(act => `
                                     <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5 gap-2">
