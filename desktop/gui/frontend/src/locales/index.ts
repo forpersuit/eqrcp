@@ -37,7 +37,7 @@ export function getSystemLocale(): SupportedLocale {
     return 'en';
 }
 
-export function t(key: TranslationKey, params?: Record<string, string | number>): string {
+export function t(key: TranslationKey | (string & {}), params?: Record<string, string | number>): string {
     const lang = (state && state.settings && (state.settings.lang as SupportedLocale)) || getSystemLocale();
     const dict = translations[lang] || translations['en'] || translations['zh'];
     let val: string = (dict && dict[key]) || (translations['en'] && translations['en'][key]) || (translations['zh'] && translations['zh'][key]) || String(key);
