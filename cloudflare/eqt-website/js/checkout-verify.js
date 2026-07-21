@@ -222,6 +222,14 @@
             }, 450);
         }
 
+        filterFriendlyMsg(rawMsg, defaultKey, defaultVal) {
+            if (!rawMsg) return this.getTranslation(defaultKey, defaultVal);
+            if (/D1_ERROR|SQLITE|UNIQUE constraint|FOREIGN KEY|syntax error|PRIMARYKEY|fatal|exception|stack|trace|TypeError|ReferenceError/i.test(rawMsg)) {
+                return this.getTranslation(defaultKey, defaultVal);
+            }
+            return rawMsg;
+        }
+
         async sendCode() {
             const dom = this.getDom();
             if (!this.validateEmail()) {
@@ -253,7 +261,8 @@
                 dom.codeInput?.focus();
             } catch (err) {
                 this.triggerShake(dom.emailInput);
-                this.showStatusCard(err.message, true);
+                const safeMsg = this.filterFriendlyMsg(err.message, 'send_code_failed', 'Failed to send verification code. Please try again later.');
+                this.showStatusCard(safeMsg, true);
                 this.cooldownRemaining = 0;
                 this.updateButtonState();
             }
@@ -324,9 +333,10 @@
                 }, 350);
 
             } catch (err) {
-                this.showCodeFieldError(err.message);
+                const safeMsg = this.filterFriendlyMsg(err.message, 'verify_failed', 'Verification failed. Please check your code.');
+                this.showCodeFieldError(safeMsg);
                 this.triggerShake(dom.codeInput);
-                this.showStatusCard(err.message, true);
+                this.showStatusCard(safeMsg, true);
             } finally {
                 if (dom.payBtn) {
                     dom.payBtn.disabled = false;

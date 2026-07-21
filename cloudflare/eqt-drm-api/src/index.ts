@@ -69,6 +69,53 @@ async function verifyPaddleSignature(
   return signatureHex === h1;
 }
 
+// System error audit log helper (Stores full technical stacktrace into D1)
+async function ensureAuditLogTable(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS system_error_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT NOT NULL DEFAULT 'ERROR',
+        category TEXT NOT NULL,
+        error_message TEXT NOT NULL,
+        context_json TEXT,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+  } catch (err) {
+    console.error("Failed to ensure audit log table:", err);
+  }
+}
+
+async function logSystemError(
+  env: Env,
+  category: string,
+  level: 'ERROR' | 'WARN' | 'CRITICAL',
+  error: any,
+  context?: any
+): Promise<void> {
+  try {
+    await ensureAuditLogTable(env);
+    const errorMsg = error instanceof Error ? `${error.message}\n${error.stack || ''}` : String(error);
+    const contextJson = context ? JSON.stringify(context) : null;
+    await env.DB.prepare(
+      "INSERT INTO system_error_logs (level, category, error_message, context_json, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind(level, category, errorMsg, contextJson, new Date().toISOString()).run();
+  } catch (err) {
+    console.error("Failed to log system error to D1:", err);
+  }
+}
+
+// Map internal DB/code errors to safe user-friendly messages for general public
+function getSafeUserErrorMessage(rawMessage: string, defaultFriendlyMsg: string = "Service temporarily unavailable. Please try again later."): string {
+  if (!rawMessage) return defaultFriendlyMsg;
+  // If rawMessage contains internal DB/code exception details, swallow them completely!
+  if (/D1_ERROR|SQLITE|UNIQUE constraint|FOREIGN KEY|syntax error|PRIMARYKEY|fatal|exception|stack|trace|TypeError|ReferenceError/i.test(rawMessage)) {
+    return defaultFriendlyMsg;
+  }
+  return rawMessage;
+}
+
 // Helper to convert hex string to Uint8Array
 function hexToUint8Array(hex: string): Uint8Array {
   hex = hex.trim();
@@ -461,6 +508,26 @@ export default {
     }
 
     try {
+      // Admin Error Logs Query Endpoint
+      if (url.pathname === "/api/v1/admin/error-logs" && request.method === "GET") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized admin access" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        await ensureAuditLogTable(env);
+        const limit = parseInt(url.searchParams.get("limit") || "50");
+        const logs = await env.DB.prepare(
+          "SELECT * FROM system_error_logs ORDER BY id DESC LIMIT ?"
+        ).bind(limit).all();
+
+        return new Response(JSON.stringify({ success: true, logs: logs.results || [] }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
       // Route request to download handler if host matches download.eqt.net.im,
       // or if pathname matches download routes (to support dev/testing on workers.dev or localhost).
       if (
@@ -1701,7 +1768,9 @@ export default {
       });
 
     } catch (e: any) {
-      return new Response(JSON.stringify({ error: e.message || String(e) }), {
+      ctx.waitUntil(logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', e, { url: request.url, method: request.method }));
+      const safeMsg = getSafeUserErrorMessage(e.message || String(e), "An unexpected server error occurred. Please try again later.");
+      return new Response(JSON.stringify({ error: safeMsg }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
