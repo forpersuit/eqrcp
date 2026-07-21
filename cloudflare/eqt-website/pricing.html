@@ -689,6 +689,9 @@
         const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3"; // Replace with your Lifetime Price ID
         const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc"; // Replace with your Yearly Price ID
 
+        let pendingPriceId = null;
+        let verifiedEmail = null;
+
         function initPaddle() {
             if (typeof Paddle !== 'undefined') {
                 Paddle.Environment.set(PADDLE_ENV);
@@ -703,26 +706,25 @@
                         }
                     }
                 });
+            }
+        }
 
-                let pendingPriceId = null;
-                let verifiedEmail = null;
+        function initCheckoutButtons() {
+            const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
+            const buyYearlyBtn = document.getElementById('buy-yearly-btn');
 
-                const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
-                const buyYearlyBtn = document.getElementById('buy-yearly-btn');
+            if (buyLifetimeBtn) {
+                buyLifetimeBtn.addEventListener('click', () => {
+                    pendingPriceId = PRICE_LIFETIME_ID;
+                    openVerifyModal();
+                });
+            }
 
-                if (buyLifetimeBtn) {
-                    buyLifetimeBtn.addEventListener('click', () => {
-                        pendingPriceId = PRICE_LIFETIME_ID;
-                        openVerifyModal();
-                    });
-                }
-
-                if (buyYearlyBtn) {
-                    buyYearlyBtn.addEventListener('click', () => {
-                        pendingPriceId = PRICE_YEARLY_ID;
-                        openVerifyModal();
-                    });
-                }
+            if (buyYearlyBtn) {
+                buyYearlyBtn.addEventListener('click', () => {
+                    pendingPriceId = PRICE_YEARLY_ID;
+                    openVerifyModal();
+                });
             }
         }
 
@@ -843,10 +845,14 @@
 
                 // Open Paddle Checkout with pre-filled verified customer email
                 setTimeout(() => {
-                    Paddle.Checkout.open({
-                        items: [{ priceId: pendingPriceId, quantity: 1 }],
-                        customer: { email: verifiedEmail }
-                    });
+                    if (typeof Paddle !== 'undefined') {
+                        Paddle.Checkout.open({
+                            items: [{ priceId: pendingPriceId, quantity: 1 }],
+                            customer: { email: verifiedEmail }
+                        });
+                    } else {
+                        showVerifyStatus('Billing component is loading or blocked by network.', true);
+                    }
                 }, 350);
 
             } catch (err) {
@@ -962,6 +968,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
+            initCheckoutButtons();
             initPaddle();
         });
     </script>
