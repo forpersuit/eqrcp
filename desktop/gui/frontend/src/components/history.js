@@ -1,5 +1,5 @@
-import { state } from '../state.js';
-import { t } from '../i18n.js';
+import { state } from '../state';
+import { t } from '../i18n';
 
 // ---- 图标函数 ----
 export function openFileIcon() {

@@ -1,5 +1,5 @@
-import { state } from './state.js';
-import { t, getSystemLocale } from './i18n.js';
+import { state } from './state';
+import { t, getSystemLocale } from './i18n';
 import { allEmojis, culturalEmojis, getCategoryLocalizedName } from './emojis.js';
 import './style.css';
 import './app.css';
@@ -11,7 +11,7 @@ import receiveIllustrationURL from './assets/images/receive.png';
 import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
-import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
+import { initDragDrop, sendDebugMessageToChat } from './dragdrop';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {

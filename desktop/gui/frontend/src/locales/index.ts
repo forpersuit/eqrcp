@@ -1,4 +1,4 @@
-import { state } from '../state.js';
+import { state } from '../state';
 import { en } from './en';
 import { zh } from './zh';
 import { ja } from './ja';
