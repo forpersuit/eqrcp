@@ -66,8 +66,13 @@
                     </button>
                     <!-- Dropdown Panel -->
                     <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-1 bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
-                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="es">Español</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="de">Deutsch</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="fr">Français</button>
                     </div>
                 </div>
                 
@@ -92,13 +97,13 @@
                 <div>
                     <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2" data-i18n="email_label">Email Address</label>
                     <div class="relative">
-                        <input id="login-email" type="email" placeholder="you@example.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" />
+                        <input id="login-email" type="email" placeholder="you@example.com" data-i18n-placeholder="email_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" />
                     </div>
                 </div>
 
                 <div class="flex gap-2">
                     <div class="flex-grow">
-                        <input id="login-code" type="text" placeholder="Verification Code" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
+                        <input id="login-code" type="text" placeholder="Verification Code" data-i18n-placeholder="code_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
                     </div>
                     <button id="send-code-btn" class="bg-white/5 hover:bg-white/10 border border-white/10 text-primary px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap" data-i18n="send_code_btn">Send Code</button>
                 </div>
@@ -164,6 +169,8 @@
                 "login_title": "Customer License Portal",
                 "login_desc": "Manage your EQT Plus keys and subscriptions",
                 "email_label": "Purchase Email Address",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "Verification Code",
                 "send_code_btn": "Send Code",
                 "login_btn": "Verify & Login",
                 "portal_title": "Customer License Portal",
@@ -186,9 +193,9 @@
                 "refund_confirm_desc": "Are you sure you want to request a refund? The license code will be suspended immediately and all active devices will revert to the free version.",
                 "cancel_btn": "Cancel",
                 "confirm_refund_btn": "Confirm & Refund",
-                "toast_code_sent": "Verification code sent to your email (and shown in debugging logs).",
+                "toast_code_sent": "Verification code sent to your email.",
                 "toast_login_success": "Successfully logged in!",
-                "toast_refund_success": "Refund adjustment created successfully! Local status updated.",
+                "toast_refund_success": "Refund adjustment created successfully!",
                 "toast_error": "An error occurred:",
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
             },
@@ -197,6 +204,8 @@
                 "login_title": "自助服务与退款门户",
                 "login_desc": "登录邮箱以查询许可证状态或申请自助退款",
                 "email_label": "购买时填写的邮箱地址",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "验证码",
                 "send_code_btn": "发送验证码",
                 "login_btn": "验证并登录",
                 "portal_title": "软件授权管理门户",
@@ -219,11 +228,186 @@
                 "refund_confirm_desc": "您确定要对这笔交易申请退款吗？退款提交后，此激活码将被永久吊销，绑定的所有设备将在下次联网对账时自动降级为免费版。",
                 "cancel_btn": "取消",
                 "confirm_refund_btn": "确认并退款",
-                "toast_code_sent": "验证码已成功发往您的邮箱（调试模式下也将呈现在接口返回中）。",
+                "toast_code_sent": "验证码已成功发往您的邮箱。",
                 "toast_login_success": "登录成功！",
-                "toast_refund_success": "退款成功！授权已被吊销，退款金额将在 5-10 个工作日内原路退回。",
+                "toast_refund_success": "退款成功！授权已被吊销。",
                 "toast_error": "发生错误：",
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。"
+            },
+            "ja": {
+                "back_to_home": "ホームに戻る",
+                "login_title": "ライセンス管理ポータル",
+                "login_desc": "メールコードでログインしてライセンスを管理",
+                "email_label": "購入時のメールアドレス",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "認証コード",
+                "send_code_btn": "コード送信",
+                "login_btn": "認証してログイン",
+                "portal_title": "ライセンス管理ポータル",
+                "logged_in_as": "ログイン中:",
+                "logout_btn": "ログアウト",
+                "your_licenses": "所有ライセンス一覧",
+                "no_licenses": "このメールアドレスに関連付けられたライセンスが見つかりません。",
+                "license_code": "ライセンスコード",
+                "tier": "プラン",
+                "status": "ステータス",
+                "created_at": "購入日",
+                "paddle_transaction": "取引ID",
+                "paddle_subscription": "サブスクリプションID",
+                "activations": "アクティベート済みデバイス",
+                "device_id": "デバイスキー",
+                "activated_on": "アクティベート日時",
+                "request_refund": "返金を申請",
+                "refund_pending": "返金処理中...",
+                "refund_confirm_title": "返金を申請しますか？",
+                "refund_confirm_desc": "返金を申請するとライセンスは無効化され、すべてのデバイスが無料版にダウングレードされます。",
+                "cancel_btn": "キャンセル",
+                "confirm_refund_btn": "返金を確定",
+                "toast_code_sent": "認証コードをメールに送信しました。",
+                "toast_login_success": "ログインに成功しました！",
+                "toast_refund_success": "返金申請が完了しました。",
+                "toast_error": "エラーが発生しました:",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "ko": {
+                "back_to_home": "홈으로 돌아가기",
+                "login_title": "고객 라이선스 포털",
+                "login_desc": "이메일 인증으로 라이선스 및 구독 관리",
+                "email_label": "구매 이메일 주소",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "인증 코드",
+                "send_code_btn": "코드 전송",
+                "login_btn": "인증 및 로그인",
+                "portal_title": "고객 라이선스 포털",
+                "logged_in_as": "로그인 계정:",
+                "logout_btn": "로그아웃",
+                "your_licenses": "내 라이선스 목록",
+                "no_licenses": "이 이메일과 연결된 라이선스를 찾을 수 없습니다.",
+                "license_code": "라이선스 코드",
+                "tier": "등급",
+                "status": "상태",
+                "created_at": "구매일",
+                "paddle_transaction": "거래 ID",
+                "paddle_subscription": "구독 ID",
+                "activations": "인증된 기기",
+                "device_id": "기기 키",
+                "activated_on": "인증일",
+                "request_refund": "환불 신청",
+                "refund_pending": "환불 처리 중...",
+                "refund_confirm_title": "환불을 신청하시겠습니까?",
+                "refund_confirm_desc": "환불 시 라이선스가 즉시 해제되며 연결된 모든 기기가 무료 버전으로 전환됩니다.",
+                "cancel_btn": "취소",
+                "confirm_refund_btn": "환불 확정",
+                "toast_code_sent": "이메일로 인증 코드가 전송되었습니다.",
+                "toast_login_success": "로그인 성공!",
+                "toast_refund_success": "환불 신청이 완료되었습니다.",
+                "toast_error": "오류 발생:",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved."
+            },
+            "es": {
+                "back_to_home": "Volver al inicio",
+                "login_title": "Portal de Licencias",
+                "login_desc": "Inicia sesión con tu correo para gestionar licencias",
+                "email_label": "Correo de compra",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "Código de verificación",
+                "send_code_btn": "Enviar código",
+                "login_btn": "Verificar y Entrar",
+                "portal_title": "Portal de Licencias",
+                "logged_in_as": "Sesión iniciada como:",
+                "logout_btn": "Cerrar sesión",
+                "your_licenses": "Tus Licencias",
+                "no_licenses": "No se encontraron licencias asociadas a este correo.",
+                "license_code": "Código de Licencia",
+                "tier": "Nivel",
+                "status": "Estado",
+                "created_at": "Fecha de compra",
+                "paddle_transaction": "ID de Transacción",
+                "paddle_subscription": "ID de Subscripción",
+                "activations": "Dispositivos activados",
+                "device_id": "Clave de dispositivo",
+                "activated_on": "Activado el",
+                "request_refund": "Solicitar reembolso",
+                "refund_pending": "Procesando reembolso...",
+                "refund_confirm_title": "¿Confirmar reembolso?",
+                "refund_confirm_desc": "Una vez reembolsada, la licencia se revocará de inmediato y todos los dispositivos volverán a la versión gratuita.",
+                "cancel_btn": "Cancelar",
+                "confirm_refund_btn": "Confirmar reembolso",
+                "toast_code_sent": "Código enviado a tu correo.",
+                "toast_login_success": "¡Sesión iniciada con éxito!",
+                "toast_refund_success": "Reembolso procesado correctamente.",
+                "toast_error": "Ocurrió un error:",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). Todos los derechos reservados."
+            },
+            "de": {
+                "back_to_home": "Zurück zur Startseite",
+                "login_title": "Kunden-Lizenzportal",
+                "login_desc": "Verwalten Sie Ihre EQT-Schlüssel und Abonnements",
+                "email_label": "Kauf-E-Mail-Adresse",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "Bestätigungscode",
+                "send_code_btn": "Code senden",
+                "login_btn": "Prüfen & Anmelden",
+                "portal_title": "Kunden-Lizenzportal",
+                "logged_in_as": "Angemeldet als:",
+                "logout_btn": "Abmelden",
+                "your_licenses": "Ihre Lizenzen",
+                "no_licenses": "Keine Lizenzen für diese E-Mail-Adresse gefunden.",
+                "license_code": "Lizenzschlüssel",
+                "tier": "Tarif",
+                "status": "Status",
+                "created_at": "Gekauft am",
+                "paddle_transaction": "Transaktions-ID",
+                "paddle_subscription": "Abonnement-ID",
+                "activations": "Aktivierte Geräte",
+                "device_id": "Geräteschlüssel",
+                "activated_on": "Aktiviert am",
+                "request_refund": "Rückerstattung beantragen",
+                "refund_pending": "Rückerstattung wird bearbeitet...",
+                "refund_confirm_title": "Rückerstattung bestätigen?",
+                "refund_confirm_desc": "Nach der Rückerstattung wird die Lizenz sofort gesperrt und alle aktiven Geräte kehren zur kostenlosen Version zurück.",
+                "cancel_btn": "Abbrechen",
+                "confirm_refund_btn": "Rückerstattung bestätigen",
+                "toast_code_sent": "Bestätigungscode an Ihre E-Mail gesendet.",
+                "toast_login_success": "Erfolgreich angemeldet!",
+                "toast_refund_success": "Rückerstattung erfolgreich erstellt.",
+                "toast_error": "Ein Fehler ist aufgetreten:",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). Alle Rechte vorbehalten."
+            },
+            "fr": {
+                "back_to_home": "Retour à l'accueil",
+                "login_title": "Portail Client Licences",
+                "login_desc": "Gérez vos clés et abonnements EQT Plus",
+                "email_label": "E-mail d'achat",
+                "email_placeholder": "you@example.com",
+                "code_placeholder": "Code de vérification",
+                "send_code_btn": "Envoyer le code",
+                "login_btn": "Vérifier & Se connecter",
+                "portal_title": "Portail Client Licences",
+                "logged_in_as": "Connecté en tant que :",
+                "logout_btn": "Se déconnecter",
+                "your_licenses": "Vos Licences",
+                "no_licenses": "Aucune licence trouvée associée à cet e-mail.",
+                "license_code": "Clé de licence",
+                "tier": "Offre",
+                "status": "Statut",
+                "created_at": "Acheté le",
+                "paddle_transaction": "ID de transaction",
+                "paddle_subscription": "ID d'abonnement",
+                "activations": "Appareils activés",
+                "device_id": "Clé d'appareil",
+                "activated_on": "Activé le",
+                "request_refund": "Demander un remboursement",
+                "refund_pending": "Remboursement en cours...",
+                "refund_confirm_title": "Confirmer le remboursement ?",
+                "refund_confirm_desc": "Une fois remboursée, la licence sera révoquée et tous les appareils reviendront à la version gratuite.",
+                "cancel_btn": "Annuler",
+                "confirm_refund_btn": "Confirmer le remboursement",
+                "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
+                "toast_login_success": "Connexion réussie !",
+                "toast_refund_success": "Demande de remboursement créée !",
+                "toast_error": "Une erreur est survenue :",
+                "footer_copy": "© 2026 EQT (Easy QR Transfer). Tous droits réservés."
             }
         };
 
@@ -242,18 +426,28 @@
             timer: null
         };
 
+        const langNames = {
+            zh: '简体中文',
+            en: 'English',
+            ja: '日本語',
+            ko: '한국어',
+            es: 'Español',
+            de: 'Deutsch',
+            fr: 'Français'
+        };
+
         // Setup i18n
         function initLanguage() {
             let userLang = localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
             if (!userLang) {
-                // Read from cookies
                 const match = document.cookie.match(/eqt-lang=([^;]+)/);
                 if (match) userLang = match[1];
             }
             if (!userLang) {
-                userLang = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+                const nav = navigator.language.toLowerCase();
+                userLang = ['zh','ja','ko','es','de','fr'].find(l => nav.startsWith(l)) || 'en';
             }
-            setLanguage(userLang === 'zh' ? 'zh' : 'en');
+            setLanguage(translations[userLang] ? userLang : 'en');
         }
 
         function setLanguage(lang) {
@@ -262,22 +456,31 @@
             localStorage.setItem('eqt-page-lang', lang);
             document.cookie = `eqt-lang=${lang}; max-age=${365 * 24 * 3600}; path=/`;
             
-            // Render translated tags
+            const dict = translations[lang] || translations['en'];
+
+            // Render translated text
             document.querySelectorAll('[data-i18n]').forEach(el => {
                 const key = el.getAttribute('data-i18n');
-                if (translations[lang] && translations[lang][key]) {
-                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                        el.setAttribute('placeholder', translations[lang][key]);
-                    } else {
-                        el.textContent = translations[lang][key];
-                    }
+                if (dict[key]) {
+                    el.textContent = dict[key];
                 }
             });
 
-            // Update header lang dropdown
-            document.getElementById('current-lang-txt').textContent = lang === 'zh' ? '简体中文' : 'English';
+            // Render translated placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (dict[key]) {
+                    el.placeholder = dict[key];
+                }
+            });
+
+            // Update header lang dropdown label
+            const currentLangTxt = document.getElementById('current-lang-txt');
+            if (currentLangTxt) {
+                currentLangTxt.textContent = langNames[lang] || 'English';
+            }
             
-            // Re-render licences list to update tier/status labels dynamically
+            // Re-render licences list to update labels dynamically
             if (state.token) {
                 renderLicenses();
             }
@@ -606,6 +809,7 @@
 
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('login-section').classList.remove('hidden');
+            applyUrlEmailAutoFill();
         }
 
         // Setup Event Listeners
@@ -654,6 +858,18 @@
             document.getElementById('confirm-ok-btn').addEventListener('click', handleConfirmRefund);
         }
 
+        function applyUrlEmailAutoFill() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const emailParam = urlParams.get('email');
+            if (emailParam) {
+                const emailInput = document.getElementById('login-email');
+                if (emailInput) {
+                    emailInput.value = emailParam.trim();
+                    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        }
+
         // Check active session
         async function checkSession() {
             const savedToken = localStorage.getItem('eqt_portal_token');
@@ -669,16 +885,6 @@
                 document.getElementById('dashboard-section').classList.remove('hidden');
 
                 await loadLicenses();
-            } else {
-                // Auto fill email from URL parameter if present
-                const urlParams = new URLSearchParams(window.location.search);
-                const emailParam = urlParams.get('email');
-                if (emailParam) {
-                    const emailInput = document.getElementById('login-email');
-                    if (emailInput) {
-                        emailInput.value = emailParam.trim();
-                    }
-                }
             }
         }
 
@@ -686,6 +892,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initLanguage();
             setupEventListeners();
+            applyUrlEmailAutoFill();
             checkSession();
         });
     </script>

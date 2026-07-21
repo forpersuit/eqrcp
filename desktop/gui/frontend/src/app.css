@@ -1960,23 +1960,10 @@ dd {
 .about-plan-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     margin-top: 2px;
-    padding-top: 10px;
-    border-top: 1px dashed rgba(0, 0, 0, 0.08);
+    padding-top: 4px;
     gap: 8px;
-}
-
-.about-plan-subtext {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-secondary, #64748b);
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-    min-width: 0;
 }
 
 .about-plan-actions {

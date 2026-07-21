@@ -2329,11 +2329,11 @@ function renderAboutPanel() {
                     <div class="about-plan-body">
                         <div class="about-plan-title">${escapeHTML(plan)}</div>
                         <div class="about-plan-meta">
-                            ${redeemDetail ? `<span class="about-plan-pill">⚡ ${escapeHTML(redeemDetail)}</span>` : ''}
-                            ${expiryDetail ? `<span class="about-plan-pill">📅 ${escapeHTML(expiryDetail)}</span>` : ''}
+                            ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
+                            ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
                             ${(hasPaidLicense() && state.status?.buyerEmail) ? `
                                 <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
-                                    <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">✉ ${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
+                                    <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
                                     <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
                                         ✓ ${escapeHTML(t('copied') || '已复制')}
                                     </span>
@@ -2343,9 +2343,6 @@ function renderAboutPanel() {
                     </div>
 
                     <div class="about-plan-footer">
-                        <div class="about-plan-subtext">
-                            ${hasPaidLicense() ? (t('plan_active_subtext') || '已激活尊享无限制极速传输与高级特权') : (t('plan_free_subtext') || '升级解锁局域网 Chat 与无限大文件传输')}
-                        </div>
                         <div class="about-plan-actions">
                             ${license ? `
                                 <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
