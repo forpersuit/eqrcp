@@ -1508,7 +1508,7 @@ export default {
         if (eventType === "transaction.completed") {
           const transactionId = data.id;
           const subscriptionId = data.subscription_id || null;
-          const buyerEmail = data.customer?.email || data.billing_details?.email_address || "";
+          const buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || "";
 
           // Check if already processed
           const existing = await env.DB.prepare(

@@ -15,6 +15,7 @@ MAIL_SENDER_PASSWORD = "q4W62}bWtR"
 MAIL_SEND_SERVER = "smtpserver.301098.xyz"
 MAIL_SEND_SAFE_PORT = "465"
 TEST_MAIL_RECEIVER = "tmp@301098.xyz"
+PADDLE_WEBHOOK_SECRET = "pdl_ntfset_01kxypg9ghrbrymheqbcjxhzt5_2AXS+FE+VGHMCShesn7R6E17ThC0VZyl"
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true },
