@@ -336,9 +336,9 @@ h2 {
 .share-illustration-wrapper img,
 .receive-illustration-wrapper img,
 .chat-illustration-wrapper img {
-    height: 155px;
-    max-height: 165px;
-    min-height: 110px;
+    height: 250px;
+    max-height: 275px;
+    min-height: 140px;
     max-width: 100%;
     width: auto;
     object-fit: contain;
