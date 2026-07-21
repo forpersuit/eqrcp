@@ -39,7 +39,7 @@
       copiedTimer = window.setTimeout(() => {
         copiedId = null;
       }, 2000);
-      dispatch('systemNotice', currentLang === 'en' ? 'Text copied' : '文本已复制');
+      dispatch('systemNotice', getTranslation('textCopied', currentLang));
     };
 
     if (navigator.clipboard && window.isSecureContext) {
@@ -49,14 +49,14 @@
         if (fallbackCopyInternal(text)) {
           doCopy();
         } else {
-          dispatch('systemNotice', currentLang === 'en' ? 'Copy failed' : '复制失败');
+          dispatch('systemNotice', getTranslation('copyFailed', currentLang));
         }
       });
     } else {
       if (fallbackCopyInternal(text)) {
         doCopy();
       } else {
-        dispatch('systemNotice', currentLang === 'en' ? 'Copy failed' : '复制失败');
+        dispatch('systemNotice', getTranslation('copyFailed', currentLang));
       }
     }
   }
@@ -344,7 +344,7 @@
     // 1. Copy text
     if (msg.type === 'text') {
       options.push({
-        label: currentLang === 'en' ? 'Copy' : '复制文本',
+        label: getTranslation('copyText', currentLang),
         action: () => {
           handleCopy(msg.id, msg.text || '');
           closeMenu();
@@ -357,7 +357,7 @@
       if (mine) {
         if (ulTx && ulTx.state === 'running') {
           options.push({
-            label: currentLang === 'en' ? 'Cancel Upload' : '取消上传',
+            label: getTranslation('cancelUpload', currentLang),
             danger: true,
             action: () => {
               handleCancel(ulTx.id);
@@ -366,7 +366,7 @@
           });
         } else if (isEmbedded) {
           options.push({
-            label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
+            label: getTranslation('openInFolder', currentLang),
             action: () => {
               handleOpenFolder(msg);
               closeMenu();
@@ -376,14 +376,14 @@
       } else {
         if (msg.uploading) {
           options.push({
-            label: currentLang === 'en' ? 'Uploading...' : '对方上传中...',
+            label: getTranslation('peerUploading', currentLang),
             disabled: true,
             action: () => {}
           });
         } else if (isDownloaded) {
           options.push({
-            label: isEmbedded ? (currentLang === 'en' ? 'Download' : '下载') : (currentLang === 'en' ? 'Downloaded (Redownload)' : '已下载 (重新下载)'),
-            confirmLabel: isEmbedded ? undefined : (currentLang === 'en' ? 'Confirm Redownload' : '确认重新下载'),
+            label: isEmbedded ? getTranslation('download', currentLang) : getTranslation('redownload', currentLang),
+            confirmLabel: isEmbedded ? undefined : getTranslation('confirmRedownload', currentLang),
             disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
@@ -392,7 +392,7 @@
           });
           if (isEmbedded && (msg.filePath || msg.fileName)) {
             options.push({
-              label: currentLang === 'en' ? 'Open in Folder' : '定位文件',
+              label: getTranslation('openInFolder', currentLang),
               action: () => {
                 handleOpenFolder(msg);
                 closeMenu();
@@ -401,7 +401,7 @@
           }
         } else if (dlTx && dlTx.state === 'running') {
           options.push({
-            label: currentLang === 'en' ? 'Cancel Download' : '取消下载',
+            label: getTranslation('cancelDownload', currentLang),
             danger: true,
             action: () => {
               handleCancel(dlTx.id);
@@ -410,7 +410,7 @@
           });
         } else if (dlTx && dlTx.state === 'failed') {
           options.push({
-            label: currentLang === 'en' ? 'Retry Download' : '重试下载',
+            label: getTranslation('retryDownload', currentLang),
             disabled: $chatSessionStatus !== 'active',
             action: () => {
               handleDownload(msg.id, msg.fileName || '', msg.size || 0, false);
@@ -418,7 +418,7 @@
             }
           });
         } else {
-        options.push({
+          options.push({
             label: getTranslation('downloadFile', currentLang),
             disabled: $chatSessionStatus !== 'active',
             action: () => {
@@ -1011,9 +1011,9 @@
                               {/if}
                             {:else}
                               {#if mine && msg.downloaded}
-                                · {currentLang === 'en' ? 'Shared' : '已分享'}
+                                · {getTranslation('shared', currentLang)}
                               {:else if !mine && isDownloaded}
-                                · {currentLang === 'en' ? 'Downloaded' : '已下载'}
+                                · {getTranslation('downloaded', currentLang)}
                               {/if}
                             {/if}
                           </div>
@@ -1030,8 +1030,8 @@
     {:else}
       <div class="messages-empty">
         <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-3.658A8.967 8.967 0 013 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" /></svg>
-        <strong>{currentLang === 'en' ? 'Start chatting!' : '开始聊天吧！'}</strong>
-        <span>{currentLang === 'en' ? 'Send text or local large files to other connected devices.' : '向其他已连接设备发送文本或局限大文件。'}</span>
+        <strong>{getTranslation('startChatting', currentLang)}</strong>
+        <span>{getTranslation('emptyTips', currentLang)}</span>
       </div>
     {/each}
   </div>

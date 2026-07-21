@@ -91,6 +91,7 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **Iframe 消息接收**：内嵌在桌面 GUI 内的 `App.svelte`（Chat v2 Svelte 页面）必须监听 `window.addEventListener('message')` 中类型为 `update-lang` 的广播，当外部宿主语言切换时同步调用 `setLanguage()` 瞬间热重载。
   - **前缀归一化**：在前端或 Svelte 页面中读取 LocalStorage 中的偏好语言或 navigator.language 时，必须进行 `toLowerCase().split('-')[0]` 归一化（例如 `zh-CN` -> `zh`），防止包含区域后缀的语言标识在匹配简短语种时因无法识别而退回默认配置。
   - **状态驱动翻译更新**：对于在传输过程中以及完成后有不同界面文案的页面，不要在进入成功/失败状态时通过 `removeAttribute('data-i18n')` 物理剥离标记。应该让 `applyLanguage()` 统一根据当前的传输阶段状态（例如 `isCompleted`）动态映射对应的词条，从而确保在状态变更后或完成页面上，切换语种依然无缝生效。
+  - **Chat 消息右键与滑动菜单国际化规范**：Chat 模式下的消息气泡操作菜单（右键/长按/左右滑动触发）中所有菜单项文字（如复制文本、取消上传、定位文件、重新下载、确认重新下载、取消下载、重试下载等）严禁使用 `currentLang === 'en' ? ... : '中文'` 二元硬编码。必须统一通过 `getTranslation(key, currentLang)`（在桌面端通过 `t('save_as')`）进行 7 种语言（zh/en/ja/ko/es/de/fr）的动态多语言映射。
 
 ## 移动端接收管理与限额特权及状态展示规范 (Mobile Upload Management, Quota Banner & Limits Handling)
 - **传输异常友好呈现**：文件上传失败或异常（网络中断、大小超限、服务端 500 写入失败）时，严禁使用原生弹窗或直接把 raw 错误文本打在表单下方。必须直接将整个界面重绘为带有红色“✕”圆形徽章的“传输失败卡片”（样式与 Done 成功卡片对称），给普通用户呈现易懂的本地化解释（如局域网未联通、磁盘满、或文件超大等提示），并提供醒目的“返回并重试”按钮以快速重载页面恢复输入状态。

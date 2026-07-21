@@ -418,6 +418,105 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Kopieren fehlgeschlagen',
     fr: 'Échec de la copie'
   },
+  copyText: {
+    zh: '复制文本',
+    en: 'Copy Text',
+    ja: 'テキストをコピー',
+    ko: '텍스트 복사',
+    es: 'Copiar texto',
+    de: 'Text kopieren',
+    fr: 'Copier le texte'
+  },
+  textCopied: {
+    zh: '文本已复制',
+    en: 'Text copied',
+    ja: 'テキストをコピーしました',
+    ko: '텍스트가 복사되었습니다',
+    es: 'Texto copiado',
+    de: 'Text kopiert',
+    fr: 'Texte copié'
+  },
+  copyFailed: {
+    zh: '复制失败',
+    en: 'Copy failed',
+    ja: 'コピーに失敗しました',
+    ko: '복사 실패',
+    es: 'Error al copiar',
+    de: 'Kopieren fehlgeschlagen',
+    fr: 'Échec de la copie'
+  },
+  cancelUpload: {
+    zh: '取消上传',
+    en: 'Cancel Upload',
+    ja: 'アップロードをキャンセル',
+    ko: '업로드 취소',
+    es: 'Cancelar carga',
+    de: 'Upload abbrechen',
+    fr: "Annuler l'envoi"
+  },
+  openInFolder: {
+    zh: '定位文件',
+    en: 'Open in Folder',
+    ja: 'フォルダで開く',
+    ko: '폴더에서 열기',
+    es: 'Abrir en carpeta',
+    de: 'Im Ordner anzeigen',
+    fr: 'Ouvrir dans le dossier'
+  },
+  peerUploading: {
+    zh: '对方上传中...',
+    en: 'Uploading...',
+    ja: '相手がアップロード中...',
+    ko: '상대방이 업로드 중...',
+    es: 'Subiendo por la otra parte...',
+    de: 'Wird von der Gegenstelle hochgeladen...',
+    fr: "Téléversement par l'autre partie..."
+  },
+  download: {
+    zh: '下载',
+    en: 'Download',
+    ja: 'ダウンロード',
+    ko: '다운로드',
+    es: 'Descargar',
+    de: 'Herunterladen',
+    fr: 'Télécharger'
+  },
+  redownload: {
+    zh: '已下载 (重新下载)',
+    en: 'Downloaded (Redownload)',
+    ja: 'ダウンロード済み (再ダウンロード)',
+    ko: '다운로드됨 (다시 다운로드)',
+    es: 'Descargado (Volver a descargar)',
+    de: 'Heruntergeladen (Erneut herunterladen)',
+    fr: 'Téléchargé (Re-télécharger)'
+  },
+  confirmRedownload: {
+    zh: '确认重新下载',
+    en: 'Confirm Redownload',
+    ja: '再ダウンロードの確認',
+    ko: '다시 다운로드 확인',
+    es: 'Confirmar volver a descargar',
+    de: 'Erneutes Herunterladen bestätigen',
+    fr: 'Confirmer le re-téléchargement'
+  },
+  cancelDownload: {
+    zh: '取消下载',
+    en: 'Cancel Download',
+    ja: 'ダウンロードをキャンセル',
+    ko: '다운로드 취소',
+    es: 'Cancelar descarga',
+    de: 'Download abbrechen',
+    fr: 'Annuler le téléchargement'
+  },
+  retryDownload: {
+    zh: '重试下载',
+    en: 'Retry Download',
+    ja: 'ダウンロードを再試行',
+    ko: '다운로드 재시도',
+    es: 'Reintentar descarga',
+    de: 'Download wiederholen',
+    fr: 'Réessayer le téléchargement'
+  },
   downloadFile: {
     zh: '下载文件',
     en: 'Download',

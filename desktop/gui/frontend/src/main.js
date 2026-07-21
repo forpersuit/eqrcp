@@ -4295,7 +4295,7 @@ function openChatContextMenu(event) {
     const target = event.currentTarget;
     const items = [];
     if (target.dataset.saveUrl) {
-        items.push({label: 'Save as', action: () => saveAttachmentAs(target.dataset.saveUrl, target.dataset.saveName || 'attachment')});
+        items.push({label: t('save_as') || 'Save as', action: () => saveAttachmentAs(target.dataset.saveUrl, target.dataset.saveName || 'attachment')});
     }
     if (items.length) {
         showContextMenu(items, event.clientX, event.clientY);
