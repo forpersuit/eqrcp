@@ -653,7 +653,7 @@ function renderShare() {
     const hasItems = state.sharePaths.length > 0;
     const isStartShareEnabled = !state.busy && hasItems && !state.shareLimitNotice;
     return `
-        <div class="share-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin-bottom: 16px; margin-top: 4px;">
+        <div class="share-illustration-wrapper">
             <img src="${shareIllustrationURL}" alt="Share Onboarding" style="pointer-events: none; user-select: none; opacity: 0.85;" />
         </div>
         <div class="dropzone" style="--wails-drop-target: drop">
@@ -970,7 +970,7 @@ function renderReceive() {
     }
     const output = state.receiveDir || state.settings?.output || '';
     return `
-        <div class="receive-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin-bottom: 16px; margin-top: 4px;">
+        <div class="receive-illustration-wrapper">
             <img src="${receiveIllustrationURL}" alt="Receive Onboarding" style="pointer-events: none; user-select: none; opacity: 0.85;" />
         </div>
         <div class="receive-box">
@@ -1667,7 +1667,7 @@ function renderChat() {
                     <div class="eyebrow">${t('session_mode')}</div>
                     <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
-                <div class="chat-illustration-wrapper" style="display: flex; justify-content: center; width: 100%; margin: 16px 0;">
+                <div class="chat-illustration-wrapper">
                     <img src="${chatIllustrationURL}" alt="Chat Onboarding" style="pointer-events: none; user-select: none; opacity: 0.85;" />
                 </div>
                 <button class="primary" id="start-chat" ${state.busy ? 'disabled' : ''}>${chatStartButtonText()}</button>
