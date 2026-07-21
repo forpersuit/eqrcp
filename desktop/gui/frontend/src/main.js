@@ -2326,7 +2326,15 @@ function renderAboutPanel() {
                         </span>
                         <strong>${escapeHTML(plan)}</strong>
                         <small>${escapeHTML(redeemDetail)}</small>
-                        ${(hasPaidLicense() && state.status?.buyerEmail) ? `<small>${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</small>` : ''}
+                        ${(hasPaidLicense() && state.status?.buyerEmail) ? `
+                            <small class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; margin: 3px 0 1px 0; border-radius: 4px; border: 1px dashed var(--line); background: var(--bg-hover); transition: border-color 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
+                                <span style="font-size: 11px; color: var(--text-secondary);">${t('license_buyer_email') || '激活邮箱'}：</span>
+                                <span style="font-size: 11px; font-weight: 600; color: var(--text-primary);">${escapeHTML(state.status.buyerEmail)}</span>
+                                <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                    ✓ ${escapeHTML(t('copied') || '已复制')}
+                                </span>
+                            </small>
+                        ` : ''}
                         ${expiryDetail ? `<small>${escapeHTML(expiryDetail)}</small>` : ''}
                         ${license ? `
                             <div style="margin-top: 6px;">
@@ -3254,7 +3262,36 @@ function bindPanelEvents() {
     document.querySelector('#refresh-license-btn')?.addEventListener('click', triggerManualRefresh);
     document.querySelector('#manage-license-portal-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        window.runtime.BrowserOpenURL('https://www.eqt.net.im/portal.html');
+        let portalUrl = 'https://www.eqt.net.im/portal.html';
+        if (state.status?.buyerEmail) {
+            portalUrl += '?email=' + encodeURIComponent(state.status.buyerEmail);
+        }
+        window.runtime.BrowserOpenURL(portalUrl);
+    });
+
+    document.querySelectorAll('.email-copy-wrapper').forEach(wrapper => {
+        wrapper.addEventListener('click', (e) => {
+            e.preventDefault();
+            const email = wrapper.getAttribute('data-email');
+            if (!email) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(email);
+            } else {
+                const input = document.createElement('input');
+                input.value = email;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+            }
+            const mask = wrapper.querySelector('.email-copy-mask');
+            if (mask) {
+                mask.style.opacity = '1';
+                setTimeout(() => {
+                    mask.style.opacity = '0';
+                }, 1200);
+            }
+        });
     });
     document.querySelector('#buy-license-btn')?.addEventListener('click', (e) => {
         e.preventDefault();

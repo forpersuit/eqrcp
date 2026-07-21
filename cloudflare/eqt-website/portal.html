@@ -669,6 +669,16 @@
                 document.getElementById('dashboard-section').classList.remove('hidden');
 
                 await loadLicenses();
+            } else {
+                // Auto fill email from URL parameter if present
+                const urlParams = new URLSearchParams(window.location.search);
+                const emailParam = urlParams.get('email');
+                if (emailParam) {
+                    const emailInput = document.getElementById('login-email');
+                    if (emailInput) {
+                        emailInput.value = emailParam.trim();
+                    }
+                }
             }
         }
 
