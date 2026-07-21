@@ -50,10 +50,22 @@ description: Guides EQT licensing architecture, offline cryptographic activation
 ### 3.1 环境变量 API Token 干扰
 Wrangler CLI 会优先读取终端环境变量的 `CLOUDFLARE_API_TOKEN`，如其失效或权限（如读取 `memberships`）不足，会报 D1/Worker 拒绝访问。
 
-- **规避手段**：在命令前手动强行清除此变量环境，强制让 Wrangler 回退去读取本机由浏览器生成的 `wrangler login` OAuth 授权：
-  ```sh
-  CLOUDFLARE_API_TOKEN="" npx wrangler d1 execute eqt-drm-db --remote --file=./schema.sql
-  ```
+- **规避手段**：在命令前手动强行清除此变量环境，强制让
+
+### 3.5 结账前邮箱强制验证与统一多语言邮件模板 (Checkout Email Verification & Multi-language i18n)
+
+为防止买家填错邮箱导致收不到激活码，并在结账前强化设备绑定安全性，引入了结账前强制邮箱验证机制：
+- **发信凭据绝对隔离 (First Principle)**：所有的 SMTP 凭证保存在 Cloudflare Worker 后端，前端仅发起请求。
+- **统一多语言发信模版 (Single Source of Truth)**：在 Worker 中维护 `CHECKOUT_EMAIL_I18N` 字典。前端发送 `POST /api/v1/checkout/send-code` 时带着用户当前的语言标识 `lang`（如 `zh`, `ja`, `en`）。发信引擎匹配字典并插入 6 位验证码。如果遇到新语言，系统静默平滑降级（Fallback）到 `en` 英文模板，未来增加新语言只需在字典中加一行，底层代码 0 修改。
+- **结账邮箱自动填充**：前端弹窗完成 `POST /api/v1/checkout/verify-code` 校验后，自动透传已被验证的 `verifiedEmail` 到 Paddle 收银台：`Paddle.Checkout.open({ items: [...], customer: { email: verifiedEmail } })`，完成收银台锁定。
+
+---
+
+## 4. 版本与发布交付规范
+- 一旦有功能增加，必须同步升级 `pkg/version/version.go` 中的小版本号（如升级到 `v1.14.9`）。
+- 提交前须确认全量 Go 单元测试通过：`go test ./...`。
+- 官网部署：使用 `CLOUDFLARE_API_TOKEN="" npx wrangler pages deploy cloudflare/eqt-website --project-name eqt` 部署至 Cloudflare Pages。
+- Worker 部署：在 `cloudflare/eqt-drm-api` 目录下执行 `CLOUDFLARE_API_TOKEN="" npx wrangler deploy`。
 
 ### 3.2 交互式 Secret 注入
 在 Cloudflare Worker 中通过管道无交互写入敏感凭据的语法：

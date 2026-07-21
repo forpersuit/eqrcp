@@ -10,13 +10,15 @@ database_name = "eqt-drm-db"
 database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
 [vars]
-# In production, use `wrangler secret put ED25519_PRIVATE_KEY`
-# In development, you can add ED25519_PRIVATE_KEY here (64-char hex)
-# ED25519_PRIVATE_KEY = "your_test_hex_private_key"
-# ADMIN_SECRET = "your_admin_secret_key"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SENDER_PASSWORD = "q4W62}bWtR"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+TEST_MAIL_RECEIVER = "tmp@301098.xyz"
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true },
   { pattern = "download.eqt.net.im", custom_domain = true }
 ]
+
 

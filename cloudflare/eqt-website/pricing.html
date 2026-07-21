@@ -745,206 +745,17 @@
             }
         }
 
-        // Email Verification Modal Control
-        function getVerifyModalEls() {
-            return {
-                modal: document.getElementById('verify-email-modal'),
-                emailInput: document.getElementById('checkout-email-input'),
-                codeInput: document.getElementById('checkout-code-input'),
-                sendBtn: document.getElementById('send-checkout-code-btn'),
-                payBtn: document.getElementById('verify-and-pay-btn'),
-                statusMsg: document.getElementById('verify-modal-status-msg')
-            };
-        }
-
-        let cooldownTimer = null;
-
+        // Email Verification Modal Control (Delegated to checkout-verify.js component)
         function openVerifyModal(priceId) {
-            pendingPriceId = priceId;
-            const { modal, statusMsg } = getVerifyModalEls();
-            if (!modal) return;
-            if (statusMsg) {
-                statusMsg.classList.add('hidden');
-                statusMsg.textContent = '';
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.open(priceId);
             }
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                modal.querySelector('.transform')?.classList.remove('scale-95');
-            }, 50);
         }
 
         function closeVerifyModal() {
-            const { modal } = getVerifyModalEls();
-            if (!modal) return;
-            modal.classList.add('opacity-0');
-            modal.querySelector('.transform')?.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
-        }
-
-        function initVerifyModalEvents() {
-            const { emailInput, codeInput, sendBtn, payBtn } = getVerifyModalEls();
-
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            function validateEmailFormat() {
-                const email = emailInput ? emailInput.value.trim() : '';
-                const fieldErrorEl = document.getElementById('email-field-error-msg');
-                if (!email || !emailRegex.test(email)) {
-                    if (fieldErrorEl) {
-                        fieldErrorEl.textContent = translations[currentLang]?.invalid_email_err || 'Please enter a valid email address';
-                        fieldErrorEl.classList.remove('hidden');
-                    }
-                    if (emailInput) {
-                        emailInput.className = 'flex-grow bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-sm rounded-lg px-3 py-2 outline-none transition-all';
-                    }
-                    return false;
-                } else {
-                    if (fieldErrorEl) {
-                        fieldErrorEl.classList.add('hidden');
-                    }
-                    if (emailInput) {
-                        emailInput.className = 'flex-grow bg-black/40 border border-emerald-500/60 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-all';
-                    }
-                    return true;
-                }
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.close();
             }
-
-            emailInput?.addEventListener('input', validateEmailFormat);
-            emailInput?.addEventListener('blur', validateEmailFormat);
-
-            // Send verification code
-            sendBtn?.addEventListener('click', async () => {
-                if (!validateEmailFormat()) {
-                    showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
-                    return;
-                }
-                const email = emailInput.value.trim();
-
-                sendBtn.disabled = true;
-                sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1"></span> <span>${translations[currentLang]?.sending_code || 'Sending...'}</span>`;
-                sendBtn.className = 'px-4 py-2 bg-primary/20 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-80 flex items-center justify-center';
-
-                try {
-                    const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/send-code', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, lang: currentLang })
-                    });
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.error || 'Failed to send code');
-                    }
-
-                    showVerifyStatus(translations[currentLang]?.code_sent_success || 'Verification code sent to your email!', false);
-                    startSendCooldown(60);
-                } catch (err) {
-                    showVerifyStatus(err.message, true);
-                    sendBtn.disabled = false;
-                    sendBtn.innerHTML = translations[currentLang]?.send_code_btn || 'Send Code';
-                    sendBtn.className = 'px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]';
-                }
-            });
-
-            // Verify code and proceed to Paddle checkout
-            payBtn?.addEventListener('click', async () => {
-                if (!validateEmailFormat()) {
-                    showVerifyStatus(translations[currentLang]?.invalid_email_err || 'Please enter a valid email address', true);
-                    return;
-                }
-                const email = emailInput.value.trim();
-                const code = codeInput ? codeInput.value.trim() : '';
-
-                if (!code || code.length !== 6) {
-                    triggerCodeInputShake();
-                    showVerifyStatus(translations[currentLang]?.invalid_code_err || 'Please enter 6-digit code', true);
-                    return;
-                }
-
-                payBtn.disabled = true;
-                payBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1"></span> <span>${translations[currentLang]?.verifying_btn || 'Verifying...'}</span>`;
-
-                try {
-                    const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, code })
-                    });
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.error || 'Verification failed');
-                    }
-
-                    verifiedEmail = email;
-                    closeVerifyModal();
-
-                    // Open Paddle Checkout with pre-filled verified customer email
-                    setTimeout(() => {
-                        if (typeof Paddle !== 'undefined') {
-                            Paddle.Checkout.open({
-                                items: [{ priceId: pendingPriceId, quantity: 1 }],
-                                customer: { email: verifiedEmail }
-                            });
-                        } else {
-                            showVerifyStatus('Billing component is loading or blocked by network.', true);
-                        }
-                    }, 350);
-
-                } catch (err) {
-                    triggerCodeInputShake();
-                    showVerifyStatus(err.message, true);
-                } finally {
-                    payBtn.disabled = false;
-                    payBtn.innerHTML = `<span>${translations[currentLang]?.verify_and_pay_btn || 'Verify & Proceed to Payment'}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
-                }
-            });
-        }
-
-        function triggerCodeInputShake() {
-            const { codeInput } = getVerifyModalEls();
-            if (!codeInput) return;
-            codeInput.className = 'w-full bg-black/40 border border-red-500 ring-2 ring-red-500/20 text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2 outline-none animate-shake';
-            setTimeout(() => {
-                codeInput.classList.remove('animate-shake');
-            }, 450);
-        }
-
-        function startSendCooldown(seconds) {
-            const { sendBtn } = getVerifyModalEls();
-            if (!sendBtn) return;
-            let remaining = seconds;
-            sendBtn.disabled = true;
-            sendBtn.className = 'px-4 py-2 bg-white/5 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
-            sendBtn.textContent = `${remaining}s`;
-            if (cooldownTimer) clearInterval(cooldownTimer);
-            cooldownTimer = setInterval(() => {
-                remaining--;
-                if (remaining <= 0) {
-                    clearInterval(cooldownTimer);
-                    sendBtn.disabled = false;
-                    sendBtn.className = 'px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]';
-                    sendBtn.textContent = translations[currentLang]?.send_code_btn || 'Send Code';
-                } else {
-                    sendBtn.textContent = `${remaining}s`;
-                }
-            }, 1000);
-        }
-
-        function showVerifyStatus(msg, isError) {
-            const { statusMsg } = getVerifyModalEls();
-            if (!statusMsg) return;
-            statusMsg.style.display = 'block';
-            statusMsg.classList.remove('hidden');
-            const iconName = isError ? 'error' : 'mark_email_read';
-            const colorClasses = isError
-                ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400';
-
-            statusMsg.innerHTML = `<div class="p-2.5 rounded-lg border ${colorClasses} text-xs flex items-center gap-2 transition-all duration-300">
-                <span class="material-symbols-outlined text-base shrink-0">${iconName}</span>
-                <span class="leading-tight">${msg}</span>
-            </div>`;
         }
 
         // Modal elements control
@@ -1062,7 +873,6 @@
         window.addEventListener('DOMContentLoaded', () => {
             initLang();
             initCheckoutButtons();
-            initVerifyModalEvents();
             initPaddle();
         });
     </script>
