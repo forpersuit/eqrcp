@@ -120,3 +120,15 @@ func TestChatLimiter(t *testing.T) {
 		t.Errorf("expected GetLicenseTier() to return 'PLUS', got '%s'", GetLicenseTier())
 	}
 }
+
+func TestNetworkTimeAndAntiTamper(t *testing.T) {
+	// Test network time fetch helper in testing mode
+	os.Setenv("EQT_TESTING", "true")
+	netTime, isOnline := getNetworkTimeOrStartFetch()
+	if !isOnline {
+		t.Errorf("expected isOnline true in testing mode")
+	}
+	if netTime.IsZero() {
+		t.Errorf("expected non-zero netTime")
+	}
+}

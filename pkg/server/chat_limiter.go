@@ -42,31 +42,11 @@ func getChatUsageFilePath() string {
 	return filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
 }
 
-func getHiddenBackupFilePath() string {
-	if os.Getenv("EQT_TESTING") == "true" {
-		return ""
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".eqt_sys_state")
-}
-
-func xorObfuscate(data []byte) []byte {
-	key := byte(0xAD)
-	result := make([]byte, len(data))
-	for i, b := range data {
-		result[i] = b ^ key
-	}
-	return result
-}
-
 func fetchNetworkTime() (time.Time, error) {
 	client := http.Client{
 		Timeout: 2 * time.Second,
 	}
-	// 1. 优先使用当前 DRM 激活所用的许可证服务器（基于 Cloudflare 全球 CDN，国内外访问都快且准确）
+	// 1. 优先使用当前 DRM 激活所用的许可证服务器
 	url := getLicenseServer()
 	resp, err := client.Head(url)
 	if err != nil {
@@ -97,40 +77,36 @@ var (
 	netTimeIsChecking bool
 )
 
-// getNetworkTimeOrStartFetch returns the best estimation of network time.
+// getNetworkTimeOrStartFetch returns the best estimation of network time and online reachability status.
 // It is non-blocking and triggers an asynchronous HTTP request if cache is stale or missing.
-func getNetworkTimeOrStartFetch() time.Time {
+func getNetworkTimeOrStartFetch() (time.Time, bool) {
 	now := time.Now()
 	if os.Getenv("EQT_TESTING") == "true" {
-		return now
+		return now, true
 	}
 
 	netTimeMu.Lock()
-	// If cached, and the last check was successful and within 1 hour, use it.
 	if netTimeCached && now.Sub(netTimeLastCheck) < 1*time.Hour {
 		offset := netTimeOffset
 		netTimeMu.Unlock()
-		return now.Add(offset)
+		return now.Add(offset), true
 	}
 
-	// If currently fetching, return estimated time (cached offset if available, otherwise local time).
 	if netTimeIsChecking {
 		if netTimeCached {
 			offset := netTimeOffset
 			netTimeMu.Unlock()
-			return now.Add(offset)
+			return now.Add(offset), true
 		}
 		netTimeMu.Unlock()
-		return now
+		return now, false
 	}
 
-	// Rate-limit failed checks to avoid spamming network requests when offline (e.g. retry once every 1 minute)
 	if !netTimeCached && !netTimeLastCheck.IsZero() && now.Sub(netTimeLastCheck) < 1*time.Minute {
 		netTimeMu.Unlock()
-		return now
+		return now, false
 	}
 
-	// Trigger async check
 	netTimeIsChecking = true
 	netTimeMu.Unlock()
 
@@ -149,9 +125,9 @@ func getNetworkTimeOrStartFetch() time.Time {
 	netTimeMu.Lock()
 	defer netTimeMu.Unlock()
 	if netTimeCached {
-		return now.Add(netTimeOffset)
+		return now.Add(netTimeOffset), true
 	}
-	return now
+	return now, false
 }
 
 func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {
@@ -243,9 +219,17 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if mock := getMockUsageForAcceptance(); mock != nil {
 		return *mock
 	}
-	today := time.Now().Format("2006-01-02")
+
+	netTime, isOnline := getNetworkTimeOrStartFetch()
+	today := netTime.Format("2006-01-02")
+
 	if l.hasCached && l.cachedUsage.Date == today {
-		return l.cachedUsage
+		usage := l.cachedUsage
+		l.checkLicenseValidity(&usage)
+		if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
+			usage.UsedSeconds = 600
+		}
+		return usage
 	}
 
 	path := getChatUsageFilePath()
@@ -272,12 +256,24 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 	l.checkLicenseValidity(&usage)
 
+	if isOnline && !usage.IsPaid && os.Getenv("EQT_TESTING") != "true" {
+		diff := time.Since(netTime)
+		if diff < -10*time.Minute || diff > 10*time.Minute {
+			usage.ClockTampered = true
+			SetClockTampered(true)
+		}
+	}
+
 	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered {
 		l.saveUsageLocked(usage)
 	} else {
 		l.cachedUsage = usage
 		l.hasCached = true
 		l.lastCacheTime = time.Now()
+	}
+
+	if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
+		usage.UsedSeconds = 600
 	}
 
 	return usage
