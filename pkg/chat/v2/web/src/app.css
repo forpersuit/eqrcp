@@ -577,6 +577,41 @@ h1 {
     text-align: center;
     user-select: none;
 }
+.session-resume-banner {
+    align-items: center;
+    background: var(--accent-wash, rgba(21, 111, 90, 0.08));
+    border-bottom: 1px solid var(--line, #d5e3d9);
+    color: var(--accent-strong, #156f5a);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    justify-content: space-between;
+    padding: 10px 14px;
+    flex-shrink: 0;
+}
+.session-resume-text {
+    flex: 1 1 12rem;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.session-resume-btn {
+    background: var(--accent-strong, #156f5a);
+    border: none;
+    border-radius: 999px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 14px;
+    white-space: nowrap;
+}
+.session-resume-btn:hover {
+    filter: brightness(1.05);
+}
+.session-resume-btn:active {
+    transform: scale(0.98);
+}
 /* ── Empty state ── */
 .messages-empty {
     align-items: center;

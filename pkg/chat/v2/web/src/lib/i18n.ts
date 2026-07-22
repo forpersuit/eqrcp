@@ -688,6 +688,24 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Ältere Nachrichten werden geladen…',
     fr: 'Chargement des messages plus anciens…'
   },
+  tabReplacedHint: {
+    zh: '本标签页已断开：同一设备在其他标签页连接了本会话。',
+    en: 'This tab is offline: the same device connected in another tab.',
+    ja: 'このタブは切断されました。同じデバイスが別のタブで接続しています。',
+    ko: '이 탭이 연결 해제되었습니다. 같은 기기가 다른 탭에서 연결되었습니다.',
+    es: 'Esta pestaña está desconectada: el mismo dispositivo se conectó en otra pestaña.',
+    de: 'Dieser Tab ist offline: dasselbe Gerät ist in einem anderen Tab verbunden.',
+    fr: 'Cet onglet est hors ligne : le même appareil s’est connecté dans un autre onglet.'
+  },
+  reconnectSession: {
+    zh: '重新连接',
+    en: 'Reconnect',
+    ja: '再接続',
+    ko: '다시 연결',
+    es: 'Reconectar',
+    de: 'Erneut verbinden',
+    fr: 'Reconnecter'
+  },
   desktopTip: {
     zh: '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。',
     en: 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.',

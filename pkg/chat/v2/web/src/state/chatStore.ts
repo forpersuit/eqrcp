@@ -7,7 +7,8 @@ export const transfers = writable<Record<string, TransferEvent>>({});
 export const connState = writable<'connecting' | 'connected' | 'disconnected'>('disconnected');
 export const currentDevice = writable<Device | null>(null);
 export const systemMessages = writable<string[]>([]); // For in-app notifications
-export const chatSessionStatus = writable<'active' | 'kicked' | 'left'>('active');
+/** active=normal; replaced=same peer took over in another tab; kicked/left=terminal offline */
+export const chatSessionStatus = writable<'active' | 'replaced' | 'kicked' | 'left'>('active');
 /** True when older message pages remain above the join boundary. */
 export const historyHasMore = writable(false);
 /** Exclusive cursor for load_history (oldest seq currently in the UI page window). */
@@ -16,7 +17,7 @@ export const historyLoading = writable(false);
 
 // Actions - Only update state through explicit actions
 export const chatActions = {
-  setSessionStatus(status: 'active' | 'kicked' | 'left') {
+  setSessionStatus(status: 'active' | 'replaced' | 'kicked' | 'left') {
     chatSessionStatus.set(status);
   },
   setHistoryPage(hasMore: boolean, oldestSeq: number) {

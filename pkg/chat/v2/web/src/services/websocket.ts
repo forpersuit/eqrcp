@@ -220,9 +220,10 @@ export class ChatWebSocketClient {
         return;
       }
       // Another tab/window of the same browser took over this peer in the room.
-      // Do not force-kick and do not auto-reconnect (avoids reconnect fights).
+      // Stop auto-reconnect to avoid fights; user can resume via explicit button.
       if (event.reason === 'replaced_by_peer') {
         this.isManualClosed = true;
+        chatActions.setSessionStatus('replaced');
         const currentLang = localStorage.getItem('eqt_lang') || 'zh';
         chatActions.addSystemMessage(
           currentLang === 'en'
@@ -295,6 +296,7 @@ export class ChatWebSocketClient {
     switch (event.type) {
       case 'hello':
         chatActions.setConnectionState('connected');
+        chatActions.setSessionStatus('active');
         chatActions.clearTransfers();
         chatActions.resetHistoryPager();
         if (event.commandId && event.commandId.startsWith('init-')) {
@@ -583,6 +585,21 @@ export class ChatWebSocketClient {
     } else {
       chatActions.addSystemMessage('Cannot send command. WebSocket is not open.');
     }
+  }
+
+  /**
+   * Explicit resume after this tab was superseded by another tab of the same peer.
+   * Clears the manual-close latch and reconnects; does not run on visibility alone.
+   */
+  public resumeConnection(): void {
+    if (!this.isManualClosed && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+    this.isManualClosed = false;
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+    this.sendLog('[SYSTEM] User requested resumeConnection after peer replacement.');
+    this.connect();
   }
 
   public close(): void {

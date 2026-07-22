@@ -1229,6 +1229,19 @@
         </div>
       </header>
 
+      {#if $chatSessionStatus === 'replaced'}
+        <div class="session-resume-banner" role="status">
+          <span class="session-resume-text">{getTranslation('tabReplacedHint', currentLang)}</span>
+          <button
+            type="button"
+            class="session-resume-btn"
+            on:click={() => client?.resumeConnection()}
+          >
+            {getTranslation('reconnectSession', currentLang)}
+          </button>
+        </div>
+      {/if}
+
       <MessageList 
         messages={$messages}
         txState={$transfers}
