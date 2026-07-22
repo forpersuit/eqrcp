@@ -205,9 +205,12 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("closeBehavior", closeBehavior)
 	v.Set("chatSender", strings.TrimSpace(settings.ChatSender))
 	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
-	v.Set("devMode", settings.DevMode)
-	if !settings.DevMode {
+	if settings.DevMode {
+		v.Set("dev", "liyuelong")
+		v.Set("devMode", true)
+	} else {
 		v.Set("dev", "")
+		v.Set("devMode", false)
 	}
 	v.Set("debugLog", settings.DebugLog)
 	v.Set("viewportDebug", settings.ViewportDebug)
