@@ -50,6 +50,7 @@ import {
     SetAutoStop,
     SubmitFeedback,
     DevSetUsedSeconds,
+    DevForceOnlineLicenseSync,
 } from '../wailsjs/go/main/App';
 
 window.addEventListener('error', (e) => {
@@ -2162,9 +2163,10 @@ function renderSettingsPanel() {
                         <button type="button" class="ghost" id="dev-open-dir" style="flex: 1; padding: 8px 12px; font-size: 12px; border-radius: 6px; font-weight: 600;">${t('btn_open_log_dir')}</button>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; width: 100%;">
-                        <button type="button" class="ghost" id="dev-reset-quota" style="padding: 8px 10px; font-size: 11.5px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置每日计时'}</button>
-                        <button type="button" class="ghost" id="dev-max-quota" style="padding: 8px 10px; font-size: 11.5px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '快速达到10分钟'}</button>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; width: 100%;">
+                        <button type="button" class="ghost" id="dev-reset-quota" style="padding: 8px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置计时'}</button>
+                        <button type="button" class="ghost" id="dev-max-quota" style="padding: 8px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '最大额度'}</button>
+                        <button type="button" class="ghost" id="dev-force-sync" style="padding: 8px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || '在线对账'}</button>
                     </div>
                     
                     <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
@@ -4221,6 +4223,22 @@ function bindSettingsControls() {
             openPanel('settings');
         } catch (error) {
             state.error = 'Failed to max quota: ' + error;
+            render();
+            openPanel('settings');
+        }
+    });
+
+    document.querySelector('#dev-force-sync')?.addEventListener('click', async () => {
+        try {
+            state.status = await DevForceOnlineLicenseSync();
+            state.notice = t('dev_sync_success') || '在线对账完成，状态已同步';
+            render();
+            openPanel('settings');
+        } catch (error) {
+            state.notice = '对账完成：' + (error?.message || error);
+            try {
+                state.status = await RefreshLicenseStatus();
+            } catch (e) {}
             render();
             openPanel('settings');
         }

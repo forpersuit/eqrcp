@@ -34,6 +34,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function DevForceOnlineLicenseSync() {
+  return window['go']['main']['App']['DevForceOnlineLicenseSync']();
+}
+
 export function DevSetUsedSeconds(arg1) {
   return window['go']['main']['App']['DevSetUsedSeconds'](arg1);
 }

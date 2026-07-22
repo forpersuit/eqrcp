@@ -299,96 +299,106 @@ func ActivateLicenseOnline(licenseCode string) error {
 	return nil
 }
 
+// ForceOnlineLicenseSync forces an immediate online license synchronization, ignoring rate limits.
+func ForceOnlineLicenseSync() error {
+	return doOnlineLicenseSync(true)
+}
+
 // StartOnlineLicenseSync triggers background license checking and synchronization with the CF Workers API.
 // It is non-blocking and executes in a goroutine.
 func StartOnlineLicenseSync() {
 	go func() {
-		// 1. Get local license
-		cert, ok := GetLocalLicenseInfo()
-		if !ok {
-			return
-		}
+		_ = doOnlineLicenseSync(false)
+	}()
+}
 
-		// 2. Rate-limit checks: only check if at least 12 hours have passed since LastOnlineSyncTime
-		if cert.LastOnlineSyncTime != "" {
-			if lastSync, err := time.Parse(time.RFC3339, cert.LastOnlineSyncTime); err == nil {
-				if time.Since(lastSync) < 12*time.Hour {
-					return
-				}
+func doOnlineLicenseSync(force bool) error {
+	// 1. Get local license
+	cert, ok := GetLocalLicenseInfo()
+	if !ok {
+		return errors.New("no local license file found")
+	}
+
+	// 2. Rate-limit checks: only check if at least 12 hours have passed since LastOnlineSyncTime (unless forced)
+	if !force && cert.LastOnlineSyncTime != "" {
+		if lastSync, err := time.Parse(time.RFC3339, cert.LastOnlineSyncTime); err == nil {
+			if time.Since(lastSync) < 12*time.Hour {
+				return nil
 			}
 		}
+	}
 
-		// 3. Make HTTP verify request
-		apiURL := fmt.Sprintf("%s/api/v1/verify", getLicenseServer())
-		uuid, cpu, disk := GetDeviceFingerprintHashes()
-		reqBody, _ := json.Marshal(map[string]string{
-			"license_code": cert.LicenseCode,
-			"uuid_hash":    uuid,
-			"cpu_hash":     cpu,
-			"disk_hash":    disk,
-		})
+	// 3. Make HTTP verify request
+	apiURL := fmt.Sprintf("%s/api/v1/verify", getLicenseServer())
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	reqBody, _ := json.Marshal(map[string]string{
+		"license_code": cert.LicenseCode,
+		"uuid_hash":    uuid,
+		"cpu_hash":     cpu,
+		"disk_hash":    disk,
+	})
 
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
-		if err != nil {
-			// Network error, ignore and allow offline grace period (7 days)
-			return
-		}
-		defer resp.Body.Close()
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		// Network error, ignore and allow offline grace period (7 days)
+		return fmt.Errorf("network error during license sync: %w", err)
+	}
+	defer resp.Body.Close()
 
-		respData, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return
-		}
+	respData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
 
-		// 4. Handle response status
-		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
-			// Suspended, revoked, or invalid device. Reset license.
-			ResetLicense()
-			return
-		}
+	// 4. Handle response status
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
+		// Suspended, revoked, or invalid device. Reset license.
+		ResetLicense()
+		return errors.New("license revoked or device unbound by server")
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			return
-		}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned status code %d", resp.StatusCode)
+	}
 
-		var verifyResp struct {
-			Status      string `json:"status"`
-			LicenseCode string `json:"license_code"`
-			CurrentTime string `json:"current_time"`
-			Signature   string `json:"signature"`
-		}
-		if err := json.Unmarshal(respData, &verifyResp); err != nil {
-			return
-		}
+	var verifyResp struct {
+		Status      string `json:"status"`
+		LicenseCode string `json:"license_code"`
+		CurrentTime string `json:"current_time"`
+		Signature   string `json:"signature"`
+	}
+	if err := json.Unmarshal(respData, &verifyResp); err != nil {
+		return fmt.Errorf("failed to parse sync response: %w", err)
+	}
 
-		if verifyResp.Status != "OK" {
-			return
-		}
+	if verifyResp.Status != "OK" {
+		return fmt.Errorf("server returned status %s", verifyResp.Status)
+	}
 
-		// 5. Update local license with sync timestamp and sync signature
-		cert.LastOnlineSyncTime = verifyResp.CurrentTime
-		cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
-		cert.VerifySignature = verifyResp.Signature
+	// 5. Update local license with sync timestamp and sync signature
+	cert.LastOnlineSyncTime = verifyResp.CurrentTime
+	cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
+	cert.VerifySignature = verifyResp.Signature
 
-		// Verify before saving to prevent bad cache corruption
-		if !VerifySyncSignature(cert) {
-			return
-		}
+	// Verify before saving to prevent bad cache corruption
+	if !VerifySyncSignature(cert) {
+		return errors.New("verification signature invalid")
+	}
 
-		path := getLicenseFilePath()
-		if certBytes, err := json.Marshal(cert); err == nil {
-			_ = os.WriteFile(path, certBytes, 0644)
-		}
+	path := getLicenseFilePath()
+	if certBytes, err := json.Marshal(cert); err == nil {
+		_ = os.WriteFile(path, certBytes, 0644)
+	}
 
-		licenseCacheMu.Lock()
-		cachedLicense = &cert
-		hasCachedLicense = true
-		licenseCacheMu.Unlock()
+	licenseCacheMu.Lock()
+	cachedLicense = &cert
+	hasCachedLicense = true
+	licenseCacheMu.Unlock()
 
-		// Refresh state in memory
-		SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
-	}()
+	// Refresh state in memory
+	SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
+	return nil
 }
 
 var (

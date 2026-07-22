@@ -1162,6 +1162,21 @@ func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 	return a.agent.snapshotLocked(), nil
 }
 
+func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
+	a.logInfo("[GUI] DevForceOnlineLicenseSync called")
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	err := server.ForceOnlineLicenseSync()
+	a.agent.mu.Lock()
+	status := a.agent.snapshotLocked()
+	a.agent.mu.Unlock()
+	if err != nil {
+		return status, err
+	}
+	return status, nil
+}
+
 func findEqtCLI() (string, error) {
 	if configured := os.Getenv("EQT_CLI"); configured != "" {
 		return configured, nil

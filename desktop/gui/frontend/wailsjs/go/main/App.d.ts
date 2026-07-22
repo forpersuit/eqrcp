@@ -18,6 +18,8 @@ export function CheckForUpdates():Promise<main.GUIUpdateCheckResult>;
 
 export function ClearHistory():Promise<void>;
 
+export function DevForceOnlineLicenseSync():Promise<main.AgentStatus>;
+
 export function DevSetUsedSeconds(arg1:number):Promise<main.AgentStatus>;
 
 export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
