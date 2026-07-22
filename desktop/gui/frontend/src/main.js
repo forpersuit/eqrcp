@@ -521,8 +521,9 @@ function render() {
                     ` : ''}
                     ${(() => {
                         const isPaid = hasPaidLicense();
-                        const tier = (isPaid && state.license?.tier) ? state.license.tier : 'FREE';
-                        const tierText = (tier === 'PLUS' && state.license?.codeDate === 'LIFETIME') ? 'PLUS U' : tier;
+                        const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
+                        const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
+                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? 'PLUS U' : tier;
                         return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
                     })()}
                     <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}" style="position: relative;">
@@ -2226,18 +2227,20 @@ function integrationStatusText(status, fallback) {
 
 function renderAboutPanel() {
     const info = state.appInfo || {};
+    const isPaid = hasPaidLicense();
     const license = state.license || loadLicense();
+    const currentTier = isPaid ? (state.status?.licenseTier || license?.tier || 'PLUS') : '';
+    const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
     let plan = '';
-    if (license?.tier) {
-        if (license.tier === 'PLUS' && (license.codeDate === 'LIFETIME' || state.status?.licenseExpiresAt === 'LIFETIME')) {
+    if (isPaid && currentTier) {
+        if (currentTier === 'PLUS' && expiresAt === 'LIFETIME') {
             plan = 'PLUS U';
         } else {
-            plan = license.tier.toUpperCase();
+            plan = currentTier.toUpperCase();
         }
     } else {
         plan = t('free_quota');
     }
-    const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
     let expiryText = '';
     if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a') {
         const expiryDate = new Date(expiresAt);
@@ -2288,7 +2291,6 @@ function renderAboutPanel() {
     }
     
     let warningBox = '';
-    const isPaid = hasPaidLicense();
     if (state.status) {
         if (state.status.clockTampered) {
             plan = t('paid_locked_clock');
@@ -4255,6 +4257,7 @@ function bindSettingsControls() {
     document.querySelector('#dev-force-sync')?.addEventListener('click', async () => {
         try {
             state.status = await DevForceOnlineLicenseSync();
+            syncLicenseFromStatus(state.status);
             state.notice = t('dev_sync_success') || '在线对账完成，状态已同步';
             render();
             openPanel('settings');
@@ -4262,6 +4265,7 @@ function bindSettingsControls() {
             state.notice = '对账完成：' + (error?.message || error);
             try {
                 state.status = await RefreshLicenseStatus();
+                syncLicenseFromStatus(state.status);
             } catch (e) {}
             render();
             openPanel('settings');
@@ -5216,15 +5220,35 @@ function chatStartButtonText() {
     return t('start_chat');
 }
 
-function hasPaidLicense() {
-    const license = state.license || loadLicense();
-    if (!license || !license.tier || !licenseTiers[license.tier]) {
-        return false;
+function syncLicenseFromStatus(status) {
+    if (!status) return;
+    if (status.isPaid && status.licenseTier) {
+        if (!state.license) {
+            state.license = {
+                code: 'ACTIVE_LICENSE',
+                tier: status.licenseTier,
+                codeDate: status.licenseExpiresAt || 'LIFETIME',
+                redeemedAt: new Date().toISOString()
+            };
+        } else {
+            state.license.tier = status.licenseTier;
+            if (status.licenseExpiresAt) state.license.codeDate = status.licenseExpiresAt;
+        }
+        saveLicense(state.license);
+    } else if (!status.isPaid && state.license) {
+        state.license = null;
+        try {
+            window.localStorage.removeItem(licenseStorageKey);
+        } catch (e) {}
     }
+}
+
+function hasPaidLicense() {
     if (state.status) {
         return Boolean(state.status.isPaid && !state.status.clockTampered);
     }
-    return true;
+    const license = state.license || loadLicense();
+    return Boolean(license && license.tier && licenseTiers[license.tier]);
 }
 
 
@@ -5323,6 +5347,7 @@ function triggerManualRefresh() {
     RefreshLicenseStatus().then(async function(status) {
         lastRefreshTime = Date.now();
         state.status = status;
+        syncLicenseFromStatus(status);
         showToast(t('refresh_success') || 'License status refreshed successfully.');
     }).catch(function(e) {
         lastRefreshTime = Date.now();

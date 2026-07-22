@@ -1163,7 +1163,7 @@ func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
 }
 
 func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
-	a.logInfo("[GUI] DevForceOnlineLicenseSync called")
+	a.logInfo("[GUI] DevForceOnlineLicenseSync: Starting manual online license verification...")
 	if a.agent == nil {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
@@ -1172,8 +1172,10 @@ func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
 	status := a.agent.snapshotLocked()
 	a.agent.mu.Unlock()
 	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] DevForceOnlineLicenseSync failed: %v, Current Paid Status: %v, Tier: %s", err, status.IsPaid, status.LicenseTier))
 		return status, err
 	}
+	a.logInfo(fmt.Sprintf("[GUI] DevForceOnlineLicenseSync succeeded. Paid Status: %v, Tier: %s, Expires: %s", status.IsPaid, status.LicenseTier, status.LicenseExpiresAt))
 	return status, nil
 }
 
