@@ -1505,6 +1505,7 @@ export default {
       if (url.pathname === "/api/v1/activate" && request.method === "POST") {
         await ensureDeviceIdColumn(env);
         const body: any = await request.json();
+        const reqLang = extractRequestLang(request, body);
         const { license_code, uuid_hash, cpu_hash, disk_hash, device_id } = body;
 
         if (!license_code) {

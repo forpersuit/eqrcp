@@ -323,10 +323,10 @@ func validateSharePathsForFreeTier(paths []string) error {
 		} else {
 			totalFiles++
 			if totalFiles > 5 {
-				return fmt.Errorf("文件数量超过免费版限制（单次最多 5 个文件）。购买 Plus 即可解锁无限制传输。 (File count exceeds 5 files limit. Upgrade to Plus to unlock.)")
+				return fmt.Errorf("ERR_FREE_LIMIT_FILES:文件数量超过免费版限制（单次最多 5 个文件）。购买 Plus 即可解锁无限制传输。 (File count exceeds 5 files limit. Upgrade to Plus to unlock.)")
 			}
 			if info.Size() > 50*1024*1024 {
-				return fmt.Errorf("文件 %s 体积（%d MB）超过免费版限制（单文件最大 50MB）。购买 Plus 即可解锁无限制传输。 (File size exceeds 50MB limit. Upgrade to Plus to unlock.)", info.Name(), info.Size()/(1024*1024))
+				return fmt.Errorf("ERR_FREE_LIMIT_SIZE:%s:%d:文件 %s 体积（%d MB）超过免费版限制（单文件最大 50MB）。购买 Plus 即可解锁无限制传输。 (File size exceeds 50MB limit. Upgrade to Plus to unlock.)", info.Name(), info.Size()/(1024*1024), info.Name(), info.Size()/(1024*1024))
 			}
 		}
 		return nil

@@ -545,7 +545,7 @@ function render() {
                 <div class="workspace">
                     ${renderWorkspace()}
                     ${state.notice ? `<div class="notice success">${escapeHTML(state.notice)}</div>` : ''}
-                    ${state.error ? `<div class="notice error">${escapeHTML(state.error)}</div>` : ''}
+                    ${state.error ? `<div class="notice error">${escapeHTML(formatErrorMessage(state.error))}</div>` : ''}
                 </div>
                 ${renderSide()}
             </section>
@@ -670,7 +670,7 @@ function renderShare() {
         ${state.shareLimitNotice ? `
             <div class="share-limit-notice" style="color: var(--danger); font-size: 12px; font-weight: 700; text-align: left; margin: 12px 0; background: rgba(180, 35, 24, 0.05); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--danger); line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
                 <span>⚠️</span>
-                <span>${escapeHTML(state.shareLimitNotice)}</span>
+                <span>${escapeHTML(formatErrorMessage(state.shareLimitNotice))}</span>
             </div>
         ` : ''}
         ${hasItems ? `<ul class="path-list">${items}</ul>` : ''}
@@ -748,7 +748,7 @@ function renderShareTransfer(task) {
                 <strong>${t('locked_list')}</strong>
                 <ul class="path-list locked" id="share-locked-path-list">${renderShareLockedPathsHtml(task)}</ul>
             </div>
-            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
+            ${task.error ? `<div class="notice error compact">${escapeHTML(formatErrorMessage(task.error))}</div>` : ''}
         </div>
     `;
 }
@@ -1044,7 +1044,7 @@ function renderReceiveTransfer(task) {
             
             <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
 
-            ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
+            ${task.error ? `<div class="notice error compact">${escapeHTML(formatErrorMessage(task.error))}</div>` : ''}
         </div>
     `;
 }
@@ -2649,6 +2649,36 @@ function renderFeedbackPanel() {
             </div>
         </div>
     `;
+}
+
+function formatErrorMessage(errMsg) {
+    if (!errMsg || typeof errMsg !== 'string') return errMsg;
+
+    // Check file size limit error
+    if (errMsg.includes('ERR_FREE_LIMIT_SIZE:') || errMsg.includes('单文件最大 50MB') || errMsg.includes('exceeds 50MB')) {
+        let filename = 'file';
+        let size = '50';
+        if (errMsg.includes('ERR_FREE_LIMIT_SIZE:')) {
+            const parts = errMsg.split(':');
+            if (parts.length >= 3) {
+                filename = parts[1];
+                size = parts[2];
+            }
+        } else {
+            const fileMatch = errMsg.match(/文件\s+(.*?)\s+体积/);
+            const sizeMatch = errMsg.match(/（(\d+)\s*MB）/);
+            if (fileMatch && fileMatch[1]) filename = fileMatch[1];
+            if (sizeMatch && sizeMatch[1]) size = sizeMatch[1];
+        }
+        return t('err_free_limit_size', { filename, size });
+    }
+
+    // Check file count limit error
+    if (errMsg.includes('ERR_FREE_LIMIT_FILES:') || errMsg.includes('单次最多 5 个文件') || errMsg.includes('exceeds 5 files')) {
+        return t('err_free_limit_files');
+    }
+
+    return errMsg;
 }
 
 function getTranslatedState(s) {
