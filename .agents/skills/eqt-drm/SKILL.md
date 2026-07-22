@@ -175,6 +175,11 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 * `verification_codes`: 存放临时生成的 6 位发信验证码及其有效期。
 * `user_sessions`: 存放用户成功校验后颁发的 24 小时过期 Session Token。
 
+### 6.5 Portal 登录前置购买校验与 Pricing 流程防阻断隔离
+为提升防刷能力和避免向非购买用户盲发验证码：
+* **Portal 登录发码 (`POST /api/v1/auth/send-code`)**：在发送验证码前，强制根据 `email` 的 SHA-256 希值/明文在 `licenses` 表中查询是否有购买记录 (`buyer_email_hash` 或 `buyer_email`)。若未购买过，拦截并直接返回多语言错误提示 `no_purchase_history`；若已购买，正常发送 6 位验证码。
+* **Pricing 结账发码 (`POST /api/v1/checkout/send-code`)**：属于购买前的邮箱真实性验证，**不校验** `licenses` 购买记录，任何合法格式邮箱均可正常获取发码。
+
 ### 6.2 极简 Workers 内置 SMTPS 发信
 利用 Workers `connect` API 通过 465 端口（Implicit TLS）直接与外部 SMTP 邮件服务器建立安全 TCP 连接进行握手和发信：
 * **TLS 握手**：`connect({ hostname: host, port: 465 }, { secureTransport: "on" })` 在连接的同时发起 TLS 握手。

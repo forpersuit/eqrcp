@@ -194,6 +194,32 @@ async function runFullDrmTestSuite() {
     }
     console.log("✓ 4-Times unbind limit and multi-language i18n verified 100%.");
 
+    // 8. Portal Login Purchase Check & Pricing Bypass Test
+    logStep(8, "Portal Login Purchase Check vs Pricing Send-Code Test");
+    const unpurchasedEmail = 'unpurchased-e2e-user@eqt.im';
+
+    // 8.1 Portal login send-code for unpurchased email should be rejected
+    const portalAuthRes = await makeRequest('/api/v1/auth/send-code', {}, {
+      email: unpurchasedEmail,
+      lang: 'zh'
+    });
+    console.log("Portal Login Send-Code (Unpurchased Email) Status:", portalAuthRes.status, "Error:", portalAuthRes.data);
+    if (portalAuthRes.status !== 400 || !portalAuthRes.data.error || !portalAuthRes.data.error.includes("未找到该邮箱的购买记录")) {
+      throw new Error("Portal login send-code failed to reject unpurchased email! Response: " + JSON.stringify(portalAuthRes.data));
+    }
+    console.log("✓ Portal login correctly blocked unpurchased email before sending verification code.");
+
+    // 8.2 Checkout send-code for pricing flow (unpurchased email should be allowed)
+    const checkoutRes = await makeRequest('/api/v1/checkout/send-code', {}, {
+      email: unpurchasedEmail,
+      lang: 'zh'
+    });
+    console.log("Checkout Send-Code (Pricing Flow) Status:", checkoutRes.status, "Data:", checkoutRes.data);
+    if (checkoutRes.status !== 200 || !checkoutRes.data.success) {
+      throw new Error("Checkout send-code failed for pricing email verification! Response: " + JSON.stringify(checkoutRes.data));
+    }
+    console.log("✓ Checkout send-code (pricing flow) allowed unpurchased email without purchase check.");
+
     console.log("\n==================================================");
     console.log("🎉🎉 ALL DRM E2E TESTS PASSED DETERMINISTICALLY! 🎉🎉");
     console.log("==================================================");

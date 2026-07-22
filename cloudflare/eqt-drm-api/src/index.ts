@@ -78,6 +78,15 @@ const API_I18N: Record<string, Record<string, string>> = {
     es: "Código de licencia no encontrado",
     de: "Lizenzcode nicht gefunden",
     fr: "Code de licence introuvable"
+  },
+  no_purchase_history: {
+    zh: "未找到该邮箱的购买记录，请确认邮箱或先购买授权套餐",
+    en: "No purchase history found for this email. Please check your email or purchase a license plan first.",
+    ja: "このメールアドレスの購入履歴が見つかりません。メールアドレスを確認するか、ライセンスをご購入ください。",
+    ko: "이 이메일의 구매 내역을 찾을 수 없습니다. 이메일을 확인하거나 라이선스 플랜을 먼저 구매해 주세요.",
+    es: "No se encontraron compras para este correo electrónico. Por favor, compruébelo o adquiera un plan primero.",
+    de: "Keine Kaufhistorie für diese E-Mail-Adresse gefunden. Bitte überprüfen Sie Ihre E-Mail oder kaufen Sie zuerst ein Paket.",
+    fr: "Aucun historique d'achat trouvé pour cet e-mail. Veuillez vérifier votre e-mail ou acheter un forfait."
   }
 };
 
@@ -1028,6 +1037,25 @@ export default {
           });
         }
         email = email.trim().toLowerCase();
+
+        // 1. Check if email has purchase history in licenses table
+        const encoder = new TextEncoder();
+        const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email));
+        const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), (x: number) => ('00' + x.toString(16)).slice(-2)).join('');
+
+        const checkPurchase = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
+        ).bind(emailHash, email).first<any>();
+
+        const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
+        if (!hasPurchased) {
+          return new Response(JSON.stringify({ 
+            error: getApiTranslation("no_purchase_history", reqLang) 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
 
         // Generate 6 digit verification code
         const code = Math.floor(100000 + Math.random() * 900000).toString();
