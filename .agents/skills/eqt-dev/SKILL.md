@@ -11,12 +11,17 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ## 1. 开发者模式 (Developer Mode & DebugLog)
 
-### 1.1 开启方式
-开发者模式（`DevMode`）及调试日志（`DebugLog`）通过运行期用户配置动态控制：
-- **配置文件控制**：保存在客户端的 `settings.json`（对应结构体 `DesktopSettings`），可通过设置面板进行切换：
-  - `devMode`: `true` (开启 WebView 调试面板和开发者选项)
-  - `debugLog`: `true` (开启后台详尽请求/处理日志)
-- **获取机制**：Wails App 直接通过内存中的 Agent（`desktopAgent` 实例）调用 `config.ReadDesktopSettings` 动态加载。若开启，系统会将后端 server 包的 `server.Log` 输出目标重定向到详细日志流中。
+### 1.1 配置文件路径与开启方式 (Config Path SSOT & Trigger)
+- **唯一配置与数据存储根目录 (SSOT)**：所有平台的配置文件、离线数字证书（`.lic`）及历史记录均**严格且统一存放在用户家目录的 `.local/eqt/` 下**（去除了任何 `AppData/Roaming` 旧兼容路径）：
+  - **Windows**: `C:\Users\<用户名>\.local\eqt\`
+  - **Linux / macOS**: `~/.local/eqt/`
+- **主配置文件与格式**：主配置文件固定为 **`config.yml`**（YAML 格式，非 `.json`）。
+- **开发者模式（`DevMode`）开启语法**：
+  在 `config.yml` 文件中配置以下这行 YAML 语法：
+  ```yaml
+  dev: liyuelong
+  ```
+  只有 `dev` 值为 `"liyuelong"` 时才会激活 `DevMode`。开启后在 GUI【设置】底部解锁绿框【开发者选项】（包含在线对账 `☁️` 等工具）。
 
 ---
 

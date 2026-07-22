@@ -12,7 +12,6 @@ import (
 	"eqt/pkg/application"
 	"eqt/pkg/logger"
 	"eqt/pkg/util"
-	"github.com/adrg/xdg"
 	"github.com/asaskevich/govalidator"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/viper"
@@ -192,7 +191,7 @@ func DefaultConfigDir() string {
 	if current, err := user.Current(); err == nil && current.HomeDir != "" {
 		return filepath.Join(current.HomeDir, ".local", "eqt")
 	}
-	return filepath.Join(xdg.ConfigHome, "eqt")
+	return filepath.Join(".", ".local", "eqt")
 }
 
 func DefaultConfigFile() string {

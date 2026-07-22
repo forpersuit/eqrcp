@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 
 	"eqt/pkg/application"
-	"github.com/adrg/xdg"
 	"gopkg.in/yaml.v2"
 )
 
 // Migrate function will look for an existing legacy configuration file
 // and will migrate it to the new format
 func Migrate(app application.App) (bool, error) {
-	oldConfigFile := filepath.Join(xdg.ConfigHome, "eqt", "config.json")
+	configDir := DefaultConfigDir()
+	oldConfigFile := filepath.Join(configDir, "config.json")
 	newConfigFile := DefaultConfigFile()
 	// Check if old configuration file exists
 	if _, err := os.Stat(oldConfigFile); os.IsNotExist(err) {
@@ -51,10 +51,10 @@ func copyLegacyConfigIfNeeded(target string) error {
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	configDir := DefaultConfigDir()
 	for _, source := range []string{
-		filepath.Join(xdg.ConfigHome, "eqt", "config.yml"),
-		filepath.Join(xdg.ConfigHome, "eqt", "config.yaml"),
-		filepath.Join(xdg.ConfigHome, "eqt", "config.json"),
+		filepath.Join(configDir, "config.yaml"),
+		filepath.Join(configDir, "config.json"),
 	} {
 		data, err := os.ReadFile(source)
 		if errors.Is(err, os.ErrNotExist) {
