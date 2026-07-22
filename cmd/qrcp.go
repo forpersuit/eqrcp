@@ -34,7 +34,6 @@ func init() {
 	desktopCmd.AddCommand(desktopAgentStatusCmd)
 	desktopCmd.AddCommand(desktopAgentOpenCmd)
 	desktopCmd.AddCommand(desktopAgentOpenCurrentCmd)
-	configCmd.AddCommand(migrateCmd)
 	desktopAgentCmd.Flags().BoolP("background", "B", false, "start the desktop agent in the background")
 	desktopAgentStartCmd.Flags().BoolP("background", "B", false, "start the desktop agent in the background")
 	// Global command flags

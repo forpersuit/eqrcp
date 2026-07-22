@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"eqt/pkg/config"
 	"github.com/spf13/cobra"
 )
@@ -19,17 +17,3 @@ var configCmd = &cobra.Command{
 	RunE:    configCmdFunc,
 }
 
-var migrateCmd = &cobra.Command{
-	Use:   "migrate",
-	Short: "Migrate the legacy configuration file",
-	Long:  "Migrate the legacy JSON configuration file to the new YAML format",
-	Run: func(cmd *cobra.Command, args []string) {
-		ok, err := config.Migrate(app)
-		if err != nil {
-			fmt.Println("error while migrating the legacy JSON configuration file:", err)
-		}
-		if ok {
-			fmt.Println("Legacy JSON configuration file has been successfully deleted")
-		}
-	},
-}

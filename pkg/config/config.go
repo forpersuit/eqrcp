@@ -42,9 +42,6 @@ func New(app application.App) (Config, error) {
 	var err error
 	cfg := Config{}
 
-	if err := migrateDefaultConfigIfNeeded(app, v.ConfigFileUsed()); err != nil {
-		return Config{}, err
-	}
 	_, err = os.Stat(v.ConfigFileUsed())
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(v.ConfigFileUsed()), os.ModeDir|os.ModePerm); err != nil {
@@ -176,12 +173,6 @@ func getViperInstance(app application.App) *viper.Viper {
 	return v
 }
 
-func migrateDefaultConfigIfNeeded(app application.App, path string) error {
-	if app.Flags.Config != "" {
-		return nil
-	}
-	return copyLegacyConfigIfNeeded(path)
-}
 
 func DefaultConfigDir() string {
 	home, err := os.UserHomeDir()

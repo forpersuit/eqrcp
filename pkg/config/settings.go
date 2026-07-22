@@ -53,9 +53,6 @@ type DesktopInterfaceOption struct {
 
 func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	v := getViperInstance(app)
-	if err := migrateDefaultConfigIfNeeded(app, v.ConfigFileUsed()); err != nil {
-		return DesktopSettings{}, err
-	}
 	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
@@ -185,9 +182,6 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 		return DesktopSettings{}, err
 	}
 	v := getViperInstance(app)
-	if err := migrateDefaultConfigIfNeeded(app, v.ConfigFileUsed()); err != nil {
-		return DesktopSettings{}, err
-	}
 	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
