@@ -130,21 +130,25 @@ func VerifyFingerprint(cert LicenseCertificate) bool {
 
 // VerifyLocalLicense reads the local .lic file, performs offline validation,
 // and sets paid status in chat limiter accordingly.
+// Any failure path clears paid status so memory never outlives a missing/invalid certificate.
 func VerifyLocalLicense() bool {
 	path := getLicenseFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// No license file found, ensure state matches
+		// No license file found — memory must match disk (SSOT).
+		SetPaidStatus(false, "", "", "")
 		return false
 	}
 
 	var cert LicenseCertificate
 	if err := json.Unmarshal(data, &cert); err != nil {
+		SetPaidStatus(false, "", "", "")
 		return false
 	}
 
 	// 1. Verify cryptographic signature
 	if !VerifyLicenseSignature(cert) {
+		SetPaidStatus(false, "", "", "")
 		return false
 	}
 
@@ -152,15 +156,18 @@ func VerifyLocalLicense() bool {
 	if cert.ExpiresAt != "LIFETIME" {
 		expiry, err := time.Parse(time.RFC3339, cert.ExpiresAt)
 		if err != nil {
+			SetPaidStatus(false, "", "", "")
 			return false
 		}
 		if time.Now().After(expiry) {
+			SetPaidStatus(false, "", "", "")
 			return false
 		}
 	}
 
 	// 3. Verify hardware fingerprint matches
 	if !VerifyFingerprint(cert) {
+		SetPaidStatus(false, "", "", "")
 		return false
 	}
 

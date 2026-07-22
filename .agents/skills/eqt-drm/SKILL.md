@@ -27,9 +27,13 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - **对账确认签名 (`VerifySignature`)**：云端通过 `/api/v1/verify` 接口使用私钥签发带有服务器最新时间的对账载荷（`OK|license_code|uuid_hash|cpu_hash|disk_hash|last_online_sync_time`）。
   - **抗手动修改机制**：为防止用户本地用文本编辑器手动修改 `.lic` 里的对账时间 `LastOnlineSyncTime`，客户端每次校验必须使用内置公钥校验 `VerifySignature` 对应的载荷合法性。任何非云端私钥签发的修改均会在微秒级被识破并降级。
 - **静默对账与 7 天租约宽限**：
-  - 应用拉起时（通过 `hardware.go` 后台线程）静默触发异步联网对账 `StartOnlineLicenseSync()`。为防频繁网络交互，触发对账具有 12 小时的最低间隔限制。
+  - 应用拉起时（通过 `hardware.go` 后台线程）先做 `VerifyLocalLicense()`，若本地存在 `.lic`，**强制**执行一次 `ForceOnlineLicenseSync()`（忽略 12 小时节流）。在线状态是吊销/Portal 解绑的权威来源（SSOT）；仅当网络失败时才回退到离线 7 天租约。
+  - 后续后台静默对账仍走 `StartOnlineLicenseSync()` / `doOnlineLicenseSync(false)`，保留 12 小时最低间隔，避免频繁网络交互。
+  - About 面板标题旁「刷新」按钮调用 `RefreshLicenseStatus()`：优先在线强制对账，失败再 `VerifyLocalLicense()` 离线校验。Dev「在线对账」同样走 `ForceOnlineLicenseSync()`。
   - 对账网络超时失败不影响使用。客户端支持 7 天内静默免网脱机运行，计算公式为：`time.Now() - LastOnlineSyncTime <= 7 * 24 * time.Hour`。若超时则自动强行降级。
   - 对账返回 403/404（授权被吊销或设备解绑）则立即执行 `ResetLicense()` 擦除证书并降级为 Unpaid 免费版。
+  - `VerifyLocalLicense()` 任意失败路径（含无 `.lic` 文件）必须 `SetPaidStatus(false)`，防止内存付费态与磁盘不一致。
+  - 前端 `localStorage` 仅缓存 UI 元数据（如 redeemedAt 展示），**禁止**在启动时用 localStorage 向 Go 端 `SetPaidStatus(true)` 抢权。
 - **极简单向时钟防回拨与网络时间防篡改**：
   - 证书内元数据字段 `LastSeenLocalTime` 记录最后一次运行时间。每次成功校验后（若距离上次写入超过 1 分钟，以减少磁盘 IO），客户端自动更新并原子性落盘。
   - 本地校验时，若判定当前系统时间倒流（`time.Now() < LastSeenLocalTime - 10 minutes`），立刻判定为篡改并调用 `SetClockTampered(true)` 降级并永久锁死高级付费功能。

@@ -251,7 +251,18 @@ func PrecomputeDeviceFingerprints() {
 		log.Println("[DRM] Background local license verification started...")
 		verified := VerifyLocalLicense()
 		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
-		if verified {
+		// Process start: always force one online reconciliation when a local certificate exists.
+		// Online status is authoritative for unbind/revoke; the 12h throttle only applies to later background syncs.
+		// Offline 7-day lease remains the fallback only when the network call fails.
+		if _, ok := GetLocalLicenseInfo(); ok {
+			log.Println("[DRM] Startup online license reconciliation (forced, online is SSOT)...")
+			if err := ForceOnlineLicenseSync(); err != nil {
+				log.Printf("[DRM] Startup online license reconciliation finished with: %v (paid=%t tier=%s)", err, GetPaidStatus(), GetLicenseTier())
+			} else {
+				log.Printf("[DRM] Startup online license reconciliation succeeded. Paid Status: %t, Tier: %s", GetPaidStatus(), GetLicenseTier())
+			}
+		} else if verified {
+			// Defensive: verified without readable cert should not happen; keep legacy non-force path.
 			StartOnlineLicenseSync()
 		}
 	}()

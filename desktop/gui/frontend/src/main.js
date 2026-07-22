@@ -40,7 +40,6 @@ import {
     Share,
     SetRightClickIntegrationEnabled,
     SetStartupEnabled,
-    SetPaidStatus,
     ActivateLicense,
     ResetLicense,
     RefreshLicenseStatus,
@@ -2225,12 +2224,36 @@ function integrationStatusText(status, fallback) {
     return fallback;
 }
 
+function isParseableLicenseDate(value) {
+    if (!value || value === 'LIFETIME' || value === 'n/a') {
+        return false;
+    }
+    // Redeem-code middle token is YYYYMMDD — not an expiry date; never feed it to Date().
+    if (/^\d{8}$/.test(String(value))) {
+        return false;
+    }
+    const date = new Date(value);
+    return !Number.isNaN(date.getTime());
+}
+
+function resolveLicenseExpiresAt(status, license) {
+    const fromStatus = status?.licenseExpiresAt;
+    if (fromStatus === 'LIFETIME' || isParseableLicenseDate(fromStatus)) {
+        return fromStatus;
+    }
+    const fromLicense = license?.codeDate;
+    if (fromLicense === 'LIFETIME' || isParseableLicenseDate(fromLicense)) {
+        return fromLicense;
+    }
+    return '';
+}
+
 function renderAboutPanel() {
     const info = state.appInfo || {};
     const isPaid = hasPaidLicense();
     const license = state.license || loadLicense();
     const currentTier = isPaid ? (state.status?.licenseTier || license?.tier || 'PLUS') : '';
-    const expiresAt = state.status?.licenseExpiresAt || license?.codeDate;
+    const expiresAt = resolveLicenseExpiresAt(state.status, license);
     let plan = '';
     if (isPaid && currentTier) {
         if (currentTier === 'PLUS' && expiresAt === 'LIFETIME') {
@@ -2242,7 +2265,7 @@ function renderAboutPanel() {
         plan = t('free_quota');
     }
     let expiryText = '';
-    if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a') {
+    if (expiresAt && expiresAt !== 'LIFETIME' && expiresAt !== 'n/a' && isParseableLicenseDate(expiresAt)) {
         const expiryDate = new Date(expiresAt);
         const now = new Date();
         const diffMs = expiryDate - now;
@@ -2268,17 +2291,13 @@ function renderAboutPanel() {
 
     let redeemDetail = '';
     let expiryDetail = '';
-    if (license?.redeemedAt) {
+    if (isPaid && license?.redeemedAt && isParseableLicenseDate(license.redeemedAt)) {
         redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
         let expVal = '';
         if (expiresAt === 'LIFETIME') {
             expVal = t('lifetime') || '永久';
-        } else if (expiresAt) {
-            try {
-                expVal = new Date(expiresAt).toLocaleDateString();
-            } catch {
-                expVal = expiresAt;
-            }
+        } else if (isParseableLicenseDate(expiresAt)) {
+            expVal = new Date(expiresAt).toLocaleDateString();
         }
         if (expVal) {
             expiryDetail = `${t('expiry_label') || '有效期'}：${expVal}`;
@@ -4262,11 +4281,18 @@ function bindSettingsControls() {
             render();
             openPanel('settings');
         } catch (error) {
+            // Wails rejects on (status, err) when err != nil — re-fetch authoritative snapshot.
+            // Unbind/revoke paths still demote local .lic; UI must follow online result.
             state.notice = '对账完成：' + (error?.message || error);
             try {
                 state.status = await RefreshLicenseStatus();
                 syncLicenseFromStatus(state.status);
-            } catch (e) {}
+            } catch (e) {
+                try {
+                    state.status = await AgentStatus();
+                    syncLicenseFromStatus(state.status);
+                } catch (_) {}
+            }
             render();
             openPanel('settings');
         }
@@ -4709,16 +4735,9 @@ async function refreshStatus(shouldRender = true) {
 async function loadSettings() {
     await run(async () => {
         loadChatUsage();
+        // localStorage license is UI metadata only. Paid entitlement is owned by backend
+        // .lic + online verify — never push localStorage paid=true into Go memory (races with unbind).
         state.license = loadLicense();
-        if (state.license) {
-            SetPaidStatus(true, state.license.redeemedAt || '', state.license.codeDate || '', state.license.tier || '').catch(function(e) {
-                console.error('Failed to sync paid status to backend during init:', e);
-            });
-        } else {
-            SetPaidStatus(false, '', '', '').catch(function(e) {
-                console.error('Failed to sync paid status to backend during init:', e);
-            });
-        }
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
         if (!state.settings.lang) {
@@ -4769,6 +4788,7 @@ async function loadIntegrationStatusData() {
 
 async function loadStatusData() {
     applyStatusData(await AgentStatus());
+    syncLicenseFromStatus(state.status);
 }
 
 function applyStatusData(nextStatus) {
@@ -5223,19 +5243,29 @@ function chatStartButtonText() {
 function syncLicenseFromStatus(status) {
     if (!status) return;
     if (status.isPaid && status.licenseTier) {
+        const expires = status.licenseExpiresAt || 'LIFETIME';
         if (!state.license) {
             state.license = {
                 code: 'ACTIVE_LICENSE',
                 tier: status.licenseTier,
-                codeDate: status.licenseExpiresAt || 'LIFETIME',
+                codeDate: expires,
                 redeemedAt: new Date().toISOString()
             };
         } else {
             state.license.tier = status.licenseTier;
-            if (status.licenseExpiresAt) state.license.codeDate = status.licenseExpiresAt;
+            // Prefer server expiry (ISO/LIFETIME). Drop stale YYYYMMDD redeem-code tokens.
+            if (expires === 'LIFETIME' || isParseableLicenseDate(expires)) {
+                state.license.codeDate = expires;
+            } else if (state.license.codeDate && !isParseableLicenseDate(state.license.codeDate) && state.license.codeDate !== 'LIFETIME') {
+                state.license.codeDate = expires;
+            }
+            if (!state.license.redeemedAt) {
+                state.license.redeemedAt = new Date().toISOString();
+            }
         }
         saveLicense(state.license);
-    } else if (!status.isPaid && state.license) {
+    } else if (!status.isPaid) {
+        // Online demotion (unbind/revoke/lease) must clear UI cache immediately.
         state.license = null;
         try {
             window.localStorage.removeItem(licenseStorageKey);
@@ -5289,11 +5319,13 @@ function confirmRedeem() {
 
     ActivateLicense(code).then(async function() {
         const redeemedAt = new Date().toISOString();
+        // result.codeDate is the redeem-code date token (YYYYMMDD), not certificate expiry.
+        // loadStatusData/syncLicenseFromStatus overwrites codeDate with server licenseExpiresAt.
         saveLicense({
             tier: result.tier,
             codeHash: checksum(`${code}:stored`, 10),
             redeemedAt: redeemedAt,
-            codeDate: result.codeDate,
+            codeDate: 'LIFETIME',
         });
         state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
         state.tempRedeemCode = ''; // Clear on success

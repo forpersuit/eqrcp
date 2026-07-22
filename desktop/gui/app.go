@@ -1139,7 +1139,11 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 	if a.agent == nil {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
-	server.VerifyLocalLicense()
+	// Prefer online truth (unbind/revoke). Network errors fall back to offline lease via local verify.
+	if err := server.ForceOnlineLicenseSync(); err != nil {
+		a.logInfo(fmt.Sprintf("[GUI] RefreshLicenseStatus online sync: %v; applying local offline verify", err))
+		server.VerifyLocalLicense()
+	}
 	a.agent.mu.Lock()
 	status := a.agent.snapshotLocked()
 	a.agent.mu.Unlock()
@@ -1168,11 +1172,17 @@ func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
 	err := server.ForceOnlineLicenseSync()
+	// Always re-verify from disk so paid memory matches certificate after revoke/unbind/network outcomes.
+	if err != nil {
+		server.VerifyLocalLicense()
+	}
 	a.agent.mu.Lock()
 	status := a.agent.snapshotLocked()
 	a.agent.mu.Unlock()
 	if err != nil {
 		a.logError(fmt.Sprintf("[GUI] DevForceOnlineLicenseSync failed: %v, Current Paid Status: %v, Tier: %s", err, status.IsPaid, status.LicenseTier))
+		// Still return the post-sync snapshot so the UI can apply unbind/revoke demotion even when
+		// Wails surfaces the error as a rejected promise (caller must re-fetch on catch).
 		return status, err
 	}
 	a.logInfo(fmt.Sprintf("[GUI] DevForceOnlineLicenseSync succeeded. Paid Status: %v, Tier: %s, Expires: %s", status.IsPaid, status.LicenseTier, status.LicenseExpiresAt))

@@ -418,6 +418,85 @@ func TestForceOnlineLicenseSyncReplacesCertificateForTierChange(t *testing.T) {
 	}
 }
 
+func TestVerifyLocalLicenseNoFileClearsPaidStatus(t *testing.T) {
+	ResetLicense()
+	defer ResetLicense()
+
+	// Simulate stale in-memory paid entitlement after external unbind wiped disk late.
+	SetPaidStatus(true, time.Now().UTC().Format(time.RFC3339), "LIFETIME", "PLUS")
+	if !GetPaidStatus() {
+		t.Fatal("precondition: expected paid status before verify")
+	}
+	if VerifyLocalLicense() {
+		t.Fatal("expected verify to fail when license.lic is missing")
+	}
+	if GetPaidStatus() {
+		t.Fatal("expected paid status cleared when no local certificate exists")
+	}
+}
+
+func TestForceOnlineLicenseSyncUnboundDeviceResetsLicense(t *testing.T) {
+	os.Setenv("EQT_TESTING", "false")
+	defer os.Setenv("EQT_TESTING", "true")
+
+	const licenseCode = "EQT-PLUS-20260722-UNBIND"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			LicenseCode string `json:"license_code"`
+			UUIDHash    string `json:"uuid_hash"`
+			CPUHash     string `json:"cpu_hash"`
+			DiskHash    string `json:"disk_hash"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		switch r.URL.Path {
+		case "/api/v1/activate":
+			cert := LicenseCertificate{
+				LicenseCode: licenseCode,
+				Tier:        "PLUS",
+				UUIDHash:    req.UUIDHash,
+				CPUHash:     req.CPUHash,
+				DiskHash:    req.DiskHash,
+				ExpiresAt:   "LIFETIME",
+				MaxDevices:  2,
+			}
+			cert.LastOnlineSyncTime = time.Now().UTC().Format(time.RFC3339)
+			cert.Signature = signTestPayload(cert)
+			cert.VerifySignature = signTestVerifyPayload(cert)
+			_ = json.NewEncoder(w).Encode(cert)
+		case "/api/v1/verify":
+			// Portal unbind removes this device from activations → 403.
+			http.Error(w, `{"error":"This device is not activated under the provided license"}`, http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+	ResetLicense()
+	defer ResetLicense()
+
+	if err := ActivateLicenseOnline(licenseCode); err != nil {
+		t.Fatalf("ActivateLicenseOnline() error = %v", err)
+	}
+	if !GetPaidStatus() {
+		t.Fatal("expected paid after activation")
+	}
+
+	err := ForceOnlineLicenseSync()
+	if err == nil {
+		t.Fatal("expected ForceOnlineLicenseSync to fail after device unbind")
+	}
+	if GetPaidStatus() {
+		t.Fatal("expected unpaid status after online unbind reconciliation")
+	}
+	if _, ok := GetLocalLicenseInfo(); ok {
+		t.Fatal("expected local certificate removed after unbind")
+	}
+}
+
 func TestPrecomputeFingerprintsNonBlocking(t *testing.T) {
 	// Reset states
 	fingerprintMu.Lock()
