@@ -283,6 +283,23 @@ func (s *Session) ClientsCount() int {
 	return len(s.clients)
 }
 
+// HasRemoteClient reports whether any non-desktop peer is currently connected.
+// Desktop Host opens its own WebSocket; free-tier chat time must only run when a
+// real external peer (e.g. phone) has joined.
+func (s *Session) HasRemoteClient() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.clients {
+		if c == nil {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(c.Peer), "desktop") {
+			return true
+		}
+	}
+	return false
+}
+
 // GetClientTheme returns the theme assigned to a client peer.
 func (s *Session) GetClientTheme(peer string) string {
 	s.mu.RLock()

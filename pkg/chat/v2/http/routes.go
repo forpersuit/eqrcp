@@ -502,9 +502,40 @@ func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token st
 	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "QR image rendered and sent", nil, append(fields, diag.F("url", joinURL))...)
 }
 
+// HasRemoteClient reports whether any chat-v2 session has a non-desktop peer online.
+func (h *Handler) HasRemoteClient() bool {
+	if h == nil || h.sessions == nil {
+		return false
+	}
+	return h.sessions.HasRemoteClient()
+}
+
+// BroadcastSystemMessage sends a system text bubble to every active chat-v2 session.
+// Used for free-tier degradation notices (in-app message, never alert dialogs).
+func (h *Handler) BroadcastSystemMessage(text string) {
+	if h == nil || h.sessions == nil {
+		return
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	h.sessions.ForEach(func(s *session.Session) {
+		s.SendSystemMessage(text)
+	})
+}
+
+// attachmentUnrestricted is true when attachment transfers should run at full speed.
+func (h *Handler) attachmentUnrestricted() bool {
+	if h == nil || h.isPaidOrUnrestricted == nil {
+		return true
+	}
+	return h.isPaidOrUnrestricted()
+}
+
 // GetAttachmentPath retrieves the absolute local path for a chat attachment by ID.
 func (h *Handler) GetAttachmentPath(id string) (string, bool) {
-	if h.sessions == nil {
+	if h == nil || h.sessions == nil {
 		return "", false
 	}
 	return h.sessions.GetAttachmentPathByID(id)
@@ -572,7 +603,9 @@ func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request, token strin
 	}
 
 	response := map[string]interface{}{
-		"licenseTier": tier,
+		"licenseTier":            tier,
+		"attachmentUnrestricted": h.attachmentUnrestricted(),
+		"freeDegraded":           !h.attachmentUnrestricted(),
 	}
 	_ = json.NewEncoder(w).Encode(response)
 }

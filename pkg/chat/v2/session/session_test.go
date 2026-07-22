@@ -65,6 +65,32 @@ func TestRegisterSamePeerKeepsSingleConnection(t *testing.T) {
 	}
 }
 
+func TestSessionHasRemoteClientIgnoresDesktopHost(t *testing.T) {
+	sess := NewSession("remote-quota")
+	sess.DisableSystemMessages = true
+
+	if sess.HasRemoteClient() {
+		t.Fatal("empty session must not report remote clients")
+	}
+
+	host := NewClient(protocol.ClientInfo{Label: "Host", Peer: "desktop"}, nil)
+	sess.Register(host, 0, 0)
+	if sess.HasRemoteClient() {
+		t.Fatal("desktop host alone must not count as remote peer for free-tier timing")
+	}
+
+	phone := NewClient(protocol.ClientInfo{Label: "Phone", Peer: "mobile-1"}, nil)
+	sess.Register(phone, 0, 0)
+	if !sess.HasRemoteClient() {
+		t.Fatal("phone peer must count as remote for free-tier timing")
+	}
+
+	sess.Unregister(phone)
+	if sess.HasRemoteClient() {
+		t.Fatal("after phone leaves, only desktop remains — no remote peer")
+	}
+}
+
 func TestSessionRegistrationAndPresence(t *testing.T) {
 	sess := NewSession("test-room")
 	sess.DisableSystemMessages = true

@@ -79,11 +79,8 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 	// Start the job
 	_ = h.transfer.StartJob(jobID)
 
-	isPaid := false
-	if h.isPaidOrUnrestricted != nil {
-		isPaid = h.isPaidOrUnrestricted()
-	}
-	h.scheduler.RegisterJob(jobID, isPaid)
+	// Attachment data plane only — WebSocket control/text paths never use this scheduler.
+	h.scheduler.RegisterJob(jobID, h.attachmentUnrestricted())
 	defer h.scheduler.UnregisterJob(jobID)
 
 	startTime := time.Now()

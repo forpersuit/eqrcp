@@ -70,11 +70,25 @@ func TestChatLimiter(t *testing.T) {
 
 	// Test 3: Reach limit
 	usage, limitReached = limiter.IncrementUsage(200)
-	if usage.UsedSeconds != 300 {
-		t.Errorf("expected used seconds 300, got %d", usage.UsedSeconds)
+	if usage.UsedSeconds != FreeChatDailySeconds {
+		t.Errorf("expected used seconds %d, got %d", FreeChatDailySeconds, usage.UsedSeconds)
 	}
 	if !limitReached {
-		t.Errorf("expected limit reached at 300s")
+		t.Errorf("expected limit reached at %ds", FreeChatDailySeconds)
+	}
+
+	// FreeChatDegraded / AttachmentUnrestricted use the process-global limiterInstance.
+	SetPaidStatus(false, "", "", "")
+	SetUsedSeconds(FreeChatDailySeconds)
+	if !FreeChatDegraded() {
+		t.Error("expected FreeChatDegraded after daily free quota")
+	}
+	if FreeChatAttachmentUnrestricted() {
+		t.Error("expected attachments restricted after daily free quota")
+	}
+	SetUsedSeconds(0)
+	if FreeChatDegraded() {
+		t.Error("expected not degraded after reset")
 	}
 
 	// Test 4: Set paid

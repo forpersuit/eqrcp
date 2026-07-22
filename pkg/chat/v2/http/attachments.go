@@ -12,11 +12,16 @@ import (
 	"path/filepath"
 	"time"
 
+	"eqt/pkg/chat/v2/bandwidth"
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
 )
+
+// freeChatMaxAttachmentBytes mirrors server.FreeChatMaxAttachmentBytes (2MB) for free over-quota uploads.
+// Kept local to avoid an import cycle (server → chathttp).
+const freeChatMaxAttachmentBytes = 2 * 1024 * 1024
 
 // handleLocalAttachmentRegister registers a local file attachment from the GUI host.
 func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
@@ -69,6 +74,10 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 
 	fileName := filepath.Base(req.Path)
 	size := info.Size()
+	if !h.attachmentUnrestricted() && size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		return
+	}
 	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
 
 	// Generate unique message ID
@@ -141,6 +150,11 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 		return
 	}
 
+	if !h.attachmentUnrestricted() && req.Size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		return
+	}
+
 	msgID := generateAttachmentMsgID()
 
 	sess := h.sessions.GetOrCreate(token)
@@ -208,6 +222,12 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 		sender = "Anonymous"
 	}
 
+	unrestricted := h.attachmentUnrestricted()
+	if !unrestricted && header.Size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		return
+	}
+
 	// Create temp file inside dedicated uploads root directory
 	uploadRoot, err := session.UploadRoot()
 	if err != nil {
@@ -221,15 +241,30 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	}
 	defer tempFile.Close()
 
-	// Wrap copy stream to report progress
+	// Wrap copy stream to report progress; throttle attachment data plane when free quota is exhausted.
 	var pr io.Reader = file
+	jobID := ""
 	if messageID != "" {
-		h.transfer.CreateJob(token, "ul-"+messageID, messageID, peer, header.Filename, header.Size)
-		_ = h.transfer.StartJob("ul-" + messageID)
+		jobID = "ul-" + messageID
+		h.transfer.CreateJob(token, jobID, messageID, peer, header.Filename, header.Size)
+		_ = h.transfer.StartJob(jobID)
 		pr = &progressReader{
 			reader:   file,
 			transfer: h.transfer,
-			jobID:    "ul-" + messageID,
+			jobID:    jobID,
+		}
+	}
+	if !unrestricted {
+		if jobID == "" {
+			jobID = "ul-direct-" + generateAttachmentMsgID()
+		}
+		h.scheduler.RegisterJob(jobID, false)
+		defer h.scheduler.UnregisterJob(jobID)
+		pr = &throttledUploadReader{
+			reader:    pr,
+			scheduler: h.scheduler,
+			jobID:     jobID,
+			startTime: time.Now(),
 		}
 	}
 
@@ -325,6 +360,25 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 	if n > 0 {
 		pr.written += int64(n)
 		_ = pr.transfer.UpdateProgress(pr.jobID, pr.written)
+	}
+	return n, err
+}
+
+// throttledUploadReader applies attachment data-plane bandwidth limits on upload.
+// WebSocket control traffic never flows through this reader.
+type throttledUploadReader struct {
+	reader    io.Reader
+	scheduler *bandwidth.Scheduler
+	jobID     string
+	startTime time.Time
+	written   int64
+}
+
+func (tr *throttledUploadReader) Read(p []byte) (int, error) {
+	n, err := tr.reader.Read(p)
+	if n > 0 && tr.scheduler != nil {
+		tr.written += int64(n)
+		tr.scheduler.Throttle(tr.jobID, tr.written, tr.startTime)
 	}
 	return n, err
 }

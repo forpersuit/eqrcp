@@ -13,6 +13,28 @@ import (
 	"eqt/pkg/config"
 )
 
+// Free-tier Chat daily quota and attachment degradation (data plane only).
+const (
+	// FreeChatDailySeconds is the daily full-feature chat allowance for unpaid users (5 minutes).
+	FreeChatDailySeconds = 300
+	// FreeChatMaxAttachmentBytes is the per-file size cap after free chat quota is exhausted.
+	FreeChatMaxAttachmentBytes = 2 * 1024 * 1024
+	// FreeChatDegradedBytesPerSec is the attachment transfer cap after free chat quota is exhausted.
+	FreeChatDegradedBytesPerSec = 100 * 1024
+)
+
+// FreeChatDegraded reports whether free chat should run in attachment-degraded mode.
+// Text messages are never degraded; only attachment transfer rate/size is limited.
+func FreeChatDegraded() bool {
+	usage := limiterInstance.GetStatus()
+	return !usage.IsPaid && usage.UsedSeconds >= FreeChatDailySeconds
+}
+
+// FreeChatAttachmentUnrestricted is true for paid users or free users still within daily quota.
+func FreeChatAttachmentUnrestricted() bool {
+	return !FreeChatDegraded()
+}
+
 // ChatUsage holds the daily usage statistics and premium license tracking.
 type ChatUsage struct {
 	Date                 string `json:"date"`
@@ -308,7 +330,7 @@ func (l *ChatLimiter) IncrementUsage(seconds int) (ChatUsage, bool) {
 	usage.UsedSeconds += seconds
 	l.saveUsageLocked(usage)
 
-	limitReached := usage.UsedSeconds >= 300
+	limitReached := usage.UsedSeconds >= FreeChatDailySeconds
 	return usage, limitReached
 }
 

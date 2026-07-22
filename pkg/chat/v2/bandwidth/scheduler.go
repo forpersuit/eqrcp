@@ -10,7 +10,8 @@ import (
 
 type activeJob struct {
 	id                  string
-	isPaid              bool
+	unrestricted        bool          // paid or free-within-quota: full speed + probing
+	rateCap             int64         // hard per-job speed cap
 	capacity            int64         // Estimated bottleneck capacity in bytes/sec
 	probing             bool          // Currently in the probing phase
 	probingStart        time.Time     // Time when probing started
@@ -43,9 +44,16 @@ func NewScheduler(globalLimit int64) *Scheduler {
 }
 
 // RegisterJob adds a job to the active pool.
-func (s *Scheduler) RegisterJob(id string, isPaid bool) {
+// unrestricted=true: paid or free-within-quota (PolicyPaid + probing).
+// unrestricted=false: free over-quota attachment path (PolicyFreeDegraded, no probing).
+func (s *Scheduler) RegisterJob(id string, unrestricted bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	rateCap := PolicyFreeDegraded.MaxSpeed
+	if unrestricted {
+		rateCap = PolicyPaid.MaxSpeed
+	}
 
 	pBytes := s.ProbingBytes
 	if pBytes == 0 {
@@ -56,13 +64,23 @@ func (s *Scheduler) RegisterJob(id string, isPaid bool) {
 		pTime = 2 * time.Second // 2s default probing window
 	}
 
-	s.activeJobs[id] = &activeJob{
+	// Degraded free transfers skip probing so the hard 100KB/s cap is enforced immediately
+	// and cannot be lifted by the unrestricted min-capacity floor.
+	enableProbing := unrestricted && pBytes > 0
+
+	job := &activeJob{
 		id:                id,
-		isPaid:            isPaid,
-		probing:           pBytes > 0, // Enabled if ProbingBytes > 0
+		unrestricted:      unrestricted,
+		rateCap:           rateCap,
+		probing:           enableProbing,
 		probingBytesLimit: pBytes,
 		probingTimeLimit:  pTime,
 	}
+	if !enableProbing {
+		job.capacity = rateCap
+		job.timeAtProbingEnd = time.Now()
+	}
+	s.activeJobs[id] = job
 }
 
 // UnregisterJob removes a job from the active pool.
@@ -82,9 +100,12 @@ func (s *Scheduler) LimitForJob(id string) int64 {
 		return 32 * 1024 // 32KB/s fallback minimum
 	}
 
-	rateCap := PolicyFree.MaxSpeed
-	if job.isPaid {
-		rateCap = PolicyPaid.MaxSpeed
+	rateCap := job.rateCap
+	if rateCap <= 0 {
+		rateCap = PolicyFreeDegraded.MaxSpeed
+		if job.unrestricted {
+			rateCap = PolicyPaid.MaxSpeed
+		}
 	}
 
 	// 1. If probing is disabled (legacy fallback), return standard fair share
@@ -97,8 +118,13 @@ func (s *Scheduler) LimitForJob(id string) int64 {
 		if rate > rateCap {
 			rate = rateCap
 		}
-		if rate < 32*1024 {
-			rate = 32 * 1024
+		// Degraded free jobs must stay at their hard cap; do not raise to 32KB floor above cap.
+		minFloor := int64(32 * 1024)
+		if rateCap < minFloor {
+			minFloor = rateCap
+		}
+		if rate < minFloor {
+			rate = minFloor
 		}
 		return rate
 	}
@@ -118,12 +144,12 @@ func (s *Scheduler) LimitForJob(id string) int64 {
 			// Estimate current usage of active probing jobs
 			if j.capacity > 0 {
 				activeProbingCapacity += j.capacity
+			} else if j.rateCap > 0 {
+				activeProbingCapacity += j.rateCap
+			} else if j.unrestricted {
+				activeProbingCapacity += PolicyPaid.MaxSpeed
 			} else {
-				if j.isPaid {
-					activeProbingCapacity += PolicyPaid.MaxSpeed
-				} else {
-					activeProbingCapacity += PolicyFree.MaxSpeed
-				}
+				activeProbingCapacity += PolicyFreeDegraded.MaxSpeed
 			}
 		} else {
 			nonProbingCount++
@@ -160,8 +186,12 @@ func (s *Scheduler) LimitForJob(id string) int64 {
 	if rate > jobCapacity {
 		rate = jobCapacity
 	}
-	if rate < 32*1024 {
-		rate = 32 * 1024 // Starvation prevention floor limit
+	minFloor := int64(32 * 1024)
+	if rateCap < minFloor {
+		minFloor = rateCap
+	}
+	if rate < minFloor {
+		rate = minFloor // Starvation prevention floor (never above rateCap)
 	}
 
 	// Trace rate allocation decisions in debug logs
@@ -200,7 +230,7 @@ func (s *Scheduler) Throttle(id string, totalBytesTransferred int64, startTime t
 			s.mu.Unlock()
 			diag.Emit(context.Background(), s.Logger, diag.LevelInfo, "bandwidth probing started", nil,
 				diag.F("jobID", id),
-				diag.F("isPaid", job.isPaid),
+				diag.F("unrestricted", job.unrestricted),
 				diag.F("warmUpBytes", totalBytesTransferred),
 			)
 			return
@@ -214,12 +244,18 @@ func (s *Scheduler) Throttle(id string, totalBytesTransferred int64, startTime t
 				job.capacity = int64(float64(bytesProbed) / elapsed.Seconds())
 			}
 			// Safeguard: sanitize estimated capacity to prevent slow-start stall lockouts
-			minCapacity := int64(2 * 1024 * 1024) // 2MB/s minimum floor for Free users
-			if job.isPaid {
-				minCapacity = 10 * 1024 * 1024 // 10MB/s minimum floor for Paid users
+			minCapacity := int64(2 * 1024 * 1024) // 2MB/s minimum floor for free-within-quota
+			if job.unrestricted {
+				minCapacity = 10 * 1024 * 1024 // 10MB/s minimum floor for full-speed jobs
+			}
+			if job.rateCap > 0 && minCapacity > job.rateCap {
+				minCapacity = job.rateCap
 			}
 			if job.capacity < minCapacity {
 				job.capacity = minCapacity
+			}
+			if job.rateCap > 0 && job.capacity > job.rateCap {
+				job.capacity = job.rateCap
 			}
 
 			job.probing = false

@@ -43,6 +43,36 @@ func (m *Manager) Delete(token string) {
 	delete(m.sessions, token)
 }
 
+// HasRemoteClient reports whether any managed session has a non-desktop peer online.
+func (m *Manager) HasRemoteClient() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, s := range m.sessions {
+		if s != nil && s.HasRemoteClient() {
+			return true
+		}
+	}
+	return false
+}
+
+// ForEach calls fn for every active session (snapshot under lock).
+func (m *Manager) ForEach(fn func(*Session)) {
+	if fn == nil {
+		return
+	}
+	m.mu.RLock()
+	list := make([]*Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		list = append(list, s)
+	}
+	m.mu.RUnlock()
+	for _, s := range list {
+		if s != nil {
+			fn(s)
+		}
+	}
+}
+
 // GetAttachmentPathByID searches all sessions for the physical path of the given attachment ID.
 func (m *Manager) GetAttachmentPathByID(id string) (string, bool) {
 	m.mu.RLock()

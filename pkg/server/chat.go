@@ -328,10 +328,9 @@ func (s *Server) Chat() error {
 	chatV2Handler := chatv2http.NewHandler(chatv2http.Config{
 		BasePath: "/chat-v2",
 		Logger:   logger,
-		IsPaidOrUnrestricted: func() bool {
-			usage := limiterInstance.GetStatus()
-			return usage.IsPaid || usage.UsedSeconds < 300
-		},
+		// Attachment data plane only: paid or free-within-quota runs unrestricted;
+		// free over-quota uses degraded attachment rate/size. WS/text never limited here.
+		IsPaidOrUnrestricted: FreeChatAttachmentUnrestricted,
 		HostToken: func() string {
 			return s.ChatHostToken()
 		},
@@ -528,20 +527,33 @@ func (s *Server) Chat() error {
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
+		degradationNotified := false
 		for range ticker.C {
 			if session.isTerminal() {
 				return
 			}
-			session.mu.Lock()
-			clientCount := len(session.clients)
-			session.mu.Unlock()
-			if clientCount > 0 {
-				usage, limitReached := limiterInstance.IncrementUsage(2)
-				if limitReached && !usage.IsPaid {
-					session.mu.Lock()
-					session.notifyLocked()
-					session.mu.Unlock()
+			// Free-tier clock runs only while a real external peer is online.
+			// Desktop Host always opens a local WebSocket (peer=desktop); that alone must not burn quota.
+			hasRemote := false
+			if s.chatV2Handler != nil {
+				hasRemote = s.chatV2Handler.HasRemoteClient()
+			}
+			if !hasRemote {
+				continue
+			}
+			usage, _ := limiterInstance.IncrementUsage(2)
+			if !usage.IsPaid && usage.UsedSeconds >= FreeChatDailySeconds {
+				if !degradationNotified {
+					degradationNotified = true
+					if s.chatV2Handler != nil {
+						s.chatV2Handler.BroadcastSystemMessage(
+							"今日免费 Chat 额度已用尽：附件限速 100KB/s，单文件不超过 2MB。文本消息不受影响。",
+						)
+					}
 				}
+				session.mu.Lock()
+				session.notifyLocked()
+				session.mu.Unlock()
 			}
 		}
 	}()
@@ -836,15 +848,7 @@ func (session *chatSession) handleMessages(w http.ResponseWriter, r *http.Reques
 		if rejectCrossOriginChat(w, r) {
 			return
 		}
-		usage := limiterInstance.GetStatus()
-		if !usage.IsPaid && usage.UsedSeconds >= 300 {
-			// Experience degradation instead of hard lock: 30% message send failure rate.
-			nBig, err := rand.Int(rand.Reader, big.NewInt(100))
-			if err == nil && nBig.Int64() < 30 {
-				http.Error(w, "Message failed to send (free tier limit reached). Please retry.", http.StatusInternalServerError)
-				return
-			}
-		}
+		// Free-tier degradation never drops text messages (no random failure).
 		var request struct {
 			Sender   string  `json:"sender"`
 			Avatar   string  `json:"avatar"`
@@ -942,14 +946,13 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		writeChatTerminal(w)
 		return
 	}
-	usage := limiterInstance.GetStatus()
-	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+	isFreeLimitExceeded := FreeChatDegraded()
 	var reqBody io.ReadCloser = r.Body
 	if isFreeLimitExceeded {
 		reqBody = &ThrottledReadCloser{
 			Reader: &ThrottledReader{
 				r:      r.Body,
-				limit:  100 * 1024,
+				limit:  FreeChatDegradedBytesPerSec,
 				active: true,
 			},
 			Closer: r.Body,
@@ -1006,7 +1009,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 			http.Error(w, "upload failed", http.StatusBadRequest)
 			return
 		}
-		if isFreeLimitExceeded && header.Size > 2*1024*1024 {
+		if isFreeLimitExceeded && header.Size > FreeChatMaxAttachmentBytes {
 			file.Close()
 			http.Error(w, "File size exceeds 2MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
 			return
@@ -1056,8 +1059,7 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		w.Header().Set("Content-Type", attachment.MimeType)
 	}
 
-	usage := limiterInstance.GetStatus()
-	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+	isFreeLimitExceeded := FreeChatDegraded()
 
 	if isFreeLimitExceeded {
 		file, err := os.Open(attachment.Path)
@@ -1067,10 +1069,10 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		}
 		defer file.Close()
 
-		// Limit to 100 KB/s (102400 bytes/sec)
+		// Attachment data plane only: 100 KB/s after free chat quota.
 		throttled := &ThrottledReader{
 			r:      file,
-			limit:  100 * 1024,
+			limit:  FreeChatDegradedBytesPerSec,
 			active: true,
 		}
 
@@ -1595,14 +1597,13 @@ func (session *chatSession) saveAttachmentWithAvatar(sender string, avatar strin
 	if err != nil {
 		return chatMessage{}, err
 	}
-	usage := limiterInstance.GetStatus()
-	isFreeLimitExceeded := !usage.IsPaid && usage.UsedSeconds >= 300
+	isFreeLimitExceeded := FreeChatDegraded()
 
 	var r io.Reader = reader
 	if isFreeLimitExceeded {
 		r = &ThrottledReader{
 			r:      reader,
-			limit:  100 * 1024,
+			limit:  FreeChatDegradedBytesPerSec,
 			active: true,
 		}
 	}

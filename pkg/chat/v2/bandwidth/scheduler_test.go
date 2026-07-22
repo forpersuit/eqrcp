@@ -12,13 +12,13 @@ func TestSchedulerBandwidthFairShare(t *testing.T) {
 
 	sched.RegisterJob("job-free-1", false)
 
-	// Free policy limits to 2MB/s, fairShare is 4MB. Min(4MB, 2MB) = 2MB.
+	// Free over-quota policy caps at 100KB/s.
 	limit1 := sched.LimitForJob("job-free-1")
-	if limit1 != PolicyFree.MaxSpeed {
-		t.Fatalf("job limit = %d, want %d (Free Policy Cap)", limit1, PolicyFree.MaxSpeed)
+	if limit1 != PolicyFreeDegraded.MaxSpeed {
+		t.Fatalf("job limit = %d, want %d (Free Degraded Cap)", limit1, PolicyFreeDegraded.MaxSpeed)
 	}
 
-	// Register a second job (paid)
+	// Register a second job (unrestricted / paid path)
 	sched.RegisterJob("job-paid-2", true)
 
 	// Two jobs active. Fair share per job is 4MB / 2 = 2MB.
@@ -28,28 +28,49 @@ func TestSchedulerBandwidthFairShare(t *testing.T) {
 		t.Fatalf("job-paid limit = %d, want 2MB (Fair Share)", limit2)
 	}
 
-	// For job-free-1: Min(2MB, 2MB) = 2MB.
+	// For job-free-1: hard cap stays at 100KB/s.
 	limit1Post := sched.LimitForJob("job-free-1")
-	if limit1Post != 2*1024*1024 {
-		t.Fatalf("job-free limit = %d, want 2MB", limit1Post)
+	if limit1Post != PolicyFreeDegraded.MaxSpeed {
+		t.Fatalf("job-free limit = %d, want %d", limit1Post, PolicyFreeDegraded.MaxSpeed)
 	}
 
 	// Register a third job (paid)
 	sched.RegisterJob("job-paid-3", true)
 
-	// Three jobs active. Fair share is 4MB / 3 = 1398101 bytes.
-	// For job-paid-3: Min(1.33MB, 100MB) = 1.33MB.
+	// Three jobs active. Fair share is 4MB / 3.
 	limit3 := sched.LimitForJob("job-paid-3")
 	expectedLimit := int64(4 * 1024 * 1024 / 3)
 	if limit3 != expectedLimit {
 		t.Fatalf("job-paid-3 limit = %d, want %d", limit3, expectedLimit)
 	}
 
-	// Unregister one job
+	// Unregister free job
 	sched.UnregisterJob("job-free-1")
 	limit2Post := sched.LimitForJob("job-paid-2")
 	if limit2Post != 2*1024*1024 { // 4MB / 2
 		t.Fatalf("post unregister job-paid-2 limit = %d, want 2MB", limit2Post)
+	}
+}
+
+func TestSchedulerDegradedHardCapWithoutProbing(t *testing.T) {
+	sched := NewScheduler(10 * 1024 * 1024)
+	// Leave probing enabled at scheduler level; degraded jobs must still skip it.
+	sched.RegisterJob("job-degraded", false)
+
+	sched.mu.RLock()
+	job := sched.activeJobs["job-degraded"]
+	probing := job.probing
+	cap := job.rateCap
+	sched.mu.RUnlock()
+
+	if probing {
+		t.Fatal("degraded free job must not enter probing")
+	}
+	if cap != PolicyFreeDegraded.MaxSpeed {
+		t.Fatalf("rateCap = %d, want %d", cap, PolicyFreeDegraded.MaxSpeed)
+	}
+	if got := sched.LimitForJob("job-degraded"); got != PolicyFreeDegraded.MaxSpeed {
+		t.Fatalf("LimitForJob = %d, want %d", got, PolicyFreeDegraded.MaxSpeed)
 	}
 }
 
