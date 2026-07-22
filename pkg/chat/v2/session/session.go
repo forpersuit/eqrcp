@@ -464,15 +464,10 @@ func (s *Session) sendHistoryPage(c *Client, afterSeq, beforeSeq int64, limit in
 		}
 	}
 
-	// If visibility filtered the whole page, still report hasMore from store selection
-	// so the client can walk older ranges; oldestSeq falls back to beforeSeq when empty.
-	if sent == 0 && hasMore && beforeSeq > 0 {
-		// Client should retry with a lower beforeSeq; without a cursor, clear hasMore
-		// only when the store page was empty.
-	}
 	if sent == 0 {
-		// No visible messages in this page: do not claim a cursor that would loop forever.
-		// If the store had more, step the cursor to the oldest candidate so next load moves.
+		// No visible messages in this page. If the store page was non-empty but
+		// filtered out, advance the cursor to the oldest candidate so the next
+		// load_history request moves backward instead of looping forever.
 		if len(page) > 0 {
 			oldestSeq = page[0].Seq
 			newestSeq = page[len(page)-1].Seq
