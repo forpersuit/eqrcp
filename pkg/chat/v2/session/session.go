@@ -41,14 +41,21 @@ func NewSession(token string) *Session {
 }
 
 // Register adds a client to the session, replays missed events, and broadcasts presence.
+//
+// Same-browser / same-device policy: peer is the device identity. At most one
+// live connection per peer is kept in a room — any prior connections with the
+// same peer are removed and closed with CloseReasonReplaced so the old tab
+// does not auto-reconnect and fight for the slot.
 func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	s.mu.Lock()
-	var oldClient *Client
+	var superseded []*Client
 	for _, client := range s.clients {
 		if client.Peer == c.Peer && client.ID != c.ID {
-			oldClient = client
-			break
+			superseded = append(superseded, client)
 		}
+	}
+	for _, old := range superseded {
+		delete(s.clients, old.ID)
 	}
 	var parentLabel string
 	if c.Join != "" {
@@ -61,6 +68,11 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	}
 	s.clients[c.ID] = c
 	s.mu.Unlock()
+
+	// Drop previous sockets for this peer outside the lock.
+	for _, old := range superseded {
+		old.CloseReplaced()
+	}
 
 	// Replay missed events safely ensuring we never leak history before joinSeq.
 	// Cold-start clients (empty local UI) send afterSeq=joinSeq to rehydrate history;
@@ -75,6 +87,10 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 
 	// Broadcast system message for client join / reconnect / rename
 	var sysMsg string
+	var oldClient *Client
+	if len(superseded) > 0 {
+		oldClient = superseded[len(superseded)-1]
+	}
 	if oldClient != nil {
 		if oldClient.Label != c.Label {
 			sysMsg = "{oldSender} 修改用户名为 {sender}"

@@ -71,10 +71,11 @@ export class ChatWebSocketClient {
     this.clientLabel = params.get('sender') || localStorage.getItem('chat_label') || `Device-${randSuffix}`;
     this.clientAvatar = params.get('avatar') || localStorage.getItem('chat_avatar') || '';
     
-    // Each device must have a unique, persistent clientPeer ID.
-    // We check URL query param 'peer' first (ideal for simulation/multi-tab debugging), then fallback to localStorage or random UUID.
+    // Device identity: same browser shares one peer via localStorage so multiple
+    // tabs of the same room count as one device. The server keeps a single live
+    // connection per peer (newer tab replaces older). Use ?peer= only for multi-tab
+    // simulation/debug when you intentionally want distinct devices.
     this.clientPeer = params.get('peer') || localStorage.getItem('chat_peer') || `peer-${Math.random().toString(36).substring(2, 10)}`;
-    // Only persist in localStorage if it was not forced via URL query parameter to avoid multi-tab collisions.
     if (!params.get('peer')) {
       localStorage.setItem('chat_peer', this.clientPeer);
     }
@@ -216,6 +217,19 @@ export class ChatWebSocketClient {
       this.stopHeartbeat();
       if (this.isSuspended) {
         this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
+        return;
+      }
+      // Another tab/window of the same browser took over this peer in the room.
+      // Do not force-kick and do not auto-reconnect (avoids reconnect fights).
+      if (event.reason === 'replaced_by_peer') {
+        this.isManualClosed = true;
+        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+        chatActions.addSystemMessage(
+          currentLang === 'en'
+            ? 'This tab was disconnected because the same device reconnected in another tab.'
+            : '本标签页已断开：同一设备在其他标签页重新连接了本会话。'
+        );
+        this.sendLog(`[SYSTEM] WebSocket closed: replaced_by_peer. Stopping reconnect.`);
         return;
       }
       if (event.code === 1008 || event.code === 4008 || event.reason === "device was forced offline") {

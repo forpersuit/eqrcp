@@ -80,12 +80,28 @@ func (c *Client) Send(event protocol.EventEnvelope) bool {
 	}
 }
 
+// CloseReasonReplaced is sent when a newer connection for the same peer
+// takes over (same browser/device, single live socket per room).
+const CloseReasonReplaced = "replaced_by_peer"
+
 // Close closes the client's send queue and WebSocket connection.
 func (c *Client) Close() {
+	c.CloseWithReason(websocket.StatusNormalClosure, "closing connection")
+}
+
+// CloseReplaced closes the socket because another connection with the same
+// peer registered. The client must not treat this as a force-kick and must
+// not auto-reconnect (otherwise tabs fight for the single peer slot).
+func (c *Client) CloseReplaced() {
+	c.CloseWithReason(websocket.StatusNormalClosure, CloseReasonReplaced)
+}
+
+// CloseWithReason closes the client's send queue and WebSocket with an explicit code/reason.
+func (c *Client) CloseWithReason(code websocket.StatusCode, reason string) {
 	c.closeOnce.Do(func() {
 		close(c.done)
 		if c.conn != nil {
-			_ = c.conn.Close(websocket.StatusNormalClosure, "closing connection")
+			_ = c.conn.Close(code, reason)
 		}
 	})
 }

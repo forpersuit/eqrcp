@@ -33,6 +33,38 @@ func TestMessageStoreMonotonicAndGetSince(t *testing.T) {
 	}
 }
 
+// TestRegisterSamePeerKeepsSingleConnection enforces device identity:
+// same peer may not hold multiple live sockets in one room.
+func TestRegisterSamePeerKeepsSingleConnection(t *testing.T) {
+	sess := NewSession("peer-slot-room")
+	sess.DisableSystemMessages = true
+
+	first := NewClient(protocol.ClientInfo{Label: "Phone", Peer: "peer-phone"}, nil)
+	sess.Register(first, 0, 0)
+	if sess.ClientsCount() != 1 {
+		t.Fatalf("after first register count = %d, want 1", sess.ClientsCount())
+	}
+
+	second := NewClient(protocol.ClientInfo{Label: "Phone", Peer: "peer-phone"}, nil)
+	sess.Register(second, 0, 0)
+	if sess.ClientsCount() != 1 {
+		t.Fatalf("after same-peer register count = %d, want 1", sess.ClientsCount())
+	}
+	if sess.GetClient(first.ID) != nil {
+		t.Fatal("first connection should be removed from the session map")
+	}
+	if sess.GetClient(second.ID) == nil {
+		t.Fatal("second connection should remain registered")
+	}
+
+	// Different peer must coexist.
+	other := NewClient(protocol.ClientInfo{Label: "Desktop", Peer: "peer-desktop"}, nil)
+	sess.Register(other, 0, 0)
+	if sess.ClientsCount() != 2 {
+		t.Fatalf("after different-peer register count = %d, want 2", sess.ClientsCount())
+	}
+}
+
 func TestSessionRegistrationAndPresence(t *testing.T) {
 	sess := NewSession("test-room")
 	sess.DisableSystemMessages = true
