@@ -21,16 +21,19 @@
 5. **[许可授权机制架构 (Licensing Architecture)](licensing-architecture.md)**
    - EQT 离线密码学激活码生成算法、硬件指纹提取与云端授权绑定设计。
 
-6. **[双重过期机制设计 (Licensing Double Expiration)](licensing-double-expiration.md)**
+6. **[DRM 流程与机制 (Current DRM Flow)](drm-flow.md)**
+   - 当前生产实现的激活、离线证书、在线对账、tier 同步、吊销、GUI 状态与测试运维说明。
+
+7. **[双重过期机制设计 (Licensing Double Expiration)](licensing-double-expiration.md)**
    - 记录按年订阅与终身买断的到期与网络时间防篡改校验机制。
 
-7. **[许可套餐层级分析 (License Tier Analysis)](license-tier-analysis.md)**
+8. **[许可套餐层级分析 (License Tier Analysis)](license-tier-analysis.md)**
    - Free / Plus Yearly / Plus Lifetime 等套餐功能的差异化设计与限制策略。
 
-8. **[许可实现路线图 (Licensing Implementation Plan)](licensing-implementation-plan.md)**
+9. **[许可实现路线图 (Licensing Implementation Plan)](licensing-implementation-plan.md)**
    - 授权系统模块化的开发路线图与历史演进阶段。
 
-9. **[套餐层级设计 (Tier Design)](tier-design.md)**
+10. **[套餐层级设计 (Tier Design)](tier-design.md)**
    - 商业化定价与套餐限制的详细设计。
 
 ---
