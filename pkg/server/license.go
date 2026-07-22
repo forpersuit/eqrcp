@@ -363,14 +363,19 @@ func doOnlineLicenseSync(force bool) error {
 	}
 
 	var verifyResp struct {
-		Status      string `json:"status"`
-		LicenseCode string `json:"license_code"`
-		Tier        string `json:"tier"`
-		MaxDevices  int    `json:"max_devices"`
-		ExpiresAt   string `json:"expires_at"`
-		BuyerEmail  string `json:"buyer_email"`
-		CurrentTime string `json:"current_time"`
-		Signature   string `json:"signature"`
+		Status               string `json:"status"`
+		LicenseCode          string `json:"license_code"`
+		Tier                 string `json:"tier"`
+		UUIDHash             string `json:"uuid_hash"`
+		CPUHash              string `json:"cpu_hash"`
+		DiskHash             string `json:"disk_hash"`
+		MaxDevices           int    `json:"max_devices"`
+		ActivatedDevices     int    `json:"activated_devices"`
+		ExpiresAt            string `json:"expires_at"`
+		BuyerEmail           string `json:"buyer_email"`
+		CertificateSignature string `json:"certificate_signature"`
+		CurrentTime          string `json:"current_time"`
+		SyncSignature        string `json:"signature"`
 	}
 	if err := json.Unmarshal(respData, &verifyResp); err != nil {
 		return fmt.Errorf("failed to parse sync response: %w", err)
@@ -380,27 +385,33 @@ func doOnlineLicenseSync(force bool) error {
 		return fmt.Errorf("server returned status %s", verifyResp.Status)
 	}
 
-	// 5. Update local license with sync timestamp, dynamic attributes and sync signature
-	cert.LastOnlineSyncTime = verifyResp.CurrentTime
-	cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
-	cert.VerifySignature = verifyResp.Signature
-	if verifyResp.Tier != "" {
-		cert.Tier = verifyResp.Tier
+	// Replace all signed certificate fields together. A sync response that only
+	// updates tier or expiry would invalidate the original certificate signature.
+	updatedCert := LicenseCertificate{
+		LicenseCode:        verifyResp.LicenseCode,
+		Tier:               verifyResp.Tier,
+		UUIDHash:           verifyResp.UUIDHash,
+		CPUHash:            verifyResp.CPUHash,
+		DiskHash:           verifyResp.DiskHash,
+		ExpiresAt:          verifyResp.ExpiresAt,
+		MaxDevices:         verifyResp.MaxDevices,
+		ActivatedDevices:   verifyResp.ActivatedDevices,
+		BuyerEmail:         verifyResp.BuyerEmail,
+		Signature:          verifyResp.CertificateSignature,
+		LastOnlineSyncTime: verifyResp.CurrentTime,
+		LastSeenLocalTime:  time.Now().Format(time.RFC3339),
+		VerifySignature:    verifyResp.SyncSignature,
 	}
-	if verifyResp.MaxDevices > 0 {
-		cert.MaxDevices = verifyResp.MaxDevices
+	if updatedCert.LicenseCode != cert.LicenseCode || !VerifyLicenseSignature(updatedCert) {
+		return errors.New("updated license certificate signature invalid")
 	}
-	if verifyResp.ExpiresAt != "" {
-		cert.ExpiresAt = verifyResp.ExpiresAt
+	if !VerifyFingerprint(updatedCert) {
+		return errors.New("updated license certificate fingerprint mismatch")
 	}
-	if verifyResp.BuyerEmail != "" {
-		cert.BuyerEmail = verifyResp.BuyerEmail
-	}
-
-	// Verify before saving to prevent bad cache corruption
-	if !VerifySyncSignature(cert) {
+	if !VerifySyncSignature(updatedCert) {
 		return errors.New("verification signature invalid")
 	}
+	cert = updatedCert
 
 	path := getLicenseFilePath()
 	if certBytes, err := json.Marshal(cert); err == nil {

@@ -41,6 +41,9 @@ async function makeRequest(path, headers = {}, body = null, method = 'POST') {
     });
 
     req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy(new Error(`Request timed out: ${method} ${path}`));
+    });
     if (data) req.write(data);
     req.end();
   });
@@ -88,6 +91,16 @@ async function runFullDrmTestSuite() {
       throw new Error("Device A activation failed! Response: " + JSON.stringify(actResA.data));
     }
     console.log("✓ Device A successfully activated. Ed25519 Signature length:", actResA.data.signature.length);
+
+    // 1.1 Online reconciliation must return a complete re-signed certificate.
+    logStep("1.1", "Online Reconciliation Certificate Integrity");
+    const verifyResA = await makeRequest('/api/v1/verify', {}, devA);
+    if (verifyResA.status !== 200 || !verifyResA.data.certificate_signature ||
+      verifyResA.data.tier !== 'PLUS' || verifyResA.data.uuid_hash !== devA.uuid_hash ||
+      verifyResA.data.cpu_hash !== devA.cpu_hash || verifyResA.data.disk_hash !== devA.disk_hash) {
+      throw new Error("Online reconciliation did not return a complete re-signed certificate: " + JSON.stringify(verifyResA.data));
+    }
+    console.log("✓ Online reconciliation returned a complete signed certificate.");
 
     // 2. Re-activation (Identical Device Fingerprint - Zero Quota Consumed)
     logStep(2, "Re-activation Test (Same Device A Re-bind)");

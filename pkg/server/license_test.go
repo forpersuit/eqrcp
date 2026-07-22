@@ -311,6 +311,113 @@ func TestIntegrationActivateAndLocalVerify(t *testing.T) {
 	}
 }
 
+func TestForceOnlineLicenseSyncReplacesCertificateForTierChange(t *testing.T) {
+	os.Setenv("EQT_TESTING", "false")
+	defer os.Setenv("EQT_TESTING", "true")
+
+	const licenseCode = "EQT-PLUS-20260722-SYNC"
+	const expiresAt = "2030-01-01T00:00:00Z"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			LicenseCode string `json:"license_code"`
+			UUIDHash    string `json:"uuid_hash"`
+			CPUHash     string `json:"cpu_hash"`
+			DiskHash    string `json:"disk_hash"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		switch r.URL.Path {
+		case "/api/v1/activate":
+			cert := LicenseCertificate{
+				LicenseCode: licenseCode,
+				Tier:        "PLUS",
+				UUIDHash:    req.UUIDHash,
+				CPUHash:     req.CPUHash,
+				DiskHash:    req.DiskHash,
+				ExpiresAt:   "LIFETIME",
+				MaxDevices:  2,
+			}
+			cert.LastOnlineSyncTime = time.Now().UTC().Format(time.RFC3339)
+			cert.Signature = signTestPayload(cert)
+			cert.VerifySignature = signTestVerifyPayload(cert)
+			_ = json.NewEncoder(w).Encode(cert)
+		case "/api/v1/verify":
+			if req.LicenseCode != licenseCode {
+				http.Error(w, "unexpected license code", http.StatusBadRequest)
+				return
+			}
+			cert := LicenseCertificate{
+				LicenseCode:      licenseCode,
+				Tier:             "PRO",
+				UUIDHash:         req.UUIDHash,
+				CPUHash:          req.CPUHash,
+				DiskHash:         req.DiskHash,
+				ExpiresAt:        expiresAt,
+				MaxDevices:       3,
+				ActivatedDevices: 1,
+				BuyerEmail:       "buyer@example.com",
+			}
+			cert.LastOnlineSyncTime = time.Now().UTC().Format(time.RFC3339)
+			cert.Signature = signTestPayload(cert)
+			cert.VerifySignature = signTestVerifyPayload(cert)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status":                "OK",
+				"license_code":          cert.LicenseCode,
+				"tier":                  cert.Tier,
+				"uuid_hash":             cert.UUIDHash,
+				"cpu_hash":              cert.CPUHash,
+				"disk_hash":             cert.DiskHash,
+				"max_devices":           cert.MaxDevices,
+				"activated_devices":     cert.ActivatedDevices,
+				"expires_at":            cert.ExpiresAt,
+				"buyer_email":           cert.BuyerEmail,
+				"certificate_signature": cert.Signature,
+				"current_time":          cert.LastOnlineSyncTime,
+				"signature":             cert.VerifySignature,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+	ResetLicense()
+	defer ResetLicense()
+
+	if err := ActivateLicenseOnline(licenseCode); err != nil {
+		t.Fatalf("ActivateLicenseOnline() error = %v", err)
+	}
+	if err := ForceOnlineLicenseSync(); err != nil {
+		t.Fatalf("ForceOnlineLicenseSync() error = %v", err)
+	}
+
+	cert, ok := GetLocalLicenseInfo()
+	if !ok {
+		t.Fatal("expected synchronized license in cache")
+	}
+	if cert.Tier != "PRO" || cert.ExpiresAt != expiresAt || cert.MaxDevices != 3 || cert.ActivatedDevices != 1 {
+		t.Fatalf("synchronized certificate = %+v, want PRO certificate fields", cert)
+	}
+
+	// Simulate a process restart: only a valid re-signed certificate may restore PRO.
+	licenseCacheMu.Lock()
+	cachedLicense = nil
+	hasCachedLicense = false
+	licenseCacheMu.Unlock()
+	SetPaidStatus(false, "", "", "")
+	if !VerifyLocalLicense() {
+		t.Fatal("expected re-signed synchronized certificate to verify after restart")
+	}
+	if !GetPaidStatus() || GetLicenseTier() != "PRO" {
+		t.Fatalf("restored status = paid:%t tier:%s, want paid PRO", GetPaidStatus(), GetLicenseTier())
+	}
+}
+
 func TestPrecomputeFingerprintsNonBlocking(t *testing.T) {
 	// Reset states
 	fingerprintMu.Lock()

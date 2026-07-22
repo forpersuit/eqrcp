@@ -1816,13 +1816,22 @@ export default {
         const signatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
         const signatureHex = bufToHex(signatureBuf);
 
+        const certificatePayloadStr = `${license_code}|${license.tier || "PLUS"}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${baseExpiresAt}|${license.max_devices || 2}`;
+        const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, encoder.encode(certificatePayloadStr));
+        const certificateSignatureHex = bufToHex(certificateSignatureBuf);
+
         return new Response(JSON.stringify({
           status: "OK",
           license_code: license_code,
           tier: license.tier || "PLUS",
+          uuid_hash: uuid_hash || "",
+          cpu_hash: cpu_hash || "",
+          disk_hash: disk_hash || "",
           max_devices: license.max_devices || 2,
+          activated_devices: activations.length,
           expires_at: baseExpiresAt,
           buyer_email: license.buyer_email || "",
+          certificate_signature: certificateSignatureHex,
           current_time: currentTime,
           signature: signatureHex
         }), {
