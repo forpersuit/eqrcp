@@ -304,7 +304,29 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 // It collects the non-empty values of uuid_hash, cpu_hash, disk_hash, sorts them, and
 // SHA256-hashes their "|"-joined string. The result never changes unless hardware changes.
 func GetDeviceStableID() string {
+	fingerprintMu.Lock()
+	cached := hasCached
+	fingerprintMu.Unlock()
+
+	if !cached {
+		// Wait up to 1 second for background precomputation to finish (takes ~5ms normally)
+		for i := 0; i < 100; i++ {
+			time.Sleep(10 * time.Millisecond)
+			fingerprintMu.Lock()
+			cached = hasCached
+			fingerprintMu.Unlock()
+			if cached {
+				break
+			}
+		}
+	}
+
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	if uuid == "" && cpu == "" && disk == "" && !cached {
+		uuid = GetBoardUUID()
+		cpu = GetCPUSerial()
+		disk = GetSystemDiskSerial()
+	}
 
 	// Collect non-empty fingerprint values and sort for determinism
 	parts := []string{}
