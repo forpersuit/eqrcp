@@ -1248,6 +1248,7 @@
         on:editAgain={handleEditAgain}
         on:resendFile={handleResendFile}
         on:openFolder={handleOpenFolder}
+        on:loadOlderHistory={() => client?.loadOlderHistory()}
       />
 
       <MessageComposer 

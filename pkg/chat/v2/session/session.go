@@ -65,14 +65,10 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	// Replay missed events safely ensuring we never leak history before joinSeq.
 	// Cold-start clients (empty local UI) send afterSeq=joinSeq to rehydrate history;
 	// warm reconnects keep a high afterSeq for incremental missed events only.
+	// Large gaps are paged: only the newest History page is pushed; older pages
+	// are fetched via load_history.
 	startSeq := ResolveReplayStartSeq(afterSeq, joinSeq, s.MessageStore.CurrentSeq())
-
-	events := s.MessageStore.GetSince(startSeq)
-	for _, e := range events {
-		if (e.Message != nil || e.Transfer != nil) && s.isEventVisibleTo(c, e) {
-			c.Send(e)
-		}
-	}
+	s.sendHistoryPage(c, startSeq, 0, DefaultHistoryPageSize, "")
 
 	// Broadcast presence update
 	s.broadcastPresence()
@@ -425,6 +421,79 @@ func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelo
 		return c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
 	}
 	return true
+}
+
+// LoadHistory delivers one older page of message events for the client.
+// Floor is joinSeq (no pre-join leak); ceiling is beforeSeq (exclusive).
+func (s *Session) LoadHistory(c *Client, joinSeq, beforeSeq int64, limit int, commandID string) {
+	if beforeSeq <= 0 {
+		c.Send(protocol.EventEnvelope{
+			Type:      protocol.EventHistoryPage,
+			Time:      time.Now(),
+			CommandID: commandID,
+			History:   &protocol.HistoryPage{HasMore: false, Count: 0},
+		})
+		return
+	}
+	floor := joinSeq
+	if floor < 0 {
+		floor = 0
+	}
+	s.sendHistoryPage(c, floor, beforeSeq, limit, commandID)
+}
+
+// sendHistoryPage pushes up to limit newest message events in (afterSeq, beforeSeq)
+// and always finishes with a history_page meta event (not stored in MessageStore).
+func (s *Session) sendHistoryPage(c *Client, afterSeq, beforeSeq int64, limit int, commandID string) {
+	limit = NormalizeHistoryLimit(limit)
+	page, hasMore := s.MessageStore.SelectMessageHistoryPage(afterSeq, beforeSeq, limit)
+
+	var oldestSeq, newestSeq int64
+	sent := 0
+	for _, e := range page {
+		if !s.isEventVisibleTo(c, e) {
+			continue
+		}
+		c.Send(e)
+		sent++
+		if oldestSeq == 0 || e.Seq < oldestSeq {
+			oldestSeq = e.Seq
+		}
+		if e.Seq > newestSeq {
+			newestSeq = e.Seq
+		}
+	}
+
+	// If visibility filtered the whole page, still report hasMore from store selection
+	// so the client can walk older ranges; oldestSeq falls back to beforeSeq when empty.
+	if sent == 0 && hasMore && beforeSeq > 0 {
+		// Client should retry with a lower beforeSeq; without a cursor, clear hasMore
+		// only when the store page was empty.
+	}
+	if sent == 0 {
+		// No visible messages in this page: do not claim a cursor that would loop forever.
+		// If the store had more, step the cursor to the oldest candidate so next load moves.
+		if len(page) > 0 {
+			oldestSeq = page[0].Seq
+			newestSeq = page[len(page)-1].Seq
+		} else {
+			hasMore = false
+			oldestSeq = 0
+			newestSeq = 0
+		}
+	}
+
+	c.Send(protocol.EventEnvelope{
+		Type:      protocol.EventHistoryPage,
+		Time:      time.Now(),
+		CommandID: commandID,
+		History: &protocol.HistoryPage{
+			HasMore:   hasMore,
+			OldestSeq: oldestSeq,
+			NewestSeq: newestSeq,
+			Count:     sent,
+		},
+	})
 }
 
 // isEventVisibleTo checks if a generic event envelope is visible to a client.

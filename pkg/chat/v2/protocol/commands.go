@@ -15,6 +15,9 @@ const (
 	CommandReportProgress CommandType = "report_progress"
 	CommandUpdateClient   CommandType = "update_client"
 	CommandKickClient     CommandType = "kick_client"
+	// CommandLoadHistory requests an older page of message events
+	// (seq in (joinSeq, beforeSeq)), newest-first page of up to limit items.
+	CommandLoadHistory CommandType = "load_history"
 )
 
 // ClientInfo describes a chat client at connection time.
@@ -40,6 +43,11 @@ type CommandEnvelope struct {
 	ClientID   string      `json:"clientId,omitempty"`
 	AfterSeq   int64       `json:"afterSeq,omitempty"`
 	JoinSeq    int64       `json:"joinSeq,omitempty"`
+	// BeforeSeq is the exclusive upper bound for load_history (typically the
+	// oldest seq the client already has). Zero means no upper bound.
+	BeforeSeq  int64       `json:"beforeSeq,omitempty"`
+	// Limit is the max message events for load_history / connect replay page.
+	Limit      int         `json:"limit,omitempty"`
 	Text       string      `json:"text,omitempty"`
 	MessageID  string      `json:"messageId,omitempty"`
 	TransferID string      `json:"transferId,omitempty"`

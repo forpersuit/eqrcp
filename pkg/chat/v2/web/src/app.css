@@ -567,6 +567,16 @@ h1 {
     min-height: 0;
 }
 .messages::-webkit-scrollbar { display: none; }
+.history-pager {
+    align-self: center;
+    color: var(--muted, #6b7c72);
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0 0 4px;
+    padding: 6px 12px;
+    text-align: center;
+    user-select: none;
+}
 /* ── Empty state ── */
 .messages-empty {
     align-items: center;

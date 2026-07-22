@@ -9,7 +9,8 @@ export type CommandType =
   | 'log'
   | 'report_progress'
   | 'update_client'
-  | 'kick_client';
+  | 'kick_client'
+  | 'load_history';
 
 export interface ClientInfo {
   token: string;
@@ -29,6 +30,8 @@ export interface CommandEnvelope {
   clientId?: string;
   afterSeq?: number;
   joinSeq?: number;
+  beforeSeq?: number;
+  limit?: number;
   text?: string;
   messageId?: string;
   transferId?: string;
@@ -49,7 +52,15 @@ export type EventType =
   | 'transfer_completed'
   | 'transfer_failed'
   | 'transfer_cancelled'
-  | 'error';
+  | 'error'
+  | 'history_page';
+
+export interface HistoryPage {
+  hasMore: boolean;
+  oldestSeq?: number;
+  newestSeq?: number;
+  count: number;
+}
 
 export type MessageType =
   | 'text'
@@ -125,6 +136,7 @@ export interface EventEnvelope {
   presence?: PresenceEvent;
   transfer?: TransferEvent;
   error?: ErrorPayload;
+  history?: HistoryPage;
 }
 
 // ── Seeded HSL theme calculations re-exported from theme.ts ──

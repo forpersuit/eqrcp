@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+  import { createEventDispatcher, onDestroy, onMount, beforeUpdate, afterUpdate, tick } from 'svelte';
   import { getTranslation } from '../lib/i18n';
-  import { connState } from '../state/chatStore';
+  import { connState, historyHasMore, historyLoading } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
   import { currentDevice, peers, chatSessionStatus } from '../state/chatStore';
@@ -31,6 +31,38 @@
   let isNearBottomValue = true;
   let programmaticScroll = false;
   let programmaticScrollTimer: number | null = null;
+
+  // Preserve viewport when older history is prepended
+  let prevFirstId = '';
+  let pendingScrollAdjust = false;
+  let prevScrollHeight = 0;
+  let prevScrollTop = 0;
+
+  beforeUpdate(() => {
+    if (!messagesEl || messages.length === 0) return;
+    const firstId = messages[0]?.id || '';
+    if (prevFirstId && firstId && firstId !== prevFirstId) {
+      pendingScrollAdjust = true;
+      prevScrollHeight = messagesEl.scrollHeight;
+      prevScrollTop = messagesEl.scrollTop;
+    }
+  });
+
+  afterUpdate(() => {
+    if (pendingScrollAdjust && messagesEl) {
+      const delta = messagesEl.scrollHeight - prevScrollHeight;
+      messagesEl.scrollTop = prevScrollTop + delta;
+      pendingScrollAdjust = false;
+      programmaticScroll = true;
+      if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);
+      programmaticScrollTimer = window.setTimeout(() => {
+        programmaticScroll = false;
+      }, 80);
+    }
+    if (messages.length > 0) {
+      prevFirstId = messages[0]?.id || '';
+    }
+  });
 
   function handleCopy(messageId: string, text: string) {
     const doCopy = () => {
@@ -231,6 +263,16 @@
       if (!programmaticScroll) {
         followLatest = false;
       }
+    }
+
+    // Near top: request older history page (server-side pagination).
+    if (
+      !programmaticScroll &&
+      messagesEl.scrollTop < 80 &&
+      $historyHasMore &&
+      !$historyLoading
+    ) {
+      dispatch('loadOlderHistory');
     }
   }
 
@@ -724,6 +766,15 @@
 
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
+    {#if $historyHasMore || $historyLoading}
+      <div class="history-pager" role="status">
+        {#if $historyLoading}
+          {getTranslation('loadingHistory', currentLang)}
+        {:else}
+          {getTranslation('loadEarlierMessages', currentLang)}
+        {/if}
+      </div>
+    {/if}
     {#if showTipSystemMessage}
       <div class="system-message tip-message" style="margin-bottom: 12px; display: flex; justify-content: center; width: 100%;">
         <span class="system-text" style="

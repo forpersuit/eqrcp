@@ -1,7 +1,10 @@
 import { get } from 'svelte/store';
 import type { CommandEnvelope, EventEnvelope } from './types';
-import { chatActions, messages } from '../state/chatStore';
+import { chatActions, messages, historyHasMore, historyOldestSeq, historyLoading } from '../state/chatStore';
 import { resolveConnectAfterSeq } from './reconnectSeq';
+
+/** Default page size; must stay aligned with session.DefaultHistoryPageSize. */
+export const HISTORY_PAGE_SIZE = 100;
 
 // Track initial page connection globally across renames within the same page load
 let isInitialConnect = true;
@@ -260,15 +263,26 @@ export class ChatWebSocketClient {
   }
 
   private handleEvent(event: EventEnvelope): void {
-    // Record event watermark to ensure reliable reconnection replay
-    if (event.seq !== undefined && event.seq > 0 && event.type !== 'hello') {
-      localStorage.setItem(`eqt_after_seq_${this.token}`, event.seq.toString());
+    // Only advance watermark (never lower it) so older history pages do not
+    // corrupt cold/warm reconnect cursors.
+    if (
+      event.seq !== undefined &&
+      event.seq > 0 &&
+      event.type !== 'hello' &&
+      event.type !== 'history_page'
+    ) {
+      const key = `eqt_after_seq_${this.token}`;
+      const prev = parseInt(localStorage.getItem(key) || '0', 10);
+      if (event.seq > prev) {
+        localStorage.setItem(key, event.seq.toString());
+      }
     }
 
     switch (event.type) {
       case 'hello':
         chatActions.setConnectionState('connected');
         chatActions.clearTransfers();
+        chatActions.resetHistoryPager();
         if (event.commandId && event.commandId.startsWith('init-')) {
           chatActions.addSystemMessage(`Registered presence roster as ${this.clientLabel}.`);
         }
@@ -278,6 +292,20 @@ export class ChatWebSocketClient {
           localStorage.setItem(keyJoin, event.seq.toString());
         }
         this.sendLog(`[SYSTEM] Handshake Hello received. Sequence: ${event.seq}`);
+        break;
+
+      case 'history_page':
+        if (event.history) {
+          chatActions.setHistoryPage(
+            !!event.history.hasMore,
+            event.history.oldestSeq || 0
+          );
+          this.sendLog(
+            `[EVENT] History page: count=${event.history.count}, hasMore=${event.history.hasMore}, oldestSeq=${event.history.oldestSeq || 0}`
+          );
+        } else {
+          chatActions.setHistoryLoading(false);
+        }
         break;
 
       case 'heartbeat':
@@ -412,6 +440,27 @@ export class ChatWebSocketClient {
       commandId: `txt-${Date.now()}`,
       text: text
     });
+  }
+
+  /** Request the next older page of messages (scroll-up pagination). */
+  public loadOlderHistory(): void {
+    if (get(historyLoading) || !get(historyHasMore)) {
+      return;
+    }
+    const beforeSeq = get(historyOldestSeq);
+    if (!beforeSeq || beforeSeq <= 0) {
+      return;
+    }
+    const joinSeq = parseInt(localStorage.getItem(`eqt_join_seq_${this.token}`) || '0', 10);
+    chatActions.setHistoryLoading(true);
+    this.sendCommand({
+      type: 'load_history',
+      commandId: `hist-${Date.now()}`,
+      joinSeq,
+      beforeSeq,
+      limit: HISTORY_PAGE_SIZE
+    });
+    this.sendLog(`[SYSTEM] load_history beforeSeq=${beforeSeq} joinSeq=${joinSeq}`);
   }
 
   public startTransfer(transferId: string): void {

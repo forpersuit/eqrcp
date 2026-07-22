@@ -670,6 +670,24 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Senden Sie Text oder lokale große Dateien an andere verbundene Geräte.',
     fr: 'Envoyez du texte ou de gros fichiers locaux à d\'autres appareils connectés.'
   },
+  loadEarlierMessages: {
+    zh: '上滑加载更早消息',
+    en: 'Scroll up for earlier messages',
+    ja: '上にスクロールして以前のメッセージを読み込む',
+    ko: '위로 스크롤하여 이전 메시지 불러오기',
+    es: 'Desplácese hacia arriba para ver mensajes anteriores',
+    de: 'Nach oben scrollen für ältere Nachrichten',
+    fr: 'Faites défiler vers le haut pour les messages plus anciens'
+  },
+  loadingHistory: {
+    zh: '正在加载历史消息…',
+    en: 'Loading earlier messages…',
+    ja: '以前のメッセージを読み込み中…',
+    ko: '이전 메시지를 불러오는 중…',
+    es: 'Cargando mensajes anteriores…',
+    de: 'Ältere Nachrichten werden geladen…',
+    fr: 'Chargement des messages plus anciens…'
+  },
   desktopTip: {
     zh: '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。',
     en: 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.',

@@ -16,6 +16,20 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
+// readEvent skips history_page meta events emitted after Register / load_history.
+func readEvent(ctx context.Context, t *testing.T, conn *websocket.Conn) protocol.EventEnvelope {
+	t.Helper()
+	for {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, conn, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type != protocol.EventHistoryPage {
+			return ev
+		}
+	}
+}
+
 func TestWebSocketHelloAndHeartbeat(t *testing.T) {
 	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 	logger := &diag.MemoryLogger{}
@@ -262,29 +276,20 @@ func TestWebSocketTwoClientsExchangeText(t *testing.T) {
 		t.Fatalf("B helloConn = %#v", helloConnB)
 	}
 
-	// Read A presence changed (A self joins)
-	var presA1 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connA, &presA1); err != nil {
-		t.Fatal(err)
-	}
+	// Read A presence changed (A self joins) — may be preceded by history_page
+	presA1 := readEvent(ctx, t, connA)
 	if presA1.Type != protocol.EventPresenceChanged {
 		t.Fatalf("presA1 = %#v", presA1)
 	}
 
 	// Read A presence changed (B joins)
-	var presA2 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connA, &presA2); err != nil {
-		t.Fatal(err)
-	}
+	presA2 := readEvent(ctx, t, connA)
 	if presA2.Type != protocol.EventPresenceChanged || len(presA2.Presence.Devices) != 2 {
 		t.Fatalf("presA2 = %#v", presA2)
 	}
 
 	// Read B presence changed (B sees both A and B)
-	var presB1 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connB, &presB1); err != nil {
-		t.Fatal(err)
-	}
+	presB1 := readEvent(ctx, t, connB)
 	if presB1.Type != protocol.EventPresenceChanged || len(presB1.Presence.Devices) != 2 {
 		t.Fatalf("presB1 = %#v", presB1)
 	}
@@ -353,10 +358,10 @@ func TestWebSocketReconnectRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read A presence changed
-	var pA1 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connA1, &pA1); err != nil {
-		t.Fatal(err)
+	// Read A presence changed (history_page may precede it)
+	pA1 := readEvent(ctx, t, connA1)
+	if pA1.Type != protocol.EventPresenceChanged {
+		t.Fatalf("pA1 = %#v", pA1)
 	}
 	seqOfPresence := pA1.Seq
 
@@ -370,9 +375,9 @@ func TestWebSocketReconnectRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var mA1 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connA1, &mA1); err != nil {
-		t.Fatal(err)
+	mA1 := readEvent(ctx, t, connA1)
+	if mA1.Type != protocol.EventMessageAdded || mA1.Message == nil || mA1.Message.Text != "message 1" {
+		t.Fatalf("mA1 = %#v", mA1)
 	}
 	seqOfMessage := mA1.Seq
 
@@ -407,11 +412,8 @@ func TestWebSocketReconnectRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Expect mA1 message (seq = seqOfMessage) replayed
-	var mA2 protocol.EventEnvelope
-	if err := wsjson.Read(ctx, connA2, &mA2); err != nil {
-		t.Fatal(err)
-	}
+	// Expect mA1 message (seq = seqOfMessage) replayed (history_page may follow)
+	mA2 := readEvent(ctx, t, connA2)
 	if mA2.Seq != seqOfMessage || mA2.Type != protocol.EventMessageAdded || mA2.Message.Text != "message 1" {
 		t.Fatalf("mA2 = %#v, expected seq = %d", mA2, seqOfMessage)
 	}

@@ -20,7 +20,18 @@ const (
 	EventTransferCancelled EventType = "transfer_cancelled"
 	EventError             EventType = "error"
 	EventRequestFileData   EventType = "request_file_data"
+	// EventHistoryPage accompanies a paged message replay (connect or load_history).
+	// It is not stored in MessageStore and does not advance client afterSeq.
+	EventHistoryPage EventType = "history_page"
 )
+
+// HistoryPage describes a slice of message history delivered to one client.
+type HistoryPage struct {
+	HasMore   bool  `json:"hasMore"`
+	OldestSeq int64 `json:"oldestSeq,omitempty"`
+	NewestSeq int64 `json:"newestSeq,omitempty"`
+	Count     int   `json:"count"`
+}
 
 // MessageType identifies a chat message payload type.
 type MessageType string
@@ -106,4 +117,5 @@ type EventEnvelope struct {
 	Presence  *PresenceEvent `json:"presence,omitempty"`
 	Transfer  *TransferEvent `json:"transfer,omitempty"`
 	Error     *ErrorPayload  `json:"error,omitempty"`
+	History   *HistoryPage   `json:"history,omitempty"`
 }

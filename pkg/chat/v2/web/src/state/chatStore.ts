@@ -8,11 +8,33 @@ export const connState = writable<'connecting' | 'connected' | 'disconnected'>('
 export const currentDevice = writable<Device | null>(null);
 export const systemMessages = writable<string[]>([]); // For in-app notifications
 export const chatSessionStatus = writable<'active' | 'kicked' | 'left'>('active');
+/** True when older message pages remain above the join boundary. */
+export const historyHasMore = writable(false);
+/** Exclusive cursor for load_history (oldest seq currently in the UI page window). */
+export const historyOldestSeq = writable(0);
+export const historyLoading = writable(false);
 
 // Actions - Only update state through explicit actions
 export const chatActions = {
   setSessionStatus(status: 'active' | 'kicked' | 'left') {
     chatSessionStatus.set(status);
+  },
+  setHistoryPage(hasMore: boolean, oldestSeq: number) {
+    historyHasMore.set(hasMore);
+    if (oldestSeq > 0) {
+      historyOldestSeq.set(oldestSeq);
+    } else if (!hasMore) {
+      historyOldestSeq.set(0);
+    }
+    historyLoading.set(false);
+  },
+  setHistoryLoading(loading: boolean) {
+    historyLoading.set(loading);
+  },
+  resetHistoryPager() {
+    historyHasMore.set(false);
+    historyOldestSeq.set(0);
+    historyLoading.set(false);
   },
   addMessage(msg: Message) {
     if (msg.text) {

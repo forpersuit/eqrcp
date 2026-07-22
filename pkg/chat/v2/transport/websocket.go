@@ -315,6 +315,13 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			}
 			diag.Emit(ctx, h.logger, diag.LevelInfo, fmt.Sprintf("[WebSocket ACK RECEIVED] Client ID=%s (Peer=%s) acknowledged receipt of messageID=%s", cl.ID, cl.Peer, cmd.MessageID), nil, fields...)
 
+		case protocol.CommandLoadHistory:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			sess.LoadHistory(cl, cmd.JoinSeq, cmd.BeforeSeq, cmd.Limit, cmd.CommandID)
+
 		case protocol.CommandLog:
 			if cl != nil {
 				h.writeClientLog(token, cl.Peer, cmd.Text)

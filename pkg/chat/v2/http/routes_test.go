@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -610,6 +611,147 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 
 	if !gotOfflineMessage {
 		t.Fatal("expected offline message from Bob during replay, but it was not received")
+	}
+}
+
+// TestHistoryPaginationLoadOlder verifies connect only delivers the newest page
+// and load_history returns older messages without pre-join leakage.
+func TestHistoryPaginationLoadOlder(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/hist-page-token/ws"
+
+	connHost, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connHost.Close(websocket.StatusNormalClosure, "done")
+	var hello protocol.EventEnvelope
+	_ = wsjson.Read(ctx, connHost, &hello)
+	_ = wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-host",
+		Client:    protocol.ClientInfo{Label: "Host", Peer: "peer-host"},
+	})
+	_ = wsjson.Read(ctx, connHost, &hello)
+
+	// Produce more than one history page of messages.
+	const total = 120
+	for i := 0; i < total; i++ {
+		if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+			Type:      protocol.CommandSendText,
+			CommandID: fmt.Sprintf("m-%d", i),
+			Text:      fmt.Sprintf("msg-%03d", i),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Drain host until last message seen
+	for {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connHost, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil && ev.Message.Text == fmt.Sprintf("msg-%03d", total-1) {
+			break
+		}
+	}
+
+	connMobile, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connMobile.Close(websocket.StatusNormalClosure, "done")
+	_ = wsjson.Read(ctx, connMobile, &hello)
+	// Cold-start style rehydrate from joinSeq=0 floor via afterSeq=0 joinSeq=1
+	// (joinSeq>0, afterSeq=0 → startSeq=joinSeq).
+	if err := wsjson.Write(ctx, connMobile, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-mobile",
+		Client:    protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"},
+		AfterSeq:  0,
+		JoinSeq:   1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = wsjson.Read(ctx, connMobile, &hello)
+
+	firstPage := map[string]bool{}
+	var hist *protocol.HistoryPage
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && hist == nil {
+		readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+		var ev protocol.EventEnvelope
+		err := wsjson.Read(readCtx, connMobile, &ev)
+		readCancel()
+		if err != nil {
+			continue
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil {
+			firstPage[ev.Message.Text] = true
+		}
+		if ev.Type == protocol.EventHistoryPage {
+			hist = ev.History
+		}
+	}
+	if hist == nil {
+		t.Fatal("expected history_page on connect")
+	}
+	if !hist.HasMore {
+		t.Fatal("expected hasMore on first page")
+	}
+	if !firstPage[fmt.Sprintf("msg-%03d", total-1)] {
+		t.Fatal("first page missing newest message")
+	}
+	if firstPage["msg-000"] {
+		t.Fatal("first page should not include oldest message")
+	}
+	oldest := hist.OldestSeq
+	if oldest <= 0 {
+		t.Fatalf("invalid oldestSeq %d", oldest)
+	}
+
+	if err := wsjson.Write(ctx, connMobile, protocol.CommandEnvelope{
+		Type:      protocol.CommandLoadHistory,
+		CommandID: "hist-1",
+		JoinSeq:   1,
+		BeforeSeq: oldest,
+		Limit:     100,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	older := map[string]bool{}
+	var hist2 *protocol.HistoryPage
+	deadline2 := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline2) && hist2 == nil {
+		readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+		var ev protocol.EventEnvelope
+		err := wsjson.Read(readCtx, connMobile, &ev)
+		readCancel()
+		if err != nil {
+			continue
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil {
+			older[ev.Message.Text] = true
+		}
+		if ev.Type == protocol.EventHistoryPage && ev.CommandID == "hist-1" {
+			hist2 = ev.History
+		}
+	}
+	if hist2 == nil {
+		t.Fatal("expected history_page for load_history")
+	}
+	if !older["msg-000"] {
+		t.Fatalf("older page missing msg-000: count=%d", len(older))
+	}
+	if older[fmt.Sprintf("msg-%03d", total-1)] {
+		t.Fatal("older page must not re-include newest")
 	}
 }
 
