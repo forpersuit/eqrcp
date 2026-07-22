@@ -365,6 +365,10 @@ func doOnlineLicenseSync(force bool) error {
 	var verifyResp struct {
 		Status      string `json:"status"`
 		LicenseCode string `json:"license_code"`
+		Tier        string `json:"tier"`
+		MaxDevices  int    `json:"max_devices"`
+		ExpiresAt   string `json:"expires_at"`
+		BuyerEmail  string `json:"buyer_email"`
 		CurrentTime string `json:"current_time"`
 		Signature   string `json:"signature"`
 	}
@@ -376,10 +380,22 @@ func doOnlineLicenseSync(force bool) error {
 		return fmt.Errorf("server returned status %s", verifyResp.Status)
 	}
 
-	// 5. Update local license with sync timestamp and sync signature
+	// 5. Update local license with sync timestamp, dynamic attributes and sync signature
 	cert.LastOnlineSyncTime = verifyResp.CurrentTime
 	cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
 	cert.VerifySignature = verifyResp.Signature
+	if verifyResp.Tier != "" {
+		cert.Tier = verifyResp.Tier
+	}
+	if verifyResp.MaxDevices > 0 {
+		cert.MaxDevices = verifyResp.MaxDevices
+	}
+	if verifyResp.ExpiresAt != "" {
+		cert.ExpiresAt = verifyResp.ExpiresAt
+	}
+	if verifyResp.BuyerEmail != "" {
+		cert.BuyerEmail = verifyResp.BuyerEmail
+	}
 
 	// Verify before saving to prevent bad cache corruption
 	if !VerifySyncSignature(cert) {

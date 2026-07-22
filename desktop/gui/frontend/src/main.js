@@ -2322,7 +2322,7 @@ function renderAboutPanel() {
                     <div class="about-plan-header">
                         <div class="about-plan-tag">
                             <span>${t('plan_label')}</span>
-                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh') || '刷新状态')}">
+                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || '立即同步并刷新授权状态与付费权益')}">
                                 <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
                             </button>
                         </div>
@@ -2379,15 +2379,9 @@ function renderAboutPanel() {
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('temp_space_available') || 'Temp Space'}</span>
                     <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.uploadDirFreeSpace || 'Unknown')}</span>
                 </div>
-                <div class="email-copy-wrapper" data-copy-text="${escapeAttr(state.status?.deviceID || '')}" style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left; cursor: pointer; position: relative; transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制设备 ID')}">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">Device ID</span>
-                        <span style="font-size: 10px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('click_to_copy') || '点击复制'}</span>
-                    </div>
-                    <span style="font-size: 13px; font-weight: 700; font-family: monospace; color: var(--text-primary); letter-spacing: 0.08em;">${escapeHTML(state.status?.deviceID || '------')}</span>
-                    <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
-                        ✓ ${escapeHTML(t('copied') || '已复制')}
-                    </span>
+                <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
+                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Device ID</span>
+                    <span style="font-size: 13px; font-weight: 700; font-family: monospace; color: var(--text-primary); letter-spacing: 0.08em; user-select: text;">${escapeHTML(state.status?.deviceID || '------')}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>

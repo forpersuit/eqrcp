@@ -1783,6 +1783,11 @@ export default {
           });
         }
 
+        let baseExpiresAt = license.expires_at || "LIFETIME";
+        if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0) {
+          baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
+        }
+
         // Generate verification signature containing server timestamp
         const currentTime = new Date().toISOString();
         // Formulate the raw verify payload: OK|license_code|uuid_hash|cpu_hash|disk_hash|current_time
@@ -1814,6 +1819,10 @@ export default {
         return new Response(JSON.stringify({
           status: "OK",
           license_code: license_code,
+          tier: license.tier || "PLUS",
+          max_devices: license.max_devices || 2,
+          expires_at: baseExpiresAt,
+          buyer_email: license.buyer_email || "",
           current_time: currentTime,
           signature: signatureHex
         }), {
