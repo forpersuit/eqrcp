@@ -164,6 +164,49 @@ h1 {
     gap: 8px;
     position: relative;
 }
+.quota-pill {
+    align-items: center;
+    background: #eef5ee;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--accent-strong);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 800;
+    gap: 6px;
+    height: 36px;
+    padding: 0 11px;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.quota-pill svg {
+    fill: none;
+    height: 14px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 14px;
+    flex-shrink: 0;
+}
+.quota-pill.urgent {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+    animation: quota-pulse 1.6s ease-in-out infinite;
+}
+.quota-pill.degraded {
+    background: #f4f4f5;
+    border-color: #d4d4d8;
+    color: #52525b;
+    animation: none;
+}
+@keyframes quota-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.72; }
+}
 .device-pill {
     align-items: center;
     background: #f4f8f4;
@@ -757,6 +800,16 @@ h1 {
     }
     .limit-status-pill {
         display: none !important;
+    }
+    .quota-pill {
+        height: 32px;
+        padding: 0 8px;
+        font-size: 11px;
+        gap: 4px;
+    }
+    .quota-pill svg {
+        height: 12px;
+        width: 12px;
     }
     .device-pill {
         height: 32px;

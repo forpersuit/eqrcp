@@ -11,6 +11,69 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Kostenlos',
     fr: 'Gratuit'
   },
+  freeQuotaRemaining: {
+    zh: '剩余 {time}',
+    en: '{time} left',
+    ja: '残り {time}',
+    ko: '{time} 남음',
+    es: 'Quedan {time}',
+    de: 'Noch {time}',
+    fr: '{time} restant'
+  },
+  freeQuotaDegraded: {
+    zh: '已降级',
+    en: 'Limited',
+    ja: '制限中',
+    ko: '제한됨',
+    es: 'Limitado',
+    de: 'Eingeschränkt',
+    fr: 'Limité'
+  },
+  freeQuotaHint: {
+    zh: '今日免费 Chat 额度；仅对端连入后计时。超额后附件限速 100KB/s、单文件 ≤2MB，文本不受影响。',
+    en: 'Daily free chat time. Counts only while a remote peer is online. After quota: attachments 100KB/s and ≤2MB; text stays free.',
+    ja: '本日の無料チャット枠。相手接続中のみ計測。超過後は添付100KB/s・2MBまで、テキストは影響なし。',
+    ko: '오늘 무료 채팅 시간. 상대 연결 시에만 측정. 초과 후 첨부 100KB/s·2MB, 텍스트는 유지.',
+    es: 'Tiempo gratis diario. Solo cuenta con un peer remoto. Tras el cupo: adjuntos 100KB/s y ≤2MB; el texto sigue.',
+    de: 'Tägliches Gratis-Chat-Kontingent. Zählt nur mit Remote-Peer. Danach: Anhänge 100KB/s und ≤2MB; Text bleibt frei.',
+    fr: 'Quota chat gratuit du jour. Compte seulement avec un pair distant. Après: pièces jointes 100KB/s et ≤2Mo; le texte reste libre.'
+  },
+  freeQuotaDaily: {
+    zh: '每日免费额度',
+    en: 'Daily free allowance',
+    ja: '1日の無料枠',
+    ko: '일일 무료 한도',
+    es: 'Cupo diario gratis',
+    de: 'Tägliches Gratis-Kontingent',
+    fr: 'Quota gratuit quotidien'
+  },
+  freeQuotaUsed: {
+    zh: '今日已用',
+    en: 'Used today',
+    ja: '本日の使用',
+    ko: '오늘 사용',
+    es: 'Usado hoy',
+    de: 'Heute verbraucht',
+    fr: "Utilisé aujourd'hui"
+  },
+  freeQuotaAttachmentPolicy: {
+    zh: '超额附件：100KB/s · ≤2MB',
+    en: 'Over quota: 100KB/s · ≤2MB files',
+    ja: '超過時: 100KB/s・2MBまで',
+    ko: '초과 시: 100KB/s · 2MB 이하',
+    es: 'Tras cupo: 100KB/s · ≤2MB',
+    de: 'Über Kontingent: 100KB/s · ≤2MB',
+    fr: 'Hors quota: 100Ko/s · ≤2Mo'
+  },
+  freeQuotaUpgrade: {
+    zh: '升级解锁无限 Chat',
+    en: 'Upgrade for unlimited chat',
+    ja: 'アップグレードで無制限チャット',
+    ko: '업그레이드로 무제한 채팅',
+    es: 'Mejora para chat ilimitado',
+    de: 'Upgrade für unbegrenzten Chat',
+    fr: 'Passez à un chat illimité'
+  },
   viewSubscription: {
     zh: '点击查看订阅详情',
     en: 'Click to view subscription details',

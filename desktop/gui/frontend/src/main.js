@@ -165,8 +165,9 @@ window.addEventListener('unhandledrejection', (event) => {
 initDragDrop(state, handleFileDrop);
 
 const agentEventsURL = 'http://127.0.0.1:48176/events';
-const chatDailyFreeMs = 5 * 60 * 1000;
-const chatUsageStorageKey = 'eqt.chat.dailyFreeUsage';
+// Free chat daily allowance (seconds) — must match server.FreeChatDailySeconds.
+const chatDailyFreeSeconds = 300;
+const chatDailyFreeMs = chatDailyFreeSeconds * 1000;
 const licenseStorageKey = 'eqt.license.activation';
 const redeemSecret = 'EQT-LOCAL-2026-V1';
 const licenseTiers = {
@@ -2186,13 +2187,6 @@ function renderSwitch(id, checked, disabled = false) {
             <span></span>
         </label>
     `;
-}
-
-function renderChatQuotaPill() {
-    if (hasPaidLicense()) {
-        return '';
-    }
-    return `<span class="chat-quota-pill" id="top-chat-quota" title="Daily free chat time">${escapeHTML(chatQuotaTopText())}</span>`;
 }
 
 function renderStatusBadge(status) {
@@ -5070,70 +5064,43 @@ function setMode(mode) {
 }
 
 function loadChatUsage() {
-    const today = todayKey();
-    state.chatUsageDate = today;
-    state.chatUsageMs = 0;
-    state.chatUsageStartedAt = 0;
-    try {
-        const saved = JSON.parse(window.localStorage.getItem(chatUsageStorageKey) || '{}');
-        if (saved.date === today) {
-            state.chatUsageMs = Math.max(0, Number(saved.usedMs || 0));
-        }
-    } catch {
-        state.chatUsageMs = 0;
-    }
-}
-
-function saveChatUsage() {
-    window.localStorage.setItem(chatUsageStorageKey, JSON.stringify({
-        date: todayKey(),
-        usedMs: Math.min(chatDailyFreeMs, Math.max(0, Math.round(state.chatUsageMs))),
-    }));
+    // No-op: free chat clock is owned by backend UsedSeconds (SSOT).
+    // Live countdown is shown inside the Chat V2 iframe title bar.
 }
 
 function startChatUsage() {
-    rollChatUsageDay();
-    if (hasPaidLicense() || state.chatUsageStartedAt || chatRemainingMs() <= 0) {
+    if (hasPaidLicense()) {
+        clearChatUsageTimer();
         return;
     }
-    state.chatUsageStartedAt = Date.now();
     scheduleChatUsageTimer();
 }
 
 function stopChatUsage() {
-    if (!state.chatUsageStartedAt) {
-        return;
-    }
-    state.chatUsageMs = Math.min(chatDailyFreeMs, state.chatUsageMs + Date.now() - state.chatUsageStartedAt);
-    state.chatUsageStartedAt = 0;
-    saveChatUsage();
     clearChatUsageTimer();
 }
 
 function scheduleChatUsageTimer() {
     clearChatUsageTimer();
     chatUsageTimer = window.setInterval(async () => {
-        saveChatUsageSnapshot();
         if (hasPaidLicense()) {
             clearChatUsageTimer();
             updateChatQuotaSurface();
             return;
         }
-        if (state.mode === 'chat') {
-            updateChatQuotaSurface();
+        if (state.mode !== 'chat') {
+            return;
         }
-    }, 1000);
+        try {
+            await loadStatusData();
+        } catch {
+            // Keep last known status if agent is briefly unavailable.
+        }
+        updateChatQuotaSurface();
+    }, 2000);
 }
 
 function updateChatQuotaSurface() {
-    const top = document.querySelector('#top-chat-quota');
-    if (top) {
-        if (hasPaidLicense()) {
-            top.remove();
-        } else {
-            top.textContent = chatQuotaTopText();
-        }
-    }
     const text = document.querySelector('#chat-quota-text');
     if (text) {
         text.textContent = chatQuotaText();
@@ -5166,42 +5133,13 @@ function clearChatUsageTimer() {
     }
 }
 
-function saveChatUsageSnapshot() {
-    rollChatUsageDay();
-    if (!state.chatUsageStartedAt) {
-        saveChatUsage();
-        return;
-    }
-    const usedMs = Math.min(chatDailyFreeMs, state.chatUsageMs + Date.now() - state.chatUsageStartedAt);
-    window.localStorage.setItem(chatUsageStorageKey, JSON.stringify({
-        date: todayKey(),
-        usedMs: Math.round(usedMs),
-    }));
-}
-
+// Remaining free chat time from backend UsedSeconds (single source of truth).
 function chatRemainingMs() {
-    rollChatUsageDay();
-    const activeMs = state.chatUsageStartedAt ? Date.now() - state.chatUsageStartedAt : 0;
-    return Math.max(0, chatDailyFreeMs - state.chatUsageMs - activeMs);
-}
-
-function rollChatUsageDay() {
-    const today = todayKey();
-    if (state.chatUsageDate === today) {
-        return;
+    if (hasPaidLicense()) {
+        return chatDailyFreeMs;
     }
-    state.chatUsageDate = today;
-    state.chatUsageMs = 0;
-    state.chatUsageStartedAt = 0;
-    state.chatQuotaNoticeShown = false;
-    saveChatUsage();
-}
-
-function todayKey() {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${now.getFullYear()}-${month}-${day}`;
+    const used = Math.max(0, Number(state.status?.usedSeconds || 0));
+    return Math.max(0, (chatDailyFreeSeconds - used) * 1000);
 }
 
 function formatDuration(ms) {
@@ -5219,17 +5157,7 @@ function chatQuotaText() {
     if (remaining <= 0) {
         return t('chat_time_used_up');
     }
-    return "";
-}
-
-function chatQuotaTopText() {
-    if (hasPaidLicense()) {
-        return `${licenseTiers[state.license.tier] || state.license.tier}`;
-    }
-    const remaining = chatRemainingMs();
-    if (remaining <= 0) {
-        return t('chat_top_used_up');
-    }
+    // Pre-start hint: remaining daily free chat time (live countdown is in Chat V2 header).
     return t('chat_top_time', { time: formatDuration(remaining) });
 }
 

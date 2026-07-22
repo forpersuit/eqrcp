@@ -28,11 +28,20 @@ import (
 
 const Version = "v2"
 
+// ChatQuotaInfo is the free-tier chat clock snapshot for the browser UI.
+// Defined here to avoid an import cycle with pkg/server.
+type ChatQuotaInfo struct {
+	IsPaid       bool `json:"isPaid"`
+	UsedSeconds  int  `json:"usedSeconds"`
+	DailySeconds int  `json:"dailySeconds"`
+}
+
 // Config controls the experimental chat v2 handler.
 type Config struct {
 	BasePath              string
 	Logger                diag.Logger
 	IsPaidOrUnrestricted  func() bool
+	GetChatQuota          func() ChatQuotaInfo
 	HostToken             func() string
 	DebugLog              func() bool
 	LogDir                func() string
@@ -57,6 +66,7 @@ type Handler struct {
 	scheduler            *bandwidth.Scheduler
 	ws                   *transport.WebSocketHandler
 	isPaidOrUnrestricted func() bool
+	getChatQuota         func() ChatQuotaInfo
 	hostToken            func() string
 	getLicenseTier       func() string
 	isClientKicked       func(token string) bool
@@ -144,6 +154,7 @@ func NewHandler(cfg Config) *Handler {
 		scheduler:            sched,
 		ws:                   ws,
 		isPaidOrUnrestricted: cfg.IsPaidOrUnrestricted,
+		getChatQuota:         cfg.GetChatQuota,
 		hostToken:            cfg.HostToken,
 		getLicenseTier:       getLicenseTier,
 		isClientKicked:       cfg.IsClientKicked,
@@ -602,10 +613,35 @@ func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request, token strin
 		tier = h.getLicenseTier()
 	}
 
+	quota := ChatQuotaInfo{DailySeconds: 300}
+	if h.getChatQuota != nil {
+		quota = h.getChatQuota()
+		if quota.DailySeconds <= 0 {
+			quota.DailySeconds = 300
+		}
+	} else if h.isPaidOrUnrestricted != nil {
+		// Fallback when only the unrestricted hook is wired (tests).
+		quota.IsPaid = h.isPaidOrUnrestricted()
+	}
+
+	remaining := quota.DailySeconds - quota.UsedSeconds
+	if remaining < 0 {
+		remaining = 0
+	}
+	freeDegraded := !quota.IsPaid && quota.UsedSeconds >= quota.DailySeconds
+	if h.isPaidOrUnrestricted != nil {
+		// Prefer live attachment policy when available.
+		freeDegraded = !h.attachmentUnrestricted()
+	}
+
 	response := map[string]interface{}{
 		"licenseTier":            tier,
-		"attachmentUnrestricted": h.attachmentUnrestricted(),
-		"freeDegraded":           !h.attachmentUnrestricted(),
+		"isPaid":                 quota.IsPaid,
+		"usedSeconds":            quota.UsedSeconds,
+		"dailySeconds":           quota.DailySeconds,
+		"remainingSeconds":       remaining,
+		"attachmentUnrestricted": !freeDegraded,
+		"freeDegraded":           freeDegraded,
 	}
 	_ = json.NewEncoder(w).Encode(response)
 }

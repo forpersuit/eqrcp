@@ -65,6 +65,12 @@
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
+  let isPaid = false;
+  let usedSeconds = 0;
+  let dailySeconds = 300;
+  let remainingSeconds = 300;
+  let freeDegraded = false;
+  let quotaPollTimer: ReturnType<typeof setInterval> | null = null;
   let copied = false;
   
   let rawLang = localStorage.getItem('eqt_lang') || '';
@@ -85,6 +91,12 @@
 
   $: t = {
     viewSubscription: getTranslation('viewSubscription', currentLang),
+    freeQuotaHint: getTranslation('freeQuotaHint', currentLang),
+    freeQuotaDaily: getTranslation('freeQuotaDaily', currentLang),
+    freeQuotaUsed: getTranslation('freeQuotaUsed', currentLang),
+    freeQuotaAttachmentPolicy: getTranslation('freeQuotaAttachmentPolicy', currentLang),
+    freeQuotaUpgrade: getTranslation('freeQuotaUpgrade', currentLang),
+    freeQuotaDegraded: getTranslation('freeQuotaDegraded', currentLang),
     onlineDevices: getTranslation('onlineDevices', currentLang),
     self: getTranslation('self', currentLang),
     online: getTranslation('online', currentLang),
@@ -110,6 +122,59 @@
     hideLink: getTranslation('hideLink', currentLang),
     showLink: getTranslation('showLink', currentLang)
   };
+
+  function formatQuotaClock(totalSec: number): string {
+    const s = Math.max(0, Math.floor(totalSec));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  }
+
+  function applyQuotaInfo(data: any) {
+    if (!data || typeof data !== 'object') return;
+    if (data.licenseTier) {
+      licenseTier = data.licenseTier;
+    }
+    if (typeof data.isPaid === 'boolean') {
+      isPaid = data.isPaid;
+    } else if (data.licenseTier && data.licenseTier !== 'FREE') {
+      isPaid = true;
+    }
+    if (typeof data.usedSeconds === 'number') {
+      usedSeconds = Math.max(0, data.usedSeconds);
+    }
+    if (typeof data.dailySeconds === 'number' && data.dailySeconds > 0) {
+      dailySeconds = data.dailySeconds;
+    }
+    if (typeof data.remainingSeconds === 'number') {
+      remainingSeconds = Math.max(0, data.remainingSeconds);
+    } else {
+      remainingSeconds = Math.max(0, dailySeconds - usedSeconds);
+    }
+    if (typeof data.freeDegraded === 'boolean') {
+      freeDegraded = data.freeDegraded;
+    } else {
+      freeDegraded = !isPaid && remainingSeconds <= 0;
+    }
+  }
+
+  async function refreshQuotaInfo() {
+    if (!token) return;
+    try {
+      const res = await fetch(`/chat-v2/${token}/info`);
+      if (!res.ok) return;
+      const data = await res.json();
+      applyQuotaInfo(data);
+    } catch (err) {
+      console.error('Failed to fetch chat v2 info:', err);
+    }
+  }
+
+  $: quotaPillLabel = freeDegraded
+    ? t.freeQuotaDegraded
+    : getTranslation('freeQuotaRemaining', currentLang).replace('{time}', formatQuotaClock(remainingSeconds));
+  $: quotaPillUrgent = !isPaid && !freeDegraded && remainingSeconds > 0 && remainingSeconds <= 60;
+  $: showQuotaPill = !isPaid;
 
   // React to theme changes and inject CSS variables
   function hexToRgb(hex: string): string | null {
@@ -690,16 +755,10 @@
       visualViewportHandler();
     }
 
-    fetch(`/chat-v2/${token}/info`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.licenseTier) {
-          licenseTier = data.licenseTier;
-        }
-      })
-      .catch(err => {
-        console.error('Failed to fetch chat v2 info:', err);
-      });
+    void refreshQuotaInfo();
+    quotaPollTimer = setInterval(() => {
+      void refreshQuotaInfo();
+    }, 2000);
 
     client = new ChatWebSocketClient(token, joinToken);
     client.onRequestFileData = (messageId) => {
@@ -734,6 +793,10 @@
     }
     if (qrPulseTimer) {
       clearTimeout(qrPulseTimer);
+    }
+    if (quotaPollTimer) {
+      clearInterval(quotaPollTimer);
+      quotaPollTimer = null;
     }
     if (client) {
       client.close();
@@ -1085,12 +1148,29 @@
         </div>
 
         <div class="head-actions">
-          {#if !isEmbedded}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="limit-status-pill" style="display: flex; cursor: pointer; align-items: center; background: #eef5ee; border: 1px solid var(--line); border-radius: 999px; height: 36px; padding: 0 11px; color: var(--accent-strong); font-size: 12px; font-weight: 800;" on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }} title={t.viewSubscription}>
-              <span>{licenseTier === 'FREE' ? getTranslation('freeTier', currentLang) : licenseTier}</span>
-            </div>
+          {#if showQuotaPill}
+            <!-- Free-tier countdown: left of device list; also shown when embedded in desktop GUI -->
+            <button
+              class="quota-pill"
+              class:urgent={quotaPillUrgent}
+              class:degraded={freeDegraded}
+              type="button"
+              title={t.freeQuotaHint}
+              on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span>{quotaPillLabel}</span>
+            </button>
+          {:else if !isEmbedded && licenseTier}
+            <!-- Paid: keep compact tier pill (non-embedded only) -->
+            <button
+              class="quota-pill"
+              type="button"
+              title={t.viewSubscription}
+              on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
+            >
+              <span>{licenseTier}</span>
+            </button>
           {/if}
 
           {#if $chatSessionStatus === 'active'}
@@ -1198,19 +1278,40 @@
           <div class="license-panel" class:open={showLicensePanel} on:click|stopPropagation>
             <div class="license-panel-title" style="margin-bottom: 8px;">{t.subscriptionDetails}</div>
             <div class="license-details-box">
-              <div class="license-status-badge success">{t.vipLifetime}</div>
-              <div class="license-info-row">
-                <strong>{t.authStatus}</strong>
-                <span>{t.validLifetime}</span>
-              </div>
-              <div class="license-info-row">
-                <strong>{t.speedLimit}</strong>
-                <span>{t.unlimitedSpeed}</span>
-              </div>
-              <div class="license-info-row">
-                <strong>{t.fingerprintCheck}</strong>
-                <span>{t.passed}</span>
-              </div>
+              {#if isPaid}
+                <div class="license-status-badge success">{licenseTier || t.vipLifetime}</div>
+                <div class="license-info-row">
+                  <strong>{t.authStatus}</strong>
+                  <span>{t.validLifetime}</span>
+                </div>
+                <div class="license-info-row">
+                  <strong>{t.speedLimit}</strong>
+                  <span>{t.unlimitedSpeed}</span>
+                </div>
+              {:else}
+                <div class="license-status-badge" class:success={!freeDegraded}>{getTranslation('freeTier', currentLang)}</div>
+                <div class="license-info-row">
+                  <strong>{t.freeQuotaDaily}</strong>
+                  <span>{formatQuotaClock(dailySeconds)}</span>
+                </div>
+                <div class="license-info-row">
+                  <strong>{t.freeQuotaUsed}</strong>
+                  <span>{formatQuotaClock(usedSeconds)}</span>
+                </div>
+                <div class="license-info-row">
+                  <strong>{freeDegraded ? t.freeQuotaDegraded : getTranslation('freeQuotaRemaining', currentLang).replace('{time}', '').trim()}</strong>
+                  <span>{freeDegraded ? t.freeQuotaAttachmentPolicy : formatQuotaClock(remainingSeconds)}</span>
+                </div>
+                <p style="margin: 8px 0 0; font-size: 11px; line-height: 1.45; color: #666;">{t.freeQuotaHint}</p>
+                {#if !isEmbedded}
+                  <a
+                    href="https://eqt.net.im/pricing.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="display: block; margin-top: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--accent-strong);"
+                  >{t.freeQuotaUpgrade}</a>
+                {/if}
+              {/if}
             </div>
           </div>
 

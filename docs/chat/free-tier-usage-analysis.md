@@ -1,7 +1,7 @@
 # Chat 模式 Free Tier 用量特点：分析与修复方案
 
 > **日期**：2026-07-23  
-> **状态**：已按修订方案实现（v1.14.49）  
+> **状态**：已按修订方案实现（v1.14.50，含标题栏倒计时胶囊）  
 > **范围**：Free tier 下 Chat 模式每日 5 分钟额度、超额附件体验降级（限速 / 文件大小）
 
 ---
@@ -175,9 +175,14 @@ func (m *Manager) HasRemoteClient() bool
 - `IsPaidOrUnrestricted` / `FreeChatAttachmentUnrestricted` = 付费 **或** 配额内  
 - `PolicyFreeDegraded` 硬顶 100KB/s；超额 job 不 probing  
 
-### 5.4 P1 待续：GUI 与后端 SSOT
+### 5.4 P1 已完成：倒计时 UI + GUI SSOT
 
-桌面 `localStorage` 倒计时仍为双轨展示层；后续应以后端 `usedSeconds` 覆盖展示与拦截文案（不阻塞本次后端修复）。
+- **展示位置**：Chat V2 标题栏右侧、设备列表按钮左侧 `.quota-pill`（embedded 桌面 iframe 也显示）。
+- **数据**：`GET /chat-v2/{token}/info` 返回 `usedSeconds` / `remainingSeconds` / `freeDegraded`；前端 2s 轮询。
+- **付费**：隐藏倒计时胶囊；非嵌入页可显示套餐徽章。
+- **降级态**：胶囊文案「已降级」+ 灰色；≤60s 琥珀色脉冲。
+- **点击**：打开 license 面板（今日额度说明 + 非嵌入时可链到 pricing）。
+- **GUI 外壳**：去掉 localStorage 双轨计时；预启动页文案读 `status.usedSeconds`；会话中倒计时只在 iframe 标题栏。
 
 ### 5.5 P2 待续：Legacy 有序退役
 

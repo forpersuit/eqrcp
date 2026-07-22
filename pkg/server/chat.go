@@ -331,6 +331,14 @@ func (s *Server) Chat() error {
 		// Attachment data plane only: paid or free-within-quota runs unrestricted;
 		// free over-quota uses degraded attachment rate/size. WS/text never limited here.
 		IsPaidOrUnrestricted: FreeChatAttachmentUnrestricted,
+		GetChatQuota: func() chatv2http.ChatQuotaInfo {
+			usage := limiterInstance.GetStatus()
+			return chatv2http.ChatQuotaInfo{
+				IsPaid:       usage.IsPaid,
+				UsedSeconds:  usage.UsedSeconds,
+				DailySeconds: FreeChatDailySeconds,
+			}
+		},
 		HostToken: func() string {
 			return s.ChatHostToken()
 		},
