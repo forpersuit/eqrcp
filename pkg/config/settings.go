@@ -92,7 +92,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		output = DefaultDesktopOutputDirectory()
 	}
 	devMode := false
-	if strings.TrimSpace(v.GetString("dev")) == "liyuelong" || v.GetBool("devMode") {
+	if strings.TrimSpace(v.GetString("dev")) == "liyuelong" {
 		devMode = true
 	}
 	debugLog := false
