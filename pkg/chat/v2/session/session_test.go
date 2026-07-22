@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"testing"
+	"time"
 
 	"eqt/pkg/chat/v2/protocol"
 )
@@ -105,6 +106,91 @@ func TestSessionSendTextAndReplay(t *testing.T) {
 	}
 	if events[1].Type != protocol.EventPresenceChanged {
 		t.Fatalf("expected presence changed event, got = %s", events[1].Type)
+	}
+}
+
+// collectMessageTexts drains a client's outbound channel for wait and returns
+// non-empty message texts seen (used by reconnect/history tests).
+func collectMessageTexts(c *Client, wait time.Duration) map[string]bool {
+	out := map[string]bool{}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		select {
+		case ev := <-c.sendChan:
+			if ev.Message != nil && ev.Message.Text != "" {
+				out[ev.Message.Text] = true
+			}
+		case <-timer.C:
+			return out
+		}
+	}
+}
+
+// TestSessionColdStartReplaysFromJoinSeq verifies the mobile cold-start path:
+// local UI is empty but after_seq watermark is high; client reconnects with
+// afterSeq=joinSeq so Register rehydrates post-join chat history.
+func TestSessionColdStartReplaysFromJoinSeq(t *testing.T) {
+	sess := NewSession("cold-start-room")
+	sess.DisableSystemMessages = true
+
+	host := NewClient(protocol.ClientInfo{Label: "Host", Peer: "peer-host"}, nil)
+	sess.Register(host, 0, 0)
+
+	// Drain host channel so presence/broadcasts do not block.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	drain := func(c *Client) {
+		go func() {
+			for {
+				select {
+				case <-c.sendChan:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+	drain(host)
+
+	// Pre-join history that a later joiner must NOT receive.
+	sess.SendText(host, "before-join-secret", "cmd-pre")
+
+	joinBoundary := sess.MessageStore.CurrentSeq()
+
+	mobile := NewClient(protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"}, nil)
+	// First join as brand-new: no pre-join history.
+	sess.Register(mobile, 0, 0)
+	drain(mobile)
+
+	// Post-join conversation (what cold-start must restore).
+	sess.SendText(host, "hello-after-join-1", "cmd-1")
+	sess.SendText(host, "hello-after-join-2", "cmd-2")
+
+	// Simulate mobile consuming up to the latest watermark, then process kill.
+	lastSeq := sess.MessageStore.CurrentSeq()
+	if lastSeq <= joinBoundary {
+		t.Fatalf("expected post-join events, lastSeq=%d joinBoundary=%d", lastSeq, joinBoundary)
+	}
+
+	// Warm reconnect with high afterSeq: only events after lastSeq (none of the chat).
+	warm := NewClient(protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"}, nil)
+	sess.Register(warm, lastSeq, joinBoundary)
+	warmTexts := collectMessageTexts(warm, 30*time.Millisecond)
+	if warmTexts["hello-after-join-1"] || warmTexts["hello-after-join-2"] {
+		t.Fatalf("warm reconnect must not rehydrate consumed history: got %v", warmTexts)
+	}
+
+	// Cold-start reconnect: empty UI → client sends afterSeq=joinSeq.
+	cold := NewClient(protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"}, nil)
+	sess.Register(cold, joinBoundary, joinBoundary)
+	coldTexts := collectMessageTexts(cold, 30*time.Millisecond)
+
+	if coldTexts["before-join-secret"] {
+		t.Fatal("cold-start must not leak pre-join history")
+	}
+	if !coldTexts["hello-after-join-1"] || !coldTexts["hello-after-join-2"] {
+		t.Fatalf("cold-start missing post-join history: got %v", coldTexts)
 	}
 }
 

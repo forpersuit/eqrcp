@@ -613,6 +613,204 @@ func TestReconnectionAfterSeqLeakFix(t *testing.T) {
 	}
 }
 
+// TestColdStartHistoryRehydrate simulates a mobile page discard:
+// Alice has a high afterSeq watermark but empty UI, so connect uses afterSeq=joinSeq
+// and must receive post-join messages again without pre-join leakage.
+func TestColdStartHistoryRehydrate(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/cold-start-token/ws"
+
+	// Host joins first and posts a pre-join secret.
+	connHost, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connHost.Close(websocket.StatusNormalClosure, "done")
+	var hello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connHost, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-host",
+		Client:    protocol.ClientInfo{Label: "Host", Peer: "peer-host"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Read(ctx, connHost, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+		Type:      protocol.CommandSendText,
+		CommandID: "pre-join",
+		Text:      "before-join-secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Wait until host sees its own pre-join message so store is populated.
+	for {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connHost, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil && ev.Message.Text == "before-join-secret" {
+			break
+		}
+	}
+
+	// Mobile first join: capture joinSeq from handshake hello.
+	connMobile, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Read(ctx, connMobile, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connMobile, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-mobile",
+		Client:    protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"},
+		AfterSeq:  0,
+		JoinSeq:   0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var joinHello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connMobile, &joinHello); err != nil {
+		t.Fatal(err)
+	}
+	joinSeq := joinHello.Seq
+	if joinSeq <= 0 {
+		t.Fatalf("expected positive joinSeq from hello, got %d", joinSeq)
+	}
+
+	// Host sends post-join messages while mobile is connected.
+	for _, text := range []string{"hello-after-join-1", "hello-after-join-2"} {
+		if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+			Type:      protocol.CommandSendText,
+			CommandID: "post-" + text,
+			Text:      text,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Mobile consumes both post-join messages and tracks high watermark.
+	var afterSeq int64
+	seen := map[string]bool{}
+	for len(seen) < 2 {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connMobile, &ev); err != nil {
+			t.Fatal(err)
+		}
+		if ev.Seq > afterSeq {
+			afterSeq = ev.Seq
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil {
+			seen[ev.Message.Text] = true
+		}
+	}
+	if !seen["hello-after-join-1"] || !seen["hello-after-join-2"] {
+		t.Fatalf("mobile did not receive live post-join messages: %v", seen)
+	}
+	if afterSeq <= joinSeq {
+		t.Fatalf("expected afterSeq > joinSeq, afterSeq=%d joinSeq=%d", afterSeq, joinSeq)
+	}
+
+	// Simulate process kill / tab discard.
+	_ = connMobile.Close(websocket.StatusNormalClosure, "mobile background kill")
+	time.Sleep(20 * time.Millisecond)
+
+	// Cold start: empty UI → connect with afterSeq=joinSeq (not high watermark).
+	connCold, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connCold.Close(websocket.StatusNormalClosure, "done")
+	if err := wsjson.Read(ctx, connCold, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connCold, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-mobile-cold",
+		Client:    protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"},
+		AfterSeq:  joinSeq, // cold-start rehydrate watermark
+		JoinSeq:   joinSeq,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Read(ctx, connCold, &hello); err != nil {
+		t.Fatal(err)
+	}
+
+	// Must rehydrate post-join history; must not leak pre-join secret.
+	coldSeen := map[string]bool{}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !(coldSeen["hello-after-join-1"] && coldSeen["hello-after-join-2"]) {
+		readCtx, readCancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		var ev protocol.EventEnvelope
+		err := wsjson.Read(readCtx, connCold, &ev)
+		readCancel()
+		if err != nil {
+			continue
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil {
+			coldSeen[ev.Message.Text] = true
+		}
+	}
+	if coldSeen["before-join-secret"] {
+		t.Fatal("cold-start rehydrate leaked pre-join history")
+	}
+	if !coldSeen["hello-after-join-1"] || !coldSeen["hello-after-join-2"] {
+		t.Fatalf("cold-start missing history: got %v (joinSeq=%d afterSeqWas=%d)", coldSeen, joinSeq, afterSeq)
+	}
+
+	// Control: high afterSeq warm reconnect must NOT re-send consumed chat.
+	connWarm, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connWarm.Close(websocket.StatusNormalClosure, "done")
+	if err := wsjson.Read(ctx, connWarm, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connWarm, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-mobile-warm",
+		Client:    protocol.ClientInfo{Label: "Mobile", Peer: "peer-mobile"},
+		AfterSeq:  afterSeq,
+		JoinSeq:   joinSeq,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Read(ctx, connWarm, &hello); err != nil {
+		t.Fatal(err)
+	}
+	warmSeen := map[string]bool{}
+	warmDeadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(warmDeadline) {
+		readCtx, readCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+		var ev protocol.EventEnvelope
+		err := wsjson.Read(readCtx, connWarm, &ev)
+		readCancel()
+		if err != nil {
+			continue
+		}
+		if ev.Type == protocol.EventMessageAdded && ev.Message != nil {
+			warmSeen[ev.Message.Text] = true
+		}
+	}
+	if warmSeen["hello-after-join-1"] || warmSeen["hello-after-join-2"] {
+		t.Fatalf("warm reconnect must not rehydrate consumed history: %v", warmSeen)
+	}
+}
+
 func TestHandlerDownloadCancellation(t *testing.T) {
 	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
 	server := httptest.NewServer(handler)

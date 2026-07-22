@@ -62,25 +62,10 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	s.clients[c.ID] = c
 	s.mu.Unlock()
 
-	// Replay missed events safely ensuring we never leak history before joinSeq
-	var startSeq int64
-
-	if afterSeq > 0 && joinSeq > 0 {
-		if afterSeq >= joinSeq {
-			startSeq = afterSeq
-		} else {
-			startSeq = joinSeq
-		}
-	} else if afterSeq > 0 {
-		startSeq = afterSeq
-	} else if joinSeq > 0 {
-		startSeq = joinSeq
-	} else {
-		// Both are 0, meaning a brand new client joined the session.
-		// According to the requirement, we do not sync messages sent before joining.
-		// So we set startSeq to the current sequence number.
-		startSeq = s.MessageStore.CurrentSeq()
-	}
+	// Replay missed events safely ensuring we never leak history before joinSeq.
+	// Cold-start clients (empty local UI) send afterSeq=joinSeq to rehydrate history;
+	// warm reconnects keep a high afterSeq for incremental missed events only.
+	startSeq := ResolveReplayStartSeq(afterSeq, joinSeq, s.MessageStore.CurrentSeq())
 
 	events := s.MessageStore.GetSince(startSeq)
 	for _, e := range events {

@@ -1,5 +1,7 @@
+import { get } from 'svelte/store';
 import type { CommandEnvelope, EventEnvelope } from './types';
-import { chatActions } from '../state/chatStore';
+import { chatActions, messages } from '../state/chatStore';
+import { resolveConnectAfterSeq } from './reconnectSeq';
 
 // Track initial page connection globally across renames within the same page load
 let isInitialConnect = true;
@@ -150,6 +152,14 @@ export class ChatWebSocketClient {
 
       const savedJoinSeq = parseInt(localStorage.getItem(`eqt_join_seq_${this.token}`) || '0', 10);
       const savedAfterSeq = parseInt(localStorage.getItem(`eqt_after_seq_${this.token}`) || '0', 10);
+      // Cold start (empty in-memory list): replay from join boundary, not high watermark.
+      const connectAfterSeq = resolveConnectAfterSeq(get(messages).length, savedJoinSeq, savedAfterSeq);
+      if (connectAfterSeq !== savedAfterSeq) {
+        // Queue until after connect handshake (cl is nil before Register).
+        this.pendingLogs.push(
+          `[SYSTEM] Cold-start history rehydrate: localMessages=0 joinSeq=${savedJoinSeq} afterSeq=${savedAfterSeq} -> connectAfterSeq=${connectAfterSeq}`
+        );
+      }
 
       // Perform Connect Command handshake
       this.sendCommand({
@@ -165,7 +175,7 @@ export class ChatWebSocketClient {
           localJoin: this.localJoin,
           isNewScan: isInitialConnect
         },
-        afterSeq: savedAfterSeq,
+        afterSeq: connectAfterSeq,
         joinSeq: savedJoinSeq
       });
       isInitialConnect = false;
