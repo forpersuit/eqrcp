@@ -173,7 +173,6 @@ func getViperInstance(app application.App) *viper.Viper {
 	return v
 }
 
-
 func DefaultConfigDir() string {
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {

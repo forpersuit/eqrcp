@@ -146,7 +146,7 @@
     <!-- Custom Toast Notification System -->
     <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-2"></div>
 
-    <!-- Confirm Modal -->
+    <!-- Confirm Refund Modal -->
     <div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
         <div class="w-full max-w-md bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-6 shadow-2xl transform scale-95 transition-transform duration-300">
             <div class="space-y-2">
@@ -160,6 +160,40 @@
         </div>
     </div>
 
+    <!-- Confirm Unbind Modal -->
+    <div id="unbind-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
+        <div class="w-full max-w-lg bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-5 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-400">link_off</span>
+                        <span data-i18n="unbind_confirm_title">Confirm Device Unbind</span>
+                    </h3>
+                    <span id="unbind-modal-quota-badge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20"></span>
+                </div>
+                <p class="text-on-surface-variant text-sm leading-relaxed" data-i18n="unbind_confirm_desc">Are you sure you want to unbind this device? Unbinding will release 1 device slot for this license key.</p>
+            </div>
+
+            <!-- Target Device Box -->
+            <div class="bg-white/5 border border-white/10 rounded-xl p-3 flex justify-between items-center text-xs">
+                <span class="text-on-surface-variant" data-i18n="device_target_label">Target Device Key:</span>
+                <span id="unbind-modal-device-key" class="font-mono text-primary font-bold tracking-wider"></span>
+            </div>
+
+            <!-- Unbind & Restoration Rules Info Box -->
+            <div class="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-2 text-xs text-on-surface-variant">
+                <div class="font-bold text-primary flex items-center gap-1.5 text-sm">
+                    <span class="material-symbols-outlined text-base">help_outline</span>
+                    <span data-i18n="unbind_policy_title">Unbind & Device Restoration Policy</span>
+                </div>
+                <div id="unbind-policy-text-box" class="whitespace-pre-line leading-relaxed text-on-surface-variant/90"></div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button id="unbind-cancel-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Cancel</button>
+                <button id="unbind-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-bold font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_unbind_btn">Confirm & Unbind</button>
+            </div>
+        </div>
     <!-- Script -->
     <script>
         // Language dictionaries
@@ -182,6 +216,9 @@
                 "license_code": "License Code",
                 "tier": "Tier",
                 "status": "Status",
+                "status_active": "Active",
+                "status_refunded": "Refunded",
+                "status_revoked": "Revoked",
                 "created_at": "Purchased On",
                 "paddle_transaction": "Transaction ID",
                 "paddle_subscription": "Subscription ID",
@@ -195,7 +232,13 @@
                 "cancel_btn": "Cancel",
                 "confirm_refund_btn": "Confirm & Refund",
                 "unbind_btn": "Unbind",
-                "unbind_confirm_desc": "Are you sure you want to unbind this device?",
+                "unbind_confirm_title": "Confirm Device Unbind",
+                "unbind_confirm_desc": "Are you sure you want to unbind this device? Unbinding will release 1 device activation slot for this license key.",
+                "confirm_unbind_btn": "Confirm & Unbind",
+                "unbind_policy_title": "Unbind & Device Restoration Policy",
+                "unbind_policy_desc": "• Slot Release: Unbinding frees 1 device slot for new device activations.\n• Device Restoration: To re-authorize a device, simply open EQT on the target device and enter this license code.\n• Quota Recovery: Up to 4 unbinds allowed per rolling 365 days. Used unbind quota resets automatically 365 days after the operation date.",
+                "unbind_quota_label": "Annual Unbind Quota: {remaining} / {max} remaining (past 365 days)",
+                "device_target_label": "Target Device Key:",
                 "unbinding": "Unbinding...",
                 "unbind_success": "Device unbound successfully!",
                 "toast_code_sent": "Verification code sent to your email.",
@@ -222,6 +265,9 @@
                 "license_code": "激活码",
                 "tier": "套餐级别",
                 "status": "状态",
+                "status_active": "已生效",
+                "status_refunded": "已退款",
+                "status_revoked": "已吊销",
                 "created_at": "购买日期",
                 "paddle_transaction": "交易单号",
                 "paddle_subscription": "订阅单号",
@@ -235,7 +281,13 @@
                 "cancel_btn": "取消",
                 "confirm_refund_btn": "确认并退款",
                 "unbind_btn": "解绑",
-                "unbind_confirm_desc": "确定要解绑此设备吗？解绑后该设备将失去付费授权。",
+                "unbind_confirm_title": "确认解绑设备",
+                "unbind_confirm_desc": "您确定要解绑此设备吗？解绑后该设备将失去付费授权，并空出 1 台设备名额。",
+                "confirm_unbind_btn": "确认解绑",
+                "unbind_policy_title": "设备解绑与恢复说明",
+                "unbind_policy_desc": "• 额度释放：解绑操作会成功空出 1 台设备名额，供新设备绑定或更换设备。\n• 权限恢复：如需在原设备或新设备上恢复付费权限，只需在目标设备上打开 EQT 客户端并重新输入该激活码激活即可。\n• 额度恢复：每张授权码在过去365天内最多允许解绑 4 次。扣减的解绑额度将在该次解绑满 365 天后自动恢复重新计入。",
+                "unbind_quota_label": "年度解绑次数：过去365天内剩余 {remaining} / {max} 次",
+                "device_target_label": "目标设备指纹:",
                 "unbinding": "解绑中...",
                 "unbind_success": "设备解绑成功！",
                 "toast_code_sent": "验证码已成功发往您的邮箱。",
@@ -262,6 +314,9 @@
                 "license_code": "ライセンスコード",
                 "tier": "プラン",
                 "status": "ステータス",
+                "status_active": "有効",
+                "status_refunded": "返金済み",
+                "status_revoked": "失効",
                 "created_at": "購入日",
                 "paddle_transaction": "取引ID",
                 "paddle_subscription": "サブスクリプションID",
@@ -275,7 +330,13 @@
                 "cancel_btn": "キャンセル",
                 "confirm_refund_btn": "返金を確定",
                 "unbind_btn": "解除",
-                "unbind_confirm_desc": "このデバイスの連携を解除しますか？",
+                "unbind_confirm_title": "デバイス連携解除の確認",
+                "unbind_confirm_desc": "このデバイスの連携を解除しますか？解除するとライセンス枠が1つ空きます。",
+                "confirm_unbind_btn": "確認して解除",
+                "unbind_policy_title": "解除とデバイス復元に関する説明",
+                "unbind_policy_desc": "• 枠の解放：連携解除により、新しいデバイスを登録するための枠が1つ空きます。\n• デバイスの復元：有料機能を再有効化するには、対象デバイスで EQT を起動してこのライセンスコードを再入力してください。\n• 枠の回復：過去365日以内で最大4回まで解除可能です。消費された枠は操作日から365日後に自動回復します。",
+                "unbind_quota_label": "年間解除枠：過去365日以内で残り {remaining} / {max} 回",
+                "device_target_label": "対象デバイスキー:",
                 "unbinding": "解除中...",
                 "unbind_success": "デバイスの解除に成功しました！",
                 "toast_code_sent": "認証コードをメールに送信しました。",
@@ -302,6 +363,9 @@
                 "license_code": "라이선스 코드",
                 "tier": "등급",
                 "status": "상태",
+                "status_active": "활성",
+                "status_refunded": "환불됨",
+                "status_revoked": "취소됨",
                 "created_at": "구매일",
                 "paddle_transaction": "거래 ID",
                 "paddle_subscription": "구독 ID",
@@ -315,7 +379,13 @@
                 "cancel_btn": "취소",
                 "confirm_refund_btn": "환불 확정",
                 "unbind_btn": "해제",
-                "unbind_confirm_desc": "이 기기의 연동을 해제하시겠습니까?",
+                "unbind_confirm_title": "기기 연동 해제 확인",
+                "unbind_confirm_desc": "이 기기의 연동을 해제하시겠습니까? 해제 시 라이선스 슬롯 1개가 확보됩니다.",
+                "confirm_unbind_btn": "확인 및 해제",
+                "unbind_policy_title": "해제 및 기기 복구 안내",
+                "unbind_policy_desc": "• 슬롯 해제: 연동 해제 시 새 기기 인증을 위한 슬롯 1개가 확보됩니다.\n• 기기 복구: 유료 라이선스를 다시 복구하려면 대상 기기의 EQT 앱에서 이 라이선스 코드를 다시 입력하세요.\n• 한도 복구: 최근 365일 동안 최대 4회 해제 가능하며, 차감된 한도는 해당 작업일 기준 365일 후 자동 복구됩니다.",
+                "unbind_quota_label": "연간 해제 한도: 최근 365일 동안 {remaining} / {max} 회 남음",
+                "device_target_label": "대상 기기 키:",
                 "unbinding": "해제 중...",
                 "unbind_success": "기기 해제 성공!",
                 "toast_code_sent": "이메일로 인증 코드가 전송되었습니다.",
@@ -342,6 +412,9 @@
                 "license_code": "Código de Licencia",
                 "tier": "Nivel",
                 "status": "Estado",
+                "status_active": "Activo",
+                "status_refunded": "Reembolsado",
+                "status_revoked": "Revocado",
                 "created_at": "Fecha de compra",
                 "paddle_transaction": "ID de Transacción",
                 "paddle_subscription": "ID de Subscripción",
@@ -355,7 +428,13 @@
                 "cancel_btn": "Cancelar",
                 "confirm_refund_btn": "Confirmar reembolso",
                 "unbind_btn": "Desvincular",
-                "unbind_confirm_desc": "¿Seguro que deseas desvincular este dispositivo?",
+                "unbind_confirm_title": "Confirmar desvinculación de dispositivo",
+                "unbind_confirm_desc": "¿Seguro que deseas desvincular este dispositivo? Liberará 1 espacio de dispositivo para esta licencia.",
+                "confirm_unbind_btn": "Confirmar y desvincular",
+                "unbind_policy_title": "Política de desvinculación y restauración",
+                "unbind_policy_desc": "• Liberación de espacio: La desvinculación libera 1 espacio para un nuevo dispositivo.\n• Restauración: Para volver a autorizar un dispositivo, abra EQT en el dispositivo de destino e ingrese este código.\n• Recuperación de cupo: Se permiten hasta 4 desvinculaciones por año móvil. El cupo consumido se restaura automáticamente a los 365 días.",
+                "unbind_quota_label": "Cupo anual de desvinculaciones: {remaining} / {max} restantes en los últimos 365 días",
+                "device_target_label": "Clave del dispositivo:",
                 "unbinding": "Desvinculando...",
                 "unbind_success": "¡Dispositivo desvinculado con éxito!",
                 "toast_code_sent": "Código enviado a tu correo.",
@@ -382,6 +461,9 @@
                 "license_code": "Lizenzschlüssel",
                 "tier": "Tarif",
                 "status": "Status",
+                "status_active": "Aktiv",
+                "status_refunded": "Erstattet",
+                "status_revoked": "Widerrufen",
                 "created_at": "Gekauft am",
                 "paddle_transaction": "Transaktions-ID",
                 "paddle_subscription": "Abonnement-ID",
@@ -395,7 +477,13 @@
                 "cancel_btn": "Abbrechen",
                 "confirm_refund_btn": "Rückerstattung bestätigen",
                 "unbind_btn": "Trennen",
-                "unbind_confirm_desc": "Möchten Sie dieses Gerät wirklich trennen?",
+                "unbind_confirm_title": "Geräteentkopplung bestätigen",
+                "unbind_confirm_desc": "Möchten Sie dieses Gerät wirklich trennen? Dadurch wird 1 Gerätesteckplatz für diesen Schlüssel freigegeben.",
+                "confirm_unbind_btn": "Bestätigen und trennen",
+                "unbind_policy_title": "Entkopplungs- und Wiederherstellungsrichtlinie",
+                "unbind_policy_desc": "• Platzfreigabe: Das Entkoppeln gibt 1 Steckplatz für ein neues Gerät frei.\n• Wiederherstellung: Um die Lizenz auf einem Gerät zu aktivieren, geben Sie den Schlüssel in EQT auf diesem Gerät erneut ein.\n• Wiederherstellung des Kontingents: Maximal 4 Entkopplungen pro 365 Tage. Verbrauchtes Kontingent wird nach 365 Tagen automatisch zurückgesetzt.",
+                "unbind_quota_label": "Jahreskontingent für Entkopplung: {remaining} / {max} verbleibend in den letzten 365 Tagen",
+                "device_target_label": "Ziel-Geräteschlüssel:",
                 "unbinding": "Trennen...",
                 "unbind_success": "Gerät erfolgreich getrennt!",
                 "toast_code_sent": "Bestätigungscode an Ihre E-Mail gesendet.",
@@ -422,6 +510,9 @@
                 "license_code": "Clé de licence",
                 "tier": "Offre",
                 "status": "Statut",
+                "status_active": "Actif",
+                "status_refunded": "Remboursé",
+                "status_revoked": "Révoqué",
                 "created_at": "Acheté le",
                 "paddle_transaction": "ID de transaction",
                 "paddle_subscription": "ID d'abonnement",
@@ -435,13 +526,17 @@
                 "cancel_btn": "Annuler",
                 "confirm_refund_btn": "Confirmer le remboursement",
                 "unbind_btn": "Délier",
-                "unbind_confirm_desc": "Voulez-vous vraiment délier cet appareil ?",
+                "unbind_confirm_title": "Confirmer la dissociation du périphérique",
+                "unbind_confirm_desc": "Voulez-vous vraiment délier cet appareil ? Cela libérera 1 emplacement d'appareil pour cette clé.",
+                "confirm_unbind_btn": "Confirmer et délier",
+                "unbind_policy_title": "Politique de dissociation et restauration",
+                "unbind_policy_desc": "• Libération d'emplacement : La dissociation libère 1 emplacement pour un nouvel appareil.\n• Restauration : Pour réautoriser un appareil, ouvrez EQT sur l'appareil cible et saisissez à nouveau ce code.\n• Récupération de quota : Jusqu'à 4 dissociations autorisées par 365 jours. Le quota consommé se réinitialise automatiquement au bout de 365 jours.",
+                "unbind_quota_label": "Quota annuel de dissociation : {remaining} / {max} restants au cours des 365 derniers jours",
+                "device_target_label": "Clé de l'appareil cible :",
                 "unbinding": "Déliaison...",
                 "unbind_success": "Appareil délié avec succès !",
                 "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
                 "toast_login_success": "Connexion réussie !",
-                "toast_refund_success": "Demande de remboursement créée !",
-                "toast_error": "Une erreur est survenue :",
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). Tous droits réservés."
             }
         };
@@ -458,6 +553,7 @@
             token: '',
             licenses: [],
             refundPendingCode: null,
+            unbindPendingData: null,
             timer: null
         };
 
@@ -549,7 +645,7 @@
             }, 4000);
         }
 
-        // Send validation code
+        // Send validation code (passes UI language)
         async function handleSendCode() {
             const emailInput = document.getElementById('login-email');
             const email = emailInput.value.trim();
@@ -562,7 +658,7 @@
                 const res = await fetch(`${API_BASE}/api/v1/auth/send-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
+                    body: JSON.stringify({ email, lang: state.lang })
                 });
                 
                 const data = await res.json();
@@ -685,9 +781,18 @@
                 card.className = 'bg-surface-variant/40 border border-white/10 rounded-xl p-6 space-y-4';
 
                 const statusColor = lic.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30';
+                const statusKey = 'status_' + lic.status;
+                const statusLabel = translations[state.lang][statusKey] || lic.status.toUpperCase();
+                
                 const createdDate = new Date(lic.created_at).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US', {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
+
+                const remainingUnbinds = lic.remaining_unbinds !== undefined ? lic.remaining_unbinds : 4;
+                const maxUnbinds = lic.max_yearly_unbinds !== undefined ? lic.max_yearly_unbinds : 4;
+                const quotaLabel = (translations[state.lang].unbind_quota_label || "Annual Unbind Quota: {remaining} / {max}")
+                    .replace('{remaining}', remainingUnbinds)
+                    .replace('{max}', maxUnbinds);
 
                 // Render activations
                 let activationsHtml = '';
@@ -702,20 +807,23 @@
                                 </span>
                             </div>
                             <div class="grid gap-2 text-xs">
-                                ${lic.activations.map(act => `
+                                ${lic.activations.map(act => {
+                                    const devKey = act.device_id || (act.uuid_hash ? act.uuid_hash.slice(0, 12) : '------');
+                                    return `
                                     <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5 gap-2">
                                         <div class="flex flex-col gap-0.5">
-                                            <span class="font-mono text-white font-semibold tracking-widest text-[13px]">${act.device_id || (act.uuid_hash ? act.uuid_hash.slice(0, 12) : '------')}</span>
+                                            <span class="font-mono text-white font-semibold tracking-widest text-[13px]">${devKey}</span>
                                             <span class="text-on-surface-variant text-[10px]">${translations[state.lang].activated_on}: ${new Date(act.activated_at).toLocaleDateString()}</span>
                                         </div>
                                         ${lic.status === 'active' ? `
-                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}">
+                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}" data-device-id="${devKey}" data-remaining-unbinds="${remainingUnbinds}">
                                                 <span class="material-symbols-outlined text-xs">link_off</span>
                                                 <span>${translations[state.lang].unbind_btn || 'Unbind'}</span>
                                             </button>
                                         ` : ''}
                                     </div>
-                                `).join('')}
+                                `;
+                                }).join('')}
                             </div>
                         </div>
                     `;
@@ -741,7 +849,7 @@
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${lic.status.toUpperCase()}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${statusLabel}</span>
                             <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">${lic.tier}</span>
                         </div>
                     </div>
@@ -750,6 +858,18 @@
                         <div><span class="font-medium text-white/50">${translations[state.lang].created_at}:</span> ${createdDate}</div>
                         <div><span class="font-medium text-white/50">${translations[state.lang].paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
                         ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${translations[state.lang].paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
+                    </div>
+
+                    <!-- Annual Unbind Quota Banner -->
+                    <div class="bg-white/5 border border-white/10 rounded-xl p-3 text-xs flex items-center justify-between text-on-surface-variant">
+                        <span class="flex items-center gap-1.5 text-primary font-medium">
+                            <span class="material-symbols-outlined text-sm">history_toggle_off</span>
+                            <span>${quotaLabel}</span>
+                        </span>
+                        <span class="text-[11px] text-on-surface-variant/70 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-xs">restore</span>
+                            <span>365天自动滚轮回复</span>
+                        </span>
                     </div>
 
                     ${activationsHtml}
@@ -774,43 +894,14 @@
                 });
             });
 
-            // Wire unbind buttons
+            // Wire unbind buttons (open custom in-app modal instead of browser alert confirm)
             container.querySelectorAll('.unbind-device-btn').forEach(btn => {
-                btn.addEventListener('click', async () => {
+                btn.addEventListener('click', () => {
                     const licenseCode = btn.getAttribute('data-license');
                     const activationId = btn.getAttribute('data-activation');
-                    const confirmMsg = translations[state.lang].unbind_confirm_desc || 'Are you sure you want to unbind this device?';
-                    if (!confirm(confirmMsg)) return;
-
-                    btn.disabled = true;
-                    btn.innerHTML = `<span class="material-symbols-outlined text-xs animate-spin">refresh</span><span>${translations[state.lang].unbinding || 'Unbinding...'}</span>`;
-
-                    try {
-                        const res = await fetch(`${API_BASE}/api/v1/user/unbind-device`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${state.token}`
-                            },
-                            body: JSON.stringify({
-                                license_code: licenseCode,
-                                activation_id: Number(activationId)
-                            })
-                        });
-                        const data = await res.json();
-                        if (res.ok) {
-                            showToast(data.message || translations[state.lang].unbind_success || 'Device unbound successfully!', 'success');
-                            await loadLicenses();
-                        } else {
-                            showToast(data.error || 'Failed to unbind device', 'error');
-                            btn.disabled = false;
-                            btn.innerHTML = `<span class="material-symbols-outlined text-xs">link_off</span><span>${translations[state.lang].unbind_btn || 'Unbind'}</span>`;
-                        }
-                    } catch (err) {
-                        showToast('Network error: ' + err.message, 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = `<span class="material-symbols-outlined text-xs">link_off</span><span>${translations[state.lang].unbind_btn || 'Unbind'}</span>`;
-                    }
+                    const deviceId = btn.getAttribute('data-device-id') || '------';
+                    const remainingUnbinds = btn.getAttribute('data-remaining-unbinds');
+                    showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds);
                 });
             });
 
@@ -821,6 +912,72 @@
                     showConfirmModal(license);
                 });
             });
+        }
+
+        // Show Unbind Confirm Modal
+        function showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds) {
+            state.unbindPendingData = { licenseCode, activationId, deviceId };
+            const modal = document.getElementById('unbind-modal');
+            const box = modal.querySelector('div');
+            
+            document.getElementById('unbind-modal-device-key').textContent = deviceId;
+            
+            const dict = translations[state.lang] || translations['en'];
+            const quotaText = (dict.unbind_quota_label || "Annual Unbind Quota: {remaining}/{max}")
+                .replace('{remaining}', remainingUnbinds !== undefined ? remainingUnbinds : 4)
+                .replace('{max}', 4);
+            document.getElementById('unbind-modal-quota-badge').textContent = quotaText;
+            document.getElementById('unbind-policy-text-box').textContent = dict.unbind_policy_desc || '';
+            
+            modal.classList.remove('pointer-events-none');
+            modal.classList.add('opacity-100');
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        // Hide Unbind Confirm Modal
+        function hideUnbindModal() {
+            state.unbindPendingData = null;
+            const modal = document.getElementById('unbind-modal');
+            const box = modal.querySelector('div');
+            
+            modal.classList.add('pointer-events-none');
+            modal.classList.remove('opacity-100');
+            box.classList.add('scale-95');
+            box.classList.remove('scale-100');
+        }
+
+        // Confirm Unbind submit
+        async function handleConfirmUnbind() {
+            if (!state.unbindPendingData) return;
+            const { licenseCode, activationId } = state.unbindPendingData;
+            
+            hideUnbindModal();
+            showToast(translations[state.lang].unbinding || 'Unbinding...');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/user/unbind-device`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${state.token}`
+                    },
+                    body: JSON.stringify({
+                        license_code: licenseCode,
+                        activation_id: Number(activationId),
+                        lang: state.lang
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || translations[state.lang].unbind_success || 'Device unbound successfully!', 'success');
+                    await loadLicenses();
+                } else {
+                    showToast(data.error || 'Failed to unbind device', 'error');
+                }
+            } catch (err) {
+                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+            }
         }
 
         // Show Confirm Modal
@@ -945,6 +1102,10 @@
             // Confirm refund modal
             document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirmModal);
             document.getElementById('confirm-ok-btn').addEventListener('click', handleConfirmRefund);
+
+            // Confirm unbind modal
+            document.getElementById('unbind-cancel-btn').addEventListener('click', hideUnbindModal);
+            document.getElementById('unbind-ok-btn').addEventListener('click', handleConfirmUnbind);
         }
 
         function applyUrlEmailAutoFill() {

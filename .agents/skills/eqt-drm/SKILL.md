@@ -203,4 +203,19 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 所有的 DRM 邮件发送（调用 `sendDRMEmail`）均需包裹在 Workers 的 `ctx.waitUntil(...)` 中异步执行。
   - 绝对禁止同步阻塞 HTTP 核心请求主线程，以保证 Webhook 握手在毫秒级内返回 200，并避免因 SMTP 服务交互时延引发 Paddle 履约重试或客户端请求超时。
 
+---
+
+## 8. 设备解绑额度与 7 语言邮件国际化 (Unbind Quota & 7-Language Email i18n)
+
+- **365 天滚轮解绑额度 (Rolling Unbind Limit)**：
+  - 每张授权码过去 365 天内最多允许解绑设备 4 次 (`MAX_YEARLY_UNBINDS = 4`)。
+  - 解绑记录持久化在 D1 的 `unbind_records` 表（包含 `license_code`, `activation_id`, `device_id`, `unbound_at`）。
+  - 扣减的 1 次解绑额度将在该次解绑满 365 天后自动恢复重新计入（使用 `unbound_at >= ONE_YEAR_MS` 过滤）。
+- **设备恢复机制 (Device Restoration)**：
+  - 解绑仅释放 1 台设备的名额，不会物理销毁客户端的设备识别能力。如需恢复付费权限，用户只需在目标设备上打开 EQT 客户端并重新输入该授权码激活即可。
+- **全生命周期统一邮件样式与 7 语言国际化**：
+  - 使用 `renderEmailWrapper(title, contentHtml)` 渲染统一响应式 600px HTML 邮件样式（包含 EQT 品牌 Header、绿条分割线、多语言正文和 Footer）。
+  - 所有系统邮件（验证码 `AUTH_CODE_EMAIL_I18N`、结账 `CHECKOUT_EMAIL_I18N`、设备绑定/解绑通知 `DEVICE_NOTIFICATION_I18N`）全面支持 7 种语言 (`zh`, `en`, `ja`, `ko`, `es`, `de`, `fr`)，并自动对齐 Portal 用户界面的语种。
+  - Portal 自助服务页面 (`portal.html`) 使用玻璃拟物风自定义模态框 `#unbind-modal` 替换原生 `confirm()` 对话框，并在面板上实时显示 365 天内剩余解绑次数徽章与解绑/恢复政策说明。
+
 

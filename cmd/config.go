@@ -16,4 +16,3 @@ var configCmd = &cobra.Command{
 	Aliases: []string{"c", "cfg"},
 	RunE:    configCmdFunc,
 }
-

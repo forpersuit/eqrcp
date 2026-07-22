@@ -370,59 +370,138 @@ async function sendDRMEmail(env: Env, to: string, subject: string, html: string)
   }
 }
 
-// Multi-language dictionary for purchase checkout email verification
-const CHECKOUT_EMAIL_I18N: Record<string, { subject: string; title: string; bodyHtml: string }> = {
+// Unified HTML Email Layout Wrapper for Consistent Style
+function renderEmailWrapper(title: string, contentHtml: string): string {
+  return `
+    <div style="font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; color: #334155; line-height: 1.6;">
+      <div style="border-bottom: 2px solid #10b981; padding-bottom: 14px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">EQT <span style="font-size: 13px; font-weight: 600; color: #10b981;">Easy QR Transfer</span></span>
+        <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Official Notice</span>
+      </div>
+      <h2 style="color: #0f172a; margin-top: 0; font-size: 18px; font-weight: 700;">${title}</h2>
+      ${contentHtml}
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 16px 0;" />
+      <p style="font-size: 12px; color: #94a3b8; margin: 0; text-align: center;">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+    </div>
+  `;
+}
+
+// Multi-language dictionary for Portal Auth Login Verification Code Email (7 Languages)
+const AUTH_CODE_EMAIL_I18N: Record<string, { subject: string; title: string; bodyText: string; validityText: string }> = {
+  zh: {
+    subject: "【EQT 登录验证码】您的验证码",
+    title: "登录验证码",
+    bodyText: "尊敬的用户，您正在登录 EQT 客户管理门户。您的验证码为：",
+    validityText: "验证码有效期为 5 分钟。请勿将验证码泄露给他人。若非您本人操作，请忽略此邮件。"
+  },
+  en: {
+    subject: "[EQT Login] Verification Code",
+    title: "Login Verification Code",
+    bodyText: "Hello, you are signing in to the EQT Customer Portal. Your verification code is:",
+    validityText: "This code is valid for 5 minutes. Do not share it with anyone. If you did not request this, please ignore this email."
+  },
+  ja: {
+    subject: "【EQT ログイン】認証コード通知",
+    title: "ログイン認証コード",
+    bodyText: "EQT カスタマーポータルにログインするための認証コードは以下の通りです：",
+    validityText: "このコードは5分間有効です。他人に共有しないでください。心当たりのない場合は無視してください。"
+  },
+  ko: {
+    subject: "【EQT 로그인】인증 코드 안내",
+    title: "로그인 인증 코드",
+    bodyText: "EQT 고객 포털에 로그인하기 위한 인증 코드입니다:",
+    validityText: "이 코드는 5분 동안 유효합니다. 타인에게 공유하지 마세요. 요청하지 않으셨다면 이 메일을 무시해 주세요."
+  },
+  es: {
+    subject: "[EQT Inicio de Sesión] Código de verificación",
+    title: "Código de verificación",
+    bodyText: "Hola, estás iniciando sesión en el Portal del Cliente EQT. Tu código de verificación es:",
+    validityText: "Este código es válido durante 5 minutos. No lo comparta con nadie. Si no lo solicitó, ignore este correo."
+  },
+  de: {
+    subject: "[EQT Anmeldung] Bestätigungscode",
+    title: "Anmelde-Bestätigungscode",
+    bodyText: "Hallo, Sie melden sich im EQT Kundenportal an. Ihr Bestätigungscode lautet:",
+    validityText: "Dieser Code ist 5 Minuten lang gültig. Bitte geben Sie ihn nicht weiter. Wenn Sie diesen Code nicht angefordert haben, ignorieren Sie diese E-Mail."
+  },
+  fr: {
+    subject: "[EQT Connexion] Code de vérification",
+    title: "Code de vérification",
+    bodyText: "Bonjour, vous vous connectez au Portail Client EQT. Votre code de vérification est :",
+    validityText: "Ce code est valable pendant 5 minutes. Ne le partagez avec personne. Si vous ne l'avez pas demandé, veuillez ignorer cet e-mail."
+  }
+};
+
+function buildAuthCodeEmailHtml(lang: string, code: string): { subject: string; html: string } {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  const t = AUTH_CODE_EMAIL_I18N[norm] || AUTH_CODE_EMAIL_I18N['zh'] || AUTH_CODE_EMAIL_I18N['en'];
+  const content = `
+    <p style="color: #475569; font-size: 14px;">${t.bodyText}</p>
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #166534; font-family: monospace;">${code}</span>
+    </div>
+    <p style="font-size: 13px; color: #64748b;">${t.validityText}</p>
+  `;
+  return { subject: t.subject, html: renderEmailWrapper(t.title, content) };
+}
+
+// Multi-language dictionary for purchase checkout email verification (7 Languages)
+const CHECKOUT_EMAIL_I18N: Record<string, { subject: string; title: string; bodyHtml: string; validityText: string }> = {
   zh: {
     subject: "【EQT】您的购买邮箱验证码",
     title: "购买邮箱验证",
-    bodyHtml: "感谢您选择 EQT 尊享服务。您当前正在验证购买邮箱，验证码为："
+    bodyHtml: "感谢您选择 EQT 尊享服务。您当前正在验证购买邮箱，验证码为：",
+    validityText: "验证码有效期为 10 分钟。请勿透露给他人。"
   },
   en: {
-    subject: "【EQT】Your Purchase Email Verification Code",
+    subject: "[EQT] Your Purchase Email Verification Code",
     title: "Verify Your Purchase Email",
-    bodyHtml: "Thank you for choosing EQT Premium. Your verification code for purchase is:"
+    bodyHtml: "Thank you for choosing EQT Premium. Your verification code for purchase is:",
+    validityText: "Valid for 10 minutes. Do not share with anyone."
   },
   ja: {
     subject: "【EQT】ご購入用メールアドレス認証コード",
     title: "ご購入メールアドレスの確認",
-    bodyHtml: "EQT プレミアムサービスをご選択いただきありがとうございます。認証コード："
+    bodyHtml: "EQT プレミアムサービスをご選択いただきありがとうございます。認証コード：",
+    validityText: "有効期限は10分間です。他人に共有しないでください。"
   },
   ko: {
     subject: "【EQT】구매 이메일 인증 코드",
     title: "구매 이메일 인증",
-    bodyHtml: "EQT 프리미엄 서비스를 선택해 주셔서 감사합니다. 귀하의 인증 코드는 다음과 같습니다:"
+    bodyHtml: "EQT 프리미엄 서비스를 선택해 주셔서 감사합니다. 귀하의 인증 코드는 다음과 같습니다:",
+    validityText: "이 코드는 10분 동안 유효합니다. 타인에게 공유하지 마세요."
   },
   es: {
-    subject: "【EQT】Código de verificación para su compra",
+    subject: "[EQT] Código de verificación para su compra",
     title: "Verificación de correo para la compra",
-    bodyHtml: "Gracias por elegir EQT Premium. Su código de verificación para la compra es:"
+    bodyHtml: "Gracias por elegir EQT Premium. Su código de verificación para la compra es:",
+    validityText: "Válido durante 10 minutos. No lo comparta con nadie."
   },
   de: {
-    subject: "【EQT】Ihr Bestätigungscode für den Kauf",
+    subject: "[EQT] Ihr Bestätigungscode für den Kauf",
     title: "Bestätigung der E-Mail-Adresse",
-    bodyHtml: "Vielen Dank, dass Sie sich für EQT Premium entschieden haben. Ihr Bestätigungscode lautet:"
+    bodyHtml: "Vielen Dank, dass Sie sich für EQT Premium entschieden haben. Ihr Bestätigungscode lautet:",
+    validityText: "Gültig für 10 Minuten. Bitte nicht weitergeben."
   },
   fr: {
-    subject: "【EQT】Votre code de vérification d'achat",
+    subject: "[EQT] Votre code de vérification d'achat",
     title: "Vérification de l'e-mail d'achat",
-    bodyHtml: "Merci d'avoir choisi EQT Premium. Votre code de vérification est :"
+    bodyHtml: "Merci d'avoir choisi EQT Premium. Votre code de vérification est :",
+    validityText: "Valable pendant 10 minutes. Ne le partagez pas."
   }
 };
 
 function buildCheckoutEmailHtml(lang: string, code: string): { subject: string; html: string } {
-  const targetLang = (lang && CHECKOUT_EMAIL_I18N[lang]) ? lang : "en";
-  const t = CHECKOUT_EMAIL_I18N[targetLang];
-  const html = `
-    <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333; max-width: 500px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
-      <h2 style="color: #10b981; margin-top: 0;">${t.title}</h2>
-      <p style="font-size: 14px; color: #555;">${t.bodyHtml}</p>
-      <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
-        <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #10b981; font-family: monospace;">${code}</span>
-      </div>
-      <p style="font-size: 12px; color: #888; margin-bottom: 0;">验证码有效期为 10 分钟 (Valid for 10 minutes)。请勿透露给他人。</p>
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  const t = CHECKOUT_EMAIL_I18N[norm] || CHECKOUT_EMAIL_I18N['zh'] || CHECKOUT_EMAIL_I18N['en'];
+  const content = `
+    <p style="color: #475569; font-size: 14px;">${t.bodyHtml}</p>
+    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #166534; font-family: monospace;">${code}</span>
     </div>
+    <p style="font-size: 13px; color: #64748b;">${t.validityText}</p>
   `;
-  return { subject: t.subject, html };
+  return { subject: t.subject, html: renderEmailWrapper(t.title, content) };
 }
 
 const DEVICE_NOTIFICATION_I18N: Record<string, {
@@ -437,59 +516,183 @@ const DEVICE_NOTIFICATION_I18N: Record<string, {
     boundSubject: "【EQT 授权安全提醒】您的授权码已绑定新设备",
     boundTitle: "新设备激活通知",
     boundBody: (lic, time, devHash, current, max) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">新设备激活成功</h2>
-        <p style="color: #475569;">尊敬的用户，您的 EQT 授权码已在新的硬件设备上完成绑定：</p>
-        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
-          <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>绑定时间：</strong> ${time}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>设备特征摘要：</strong> ${devHash}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>已用设备数：</strong> ${current} / ${max}</p>
-        </div>
-        <p style="color: #64748b; font-size: 13px;">若非您本人操作，请及时前往用户自服务门户解绑非法设备。</p>
-      </div>`,
+      <p style="color: #475569; font-size: 14px;">尊敬的用户，您的 EQT 授权码已在新的硬件设备上完成绑定：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>绑定时间：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>设备特征摘要：</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>已用设备数：</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">若非您本人操作，请及时前往用户自服务门户解绑非法设备。</p>`,
     unboundSubject: "【EQT 授权安全提醒】您的授权码已成功解绑一台设备",
     unboundTitle: "设备解绑成功通知",
     unboundBody: (lic, time, remainingUnbinds) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">设备解绑成功</h2>
-        <p style="color: #475569;">尊敬的用户，您的 EQT 授权码已成功解绑一台硬件设备：</p>
-        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
-          <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>解绑时间：</strong> ${time}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>过去365天剩余解绑额度：</strong> ${remainingUnbinds} 次</p>
-        </div>
-        <p style="color: #64748b; font-size: 13px;">空出的设备额度现可用于绑定新的设备。</p>
-      </div>`
+      <p style="color: #475569; font-size: 14px;">尊敬的用户，您的 EQT 授权码已成功解绑一台硬件设备：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>授权码：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>解绑时间：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>过去 365 天剩余解绑额度：</strong> ${remainingUnbinds} / 4 次</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>设备恢复与重新绑定说明：</strong><br/>
+      1. 解绑后空出的设备额度现可用于绑定新的设备。<br/>
+      2. 如需在原设备或新设备上恢复付费授权，只需在目标设备上打开 EQT 客户端并重新输入该授权码激活即可。<br/>
+      3. 扣减的解绑额度将在该解绑操作发生 365 天后自动恢复。</p>`
   },
   en: {
     boundSubject: "[EQT Security Alert] New Device Bound to Your License",
     boundTitle: "New Device Activated",
     boundBody: (lic, time, devHash, current, max) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">New Device Activated Successfully</h2>
-        <p style="color: #475569;">Hello, a new hardware device has been bound to your EQT license:</p>
-        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
-          <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>Activated At:</strong> ${time}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>Device Hash:</strong> ${devHash}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>Devices In Use:</strong> ${current} / ${max}</p>
-        </div>
-        <p style="color: #64748b; font-size: 13px;">If you did not authorize this action, please visit the self-service portal to unbind unknown devices.</p>
-      </div>`,
+      <p style="color: #475569; font-size: 14px;">Hello, a new hardware device has been bound to your EQT license:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Activated At:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Device Hash:</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Devices In Use:</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">If you did not authorize this action, please visit the self-service portal to unbind unknown devices.</p>`,
     unboundSubject: "[EQT Security Alert] Device Unbound from Your License",
     unboundTitle: "Device Unbound Successfully",
     unboundBody: (lic, time, remainingUnbinds) => `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Device Unbound Successfully</h2>
-        <p style="color: #475569;">Hello, a device has been unbound from your EQT license:</p>
-        <div style="background: #f8fafc; padding: 16px; border-radius: 6px; margin: 16px 0;">
-          <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>Unbound At:</strong> ${time}</p>
-          <p style="margin: 4px 0; color: #334155;"><strong>Remaining Yearly Unbind Quota:</strong> ${remainingUnbinds}</p>
-        </div>
-        <p style="color: #64748b; font-size: 13px;">The freed device slot is now available for new device activations.</p>
-      </div>`
+      <p style="color: #475569; font-size: 14px;">Hello, a device has been unbound from your EQT license:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>License Code:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Unbound At:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Remaining Yearly Unbind Quota:</strong> ${remainingUnbinds} / 4</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>Device Slot & Restoration Guide:</strong><br/>
+      1. The freed device slot is now available for new device activations.<br/>
+      2. To restore authorization on a device, simply open EQT on that target device and re-enter this license code.<br/>
+      3. Used unbind quota automatically recovers 365 days after the operation date.</p>`
+  },
+  ja: {
+    boundSubject: "【EQT セキュリティ警告】新しいデバイスがライセンスに連携されました",
+    boundTitle: "新規デバイスアクティベーション通知",
+    boundBody: (lic, time, devHash, current, max) => `
+      <p style="color: #475569; font-size: 14px;">EQT ライセンスに新しいハードウェアデバイスが連携されました：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>ライセンスコード：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>アクティベート日時：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>デバイスハッシュ：</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>使用中デバイス数：</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">心当たりのない場合は、カスタマーポータルから解除を行ってください。</p>`,
+    unboundSubject: "【EQT セキュリティ警告】デバイスの連携解除が完了しました",
+    unboundTitle: "デバイス連携解除通知",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <p style="color: #475569; font-size: 14px;">EQT ライセンスからデバイスの連携が正常に解除されました：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>ライセンスコード：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>解除日時：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>過去365日以内の残り解除枠：</strong> ${remainingUnbinds} / 4 回</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>デバイス復元と再連携について：</strong><br/>
+      1. 空いたデバイス枠は新しいデバイスのアクティベーションに使用できます。<br/>
+      2. デバイスで有料機能を再有効化するには、EQT アプリを起動してこのライセンスコードを再入力してください。<br/>
+      3. 消費された解除枠は、操作日から365日経過後に自動的に回復します。</p>`
+  },
+  ko: {
+    boundSubject: "【EQT 보안 알림】새 기기가 라이선스에 연동되었습니다",
+    boundTitle: "새 기기 인증 알림",
+    boundBody: (lic, time, devHash, current, max) => `
+      <p style="color: #475569; font-size: 14px;">EQT 라이선스에 새로운 하드웨어 기기가 연동되었습니다:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>라이선스 코드：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>인증 시간：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>기기 해시：</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>사용 중 기기 수：</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">본인의 요청이 아닌 경우 포털에서 임의 기기를 해제해 주세요.</p>`,
+    unboundSubject: "【EQT 보안 알림】기기 연동이 해제되었습니다",
+    unboundTitle: "기기 연동 해제 완료",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <p style="color: #475569; font-size: 14px;">EQT 라이선스에서 기기 연동 해제가 성공적으로 완료되었습니다:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>라이선스 코드：</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>해제 시간：</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>최근 365일 남은 해제 횟수：</strong> ${remainingUnbinds} / 4 회</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>기기 복구 및 재연동 안내：</strong><br/>
+      1. 확보된 슬롯은 새로운 기기 인증에 사용할 수 있습니다.<br/>
+      2. 해제된 기기에서 인증을 다시 복구하려면 EQT 앱에서 라이선스 코드를 다시 입력해 주세요.<br/>
+      3. 사용된 해제 횟수는 해당 작업일 기준 365일 후 자동으로 복구됩니다.</p>`
+  },
+  es: {
+    boundSubject: "[EQT Alerta de Seguridad] Nuevo dispositivo vinculado a su licencia",
+    boundTitle: "Nuevo dispositivo activado",
+    boundBody: (lic, time, devHash, current, max) => `
+      <p style="color: #475569; font-size: 14px;">Hola, se ha vinculado un nuevo dispositivo a su licencia EQT:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Código de licencia:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Fecha de activación:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Hash de dispositivo:</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Dispositivos en uso:</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Si no autorizó esta acción, desvincule los dispositivos en el portal de autoservicio.</p>`,
+    unboundSubject: "[EQT Alerta de Seguridad] Dispositivo desvinculado con éxito",
+    unboundTitle: "Dispositivo desvinculado",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <p style="color: #475569; font-size: 14px;">Un dispositivo se ha desvinculado correctamente de su licencia EQT:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Código de licencia:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Fecha de desvinculación:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Cupo anual restante de desvinculaciones:</strong> ${remainingUnbinds} / 4</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>Guía de restauración de dispositivos:</strong><br/>
+      1. El espacio liberado está listo para activarse en un nuevo dispositivo.<br/>
+      2. Para restaurar la licencia en un dispositivo, abra EQT en el dispositivo de destino y vuelva a ingresar este código.<br/>
+      3. El cupo de desvinculación consumido se restaura automáticamente 365 días después de la operación.</p>`
+  },
+  de: {
+    boundSubject: "[EQT Sicherheitsmeldung] Neues Gerät mit Ihrer Lizenz verknüpft",
+    boundTitle: "Neues Gerät aktiviert",
+    boundBody: (lic, time, devHash, current, max) => `
+      <p style="color: #475569; font-size: 14px;">Hallo, ein neues Gerät wurde mit Ihrer EQT-Lizenz verknüpft:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Lizenzschlüssel:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Aktiviert am:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Geräte-Hash:</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Verwendete Geräte:</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Wenn Sie dies nicht autorisiert haben, trennen Sie unbekannte Geräte im Selbstbedienungsportal.</p>`,
+    unboundSubject: "[EQT Sicherheitsmeldung] Gerät erfolgreich entkoppelt",
+    unboundTitle: "Geräteentkopplung erfolgreich",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <p style="color: #475569; font-size: 14px;">Ein Gerät wurde erfolgreich von Ihrer EQT-Lizenz getrennt:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Lizenzschlüssel:</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Entkoppelt am:</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Verbleibendes Jahreskontingent:</strong> ${remainingUnbinds} / 4</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>Wiederherstellung & Neukopplung:</strong><br/>
+      1. Der freigegebene Platz steht für eine neue Geräteaktivierung zur Verfügung.<br/>
+      2. Um die Lizenz auf einem Gerät wiederherzustellen, geben Sie den Schlüssel in EQT erneut ein.<br/>
+      3. Das verbrauchte Kontingent wird 365 Tage nach dem Entkopplungsdatum automatisch wiederhergestellt.</p>`
+  },
+  fr: {
+    boundSubject: "[EQT Alerte de Sécurité] Nouveau périphérique lié à votre licence",
+    boundTitle: "Nouveau périphérique activé",
+    boundBody: (lic, time, devHash, current, max) => `
+      <p style="color: #475569; font-size: 14px;">Bonjour, un nouveau périphérique a été lié à votre licence EQT :</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Clé de licence :</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Activé le :</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Hash de l'appareil :</strong> ${devHash}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Périphériques utilisés :</strong> ${current} / ${max}</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Si vous n'avez pas autorisé cette action, rendez-vous sur le portail client pour délier l'appareil.</p>`,
+    unboundSubject: "[EQT Alerte de Sécurité] Périphérique dissocié avec succès",
+    unboundTitle: "Dissociation du périphérique réussie",
+    unboundBody: (lic, time, remainingUnbinds) => `
+      <p style="color: #475569; font-size: 14px;">Un périphérique a été dissocié avec succès de votre licence EQT :</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Clé de licence :</strong> ${lic}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Dissocié le :</strong> ${time}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Quota annuel restant de dissociation :</strong> ${remainingUnbinds} / 4</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;"><strong>Restauration & Réassociation :</strong><br/>
+      1. Emplacement libéré disponible pour l'activation d'un nouveau périphérique.<br/>
+      2. Pour restaurer la licence sur un appareil cible, ouvrez EQT et ressaisissez cette clé de licence.<br/>
+      3. Le quota de dissociation consommé se restaure automatiquement 365 jours après la date de l'opération.</p>`
   }
 };
 
@@ -813,13 +1016,13 @@ export default {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
-
       // 0.1 Send email verification code
       if (url.pathname === "/api/v1/auth/send-code" && request.method === "POST") {
-        const body: any = await request.json();
+        const body: any = await request.json().catch(() => ({}));
+        const reqLang = extractRequestLang(request, body);
         let email = body.email;
         if (!email) {
-          return new Response(JSON.stringify({ error: "Missing email" }), {
+          return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
@@ -835,13 +1038,14 @@ export default {
           "INSERT OR REPLACE INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)"
         ).bind(email, code, expiresAt).run();
 
-        // Send mail via SMTPS
+        // Send mail via SMTPS with localized i18n template
         const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
         const mailSenderPassword = env.MAIL_SENDER_PASSWORD || "q4W62}bWtR";
         const mailSendServer = env.MAIL_SEND_SERVER || "smtpserver.301098.xyz";
         const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
         
         const targetEmail = env.TEST_MAIL_RECEIVER || email;
+        const mailObj = buildAuthCodeEmailHtml(reqLang, code);
 
         try {
           await sendMailViaSmtp({
@@ -850,8 +1054,8 @@ export default {
             host: mailSendServer,
             port: mailSendPort,
             to: targetEmail,
-            subject: "[EQT] Login Verification Code",
-            html: `<p>Your EQT login verification code is: <strong style="font-size: 18px; color: #6200ee;">${code}</strong></p><p>This code is valid for 5 minutes. If you did not request this, please ignore this email.</p>`
+            subject: mailObj.subject,
+            html: mailObj.html
           });
         } catch (mailErr: any) {
           console.error("Mail Send Error:", mailErr);
@@ -961,15 +1165,26 @@ export default {
           "SELECT * FROM licenses WHERE buyer_email_hash = ? ORDER BY created_at DESC"
         ).bind(emailHash).all<any>();
 
+        const oneYearAgoIso = new Date(Date.now() - ONE_YEAR_MS).toISOString();
+
         const list: any[] = [];
         for (const lic of licenses) {
           const { results: activations } = await env.DB.prepare(
             "SELECT * FROM activations WHERE license_code = ?"
           ).bind(lic.license_code).all<any>();
-          
+
+          const unbindCheck = await env.DB.prepare(
+            "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
+          ).bind(lic.license_code, oneYearAgoIso).first<any>();
+          const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
+          const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
+
           list.push({
             ...lic,
-            activations: activations
+            activations: activations,
+            used_unbinds: unbindCount,
+            remaining_unbinds: remainingUnbinds,
+            max_yearly_unbinds: MAX_YEARLY_UNBINDS
           });
         }
 
@@ -1059,11 +1274,12 @@ export default {
         if (targetEmail) {
           const t = getDeviceNoticeTemplate(reqLang);
           const remainingUnbinds = MAX_YEARLY_UNBINDS - (unbindCount + 1);
+          const emailHtml = renderEmailWrapper(t.unboundTitle, t.unboundBody(license_code, nowIso, remainingUnbinds));
           ctx.waitUntil(sendDRMEmail(
             env,
             targetEmail,
             t.unboundSubject,
-            t.unboundBody(license_code, nowIso, remainingUnbinds)
+            emailHtml
           ));
         }
 
@@ -1356,43 +1572,13 @@ export default {
 
           // Send activation notification email to the buyer asynchronously
           if (license.buyer_email) {
-            const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
             const currentDevicesCount = activations.length + 1;
             const actTimeStr = new Date().toLocaleString();
+            const devHashSummary = uuid_hash ? uuid_hash.substring(0, 8) + "..." : (cpu_hash ? cpu_hash.substring(0, 8) + "..." : "Default");
             
-            // Mask hashes for user privacy, show only first 6 chars
-            const shortUUID = uuid_hash ? uuid_hash.substring(0, 6) + "..." : "无";
-            const shortCPU = cpu_hash ? cpu_hash.substring(0, 6) + "..." : "无";
-            const shortDisk = disk_hash ? disk_hash.substring(0, 6) + "..." : "无";
-
-            const emailHtml = `
-              <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
-                <h2 style="color: #3b82f6;">您的 EQT 激活码绑定了新设备</h2>
-                <p>我们检测到您的激活码在新的客户端进行了设备激活绑定。以下是激活事件明细：</p>
-                <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
-                  <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码 (License Code)</td>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace;">${license_code}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">授权级别 (Tier)</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活时间 (Time)</td>
-                    <td style="padding: 10px; border: 1px solid #ddd;">${actTimeStr}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">设备占用状态</td>
-                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #3b82f6;">${currentDevicesCount} / ${license.max_devices} (台设备已使用)</td>
-                  </tr>
-                </table>
-                <p><strong>注意：</strong>如果这并非由您本人操作，可能说明您的激活码已被他人盗用，请立即前往我们的 <a href="https://www.eqt.net.im/portal.html" target="_blank" style="color: #3b82f6; text-decoration: none; font-weight: bold;">许可证自服务门户</a> 申请退款或重置授权，以保护您的权益！</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-                <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请安全使用您的激活码。</p>
-              </div>
-            `;
-            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】新设备授权激活提醒通知", emailHtml));
+            const t = getDeviceNoticeTemplate(reqLang);
+            const emailHtml = renderEmailWrapper(t.boundTitle, t.boundBody(license_code, actTimeStr, devHashSummary, currentDevicesCount, license.max_devices));
+            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.boundSubject, emailHtml));
           }
         }
 
