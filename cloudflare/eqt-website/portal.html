@@ -47,7 +47,7 @@
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
     <!-- Header -->
-    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-4">
+    <header class="relative z-40 w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-4">
         <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
             <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
                 <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
@@ -66,13 +66,13 @@
                     </button>
                     <!-- Dropdown Panel -->
                     <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-1 bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
-                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="es">Español</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="de">Deutsch</button>
                         <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="fr">Français</button>
+                        <button class="w-full text-left px-4 py-1.5 text-sm text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
                     </div>
                 </div>
                 
@@ -194,6 +194,8 @@
                 <button id="unbind-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-bold font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_unbind_btn">Confirm & Unbind</button>
             </div>
         </div>
+    </div>
+
     <!-- Script -->
     <script>
         // Language dictionaries
