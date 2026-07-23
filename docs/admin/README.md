@@ -14,7 +14,9 @@
 | [gap-analysis.md](./gap-analysis.md) | 现状 vs 目标缺口（文档 / 后端 / 前端 / 部署） |
 | [api-contract.md](./api-contract.md) | Admin API 请求/响应契约（对齐真实 D1 schema） |
 | [progress.md](./progress.md) | 进度勾选表（以代码事实为准，随阶段更新） |
+| [ops-guide.md](./ops-guide.md) | **生产运维与灾备手册**（Pages/Worker部署、Secret轮换、D1应急操作） |
 | [../admin-dashboard-design.md](../admin-dashboard-design.md) | 产品与架构设计总纲（原则、模块、技术栈） |
+
 
 支付与授权业务背景见 [`docs/payment/`](../payment/README.md)。
 

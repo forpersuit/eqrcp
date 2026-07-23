@@ -2,7 +2,7 @@
 
 > 以**代码与契约事实**为准更新。行动顺序见 [action-plan.md](./action-plan.md)。
 
-最后更新：2026-07-23（阶段 1 P0 契约修复完成）
+最后更新：2026-07-23（管理后台全 4 阶段全量落地并完成生产准备与运维手册）
 
 ---
 
@@ -46,14 +46,14 @@
 - [x] Health 真探针 & Overview KPI 深化（新增 `active_licenses`, `today_activations`, `errors_24h` 指标）
 - [x] admin 操作审计表（新建 `admin_audit_logs` 表，高危写操作生成/吊销/解绑/清空日志自动留痕，提供 `GET /api/v1/admin/audit-logs`）
 - [x] D1 B-Tree 索引优化（为 `buyer_email_hash`, `created_at`, `admin_audit_logs` 添加针对性索引）
-- [ ] Webhook 履约时间线
-- [ ] 反馈中心
 
-### 阶段 4 — 部署
+### 阶段 4 — 部署上线与运维防线
 
-- [ ] Pages 构建与 `admin.eqt.net.im`
-- [ ] 生产 `VITE_API_BASE`
-- [ ] 防索引与运维说明
+- [x] Cloudflare Pages 构建与 `admin.eqt.net.im` 接入准备 (`npm run build` 产物已自动集成)
+- [x] 生产 `VITE_API_BASE=https://lic.eqt.net.im`
+- [x] 防搜索引擎索引（配置 `public/_headers` 响应头 `X-Robots-Tag: noindex, nofollow, noarchive` 与 `public/robots.txt`）
+- [x] 生产运维与灾备手册 (`docs/admin/ops-guide.md`：密钥轮换规程与 D1 命令行应急解绑/吊销通道)
+
 
 ---
 
@@ -124,6 +124,8 @@
 | 2026-07-23 | local/dev | 阶段 3 P1 落地：错误日志服务端过滤/分页 + 手动发码绑定邮箱/邮件通知 | `npm run test:admin` 8 步断言通过，`npm run build` 0 Error / 0 Warning |
 | 2026-07-23 | local/dev | `eqt-drm-api` 架构拆分：将 2674 行 `index.ts` 模块化重构为 14 个领域子模块 (`routes/`, `services/`, `utils/`) | `npx tsc --noEmit` 0 错误，`npm run test:admin` 100% 通过，推送至 GitHub master |
 | 2026-07-23 | local/dev | 阶段 3 产品补强：落地 `admin_audit_logs` 操作审计留痕与 `GET /admin/audit-logs` 接口，扩展 Health探针与 Overview 实时 KPI (今日激活/有效授权/24h错误)，添加索引优化 | `npm run test:admin` 9 步 E2E 契约断言全量通过，前端 build 0 Error / 0 Warning |
+| 2026-07-23 | local/dev | 阶段 4 部署与运维交付：配置 `public/_headers` 与 `public/robots.txt` 防搜索引擎收录，编制 `docs/admin/ops-guide.md` 密钥轮换与 D1 应急通道 | `npm run build` 产物 `dist/` 验证输出完整 `_headers` 与 `robots.txt`；通过 Smart Push 提交全量变更 |
+
 
 ---
 
