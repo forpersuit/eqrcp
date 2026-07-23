@@ -183,6 +183,8 @@
 | 2026-07-23 | local/dev | P2：探针/限流/OpsAudit；`tsc`+`build`+`test:admin` | 见本轮提交；health 含 probes |
 | 2026-07-23 | prod | `curl https://admin.eqt.net.im/` | HTTP **200**，HTML title 含 EQT Admin |
 | 2026-07-23 | prod | `curl https://lic.eqt.net.im/api/v1/admin/health` 无 secret | HTTP **401** Unauthorized（鉴权生效） |
+| 2026-07-23 | prod | Worker `wrangler deploy` + Pages `eqt-admin` | Worker Version `2988eade…`；Pages `https://dde0bc9b.eqt-admin.pages.dev`；自定义域 bundle `index-Bg8qqf70.js` 含「操作审计轨迹」「真探针」 |
+| 2026-07-23 | prod | CORS OPTIONS DELETE from `admin.eqt.net.im` | Allow-Methods 含 DELETE；Allow-Origin 回显 admin 源 |
 
 ---
 
