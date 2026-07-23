@@ -46,8 +46,8 @@
 | V2 | Worker 部署 | [x] | `wrangler deploy` Version `d8b94e67-8805-4724-93c2-91d987afd405` |
 | V3 | `npm run test:e2e` 通过 | [x] | 含 Step 9–11 Portal 新断言 |
 | V4 | 更新本 progress 验证记录 | [x] | 见下表 |
-| V5 | git commit + push | [ ] | 智能推送脚本 |
-| V6 | Pages 部署 portal.html | [ ] | `wrangler pages deploy` |
+| V5 | git commit + push | [x] | `ae892a4` → `origin/master` |
+| V6 | Pages 部署 portal.html | [x] | `wrangler pages deploy` → `https://6889d6d6.eqt-27c.pages.dev` |
 
 ---
 
