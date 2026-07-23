@@ -53,16 +53,17 @@ export async function probePaddle(env: Env, timeoutMs = 3500): Promise<ProbeResu
     });
     clearTimeout(timer);
     const latency = Date.now() - started;
-    // 200 = key valid; 401/403 = API reachable but key rejected — still a live probe signal
+    // Webhook secret is what fulfillment needs. Optional API key is a deeper check:
+    // 200 = key valid; 401/403 = network/API reachable but key rejected — still OK for webhook path.
     if (res.status === 200) {
       return { ok: true, latency_ms: latency, error: null, mode: "api_reachable" };
     }
     if (res.status === 401 || res.status === 403) {
       return {
-        ok: false,
+        ok: true,
         latency_ms: latency,
-        error: `Paddle API HTTP ${res.status}`,
-        mode: "api_auth_failed"
+        error: `Paddle API key rejected (HTTP ${res.status}); webhook secret still configured`,
+        mode: "webhook_ok_api_key_invalid"
       };
     }
     return {

@@ -185,6 +185,7 @@
 | 2026-07-23 | prod | `curl https://lic.eqt.net.im/api/v1/admin/health` 无 secret | HTTP **401** Unauthorized（鉴权生效） |
 | 2026-07-23 | prod | Worker `wrangler deploy` + Pages `eqt-admin` | Worker Version `2988eade…`；Pages `https://dde0bc9b.eqt-admin.pages.dev`；自定义域 bundle `index-Bg8qqf70.js` 含「操作审计轨迹」「真探针」 |
 | 2026-07-23 | prod | CORS OPTIONS DELETE from `admin.eqt.net.im` | Allow-Methods 含 DELETE；Allow-Origin 回显 admin 源 |
+| 2026-07-23 | prod | 鉴权后全链路在线测（.env ADMIN_SECRET） | health: SMTP ok(~200ms) D1 ok; Paddle mode webhook_ok_api_key_invalid; generate/revoke 写 audit；Chrome 五 Tab 通过 |
 
 ---
 
