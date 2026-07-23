@@ -921,6 +921,23 @@ export default {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
+
+      // Admin Error Logs Clear Endpoint
+      if (url.pathname === "/api/v1/admin/error-logs" && request.method === "DELETE") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized admin access" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        await ensureAuditLogTable(env);
+        await env.DB.prepare("DELETE FROM system_error_logs").run();
+        return new Response(JSON.stringify({ success: true, message: "System error logs cleared successfully" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
       // Route request to download handler if host matches download.eqt.net.im,
       // or if pathname matches download routes (to support dev/testing on workers.dev or localhost).
       if (
@@ -1840,10 +1857,10 @@ export default {
         });
       }
 
-      // 2. Admin Endpoint: Manual license generation for test/issue
-      if (url.pathname === "/api/v1/admin/generate" && request.method === "POST") {
-        const adminSecret = request.headers.get("X-Admin-Secret");
-        if (!env.ADMIN_SECRET || adminSecret !== env.ADMIN_SECRET) {
+      // 2. Admin Endpoint: Manual license generation for test/issue (supports /generate and /generate-license)
+      if ((url.pathname === "/api/v1/admin/generate" || url.pathname === "/api/v1/admin/generate-license") && request.method === "POST") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
           return new Response(JSON.stringify({ error: "Unauthorized" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -1890,12 +1907,169 @@ export default {
         ).run();
 
         return new Response(JSON.stringify({
+          success: true,
           license_code: licenseCode,
           tier: tier,
           max_devices: maxDev,
           expires_at: expiresAt,
           duration_days: durDays,
           status: "active"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Admin Endpoint: Search all licenses
+      if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+        const limit = parseInt(url.searchParams.get("limit") || "50");
+        const offset = parseInt(url.searchParams.get("offset") || "0");
+
+        let sql = "SELECT * FROM licenses";
+        let params: any[] = [];
+
+        if (queryStr) {
+          let emailHash = "";
+          if (queryStr.includes("@")) {
+            const encoder = new TextEncoder();
+            const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(queryStr.toLowerCase()));
+            emailHash = Array.from(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+          }
+          const likeQuery = `%${queryStr}%`;
+          sql += " WHERE license_code LIKE ? OR buyer_email LIKE ? OR paddle_transaction_id LIKE ? OR buyer_email_hash = ?";
+          params = [likeQuery, likeQuery, likeQuery, emailHash || queryStr];
+        }
+
+        sql += " ORDER BY id DESC LIMIT ? OFFSET ?";
+        params.push(limit, offset);
+
+        const stmt = env.DB.prepare(sql);
+        const res = await (params.length > 2 ? stmt.bind(...params) : stmt.bind(limit, offset)).all();
+
+        const rawLicenses: any[] = res.results || [];
+        const licensesWithDevices = await Promise.all(
+          rawLicenses.map(async (lic) => {
+            const actRes = await env.DB.prepare(
+              "SELECT device_fingerprint, device_name, activated_at FROM activations WHERE license_code = ?"
+            ).bind(lic.license_code).all();
+            return {
+              ...lic,
+              active_devices_count: actRes.results?.length || 0,
+              activations: actRes.results || []
+            };
+          })
+        );
+
+        return new Response(JSON.stringify({ success: true, licenses: licensesWithDevices }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Admin Endpoint: Revoke license (supports /revoke and /revoke-license)
+      if ((url.pathname === "/api/v1/admin/revoke" || url.pathname === "/api/v1/admin/revoke-license") && request.method === "POST") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const body: any = await request.json();
+        const { license_code } = body;
+        if (!license_code) {
+          return new Response(JSON.stringify({ error: "license_code is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        await env.DB.prepare("UPDATE licenses SET status = 'revoked' WHERE license_code = ?").bind(license_code).run();
+        return new Response(JSON.stringify({ success: true, message: `License ${license_code} revoked successfully` }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Admin Endpoint: Unbind devices
+      if (url.pathname === "/api/v1/admin/unbind" && request.method === "POST") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const body: any = await request.json();
+        const { license_code, device_fingerprint } = body;
+        if (!license_code) {
+          return new Response(JSON.stringify({ error: "license_code is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        if (device_fingerprint) {
+          await env.DB.prepare("DELETE FROM activations WHERE license_code = ? AND device_fingerprint = ?")
+            .bind(license_code, device_fingerprint).run();
+        } else {
+          await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code).run();
+        }
+
+        return new Response(JSON.stringify({ success: true, message: `Devices for license ${license_code} unbound successfully` }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Admin Endpoint: System Health Probe
+      if (url.pathname === "/api/v1/admin/health" && request.method === "GET") {
+        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        let dbStatus = "ok";
+        let errorCount = 0;
+        let licenseCount = 0;
+        try {
+          const licCountRes = await env.DB.prepare("SELECT count(*) as count FROM licenses").first<{ count: number }>();
+          licenseCount = licCountRes?.count || 0;
+          await ensureAuditLogTable(env);
+          const errCountRes = await env.DB.prepare("SELECT count(*) as count FROM system_error_logs").first<{ count: number }>();
+          errorCount = errCountRes?.count || 0;
+        } catch (e: any) {
+          dbStatus = e?.message || "error";
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          status: "healthy",
+          timestamp: new Date().toISOString(),
+          metrics: {
+            total_licenses: licenseCount,
+            total_error_logs: errorCount
+          },
+          config: {
+            smtp_configured: !!env.MAIL_SEND_SERVER,
+            paddle_configured: !!env.PADDLE_WEBHOOK_SECRET,
+            r2_configured: !!env.R2_PUBLIC_URL,
+            db_status: dbStatus
+          }
         }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
