@@ -12,7 +12,9 @@
 | ID | 债 | 严重度 | 状态 | 建议解法 |
 | :---: | :--- | :---: | :---: | :--- |
 | D1 | 生产 error-log：`reqLang is not defined` | P1 | **未修** | 业务路径（非 Admin SPA）补 `reqLang` 定义/传参；修后健康/审计自然干净 |
-| D2 | `PADDLE_API_KEY` 无效 → API 403 | P2 | **已缓解** | 探针已 `webhook_ok_api_key_invalid` 不整项失败；治本：换有效 key 或 `wrangler secret delete PADDLE_API_KEY` |
+| D2 | `PADDLE_API_KEY` 无效 → API 403 | P2 | **已缓解** | 探针已 `webhook_ok_api_key_invalid`；文档见 IMPORTANT_paddle-api-and-errors；治本：换有效 key 或删除 secret |
+| D13 | 下载曾回落 GitHub | P1（产品） | **已修** | `github.ts` / `update/check` 无 R2 则 503；见 IMPORTANT_r2-distribution |
+| D14 | Paddle 失败不进错误审计 | P2 | **已修** | Webhook/API 失败写 `PADDLE_WEBHOOK` / `PADDLE_API_ERROR` |
 | D3 | 鉴权限流仅 **进程内** Map | P2 | 可接受 | 生产补 Cloudflare WAF / Rate limiting 规则（按 IP 对 `/api/v1/admin/*`） |
 | D4 | 操作审计 `ctx.waitUntil` 异步 | P3 | 已知 UX | 文档已提示延迟刷新；可选改为 await 写入（略增延迟）或 UI 延迟 1s 再拉 |
 | D5 | 解绑后客户端最长 ~7 天离线有效 | P2（产品） | 设计如此 | 文档/对客说明；急停需吊销 + 等 verify；非 Admin bug |

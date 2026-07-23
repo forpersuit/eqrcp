@@ -55,9 +55,9 @@ npm run dev   # 默认 :3001
 | `MAIL_SEND_SERVER` | 同上 | SMTP 主机 | 同上 |
 | `MAIL_SEND_SAFE_PORT` | 建议 | 默认 465 | 缺则探针/发信用 465 |
 | `PADDLE_WEBHOOK_SECRET` | 支付履约 | Webhook 验签 | `paddle_configured=false`；探针 skipped/失败 |
-| `PADDLE_API_KEY` | 可选 | 健康页对 Paddle API 深探针 | 无 key 时 mode=`webhook_secret_present`；key 无效 403 时 mode=`webhook_ok_api_key_invalid`（Webhook 仍算 ok） |
-| `R2_PUBLIC_URL` | 可选 | 更新包 CDN；健康徽章 | `r2_configured=false` |
-| `GITHUB_TOKEN` / `GITHUB_REPO` | 可选 | 下载/更新元数据 | 非 Admin 主路径 |
+| `PADDLE_API_KEY` | 建议（Portal 退款/补邮箱） | REST API；健康深探针 | 生成与用途见 [IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md)；无效 403 → mode=`webhook_ok_api_key_invalid`（Webhook 仍 ok） |
+| `R2_PUBLIC_URL` | **生产下载/更新必填** | 安装包 CDN 基址 | 未配：`r2_configured=false`；公开下载与 update/check **503**（无 GitHub 回落）。形态与 zip 建议见 [IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md) |
+| `GITHUB_TOKEN` / `GITHUB_REPO` | 可选 | **仅**拉 release **元数据**（版本/changelog/资产名列表） | 用户下载 URL 不指向 GitHub；无 token 时受 GitHub 匿名限流影响 |
 
 发码勾选「发邮件」时依赖 SMTP 四元组；`send_email:false` 仅写库不发信。
 

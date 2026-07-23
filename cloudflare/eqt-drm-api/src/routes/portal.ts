@@ -1,6 +1,7 @@
 import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
+import { logSystemError } from '../utils/error-logger';
 
 export async function handlePortalRoutes(
   request: Request,
@@ -308,6 +309,11 @@ export async function handlePortalRoutes(
       });
     } catch (err: any) {
       console.error("Refund processing error:", err);
+      ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'ERROR', err, {
+        path: url.pathname,
+        action: 'portal_refund',
+        transaction_id: transactionId || null
+      }));
       return new Response(JSON.stringify({ error: err.message || "Failed to process refund" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }

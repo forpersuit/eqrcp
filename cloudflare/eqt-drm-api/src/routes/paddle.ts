@@ -1,6 +1,7 @@
 import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID } from '../types';
 import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail } from '../services/smtp';
+import { logSystemError } from '../utils/error-logger';
 
 export async function handlePaddleRoutes(
   request: Request,
@@ -16,6 +17,9 @@ export async function handlePaddleRoutes(
     const webhookSecret = env.PADDLE_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'CRITICAL',
+        new Error('PADDLE_WEBHOOK_SECRET is not configured'),
+        { path: url.pathname }));
       return new Response(JSON.stringify({ error: "Paddle Webhook secret is not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -24,17 +28,32 @@ export async function handlePaddleRoutes(
 
     const isValid = await verifyPaddleSignature(rawBody, signature, webhookSecret);
     if (!isValid) {
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'WARN',
+        new Error('Invalid Paddle webhook signature'),
+        { path: url.pathname, has_signature: Boolean(signature) }));
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const event = JSON.parse(rawBody);
+    let event: any;
+    try {
+      event = JSON.parse(rawBody);
+    } catch (parseErr) {
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR', parseErr,
+        { path: url.pathname, reason: 'invalid_json' }));
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const eventType = event.event_type;
     const data = event.data;
     console.log("PADDLE_WEBHOOK_EVENT:", JSON.stringify(event));
 
+    try {
     if (eventType === "transaction.completed") {
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
@@ -51,9 +70,16 @@ export async function handlePaddleRoutes(
           if (custRes.ok) {
             const custData: any = await custRes.json();
             buyerEmail = custData.data?.email || "";
+          } else {
+            const errBody = await custRes.text().catch(() => '');
+            ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'WARN',
+              new Error(`Paddle customers API HTTP ${custRes.status}`),
+              { customer_id: customerId, transaction_id: transactionId, body: errBody.slice(0, 500) }));
           }
         } catch (cErr) {
           console.error("Failed to fetch customer email from Paddle API:", cErr);
+          ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'WARN', cErr,
+            { customer_id: customerId, transaction_id: transactionId, action: 'fetch_customer_email' }));
         }
       }
 
@@ -286,6 +312,19 @@ export async function handlePaddleRoutes(
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
+    } catch (webhookErr: any) {
+      console.error("Paddle webhook processing error:", webhookErr);
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR', webhookErr, {
+        path: url.pathname,
+        event_type: eventType,
+        transaction_id: data?.id || null,
+        subscription_id: data?.subscription_id || data?.id || null
+      }));
+      return new Response(JSON.stringify({ error: "Webhook processing failed" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
   }
 
   // 3.5.2 Client License Query (polling to fetch license code instantly after web payment completion)

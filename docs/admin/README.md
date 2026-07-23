@@ -15,6 +15,8 @@
 | 1 | **[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md)** | **必读**：运行要配哪些参数 |
 | 2 | **[IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)** | **必读**：如何改代码、测、双部署 |
 | 3 | **[IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)** | 已知债与解法优先级 |
+| — | **[IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md)** | R2 下载、禁止 GitHub 作源、zip/签名 |
+| — | **[IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md)** | API Key 生成/用途、Paddle 错误审计 |
 | 4 | [api-contract.md](./api-contract.md) | API 字段 SSOT（改接口先改它） |
 | 5 | [ops-guide.md](./ops-guide.md) | 密钥轮换、D1 应急 SQL |
 | 6 | [progress.md](./progress.md) | 进度勾选与验证记录 |
@@ -35,6 +37,8 @@
 | [IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) | 配置参数、最小可运行、自检 |
 | [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) | 发布流水线、冒烟、DoD、禁止事项 |
 | [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md) | 技术债与解决路径 |
+| [IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md) | R2 安装包分发、zip vs exe、无 GitHub 下载 |
+| [IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md) | Paddle API Key 与错误审计 category |
 
 ### B. 运行时 SSOT
 

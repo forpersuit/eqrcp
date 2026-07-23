@@ -81,7 +81,7 @@
 | :--- | :--- | :--- |
 | `id` | number | |
 | `level` | string | `ERROR` \| `WARN` \| `CRITICAL` |
-| `category` | string | 如 `PADDLE_WEBHOOK`, `SERVER_EXCEPTION` |
+| `category` | string | `SERVER_EXCEPTION` / `PADDLE_WEBHOOK` / `PADDLE_API_ERROR` / `SMTP_EMAIL_FAIL` 等 |
 | `error_message` | string | |
 | `context_json` | string \| null | JSON 文本 |
 | `created_at` | string | ISO |
@@ -390,6 +390,15 @@ GET /api/v1/admin/health
 | `db` | `SELECT 1` |
 
 `recent_events`：`system_error_logs` 中 PADDLE_* / SMTP_* 最近 15 条（故障时间线代理，非完整 Webhook 成功履约流水）。
+
+**Paddle 写库约定**（`logSystemError`，见 [IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md)）：
+
+| category | 典型触发 |
+| :--- | :--- |
+| `PADDLE_WEBHOOK` | 缺 secret / 签名失败 / JSON 非法 / 履约处理异常 |
+| `PADDLE_API_ERROR` | Webhook 补邮箱 API 失败；Portal 退款 API 失败 |
+
+健康探针调 Paddle API 的 401/403 **不写**错误审计（仅 probes.mode）。
 
 ### 2.8 操作审计日志
 

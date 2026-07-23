@@ -369,21 +369,26 @@ export async function handleDrmRoutes(
     }
 
     const release: any = await ghRes.json();
-    
+
+    // Download URLs must point at R2 CDN only (never GitHub asset URLs).
     const r2PublicUrl = env.R2_PUBLIC_URL;
+    if (!r2PublicUrl) {
+      return new Response(JSON.stringify({
+        error: "R2_PUBLIC_URL is not configured; update assets require R2 CDN"
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const base = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl;
     const result = {
       version: release.tag_name,
       published_at: release.published_at,
       changelog: release.body || "",
       assets: (release.assets || []).map((asset: any) => {
-        let downloadUrl = asset.browser_download_url;
-        if (r2PublicUrl) {
-          const base = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl;
-          downloadUrl = `${base}/downloads/${release.tag_name}/${asset.name}`;
-        }
         return {
           name: asset.name,
-          download_url: downloadUrl,
+          download_url: `${base}/downloads/${release.tag_name}/${asset.name}`,
           size: asset.size
         };
       })

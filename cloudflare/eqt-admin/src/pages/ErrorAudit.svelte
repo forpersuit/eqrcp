@@ -81,6 +81,7 @@
     'SERVER_EXCEPTION',
     'PADDLE_WEBHOOK',
     'PADDLE_API_ERROR',
+    'SMTP_EMAIL_FAIL',
     'SMTP_ERROR',
     'AUTH_ERROR'
   ];

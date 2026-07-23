@@ -97,12 +97,17 @@ export async function handleDownloadDomain(
       version = latestRelease.tag_name;
     }
 
-    let redirectUrl = `https://github.com/forpersuit/eqrcp/releases/download/${version}/${filename}`;
-    if (env.R2_PUBLIC_URL) {
-      const base = env.R2_PUBLIC_URL.endsWith('/') ? env.R2_PUBLIC_URL.slice(0, -1) : env.R2_PUBLIC_URL;
-      redirectUrl = `${base}/downloads/${version}/${filename}`;
+    // Public downloads are R2-only (no GitHub Releases fallback).
+    if (!env.R2_PUBLIC_URL) {
+      return new Response(JSON.stringify({
+        error: "R2_PUBLIC_URL is not configured; public downloads require R2 CDN"
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
-    return Response.redirect(redirectUrl, 302);
+    const base = env.R2_PUBLIC_URL.endsWith('/') ? env.R2_PUBLIC_URL.slice(0, -1) : env.R2_PUBLIC_URL;
+    return Response.redirect(`${base}/downloads/${version}/${filename}`, 302);
   }
 
   // Fallback: redirect any unmatched downloads domain requests to the main website
