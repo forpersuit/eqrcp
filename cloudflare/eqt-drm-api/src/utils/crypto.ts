@@ -1,3 +1,24 @@
+/** SHA-256 hex digest of a UTF-8 string (buyer email hashing). */
+export async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return bufToHex(buf);
+}
+
+/**
+ * Portal ownership: match buyer_email_hash or plaintext buyer_email.
+ * Fail closed when neither field is set (Admin-only licenses).
+ */
+export function licenseOwnedByEmail(
+  license: { buyer_email_hash?: string | null; buyer_email?: string | null },
+  email: string,
+  emailHash: string
+): boolean {
+  const norm = (email || "").trim().toLowerCase();
+  if (license.buyer_email_hash && license.buyer_email_hash === emailHash) return true;
+  if (license.buyer_email && String(license.buyer_email).trim().toLowerCase() === norm) return true;
+  return false;
+}
+
 // Helper to convert hex string to Uint8Array
 export function hexToUint8Array(hex: string): Uint8Array {
   hex = hex.trim();

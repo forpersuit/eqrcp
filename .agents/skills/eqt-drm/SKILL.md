@@ -183,6 +183,8 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 
 ## 6. 许可证查询与退款自服务门户 (License Portal & Self-service Refund)
 
+> **文档 SSOT**：[`docs/portal/`](../../../docs/portal/README.md)（overview / api-contract / progress）。改 Portal 行为前先读契约与进度清单。
+
 我们实现了一个支持多语言、现代化的许可证管理与自助退款自服务门户（`cloudflare/eqt-website/portal.html`）以及配套的后端验证/退款 API（在 `eqt-drm-api` 中）。
 
 ### 6.1 D1 表结构扩展
@@ -192,8 +194,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 
 ### 6.5 Portal 登录前置购买校验与 Pricing 流程防阻断隔离
 为提升防刷能力和避免向非购买用户盲发验证码：
-* **Portal 登录发码 (`POST /api/v1/auth/send-code`)**：在发送验证码前，强制根据 `email` 的 SHA-256 希值/明文在 `licenses` 表中查询是否有购买记录 (`buyer_email_hash` 或 `buyer_email`)。若未购买过，拦截并直接返回多语言错误提示 `no_purchase_history`；若已购买，正常发送 6 位验证码。
+* **Portal 登录发码 (`POST /api/v1/auth/send-code`)**：在发送验证码前，强制根据 `email` 的 SHA-256 希值/明文在 `licenses` 表中查询是否有购买记录 (`buyer_email_hash` 或 `buyer_email`)。若未购买过，拦截并直接返回多语言错误提示 `no_purchase_history`；若已购买，正常发送 6 位验证码。与 checkout 一样有 **60s 发码冷却**（`created_at`）。
 * **Pricing 结账发码 (`POST /api/v1/checkout/send-code`)**：属于购买前的邮箱真实性验证，**不校验** `licenses` 购买记录，任何合法格式邮箱均可正常获取发码。
+* **Ownership 第一性原理**：`POST /user/unbind-device` 与 `POST /user/refund` 必须校验 session 邮箱对该 license 的所有权（`buyer_email_hash` 或 `buyer_email`）；失败 403 `not_license_owner`。无归属字段的码仅 Admin 可操作。
+* **Logout**：`POST /api/v1/auth/logout` 删除 `user_sessions`（幂等）。
 
 ### 6.2 极简 Workers 内置 SMTPS 发信
 利用 Workers `connect` API 通过 465 端口（Implicit TLS）直接与外部 SMTP 邮件服务器建立安全 TCP 连接进行握手和发信：

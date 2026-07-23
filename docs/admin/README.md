@@ -2,7 +2,7 @@
 
 运维管理后台：**`cloudflare/eqt-admin`**（SPA）+ **`eqt-drm-api`** 的 `/api/v1/admin/*`。
 
-与用户 Portal（`eqt-website/portal.html`）**完全分离**：Portal = 购买邮箱用户；Admin = 持有 `ADMIN_SECRET` 的运维。
+与用户 Portal（`eqt-website/portal.html`）**完全分离**：Portal = 购买邮箱用户；Admin = 持有 `ADMIN_SECRET` 的运维。用户 Portal 文档：[`docs/portal/`](../portal/README.md)。
 
 **主线状态（2026-07-23）**：Admin **v1 可日常使用**（登录、KPI、错误审计、操作审计、发码/吊销/解绑、真探针健康、生产 `admin.eqt.net.im`）。后置项见 [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)。
 

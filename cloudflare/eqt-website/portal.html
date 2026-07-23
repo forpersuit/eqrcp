@@ -793,7 +793,8 @@
                 const statusKey = 'status_' + lic.status;
                 const statusLabel = translations[state.lang][statusKey] || lic.status.toUpperCase();
                 
-                const createdDate = new Date(lic.created_at).toLocaleDateString(state.lang === 'zh' ? 'zh-CN' : 'en-US', {
+                const dateLocales = { zh: 'zh-CN', en: 'en-US', ja: 'ja-JP', ko: 'ko-KR', es: 'es-ES', de: 'de-DE', fr: 'fr-FR' };
+                const createdDate = new Date(lic.created_at).toLocaleDateString(dateLocales[state.lang] || 'en-US', {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
 
@@ -825,7 +826,7 @@
                                             <span class="text-on-surface-variant text-[10px]">${translations[state.lang].activated_on}: ${new Date(act.activated_at).toLocaleDateString()}</span>
                                         </div>
                                         ${lic.status === 'active' ? `
-                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}" data-device-id="${devKey}" data-remaining-unbinds="${remainingUnbinds}">
+                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}" data-device-id="${devKey}" data-remaining-unbinds="${remainingUnbinds}" data-max-unbinds="${maxUnbinds}">
                                                 <span class="material-symbols-outlined text-xs">link_off</span>
                                                 <span>${translations[state.lang].unbind_btn || 'Unbind'}</span>
                                             </button>
@@ -910,7 +911,8 @@
                     const activationId = btn.getAttribute('data-activation');
                     const deviceId = btn.getAttribute('data-device-id') || '------';
                     const remainingUnbinds = btn.getAttribute('data-remaining-unbinds');
-                    showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds);
+                    const maxUnbinds = btn.getAttribute('data-max-unbinds');
+                    showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds, maxUnbinds);
                 });
             });
 
@@ -924,7 +926,7 @@
         }
 
         // Show Unbind Confirm Modal
-        function showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds) {
+        function showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds, maxUnbinds) {
             state.unbindPendingData = { licenseCode, activationId, deviceId };
             const modal = document.getElementById('unbind-modal');
             const box = modal.querySelector('div');
@@ -933,8 +935,8 @@
             
             const dict = translations[state.lang] || translations['en'];
             const quotaText = (dict.unbind_quota_label || "Annual Unbind Quota: {remaining}/{max}")
-                .replace('{remaining}', remainingUnbinds !== undefined ? remainingUnbinds : 4)
-                .replace('{max}', 4);
+                .replace('{remaining}', remainingUnbinds !== undefined && remainingUnbinds !== null ? remainingUnbinds : 4)
+                .replace('{max}', maxUnbinds !== undefined && maxUnbinds !== null ? maxUnbinds : 4);
             document.getElementById('unbind-modal-quota-badge').textContent = quotaText;
             document.getElementById('unbind-policy-text-box').textContent = dict.unbind_policy_desc || '';
             
@@ -1028,13 +1030,13 @@
                         'Authorization': `Bearer ${state.token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ license_code: license })
+                    body: JSON.stringify({ license_code: license, lang: state.lang })
                 });
 
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
 
-                showToast(translations[state.lang].toast_refund_success);
+                showToast(data.message || translations[state.lang].toast_refund_success);
                 
                 // Reload data
                 await loadLicenses();
@@ -1044,8 +1046,9 @@
             }
         }
 
-        // Logout
-        function handleLogout() {
+        // Logout (best-effort server session revoke + clear local)
+        async function handleLogout() {
+            const token = state.token;
             state.email = '';
             state.token = '';
             localStorage.removeItem('eqt_portal_token');
@@ -1065,6 +1068,15 @@
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('login-section').classList.remove('hidden');
             applyUrlEmailAutoFill();
+
+            if (token) {
+                try {
+                    await fetch(`${API_BASE}/api/v1/auth/logout`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } catch (_) { /* ignore network errors on logout */ }
+            }
         }
 
         // Setup Event Listeners

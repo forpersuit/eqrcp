@@ -36,7 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 CREATE TABLE IF NOT EXISTS verification_codes (
     email TEXT PRIMARY KEY,
     code TEXT NOT NULL,
-    expires_at TEXT NOT NULL
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT NULL   -- ISO time; used for 60s send-code rate limit
 );
 
 CREATE TABLE IF NOT EXISTS user_sessions (

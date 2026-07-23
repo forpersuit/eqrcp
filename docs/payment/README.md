@@ -36,6 +36,8 @@
 10. **[套餐层级设计 (Tier Design)](tier-design.md)**
    - 商业化定价与套餐限制的详细设计。
 
+用户自助 Portal（查授权 / 解绑 / 退款）文档见 **[`docs/portal/`](../portal/README.md)**。
+
 ---
 
 ## 相关：运维管理后台

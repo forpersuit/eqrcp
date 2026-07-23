@@ -62,6 +62,78 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "No se encontraron compras para este correo electrónico. Por favor, compruébelo o adquiera un plan primero.",
     de: "Keine Kaufhistorie für diese E-Mail-Adresse gefunden. Bitte überprüfen Sie Ihre E-Mail oder kaufen Sie zuerst ein Paket.",
     fr: "Aucun historique d'achat trouvé pour cet e-mail. Veuillez vérifier votre e-mail ou acheter un forfait."
+  },
+  rate_limited: {
+    zh: "请求过于频繁，请 60 秒后再试",
+    en: "Please wait 60 seconds before requesting another code",
+    ja: "リクエストが多すぎます。60秒後に再度お試しください。",
+    ko: "요청이 너무 많습니다. 60초 후에 다시 시도해 주세요.",
+    es: "Demasiadas solicitudes. Espere 60 segundos e inténtelo de nuevo.",
+    de: "Zu viele Anfragen. Bitte warten Sie 60 Sekunden.",
+    fr: "Trop de demandes. Veuillez attendre 60 secondes."
+  },
+  not_license_owner: {
+    zh: "您无权操作此授权码",
+    en: "You do not own this license",
+    ja: "このライセンスを操作する権限がありません",
+    ko: "이 라이선스에 대한 권한이 없습니다",
+    es: "No es propietario de esta licencia",
+    de: "Sie besitzen diese Lizenz nicht",
+    fr: "Vous n'êtes pas propriétaire de cette licence"
+  },
+  activation_not_found: {
+    zh: "未找到对应的设备激活记录",
+    en: "Activation record not found",
+    ja: "デバイスのアクティベーションが見つかりません",
+    ko: "기기 활성화 기록을 찾을 수 없습니다",
+    es: "No se encontró el registro de activación",
+    de: "Aktivierungsdatensatz nicht gefunden",
+    fr: "Enregistrement d'activation introuvable"
+  },
+  license_already_revoked: {
+    zh: "该授权已退款或吊销",
+    en: "License is already refunded or revoked",
+    ja: "このライセンスは既に返金または失効しています",
+    ko: "이미 환불되었거나 취소된 라이선스입니다",
+    es: "La licencia ya fue reembolsada o revocada",
+    de: "Lizenz wurde bereits erstattet oder widerrufen",
+    fr: "La licence est déjà remboursée ou révoquée"
+  },
+  no_paddle_transaction: {
+    zh: "该授权无关联的 Paddle 交易，无法自助退款",
+    en: "No associated Paddle transaction found for this license",
+    ja: "このライセンスに関連する Paddle 取引がありません",
+    ko: "이 라이선스에 연결된 Paddle 거래가 없습니다",
+    es: "No hay transacción de Paddle asociada a esta licencia",
+    de: "Keine zugehörige Paddle-Transaktion für diese Lizenz gefunden",
+    fr: "Aucune transaction Paddle associée à cette licence"
+  },
+  paddle_not_configured: {
+    zh: "退款服务暂时不可用，请稍后重试或联系支持",
+    en: "Refund service is temporarily unavailable",
+    ja: "返金サービスは一時的に利用できません",
+    ko: "환불 서비스를 일시적으로 사용할 수 없습니다",
+    es: "El servicio de reembolso no está disponible temporalmente",
+    de: "Erstattungsservice vorübergehend nicht verfügbar",
+    fr: "Service de remboursement temporairement indisponible"
+  },
+  refund_success: {
+    zh: "退款已提交，授权已被吊销",
+    en: "Refund request initiated successfully. Your license has been revoked.",
+    ja: "返金申請が完了し、ライセンスは失効しました",
+    ko: "환불이 접수되었으며 라이선스가 취소되었습니다",
+    es: "Reembolso iniciado. La licencia ha sido revocada.",
+    de: "Rückerstattung eingeleitet. Ihre Lizenz wurde widerrufen.",
+    fr: "Remboursement initié. Votre licence a été révoquée."
+  },
+  refund_failed: {
+    zh: "退款处理失败，请稍后重试",
+    en: "Failed to process refund",
+    ja: "返金処理に失敗しました",
+    ko: "환불 처리에 실패했습니다",
+    es: "Error al procesar el reembolso",
+    de: "Rückerstattung fehlgeschlagen",
+    fr: "Échec du traitement du remboursement"
   }
 };
 

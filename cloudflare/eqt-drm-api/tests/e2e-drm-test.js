@@ -57,7 +57,12 @@ function logStep(stepNum, title) {
 
 async function runFullDrmTestSuite() {
   const testLic = 'E2E-FULL-TEST-LIC-888';
+  const foreignLic = 'E2E-FOREIGN-LIC-999';
   const testToken = 'E2E-TEST-SESSION-TOKEN-888';
+  const testEmail = 'e2e@eqt.im';
+  // SHA-256 of e2e@eqt.im / other-owner@eqt.im (must match Worker crypto)
+  const testEmailHash = '441c9ea7824323f12e6ae207cb21f6c91c729965b8720a741ab113a8b91ca826';
+  const foreignEmailHash = '4fd79813405831cafeed58a7c6b1acbfcfe8fa8c10043a6247a62fbd8d01ec26';
   const nowIso = new Date().toISOString();
   const futureIso = new Date(Date.now() + 86400000).toISOString();
 
@@ -68,14 +73,16 @@ async function runFullDrmTestSuite() {
   try {
     // 0. Environment Setup
     logStep(0, "DB Cleanup & Fixture Injection");
-    execWranglerSQL(`DELETE FROM unbind_records WHERE license_code = '${testLic}';`);
-    execWranglerSQL(`DELETE FROM activations WHERE license_code = '${testLic}';`);
+    execWranglerSQL(`DELETE FROM unbind_records WHERE license_code IN ('${testLic}', '${foreignLic}');`);
+    execWranglerSQL(`DELETE FROM activations WHERE license_code IN ('${testLic}', '${foreignLic}');`);
     execWranglerSQL(`DELETE FROM user_sessions WHERE session_token = '${testToken}';`);
-    execWranglerSQL(`DELETE FROM licenses WHERE license_code = '${testLic}';`);
+    execWranglerSQL(`DELETE FROM verification_codes WHERE email = '${testEmail}';`);
+    execWranglerSQL(`DELETE FROM licenses WHERE license_code IN ('${testLic}', '${foreignLic}');`);
 
-    execWranglerSQL(`INSERT INTO licenses (license_code, tier, max_devices, expires_at, created_at) VALUES ('${testLic}', 'PLUS', 2, 'LIFETIME', '${nowIso}');`);
-    execWranglerSQL(`INSERT INTO user_sessions (session_token, email, expires_at) VALUES ('${testToken}', 'e2e@eqt.im', '${futureIso}');`);
-    console.log("✓ Fixtures successfully injected in Cloudflare D1 (Max Devices: 2).");
+    execWranglerSQL(`INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, buyer_email_hash, buyer_email, created_at) VALUES ('${testLic}', 'PLUS', 'active', 2, 'LIFETIME', '${testEmailHash}', '${testEmail}', '${nowIso}');`);
+    execWranglerSQL(`INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, buyer_email_hash, buyer_email, created_at) VALUES ('${foreignLic}', 'PLUS', 'active', 2, 'LIFETIME', '${foreignEmailHash}', 'other-owner@eqt.im', '${nowIso}');`);
+    execWranglerSQL(`INSERT INTO user_sessions (session_token, email, expires_at) VALUES ('${testToken}', '${testEmail}', '${futureIso}');`);
+    console.log("✓ Fixtures successfully injected in Cloudflare D1 (Max Devices: 2, ownership email set).");
 
     // 1. Device Activation (First Device)
     logStep(1, "First Device Activation (Device A)");
@@ -93,11 +100,13 @@ async function runFullDrmTestSuite() {
     console.log("✓ Device A successfully activated. Ed25519 Signature length:", actResA.data.signature.length);
 
     // 1.1 Online reconciliation must return a complete re-signed certificate.
+    // /api/v1/verify returns status/tier/certificate_signature/signature (hashes are in signed payload, not response body).
     logStep("1.1", "Online Reconciliation Certificate Integrity");
     const verifyResA = await makeRequest('/api/v1/verify', {}, devA);
-    if (verifyResA.status !== 200 || !verifyResA.data.certificate_signature ||
-      verifyResA.data.tier !== 'PLUS' || verifyResA.data.uuid_hash !== devA.uuid_hash ||
-      verifyResA.data.cpu_hash !== devA.cpu_hash || verifyResA.data.disk_hash !== devA.disk_hash) {
+    if (verifyResA.status !== 200 || verifyResA.data.status !== 'OK' ||
+      !verifyResA.data.certificate_signature || !verifyResA.data.signature ||
+      verifyResA.data.tier !== 'PLUS' || verifyResA.data.license_code !== testLic ||
+      verifyResA.data.buyer_email !== testEmail) {
       throw new Error("Online reconciliation did not return a complete re-signed certificate: " + JSON.stringify(verifyResA.data));
     }
     console.log("✓ Online reconciliation returned a complete signed certificate.");
@@ -233,16 +242,67 @@ async function runFullDrmTestSuite() {
     }
     console.log("✓ Checkout send-code (pricing flow) allowed unpurchased email without purchase check.");
 
+    // 9. Cross-user unbind ownership rejection
+    logStep(9, "Portal Unbind Ownership Guard (foreign license)");
+    execWranglerSQL(`INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, activated_at) VALUES ('${foreignLic}', 'uuid-foreign', 'cpu-foreign', 'disk-foreign', '${nowIso}');`);
+    const foreignActsRaw = execWranglerJSON(`SELECT id FROM activations WHERE license_code = '${foreignLic}' LIMIT 1;`);
+    const foreignActId = foreignActsRaw[0].results[0].id;
+    const foreignUnbindRes = await makeRequest('/api/v1/user/unbind-device', { 'Authorization': `Bearer ${testToken}` }, {
+      license_code: foreignLic,
+      activation_id: foreignActId,
+      lang: 'zh'
+    });
+    console.log("Foreign Unbind Status:", foreignUnbindRes.status, "Error:", foreignUnbindRes.data);
+    if (foreignUnbindRes.status !== 403 || !foreignUnbindRes.data.error || !String(foreignUnbindRes.data.error).includes("无权")) {
+      throw new Error("Cross-user unbind should be 403 not_license_owner! Response: " + JSON.stringify(foreignUnbindRes.data));
+    }
+    const foreignStillBound = execWranglerJSON(`SELECT COUNT(*) as count FROM activations WHERE license_code = '${foreignLic}';`);
+    if (Number(foreignStillBound[0].results[0].count) !== 1) {
+      throw new Error("Foreign activation must remain after ownership rejection");
+    }
+    console.log("✓ Cross-user unbind correctly rejected with ownership guard.");
+
+    // 10. Portal send-code 60s rate limit (inject recent code; no real SMTP for second call)
+    logStep(10, "Portal Send-Code 60s Rate Limit");
+    const rateCodeExp = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    execWranglerSQL(`INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES ('${testEmail}', '111111', '${rateCodeExp}', '${nowIso}');`);
+    const rateLimitRes = await makeRequest('/api/v1/auth/send-code', {}, {
+      email: testEmail,
+      lang: 'zh'
+    });
+    console.log("Portal Send-Code Rate Limit Status:", rateLimitRes.status, "Error:", rateLimitRes.data);
+    if (rateLimitRes.status !== 429 || !rateLimitRes.data.error || !String(rateLimitRes.data.error).includes("60")) {
+      throw new Error("Portal send-code rate limit failed! Response: " + JSON.stringify(rateLimitRes.data));
+    }
+    console.log("✓ Portal send-code 60s rate limit enforced (429).");
+
+    // 11. Logout invalidates session
+    logStep(11, "Portal Logout Invalidates Session");
+    const logoutRes = await makeRequest('/api/v1/auth/logout', { 'Authorization': `Bearer ${testToken}` }, {});
+    if (logoutRes.status !== 200 || !logoutRes.data.success) {
+      throw new Error("Logout failed: " + JSON.stringify(logoutRes.data));
+    }
+    const licensesAfterLogout = await makeRequest('/api/v1/user/licenses', { 'Authorization': `Bearer ${testToken}` }, null, 'GET');
+    if (licensesAfterLogout.status !== 401) {
+      throw new Error("Session should be invalid after logout, got: " + licensesAfterLogout.status);
+    }
+    console.log("✓ Logout deleted session; subsequent licenses call returns 401.");
+
     console.log("\n==================================================");
     console.log("🎉🎉 ALL DRM E2E TESTS PASSED DETERMINISTICALLY! 🎉🎉");
     console.log("==================================================");
 
   } finally {
     console.log("\n[Teardown] Cleaning up test fixtures from D1...");
-    execWranglerSQL(`DELETE FROM unbind_records WHERE license_code = '${testLic}';`);
-    execWranglerSQL(`DELETE FROM activations WHERE license_code = '${testLic}';`);
-    execWranglerSQL(`DELETE FROM user_sessions WHERE session_token = '${testToken}';`);
-    execWranglerSQL(`DELETE FROM licenses WHERE license_code = '${testLic}';`);
+    try {
+      execWranglerSQL(`DELETE FROM unbind_records WHERE license_code IN ('${testLic}', '${foreignLic}');`);
+      execWranglerSQL(`DELETE FROM activations WHERE license_code IN ('${testLic}', '${foreignLic}');`);
+      execWranglerSQL(`DELETE FROM user_sessions WHERE session_token = '${testToken}';`);
+      execWranglerSQL(`DELETE FROM verification_codes WHERE email IN ('${testEmail}', 'unpurchased-e2e-user@eqt.im');`);
+      execWranglerSQL(`DELETE FROM licenses WHERE license_code IN ('${testLic}', '${foreignLic}');`);
+    } catch (teardownErr) {
+      console.error("[Teardown] partial failure:", teardownErr.message || teardownErr);
+    }
     console.log("[Teardown] Cleanup completed.");
   }
 }

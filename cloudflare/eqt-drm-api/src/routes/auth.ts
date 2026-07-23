@@ -2,6 +2,22 @@ import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
 import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
+import { sha256Hex } from '../utils/crypto';
+import { ensureVerificationCodesCreatedAt } from '../utils/auth';
+
+const SEND_CODE_COOLDOWN_MS = 60_000;
+
+async function isSendCodeRateLimited(env: Env, email: string): Promise<boolean> {
+  await ensureVerificationCodesCreatedAt(env);
+  const recentCode = await env.DB.prepare(
+    "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
+  ).bind(email, new Date().toISOString()).first<any>();
+
+  if (!recentCode || !recentCode.created_at) return false;
+  const createdAt = new Date(recentCode.created_at).getTime();
+  if (isNaN(createdAt)) return false;
+  return Date.now() - createdAt < SEND_CODE_COOLDOWN_MS;
+}
 
 export async function handleAuthRoutes(
 
@@ -26,27 +42,21 @@ export async function handleAuthRoutes(
     email = email.trim().toLowerCase();
 
     // Rate limit: check if a code was sent in the last 60 seconds
-    const recentCode = await env.DB.prepare(
-      "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
-    ).bind(email, new Date().toISOString()).first<any>();
-
-    if (recentCode) {
-      const createdAt = new Date(recentCode.created_at).getTime();
-      if (Date.now() - createdAt < 60000) {
-        return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
+    if (await isSendCodeRateLimited(env, email)) {
+      return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // Generate 6-digit random code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+    const createdAt = new Date().toISOString();
 
     await env.DB.prepare(
       "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(email, code, expiresAt, new Date().toISOString()).run();
+    ).bind(email, code, expiresAt, createdAt).run();
 
     // Build localized email
     const { subject, html } = buildCheckoutEmailHtml(lang, code);
@@ -102,7 +112,7 @@ export async function handleAuthRoutes(
     });
   }
 
-  // 0.1 Send email verification code
+  // 0.1 Send portal login email verification code
   if (url.pathname === "/api/v1/auth/send-code" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
@@ -116,9 +126,7 @@ export async function handleAuthRoutes(
     email = email.trim().toLowerCase();
 
     // 1. Check if email has purchase history in licenses table
-    const encoder = new TextEncoder();
-    const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email));
-    const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), (x: number) => ('00' + x.toString(16)).slice(-2)).join('');
+    const emailHash = await sha256Hex(email);
 
     const checkPurchase = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
@@ -126,10 +134,20 @@ export async function handleAuthRoutes(
 
     const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
     if (!hasPurchased) {
-      return new Response(JSON.stringify({ 
-        error: getApiTranslation("no_purchase_history", reqLang) 
+      return new Response(JSON.stringify({
+        error: getApiTranslation("no_purchase_history", reqLang)
       }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // 2. 60s rate limit (aligned with checkout)
+    if (await isSendCodeRateLimited(env, email)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("rate_limited", reqLang)
+      }), {
+        status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -137,18 +155,19 @@ export async function handleAuthRoutes(
     // Generate 6 digit verification code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // Valid for 5 minutes
+    const createdAt = new Date().toISOString();
 
     // Insert code into DB
     await env.DB.prepare(
-      "INSERT OR REPLACE INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)"
-    ).bind(email, code, expiresAt).run();
+      "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(email, code, expiresAt, createdAt).run();
 
     // Send mail via SMTPS with localized i18n template
     const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
     const mailSenderPassword = env.MAIL_SENDER_PASSWORD || "q4W62}bWtR";
     const mailSendServer = env.MAIL_SEND_SERVER || "smtpserver.301098.xyz";
     const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
-    
+
     const targetEmail = env.TEST_MAIL_RECEIVER || email;
     const mailObj = buildAuthCodeEmailHtml(reqLang, code);
 
@@ -165,9 +184,9 @@ export async function handleAuthRoutes(
     } catch (mailErr: any) {
       console.error("Mail Send Error:", mailErr);
       ctx.waitUntil(logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', mailErr, { to: targetEmail, subject: mailObj.subject }));
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Failed to send verification email: " + mailErr.message,
-        code: env.TEST_MAIL_RECEIVER ? code : undefined 
+        code: env.TEST_MAIL_RECEIVER ? code : undefined
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -175,10 +194,10 @@ export async function handleAuthRoutes(
     }
 
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return new Response(JSON.stringify({
+      success: true,
       message: "Verification code sent successfully",
-      code: env.TEST_MAIL_RECEIVER ? code : undefined 
+      code: env.TEST_MAIL_RECEIVER ? code : undefined
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -236,6 +255,23 @@ export async function handleAuthRoutes(
       session_token: sessionToken,
       email: email
     }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.25 Logout — invalidate portal session (idempotent)
+  if (url.pathname === "/api/v1/auth/logout" && request.method === "POST") {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      if (token) {
+        await env.DB.prepare(
+          "DELETE FROM user_sessions WHERE session_token = ?"
+        ).bind(token).run();
+      }
+    }
+    return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

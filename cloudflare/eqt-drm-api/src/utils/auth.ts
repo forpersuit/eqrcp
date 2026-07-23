@@ -32,6 +32,17 @@ export async function ensureDeviceIdColumn(env: Env): Promise<void> {
   }
 }
 
+/** Ensure verification_codes.created_at exists for 60s send-code rate limiting. */
+export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare(
+      "ALTER TABLE verification_codes ADD COLUMN created_at TEXT DEFAULT NULL"
+    ).run();
+  } catch (err) {
+    // Column already exists or table does not exist yet; ignore safely
+  }
+}
+
 export async function ensureDrmTables(env: Env): Promise<void> {
   try {
     await env.DB.batch([

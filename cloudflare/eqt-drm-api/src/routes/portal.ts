@@ -2,6 +2,7 @@ import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
+import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
 
 export async function handlePortalRoutes(
   request: Request,
@@ -33,13 +34,11 @@ export async function handlePortalRoutes(
     }
 
     const email = session.email;
-    const encoder = new TextEncoder();
-    const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email));
-    const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+    const emailHash = await sha256Hex(email);
 
     const { results: licenses } = await env.DB.prepare(
-      "SELECT * FROM licenses WHERE buyer_email_hash = ? ORDER BY created_at DESC"
-    ).bind(emailHash).all<any>();
+      "SELECT * FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ? ORDER BY created_at DESC"
+    ).bind(emailHash, email).all<any>();
 
     const oneYearAgoIso = new Date(Date.now() - ONE_YEAR_MS).toISOString();
 
@@ -74,7 +73,7 @@ export async function handlePortalRoutes(
     });
   }
 
-  // 0.3.5 Unbind device with yearly limit & full i18n
+  // 0.3.5 Unbind device with ownership, yearly limit & full i18n
   if (url.pathname === "/api/v1/user/unbind-device" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
@@ -118,6 +117,14 @@ export async function handlePortalRoutes(
       });
     }
 
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // Check 1-year rolling window unbind limit using constant
     const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
     const unbindCheck = await env.DB.prepare(
@@ -130,6 +137,17 @@ export async function handlePortalRoutes(
         error: getApiTranslation("unbind_limit_reached", reqLang)
       }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const activation = await env.DB.prepare(
+      "SELECT id FROM activations WHERE id = ? AND license_code = ?"
+    ).bind(activation_id, license_code).first<any>();
+
+    if (!activation) {
+      return new Response(JSON.stringify({ error: getApiTranslation("activation_not_found", reqLang) }), {
+        status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -171,9 +189,12 @@ export async function handlePortalRoutes(
 
   // 0.4 Refund license
   if (url.pathname === "/api/v1/user/refund" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -185,16 +206,15 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const body: any = await request.json();
     const { license_code } = body;
     if (!license_code) {
-      return new Response(JSON.stringify({ error: "Missing license_code" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -205,25 +225,22 @@ export async function handlePortalRoutes(
     ).bind(license_code).first<any>();
 
     if (!license) {
-      return new Response(JSON.stringify({ error: "License not found" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const encoder = new TextEncoder();
-    const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(session.email));
-    const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
-
-    if (license.buyer_email_hash !== emailHash) {
-      return new Response(JSON.stringify({ error: "You do not own this license" }), {
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     if (license.status === "revoked") {
-      return new Response(JSON.stringify({ error: "License is already refunded or revoked" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_already_revoked", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -231,7 +248,7 @@ export async function handlePortalRoutes(
 
     const transactionId = license.paddle_transaction_id;
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "No associated Paddle transaction found for this license" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("no_paddle_transaction", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -239,7 +256,7 @@ export async function handlePortalRoutes(
 
     const paddleApiKey = env.PADDLE_API_KEY;
     if (!paddleApiKey) {
-      return new Response(JSON.stringify({ error: "Paddle API Key is not configured" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("paddle_not_configured", reqLang) }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -301,7 +318,7 @@ export async function handlePortalRoutes(
 
       return new Response(JSON.stringify({
         success: true,
-        message: "Refund request initiated successfully. Your license has been revoked.",
+        message: getApiTranslation("refund_success", reqLang),
         adjustment: adjData
       }), {
         status: 200,
@@ -314,7 +331,9 @@ export async function handlePortalRoutes(
         action: 'portal_refund',
         transaction_id: transactionId || null
       }));
-      return new Response(JSON.stringify({ error: err.message || "Failed to process refund" }), {
+      return new Response(JSON.stringify({
+        error: err.message || getApiTranslation("refund_failed", reqLang)
+      }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
