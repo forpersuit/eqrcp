@@ -1,0 +1,241 @@
+import { Env } from '../types';
+import { extractRequestLang, getApiTranslation } from '../i18n';
+import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
+
+export async function handleAuthRoutes(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  url: URL,
+  corsHeaders: Record<string, string>
+): Promise<Response | null> {
+  // 0.0 Send checkout email verification code (supports multi-language)
+  if (url.pathname === "/api/v1/checkout/send-code" && request.method === "POST") {
+    const body: any = await request.json();
+    let email = body.email;
+    const lang = body.lang || "en";
+
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return new Response(JSON.stringify({ error: "Invalid email address" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    email = email.trim().toLowerCase();
+
+    // Rate limit: check if a code was sent in the last 60 seconds
+    const recentCode = await env.DB.prepare(
+      "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
+    ).bind(email, new Date().toISOString()).first<any>();
+
+    if (recentCode) {
+      const createdAt = new Date(recentCode.created_at).getTime();
+      if (Date.now() - createdAt < 60000) {
+        return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // Generate 6-digit random code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(email, code, expiresAt, new Date().toISOString()).run();
+
+    // Build localized email
+    const { subject, html } = buildCheckoutEmailHtml(lang, code);
+    ctx.waitUntil(sendDRMEmail(env, email, subject, html));
+
+    return new Response(JSON.stringify({ success: true, message: "Verification code sent to your email" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.01 Verify checkout email code
+  if (url.pathname === "/api/v1/checkout/verify-code" && request.method === "POST") {
+    const body: any = await request.json();
+    let email = body.email;
+    let code = body.code;
+
+    if (!email || !code) {
+      return new Response(JSON.stringify({ error: "Missing email or verification code" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    email = email.trim().toLowerCase();
+    code = code.trim();
+
+    const record = await env.DB.prepare(
+      "SELECT * FROM verification_codes WHERE email = ? AND code = ? ORDER BY expires_at DESC LIMIT 1"
+    ).bind(email, code).first<any>();
+
+    if (!record) {
+      return new Response(JSON.stringify({ error: "Invalid verification code. Please check and try again." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const now = new Date().getTime();
+    const exp = new Date(record.expires_at).getTime();
+    if (isNaN(exp) || exp < now) {
+      return new Response(JSON.stringify({ error: "Verification code has expired. Please send a new code." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Clean up verified code to prevent re-use
+    ctx.waitUntil(env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run());
+
+    return new Response(JSON.stringify({ success: true, message: "Email verified successfully" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.1 Send email verification code
+  if (url.pathname === "/api/v1/auth/send-code" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+    let email = body.email;
+    if (!email) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    email = email.trim().toLowerCase();
+
+    // 1. Check if email has purchase history in licenses table
+    const encoder = new TextEncoder();
+    const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email));
+    const emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), (x: number) => ('00' + x.toString(16)).slice(-2)).join('');
+
+    const checkPurchase = await env.DB.prepare(
+      "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
+    ).bind(emailHash, email).first<any>();
+
+    const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
+    if (!hasPurchased) {
+      return new Response(JSON.stringify({ 
+        error: getApiTranslation("no_purchase_history", reqLang) 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Generate 6 digit verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // Valid for 5 minutes
+
+    // Insert code into DB
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)"
+    ).bind(email, code, expiresAt).run();
+
+    // Send mail via SMTPS with localized i18n template
+    const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
+    const mailSenderPassword = env.MAIL_SENDER_PASSWORD || "q4W62}bWtR";
+    const mailSendServer = env.MAIL_SEND_SERVER || "smtpserver.301098.xyz";
+    const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
+    
+    const targetEmail = env.TEST_MAIL_RECEIVER || email;
+    const mailObj = buildAuthCodeEmailHtml(reqLang, code);
+
+    try {
+      await sendMailViaSmtp({
+        sender: mailSender,
+        senderPass: mailSenderPassword,
+        host: mailSendServer,
+        port: mailSendPort,
+        to: targetEmail,
+        subject: mailObj.subject,
+        html: mailObj.html
+      });
+    } catch (mailErr: any) {
+      console.error("Mail Send Error:", mailErr);
+      return new Response(JSON.stringify({ 
+        error: "Failed to send verification email: " + mailErr.message,
+        code: env.TEST_MAIL_RECEIVER ? code : undefined 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Verification code sent successfully",
+      code: env.TEST_MAIL_RECEIVER ? code : undefined 
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.2 Verify email verification code and issue session token
+  if (url.pathname === "/api/v1/auth/verify-code" && request.method === "POST") {
+    const body: any = await request.json();
+    let { email, code } = body;
+    if (!email || !code) {
+      return new Response(JSON.stringify({ error: "Missing email or code" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    email = email.trim().toLowerCase();
+    code = code.trim();
+
+    const record = await env.DB.prepare(
+      "SELECT * FROM verification_codes WHERE email = ?"
+    ).bind(email).first<any>();
+
+    if (!record || record.code !== code) {
+      return new Response(JSON.stringify({ error: "Invalid verification code" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const expiresAt = new Date(record.expires_at).getTime();
+    if (expiresAt < Date.now()) {
+      return new Response(JSON.stringify({ error: "Verification code expired" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Delete verification code
+    await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run();
+
+    // Generate session token
+    const sessionBytes = new Uint8Array(16);
+    crypto.getRandomValues(sessionBytes);
+    const sessionToken = Array.from(sessionBytes, b => ('00' + b.toString(16)).slice(-2)).join('');
+    const sessionExpiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24 hours validity
+
+    // Insert user session
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO user_sessions (session_token, email, expires_at) VALUES (?, ?, ?)"
+    ).bind(sessionToken, email, sessionExpiresAt).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      session_token: sessionToken,
+      email: email
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  return null;
+}
