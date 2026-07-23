@@ -1,28 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import type { SystemErrorLog } from '../lib/types';
 
-  interface LogEntry {
-    id: number;
-    level: string;
-    category: string;
-    error_message: string;
-    context_json: string | null;
-    created_at: string;
-  }
-
-  let logs = $state<LogEntry[]>([]);
+  let logs = $state<SystemErrorLog[]>([]);
   let loading = $state(true);
   let errorMsg = $state('');
+  let actionMsg = $state('');
   let filterCategory = $state('ALL');
   let searchKeyword = $state('');
-  let selectedLog = $state<LogEntry | null>(null);
+  let selectedLog = $state<SystemErrorLog | null>(null);
+  let showClearConfirm = $state(false);
+  let clearing = $state(false);
 
   async function loadLogs() {
     loading = true;
     errorMsg = '';
     try {
-      const data = await adminFetch('/api/v1/admin/error-logs?limit=100');
+      const data = await adminFetch<{ logs: SystemErrorLog[] }>('/api/v1/admin/error-logs', {
+        params: { limit: '100' }
+      });
       logs = data.logs || [];
     } catch (err: any) {
       errorMsg = err.message || '加载日志失败';
@@ -32,12 +29,18 @@
   }
 
   async function clearLogs() {
-    if (!confirm('确定要清空所有系统错误日志吗？此操作无法撤销。')) return;
+    clearing = true;
+    errorMsg = '';
+    actionMsg = '';
     try {
       await adminFetch('/api/v1/admin/error-logs', { method: 'DELETE' });
+      showClearConfirm = false;
+      actionMsg = '系统错误日志已清空';
       await loadLogs();
     } catch (err: any) {
-      alert('清空日志失败: ' + err.message);
+      errorMsg = '清空日志失败: ' + (err.message || String(err));
+    } finally {
+      clearing = false;
     }
   }
 
@@ -73,7 +76,11 @@
       <button class="btn btn-secondary" onclick={loadLogs} disabled={loading}>
         刷新日志
       </button>
-      <button class="btn btn-danger" onclick={clearLogs} disabled={loading || logs.length === 0}>
+      <button
+        class="btn btn-danger"
+        onclick={() => (showClearConfirm = true)}
+        disabled={loading || logs.length === 0}
+      >
         清空旧日志
       </button>
     </div>
@@ -102,6 +109,9 @@
 
   {#if errorMsg}
     <div class="error-banner">{errorMsg}</div>
+  {/if}
+  {#if actionMsg}
+    <div class="ok-banner">{actionMsg}</div>
   {/if}
 
   {#if loading}
@@ -170,6 +180,23 @@
 
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick={() => (selectedLog = null)}>关闭</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showClearConfirm}
+  <div class="modal-overlay" onclick={() => (showClearConfirm = false)} role="presentation">
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+      <h3 style="color: var(--accent-danger);">确认清空错误日志</h3>
+      <p class="confirm-text">
+        确定要清空 <strong>全部</strong> system_error_logs 吗？此操作无法撤销。
+      </p>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick={() => (showClearConfirm = false)} disabled={clearing}>取消</button>
+        <button class="btn btn-danger" onclick={clearLogs} disabled={clearing}>
+          {clearing ? '清空中...' : '确认清空'}
+        </button>
       </div>
     </div>
   </div>
@@ -322,5 +349,19 @@
     color: #fca5a5;
     padding: 0.75rem;
     border-radius: var(--radius-sm);
+  }
+
+  .ok-banner {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    padding: 0.75rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .confirm-text {
+    margin: 1rem 0;
+    color: var(--text-secondary);
+    line-height: 1.6;
   }
 </style>

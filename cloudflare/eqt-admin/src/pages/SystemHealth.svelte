@@ -1,24 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import type { AdminHealthResponse } from '../lib/types';
 
-  interface HealthData {
-    success: boolean;
-    status: string;
-    timestamp: string;
-    metrics: {
-      total_licenses: number;
-      total_error_logs: number;
-    };
-    config: {
-      smtp_configured: boolean;
-      paddle_configured: boolean;
-      r2_configured: boolean;
-      db_status: string;
-    };
-  }
-
-  let health = $state<HealthData | null>(null);
+  let health = $state<AdminHealthResponse | null>(null);
   let loading = $state(true);
   let errorMsg = $state('');
 
@@ -26,7 +11,7 @@
     loading = true;
     errorMsg = '';
     try {
-      health = await adminFetch<HealthData>('/api/v1/admin/health');
+      health = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
     } catch (err: any) {
       errorMsg = err.message || '诊断服务请求失败';
     } finally {

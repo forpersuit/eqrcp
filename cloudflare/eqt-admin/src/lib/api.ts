@@ -14,20 +14,22 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     throw new Error('未设置 Admin Secret');
   }
 
+  const { params, headers: optHeaders, ...fetchInit } = options;
+
   let urlStr = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
-  if (options.params) {
-    const searchParams = new URLSearchParams(options.params);
+  if (params) {
+    const searchParams = new URLSearchParams(params);
     urlStr += (urlStr.includes('?') ? '&' : '?') + searchParams.toString();
   }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Admin-Secret': secret,
-    ...(options.headers as Record<string, string> || {})
+    ...((optHeaders as Record<string, string>) || {})
   };
 
   const response = await fetch(urlStr, {
-    ...options,
+    ...fetchInit,
     headers
   });
 
@@ -35,6 +37,11 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     clearAdminSecret();
     window.location.reload();
     throw new Error('鉴权凭证已失效或不正确');
+  }
+
+  if (response.status === 503) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error((data as any).error || 'Admin API 未配置 (ADMIN_SECRET)');
   }
 
   const data = await response.json();

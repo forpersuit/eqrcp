@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import type { AdminHealthResponse } from '../lib/types';
 
   interface QuickStats {
     total_licenses: number;
@@ -13,7 +14,7 @@
 
   async function loadStats() {
     try {
-      const data = await adminFetch('/api/v1/admin/health');
+      const data = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
       stats = {
         total_licenses: data.metrics?.total_licenses || 0,
         total_error_logs: data.metrics?.total_error_logs || 0,

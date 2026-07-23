@@ -209,6 +209,35 @@ async function logSystemError(
   }
 }
 
+/**
+ * Admin route guard (docs/admin/api-contract.md):
+ * - ADMIN_SECRET unset → 503 fail-closed
+ * - missing/wrong secret → 401
+ * Query ?secret= is deprecated but still accepted for local ops.
+ */
+function requireAdminAuth(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Response | null {
+  if (!env.ADMIN_SECRET) {
+    return new Response(
+      JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET missing)" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  const url = new URL(request.url);
+  const adminSecret =
+    request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+  if (!adminSecret || adminSecret !== env.ADMIN_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
+
 // Map internal DB/code errors to safe user-friendly messages for general public
 function getSafeUserErrorMessage(rawMessage: string, defaultFriendlyMsg: string = "Service temporarily unavailable. Please try again later."): string {
   if (!rawMessage) return defaultFriendlyMsg;
@@ -889,10 +918,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // CORS Headers
+    // CORS Headers (DELETE required for admin error-log clear)
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Secret",
     };
 
@@ -903,15 +932,10 @@ export default {
     try {
       // Admin Error Logs Query Endpoint
       if (url.pathname === "/api/v1/admin/error-logs" && request.method === "GET") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized admin access" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
         await ensureAuditLogTable(env);
-        const limit = parseInt(url.searchParams.get("limit") || "50");
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
         const logs = await env.DB.prepare(
           "SELECT * FROM system_error_logs ORDER BY id DESC LIMIT ?"
         ).bind(limit).all();
@@ -923,14 +947,12 @@ export default {
       }
 
       // Admin Error Logs Clear Endpoint
-      if (url.pathname === "/api/v1/admin/error-logs" && request.method === "DELETE") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized admin access" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+      if (
+        (url.pathname === "/api/v1/admin/error-logs" && request.method === "DELETE") ||
+        (url.pathname === "/api/v1/admin/error-logs/clear" && request.method === "POST")
+      ) {
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
         await ensureAuditLogTable(env);
         await env.DB.prepare("DELETE FROM system_error_logs").run();
         return new Response(JSON.stringify({ success: true, message: "System error logs cleared successfully" }), {
@@ -1857,15 +1879,10 @@ export default {
         });
       }
 
-      // 2. Admin Endpoint: Manual license generation for test/issue (supports /generate and /generate-license)
+      // 2. Admin Endpoint: Manual license generation (supports /generate and /generate-license)
       if ((url.pathname === "/api/v1/admin/generate" || url.pathname === "/api/v1/admin/generate-license") && request.method === "POST") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
 
         const body: any = await request.json();
         const { tier, max_devices, expires_in_days, duration_days } = body;
@@ -1920,19 +1937,14 @@ export default {
         });
       }
 
-      // Admin Endpoint: Search all licenses
+      // Admin Endpoint: Search all licenses (sort by created_at; real activations columns)
       if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
 
         const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
-        const limit = parseInt(url.searchParams.get("limit") || "50");
-        const offset = parseInt(url.searchParams.get("offset") || "0");
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
+        const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
 
         let sql = "SELECT * FROM licenses";
         let params: any[] = [];
@@ -1949,17 +1961,16 @@ export default {
           params = [likeQuery, likeQuery, likeQuery, emailHash || queryStr];
         }
 
-        sql += " ORDER BY id DESC LIMIT ? OFFSET ?";
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
         params.push(limit, offset);
 
-        const stmt = env.DB.prepare(sql);
-        const res = await (params.length > 2 ? stmt.bind(...params) : stmt.bind(limit, offset)).all();
+        const res = await env.DB.prepare(sql).bind(...params).all();
 
         const rawLicenses: any[] = res.results || [];
         const licensesWithDevices = await Promise.all(
           rawLicenses.map(async (lic) => {
             const actRes = await env.DB.prepare(
-              "SELECT device_fingerprint, device_name, activated_at FROM activations WHERE license_code = ?"
+              "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
             ).bind(lic.license_code).all();
             return {
               ...lic,
@@ -1977,13 +1988,8 @@ export default {
 
       // Admin Endpoint: Revoke license (supports /revoke and /revoke-license)
       if ((url.pathname === "/api/v1/admin/revoke" || url.pathname === "/api/v1/admin/revoke-license") && request.method === "POST") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
 
         const body: any = await request.json();
         const { license_code } = body;
@@ -1994,25 +2000,36 @@ export default {
           });
         }
 
+        const existing = await env.DB.prepare(
+          "SELECT license_code, status FROM licenses WHERE license_code = ?"
+        ).bind(license_code).first<any>();
+
+        if (!existing) {
+          return new Response(JSON.stringify({ error: "License not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
         await env.DB.prepare("UPDATE licenses SET status = 'revoked' WHERE license_code = ?").bind(license_code).run();
-        return new Response(JSON.stringify({ success: true, message: `License ${license_code} revoked successfully` }), {
+        return new Response(JSON.stringify({
+          success: true,
+          message: `License ${license_code} revoked successfully`,
+          license_code,
+          status: "revoked"
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      // Admin Endpoint: Unbind devices
+      // Admin Endpoint: Unbind devices by activation_id (or clear all for license)
       if (url.pathname === "/api/v1/admin/unbind" && request.method === "POST") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
 
         const body: any = await request.json();
-        const { license_code, device_fingerprint } = body;
+        const { license_code, activation_id } = body;
         if (!license_code) {
           return new Response(JSON.stringify({ error: "license_code is required" }), {
             status: 400,
@@ -2020,14 +2037,49 @@ export default {
           });
         }
 
-        if (device_fingerprint) {
-          await env.DB.prepare("DELETE FROM activations WHERE license_code = ? AND device_fingerprint = ?")
-            .bind(license_code, device_fingerprint).run();
+        const lic = await env.DB.prepare(
+          "SELECT license_code FROM licenses WHERE license_code = ?"
+        ).bind(license_code).first<any>();
+        if (!lic) {
+          return new Response(JSON.stringify({ error: "License not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        let unboundActivationId: number | null = null;
+        if (activation_id !== undefined && activation_id !== null && activation_id !== "") {
+          const actId = Number(activation_id);
+          if (!Number.isFinite(actId)) {
+            return new Response(JSON.stringify({ error: "activation_id must be a number" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+          const act = await env.DB.prepare(
+            "SELECT id FROM activations WHERE id = ? AND license_code = ?"
+          ).bind(actId, license_code).first<any>();
+          if (!act) {
+            return new Response(JSON.stringify({ error: "Activation not found for this license" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+          await env.DB.prepare(
+            "DELETE FROM activations WHERE id = ? AND license_code = ?"
+          ).bind(actId, license_code).run();
+          unboundActivationId = actId;
         } else {
           await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code).run();
         }
 
-        return new Response(JSON.stringify({ success: true, message: `Devices for license ${license_code} unbound successfully` }), {
+        // Admin unbind does not write unbind_records (ops privilege; see api-contract)
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Devices for license ${license_code} unbound successfully`,
+          license_code,
+          unbound_activation_id: unboundActivationId
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -2035,13 +2087,8 @@ export default {
 
       // Admin Endpoint: System Health Probe
       if (url.pathname === "/api/v1/admin/health" && request.method === "GET") {
-        const adminSecret = request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
-        if (env.ADMIN_SECRET && adminSecret !== env.ADMIN_SECRET) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        const denied = requireAdminAuth(request, env, corsHeaders);
+        if (denied) return denied;
 
         let dbStatus = "ok";
         let errorCount = 0;

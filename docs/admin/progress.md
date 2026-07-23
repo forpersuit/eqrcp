@@ -2,7 +2,7 @@
 
 > 以**代码与契约事实**为准更新。行动顺序见 [action-plan.md](./action-plan.md)。
 
-最后更新：2026-07-23（阶段 0 对齐完成）
+最后更新：2026-07-23（阶段 1 P0 契约修复完成）
 
 ---
 
@@ -22,18 +22,20 @@
 
 ### 阶段 1 — P0 契约修复
 
-- [ ] 后端：`ADMIN_SECRET` fail-closed
-- [ ] 后端：CORS 允许 DELETE（或 clear 别名）
-- [ ] 后端：`GET /admin/licenses` 排序 + activations 真实列
-- [ ] 后端：`POST /admin/unbind` 使用 `activation_id`
-- [ ] 后端：`POST /admin/revoke` 不存在返回 404
-- [ ] 前端：`types.ts` + Licenses 字段/解绑对齐契约
-- [ ] 前端：生成成功展示/复制 license_code
-- [ ] 前端：危险操作去掉裸 `alert`/`confirm`（改 modal/错误条）
+- [x] 后端：`ADMIN_SECRET` fail-closed（`requireAdminAuth` → 503/401）
+- [x] 后端：CORS 允许 DELETE + `POST /error-logs/clear` 别名
+- [x] 后端：`GET /admin/licenses` → `ORDER BY created_at` + 真实 activations 列
+- [x] 后端：`POST /admin/unbind` 使用 `activation_id`（无则清空；不计用户年限额）
+- [x] 后端：`POST /admin/revoke` 不存在返回 404
+- [x] 前端：Licenses 字段/解绑对齐契约；key=`license_code`
+- [x] 前端：生成成功展示/复制 license_code
+- [x] 前端：危险操作改 modal + 页面内错误/成功条（去掉裸 alert/confirm）
+- [x] 前端：`adminFetch` 剥离 `params`；处理 503
+- [x] `npm run build` 通过
 
 ### 阶段 2 — 端到端验收
 
-- [ ] 本地联调四 Tab 主路径
+- [ ] 部署 Worker 后本地/线上联调四 Tab 主路径
 - [ ] admin 相关最小测试或脚本
 - [ ] 验证记录写入本节（无 secret）
 
@@ -60,23 +62,23 @@
 
 | 接口 | 文件内存在 | 契约对齐 |
 | :--- | :---: | :---: |
-| GET error-logs | 是 | 基本可用 |
-| DELETE error-logs | 是 | CORS 待修 |
-| POST generate | 是 | 基本可用 |
-| GET licenses | 是 | **否**（id / activations 列） |
-| POST revoke | 是 | 弱（无 404） |
-| POST unbind | 是 | **否**（错误列名） |
-| GET health | 是 | 配置布尔级可用 |
+| GET error-logs | 是 | 是 |
+| DELETE error-logs / POST clear | 是 | 是（CORS 含 DELETE） |
+| POST generate | 是 | 是 |
+| GET licenses | 是 | 是 |
+| POST revoke | 是 | 是（含 404） |
+| POST unbind | 是 | 是（`activation_id`） |
+| GET health | 是 | 是（配置布尔级） |
 
 ### 前端 `eqt-admin`
 
 | 页面 | 壳子 | 主路径可用预期 |
 | :--- | :---: | :--- |
-| Login | 是 | 在 secret 正确且 Worker 可达时可用 |
+| Login | 是 | secret 正确且 Worker 可达 |
 | Overview | 是 | 依赖 health |
-| ErrorAudit | 是 | 列表可用；清空依赖 CORS |
-| Licenses | 是 | **解绑/设备展示预期失败至阶段 1** |
-| SystemHealth | 是 | 配置徽章可用 |
+| ErrorAudit | 是 | 列表 + 清空（需已部署新 Worker） |
+| Licenses | 是 | 检索/生成/吊销/按 activation 解绑 |
+| SystemHealth | 是 | 配置徽章 |
 
 ### 技术栈事实
 
@@ -101,3 +103,4 @@
 | 日期 | 摘要 |
 | :--- | :--- |
 | 2026-07-23 | 初版 api-contract：冻结 activation_id、created_at 排序、禁用虚构设备字段 |
+| 2026-07-23 | 阶段 1 落地：requireAdminAuth、CORS DELETE、licenses/unbind/revoke 修复；前端对齐 |
