@@ -41,8 +41,8 @@
 
 ### 阶段 3 — 产品补强
 
-- [ ] 错误日志服务端过滤/分页
-- [ ] generate 绑 email / 可选发信
+- [x] 错误日志服务端过滤/分页 (`level`/`category`/`q`/`offset`/`limit`)
+- [x] generate 绑 email / 可选 SMTP 自动发信
 - [ ] Health 真探针 / Webhook 记录
 - [ ] Overview KPI 深化
 - [ ] 反馈中心
@@ -119,6 +119,7 @@
 | 2026-07-23 | local/dev | `cd cloudflare/eqt-admin && npm run build` | 编译通过，Dist 产物已生成，TS/Svelte5 校验 0 Error / 0 Warning |
 | 2026-07-23 | local/dev | 新增 `cloudflare/eqt-drm-api/tests/e2e-admin-test.js` 并配置 `npm run test:admin` | 自动唤起本地 wrangler dev，8 步契约断言全量 100% 通过 |
 | 2026-07-23 | local/dev | 修复 N+1 表达查询、消除 `?secret=` 传参、动态 CORS 与 Svelte5 a11y 警告 | 运行 `npm run test:admin` 与前端 build 验证零错误通过 |
+| 2026-07-23 | local/dev | 阶段 3 P1 落地：错误日志服务端过滤/分页 + 手动发码绑定邮箱/邮件通知 | `npm run test:admin` 8 步断言通过，`npm run build` 0 Error / 0 Warning |
 
 ---
 
@@ -130,3 +131,4 @@
 | 2026-07-23 | 阶段 1 落地：requireAdminAuth、CORS DELETE、licenses/unbind/revoke 修复；前端对齐 |
 | 2026-07-23 | 阶段 2 落地：新增 Admin 契约 E2E 校验脚本 `tests/e2e-admin-test.js` 并完成前端构建及验证日志记录 |
 | 2026-07-23 | 技术债清理：解决 N+1 查询、强封 ?secret= 泄漏通道、动态 CORS 与 Svelte 5 a11y 警告 |
+| 2026-07-23 | 阶段 3 P1 落地：error-logs 服务端多条件过滤与 total 分页，generate 增加 buyer_email 绑定与可选 SMTP 通知 |

@@ -24,6 +24,8 @@
   let genTier = $state<LicenseTier>('PLUS');
   let genMaxDevices = $state(2);
   let genExpiresInDays = $state<string>('');
+  let genBuyerEmail = $state('');
+  let genSendEmail = $state(false);
   let lastGeneratedCode = $state<string | null>(null);
   let copyHint = $state('');
 
@@ -73,13 +75,17 @@
       if (days && days > 0) {
         body.expires_in_days = days;
       }
+      if (genBuyerEmail.trim()) {
+        body.buyer_email = genBuyerEmail.trim();
+        body.send_email = genSendEmail;
+      }
 
-      const res = await adminFetch<GenerateLicenseResponse>('/api/v1/admin/generate', {
+      const res = await adminFetch<GenerateLicenseResponse & { email_sent?: boolean }>('/api/v1/admin/generate', {
         method: 'POST',
         body: JSON.stringify(body)
       });
       lastGeneratedCode = res.license_code;
-      actionMsg = `已生成授权码 ${res.license_code}`;
+      actionMsg = `已生成授权码 ${res.license_code}${res.email_sent ? '（通知邮件已并发投递）' : ''}`;
       await loadLicenses();
     } catch (err: any) {
       errorMsg = '生成授权码失败: ' + (err.message || String(err));
@@ -292,6 +298,20 @@
           <label for="exp-days">有效期天数 (留空为 LIFETIME 永久):</label>
           <input id="exp-days" type="number" class="input" placeholder="例如 365" bind:value={genExpiresInDays} min="1" />
         </div>
+
+        <div class="form-group">
+          <label for="buyer-email">买家邮箱 (选填，用于绑定与开通通知):</label>
+          <input id="buyer-email" type="email" class="input" placeholder="例如 buyer@example.com" bind:value={genBuyerEmail} />
+        </div>
+
+        {#if genBuyerEmail.trim()}
+          <div class="form-group checkbox-group">
+            <label for="send-email-check" class="checkbox-label">
+              <input id="send-email-check" type="checkbox" bind:checked={genSendEmail} />
+              自动向买家发送授权码通知邮件
+            </label>
+          </div>
+        {/if}
 
         {#if lastGeneratedCode}
           <div class="generated-box">

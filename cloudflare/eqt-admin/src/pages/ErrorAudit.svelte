@@ -4,9 +4,13 @@
   import type { SystemErrorLog } from '../lib/types';
 
   let logs = $state<SystemErrorLog[]>([]);
+  let total = $state(0);
+  let page = $state(1);
+  const pageSize = 50;
   let loading = $state(true);
   let errorMsg = $state('');
   let actionMsg = $state('');
+  let filterLevel = $state('ALL');
   let filterCategory = $state('ALL');
   let searchKeyword = $state('');
   let selectedLog = $state<SystemErrorLog | null>(null);
@@ -16,15 +20,42 @@
   async function loadLogs() {
     loading = true;
     errorMsg = '';
+    const offset = (page - 1) * pageSize;
     try {
-      const data = await adminFetch<{ logs: SystemErrorLog[] }>('/api/v1/admin/error-logs', {
-        params: { limit: '100' }
+      const data = await adminFetch<{ logs: SystemErrorLog[]; total: number }>('/api/v1/admin/error-logs', {
+        params: {
+          level: filterLevel,
+          category: filterCategory,
+          q: searchKeyword,
+          limit: String(pageSize),
+          offset: String(offset)
+        }
       });
       logs = data.logs || [];
+      total = data.total || logs.length;
     } catch (err: any) {
       errorMsg = err.message || '加载日志失败';
     } finally {
       loading = false;
+    }
+  }
+
+  function handleFilterChange() {
+    page = 1;
+    loadLogs();
+  }
+
+  function prevPage() {
+    if (page > 1) {
+      page--;
+      loadLogs();
+    }
+  }
+
+  function nextPage() {
+    if (page * pageSize < total) {
+      page++;
+      loadLogs();
     }
   }
 
@@ -36,6 +67,7 @@
       await adminFetch('/api/v1/admin/error-logs', { method: 'DELETE' });
       showClearConfirm = false;
       actionMsg = '系统错误日志已清空';
+      page = 1;
       await loadLogs();
     } catch (err: any) {
       errorMsg = '清空日志失败: ' + (err.message || String(err));
@@ -44,22 +76,14 @@
     }
   }
 
-  const filteredLogs = $derived(
-    logs.filter((log) => {
-      const matchCat = filterCategory === 'ALL' || log.category === filterCategory;
-      const matchKw =
-        !searchKeyword.trim() ||
-        log.error_message.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        log.category.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        (log.context_json && log.context_json.toLowerCase().includes(searchKeyword.toLowerCase()));
-      return matchCat && matchKw;
-    })
-  );
-
-  const categories = $derived([
+  const categories = [
     'ALL',
-    ...Array.from(new Set(logs.map((l) => l.category)))
-  ]);
+    'SERVER_EXCEPTION',
+    'PADDLE_WEBHOOK',
+    'PADDLE_API_ERROR',
+    'SMTP_ERROR',
+    'AUTH_ERROR'
+  ];
 
   onMount(() => {
     loadLogs();
@@ -70,7 +94,7 @@
   <div class="header-row">
     <div>
       <h2>错误审计中心</h2>
-      <p class="subtitle">Cloudflare D1 system_error_logs 实时控制台</p>
+      <p class="subtitle">Cloudflare D1 system_error_logs 实时控制台 (共 {total} 条)</p>
     </div>
     <div class="actions">
       <button class="btn btn-secondary" onclick={loadLogs} disabled={loading}>
@@ -79,7 +103,7 @@
       <button
         class="btn btn-danger"
         onclick={() => (showClearConfirm = true)}
-        disabled={loading || logs.length === 0}
+        disabled={loading || total === 0}
       >
         清空旧日志
       </button>
@@ -88,8 +112,17 @@
 
   <div class="filter-bar card">
     <div class="filter-group">
+      <label for="level-select">级别筛选:</label>
+      <select id="level-select" class="input select-input" bind:value={filterLevel} onchange={handleFilterChange}>
+        <option value="ALL">全部 (ALL)</option>
+        <option value="ERROR">ERROR</option>
+        <option value="WARN">WARN</option>
+        <option value="CRITICAL">CRITICAL</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label for="cat-select">分类筛选:</label>
-      <select id="cat-select" class="input select-input" bind:value={filterCategory}>
+      <select id="cat-select" class="input select-input" bind:value={filterCategory} onchange={handleFilterChange}>
         {#each categories as cat}
           <option value={cat}>{cat}</option>
         {/each}
@@ -101,9 +134,11 @@
         id="kw-input"
         type="text"
         class="input"
-        placeholder="搜索堆栈、Category 或 Email..."
+        placeholder="输入关键词按回车搜索..."
         bind:value={searchKeyword}
+        onkeydown={(e) => e.key === 'Enter' && handleFilterChange()}
       />
+      <button class="btn btn-secondary btn-sm" onclick={handleFilterChange}>搜索</button>
     </div>
   </div>
 
@@ -116,11 +151,11 @@
 
   {#if loading}
     <div class="loading-state">正在拉取 D1 审计日志...</div>
-  {:else if filteredLogs.length === 0}
+  {:else if logs.length === 0}
     <div class="empty-state card">暂无符合条件的错误审计日志</div>
   {:else}
     <div class="logs-list">
-      {#each filteredLogs as log (log.id)}
+      {#each logs as log (log.id)}
         <div
           class="log-card card"
           class:critical={log.level === 'CRITICAL'}
@@ -144,6 +179,19 @@
           {/if}
         </div>
       {/each}
+    </div>
+
+    <!-- Pagination Bar -->
+    <div class="pagination-bar card">
+      <button class="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onclick={prevPage}>
+        上一页
+      </button>
+      <span class="page-info">
+        第 {page} 页 / 共 {Math.ceil(total / pageSize) || 1} 页 (第 {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} 条，共 {total} 条)
+      </span>
+      <button class="btn btn-secondary btn-sm" disabled={page * pageSize >= total || loading} onclick={nextPage}>
+        下一页
+      </button>
     </div>
   {/if}
 </div>

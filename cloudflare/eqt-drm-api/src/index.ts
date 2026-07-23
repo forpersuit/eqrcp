@@ -986,17 +986,52 @@ export default {
     }
 
     try {
-      // Admin Error Logs Query Endpoint
+      // Admin Error Logs Query Endpoint (Server-Side Filtering & Pagination)
       if (url.pathname === "/api/v1/admin/error-logs" && request.method === "GET") {
         const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
         await ensureAuditLogTable(env);
-        const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
-        const logs = await env.DB.prepare(
-          "SELECT * FROM system_error_logs ORDER BY id DESC LIMIT ?"
-        ).bind(limit).all();
 
-        return new Response(JSON.stringify({ success: true, logs: logs.results || [] }), {
+        const level = (url.searchParams.get("level") || "").trim();
+        const category = (url.searchParams.get("category") || "").trim();
+        const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
+        const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+
+        const conditions: string[] = [];
+        const params: any[] = [];
+
+        if (level && level.toUpperCase() !== "ALL") {
+          conditions.push("level = ?");
+          params.push(level.toUpperCase());
+        }
+        if (category && category.toUpperCase() !== "ALL") {
+          conditions.push("category = ?");
+          params.push(category);
+        }
+        if (queryStr) {
+          conditions.push("(error_message LIKE ? OR context_json LIKE ?)");
+          params.push(`%${queryStr}%`, `%${queryStr}%`);
+        }
+
+        const whereClause = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
+
+        // Query total count for pagination UI
+        const countSql = "SELECT COUNT(*) as total FROM system_error_logs" + whereClause;
+        const countRes = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
+        const total = countRes?.total || 0;
+
+        // Query log items
+        const logsSql = "SELECT * FROM system_error_logs" + whereClause + " ORDER BY id DESC LIMIT ? OFFSET ?";
+        const logsRes = await env.DB.prepare(logsSql).bind(...params, limit, offset).all();
+
+        return new Response(JSON.stringify({
+          success: true,
+          logs: logsRes.results || [],
+          total,
+          limit,
+          offset
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -1941,7 +1976,7 @@ export default {
         if (denied) return denied;
 
         const body: any = await request.json();
-        const { tier, max_devices, expires_in_days, duration_days } = body;
+        const { tier, max_devices, expires_in_days, duration_days, buyer_email, send_email } = body;
 
         if (tier !== "PLUS" && tier !== "PRO") {
           return new Response(JSON.stringify({ error: "Invalid tier. Must be 'PLUS' or 'PRO'" }), {
@@ -1966,9 +2001,17 @@ export default {
 
         const maxDev = max_devices ? Number(max_devices) : 2;
         const durDays = duration_days !== undefined ? Number(duration_days) : null;
+        const cleanEmail = (buyer_email || "").trim();
+
+        let emailHash: string | null = null;
+        if (cleanEmail) {
+          const encoder = new TextEncoder();
+          const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(cleanEmail.toLowerCase()));
+          emailHash = Array.from(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+        }
 
         await env.DB.prepare(
-          "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+          "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         ).bind(
           licenseCode,
           tier,
@@ -1976,8 +2019,48 @@ export default {
           maxDev,
           expiresAt,
           durDays,
+          emailHash,
+          cleanEmail || null,
           new Date().toISOString()
         ).run();
+
+        // Optional SMTP Email dispatch if requested and buyer_email provided
+        let emailSent = false;
+        if (send_email && cleanEmail) {
+          const planName = tier === "PLUS" ? "EQT Plus" : (tier === "PRO" ? "EQT Pro" : tier);
+          const expiresStr = expiresAt === "LIFETIME" ? "Lifetime (永久生效)" : new Date(expiresAt).toLocaleDateString();
+          const emailHtml = `
+            <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+              <h2 style="color: #10b981;">您的 EQT 专享授权激活码已发放！</h2>
+              <p>管理员已成功为您创建 EQT 许可授权。以下是您的授权明细：</p>
+              <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
+                  <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${licenseCode}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有效期限 (Expires)</td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大激活设备数</td>
+                  <td style="padding: 10px; border: 1px solid #ddd;">${maxDev} 台设备</td>
+                </tr>
+              </table>
+              <p><strong>如何激活：</strong></p>
+              <ol>
+                <li>打开 EQT 客户端，前往设置或关于面板。</li>
+                <li>点击“输入激活码”并输入上述激活码，确认即可享受高级传输体验！</li>
+              </ol>
+            </div>
+          `;
+          ctx.waitUntil(sendDRMEmail(env, cleanEmail, "【EQT】您的专属授权激活码", emailHtml));
+          emailSent = true;
+        }
 
         return new Response(JSON.stringify({
           success: true,
@@ -1986,6 +2069,8 @@ export default {
           max_devices: maxDev,
           expires_at: expiresAt,
           duration_days: durDays,
+          buyer_email: cleanEmail || null,
+          email_sent: emailSent,
           status: "active"
         }), {
           status: 200,

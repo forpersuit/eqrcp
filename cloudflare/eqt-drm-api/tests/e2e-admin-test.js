@@ -118,24 +118,26 @@ async function runAdminTestSuite() {
   console.log("✓ Health probe returned valid metrics and config badges.");
 
   // 3. Manual License Generation
-  logStep(3, "Manual License Generation (POST /admin/generate)");
+  logStep(3, "Manual License Generation (POST /admin/generate with buyer_email)");
   const genRes = await makeRequest('/api/v1/admin/generate', 'POST', {
     'X-Admin-Secret': ADMIN_SECRET
   }, {
     tier: 'PLUS',
     max_devices: 2,
-    expires_in_days: 30
+    expires_in_days: 30,
+    buyer_email: 'testbuyer@example.com',
+    send_email: false
   });
   console.log("Generate License Status:", genRes.status, "Data:", genRes.data);
-  if (genRes.status !== 200 || !genRes.data.success || !genRes.data.license_code) {
+  if (genRes.status !== 200 || !genRes.data.success || !genRes.data.license_code || genRes.data.buyer_email !== 'testbuyer@example.com') {
     throw new Error(`Generate license failed: ${JSON.stringify(genRes.data)}`);
   }
   createdLicenseCode = genRes.data.license_code;
-  console.log(`✓ License generated successfully: ${createdLicenseCode}`);
+  console.log(`✓ License generated successfully with buyer_email: ${createdLicenseCode}`);
 
   // 4. Search Licenses (Batch IN activations query test)
   logStep(4, "License Listing & Search (GET /admin/licenses - Optimized Batch Query)");
-  const searchRes = await makeRequest(`/api/v1/admin/licenses?q=${createdLicenseCode}`, 'GET', {
+  const searchRes = await makeRequest(`/api/v1/admin/licenses?q=testbuyer@example.com`, 'GET', {
     'X-Admin-Secret': ADMIN_SECRET
   });
   console.log("Search Status:", searchRes.status, "Result Count:", searchRes.data.licenses?.length);
@@ -146,7 +148,7 @@ async function runAdminTestSuite() {
   if (foundLic.license_code !== createdLicenseCode) {
     throw new Error(`Found license code mismatch! Expected ${createdLicenseCode}, got ${foundLic.license_code}`);
   }
-  console.log("✓ License search successfully returned created license with batch activations.");
+  console.log("✓ License search by buyer_email successfully returned created license.");
 
   // 5. Revoke Non-Existent License (404 Check)
   logStep(5, "Revoke Non-Existent License (404 Check)");
@@ -187,13 +189,18 @@ async function runAdminTestSuite() {
   }
   console.log("✓ Admin device unbind executed successfully.");
 
-  // 8. Fetch & Clear System Error Logs
-  logStep(8, "Fetch & Clear Error Logs (DELETE /admin/error-logs & POST /admin/error-logs/clear)");
-  const logsRes = await makeRequest('/api/v1/admin/error-logs?limit=10', 'GET', {
+  // 8. Fetch & Clear System Error Logs (Server-side Filter & Pagination)
+  logStep(8, "Fetch & Clear Error Logs (Server-Side Filter & Pagination)");
+  const logsRes = await makeRequest('/api/v1/admin/error-logs?level=ALL&limit=10&offset=0', 'GET', {
     'X-Admin-Secret': ADMIN_SECRET
   });
-  console.log("Fetch Error Logs Status:", logsRes.status, "Logs Count:", logsRes.data.logs?.length);
-  if (logsRes.status !== 200 || !logsRes.data.logs) {
+  console.log("Fetch Error Logs Status:", logsRes.status, "Data:", {
+    count: logsRes.data.logs?.length,
+    total: logsRes.data.total,
+    limit: logsRes.data.limit,
+    offset: logsRes.data.offset
+  });
+  if (logsRes.status !== 200 || !logsRes.data.logs || typeof logsRes.data.total !== 'number') {
     throw new Error(`Fetch error logs failed: ${JSON.stringify(logsRes.data)}`);
   }
 
@@ -204,7 +211,7 @@ async function runAdminTestSuite() {
   if (clearRes.status !== 200 || !clearRes.data.success) {
     throw new Error(`Clear error logs failed: ${JSON.stringify(clearRes.data)}`);
   }
-  console.log("✓ Error logs fetched and cleared successfully.");
+  console.log("✓ Server-side error logs filter, total count & clear executed successfully.");
 
   console.log("\n==================================================");
   console.log("🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉");
