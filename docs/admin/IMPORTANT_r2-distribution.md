@@ -5,13 +5,20 @@
 
 ---
 
-## 1. 必须配置
+## 1. 必须配置（用 **vars**，不要 secret）
+
+`R2_PUBLIC_URL` 是**公开下载基址**（用户链接里本来就会出现），**没有保密价值**，**不要**当成 Secret。  
+用 `wrangler.toml` `[vars]` 或 Dashboard **Plaintext** 即可（全量 env 分类见 [IMPORTANT_drm-secrets.md](./IMPORTANT_drm-secrets.md)）。
+
+```toml
+# cloudflare/eqt-drm-api/wrangler.toml
+[vars]
+R2_PUBLIC_URL = "https://download.eqt.net.im"   # 无尾斜杠
+```
 
 ```bash
 cd cloudflare/eqt-drm-api
-# 示例：与 download 自定义域一致（无尾斜杠）
-echo -n 'https://download.eqt.net.im' | npx wrangler secret put R2_PUBLIC_URL
-# 或 [vars]（非敏感可用 vars）；改完后 wrangler deploy
+npx wrangler deploy   # 改 vars 后必须 deploy
 ```
 
 | 项 | 说明 |
@@ -19,6 +26,7 @@ echo -n 'https://download.eqt.net.im' | npx wrangler secret put R2_PUBLIC_URL
 | 值 | 用户浏览器/客户端最终下载的**公网基址**，如 `https://download.eqt.net.im` |
 | 对象键约定 | `{R2_PUBLIC_URL}/downloads/{version}/{filename}`，如 `.../downloads/v1.2.3/eqt-desktop-windows-amd64.exe` |
 | 未配置时 | 健康页 `r2_configured=false`；`/downloads/*` 与 `/api/v1/update/check` 返回 **503**（**不再回落 GitHub**） |
+| 与 R2 API 密钥 | **无关**。本变量不是 Cloudflare R2 Access Key；上传用 wrangler/控制台 |
 
 上传产物到 R2 的对象路径须与上表一致，否则链接 404。
 

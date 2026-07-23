@@ -201,3 +201,4 @@
 | 2026-07-23 | P2：probes(smtp/paddle/db)、recent_events、admin 鉴权 429 限流、OpsAudit UI；eqt-admin/eqt-drm-api 小版本 1.1.0 |
 | 2026-07-23 | 文档整理：IMPORTANT_admin-config / release / debt；README 分层；gap-analysis 标 HISTORICAL |
 | 2026-07-24 | Paddle 失败写 system_error_logs；下载/更新无 GitHub 回落；IMPORTANT_r2 / paddle-api；eqt-drm-api+admin 1.1.1 |
+| 2026-07-24 | IMPORTANT_drm-secrets：R2 用 vars 非 secret；全量 Secret 清单与 key 生成路径 |

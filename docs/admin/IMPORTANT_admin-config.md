@@ -3,6 +3,8 @@
 > **必读**：`eqt-admin`（前端）与 `eqt-drm-api`（后端 Admin API）要正常跑通，依赖下列环境与绑定。  
 > 与用户 Portal 无关。禁止把真实 secret 提交进 git。
 
+**DRM 全量 Secret / vars 清单与「如何生成 key」** → [IMPORTANT_drm-secrets.md](./IMPORTANT_drm-secrets.md)（**优先读**）。
+
 关联：[IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) · [ops-guide.md](./ops-guide.md) · [api-contract.md](./api-contract.md)
 
 ---
@@ -56,10 +58,11 @@ npm run dev   # 默认 :3001
 | `MAIL_SEND_SAFE_PORT` | 建议 | 默认 465 | 缺则探针/发信用 465 |
 | `PADDLE_WEBHOOK_SECRET` | 支付履约 | Webhook 验签 | `paddle_configured=false`；探针 skipped/失败 |
 | `PADDLE_API_KEY` | 建议（Portal 退款/补邮箱） | REST API；健康深探针 | 生成与用途见 [IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md)；无效 403 → mode=`webhook_ok_api_key_invalid`（Webhook 仍 ok） |
-| `R2_PUBLIC_URL` | **生产下载/更新必填** | 安装包 CDN 基址 | 未配：`r2_configured=false`；公开下载与 update/check **503**（无 GitHub 回落）。形态与 zip 建议见 [IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md) |
-| `GITHUB_TOKEN` / `GITHUB_REPO` | 可选 | **仅**拉 release **元数据**（版本/changelog/资产名列表） | 用户下载 URL 不指向 GitHub；无 token 时受 GitHub 匿名限流影响 |
+| `R2_PUBLIC_URL` | **生产下载/更新必填** | 安装包 CDN 基址 | **用 `[vars]`，非 secret**（公开 URL）。未配：`r2_configured=false`；下载/update **503**。见 [IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md) |
+| `GITHUB_TOKEN` / `GITHUB_REPO` | 可选 | **仅**拉 release **元数据**（版本/changelog/资产名列表） | TOKEN 用 secret；REPO 用 vars。用户下载不指向 GitHub |
 
-发码勾选「发邮件」时依赖 SMTP 四元组；`send_email:false` 仅写库不发信。
+发码勾选「发邮件」时依赖 SMTP 四元组；`send_email:false` 仅写库不发信。  
+生成路径与 Secret 清单：[IMPORTANT_drm-secrets.md](./IMPORTANT_drm-secrets.md)。
 
 ---
 
@@ -78,9 +81,14 @@ npm run dev   # 默认 :3001
 
 | 参数 | Worker Secret | wrangler `[vars]` | Pages 构建 env | 浏览器 sessionStorage |
 | :--- | :---: | :---: | :---: | :---: |
-| `ADMIN_SECRET` | ✅ 推荐唯一落点 | ❌ 勿提交明文 | — | 登录后缓存副本 |
+| `ADMIN_SECRET` | ✅ 唯一推荐 | ❌ 勿提交明文 | — | 登录后缓存副本 |
 | `ED25519_PRIVATE_KEY` | ✅ | ❌ | — | — |
-| SMTP / Paddle webhook | 敏感项用 Secret 更安全 | 现状可能在 vars（宜迁 Secret） | — | — |
+| `PADDLE_API_KEY` / `PADDLE_WEBHOOK_SECRET` | ✅ | ❌ 勿长期明文 | — | — |
+| `MAIL_SENDER_PASSWORD` | ✅ | ❌ | — | — |
+| `MAIL_SENDER` / `MAIL_SEND_SERVER` / port | 可选 | ✅ 可明文 | — | — |
+| **`R2_PUBLIC_URL`** | ❌ **不必** | ✅ **推荐** | — | — |
+| `GITHUB_TOKEN` | ✅ 可选 | ❌ | — | — |
+| `GITHUB_REPO` | — | ✅ 可选 | — | — |
 | `VITE_API_BASE` | — | — | ✅ 构建期写入 bundle | — |
 | 运维口令（与 ADMIN_SECRET 相同） | — | — | ❌ 不要写进前端 env 发布 | ✅ 登录输入 |
 

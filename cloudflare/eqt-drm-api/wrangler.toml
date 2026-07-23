@@ -10,6 +10,8 @@ database_name = "eqt-drm-db"
 database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
 [vars]
+# Public CDN base for installs/updates (NOT a secret — see docs/admin/IMPORTANT_drm-secrets.md)
+R2_PUBLIC_URL = "https://download.eqt.net.im"
 MAIL_SENDER = "noreply@eqt.net.im"
 MAIL_SENDER_PASSWORD = "q4W62}bWtR"
 MAIL_SEND_SERVER = "smtpserver.301098.xyz"

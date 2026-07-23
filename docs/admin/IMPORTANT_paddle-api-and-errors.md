@@ -1,5 +1,7 @@
 # IMPORTANT — Paddle API Key 与错误审计落库
 
+> DRM 全量 Secret/vars 与其它 key 生成方式：[IMPORTANT_drm-secrets.md](./IMPORTANT_drm-secrets.md)。
+
 ---
 
 ## 1. `PADDLE_API_KEY` 在哪生成？
@@ -7,20 +9,21 @@
 1. 登录 [Paddle](https://vendors.paddle.com/)（Sandbox 与 Live **各有独立**后台）  
 2. **Developer tools** → **Authentication**（或 **API keys**）  
 3. 创建 **Server-side API key**（Bearer token，形如 `pdl_...` / 沙箱常以 `pdl_sdbx_` 开头）  
-4. 写入 Worker（**不要**提交 git）：
+4. 写入 Worker **Secret**（**不要**提交 git / 勿写进 `[vars]`）：
 
 ```bash
 cd cloudflare/eqt-drm-api
 npx wrangler secret put PADDLE_API_KEY
-# 粘贴 key 后回车；再 wrangler deploy（若 secret 变更需已部署实例可见）
+# 粘贴 key 后回车；secret 一般即时生效，改 toml vars 才必须 deploy
+npx wrangler secret list   # 确认名称存在（看不到值）
 ```
 
 **不要**与 **Webhook 签名密钥**（`PADDLE_WEBHOOK_SECRET` / Notification secret，形如 `pdl_ntfset_...`）混淆：
 
-| 变量 | 来源 | 用途 |
-| :--- | :--- | :--- |
-| `PADDLE_WEBHOOK_SECRET` | Developer tools → Notifications → 某 endpoint 的 **Secret key** | 校验 `Paddle-Signature`，**支付履约主路径** |
-| `PADDLE_API_KEY` | Authentication → **API key** | 主动调 Paddle REST |
+| 变量 | 落点 | 来源 | 用途 |
+| :--- | :--- | :--- | :--- |
+| `PADDLE_WEBHOOK_SECRET` | **Secret** | Developer tools → Notifications → endpoint **Secret key** | 校验 `Paddle-Signature`，**支付履约主路径** |
+| `PADDLE_API_KEY` | **Secret** | Authentication → **API key** | 主动调 Paddle REST |
 
 ---
 
