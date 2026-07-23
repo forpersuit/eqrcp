@@ -410,6 +410,17 @@ GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
 成功 200：`{ success, logs[], total, limit, offset }`。  
 管理台前端 Tab「操作审计轨迹」只读消费本接口。
 
+**`details_json` 约定（按 action）** — 便于取证；历史旧行可能字段较少。
+
+| action | target_type | target_id | details_json 要点 |
+| :--- | :--- | :--- | :--- |
+| `GENERATE` | `LICENSE` | license_code | `license_code`, `tier`, `max_devices`, `expires_at`, `duration_days`, `expires_in_days`, `buyer_email`, `send_email_requested`, `email_sent`, `status`, `source=admin_manual` |
+| `REVOKE` | `LICENSE` | license_code | `previous_status`, `new_status=revoked`, `tier`, `max_devices`, `expires_at`, `buyer_email`, `paddle_*`, `active_devices_count`, `activations_snapshot[]`（解绑前指纹快照）, `activations_deleted=false` |
+| `UNBIND` | `ACTIVATION` 或 `LICENSE` | activation_id 或 license_code | `mode=single\|clear_all`, `license_code`, `activation_id`, `unbound_count`, `activation_ids[]`, `device_snapshot` / `devices_snapshot[]`（含 device_id 与各 hash、activated_at）, **`counts_toward_user_quota=false`** |
+| `CLEAR_LOGS` | `SYSTEM` | null | `cleared_error_log_count`, note（只清 `system_error_logs`，保留操作审计） |
+
+Admin 解绑 **不写** `unbind_records`，故不占用用户 365 天 4 次配额。
+
 ### 0.4 鉴权失败限流
 
 同一客户端 IP（`cf-connecting-ip` 或 `X-Forwarded-For`）在约 5 分钟窗口内，**携带了错误的** `X-Admin-Secret` ≥ 10 次 → **429**  

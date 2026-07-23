@@ -464,6 +464,67 @@ async function runAdminTestSuite() {
   }
   console.log('✓ Audit logs contain GENERATE/UNBIND/REVOKE/CLEAR_LOGS.');
 
+  function parseDetails(row) {
+    if (!row?.details_json) return null;
+    try {
+      return JSON.parse(row.details_json);
+    } catch {
+      return null;
+    }
+  }
+
+  const genAudit = auditRes.data.logs.find(
+    (l) => l.action === 'GENERATE' && String(l.target_id) === createdLicenseCode
+  );
+  const genD = parseDetails(genAudit);
+  if (!genD || genD.tier !== 'PLUS' || genD.license_code !== createdLicenseCode || genD.status !== 'active') {
+    throw new Error(`GENERATE audit details incomplete: ${JSON.stringify(genD)}`);
+  }
+  if (genD.max_devices == null || !('email_sent' in genD) || !('expires_at' in genD)) {
+    throw new Error(`GENERATE audit missing fields: ${JSON.stringify(genD)}`);
+  }
+
+  const unbindSingle = auditRes.data.logs.find((l) => {
+    if (l.action !== 'UNBIND') return false;
+    const d = parseDetails(l);
+    return d && d.mode === 'single' && d.license_code === createdLicenseCode;
+  });
+  const u1 = parseDetails(unbindSingle);
+  if (
+    !u1 ||
+    u1.counts_toward_user_quota !== false ||
+    Number(u1.unbound_count) !== 1 ||
+    !u1.device_snapshot ||
+    u1.device_snapshot.id == null
+  ) {
+    throw new Error(`UNBIND single audit details incomplete: ${JSON.stringify(u1)}`);
+  }
+
+  const unbindAll = auditRes.data.logs.find((l) => {
+    if (l.action !== 'UNBIND') return false;
+    const d = parseDetails(l);
+    return d && d.mode === 'clear_all' && d.license_code === createdLicenseCode;
+  });
+  const u2 = parseDetails(unbindAll);
+  if (!u2 || u2.counts_toward_user_quota !== false || !Array.isArray(u2.devices_snapshot)) {
+    throw new Error(`UNBIND clear_all audit details incomplete: ${JSON.stringify(u2)}`);
+  }
+
+  const revAudit = auditRes.data.logs.find(
+    (l) => l.action === 'REVOKE' && String(l.target_id) === createdLicenseCode
+  );
+  const revD = parseDetails(revAudit);
+  if (!revD || revD.new_status !== 'revoked' || !('previous_status' in revD) || !('activations_snapshot' in revD)) {
+    throw new Error(`REVOKE audit details incomplete: ${JSON.stringify(revD)}`);
+  }
+
+  const clearAudit = auditRes.data.logs.find((l) => l.action === 'CLEAR_LOGS');
+  const clearD = parseDetails(clearAudit);
+  if (!clearD || typeof clearD.cleared_error_log_count !== 'number') {
+    throw new Error(`CLEAR_LOGS audit details incomplete: ${JSON.stringify(clearD)}`);
+  }
+  console.log('✓ Audit details_json enriched for GENERATE/UNBIND/REVOKE/CLEAR_LOGS.');
+
   console.log('\n==================================================');
   console.log('🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉');
   console.log('==================================================');

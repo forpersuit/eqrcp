@@ -57,12 +57,64 @@
     }
   }
 
+  function parseDetails(raw: string | null): Record<string, unknown> | null {
+    if (!raw) return null;
+    try {
+      const v = JSON.parse(raw);
+      return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+
   function prettyDetails(raw: string | null): string {
     if (!raw) return '—';
     try {
       return JSON.stringify(JSON.parse(raw), null, 2);
     } catch {
       return raw;
+    }
+  }
+
+  /** One-line summary for table; full JSON still in modal */
+  function summarizeDetails(row: AdminAuditLog): string {
+    const d = parseDetails(row.details_json);
+    if (!d) return '—';
+    switch (row.action) {
+      case 'GENERATE':
+        return [
+          d.tier,
+          d.max_devices != null ? `设备上限 ${d.max_devices}` : null,
+          d.expires_at === 'LIFETIME' ? '永久' : d.expires_at ? `到期 ${d.expires_at}` : null,
+          d.buyer_email ? `邮箱 ${d.buyer_email}` : null,
+          d.email_sent === true ? '已发信' : d.send_email_requested ? '未发信' : null
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      case 'REVOKE':
+        return [
+          d.previous_status ? `${d.previous_status}→revoked` : '→revoked',
+          d.tier,
+          d.active_devices_count != null ? `当时设备 ${d.active_devices_count}` : null,
+          d.buyer_email ? String(d.buyer_email) : null
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      case 'UNBIND':
+        return [
+          d.mode === 'clear_all' ? '全清' : '单台',
+          d.license_code ? String(d.license_code) : null,
+          d.unbound_count != null ? `解绑 ${d.unbound_count} 台` : null,
+          d.counts_toward_user_quota === false ? '不计用户配额' : null
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      case 'CLEAR_LOGS':
+        return d.cleared_error_log_count != null
+          ? `清空错误日志 ${d.cleared_error_log_count} 条`
+          : '清空错误日志';
+      default:
+        return Object.keys(d).slice(0, 3).join(', ') || '—';
     }
   }
 
@@ -122,6 +174,7 @@
             <th>动作</th>
             <th>目标类型</th>
             <th>目标 ID</th>
+            <th>摘要</th>
             <th>操作 IP</th>
             <th></th>
           </tr>
@@ -133,6 +186,7 @@
               <td><span class="badge badge-active">{row.action}</span></td>
               <td>{row.target_type || '—'}</td>
               <td class="mono">{row.target_id || '—'}</td>
+              <td class="summary-cell" title={summarizeDetails(row)}>{summarizeDetails(row)}</td>
               <td class="mono">{row.operator_ip || '—'}</td>
               <td>
                 <button class="btn btn-secondary btn-sm" onclick={() => (selected = row)}>详情</button>
@@ -183,7 +237,11 @@
         <div class="mono">{selected.operator_ip || '—'}</div>
       </div>
       <div class="detail-section">
-        <span class="detail-label">details_json</span>
+        <span class="detail-label">摘要</span>
+        <div>{summarizeDetails(selected)}</div>
+      </div>
+      <div class="detail-section">
+        <span class="detail-label">details_json（完整）</span>
         <pre class="code-block">{prettyDetails(selected.details_json)}</pre>
       </div>
       <div class="modal-footer">
@@ -214,6 +272,14 @@
 
   .table-wrap { overflow-x: auto; padding: 0; }
   .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  .summary-cell {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary, #64748b);
+    font-size: 0.8rem;
+  }
   .data-table th, .data-table td {
     padding: 0.75rem 1rem;
     text-align: left;

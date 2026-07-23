@@ -1,7 +1,7 @@
 import { Env } from '../types';
 import { requireAdminAuth } from '../utils/auth';
 import { ensureAuditLogTable } from '../utils/error-logger';
-import { ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
+import { activationAuditSnapshot, ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
 import { sendDRMEmail } from '../services/smtp';
 import { runHealthProbes } from '../utils/probes';
 
@@ -71,8 +71,13 @@ export async function handleAdminRoutes(
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
     await ensureAuditLogTable(env);
+    const errCountRes = await env.DB.prepare("SELECT COUNT(*) as count FROM system_error_logs").first<{ count: number }>();
+    const clearedCount = Number(errCountRes?.count || 0);
     await env.DB.prepare("DELETE FROM system_error_logs").run();
-    ctx.waitUntil(logAdminAudit(env, 'CLEAR_LOGS', 'SYSTEM', null, {}, clientIp));
+    ctx.waitUntil(logAdminAudit(env, 'CLEAR_LOGS', 'SYSTEM', null, {
+      cleared_error_log_count: clearedCount,
+      note: 'Cleared system_error_logs only; admin_audit_logs retained'
+    }, clientIp));
     return new Response(JSON.stringify({ success: true, message: "System error logs cleared successfully" }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -176,8 +181,6 @@ export async function handleAdminRoutes(
       new Date().toISOString()
     ).run();
 
-    ctx.waitUntil(logAdminAudit(env, 'GENERATE', 'LICENSE', licenseCode, { tier, max_devices: maxDev, buyer_email: cleanEmail || null }, clientIp));
-
     let emailSent = false;
     if (send_email && cleanEmail) {
       const planName = tier === "PLUS" ? "EQT Plus" : (tier === "PRO" ? "EQT Pro" : tier);
@@ -214,6 +217,20 @@ export async function handleAdminRoutes(
       ctx.waitUntil(sendDRMEmail(env, cleanEmail, "【EQT】您的专属授权激活码", emailHtml));
       emailSent = true;
     }
+
+    ctx.waitUntil(logAdminAudit(env, 'GENERATE', 'LICENSE', licenseCode, {
+      license_code: licenseCode,
+      tier,
+      max_devices: maxDev,
+      expires_at: expiresAt,
+      duration_days: durDays,
+      expires_in_days: expires_in_days != null && expires_in_days !== '' ? Number(expires_in_days) : null,
+      buyer_email: cleanEmail || null,
+      send_email_requested: Boolean(send_email),
+      email_sent: emailSent,
+      status: 'active',
+      source: 'admin_manual'
+    }, clientIp));
 
     return new Response(JSON.stringify({
       success: true,
@@ -307,7 +324,7 @@ export async function handleAdminRoutes(
     }
 
     const existing = await env.DB.prepare(
-      "SELECT license_code, status FROM licenses WHERE license_code = ?"
+      "SELECT * FROM licenses WHERE license_code = ?"
     ).bind(license_code).first<any>();
 
     if (!existing) {
@@ -317,8 +334,28 @@ export async function handleAdminRoutes(
       });
     }
 
+    const actRes = await env.DB.prepare(
+      "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
+    ).bind(license_code).all();
+    const activationsAtRevoke = (actRes.results || []).map(activationAuditSnapshot);
+
     await env.DB.prepare("UPDATE licenses SET status = 'revoked' WHERE license_code = ?").bind(license_code).run();
-    ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {}, clientIp));
+    ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {
+      license_code,
+      previous_status: existing.status,
+      new_status: 'revoked',
+      tier: existing.tier,
+      max_devices: existing.max_devices,
+      expires_at: existing.expires_at,
+      duration_days: existing.duration_days ?? null,
+      buyer_email: existing.buyer_email ?? null,
+      paddle_transaction_id: existing.paddle_transaction_id ?? null,
+      paddle_subscription_id: existing.paddle_subscription_id ?? null,
+      active_devices_count: activationsAtRevoke.length,
+      activations_snapshot: activationsAtRevoke,
+      activations_deleted: false,
+      note: 'Status set to revoked only; activation rows kept until unbind/expiry sync'
+    }, clientIp));
 
     return new Response(JSON.stringify({
       success: true,
@@ -356,6 +393,8 @@ export async function handleAdminRoutes(
     }
 
     let unboundActivationId: number | null = null;
+    let auditDetails: Record<string, unknown>;
+
     if (activation_id !== undefined && activation_id !== null && activation_id !== "") {
       const actId = Number(activation_id);
       if (!Number.isFinite(actId)) {
@@ -365,7 +404,7 @@ export async function handleAdminRoutes(
         });
       }
       const act = await env.DB.prepare(
-        "SELECT id FROM activations WHERE id = ? AND license_code = ?"
+        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE id = ? AND license_code = ?"
       ).bind(actId, license_code).first<any>();
       if (!act) {
         return new Response(JSON.stringify({ error: "Activation not found for this license" }), {
@@ -377,17 +416,53 @@ export async function handleAdminRoutes(
         "DELETE FROM activations WHERE id = ? AND license_code = ?"
       ).bind(actId, license_code).run();
       unboundActivationId = actId;
+      auditDetails = {
+        mode: 'single',
+        license_code,
+        activation_id: actId,
+        unbound_count: 1,
+        activation_ids: [actId],
+        device_snapshot: activationAuditSnapshot(act),
+        devices_snapshot: [activationAuditSnapshot(act)],
+        counts_toward_user_quota: false,
+        note: 'Admin unbind does not insert unbind_records (user 4/year quota unchanged)'
+      };
     } else {
+      const actRes = await env.DB.prepare(
+        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
+      ).bind(license_code).all();
+      const acts = actRes.results || [];
+      const snaps = acts.map(activationAuditSnapshot);
+      const ids = acts.map((a: any) => a.id);
       await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code).run();
+      auditDetails = {
+        mode: 'clear_all',
+        license_code,
+        activation_id: null,
+        unbound_count: snaps.length,
+        activation_ids: ids,
+        devices_snapshot: snaps,
+        counts_toward_user_quota: false,
+        note: 'Admin clear-all unbind; does not insert unbind_records (user 4/year quota unchanged)'
+      };
     }
 
-    ctx.waitUntil(logAdminAudit(env, 'UNBIND', unboundActivationId ? 'ACTIVATION' : 'LICENSE', unboundActivationId ? String(unboundActivationId) : license_code, { license_code, activation_id: unboundActivationId }, clientIp));
+    ctx.waitUntil(logAdminAudit(
+      env,
+      'UNBIND',
+      unboundActivationId ? 'ACTIVATION' : 'LICENSE',
+      unboundActivationId ? String(unboundActivationId) : license_code,
+      auditDetails,
+      clientIp
+    ));
 
     return new Response(JSON.stringify({
       success: true,
       message: `Devices for license ${license_code} unbound successfully`,
       license_code,
-      unbound_activation_id: unboundActivationId
+      unbound_activation_id: unboundActivationId,
+      unbound_count: auditDetails.unbound_count,
+      counts_toward_user_quota: false
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

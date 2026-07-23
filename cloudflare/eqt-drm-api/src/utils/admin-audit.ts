@@ -18,6 +18,18 @@ export async function ensureAdminAuditLogTable(env: Env): Promise<void> {
   }
 }
 
+/** Compact activation row for admin audit forensics (survives DELETE activations). */
+export function activationAuditSnapshot(act: any): Record<string, unknown> {
+  return {
+    id: act?.id ?? null,
+    device_id: act?.device_id ?? null,
+    uuid_hash: act?.uuid_hash ?? null,
+    cpu_hash: act?.cpu_hash ?? null,
+    disk_hash: act?.disk_hash ?? null,
+    activated_at: act?.activated_at ?? null
+  };
+}
+
 export async function logAdminAudit(
   env: Env,
   action: string,
