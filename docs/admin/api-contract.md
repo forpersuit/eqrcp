@@ -362,14 +362,34 @@ GET /api/v1/admin/health
     "r2_configured": false,
     "ed25519_key_configured": true,
     "admin_secret_configured": true
-  }
+  },
+  "probes": {
+    "smtp": { "ok": true, "latency_ms": 180, "error": null, "skipped": false },
+    "paddle": { "ok": true, "latency_ms": 1, "error": null, "mode": "webhook_secret_present" },
+    "db": { "ok": true, "latency_ms": 2, "error": null, "mode": "select_1" }
+  },
+  "recent_events": [
+    {
+      "id": 12,
+      "level": "WARN",
+      "category": "SMTP_EMAIL_FAIL",
+      "error_message": "...",
+      "created_at": "2026-07-23T00:00:00.000Z"
+    }
+  ]
 }
 ```
 
-**必填 config 键（前端徽章）**：`db_status`, `smtp_configured`, `paddle_configured`, `r2_configured`。  
-`paddle_webhook_configured` 与 `paddle_configured` 同值（别名）。  
-语义：`*_configured` = 环境变量是否非空；**不是** TLS 握手成功。  
-真探针（`probes.smtp` 等）仍为后置。
+**必填 config 键**：`db_status`, `smtp_configured`, `paddle_configured`, `r2_configured`。  
+**必填 probes 键**：`smtp`, `paddle`, `db`（各含 `ok` / `latency_ms` / `error`）。  
+
+| 探针 | 行为 |
+| :--- | :--- |
+| `smtp` | TLS 连接 + EHLO + AUTH LOGIN + QUIT（不发信）；超时约 4s；env 不全则 `skipped: true` |
+| `paddle` | 有 webhook secret 即配置级 ok；若有 `PADDLE_API_KEY` 则 GET Paddle API |
+| `db` | `SELECT 1` |
+
+`recent_events`：`system_error_logs` 中 PADDLE_* / SMTP_* 最近 15 条（故障时间线代理，非完整 Webhook 成功履约流水）。
 
 ### 2.8 操作审计日志
 
@@ -378,7 +398,14 @@ GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
 ```
 
 高危写操作（GENERATE / REVOKE / UNBIND / CLEAR_LOGS）自动写入 `admin_audit_logs`。  
-成功 200：`{ success, logs[], total, limit, offset }`。
+成功 200：`{ success, logs[], total, limit, offset }`。  
+管理台前端 Tab「操作审计轨迹」只读消费本接口。
+
+### 0.4 鉴权失败限流
+
+同一客户端 IP（`cf-connecting-ip` 或 `X-Forwarded-For`）在约 5 分钟窗口内，**携带了错误的** `X-Admin-Secret` ≥ 10 次 → **429**  
+`{ "error": "...", "code": "ADMIN_AUTH_RATE_LIMITED" }`，`Retry-After: 300`。  
+缺 Header 的 401 **不计次**（避免登录探活误伤）。成功鉴权后清除该 IP 计数。此为 Worker 进程内限流，非全局 Cloudflare 边缘规则。
 
 ---
 

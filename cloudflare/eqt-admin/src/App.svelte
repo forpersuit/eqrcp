@@ -3,6 +3,7 @@
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
+  import OpsAudit from './pages/OpsAudit.svelte';
   import Licenses from './pages/Licenses.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
   import type { AdminTab } from './lib/types';
@@ -49,6 +50,14 @@
 
         <button
           class="nav-item"
+          class:active={currentTab === 'ops'}
+          onclick={() => (currentTab = 'ops')}
+        >
+          <span class="nav-icon">📋</span> 操作审计轨迹
+        </button>
+
+        <button
+          class="nav-item"
           class:active={currentTab === 'licenses'}
           onclick={() => (currentTab = 'licenses')}
         >
@@ -77,6 +86,8 @@
         <Overview onNavigate={navigateTo} />
       {:else if currentTab === 'audit'}
         <ErrorAudit />
+      {:else if currentTab === 'ops'}
+        <OpsAudit />
       {:else if currentTab === 'licenses'}
         <Licenses />
       {:else if currentTab === 'health'}

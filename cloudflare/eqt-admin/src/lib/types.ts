@@ -6,7 +6,7 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'licenses' | 'health';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'health';
 
 /** Row shape from activations table */
 export interface Activation {
@@ -55,7 +55,7 @@ export interface AdminAuditLog {
   created_at: string;
 }
 
-/** GET /api/v1/admin/health — env readiness badges (not live TLS probes) */
+/** GET /api/v1/admin/health — env readiness + live probes */
 export interface AdminHealthConfig {
   db_status: string;
   db_connected?: boolean;
@@ -66,6 +66,22 @@ export interface AdminHealthConfig {
   r2_configured: boolean;
   ed25519_key_configured?: boolean;
   admin_secret_configured?: boolean;
+}
+
+export interface HealthProbeResult {
+  ok: boolean;
+  latency_ms: number;
+  error: string | null;
+  skipped?: boolean;
+  mode?: string;
+}
+
+export interface HealthRecentEvent {
+  id: number;
+  level: string;
+  category: string;
+  error_message: string;
+  created_at: string;
 }
 
 export interface AdminHealthResponse {
@@ -80,6 +96,12 @@ export interface AdminHealthResponse {
     errors_24h?: number;
   };
   config: AdminHealthConfig;
+  probes?: {
+    smtp?: HealthProbeResult;
+    paddle?: HealthProbeResult;
+    db?: HealthProbeResult;
+  };
+  recent_events?: HealthRecentEvent[];
 }
 
 export interface GenerateLicenseBody {

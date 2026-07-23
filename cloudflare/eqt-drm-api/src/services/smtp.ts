@@ -118,6 +118,113 @@ export async function sendMailViaSmtp(options: MailOptions): Promise<void> {
   }
 }
 
+export interface SmtpProbeResult {
+  ok: boolean;
+  latency_ms: number;
+  error: string | null;
+  skipped: boolean;
+}
+
+/**
+ * Live SMTP probe: TLS connect + EHLO + AUTH LOGIN + QUIT (no mail delivery).
+ * Bounded by timeoutMs so admin health never hangs the isolate.
+ */
+export async function probeSmtp(env: Env, timeoutMs = 4000): Promise<SmtpProbeResult> {
+  const host = env.MAIL_SEND_SERVER;
+  const pass = env.MAIL_SENDER_PASSWORD;
+  const sender = env.MAIL_SENDER;
+  const portStr = env.MAIL_SEND_SAFE_PORT;
+  if (!host || !pass || !sender || !portStr) {
+    return { ok: false, latency_ms: 0, error: "SMTP env incomplete", skipped: true };
+  }
+
+  const port = parseInt(portStr, 10) || 465;
+  const started = Date.now();
+
+  const run = async (): Promise<SmtpProbeResult> => {
+    const socket = connect({ hostname: host, port }, { secureTransport: "on", allowHalfOpen: false });
+    const writer = socket.writable.getWriter();
+    const reader = socket.readable.getReader();
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    let buffer = "";
+
+    async function readLine(): Promise<string> {
+      while (true) {
+        const idx = buffer.indexOf("\r\n");
+        if (idx !== -1) {
+          const line = buffer.substring(0, idx);
+          buffer = buffer.substring(idx + 2);
+          return line;
+        }
+        const { value, done } = await reader.read();
+        if (done) {
+          if (buffer.length > 0) {
+            const line = buffer;
+            buffer = "";
+            return line;
+          }
+          throw new Error("SMTP closed during probe");
+        }
+        buffer += decoder.decode(value, { stream: true });
+      }
+    }
+
+    async function readResponse(): Promise<{ code: number }> {
+      while (true) {
+        const line = await readLine();
+        if (line.match(/^\d{3} /)) {
+          return { code: parseInt(line.substring(0, 3), 10) };
+        }
+      }
+    }
+
+    async function sendCmd(cmd: string, expected: number): Promise<void> {
+      await writer.write(encoder.encode(cmd + "\r\n"));
+      const resp = await readResponse();
+      if (resp.code !== expected) {
+        throw new Error(`SMTP ${cmd.split(" ")[0]} expected ${expected} got ${resp.code}`);
+      }
+    }
+
+    try {
+      const greet = await readResponse();
+      if (greet.code !== 220) throw new Error(`SMTP greeting ${greet.code}`);
+      await sendCmd("EHLO eqt-admin-probe", 250);
+      await sendCmd("AUTH LOGIN", 334);
+      await sendCmd(btoa(sender), 334);
+      await sendCmd(btoa(pass), 235);
+      await sendCmd("QUIT", 221);
+      return { ok: true, latency_ms: Date.now() - started, error: null, skipped: false };
+    } finally {
+      try {
+        writer.releaseLock();
+        reader.releaseLock();
+        await socket.close();
+      } catch {
+        // ignore close errors after probe
+      }
+    }
+  };
+
+  try {
+    const result = await Promise.race([
+      run(),
+      new Promise<SmtpProbeResult>((_, reject) =>
+        setTimeout(() => reject(new Error(`SMTP probe timeout after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+    return result;
+  } catch (err: any) {
+    return {
+      ok: false,
+      latency_ms: Date.now() - started,
+      error: err?.message || String(err),
+      skipped: false
+    };
+  }
+}
+
 export async function sendDRMEmail(env: Env, to: string, subject: string, html: string): Promise<void> {
   const host = env.MAIL_SEND_SERVER;
   const pass = env.MAIL_SENDER_PASSWORD;

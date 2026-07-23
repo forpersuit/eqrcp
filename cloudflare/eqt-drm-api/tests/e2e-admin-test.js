@@ -107,8 +107,9 @@ function insertLocalErrorLog(level, category, message) {
 }
 
 async function ensureServerRunning() {
+  // Probe public index (no admin auth) so readiness never burns rate-limit budget.
   try {
-    await makeRequest('/api/v1/admin/health', 'GET');
+    await makeRequest('/', 'GET');
     console.log('✓ Target server is already active at', TARGET_URL);
     return null;
   } catch (e) {
@@ -126,7 +127,7 @@ async function ensureServerRunning() {
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 600));
       try {
-        await makeRequest('/api/v1/admin/health', 'GET');
+        await makeRequest('/', 'GET');
         console.log('✓ Local wrangler dev server successfully spawned and ready.');
         return child;
       } catch (err) {
@@ -170,10 +171,30 @@ async function runAdminTestSuite() {
   }
   console.log('✓ Query ?secret= rejected (status', querySecretRes.status + ').');
 
-  // 2. Health contract keys
-  logStep(2, 'System Health Probe + Config Key Contract');
+  // Rate limit: isolated IP via X-Forwarded-For (does not lock the test suite IP)
+  logStep('1b', 'Admin Auth Rate Limit (429 after repeated failures)');
+  const bruteIp = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+  let lastBrute = null;
+  for (let i = 0; i < 12; i++) {
+    lastBrute = await makeRequest('/api/v1/admin/health', 'GET', {
+      'X-Admin-Secret': 'wrong-key-for-rate-limit',
+      'X-Forwarded-For': bruteIp
+    });
+  }
+  console.log('After 12 wrong secrets from', bruteIp, 'status=', lastBrute?.status);
+  if (lastBrute?.status !== 429) {
+    throw new Error(`Expected 429 rate limit after repeated failures, got ${lastBrute?.status}`);
+  }
+  if (lastBrute?.data?.code !== 'ADMIN_AUTH_RATE_LIMITED') {
+    throw new Error(`Expected ADMIN_AUTH_RATE_LIMITED code, got ${JSON.stringify(lastBrute?.data)}`);
+  }
+  console.log('✓ Rate limit returns 429 with ADMIN_AUTH_RATE_LIMITED.');
+
+  // 2. Health contract keys + live probes shape
+  logStep(2, 'System Health Probe + Config Key Contract + probes');
   const healthRes = await makeRequest('/api/v1/admin/health', 'GET', authHeaders());
   console.log('Health Status:', healthRes.status, 'Metrics:', healthRes.data.metrics);
+  console.log('Probes:', JSON.stringify(healthRes.data.probes));
   if (healthRes.status !== 200 || !healthRes.data.success || !healthRes.data.config) {
     throw new Error(`System health probe failed: ${JSON.stringify(healthRes.data)}`);
   }
@@ -196,8 +217,22 @@ async function runAdminTestSuite() {
   if (typeof healthRes.data.config.r2_configured !== 'boolean') {
     throw new Error('r2_configured must be boolean');
   }
-  console.log('✓ Health config/metrics contract keys present:', REQUIRED_HEALTH_CONFIG_KEYS.join(', '));
-
+  if (!healthRes.data.probes || !healthRes.data.probes.smtp || !healthRes.data.probes.db) {
+    throw new Error(`health.probes.smtp/db required: ${JSON.stringify(healthRes.data.probes)}`);
+  }
+  for (const name of ['smtp', 'paddle', 'db']) {
+    const p = healthRes.data.probes[name];
+    if (typeof p.ok !== 'boolean' || typeof p.latency_ms !== 'number') {
+      throw new Error(`probe ${name} invalid shape: ${JSON.stringify(p)}`);
+    }
+  }
+  if (!Array.isArray(healthRes.data.recent_events)) {
+    throw new Error('health.recent_events must be an array');
+  }
+  if (!healthRes.data.probes.db.ok) {
+    throw new Error(`D1 probe must pass on local wrangler: ${JSON.stringify(healthRes.data.probes.db)}`);
+  }
+  console.log('✓ Health config/metrics/probes/recent_events contract OK.');
   // 3. Generate
   logStep(3, 'Manual License Generation (POST /admin/generate with buyer_email)');
   const genRes = await makeRequest('/api/v1/admin/generate', 'POST', authHeaders(), {

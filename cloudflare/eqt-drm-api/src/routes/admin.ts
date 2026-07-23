@@ -3,6 +3,7 @@ import { requireAdminAuth } from '../utils/auth';
 import { ensureAuditLogTable } from '../utils/error-logger';
 import { ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
 import { sendDRMEmail } from '../services/smtp';
+import { runHealthProbes } from '../utils/probes';
 
 export async function handleAdminRoutes(
   request: Request,
@@ -431,11 +432,27 @@ export async function handleAdminRoutes(
     const paddleConfigured = Boolean(env.PADDLE_WEBHOOK_SECRET);
     const r2Configured = Boolean(env.R2_PUBLIC_URL);
 
+    // Live probes (bounded timeouts) + recent Paddle/SMTP related error rows as webhook timeline proxy
+    const probes = await runHealthProbes(env);
+
+    let recentEvents: any[] = [];
+    try {
+      await ensureAuditLogTable(env);
+      const evRes = await env.DB.prepare(
+        `SELECT id, level, category, error_message, created_at FROM system_error_logs
+         WHERE category IN ('PADDLE_WEBHOOK', 'PADDLE_API_ERROR', 'SMTP_ERROR', 'SMTP_EMAIL_FAIL')
+         ORDER BY id DESC LIMIT 15`
+      ).all();
+      recentEvents = evRes.results || [];
+    } catch {
+      recentEvents = [];
+    }
+
     // config keys are contract SSOT (docs/admin/api-contract.md). Keep both
     // canonical short names and explicit *_webhook / detail flags for UI badges.
     return new Response(JSON.stringify({
       success: true,
-      status: "healthy",
+      status: probes.db.ok ? "healthy" : "degraded",
       timestamp: new Date().toISOString(),
       metrics: {
         total_licenses: licenseCount,
@@ -453,7 +470,13 @@ export async function handleAdminRoutes(
         r2_configured: r2Configured,
         ed25519_key_configured: Boolean(env.ED25519_PRIVATE_KEY),
         admin_secret_configured: Boolean(env.ADMIN_SECRET)
-      }
+      },
+      probes: {
+        smtp: probes.smtp,
+        paddle: probes.paddle,
+        db: probes.db
+      },
+      recent_events: recentEvents
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

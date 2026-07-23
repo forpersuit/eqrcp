@@ -2,7 +2,7 @@
 
 > 以**代码与契约事实**为准更新。行动顺序见 [action-plan.md](./action-plan.md)。
 
-最后更新：2026-07-23（契约对齐与测试深化修复轮完成：Health 字段对齐、E2E 深化、Chrome 9222 冒烟）
+最后更新：2026-07-23（P2 完成：操作审计 UI、SMTP/Paddle/D1 真探针、鉴权限流、生产域名实测）
 
 ---
 
@@ -48,13 +48,13 @@
 - [x] 错误日志服务端过滤/分页 (`level`/`category`/`q`/`offset`/`limit`)
 - [x] generate 绑 email / 可选 SMTP 自动发信
 - [x] Overview KPI 深化（`active_licenses`, `today_activations`, `errors_24h`）
-- [x] admin 操作审计表 + `GET /api/v1/admin/audit-logs`（**API 已有，前端审计页未做**）
+- [x] admin 操作审计表 + `GET /api/v1/admin/audit-logs` + 前端「操作审计轨迹」页
 - [x] D1 B-Tree 索引优化
-- [ ] Health **真探针**（SMTP TLS 握手等）——当前仅为 env 配置布尔，勿再标为已完成
-- [ ] 前端操作审计只读页（消费 `GET /admin/audit-logs`）
+- [x] Health **真探针**（SMTP TLS+AUTH / Paddle / D1 SELECT 1 + `probes` 字段）
+- [x] 前端操作审计只读页（`OpsAudit.svelte`）
 - [x] Overview 快捷入口可跳转对应 Tab
-- [ ] Webhook 最近记录时间线
-- [ ] 反馈中心对接 `eqt-feedback-api`
+- [x] Webhook/发信相关故障时间线（health `recent_events` 代理 PADDLE_*/SMTP_*）
+- [ ] 反馈中心对接 `eqt-feedback-api`（后置，跨服务）
 
 ### 阶段 4 — 部署上线与运维防线
 
@@ -62,7 +62,7 @@
 - [x] 生产 `VITE_API_BASE` 默认 `https://lic.eqt.net.im`
 - [x] 防搜索引擎索引
 - [x] 生产运维与灾备手册 (`docs/admin/ops-guide.md`)
-- [ ] 生产 Pages 实际部署与 `admin.eqt.net.im` 可达性实测（验证记录）
+- [x] 生产 `admin.eqt.net.im` 可达性实测（HTTP 200，见验证记录）
 
 ---
 
@@ -99,15 +99,15 @@
 | F9 | `npm run check` / svelte-check 可用 | [x] | 补 `svelte.config.js` |
 | F10 | Chrome 9222 本地 Admin 主路径冒烟 | [x] | 四 Tab + 快捷入口 + Paddle 徽章就绪 |
 
-### P2 — 后置（不阻断本轮）
+### P2 — 产品补强（本轮）
 
-| # | 项 | 状态 |
-| :---: | :--- | :---: |
-| F11 | 操作审计只读 UI | [ ] |
-| F12 | SMTP/Paddle 真探针 | [ ] |
-| F13 | Admin 路由 Rate Limiting | [ ] |
-| F14 | 生产 `admin.eqt.net.im` 实测 | [ ] |
-| F15 | 拒绝 `?secret=` / OPTIONS DELETE / 503 无 secret 专项断言 | [ ] |
+| # | 项 | 状态 | 说明 |
+| :---: | :--- | :---: | :--- |
+| F11 | 操作审计只读 UI | [x] | `OpsAudit.svelte` + 侧栏 Tab |
+| F12 | SMTP/Paddle/D1 真探针 | [x] | `probes` + Health 页展示；SMTP 限时 AUTH |
+| F13 | Admin 鉴权失败 Rate Limiting | [x] | 同 IP 5 分钟 ≥10 次 → 429 |
+| F14 | 生产 `admin.eqt.net.im` 实测 | [x] | curl HTTPS 200，返回 Admin SPA HTML |
+| F15 | `?secret=` / OPTIONS DELETE / 429 断言 | [x] | E2E 覆盖（含 rate limit 隔离 IP） |
 
 ---
 
@@ -123,19 +123,19 @@
 | GET licenses | 是 | 是（created_at + batch activations） |
 | POST revoke | 是 | 是（含 404） |
 | POST unbind | 是 | 是（`activation_id`） |
-| GET health | 是 | 字段对齐（含 paddle/r2 布尔） |
-| GET audit-logs | 是 | API 有；前端无页 |
+| GET health | 是 | config + probes + recent_events |
+| GET audit-logs | 是 | API + 前端 OpsAudit 页 |
 
 ### 前端 `eqt-admin`
 
 | 页面 | 壳子 | 主路径可用预期 |
 | :--- | :---: | :--- |
 | Login | 是 | secret 正确且 Worker 可达 |
-| Overview | 是 | KPI + 快捷入口可跳转 |
+| Overview | 是 | KPI + 快捷入口可跳转（含操作审计） |
 | ErrorAudit | 是 | 列表过滤分页 + 清空 |
+| OpsAudit | 是 | 操作审计只读列表/过滤/详情 |
 | Licenses | 是 | 检索/生成/吊销/按 activation 解绑 |
-| SystemHealth | 是 | 配置徽章对齐（env 布尔，非真探针） |
-| AuditLogs | 否 | 仅 types 预留 |
+| SystemHealth | 是 | config 徽章 + 真探针 + recent_events |
 
 ### 技术栈事实
 
@@ -152,19 +152,20 @@
 - [x] **索引**：`idx_licenses_email_hash`, `idx_licenses_created`, `idx_admin_audit_logs_created`
 
 ### 2. 安全性与防护层
-- [ ] **Rate Limiting**：`/api/v1/admin/*` 错 Key 防爆破
+- [x] **Rate Limiting（进程内）**：错 secret 同 IP 窗口累计 → 429；边缘 CF WAF 规则仍可选加强
 - [x] **废弃 `?secret=`**：仅 Header `X-Admin-Secret`
 - [x] **CORS 域名收缩**：`getCorsHeaders` 动态匹配
 
 ### 3. 业务一致性与审计
 - **解绑与离线 7 天租约**：Admin 删 D1 activation 后，客户端最长约 7 天仍可凭本地签名运行，直到 `/verify` 403
 - [x] **Admin 操作审计 API**：`admin_audit_logs` + GET
-- [ ] **Admin 操作审计 UI**
+- [x] **Admin 操作审计 UI**：OpsAudit 页
 
 ### 4. 前端 UX / 契约
 - [x] Svelte 5 a11y：`npm run build` 0 Warning（历史）
 - [x] Health 字段错位（F1/F2 已修）
 - [x] Overview 死链快捷入口（F7 已修）
+- [x] Health 真探针 UI（F12）
 
 ---
 
@@ -179,6 +180,9 @@
 | 2026-07-23 | local/dev | 审查实现 vs docs/admin | 记录 P0/P1 修复清单；启动修复轮 |
 | 2026-07-23 | local/dev | 修复 Health 字段对齐 + Overview 跳转 + E2E 深化 | `npm run test:admin` 10 步全过；`npm run build` 通过 |
 | 2026-07-23 | local/dev | Chrome 9222 冒烟：`127.0.0.1:3001` + 本地 Worker `:8787` | 登录壳→四 Tab→快捷入口；Health 显示 Paddle CONFIGURED；截图 `docs/admin/chrome-smoke-health.png` |
+| 2026-07-23 | local/dev | P2：探针/限流/OpsAudit；`tsc`+`build`+`test:admin` | 见本轮提交；health 含 probes |
+| 2026-07-23 | prod | `curl https://admin.eqt.net.im/` | HTTP **200**，HTML title 含 EQT Admin |
+| 2026-07-23 | prod | `curl https://lic.eqt.net.im/api/v1/admin/health` 无 secret | HTTP **401** Unauthorized（鉴权生效） |
 
 ---
 
@@ -189,3 +193,4 @@
 | 2026-07-23 | 初版 api-contract：冻结 activation_id、created_at 排序 |
 | 2026-07-23 | 阶段 1–4 主链路落地记录 |
 | 2026-07-23 | 审查+修复：Health FE/BE 字段对齐、E2E 深化（activation unbind/filter）、契约文档同步、Chrome 冒烟 |
+| 2026-07-23 | P2：probes(smtp/paddle/db)、recent_events、admin 鉴权 429 限流、OpsAudit UI；eqt-admin/eqt-drm-api 小版本 1.1.0 |

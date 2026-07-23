@@ -104,6 +104,11 @@
         <p>实时排查 D1 system_error_logs，高亮查看 CRITICAL 堆栈与上下文信息。</p>
       </button>
 
+      <button type="button" class="link-card" onclick={() => go('ops')}>
+        <h4>📋 操作审计轨迹</h4>
+        <p>追溯管理员发码、吊销、解绑与清空日志等高危写操作及来源 IP。</p>
+      </button>
+
       <button type="button" class="link-card" onclick={() => go('licenses')}>
         <h4>🎫 授权码与订单管控</h4>
         <p>支持按邮箱/码/交易号全库检索、手动发码、吊销作废与绑定设备管理。</p>
@@ -111,7 +116,7 @@
 
       <button type="button" class="link-card" onclick={() => go('health')}>
         <h4>🌐 发信引擎与系统健康</h4>
-        <p>查看 SMTP / Paddle / R2 / 签名密钥等环境配置就绪度与 KPI。</p>
+        <p>SMTP/Paddle 真探针、配置就绪度与近期履约相关事件时间线。</p>
       </button>
     </div>
   </div>

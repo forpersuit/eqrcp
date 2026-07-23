@@ -1,4 +1,9 @@
 import { Env } from '../types';
+import {
+  clearAdminAuthFailures,
+  isAdminAuthRateLimited,
+  recordAdminAuthFailure
+} from './rate-limit';
 
 export function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") || "";
@@ -72,29 +77,90 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   }
 }
 
+function clientIpFromRequest(request: Request): string {
+  // Prefer explicit X-Forwarded-For when present (tests / reverse proxies), else CF edge IP.
+  const xff = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (xff) return xff;
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-real-ip") ||
+    ""
+  );
+}
+
 /**
  * Admin route guard (docs/admin/api-contract.md):
  * - ADMIN_SECRET unset → 503 fail-closed
  * - missing/wrong secret → 401 (strictly X-Admin-Secret header)
+ * - repeated wrong secrets from same IP → 429 (in-isolate rate limit)
+ * - correct secret always succeeds and clears the bucket (recovery path)
  */
 export async function requireAdminAuth(
   request: Request,
   env: Env,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
+  const clientIp = clientIpFromRequest(request);
+
   if (!env.ADMIN_SECRET) {
     return new Response(
       JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET missing)" }),
       { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+
   const adminSecret = request.headers.get("X-Admin-Secret");
-  if (!adminSecret || adminSecret !== env.ADMIN_SECRET) {
+  // Missing header → 401 without counting (login probes / readiness).
+  if (!adminSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  await ensureDrmTables(env);
-  return null;
+
+  if (adminSecret === env.ADMIN_SECRET) {
+    clearAdminAuthFailures(clientIp);
+    await ensureDrmTables(env);
+    return null;
+  }
+
+  // Wrong secret: rate-limit then 401
+  if (isAdminAuthRateLimited(clientIp)) {
+    return new Response(
+      JSON.stringify({
+        error: "Too many failed admin auth attempts. Try again later.",
+        code: "ADMIN_AUTH_RATE_LIMITED"
+      }),
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Retry-After": "300"
+        }
+      }
+    );
+  }
+  recordAdminAuthFailure(clientIp);
+  // If this failure crossed the threshold, surface 429 immediately.
+  if (isAdminAuthRateLimited(clientIp)) {
+    return new Response(
+      JSON.stringify({
+        error: "Too many failed admin auth attempts. Try again later.",
+        code: "ADMIN_AUTH_RATE_LIMITED"
+      }),
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Retry-After": "300"
+        }
+      }
+    );
+  }
+  return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
