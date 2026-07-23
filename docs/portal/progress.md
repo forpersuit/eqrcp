@@ -87,6 +87,8 @@
 | 2026-07-24 | Pages deploy | 推进中/完成见 commit |
 | 2026-07-24 | git push | 见 commit |
 | 2026-07-24 | Chrome 9222 Portal 冒烟 | 登录页 / 中文 / 未购买 toast / `?email=` 预填 / 结构 Modal — 全绿；截图 `docs/portal/chrome-portal-*.png` |
+| 2026-07-24 | **真实邮箱** `TEST_MAIL_RECEIVER=tmp@301098.xyz` + Chrome | OTP 登录 / 列表 / 解绑 / 退款 Modal / logout；截图 `chrome-portal-real-*.png` |
+| 2026-07-24 | **Sandbox Paddle 真退款** | `EQT-PLUS-20260721-37X60D-FB0D` → adjustment `adj_01ky85pj…` status pending_approval；本地 license **revoked** |
 
 ### E2E 关键摘要（阶段 4 新增）
 
