@@ -44,13 +44,26 @@ export interface SystemErrorLog {
   created_at: string;
 }
 
+export interface AdminAuditLog {
+  id: number;
+  action: 'GENERATE' | 'REVOKE' | 'UNBIND' | 'CLEAR_LOGS' | string;
+  target_type: 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | string;
+  target_id: string | null;
+  details_json: string | null;
+  operator_ip: string | null;
+  created_at: string;
+}
+
 export interface AdminHealthResponse {
   success: boolean;
   status: string;
   timestamp: string;
   metrics: {
     total_licenses: number;
+    active_licenses?: number;
+    today_activations?: number;
     total_error_logs: number;
+    errors_24h?: number;
   };
   config: {
     smtp_configured: boolean;
@@ -59,6 +72,7 @@ export interface AdminHealthResponse {
     db_status: string;
   };
 }
+
 
 export interface GenerateLicenseBody {
   tier: LicenseTier;

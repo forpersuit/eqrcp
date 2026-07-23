@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS activations (
 
 -- Indexing for speed
 CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);
+CREATE INDEX IF NOT EXISTS idx_licenses_email_hash ON licenses(buyer_email_hash);
+CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 
 CREATE TABLE IF NOT EXISTS verification_codes (
     email TEXT PRIMARY KEY,
@@ -53,7 +55,7 @@ CREATE TABLE IF NOT EXISTS unbind_records (
 
 CREATE INDEX IF NOT EXISTS idx_unbind_license ON unbind_records(license_code);
 
--- Admin / ops audit log (also ensured at runtime by ensureAuditLogTable)
+-- Admin / ops error audit log (also ensured at runtime by ensureAuditLogTable)
 CREATE TABLE IF NOT EXISTS system_error_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     level TEXT NOT NULL DEFAULT 'ERROR',       -- 'ERROR', 'WARN', 'CRITICAL'
@@ -64,4 +66,18 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_system_error_logs_created ON system_error_logs(created_at);
+
+-- Admin operation audit log for tracking high-privilege actions (generate, revoke, unbind, clear_logs)
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,                      -- 'GENERATE', 'REVOKE', 'UNBIND', 'CLEAR_LOGS'
+    target_type TEXT,                          -- 'LICENSE', 'ACTIVATION', 'SYSTEM'
+    target_id TEXT,                            -- license_code or activation_id
+    details_json TEXT,
+    operator_ip TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at);
+
 

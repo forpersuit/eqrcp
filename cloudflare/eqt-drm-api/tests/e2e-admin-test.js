@@ -213,9 +213,24 @@ async function runAdminTestSuite() {
   }
   console.log("✓ Server-side error logs filter, total count & clear executed successfully.");
 
+  // 9. Fetch Admin Operation Audit Logs
+  logStep(9, "Fetch Admin Operation Audit Logs (GET /admin/audit-logs)");
+  const auditRes = await makeRequest('/api/v1/admin/audit-logs?limit=20', 'GET', {
+    'X-Admin-Secret': ADMIN_SECRET
+  });
+  console.log("Audit Logs Status:", auditRes.status, "Logs Count:", auditRes.data.logs?.length, "Total:", auditRes.data.total);
+  if (auditRes.status !== 200 || !auditRes.data.success || !Array.isArray(auditRes.data.logs)) {
+    throw new Error(`Fetch audit logs failed: ${JSON.stringify(auditRes.data)}`);
+  }
+  if (auditRes.data.logs.length === 0) {
+    throw new Error(`Expected admin audit logs to be recorded for high-privilege actions, but got 0`);
+  }
+  console.log("✓ Admin operation audit logs successfully queried with actions logged:", auditRes.data.logs.map(l => l.action).join(', '));
+
   console.log("\n==================================================");
   console.log("🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉");
   console.log("==================================================");
+
 }
 
 async function main() {

@@ -5,11 +5,21 @@
 
   interface QuickStats {
     total_licenses: number;
+    active_licenses: number;
+    today_activations: number;
     total_error_logs: number;
+    errors_24h: number;
     db_status: string;
   }
 
-  let stats = $state<QuickStats>({ total_licenses: 0, total_error_logs: 0, db_status: 'checking...' });
+  let stats = $state<QuickStats>({
+    total_licenses: 0,
+    active_licenses: 0,
+    today_activations: 0,
+    total_error_logs: 0,
+    errors_24h: 0,
+    db_status: 'checking...'
+  });
   let loading = $state(true);
 
   async function loadStats() {
@@ -17,7 +27,10 @@
       const data = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
       stats = {
         total_licenses: data.metrics?.total_licenses || 0,
+        active_licenses: data.metrics?.active_licenses || 0,
+        today_activations: data.metrics?.today_activations || 0,
         total_error_logs: data.metrics?.total_error_logs || 0,
+        errors_24h: data.metrics?.errors_24h || 0,
         db_status: data.config?.db_status || 'ok'
       };
     } catch {
@@ -36,7 +49,7 @@
   <div class="header-row">
     <div>
       <h2>控制台全局概览</h2>
-      <p class="subtitle">欢迎来到 EQT 运维管理系统，快速监控全站运营状态</p>
+      <p class="subtitle">欢迎来到 EQT 运维管理系统，快速监控全站运营状态与实时 KPI</p>
     </div>
   </div>
 
@@ -45,7 +58,15 @@
       <div class="stat-icon">🔑</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.total_licenses}</div>
-        <div class="stat-label">已发放全库授权总数</div>
+        <div class="stat-label">全库授权总数（生效中: {stats.active_licenses}）</div>
+      </div>
+    </div>
+
+    <div class="card stat-card">
+      <div class="stat-icon">💻</div>
+      <div>
+        <div class="stat-num">{loading ? '...' : stats.today_activations}</div>
+        <div class="stat-label">今日新增客户端设备激活数</div>
       </div>
     </div>
 
@@ -53,7 +74,7 @@
       <div class="stat-icon">⚠️</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.total_error_logs}</div>
-        <div class="stat-label">待排查系统异常日志</div>
+        <div class="stat-label">待排查异常日志（24h内: {stats.errors_24h}）</div>
       </div>
     </div>
 
@@ -65,6 +86,7 @@
       </div>
     </div>
   </div>
+
 
   <div class="quick-links card">
     <h3>核心业务模块快捷入口</h3>

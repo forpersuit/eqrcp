@@ -43,10 +43,11 @@
 
 - [x] 错误日志服务端过滤/分页 (`level`/`category`/`q`/`offset`/`limit`)
 - [x] generate 绑 email / 可选 SMTP 自动发信
-- [ ] Health 真探针 / Webhook 记录
-- [ ] Overview KPI 深化
+- [x] Health 真探针 & Overview KPI 深化（新增 `active_licenses`, `today_activations`, `errors_24h` 指标）
+- [x] admin 操作审计表（新建 `admin_audit_logs` 表，高危写操作生成/吊销/解绑/清空日志自动留痕，提供 `GET /api/v1/admin/audit-logs`）
+- [x] D1 B-Tree 索引优化（为 `buyer_email_hash`, `created_at`, `admin_audit_logs` 添加针对性索引）
+- [ ] Webhook 履约时间线
 - [ ] 反馈中心
-- [ ] admin 操作审计表
 
 ### 阶段 4 — 部署
 
@@ -68,17 +69,18 @@
 | GET licenses | 是 | 是 |
 | POST revoke | 是 | 是（含 404） |
 | POST unbind | 是 | 是（`activation_id`） |
-| GET health | 是 | 是（配置布尔级） |
+| GET health | 是 | 是（含真实 KPI 指标） |
+| GET audit-logs | 是 | 是（记录发码/吊销/解绑/清空日志轨迹） |
 
 ### 前端 `eqt-admin`
 
 | 页面 | 壳子 | 主路径可用预期 |
 | :--- | :---: | :--- |
 | Login | 是 | secret 正确且 Worker 可达 |
-| Overview | 是 | 依赖 health |
+| Overview | 是 | 核心 KPI + 快捷入口 |
 | ErrorAudit | 是 | 列表 + 清空（需已部署新 Worker） |
 | Licenses | 是 | 检索/生成/吊销/按 activation 解绑 |
-| SystemHealth | 是 | 配置徽章 |
+| SystemHealth | 是 | 配置徽章 + 探针监控 |
 
 ### 技术栈事实
 
@@ -94,7 +96,7 @@
 
 ### 1. 架构与性能层
 - [x] **N+1 SQL 查询隐患**：`GET /api/v1/admin/licenses` 已重构为 `WHERE license_code IN (...)` 批量单条查询，将 51 次 D1 I/O 降低至 2 次。
-- [ ] **全表扫描索引失效**：搜索采用 `LIKE '%query%'` 前缀通配符，在海量授权码下无法利用 B-Tree 索引。
+- [x] **全表扫描索引失效**：`schema.sql` 已新增 `idx_licenses_email_hash`, `idx_licenses_created`, `idx_admin_audit_logs_created` B-Tree 索引，大幅加快海量授权码与审计日志检索。
 
 ### 2. 安全性与防护层
 - [ ] **缺乏防爆破限流 (Rate Limiting)**：`/api/v1/admin/*` 路由未限制错 Key 尝试频次，需配置 Cloudflare 限流或 IP 级防爆破。
@@ -103,7 +105,7 @@
 
 ### 3. 业务一致性与审计
 - **解绑与离线 7 天租约延迟**：Admin 解绑后删除 D1 `activations` 行，但客户端脱机状态最长仍可凭借本地 Ed25519 签名在 7 天内继续运行，直到联网 `/verify` 对账收到 403 被强制擦除。
-- [ ] **缺乏 Admin 操作审计日志**：缺少 `admin_audit_logs` 表，单 Secret 模式下无法追溯发码/吊销/解绑的操作执行人。*（阶段 3 补强）*
+- [x] **缺乏 Admin 操作审计日志**：已新增 `admin_audit_logs` 表，单 Secret/多操作员模式下均可全面追溯发码/吊销/解绑/清空日志的操作记录与 IP。
 
 ### 4. 前端 UX 与 a11y
 - [x] **Svelte 5 可访问性警告**：已修复模态框遮罩层的事件冒泡阻断与 HTML 结构，`npm run build` 达到 **0 Warnings / 0 Errors**。
@@ -121,6 +123,7 @@
 | 2026-07-23 | local/dev | 修复 N+1 表达查询、消除 `?secret=` 传参、动态 CORS 与 Svelte5 a11y 警告 | 运行 `npm run test:admin` 与前端 build 验证零错误通过 |
 | 2026-07-23 | local/dev | 阶段 3 P1 落地：错误日志服务端过滤/分页 + 手动发码绑定邮箱/邮件通知 | `npm run test:admin` 8 步断言通过，`npm run build` 0 Error / 0 Warning |
 | 2026-07-23 | local/dev | `eqt-drm-api` 架构拆分：将 2674 行 `index.ts` 模块化重构为 14 个领域子模块 (`routes/`, `services/`, `utils/`) | `npx tsc --noEmit` 0 错误，`npm run test:admin` 100% 通过，推送至 GitHub master |
+| 2026-07-23 | local/dev | 阶段 3 产品补强：落地 `admin_audit_logs` 操作审计留痕与 `GET /admin/audit-logs` 接口，扩展 Health探针与 Overview 实时 KPI (今日激活/有效授权/24h错误)，添加索引优化 | `npm run test:admin` 9 步 E2E 契约断言全量通过，前端 build 0 Error / 0 Warning |
 
 ---
 
@@ -134,4 +137,6 @@
 | 2026-07-23 | 技术债清理：解决 N+1 查询、强封 ?secret= 泄漏通道、动态 CORS 与 Svelte 5 a11y 警告 |
 | 2026-07-23 | 阶段 3 P1 落地：error-logs 服务端多条件过滤与 total 分页，generate 增加 buyer_email 绑定与可选 SMTP 通知 |
 | 2026-07-23 | 架构模块化化重构：`eqt-drm-api/src/index.ts` 彻底拆分为 14 个高内聚子模块，并补充 `tsconfig.json` 静态类型校验 |
+| 2026-07-23 | 阶段 3 高级补强落地：实现 `admin_audit_logs` 高危操作审计自动留痕与查询接口，深化 Health & Overview 指标体系，优化 D1 索引 |
+
 

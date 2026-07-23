@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { requireAdminAuth } from '../utils/auth';
 import { ensureAuditLogTable } from '../utils/error-logger';
+import { ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
 import { sendDRMEmail } from '../services/smtp';
 
 export async function handleAdminRoutes(
@@ -10,6 +11,8 @@ export async function handleAdminRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
+  const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+
   // 1. Admin Error Logs Query Endpoint (Server-Side Filtering & Pagination)
   if (url.pathname === "/api/v1/admin/error-logs" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
@@ -68,7 +71,52 @@ export async function handleAdminRoutes(
     if (denied) return denied;
     await ensureAuditLogTable(env);
     await env.DB.prepare("DELETE FROM system_error_logs").run();
+    ctx.waitUntil(logAdminAudit(env, 'CLEAR_LOGS', 'SYSTEM', null, {}, clientIp));
     return new Response(JSON.stringify({ success: true, message: "System error logs cleared successfully" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 2.5 Admin Audit Logs Query Endpoint
+  if (url.pathname === "/api/v1/admin/audit-logs" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureAdminAuditLogTable(env);
+
+    const action = (url.searchParams.get("action") || "").trim();
+    const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
+    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (action && action.toUpperCase() !== "ALL") {
+      conditions.push("action = ?");
+      params.push(action.toUpperCase());
+    }
+    if (queryStr) {
+      conditions.push("(target_id LIKE ? OR details_json LIKE ? OR operator_ip LIKE ?)");
+      params.push(`%${queryStr}%`, `%${queryStr}%`, `%${queryStr}%`);
+    }
+
+    const whereClause = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
+
+    const countSql = "SELECT COUNT(*) as total FROM admin_audit_logs" + whereClause;
+    const countRes = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
+    const total = countRes?.total || 0;
+
+    const logsSql = "SELECT * FROM admin_audit_logs" + whereClause + " ORDER BY id DESC LIMIT ? OFFSET ?";
+    const logsRes = await env.DB.prepare(logsSql).bind(...params, limit, offset).all();
+
+    return new Response(JSON.stringify({
+      success: true,
+      logs: logsRes.results || [],
+      total,
+      limit,
+      offset
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
@@ -126,6 +174,8 @@ export async function handleAdminRoutes(
       cleanEmail || null,
       new Date().toISOString()
     ).run();
+
+    ctx.waitUntil(logAdminAudit(env, 'GENERATE', 'LICENSE', licenseCode, { tier, max_devices: maxDev, buyer_email: cleanEmail || null }, clientIp));
 
     let emailSent = false;
     if (send_email && cleanEmail) {
@@ -267,6 +317,8 @@ export async function handleAdminRoutes(
     }
 
     await env.DB.prepare("UPDATE licenses SET status = 'revoked' WHERE license_code = ?").bind(license_code).run();
+    ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {}, clientIp));
+
     return new Response(JSON.stringify({
       success: true,
       message: `License ${license_code} revoked successfully`,
@@ -328,6 +380,8 @@ export async function handleAdminRoutes(
       await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code).run();
     }
 
+    ctx.waitUntil(logAdminAudit(env, 'UNBIND', unboundActivationId ? 'ACTIVATION' : 'LICENSE', unboundActivationId ? String(unboundActivationId) : license_code, { license_code, activation_id: unboundActivationId }, clientIp));
+
     return new Response(JSON.stringify({
       success: true,
       message: `Devices for license ${license_code} unbound successfully`,
@@ -339,7 +393,7 @@ export async function handleAdminRoutes(
     });
   }
 
-  // 7. Admin Endpoint: System Health Probe
+  // 7. Admin Endpoint: System Health Probe & Enriched KPI Metrics
   if (url.pathname === "/api/v1/admin/health" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
@@ -347,12 +401,28 @@ export async function handleAdminRoutes(
     let dbStatus = "ok";
     let errorCount = 0;
     let licenseCount = 0;
+    let activeLicenseCount = 0;
+    let todayActivationCount = 0;
+    let errors24hCount = 0;
+
     try {
       const licCountRes = await env.DB.prepare("SELECT count(*) as count FROM licenses").first<{ count: number }>();
       licenseCount = licCountRes?.count || 0;
+
+      const activeLicRes = await env.DB.prepare("SELECT count(*) as count FROM licenses WHERE status = 'active'").first<{ count: number }>();
+      activeLicenseCount = activeLicRes?.count || 0;
+
+      const todayStart = new Date().toISOString().slice(0, 10);
+      const todayActRes = await env.DB.prepare("SELECT count(*) as count FROM activations WHERE activated_at >= ?").bind(todayStart).first<{ count: number }>();
+      todayActivationCount = todayActRes?.count || 0;
+
       await ensureAuditLogTable(env);
       const errCountRes = await env.DB.prepare("SELECT count(*) as count FROM system_error_logs").first<{ count: number }>();
       errorCount = errCountRes?.count || 0;
+
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const err24hRes = await env.DB.prepare("SELECT count(*) as count FROM system_error_logs WHERE created_at >= ?").bind(dayAgo).first<{ count: number }>();
+      errors24hCount = err24hRes?.count || 0;
     } catch (err) {
       dbStatus = "error";
     }
@@ -363,10 +433,14 @@ export async function handleAdminRoutes(
       timestamp: new Date().toISOString(),
       metrics: {
         total_licenses: licenseCount,
-        total_error_logs: errorCount
+        active_licenses: activeLicenseCount,
+        today_activations: todayActivationCount,
+        total_error_logs: errorCount,
+        errors_24h: errors24hCount
       },
       config: {
         db_connected: dbStatus === "ok",
+        db_status: dbStatus,
         ed25519_key_configured: Boolean(env.ED25519_PRIVATE_KEY),
         admin_secret_configured: Boolean(env.ADMIN_SECRET),
         paddle_webhook_configured: Boolean(env.PADDLE_WEBHOOK_SECRET),
@@ -380,3 +454,4 @@ export async function handleAdminRoutes(
 
   return null;
 }
+
