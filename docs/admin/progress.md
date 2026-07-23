@@ -90,23 +90,23 @@
 
 ## P0/P1 已知缺陷与技术债 (Known Issues & Technical Debt)
 
-基于第一性原理对 P0/P1 落地实现的分析与审查，记录以下已知问题及后续阶段优化目标：
+基于第一性原理对 P0/P1 落地实现的分析与审查，状态更新如下：
 
 ### 1. 架构与性能层
-- **N+1 SQL 查询隐患**：`GET /api/v1/admin/licenses` 检索列表时对每条记录发起单独的 `activations` 查询。拉取 50 条记录将触发 51 次 D1 I/O。*（阶段 3 计划：优化为 IN 批量查询或 JOIN 组装）*
-- **全表扫描索引失效**：搜索采用 `LIKE '%query%'` 前缀通配符，在海量授权码下无法利用 B-Tree 索引。
+- [x] **N+1 SQL 查询隐患**：`GET /api/v1/admin/licenses` 已重构为 `WHERE license_code IN (...)` 批量单条查询，将 51 次 D1 I/O 降低至 2 次。
+- [ ] **全表扫描索引失效**：搜索采用 `LIKE '%query%'` 前缀通配符，在海量授权码下无法利用 B-Tree 索引。
 
 ### 2. 安全性与防护层
-- **缺乏防爆破限流 (Rate Limiting)**：`/api/v1/admin/*` 路由未限制错 Key 尝试频次，需配置 Cloudflare 限流或 IP 级防爆破。
-- **废弃 Query `?secret=` 传参风险**：代码中保留兼容了 URL Query 传参，在代理服务器与浏览器历史中存在泄漏隐患。*（阶段 4 部署前彻底收锁仅允许 Header）*
-- **CORS 域名未收缩**：响应头包含 `Access-Control-Allow-Origin: *`。生产环境部署需收紧为指定 Admin 域名。
+- [ ] **缺乏防爆破限流 (Rate Limiting)**：`/api/v1/admin/*` 路由未限制错 Key 尝试频次，需配置 Cloudflare 限流或 IP 级防爆破。
+- [x] **废弃 Query `?secret=` 传参风险**：已在 `requireAdminAuth` 中彻底移除 `?secret=` 支持，强制要求 Header `X-Admin-Secret`，消除 URL/日志泄漏隐患。
+- [x] **CORS 域名未收缩**：已实现 `getCorsHeaders(request)` 动态域名匹配，限制仅允许官方域名与本地开发源。
 
 ### 3. 业务一致性与审计
 - **解绑与离线 7 天租约延迟**：Admin 解绑后删除 D1 `activations` 行，但客户端脱机状态最长仍可凭借本地 Ed25519 签名在 7 天内继续运行，直到联网 `/verify` 对账收到 403 被强制擦除。
-- **缺乏 Admin 操作审计日志**：缺少 `admin_audit_logs` 表，单 Secret 模式下无法追溯发码/吊销/解绑的操作执行人。*（阶段 3 补强）*
+- [ ] **缺乏 Admin 操作审计日志**：缺少 `admin_audit_logs` 表，单 Secret 模式下无法追溯发码/吊销/解绑的操作执行人。*（阶段 3 补强）*
 
 ### 4. 前端 UX 与 a11y
-- **Svelte 5 可访问性警告**：`npm run build` 提示遮罩层点击事件缺乏键盘响应 handlers（如 `Esc` 退出），部分 `label` 未显式绑定控件。
+- [x] **Svelte 5 可访问性警告**：已修复模态框遮罩层的事件冒泡阻断与 HTML 结构，`npm run build` 达到 **0 Warnings / 0 Errors**。
 
 ---
 
@@ -116,8 +116,9 @@
 
 | 日期 | 环境 | 做了什么 | 结果 |
 | :--- | :--- | :--- | :--- |
-| 2026-07-23 | local/dev | `cd cloudflare/eqt-admin && npm run build` | 编译通过，Dist 产物已生成，TS/Svelte5 校验 0 Error |
-| 2026-07-23 | local/dev | 新增 `cloudflare/eqt-drm-api/tests/e2e-admin-test.js` 并配置 `npm run test:admin` | 覆盖鉴权拦截、Health 探针、生成授权码、检索排序、按 activation_id 解绑、吊销 404/成功及日志清空契约链路 |
+| 2026-07-23 | local/dev | `cd cloudflare/eqt-admin && npm run build` | 编译通过，Dist 产物已生成，TS/Svelte5 校验 0 Error / 0 Warning |
+| 2026-07-23 | local/dev | 新增 `cloudflare/eqt-drm-api/tests/e2e-admin-test.js` 并配置 `npm run test:admin` | 自动唤起本地 wrangler dev，8 步契约断言全量 100% 通过 |
+| 2026-07-23 | local/dev | 修复 N+1 表达查询、消除 `?secret=` 传参、动态 CORS 与 Svelte5 a11y 警告 | 运行 `npm run test:admin` 与前端 build 验证零错误通过 |
 
 ---
 
@@ -128,3 +129,4 @@
 | 2026-07-23 | 初版 api-contract：冻结 activation_id、created_at 排序、禁用虚构设备字段 |
 | 2026-07-23 | 阶段 1 落地：requireAdminAuth、CORS DELETE、licenses/unbind/revoke 修复；前端对齐 |
 | 2026-07-23 | 阶段 2 落地：新增 Admin 契约 E2E 校验脚本 `tests/e2e-admin-test.js` 并完成前端构建及验证日志记录 |
+| 2026-07-23 | 技术债清理：解决 N+1 查询、强封 ?secret= 泄漏通道、动态 CORS 与 Svelte 5 a11y 警告 |

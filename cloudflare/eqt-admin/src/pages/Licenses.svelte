@@ -271,7 +271,8 @@
 
 {#if showGenerateModal}
   <div class="modal-overlay" onclick={() => (showGenerateModal = false)} role="presentation">
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
       <h3>手动生成授权码</h3>
       <form onsubmit={handleGenerate} class="gen-form">
         <div class="form-group">
@@ -318,7 +319,8 @@
 
 {#if showRevokeConfirm && selectedLicense}
   <div class="modal-overlay" onclick={() => (showRevokeConfirm = false)} role="presentation">
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
       <h3 class="danger-title">高危操作确认：吊销授权</h3>
       <p class="confirm-text">
         确定要吊销授权码 <strong>{selectedLicense.license_code}</strong> 吗？<br />
@@ -336,7 +338,8 @@
 
 {#if showUnbindConfirm && selectedLicense}
   <div class="modal-overlay" onclick={() => (showUnbindConfirm = false)} role="presentation">
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
       <h3>设备解绑管理</h3>
       <p class="subtitle">授权码: {selectedLicense.license_code}</p>
 

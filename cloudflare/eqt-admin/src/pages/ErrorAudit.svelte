@@ -150,30 +150,31 @@
 
 {#if selectedLog}
   <div class="modal-overlay" onclick={() => (selectedLog = null)} role="presentation">
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
       <div class="modal-header">
         <h3>错误日志详情 #{selectedLog.id}</h3>
         <span class={`badge badge-${selectedLog.level.toLowerCase()}`}>{selectedLog.level}</span>
       </div>
       
       <div class="detail-section">
-        <label>发生时间:</label>
+        <span class="detail-label">发生时间:</span>
         <div>{new Date(selectedLog.created_at).toLocaleString()}</div>
       </div>
 
       <div class="detail-section">
-        <label>分类 (Category):</label>
+        <span class="detail-label">分类 (Category):</span>
         <div>{selectedLog.category}</div>
       </div>
 
       <div class="detail-section">
-        <label>异常信息:</label>
+        <span class="detail-label">异常信息:</span>
         <pre class="code-block">{selectedLog.error_message}</pre>
       </div>
 
       {#if selectedLog.context_json}
         <div class="detail-section">
-          <label>上下文 JSON (Context):</label>
+          <span class="detail-label">上下文 JSON (Context):</span>
           <pre class="code-block json-block">{selectedLog.context_json}</pre>
         </div>
       {/if}
@@ -187,7 +188,8 @@
 
 {#if showClearConfirm}
   <div class="modal-overlay" onclick={() => (showClearConfirm = false)} role="presentation">
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
       <h3 style="color: var(--accent-danger);">确认清空错误日志</h3>
       <p class="confirm-text">
         确定要清空 <strong>全部</strong> system_error_logs 吗？此操作无法撤销。
@@ -318,7 +320,7 @@
     margin-bottom: 1rem;
   }
 
-  .detail-section label {
+  .detail-section .detail-label {
     font-size: 0.8rem;
     color: var(--text-muted);
     display: block;

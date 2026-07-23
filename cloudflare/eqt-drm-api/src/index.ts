@@ -209,32 +209,92 @@ async function logSystemError(
   }
 }
 
+function getCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("Origin") || "";
+  let allowOrigin = "*";
+  if (origin && (
+    origin.includes("eqt.net.im") ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1")
+  )) {
+    allowOrigin = origin;
+  }
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Secret",
+  };
+}
+
+async function ensureDrmTables(env: Env): Promise<void> {
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS licenses (
+            license_code TEXT PRIMARY KEY,
+            tier TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            max_devices INTEGER DEFAULT 2,
+            expires_at TEXT,
+            duration_days INTEGER DEFAULT NULL,
+            buyer_email_hash TEXT DEFAULT NULL,
+            buyer_email TEXT DEFAULT NULL,
+            paddle_transaction_id TEXT DEFAULT NULL,
+            paddle_subscription_id TEXT DEFAULT NULL,
+            created_at TEXT NOT NULL
+        )
+      `),
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS activations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            license_code TEXT NOT NULL,
+            uuid_hash TEXT,
+            cpu_hash TEXT,
+            disk_hash TEXT,
+            device_id TEXT DEFAULT NULL,
+            activated_at TEXT NOT NULL
+        )
+      `),
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS system_error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL DEFAULT 'ERROR',
+            category TEXT NOT NULL,
+            error_message TEXT NOT NULL,
+            context_json TEXT,
+            created_at TEXT NOT NULL
+        )
+      `)
+    ]);
+  } catch (err) {
+    console.error("Failed to ensure DRM D1 tables:", err);
+  }
+}
+
 /**
  * Admin route guard (docs/admin/api-contract.md):
  * - ADMIN_SECRET unset → 503 fail-closed
- * - missing/wrong secret → 401
- * Query ?secret= is deprecated but still accepted for local ops.
+ * - missing/wrong secret → 401 (strictly X-Admin-Secret header)
  */
-function requireAdminAuth(
+async function requireAdminAuth(
   request: Request,
   env: Env,
   corsHeaders: Record<string, string>
-): Response | null {
+): Promise<Response | null> {
   if (!env.ADMIN_SECRET) {
     return new Response(
       JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET missing)" }),
       { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
-  const url = new URL(request.url);
-  const adminSecret =
-    request.headers.get("X-Admin-Secret") || url.searchParams.get("secret");
+  const adminSecret = request.headers.get("X-Admin-Secret");
   if (!adminSecret || adminSecret !== env.ADMIN_SECRET) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  await ensureDrmTables(env);
   return null;
 }
 
@@ -918,12 +978,8 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // CORS Headers (DELETE required for admin error-log clear)
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Secret",
-    };
+    // Dynamic CORS Headers with Origin domain matching
+    const corsHeaders = getCorsHeaders(request);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
@@ -932,7 +988,7 @@ export default {
     try {
       // Admin Error Logs Query Endpoint
       if (url.pathname === "/api/v1/admin/error-logs" && request.method === "GET") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
         await ensureAuditLogTable(env);
         const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
@@ -951,7 +1007,7 @@ export default {
         (url.pathname === "/api/v1/admin/error-logs" && request.method === "DELETE") ||
         (url.pathname === "/api/v1/admin/error-logs/clear" && request.method === "POST")
       ) {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
         await ensureAuditLogTable(env);
         await env.DB.prepare("DELETE FROM system_error_logs").run();
@@ -1881,7 +1937,7 @@ export default {
 
       // 2. Admin Endpoint: Manual license generation (supports /generate and /generate-license)
       if ((url.pathname === "/api/v1/admin/generate" || url.pathname === "/api/v1/admin/generate-license") && request.method === "POST") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
 
         const body: any = await request.json();
@@ -1939,7 +1995,7 @@ export default {
 
       // Admin Endpoint: Search all licenses (sort by created_at; real activations columns)
       if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
 
         const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
@@ -1967,18 +2023,31 @@ export default {
         const res = await env.DB.prepare(sql).bind(...params).all();
 
         const rawLicenses: any[] = res.results || [];
-        const licensesWithDevices = await Promise.all(
-          rawLicenses.map(async (lic) => {
-            const actRes = await env.DB.prepare(
-              "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
-            ).bind(lic.license_code).all();
+        let licensesWithDevices: any[] = [];
+
+        if (rawLicenses.length > 0) {
+          const licenseCodes = rawLicenses.map(lic => lic.license_code);
+          const placeholders = licenseCodes.map(() => '?').join(',');
+          const actSql = `SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code IN (${placeholders}) ORDER BY id ASC`;
+          const actRes = await env.DB.prepare(actSql).bind(...licenseCodes).all();
+          const rawActivations: any[] = actRes.results || [];
+
+          const activationsMap = new Map<string, any[]>();
+          for (const act of rawActivations) {
+            const list = activationsMap.get(act.license_code) || [];
+            list.push(act);
+            activationsMap.set(act.license_code, list);
+          }
+
+          licensesWithDevices = rawLicenses.map((lic) => {
+            const acts = activationsMap.get(lic.license_code) || [];
             return {
               ...lic,
-              active_devices_count: actRes.results?.length || 0,
-              activations: actRes.results || []
+              active_devices_count: acts.length,
+              activations: acts
             };
-          })
-        );
+          });
+        }
 
         return new Response(JSON.stringify({ success: true, licenses: licensesWithDevices }), {
           status: 200,
@@ -1988,7 +2057,7 @@ export default {
 
       // Admin Endpoint: Revoke license (supports /revoke and /revoke-license)
       if ((url.pathname === "/api/v1/admin/revoke" || url.pathname === "/api/v1/admin/revoke-license") && request.method === "POST") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
 
         const body: any = await request.json();
@@ -2025,7 +2094,7 @@ export default {
 
       // Admin Endpoint: Unbind devices by activation_id (or clear all for license)
       if (url.pathname === "/api/v1/admin/unbind" && request.method === "POST") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
 
         const body: any = await request.json();
@@ -2087,7 +2156,7 @@ export default {
 
       // Admin Endpoint: System Health Probe
       if (url.pathname === "/api/v1/admin/health" && request.method === "GET") {
-        const denied = requireAdminAuth(request, env, corsHeaders);
+        const denied = await requireAdminAuth(request, env, corsHeaders);
         if (denied) return denied;
 
         let dbStatus = "ok";

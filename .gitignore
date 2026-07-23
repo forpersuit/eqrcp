@@ -65,6 +65,7 @@ currentStatus
 
 
 node_modules
+.wrangler/
 .codegraph
 .commandcode
 
