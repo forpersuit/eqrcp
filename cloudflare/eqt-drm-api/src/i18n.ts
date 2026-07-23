@@ -134,6 +134,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Error al procesar el reembolso",
     de: "Rückerstattung fehlgeschlagen",
     fr: "Échec du traitement du remboursement"
+  },
+  license_not_active: {
+    zh: "该授权当前不可用（已吊销或暂停），无法解绑设备",
+    en: "License is not active (revoked or suspended); unbind is not allowed",
+    ja: "このライセンスは無効または停止中のため、デバイス解除できません",
+    ko: "라이선스가 활성 상태가 아니어서 기기 해제를 할 수 없습니다",
+    es: "La licencia no está activa; no se puede desvincular el dispositivo",
+    de: "Lizenz ist nicht aktiv; Entkopplung nicht erlaubt",
+    fr: "Licence inactive ; dissociation non autorisée"
+  },
+  too_many_verify_attempts: {
+    zh: "验证码错误次数过多，请 15 分钟后再试",
+    en: "Too many failed verification attempts. Please try again in 15 minutes.",
+    ja: "認証の失敗が多すぎます。15分後に再度お試しください。",
+    ko: "인증 실패 횟수가 너무 많습니다. 15분 후에 다시 시도해 주세요.",
+    es: "Demasiados intentos fallidos. Espere 15 minutos e inténtelo de nuevo.",
+    de: "Zu viele fehlgeschlagene Versuche. Bitte in 15 Minuten erneut versuchen.",
+    fr: "Trop de tentatives échouées. Réessayez dans 15 minutes."
   }
 };
 
@@ -448,4 +466,101 @@ export const DEVICE_NOTIFICATION_I18N: Record<string, {
 export function getDeviceNoticeTemplate(lang: string) {
   const norm = (lang || 'en').toLowerCase().substring(0, 2);
   return DEVICE_NOTIFICATION_I18N[norm] || DEVICE_NOTIFICATION_I18N['zh'] || DEVICE_NOTIFICATION_I18N['en'];
+}
+
+/** Portal self-service refund → revoke notification (7 languages). */
+export const REFUND_REVOKE_EMAIL_I18N: Record<string, {
+  subject: string;
+  title: string;
+  body: (lic: string, tier: string) => string;
+}> = {
+  zh: {
+    subject: "【EQT】许可证授权吊销与退款通知",
+    title: "您的 EQT 许可证授权已吊销",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">您的退款申请已提交并处理，以下授权已被立即吊销：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>套餐：</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>激活码：</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>状态：</strong> 已吊销</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">已激活设备将在下次联网对账（或最迟 7 天租约到期）时自动降级为免费版。退款到账时间以支付渠道为准。</p>`
+  },
+  en: {
+    subject: "[EQT] License Revoked — Refund Notification",
+    title: "Your EQT license has been revoked",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Your refund request has been submitted. The following license is revoked immediately:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Plan:</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>License:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>Status:</strong> Revoked</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Activated devices will downgrade on the next online sync (or within the 7-day offline grace period). Refund timing depends on your payment provider.</p>`
+  },
+  ja: {
+    subject: "【EQT】ライセンス失効・返金のお知らせ",
+    title: "EQT ライセンスが失効しました",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">返金申請を受け付け、以下のライセンスを直ちに失効しました：</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>プラン：</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>ライセンス：</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>状態：</strong> 失効</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">アクティブな端末は次回のオンライン同期（または最大7日間のオフライン猶予後）に無料版へ降格します。</p>`
+  },
+  ko: {
+    subject: "【EQT】라이선스 취소 및 환불 안내",
+    title: "EQT 라이선스가 취소되었습니다",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">환불 요청이 접수되어 다음 라이선스가 즉시 취소되었습니다:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>요금제:</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>라이선스:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>상태:</strong> 취소됨</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">활성화된 기기는 다음 온라인 동기화(또는 최대 7일 오프라인 유예 후)에 무료 버전으로 전환됩니다.</p>`
+  },
+  es: {
+    subject: "[EQT] Licencia revocada — Aviso de reembolso",
+    title: "Su licencia EQT ha sido revocada",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Su solicitud de reembolso fue procesada. La siguiente licencia queda revocada de inmediato:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Plan:</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Licencia:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>Estado:</strong> Revocada</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Los dispositivos activados volverán a la versión gratuita en la próxima sincronización (o en el plazo de gracia de 7 días).</p>`
+  },
+  de: {
+    subject: "[EQT] Lizenz widerrufen — Erstattungsbenachrichtigung",
+    title: "Ihre EQT-Lizenz wurde widerrufen",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Ihre Erstattungsanfrage wurde übermittelt. Die folgende Lizenz ist sofort widerrufen:</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Tarif:</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Lizenz:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>Status:</strong> Widerrufen</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Aktivierte Geräte werden bei der nächsten Online-Synchronisation (oder spätestens nach 7 Tagen Offline-Grace) auf die Free-Version zurückgestuft.</p>`
+  },
+  fr: {
+    subject: "[EQT] Licence révoquée — Notification de remboursement",
+    title: "Votre licence EQT a été révoquée",
+    body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Votre demande de remboursement a été prise en compte. La licence suivante est révoquée immédiatement :</p>
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Offre :</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Licence :</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>Statut :</strong> Révoquée</p>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">Les appareils activés repasseront en version gratuite à la prochaine synchronisation (ou sous 7 jours de grâce hors ligne).</p>`
+  }
+};
+
+export function getRefundRevokeEmailTemplate(lang: string) {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  return REFUND_REVOKE_EMAIL_I18N[norm] || REFUND_REVOKE_EMAIL_I18N['en'];
 }

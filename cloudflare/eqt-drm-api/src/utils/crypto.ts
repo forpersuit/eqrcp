@@ -1,3 +1,15 @@
+/** Storage purpose for verification_codes PK isolation (portal vs checkout). */
+export type VerificationPurpose = "portal" | "checkout";
+
+/**
+ * Composite storage key for verification_codes.email column.
+ * Prevents portal login codes from overwriting checkout codes (and vice versa).
+ */
+export function verificationStorageKey(purpose: VerificationPurpose, email: string): string {
+  const norm = (email || "").trim().toLowerCase();
+  return `${purpose}:${norm}`;
+}
+
 /** SHA-256 hex digest of a UTF-8 string (buyer email hashing). */
 export async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));

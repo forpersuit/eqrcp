@@ -563,7 +563,8 @@
             licenses: [],
             refundPendingCode: null,
             unbindPendingData: null,
-            timer: null
+            timer: null,
+            refundInFlight: false
         };
 
         const langNames = {
@@ -1015,10 +1016,14 @@
             box.classList.remove('scale-100');
         }
 
-        // Confirm ok
+        // Confirm ok (single-flight lock — prevent double refund clicks)
         async function handleConfirmRefund() {
             const license = state.refundPendingCode;
-            if (!license) return;
+            if (!license || state.refundInFlight) return;
+
+            state.refundInFlight = true;
+            const okBtn = document.getElementById('confirm-ok-btn');
+            if (okBtn) okBtn.disabled = true;
 
             hideConfirmModal();
             showToast(translations[state.lang].refund_pending);
@@ -1043,6 +1048,9 @@
 
             } catch (err) {
                 showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+            } finally {
+                state.refundInFlight = false;
+                if (okBtn) okBtn.disabled = false;
             }
         }
 

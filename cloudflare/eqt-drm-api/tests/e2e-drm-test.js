@@ -262,10 +262,12 @@ async function runFullDrmTestSuite() {
     }
     console.log("✓ Cross-user unbind correctly rejected with ownership guard.");
 
-    // 10. Portal send-code 60s rate limit (inject recent code; no real SMTP for second call)
+    // 10. Portal send-code 60s rate limit (inject recent purpose-prefixed code)
     logStep(10, "Portal Send-Code 60s Rate Limit");
+    const portalStorageKey = `portal:${testEmail}`;
+    const checkoutStorageKey = `checkout:${testEmail}`;
     const rateCodeExp = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-    execWranglerSQL(`INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES ('${testEmail}', '111111', '${rateCodeExp}', '${nowIso}');`);
+    execWranglerSQL(`INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES ('${portalStorageKey}', '111111', '${rateCodeExp}', '${nowIso}');`);
     const rateLimitRes = await makeRequest('/api/v1/auth/send-code', {}, {
       email: testEmail,
       lang: 'zh'
@@ -276,16 +278,88 @@ async function runFullDrmTestSuite() {
     }
     console.log("✓ Portal send-code 60s rate limit enforced (429).");
 
-    // 11. Logout invalidates session
-    logStep(11, "Portal Logout Invalidates Session");
-    const logoutRes = await makeRequest('/api/v1/auth/logout', { 'Authorization': `Bearer ${testToken}` }, {});
+    // 11. Portal vs checkout verification_codes isolation
+    logStep(11, "Portal/Checkout verification code key isolation");
+    execWranglerSQL(`INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES ('${portalStorageKey}', '654321', '${rateCodeExp}', '${nowIso}');`);
+    execWranglerSQL(`INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES ('${checkoutStorageKey}', '123456', '${rateCodeExp}', '${nowIso}');`);
+    const bothKeys = execWranglerJSON(`SELECT email, code FROM verification_codes WHERE email IN ('${portalStorageKey}', '${checkoutStorageKey}') ORDER BY email;`);
+    const keyRows = bothKeys[0].results || [];
+    if (keyRows.length !== 2) {
+      throw new Error("Expected both portal: and checkout: verification rows, got: " + JSON.stringify(keyRows));
+    }
+    // Consuming portal code must not delete checkout code
+    const portalVerifyOk = await makeRequest('/api/v1/auth/verify-code', {}, {
+      email: testEmail,
+      code: '654321',
+      lang: 'zh'
+    });
+    if (portalVerifyOk.status !== 200 || !portalVerifyOk.data.session_token) {
+      throw new Error("Portal verify with isolated code failed: " + JSON.stringify(portalVerifyOk.data));
+    }
+    const checkoutStill = execWranglerJSON(`SELECT code FROM verification_codes WHERE email = '${checkoutStorageKey}';`);
+    if (!checkoutStill[0].results || checkoutStill[0].results.length !== 1 || checkoutStill[0].results[0].code !== '123456') {
+      throw new Error("Checkout verification code was overwritten/deleted by portal verify!");
+    }
+    // Prefer freshly issued token for remaining portal tests
+    const isolatedToken = portalVerifyOk.data.session_token;
+    console.log("✓ Portal and checkout verification codes are storage-isolated.");
+
+    // 12. Unbind rejected when license is not active
+    logStep(12, "Unbind rejected for revoked license");
+    execWranglerSQL(`UPDATE licenses SET status = 'revoked', buyer_email_hash = '${testEmailHash}', buyer_email = '${testEmail}' WHERE license_code = '${foreignLic}';`);
+    const revokedActs = execWranglerJSON(`SELECT id FROM activations WHERE license_code = '${foreignLic}' LIMIT 1;`);
+    const revokedActId = revokedActs[0].results[0].id;
+    const revokedUnbind = await makeRequest('/api/v1/user/unbind-device', { 'Authorization': `Bearer ${isolatedToken}` }, {
+      license_code: foreignLic,
+      activation_id: revokedActId,
+      lang: 'zh'
+    });
+    console.log("Revoked-license Unbind Status:", revokedUnbind.status, "Error:", revokedUnbind.data);
+    if (revokedUnbind.status !== 403 || !String(revokedUnbind.data.error || '').includes("不可用")) {
+      throw new Error("Unbind on revoked license should be 403 license_not_active: " + JSON.stringify(revokedUnbind.data));
+    }
+    console.log("✓ Unbind correctly blocked when license is not active.");
+
+    // 13. OTP verify failure rate limit (8 fails → 429)
+    logStep(13, "Portal verify-code failure rate limit");
+    const verifyTargetEmail = 'otp-bruteforce-e2e@eqt.im';
+    // Purchase fixture so send-code would be allowed; we only hit verify with wrong codes
+    execWranglerSQL(`DELETE FROM verification_codes WHERE email = 'portal:${verifyTargetEmail}';`);
+    let lastVerifyStatus = 0;
+    for (let i = 0; i < 8; i++) {
+      const failRes = await makeRequest('/api/v1/auth/verify-code', {}, {
+        email: verifyTargetEmail,
+        code: '000000',
+        lang: 'zh'
+      });
+      lastVerifyStatus = failRes.status;
+      if (failRes.status !== 400) {
+        throw new Error(`Expected 400 on wrong OTP attempt ${i + 1}, got ${failRes.status}: ${JSON.stringify(failRes.data)}`);
+      }
+    }
+    const blockedRes = await makeRequest('/api/v1/auth/verify-code', {}, {
+      email: verifyTargetEmail,
+      code: '000000',
+      lang: 'zh'
+    });
+    console.log("OTP brute-force after 8 fails Status:", blockedRes.status, "Error:", blockedRes.data);
+    if (blockedRes.status !== 429 || !String(blockedRes.data.error || '').includes("15")) {
+      throw new Error("Expected 429 after 8 wrong verify attempts, got: " + JSON.stringify(blockedRes.data) + " last400=" + lastVerifyStatus);
+    }
+    console.log("✓ Portal verify-code failure rate limit enforced (429 after 8 fails).");
+
+    // 14. Logout invalidates session
+    logStep(14, "Portal Logout Invalidates Session");
+    const logoutRes = await makeRequest('/api/v1/auth/logout', { 'Authorization': `Bearer ${isolatedToken}` }, {});
     if (logoutRes.status !== 200 || !logoutRes.data.success) {
       throw new Error("Logout failed: " + JSON.stringify(logoutRes.data));
     }
-    const licensesAfterLogout = await makeRequest('/api/v1/user/licenses', { 'Authorization': `Bearer ${testToken}` }, null, 'GET');
+    const licensesAfterLogout = await makeRequest('/api/v1/user/licenses', { 'Authorization': `Bearer ${isolatedToken}` }, null, 'GET');
     if (licensesAfterLogout.status !== 401) {
       throw new Error("Session should be invalid after logout, got: " + licensesAfterLogout.status);
     }
+    // Also clear original fixture token if still present
+    await makeRequest('/api/v1/auth/logout', { 'Authorization': `Bearer ${testToken}` }, {});
     console.log("✓ Logout deleted session; subsequent licenses call returns 401.");
 
     console.log("\n==================================================");
@@ -298,7 +372,7 @@ async function runFullDrmTestSuite() {
       execWranglerSQL(`DELETE FROM unbind_records WHERE license_code IN ('${testLic}', '${foreignLic}');`);
       execWranglerSQL(`DELETE FROM activations WHERE license_code IN ('${testLic}', '${foreignLic}');`);
       execWranglerSQL(`DELETE FROM user_sessions WHERE session_token = '${testToken}';`);
-      execWranglerSQL(`DELETE FROM verification_codes WHERE email IN ('${testEmail}', 'unpurchased-e2e-user@eqt.im');`);
+      execWranglerSQL(`DELETE FROM verification_codes WHERE email IN ('portal:${testEmail}', 'checkout:${testEmail}', 'portal:unpurchased-e2e-user@eqt.im', 'checkout:unpurchased-e2e-user@eqt.im', 'portal:otp-bruteforce-e2e@eqt.im', 'checkout:otp-bruteforce-e2e@eqt.im', '${testEmail}', 'unpurchased-e2e-user@eqt.im') OR email LIKE 'fail:portal:%otp-bruteforce-e2e@eqt.im' OR email LIKE 'fail:portal:%${testEmail}';`);
       execWranglerSQL(`DELETE FROM licenses WHERE license_code IN ('${testLic}', '${foreignLic}');`);
     } catch (teardownErr) {
       console.error("[Teardown] partial failure:", teardownErr.message || teardownErr);

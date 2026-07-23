@@ -34,6 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_licenses_email_hash ON licenses(buyer_email_hash)
 CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 
 CREATE TABLE IF NOT EXISTS verification_codes (
+    -- PK value is purpose-prefixed: "portal:user@x.com" or "checkout:user@x.com"
+    -- (column name remains email for backward compatibility with existing D1 rows)
     email TEXT PRIMARY KEY,
     code TEXT NOT NULL,
     expires_at TEXT NOT NULL,

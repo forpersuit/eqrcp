@@ -196,7 +196,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 为提升防刷能力和避免向非购买用户盲发验证码：
 * **Portal 登录发码 (`POST /api/v1/auth/send-code`)**：在发送验证码前，强制根据 `email` 的 SHA-256 希值/明文在 `licenses` 表中查询是否有购买记录 (`buyer_email_hash` 或 `buyer_email`)。若未购买过，拦截并直接返回多语言错误提示 `no_purchase_history`；若已购买，正常发送 6 位验证码。与 checkout 一样有 **60s 发码冷却**（`created_at`）。
 * **Pricing 结账发码 (`POST /api/v1/checkout/send-code`)**：属于购买前的邮箱真实性验证，**不校验** `licenses` 购买记录，任何合法格式邮箱均可正常获取发码。
-* **Ownership 第一性原理**：`POST /user/unbind-device` 与 `POST /user/refund` 必须校验 session 邮箱对该 license 的所有权（`buyer_email_hash` 或 `buyer_email`）；失败 403 `not_license_owner`。无归属字段的码仅 Admin 可操作。
+* **Ownership 第一性原理**：`POST /user/unbind-device` 与 `POST /user/refund` 必须校验 session 邮箱对该 license 的所有权（`buyer_email_hash` 或 `buyer_email`）；失败 403 `not_license_owner`。无归属字段的码仅 Admin 可操作。解绑额外要求 `status === 'active'`。
+* **验证码隔离**：D1 `verification_codes` 主键实际存 `portal:{email}` / `checkout:{email}`，防止两流程互相覆盖。
+* **OTP 失败限流**：`verify-code` 同 IP+purpose+email 15 分钟内 8 次失败 → 429（Worker isolate 内计数）。
+* **Portal 退款邮件**：自助退款成功后除 Paddle adjustment 外，异步发 7 语吊销通知（`REFUND_REVOKE_EMAIL_I18N`）。
 * **Logout**：`POST /api/v1/auth/logout` 删除 `user_sessions`（幂等）。
 
 ### 6.2 极简 Workers 内置 SMTPS 发信

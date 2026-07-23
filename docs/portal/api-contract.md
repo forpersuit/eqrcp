@@ -26,7 +26,7 @@
 2. `SHA-256(email)` 与 `licenses.buyer_email_hash` / `buyer_email` 查购买记录  
 3. 无记录 → **400** `no_purchase_history`（i18n）  
 4. 60s 内重复发码 → **429** `rate_limited`（i18n）  
-5. 6 位码，**5 分钟**有效；写 `verification_codes`（含 `created_at`）  
+5. 6 位码，**5 分钟**有效；写 `verification_codes`，PK 为 **`portal:{email}`**（与 checkout 隔离）  
 6. SMTP 发 `AUTH_CODE_EMAIL_I18N`  
 
 **200**
@@ -44,8 +44,14 @@
 **Body**
 
 ```json
-{ "email": "buyer@example.com", "code": "123456" }
+{ "email": "buyer@example.com", "code": "123456", "lang": "zh" }
 ```
+
+**逻辑**
+
+1. 读 `verification_codes` 键 `portal:{email}`  
+2. 同 IP+purpose+email（D1 键 `fail:{purpose}:{ip}:{email}`）：**15 分钟内 8 次失败** → **429** `too_many_verify_attempts`（多 isolate 一致）  
+3. 成功则清失败计数、删码、签发 session  
 
 **200**
 
@@ -58,6 +64,8 @@
 ```
 
 Session **24h**，表 `user_sessions`。
+
+Checkout 对应：`/checkout/send-code` / `verify-code` 使用键 **`checkout:{email}`**，互不覆盖；verify 同样有 8 次失败限流。
 
 ---
 
@@ -128,8 +136,9 @@ Session **24h**，表 `user_sessions`。
 2. 参数齐全  
 3. License 存在  
 4. **Ownership**：`buyer_email_hash == SHA256(session.email)` **或** `buyer_email == session.email`；否则 **403** `not_license_owner`  
-5. 年解绑配额未满；否则 **403** `unbind_limit_reached`  
-6. Activation 存在且属于该 license；否则 **404** `activation_not_found`  
+5. **`status === 'active'`**；否则 **403** `license_not_active`  
+6. 年解绑配额未满；否则 **403** `unbind_limit_reached`  
+7. Activation 存在且属于该 license；否则 **404** `activation_not_found`  
 
 **副作用**：`DELETE activations`；`INSERT unbind_records`；异步解绑邮件。
 
@@ -164,7 +173,8 @@ Session **24h**，表 `user_sessions`。
 
 1. Paddle `GET /transactions/{id}` → `POST /adjustments` full refund，`reason: requested_by_customer`  
 2. 本地 `UPDATE licenses SET status = 'revoked'`  
-3. Paddle 失败写 `system_error_logs`（`portal_refund`），**不**吊销本地  
+3. 异步 7 语吊销/退款邮件（`REFUND_REVOKE_EMAIL_I18N`）→ session/buyer 邮箱  
+4. Paddle 失败写 `system_error_logs`（`portal_refund`），**不**吊销本地  
 
 **200**
 
@@ -200,14 +210,16 @@ Session **24h**，表 `user_sessions`。
 | 403 | `not_license_owner` | 解绑/退款非本人 license |
 | 403 | `unbind_limit_reached` | 年解绑 4 次用尽 |
 | 404 | `license_not_found` / `activation_not_found` | 资源不存在 |
+| 403 | `license_not_active` | 解绑时 license 非 active |
 | 429 | `rate_limited` | 发码 60s 冷却 |
+| 429 | `too_many_verify_attempts` | OTP 校验失败过多 |
 | 500 | Paddle / SMTP 失败 | 外部依赖 |
 
 ---
 
 ## 相关对比
 
-| 流程 | 路径 | 购买校验 | 码有效期 | 限流 |
-| :--- | :--- | :---: | :---: | :---: |
-| Portal 登录 | `/auth/send-code` | 是 | 5 min | 60s |
-| Checkout 结账 | `/checkout/send-code` | 否 | 10 min | 60s |
+| 流程 | 路径 | 购买校验 | 存储键 | 码有效期 | 发码限流 | 校验失败限流 |
+| :--- | :--- | :---: | :--- | :---: | :---: | :---: |
+| Portal 登录 | `/auth/*` | 是 | `portal:{email}` | 5 min | 60s | 8 / 15min |
+| Checkout 结账 | `/checkout/*` | 否 | `checkout:{email}` | 10 min | 60s | 8 / 15min |

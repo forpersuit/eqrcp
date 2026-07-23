@@ -2,21 +2,68 @@ import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
 import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { sha256Hex } from '../utils/crypto';
+import { sha256Hex, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
 import { ensureVerificationCodesCreatedAt } from '../utils/auth';
+import { clientIpFromRequest } from '../utils/rate-limit';
 
 const SEND_CODE_COOLDOWN_MS = 60_000;
+const OTP_VERIFY_WINDOW_MS = 15 * 60 * 1000;
+const OTP_VERIFY_MAX_FAILS = 8;
 
-async function isSendCodeRateLimited(env: Env, email: string): Promise<boolean> {
+async function isSendCodeRateLimited(env: Env, storageKey: string): Promise<boolean> {
   await ensureVerificationCodesCreatedAt(env);
   const recentCode = await env.DB.prepare(
     "SELECT created_at FROM verification_codes WHERE email = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1"
-  ).bind(email, new Date().toISOString()).first<any>();
+  ).bind(storageKey, new Date().toISOString()).first<any>();
 
   if (!recentCode || !recentCode.created_at) return false;
   const createdAt = new Date(recentCode.created_at).getTime();
   if (isNaN(createdAt)) return false;
   return Date.now() - createdAt < SEND_CODE_COOLDOWN_MS;
+}
+
+/** D1-backed fail counter (multi-isolate safe). Key: fail:{purpose}:{ip}:{email} */
+function otpFailStorageKey(request: Request, purpose: VerificationPurpose, email: string): string {
+  return `fail:${purpose}:${clientIpFromRequest(request)}:${email}`;
+}
+
+async function isOtpVerifyBlocked(env: Env, failKey: string): Promise<boolean> {
+  await ensureVerificationCodesCreatedAt(env);
+  const row = await env.DB.prepare(
+    "SELECT code, created_at FROM verification_codes WHERE email = ?"
+  ).bind(failKey).first<any>();
+  if (!row || !row.created_at) return false;
+  const windowStart = new Date(row.created_at).getTime();
+  if (isNaN(windowStart) || Date.now() - windowStart > OTP_VERIFY_WINDOW_MS) return false;
+  return (parseInt(row.code, 10) || 0) >= OTP_VERIFY_MAX_FAILS;
+}
+
+async function recordOtpVerifyFail(env: Env, failKey: string): Promise<void> {
+  await ensureVerificationCodesCreatedAt(env);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const expIso = new Date(now + OTP_VERIFY_WINDOW_MS).toISOString();
+  const row = await env.DB.prepare(
+    "SELECT code, created_at FROM verification_codes WHERE email = ?"
+  ).bind(failKey).first<any>();
+
+  let fails = 1;
+  let createdAt = nowIso;
+  if (row && row.created_at) {
+    const windowStart = new Date(row.created_at).getTime();
+    if (!isNaN(windowStart) && now - windowStart <= OTP_VERIFY_WINDOW_MS) {
+      fails = (parseInt(row.code, 10) || 0) + 1;
+      createdAt = row.created_at;
+    }
+  }
+
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+  ).bind(failKey, String(fails), expIso, createdAt).run();
+}
+
+async function clearOtpVerifyFails(env: Env, failKey: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(failKey).run();
 }
 
 export async function handleAuthRoutes(
@@ -40,9 +87,10 @@ export async function handleAuthRoutes(
       });
     }
     email = email.trim().toLowerCase();
+    const storageKey = verificationStorageKey("checkout", email);
 
     // Rate limit: check if a code was sent in the last 60 seconds
-    if (await isSendCodeRateLimited(env, email)) {
+    if (await isSendCodeRateLimited(env, storageKey)) {
       return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -56,7 +104,7 @@ export async function handleAuthRoutes(
 
     await env.DB.prepare(
       "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(email, code, expiresAt, createdAt).run();
+    ).bind(storageKey, code, expiresAt, createdAt).run();
 
     // Build localized email
     const { subject, html } = buildCheckoutEmailHtml(lang, code);
@@ -73,6 +121,7 @@ export async function handleAuthRoutes(
     const body: any = await request.json();
     let email = body.email;
     let code = body.code;
+    const reqLang = extractRequestLang(request, body);
 
     if (!email || !code) {
       return new Response(JSON.stringify({ error: "Missing email or verification code" }), {
@@ -82,12 +131,22 @@ export async function handleAuthRoutes(
     }
     email = email.trim().toLowerCase();
     code = code.trim();
+    const storageKey = verificationStorageKey("checkout", email);
+    const failKey = otpFailStorageKey(request, "checkout", email);
+
+    if (await isOtpVerifyBlocked(env, failKey)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("too_many_verify_attempts", reqLang) }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     const record = await env.DB.prepare(
       "SELECT * FROM verification_codes WHERE email = ? AND code = ? ORDER BY expires_at DESC LIMIT 1"
-    ).bind(email, code).first<any>();
+    ).bind(storageKey, code).first<any>();
 
     if (!record) {
+      await recordOtpVerifyFail(env, failKey);
       return new Response(JSON.stringify({ error: "Invalid verification code. Please check and try again." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -97,14 +156,16 @@ export async function handleAuthRoutes(
     const now = new Date().getTime();
     const exp = new Date(record.expires_at).getTime();
     if (isNaN(exp) || exp < now) {
+      await recordOtpVerifyFail(env, failKey);
       return new Response(JSON.stringify({ error: "Verification code has expired. Please send a new code." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
+    await clearOtpVerifyFails(env, failKey);
     // Clean up verified code to prevent re-use
-    ctx.waitUntil(env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run());
+    ctx.waitUntil(env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run());
 
     return new Response(JSON.stringify({ success: true, message: "Email verified successfully" }), {
       status: 200,
@@ -124,6 +185,7 @@ export async function handleAuthRoutes(
       });
     }
     email = email.trim().toLowerCase();
+    const storageKey = verificationStorageKey("portal", email);
 
     // 1. Check if email has purchase history in licenses table
     const emailHash = await sha256Hex(email);
@@ -143,7 +205,7 @@ export async function handleAuthRoutes(
     }
 
     // 2. 60s rate limit (aligned with checkout)
-    if (await isSendCodeRateLimited(env, email)) {
+    if (await isSendCodeRateLimited(env, storageKey)) {
       return new Response(JSON.stringify({
         error: getApiTranslation("rate_limited", reqLang)
       }), {
@@ -157,10 +219,10 @@ export async function handleAuthRoutes(
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // Valid for 5 minutes
     const createdAt = new Date().toISOString();
 
-    // Insert code into DB
+    // Insert code into DB (portal: purpose-prefixed key)
     await env.DB.prepare(
       "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(email, code, expiresAt, createdAt).run();
+    ).bind(storageKey, code, expiresAt, createdAt).run();
 
     // Send mail via SMTPS with localized i18n template
     const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
@@ -207,6 +269,7 @@ export async function handleAuthRoutes(
   // 0.2 Verify email verification code and issue session token
   if (url.pathname === "/api/v1/auth/verify-code" && request.method === "POST") {
     const body: any = await request.json();
+    const reqLang = extractRequestLang(request, body);
     let { email, code } = body;
     if (!email || !code) {
       return new Response(JSON.stringify({ error: "Missing email or code" }), {
@@ -216,12 +279,22 @@ export async function handleAuthRoutes(
     }
     email = email.trim().toLowerCase();
     code = code.trim();
+    const storageKey = verificationStorageKey("portal", email);
+    const failKey = otpFailStorageKey(request, "portal", email);
+
+    if (await isOtpVerifyBlocked(env, failKey)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("too_many_verify_attempts", reqLang) }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     const record = await env.DB.prepare(
       "SELECT * FROM verification_codes WHERE email = ?"
-    ).bind(email).first<any>();
+    ).bind(storageKey).first<any>();
 
     if (!record || record.code !== code) {
+      await recordOtpVerifyFail(env, failKey);
       return new Response(JSON.stringify({ error: "Invalid verification code" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -230,14 +303,17 @@ export async function handleAuthRoutes(
 
     const expiresAt = new Date(record.expires_at).getTime();
     if (expiresAt < Date.now()) {
+      await recordOtpVerifyFail(env, failKey);
       return new Response(JSON.stringify({ error: "Verification code expired" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
+    await clearOtpVerifyFails(env, failKey);
+
     // Delete verification code
-    await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(email).run();
+    await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run();
 
     // Generate session token
     const sessionBytes = new Uint8Array(16);

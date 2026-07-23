@@ -1,5 +1,5 @@
 import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
-import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
+import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getRefundRevokeEmailTemplate } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
@@ -120,6 +120,13 @@ export async function handlePortalRoutes(
     const emailHash = await sha256Hex(session.email);
     if (!licenseOwnedByEmail(license, session.email, emailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status !== "active") {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_active", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -315,6 +322,15 @@ export async function handlePortalRoutes(
       await env.DB.prepare(
         "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
       ).bind(license_code).run();
+
+      // Async multi-language revoke notice (portal path — do not rely only on webhook)
+      const notifyEmail = session.email || license.buyer_email;
+      if (notifyEmail) {
+        const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : (license.tier || "EQT"));
+        const t = getRefundRevokeEmailTemplate(reqLang);
+        const emailHtml = renderEmailWrapper(t.title, t.body(license_code, planName));
+        ctx.waitUntil(sendDRMEmail(env, notifyEmail, t.subject, emailHtml));
+      }
 
       return new Response(JSON.stringify({
         success: true,
