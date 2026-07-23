@@ -1,8 +1,10 @@
 import { connect } from 'cloudflare:sockets';
 import { Env } from '../types';
 import { AUTH_CODE_EMAIL_I18N, CHECKOUT_EMAIL_I18N } from '../i18n';
+import { logSystemError } from '../utils/error-logger';
 
 export interface MailOptions {
+
   sender: string;
   senderPass: string;
   host: string;
@@ -141,8 +143,10 @@ export async function sendDRMEmail(env: Env, to: string, subject: string, html: 
     console.log(`DRM SMTP Send Success: Email successfully sent to ${to} with subject "${subject}"`);
   } catch (err: any) {
     console.error(`DRM SMTP Send Error to ${to}:`, err.message || err);
+    await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to, subject });
   }
 }
+
 
 // Unified HTML Email Layout Wrapper for Consistent Style
 export function renderEmailWrapper(title: string, contentHtml: string): string {

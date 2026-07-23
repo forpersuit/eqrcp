@@ -1,8 +1,10 @@
 import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
 import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
+import { logSystemError } from '../utils/error-logger';
 
 export async function handleAuthRoutes(
+
   request: Request,
   env: Env,
   ctx: ExecutionContext,
@@ -162,6 +164,7 @@ export async function handleAuthRoutes(
       });
     } catch (mailErr: any) {
       console.error("Mail Send Error:", mailErr);
+      ctx.waitUntil(logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', mailErr, { to: targetEmail, subject: mailObj.subject }));
       return new Response(JSON.stringify({ 
         error: "Failed to send verification email: " + mailErr.message,
         code: env.TEST_MAIL_RECEIVER ? code : undefined 
@@ -170,6 +173,7 @@ export async function handleAuthRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
 
     return new Response(JSON.stringify({ 
       success: true, 
