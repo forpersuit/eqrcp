@@ -93,15 +93,16 @@
 ### 2.1 拉取错误日志
 
 ```
-GET /api/v1/admin/error-logs?limit=50
+GET /api/v1/admin/error-logs?limit=50&offset=0&level=&category=&q=
 ```
 
 | Query | 默认 | 说明 |
 | :--- | :--- | :--- |
-| `limit` | 50 | 最大建议 200 |
-
-**当前实现**：仅 limit + 倒序。  
-**阶段 3 扩展（预留，未实现勿调用）**：`level`, `category`, `q`, `offset` / `cursor`。
+| `limit` | 50 | 最大 200 |
+| `offset` | 0 | 分页偏移 |
+| `level` | （空/ALL） | `ERROR` \| `WARN` \| `CRITICAL`；`ALL` 或空=不过滤 |
+| `category` | （空/ALL） | 精确匹配；`ALL` 或空=不过滤 |
+| `q` / `query` | （空） | 匹配 `error_message` / `context_json` LIKE |
 
 **成功 200：**
 
@@ -117,7 +118,10 @@ GET /api/v1/admin/error-logs?limit=50
       "context_json": "{\"url\":\"...\"}",
       "created_at": "2026-07-23T00:00:00.000Z"
     }
-  ]
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
 }
 ```
 
@@ -171,8 +175,8 @@ Content-Type: application/json
 | `max_devices` | 否 | 默认 2 |
 | `expires_in_days` | 否 | 有则算 `expires_at`；否则 `LIFETIME` |
 | `duration_days` | 否 | 写入列；可与 expires 并存 |
-
-**阶段 3 扩展（预留）**：`buyer_email`、`send_email: boolean`。
+| `buyer_email` | 否 | 绑定明文邮箱并写 `buyer_email_hash` |
+| `send_email` | 否 | `true` 且已绑 email 时异步 SMTP 发信 |
 
 **成功 200：**
 
@@ -184,6 +188,8 @@ Content-Type: application/json
   "max_devices": 2,
   "expires_at": "LIFETIME",
   "duration_days": null,
+  "buyer_email": "a@b.com",
+  "email_sent": false,
   "status": "active"
 }
 ```
@@ -335,8 +341,6 @@ Content-Type: application/json
 GET /api/v1/admin/health
 ```
 
-**当前（阶段 1 保持即可）：**
-
 ```json
 {
   "success": true,
@@ -344,19 +348,37 @@ GET /api/v1/admin/health
   "timestamp": "2026-07-23T00:00:00.000Z",
   "metrics": {
     "total_licenses": 10,
-    "total_error_logs": 3
+    "active_licenses": 8,
+    "today_activations": 2,
+    "total_error_logs": 3,
+    "errors_24h": 1
   },
   "config": {
+    "db_status": "ok",
+    "db_connected": true,
     "smtp_configured": true,
     "paddle_configured": true,
-    "r2_configured": true,
-    "db_status": "ok"
+    "paddle_webhook_configured": true,
+    "r2_configured": false,
+    "ed25519_key_configured": true,
+    "admin_secret_configured": true
   }
 }
 ```
 
+**必填 config 键（前端徽章）**：`db_status`, `smtp_configured`, `paddle_configured`, `r2_configured`。  
+`paddle_webhook_configured` 与 `paddle_configured` 同值（别名）。  
 语义：`*_configured` = 环境变量是否非空；**不是** TLS 握手成功。  
-阶段 3 可扩展：`probes.smtp = { ok, latency_ms, error }`。
+真探针（`probes.smtp` 等）仍为后置。
+
+### 2.8 操作审计日志
+
+```
+GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
+```
+
+高危写操作（GENERATE / REVOKE / UNBIND / CLEAR_LOGS）自动写入 `admin_audit_logs`。  
+成功 200：`{ success, logs[], total, limit, offset }`。
 
 ---
 

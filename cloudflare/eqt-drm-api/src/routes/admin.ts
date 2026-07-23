@@ -427,6 +427,12 @@ export async function handleAdminRoutes(
       dbStatus = "error";
     }
 
+    const smtpConfigured = Boolean(env.MAIL_SENDER && env.MAIL_SENDER_PASSWORD && env.MAIL_SEND_SERVER);
+    const paddleConfigured = Boolean(env.PADDLE_WEBHOOK_SECRET);
+    const r2Configured = Boolean(env.R2_PUBLIC_URL);
+
+    // config keys are contract SSOT (docs/admin/api-contract.md). Keep both
+    // canonical short names and explicit *_webhook / detail flags for UI badges.
     return new Response(JSON.stringify({
       success: true,
       status: "healthy",
@@ -439,12 +445,14 @@ export async function handleAdminRoutes(
         errors_24h: errors24hCount
       },
       config: {
-        db_connected: dbStatus === "ok",
         db_status: dbStatus,
+        db_connected: dbStatus === "ok",
+        smtp_configured: smtpConfigured,
+        paddle_configured: paddleConfigured,
+        paddle_webhook_configured: paddleConfigured,
+        r2_configured: r2Configured,
         ed25519_key_configured: Boolean(env.ED25519_PRIVATE_KEY),
-        admin_secret_configured: Boolean(env.ADMIN_SECRET),
-        paddle_webhook_configured: Boolean(env.PADDLE_WEBHOOK_SECRET),
-        smtp_configured: Boolean(env.MAIL_SENDER && env.MAIL_SENDER_PASSWORD && env.MAIL_SEND_SERVER)
+        admin_secret_configured: Boolean(env.ADMIN_SECRET)
       }
     }), {
       status: 200,

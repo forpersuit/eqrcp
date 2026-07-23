@@ -2,7 +2,8 @@ import { getAdminSecret, clearAdminSecret } from './auth';
 
 // Base URL: set VITE_API_BASE in .env.local (see .env.example).
 // Contract: docs/admin/api-contract.md — production https://lic.eqt.net.im
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://eqt-drm-api.yelon.workers.dev';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://lic.eqt.net.im';
+
 
 export interface ApiOptions extends RequestInit {
   params?: Record<string, string>;

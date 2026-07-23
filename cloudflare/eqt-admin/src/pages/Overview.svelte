@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
-  import type { AdminHealthResponse } from '../lib/types';
+  import type { AdminHealthResponse, AdminTab } from '../lib/types';
+
+  interface Props {
+    onNavigate?: (tab: AdminTab) => void;
+  }
+  let { onNavigate }: Props = $props();
 
   interface QuickStats {
     total_licenses: number;
@@ -38,6 +43,10 @@
     } finally {
       loading = false;
     }
+  }
+
+  function go(tab: AdminTab) {
+    onNavigate?.(tab);
   }
 
   onMount(() => {
@@ -87,24 +96,23 @@
     </div>
   </div>
 
-
   <div class="quick-links card">
     <h3>核心业务模块快捷入口</h3>
     <div class="links-grid">
-      <div class="link-card">
+      <button type="button" class="link-card" onclick={() => go('audit')}>
         <h4>🚨 错误审计中心</h4>
         <p>实时排查 D1 system_error_logs，高亮查看 CRITICAL 堆栈与上下文信息。</p>
-      </div>
+      </button>
 
-      <div class="link-card">
+      <button type="button" class="link-card" onclick={() => go('licenses')}>
         <h4>🎫 授权码与订单管控</h4>
         <p>支持按邮箱/码/交易号全库检索、手动发码、吊销作废与绑定设备管理。</p>
-      </div>
+      </button>
 
-      <div class="link-card">
+      <button type="button" class="link-card" onclick={() => go('health')}>
         <h4>🌐 发信引擎与系统健康</h4>
-        <p>检测 465 端口 SMTP TLS 握手状态与 Paddle Webhook 回调履约管道。</p>
-      </div>
+        <p>查看 SMTP / Paddle / R2 / 签名密钥等环境配置就绪度与 KPI。</p>
+      </button>
     </div>
   </div>
 </div>
@@ -123,7 +131,21 @@
 
   .quick-links { display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; }
   .links-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
-  .link-card { background: rgba(15, 23, 42, 0.4); padding: 1.25rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); }
+  .link-card {
+    background: rgba(15, 23, 42, 0.4);
+    padding: 1.25rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .link-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(99, 102, 241, 0.08);
+  }
   .link-card h4 { font-size: 1.05rem; font-weight: 600; color: var(--accent-primary); margin-bottom: 0.5rem; }
   .link-card p { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
 </style>

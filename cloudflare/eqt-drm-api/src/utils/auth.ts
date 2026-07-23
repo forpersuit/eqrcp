@@ -5,11 +5,13 @@ export function getCorsHeaders(request: Request): Record<string, string> {
   let allowOrigin = "*";
   if (origin && (
     origin.includes("eqt.net.im") ||
+    origin.includes("pages.dev") ||
     origin.includes("localhost") ||
     origin.includes("127.0.0.1")
   )) {
     allowOrigin = origin;
   }
+
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",

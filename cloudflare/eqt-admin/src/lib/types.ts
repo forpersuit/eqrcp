@@ -1,11 +1,12 @@
 /**
  * Admin API types aligned with docs/admin/api-contract.md and D1 schema.
- * Phase 1: pages should import from here; do not invent device_fingerprint / licenses.id.
+ * Do not invent device_fingerprint / licenses.id.
  */
 
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
+export type AdminTab = 'overview' | 'audit' | 'licenses' | 'health';
 
 /** Row shape from activations table */
 export interface Activation {
@@ -54,6 +55,19 @@ export interface AdminAuditLog {
   created_at: string;
 }
 
+/** GET /api/v1/admin/health — env readiness badges (not live TLS probes) */
+export interface AdminHealthConfig {
+  db_status: string;
+  db_connected?: boolean;
+  smtp_configured: boolean;
+  paddle_configured: boolean;
+  /** Alias of paddle_configured (explicit name) */
+  paddle_webhook_configured?: boolean;
+  r2_configured: boolean;
+  ed25519_key_configured?: boolean;
+  admin_secret_configured?: boolean;
+}
+
 export interface AdminHealthResponse {
   success: boolean;
   status: string;
@@ -65,20 +79,16 @@ export interface AdminHealthResponse {
     total_error_logs: number;
     errors_24h?: number;
   };
-  config: {
-    smtp_configured: boolean;
-    paddle_configured: boolean;
-    r2_configured: boolean;
-    db_status: string;
-  };
+  config: AdminHealthConfig;
 }
-
 
 export interface GenerateLicenseBody {
   tier: LicenseTier;
   max_devices?: number;
   expires_in_days?: number | null;
   duration_days?: number | null;
+  buyer_email?: string;
+  send_email?: boolean;
 }
 
 export interface GenerateLicenseResponse {
@@ -89,9 +99,11 @@ export interface GenerateLicenseResponse {
   expires_at: string;
   duration_days: number | null;
   status: string;
+  buyer_email?: string | null;
+  email_sent?: boolean;
 }
 
-/** Phase 1 target body for POST /admin/unbind */
+/** POST /admin/unbind */
 export interface AdminUnbindBody {
   license_code: string;
   activation_id?: number;

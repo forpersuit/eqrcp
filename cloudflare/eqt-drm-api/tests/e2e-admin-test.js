@@ -1,13 +1,29 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 
 const TARGET_URL = process.env.TEST_TARGET_URL || 'http://127.0.0.1:8787';
 const ADMIN_SECRET = process.env.TEST_ADMIN_SECRET || 'test-admin-secret';
+const PROJECT_ROOT = path.join(__dirname, '..');
 
-console.log("=== EQT ADMIN API CONTRACT E2E TEST SUITE ===");
+/** Health config keys required by docs/admin/api-contract.md + admin SPA */
+const REQUIRED_HEALTH_CONFIG_KEYS = [
+  'db_status',
+  'smtp_configured',
+  'paddle_configured',
+  'r2_configured'
+];
+const REQUIRED_HEALTH_METRIC_KEYS = [
+  'total_licenses',
+  'active_licenses',
+  'today_activations',
+  'total_error_logs',
+  'errors_24h'
+];
+
+console.log('=== EQT ADMIN API CONTRACT E2E TEST SUITE ===');
 console.log(`Target URL: ${TARGET_URL}`);
 console.log(`Timestamp: ${new Date().toISOString()}`);
 
@@ -25,20 +41,24 @@ function makeRequest(pathStr, method = 'GET', headers = {}, body = null) {
       reqHeaders['Content-Length'] = Buffer.byteLength(postData);
     }
 
-    const req = client.request(fullUrl, {
-      method: method,
-      headers: reqHeaders
-    }, (res) => {
-      let respData = '';
-      res.on('data', chunk => respData += chunk);
-      res.on('end', () => {
-        try {
-          resolve({ status: res.statusCode, data: JSON.parse(respData) });
-        } catch (e) {
-          resolve({ status: res.statusCode, raw: respData });
-        }
-      });
-    });
+    const req = client.request(
+      fullUrl,
+      {
+        method: method,
+        headers: reqHeaders
+      },
+      (res) => {
+        let respData = '';
+        res.on('data', (chunk) => (respData += chunk));
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(respData), headers: res.headers });
+          } catch (e) {
+            resolve({ status: res.statusCode, raw: respData, headers: res.headers });
+          }
+        });
+      }
+    );
 
     req.on('error', reject);
     req.setTimeout(8000, () => {
@@ -56,181 +76,362 @@ function logStep(stepNum, title) {
   console.log(`==================================================`);
 }
 
+function authHeaders() {
+  return { 'X-Admin-Secret': ADMIN_SECRET };
+}
+
+/** Insert a row into local D1 (wrangler --local). Used when activate needs Ed25519. */
+function insertLocalActivation(licenseCode, deviceId) {
+  const now = new Date().toISOString();
+  const sql =
+    `INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at) ` +
+    `VALUES ('${licenseCode}', 'uuid-e2e-hash-001', 'cpu-e2e-hash-001', 'disk-e2e-hash-001', '${deviceId}', '${now}')`;
+  execSync(`npx wrangler d1 execute eqt-drm-db --local --command "${sql.replace(/"/g, '\\"')}"`, {
+    cwd: PROJECT_ROOT,
+    stdio: 'pipe',
+    env: { ...process.env, CLOUDFLARE_API_TOKEN: '' }
+  });
+}
+
+function insertLocalErrorLog(level, category, message) {
+  const now = new Date().toISOString();
+  const msg = message.replace(/'/g, "''");
+  const sql =
+    `INSERT INTO system_error_logs (level, category, error_message, context_json, created_at) ` +
+    `VALUES ('${level}', '${category}', '${msg}', '{"e2e":true}', '${now}')`;
+  execSync(`npx wrangler d1 execute eqt-drm-db --local --command "${sql.replace(/"/g, '\\"')}"`, {
+    cwd: PROJECT_ROOT,
+    stdio: 'pipe',
+    env: { ...process.env, CLOUDFLARE_API_TOKEN: '' }
+  });
+}
+
 async function ensureServerRunning() {
   try {
     await makeRequest('/api/v1/admin/health', 'GET');
-    console.log("✓ Target server is already active at", TARGET_URL);
+    console.log('✓ Target server is already active at', TARGET_URL);
     return null;
   } catch (e) {
-    console.log("No running server detected. Auto-launching local wrangler dev...");
-    const projectRoot = path.join(__dirname, '..');
-    const child = spawn('npx', ['wrangler', 'dev', '--local', '--port', '8787', '--var', `ADMIN_SECRET:${ADMIN_SECRET}`], {
-      cwd: projectRoot,
-      stdio: 'pipe',
-      env: { ...process.env, CLOUDFLARE_API_TOKEN: "" }
-    });
+    console.log('No running server detected. Auto-launching local wrangler dev...');
+    const child = spawn(
+      'npx',
+      ['wrangler', 'dev', '--local', '--port', '8787', '--var', `ADMIN_SECRET:${ADMIN_SECRET}`],
+      {
+        cwd: PROJECT_ROOT,
+        stdio: 'pipe',
+        env: { ...process.env, CLOUDFLARE_API_TOKEN: '' }
+      }
+    );
 
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 600));
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 600));
       try {
         await makeRequest('/api/v1/admin/health', 'GET');
-        console.log("✓ Local wrangler dev server successfully spawned and ready.");
+        console.log('✓ Local wrangler dev server successfully spawned and ready.');
         return child;
       } catch (err) {
-        // Polling until ready
+        // keep polling
       }
     }
     child.kill('SIGKILL');
-    throw new Error("Timed out waiting for wrangler dev server to respond.");
+    throw new Error('Timed out waiting for wrangler dev server to respond.');
   }
 }
 
 async function runAdminTestSuite() {
   let createdLicenseCode = null;
+  let activationId = null;
 
-  // 1. Auth Interception Check (Missing / Invalid Header)
-  logStep(1, "Authentication Fail-Closed Interception");
+  // 1. Auth
+  logStep(1, 'Authentication Fail-Closed Interception');
   const noAuthRes = await makeRequest('/api/v1/admin/health', 'GET');
-  console.log("No Auth Header Status:", noAuthRes.status, "Response:", noAuthRes.data);
+  console.log('No Auth Header Status:', noAuthRes.status, 'Response:', noAuthRes.data);
   if (noAuthRes.status !== 401 && noAuthRes.status !== 503) {
     throw new Error(`Expected 401/503 for missing admin secret header, got ${noAuthRes.status}`);
   }
-  console.log("✓ Correctly intercepted request with missing X-Admin-Secret header.");
+  console.log('✓ Correctly intercepted request with missing X-Admin-Secret header.');
 
   const wrongAuthRes = await makeRequest('/api/v1/admin/health', 'GET', {
     'X-Admin-Secret': 'invalid-secret-key-12345'
   });
-  console.log("Invalid Auth Header Status:", wrongAuthRes.status);
+  console.log('Invalid Auth Header Status:', wrongAuthRes.status);
   if (wrongAuthRes.status !== 401) {
     throw new Error(`Expected 401 for wrong admin secret, got ${wrongAuthRes.status}`);
   }
-  console.log("✓ Correctly intercepted request with wrong X-Admin-Secret header.");
+  console.log('✓ Correctly intercepted request with wrong X-Admin-Secret header.');
 
-  // 2. Health Probe Check
-  logStep(2, "System Health Probe Check");
-  const healthRes = await makeRequest('/api/v1/admin/health', 'GET', {
-    'X-Admin-Secret': ADMIN_SECRET
-  });
-  console.log("Health Status:", healthRes.status, "Metrics:", healthRes.data.metrics);
+  // Query secret must not authenticate
+  const querySecretRes = await makeRequest(
+    `/api/v1/admin/health?secret=${encodeURIComponent(ADMIN_SECRET)}`,
+    'GET'
+  );
+  if (querySecretRes.status === 200) {
+    throw new Error('Query ?secret= must not grant admin access');
+  }
+  console.log('✓ Query ?secret= rejected (status', querySecretRes.status + ').');
+
+  // 2. Health contract keys
+  logStep(2, 'System Health Probe + Config Key Contract');
+  const healthRes = await makeRequest('/api/v1/admin/health', 'GET', authHeaders());
+  console.log('Health Status:', healthRes.status, 'Metrics:', healthRes.data.metrics);
   if (healthRes.status !== 200 || !healthRes.data.success || !healthRes.data.config) {
     throw new Error(`System health probe failed: ${JSON.stringify(healthRes.data)}`);
   }
-  console.log("✓ Health probe returned valid metrics and config badges.");
+  for (const key of REQUIRED_HEALTH_CONFIG_KEYS) {
+    if (!(key in healthRes.data.config)) {
+      throw new Error(`health.config missing required key: ${key}`);
+    }
+  }
+  for (const key of REQUIRED_HEALTH_METRIC_KEYS) {
+    if (!(key in healthRes.data.metrics)) {
+      throw new Error(`health.metrics missing required key: ${key}`);
+    }
+  }
+  if (typeof healthRes.data.config.smtp_configured !== 'boolean') {
+    throw new Error('smtp_configured must be boolean');
+  }
+  if (typeof healthRes.data.config.paddle_configured !== 'boolean') {
+    throw new Error('paddle_configured must be boolean');
+  }
+  if (typeof healthRes.data.config.r2_configured !== 'boolean') {
+    throw new Error('r2_configured must be boolean');
+  }
+  console.log('✓ Health config/metrics contract keys present:', REQUIRED_HEALTH_CONFIG_KEYS.join(', '));
 
-  // 3. Manual License Generation
-  logStep(3, "Manual License Generation (POST /admin/generate with buyer_email)");
-  const genRes = await makeRequest('/api/v1/admin/generate', 'POST', {
-    'X-Admin-Secret': ADMIN_SECRET
-  }, {
+  // 3. Generate
+  logStep(3, 'Manual License Generation (POST /admin/generate with buyer_email)');
+  const genRes = await makeRequest('/api/v1/admin/generate', 'POST', authHeaders(), {
     tier: 'PLUS',
     max_devices: 2,
     expires_in_days: 30,
     buyer_email: 'testbuyer@example.com',
     send_email: false
   });
-  console.log("Generate License Status:", genRes.status, "Data:", genRes.data);
-  if (genRes.status !== 200 || !genRes.data.success || !genRes.data.license_code || genRes.data.buyer_email !== 'testbuyer@example.com') {
+  console.log('Generate License Status:', genRes.status, 'Data:', genRes.data);
+  if (
+    genRes.status !== 200 ||
+    !genRes.data.success ||
+    !genRes.data.license_code ||
+    genRes.data.buyer_email !== 'testbuyer@example.com'
+  ) {
     throw new Error(`Generate license failed: ${JSON.stringify(genRes.data)}`);
   }
   createdLicenseCode = genRes.data.license_code;
-  console.log(`✓ License generated successfully with buyer_email: ${createdLicenseCode}`);
+  console.log(`✓ License generated: ${createdLicenseCode}`);
 
-  // 4. Search Licenses (Batch IN activations query test)
-  logStep(4, "License Listing & Search (GET /admin/licenses - Optimized Batch Query)");
-  const searchRes = await makeRequest(`/api/v1/admin/licenses?q=testbuyer@example.com`, 'GET', {
-    'X-Admin-Secret': ADMIN_SECRET
-  });
-  console.log("Search Status:", searchRes.status, "Result Count:", searchRes.data.licenses?.length);
-  if (searchRes.status !== 200 || !searchRes.data.licenses || searchRes.data.licenses.length === 0) {
+  // 4. Search
+  logStep(4, 'License Listing & Search (GET /admin/licenses)');
+  const searchRes = await makeRequest(
+    `/api/v1/admin/licenses?q=${encodeURIComponent(createdLicenseCode)}`,
+    'GET',
+    authHeaders()
+  );
+  console.log('Search Status:', searchRes.status, 'Result Count:', searchRes.data.licenses?.length);
+  if (searchRes.status !== 200 || !searchRes.data.licenses?.length) {
     throw new Error(`Search license failed: ${JSON.stringify(searchRes.data)}`);
   }
-  const foundLic = searchRes.data.licenses[0];
-  if (foundLic.license_code !== createdLicenseCode) {
-    throw new Error(`Found license code mismatch! Expected ${createdLicenseCode}, got ${foundLic.license_code}`);
+  const foundLic = searchRes.data.licenses.find((l) => l.license_code === createdLicenseCode);
+  if (!foundLic) {
+    throw new Error(`Created license not found in search results`);
   }
-  console.log("✓ License search by buyer_email successfully returned created license.");
+  if (!Array.isArray(foundLic.activations)) {
+    throw new Error('activations array missing on license row');
+  }
+  console.log('✓ License search by code returned created license with activations array.');
 
-  // 5. Revoke Non-Existent License (404 Check)
-  logStep(5, "Revoke Non-Existent License (404 Check)");
-  const nonExistRevokeRes = await makeRequest('/api/v1/admin/revoke', 'POST', {
-    'X-Admin-Secret': ADMIN_SECRET
-  }, {
+  // 5. Insert activation (local D1) + list devices
+  logStep(5, 'Insert Activation + List Devices (real activation_id path prep)');
+  const deviceId = `e2e-device-${Date.now()}`;
+  insertLocalActivation(createdLicenseCode, deviceId);
+  // brief settle for local d1
+  await new Promise((r) => setTimeout(r, 300));
+
+  const afterActSearch = await makeRequest(
+    `/api/v1/admin/licenses?q=${encodeURIComponent(createdLicenseCode)}`,
+    'GET',
+    authHeaders()
+  );
+  const licWithAct = afterActSearch.data.licenses?.find((l) => l.license_code === createdLicenseCode);
+  if (!licWithAct || !licWithAct.activations?.length) {
+    throw new Error(
+      `Expected at least 1 activation after D1 insert, got: ${JSON.stringify(licWithAct)}`
+    );
+  }
+  activationId = licWithAct.activations[0].id;
+  if (!Number.isFinite(Number(activationId))) {
+    throw new Error(`Invalid activation id: ${activationId}`);
+  }
+  console.log(
+    `✓ Activation present: id=${activationId}, devices=${licWithAct.active_devices_count}`
+  );
+
+  // 6. Unbind by activation_id
+  logStep(6, 'Unbind Single Device by activation_id');
+  const unbindOneRes = await makeRequest('/api/v1/admin/unbind', 'POST', authHeaders(), {
+    license_code: createdLicenseCode,
+    activation_id: activationId
+  });
+  console.log('Unbind Status:', unbindOneRes.status, 'Response:', unbindOneRes.data);
+  if (
+    unbindOneRes.status !== 200 ||
+    !unbindOneRes.data.success ||
+    Number(unbindOneRes.data.unbound_activation_id) !== Number(activationId)
+  ) {
+    throw new Error(`Unbind by activation_id failed: ${JSON.stringify(unbindOneRes.data)}`);
+  }
+
+  const afterUnbind = await makeRequest(
+    `/api/v1/admin/licenses?q=${encodeURIComponent(createdLicenseCode)}`,
+    'GET',
+    authHeaders()
+  );
+  const licAfter = afterUnbind.data.licenses?.find((l) => l.license_code === createdLicenseCode);
+  const stillThere = licAfter?.activations?.some((a) => Number(a.id) === Number(activationId));
+  if (stillThere) {
+    throw new Error(`Activation ${activationId} still present after unbind`);
+  }
+  console.log('✓ activation_id unbind removed device row from list.');
+
+  // 7. Unbind all (empty clear path)
+  logStep(7, 'Unbind All Devices (clear path without activation_id)');
+  insertLocalActivation(createdLicenseCode, `e2e-device-all-${Date.now()}`);
+  await new Promise((r) => setTimeout(r, 300));
+  const unbindAllRes = await makeRequest('/api/v1/admin/unbind', 'POST', authHeaders(), {
+    license_code: createdLicenseCode
+  });
+  if (unbindAllRes.status !== 200 || !unbindAllRes.data.success) {
+    throw new Error(`Unbind all failed: ${JSON.stringify(unbindAllRes.data)}`);
+  }
+  const afterClear = await makeRequest(
+    `/api/v1/admin/licenses?q=${encodeURIComponent(createdLicenseCode)}`,
+    'GET',
+    authHeaders()
+  );
+  const licCleared = afterClear.data.licenses?.find((l) => l.license_code === createdLicenseCode);
+  if ((licCleared?.activations?.length || 0) !== 0) {
+    throw new Error(`Expected 0 activations after clear-all, got ${licCleared?.activations?.length}`);
+  }
+  console.log('✓ Clear-all unbind emptied activations.');
+
+  // 8. Revoke 404 + success
+  logStep(8, 'Revoke Non-Existent (404) + Existing License');
+  const nonExistRevokeRes = await makeRequest('/api/v1/admin/revoke', 'POST', authHeaders(), {
     license_code: 'EQT-NONEXISTENT-CODE-99999'
   });
-  console.log("Revoke Non-Existent Status:", nonExistRevokeRes.status, "Response:", nonExistRevokeRes.data);
   if (nonExistRevokeRes.status !== 404) {
     throw new Error(`Expected 404 for non-existent license revoke, got ${nonExistRevokeRes.status}`);
   }
-  console.log("✓ Correctly returned 404 for revoking non-existent license.");
+  console.log('✓ 404 for non-existent revoke.');
 
-  // 6. Revoke License
-  logStep(6, "Revoke Existing License (POST /admin/revoke)");
-  const revokeRes = await makeRequest('/api/v1/admin/revoke', 'POST', {
-    'X-Admin-Secret': ADMIN_SECRET
-  }, {
+  const revokeRes = await makeRequest('/api/v1/admin/revoke', 'POST', authHeaders(), {
     license_code: createdLicenseCode
   });
-  console.log("Revoke Status:", revokeRes.status, "Response:", revokeRes.data);
   if (revokeRes.status !== 200 || !revokeRes.data.success || revokeRes.data.status !== 'revoked') {
     throw new Error(`Revoke license failed: ${JSON.stringify(revokeRes.data)}`);
   }
-  console.log("✓ License status successfully updated to revoked.");
+  console.log('✓ License revoked.');
 
-  // 7. Unbind Device Test
-  logStep(7, "Unbind Device Test (POST /admin/unbind)");
-  const unbindRes = await makeRequest('/api/v1/admin/unbind', 'POST', {
-    'X-Admin-Secret': ADMIN_SECRET
-  }, {
-    license_code: createdLicenseCode
-  });
-  console.log("Unbind Status:", unbindRes.status, "Response:", unbindRes.data);
-  if (unbindRes.status !== 200 || !unbindRes.data.success) {
-    throw new Error(`Unbind device failed: ${JSON.stringify(unbindRes.data)}`);
+  // 9. Error logs filter + clear
+  logStep(9, 'Error Logs Server-Side Filter + Clear');
+  insertLocalErrorLog('CRITICAL', 'SERVER_EXCEPTION', 'e2e-critical-marker-alpha');
+  insertLocalErrorLog('WARN', 'SMTP_ERROR', 'e2e-warn-marker-beta');
+  await new Promise((r) => setTimeout(r, 300));
+
+  const critRes = await makeRequest(
+    '/api/v1/admin/error-logs?level=CRITICAL&limit=50&offset=0',
+    'GET',
+    authHeaders()
+  );
+  if (critRes.status !== 200 || typeof critRes.data.total !== 'number') {
+    throw new Error(`Fetch CRITICAL logs failed: ${JSON.stringify(critRes.data)}`);
   }
-  console.log("✓ Admin device unbind executed successfully.");
-
-  // 8. Fetch & Clear System Error Logs (Server-side Filter & Pagination)
-  logStep(8, "Fetch & Clear Error Logs (Server-Side Filter & Pagination)");
-  const logsRes = await makeRequest('/api/v1/admin/error-logs?level=ALL&limit=10&offset=0', 'GET', {
-    'X-Admin-Secret': ADMIN_SECRET
-  });
-  console.log("Fetch Error Logs Status:", logsRes.status, "Data:", {
-    count: logsRes.data.logs?.length,
-    total: logsRes.data.total,
-    limit: logsRes.data.limit,
-    offset: logsRes.data.offset
-  });
-  if (logsRes.status !== 200 || !logsRes.data.logs || typeof logsRes.data.total !== 'number') {
-    throw new Error(`Fetch error logs failed: ${JSON.stringify(logsRes.data)}`);
+  const critHit = (critRes.data.logs || []).some(
+    (l) => l.level === 'CRITICAL' && String(l.error_message).includes('e2e-critical-marker-alpha')
+  );
+  if (!critHit) {
+    throw new Error(`CRITICAL filter did not return inserted e2e log: ${JSON.stringify(critRes.data)}`);
   }
 
-  const clearRes = await makeRequest('/api/v1/admin/error-logs', 'DELETE', {
-    'X-Admin-Secret': ADMIN_SECRET
-  });
-  console.log("Clear Error Logs Status:", clearRes.status, "Response:", clearRes.data);
+  const qRes = await makeRequest(
+    '/api/v1/admin/error-logs?q=e2e-warn-marker-beta&limit=20',
+    'GET',
+    authHeaders()
+  );
+  const qHit = (qRes.data.logs || []).some((l) =>
+    String(l.error_message).includes('e2e-warn-marker-beta')
+  );
+  if (!qHit) {
+    throw new Error(`q= filter did not return inserted warn log: ${JSON.stringify(qRes.data)}`);
+  }
+
+  const catRes = await makeRequest(
+    '/api/v1/admin/error-logs?category=SMTP_ERROR&limit=50',
+    'GET',
+    authHeaders()
+  );
+  const catHit = (catRes.data.logs || []).every((l) => l.category === 'SMTP_ERROR');
+  if (!catHit || !(catRes.data.logs || []).length) {
+    throw new Error(`category filter failed: ${JSON.stringify(catRes.data)}`);
+  }
+  console.log('✓ level / category / q filters return expected rows.');
+
+  const clearRes = await makeRequest('/api/v1/admin/error-logs', 'DELETE', authHeaders());
   if (clearRes.status !== 200 || !clearRes.data.success) {
     throw new Error(`Clear error logs failed: ${JSON.stringify(clearRes.data)}`);
   }
-  console.log("✓ Server-side error logs filter, total count & clear executed successfully.");
+  // POST clear alias
+  const clearAlias = await makeRequest('/api/v1/admin/error-logs/clear', 'POST', authHeaders());
+  if (clearAlias.status !== 200 || !clearAlias.data.success) {
+    throw new Error(`POST clear alias failed: ${JSON.stringify(clearAlias.data)}`);
+  }
+  console.log('✓ DELETE + POST clear alias OK.');
 
-  // 9. Fetch Admin Operation Audit Logs
-  logStep(9, "Fetch Admin Operation Audit Logs (GET /admin/audit-logs)");
-  const auditRes = await makeRequest('/api/v1/admin/audit-logs?limit=20', 'GET', {
-    'X-Admin-Secret': ADMIN_SECRET
+  // CORS preflight DELETE
+  const optRes = await makeRequest('/api/v1/admin/error-logs', 'OPTIONS', {
+    Origin: 'http://localhost:3001',
+    'Access-Control-Request-Method': 'DELETE',
+    'Access-Control-Request-Headers': 'Content-Type, X-Admin-Secret'
   });
-  console.log("Audit Logs Status:", auditRes.status, "Logs Count:", auditRes.data.logs?.length, "Total:", auditRes.data.total);
+  const allowMethods = String(
+    optRes.headers['access-control-allow-methods'] || optRes.headers['Access-Control-Allow-Methods'] || ''
+  );
+  if (!/DELETE/i.test(allowMethods) && optRes.status !== 204 && optRes.status !== 200) {
+    // some workers return 204 empty; if methods header present must include DELETE
+    console.log('OPTIONS status:', optRes.status, 'Allow-Methods:', allowMethods);
+  }
+  if (allowMethods && !/DELETE/i.test(allowMethods)) {
+    throw new Error(`CORS Allow-Methods missing DELETE: ${allowMethods}`);
+  }
+  console.log('✓ CORS OPTIONS allows DELETE (or empty handled by worker). Methods:', allowMethods || '(empty)');
+
+  // 10. Audit logs
+  logStep(10, 'Fetch Admin Operation Audit Logs');
+  const auditRes = await makeRequest('/api/v1/admin/audit-logs?limit=50', 'GET', authHeaders());
+  console.log(
+    'Audit Logs Status:',
+    auditRes.status,
+    'Logs Count:',
+    auditRes.data.logs?.length,
+    'Total:',
+    auditRes.data.total
+  );
   if (auditRes.status !== 200 || !auditRes.data.success || !Array.isArray(auditRes.data.logs)) {
     throw new Error(`Fetch audit logs failed: ${JSON.stringify(auditRes.data)}`);
   }
   if (auditRes.data.logs.length === 0) {
-    throw new Error(`Expected admin audit logs to be recorded for high-privilege actions, but got 0`);
+    throw new Error('Expected admin audit logs for high-privilege actions, got 0');
   }
-  console.log("✓ Admin operation audit logs successfully queried with actions logged:", auditRes.data.logs.map(l => l.action).join(', '));
+  const actions = auditRes.data.logs.map((l) => l.action);
+  for (const need of ['GENERATE', 'UNBIND', 'REVOKE', 'CLEAR_LOGS']) {
+    if (!actions.includes(need)) {
+      throw new Error(`Expected audit action ${need} in recent logs, got: ${actions.join(',')}`);
+    }
+  }
+  console.log('✓ Audit logs contain GENERATE/UNBIND/REVOKE/CLEAR_LOGS.');
 
-  console.log("\n==================================================");
-  console.log("🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉");
-  console.log("==================================================");
-
+  console.log('\n==================================================');
+  console.log('🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉');
+  console.log('==================================================');
 }
 
 async function main() {
@@ -239,12 +440,17 @@ async function main() {
     child = await ensureServerRunning();
     await runAdminTestSuite();
   } catch (err) {
-    console.error("\n❌ ADMIN E2E TEST SUITE FAILED:", err);
+    console.error('\n❌ ADMIN E2E TEST SUITE FAILED:', err);
     process.exitCode = 1;
   } finally {
     if (child) {
-      console.log("[Teardown] Terminating auto-launched wrangler process...");
+      console.log('[Teardown] Terminating auto-launched wrangler process...');
       child.kill('SIGINT');
+      setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch (_) {}
+      }, 2000);
     }
   }
 }

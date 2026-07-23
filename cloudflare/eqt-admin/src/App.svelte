@@ -5,13 +5,18 @@
   import ErrorAudit from './pages/ErrorAudit.svelte';
   import Licenses from './pages/Licenses.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
+  import type { AdminTab } from './lib/types';
 
   let authed = $state(isAuthenticated());
-  let currentTab = $state<'overview' | 'audit' | 'licenses' | 'health'>('overview');
+  let currentTab = $state<AdminTab>('overview');
 
   function handleLogout() {
     clearAdminSecret();
     authed = false;
+  }
+
+  function navigateTo(tab: AdminTab) {
+    currentTab = tab;
   }
 </script>
 
@@ -69,7 +74,7 @@
     <!-- Main Content Area -->
     <main class="main-content">
       {#if currentTab === 'overview'}
-        <Overview />
+        <Overview onNavigate={navigateTo} />
       {:else if currentTab === 'audit'}
         <ErrorAudit />
       {:else if currentTab === 'licenses'}
