@@ -2,7 +2,7 @@
 
 > 以**代码与契约事实**为准更新。功能说明见 [overview.md](./overview.md)，契约见 [api-contract.md](./api-contract.md)。
 
-最后更新：2026-07-24（阶段 4 完成）
+最后更新：2026-07-24（阶段 4 完成；Chrome 9222 Portal 验收通过）
 
 ---
 
@@ -86,6 +86,7 @@
 | 2026-07-24 | `npm run test:e2e` | **全部通过 Step 0–14** |
 | 2026-07-24 | Pages deploy | 推进中/完成见 commit |
 | 2026-07-24 | git push | 见 commit |
+| 2026-07-24 | Chrome 9222 Portal 冒烟 | 登录页 / 中文 / 未购买 toast / `?email=` 预填 / 结构 Modal — 全绿；截图 `docs/portal/chrome-portal-*.png` |
 
 ### E2E 关键摘要（阶段 4 新增）
 

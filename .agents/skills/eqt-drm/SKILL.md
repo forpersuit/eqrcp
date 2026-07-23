@@ -201,6 +201,7 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 * **OTP 失败限流**：`verify-code` 同 IP+purpose+email 15 分钟内 8 次失败 → 429（Worker isolate 内计数）。
 * **Portal 退款邮件**：自助退款成功后除 Paddle adjustment 外，异步发 7 语吊销通知（`REFUND_REVOKE_EMAIL_I18N`）。
 * **Logout**：`POST /api/v1/auth/logout` 删除 `user_sessions`（幂等）。
+* **激活网络元数据**：`POST /activate` 写入 `client_ip`（CF-Connecting-IP）、`ip_country`（CF-IPCountry）、`user_agent`（截断 256）。Admin Licenses 列表 20s 静默刷新并展示设备网络行；旧激活可空。
 
 ### 6.2 极简 Workers 内置 SMTPS 发信
 利用 Workers `connect` API 通过 465 端口（Implicit TLS）直接与外部 SMTP 邮件服务器建立安全 TCP 连接进行握手和发信：

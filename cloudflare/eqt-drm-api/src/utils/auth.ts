@@ -43,6 +43,22 @@ export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> 
   }
 }
 
+/** Ensure activations network metadata columns for admin visibility / geo baselining. */
+export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
+  const alters = [
+    "ALTER TABLE activations ADD COLUMN client_ip TEXT DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN ip_country TEXT DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN user_agent TEXT DEFAULT NULL",
+  ];
+  for (const sql of alters) {
+    try {
+      await env.DB.prepare(sql).run();
+    } catch (err) {
+      // Column already exists; ignore
+    }
+  }
+}
+
 export async function ensureDrmTables(env: Env): Promise<void> {
   try {
     await env.DB.batch([

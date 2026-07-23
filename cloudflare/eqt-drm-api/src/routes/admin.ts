@@ -282,7 +282,7 @@ export async function handleAdminRoutes(
     if (rawLicenses.length > 0) {
       const licenseCodes = rawLicenses.map(lic => lic.license_code);
       const placeholders = licenseCodes.map(() => '?').join(',');
-      const actSql = `SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code IN (${placeholders}) ORDER BY id ASC`;
+      const actSql = `SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent FROM activations WHERE license_code IN (${placeholders}) ORDER BY id ASC`;
       const actRes = await env.DB.prepare(actSql).bind(...licenseCodes).all();
       const rawActivations: any[] = actRes.results || [];
 
@@ -335,7 +335,7 @@ export async function handleAdminRoutes(
     }
 
     const actRes = await env.DB.prepare(
-      "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
+      "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent FROM activations WHERE license_code = ? ORDER BY id ASC"
     ).bind(license_code).all();
     const activationsAtRevoke = (actRes.results || []).map(activationAuditSnapshot);
 
@@ -404,7 +404,7 @@ export async function handleAdminRoutes(
         });
       }
       const act = await env.DB.prepare(
-        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE id = ? AND license_code = ?"
+        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent FROM activations WHERE id = ? AND license_code = ?"
       ).bind(actId, license_code).first<any>();
       if (!act) {
         return new Response(JSON.stringify({ error: "Activation not found for this license" }), {
@@ -429,7 +429,7 @@ export async function handleAdminRoutes(
       };
     } else {
       const actRes = await env.DB.prepare(
-        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at FROM activations WHERE license_code = ? ORDER BY id ASC"
+        "SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent FROM activations WHERE license_code = ? ORDER BY id ASC"
       ).bind(license_code).all();
       const acts = actRes.results || [];
       const snaps = acts.map(activationAuditSnapshot);

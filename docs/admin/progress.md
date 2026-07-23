@@ -188,6 +188,7 @@
 | 2026-07-23 | prod | Worker `wrangler deploy` + Pages `eqt-admin` | Worker Version `2988eade…`；Pages `https://dde0bc9b.eqt-admin.pages.dev`；自定义域 bundle `index-Bg8qqf70.js` 含「操作审计轨迹」「真探针」 |
 | 2026-07-23 | prod | CORS OPTIONS DELETE from `admin.eqt.net.im` | Allow-Methods 含 DELETE；Allow-Origin 回显 admin 源 |
 | 2026-07-23 | prod | 鉴权后全链路在线测（.env ADMIN_SECRET） | health: SMTP ok(~200ms) D1 ok; Paddle mode webhook_ok_api_key_invalid; generate/revoke 写 audit；Chrome 五 Tab 通过 |
+| 2026-07-24 | prod | activations 网络元数据 + Admin 近实时刷新 | D1 增列；Worker deploy；Pages `eqt-admin`；契约 1.2 节更新 |
 
 ---
 
@@ -203,3 +204,4 @@
 | 2026-07-24 | Paddle 失败写 system_error_logs；下载/更新无 GitHub 回落；IMPORTANT_r2 / paddle-api；eqt-drm-api+admin 1.1.1 |
 | 2026-07-24 | IMPORTANT_drm-secrets：R2 用 vars 非 secret；全量 Secret 清单与 key 生成路径 |
 | 2026-07-24 | 操作审计 details  enrichment：GENERATE/REVOKE/UNBIND 设备快照/CLEAR_LOGS 计数；eqt 1.1.2 |
+| 2026-07-24 | activations 落库 `client_ip`/`ip_country`/`user_agent`；Admin Licenses 20s 静默刷新 + 设备网络行；eqt `v1.16.3` |

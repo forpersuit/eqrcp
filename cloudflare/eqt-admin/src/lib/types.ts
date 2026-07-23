@@ -17,6 +17,10 @@ export interface Activation {
   disk_hash?: string | null;
   device_id?: string | null;
   activated_at: string;
+  /** Populated on new activations after v1.16.3 network meta capture */
+  client_ip?: string | null;
+  ip_country?: string | null;
+  user_agent?: string | null;
 }
 
 /** licenses row + admin-computed fields */

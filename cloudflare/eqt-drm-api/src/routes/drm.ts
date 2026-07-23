@@ -1,9 +1,26 @@
 import { Env } from '../types';
 import { extractRequestLang, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
-import { ensureDeviceIdColumn } from '../utils/auth';
+import { ensureDeviceIdColumn, ensureActivationNetworkColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
+import { clientIpFromRequest } from '../utils/rate-limit';
+
+function activationClientMeta(request: Request): {
+  client_ip: string | null;
+  ip_country: string | null;
+  user_agent: string | null;
+} {
+  const ip = clientIpFromRequest(request);
+  const client_ip = ip && ip !== "unknown" ? ip : null;
+  const countryRaw = (request.headers.get("cf-ipcountry") || "").trim().toUpperCase();
+  const ip_country = countryRaw && countryRaw !== "XX" && countryRaw !== "T1"
+    ? countryRaw.slice(0, 8)
+    : (countryRaw || null);
+  const ua = (request.headers.get("user-agent") || "").trim();
+  const user_agent = ua ? ua.slice(0, 256) : null;
+  return { client_ip, ip_country, user_agent };
+}
 
 export async function handleDrmRoutes(
   request: Request,
@@ -15,6 +32,7 @@ export async function handleDrmRoutes(
   // 1. Activating a device
   if (url.pathname === "/api/v1/activate" && request.method === "POST") {
     await ensureDeviceIdColumn(env);
+    await ensureActivationNetworkColumns(env);
     const body: any = await request.json();
     const reqLang = extractRequestLang(request, body);
     const { license_code, uuid_hash, cpu_hash, disk_hash, device_id } = body;
@@ -98,16 +116,20 @@ export async function handleDrmRoutes(
         });
       }
 
-      // Insert new activation record
+      // Insert new activation record (capture network meta for admin visibility / future geo)
+      const net = activationClientMeta(request);
       await env.DB.prepare(
-        "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
         license_code,
         uuid_hash || "",
         cpu_hash || "",
         disk_hash || "",
         device_id || "",
-        new Date().toISOString()
+        new Date().toISOString(),
+        net.client_ip,
+        net.ip_country,
+        net.user_agent
       ).run();
 
       // Send activation notification email to the buyer asynchronously

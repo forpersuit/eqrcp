@@ -36,6 +36,9 @@ export interface Activation {
   disk_hash: string | null;
   device_id: string | null;
   activated_at: string;
+  client_ip?: string | null;
+  ip_country?: string | null;
+  user_agent?: string | null;
 }
 
 export interface UnbindRecord {

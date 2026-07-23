@@ -92,12 +92,28 @@ async function runFullDrmTestSuite() {
       cpu_hash: 'cpu-hash-dev-A',
       disk_hash: 'disk-hash-dev-A'
     };
-    const actResA = await makeRequest('/api/v1/activate', {}, devA);
+    const actResA = await makeRequest('/api/v1/activate', {
+      'User-Agent': 'EQT-E2E-Activate/1.0'
+    }, devA);
     console.log("Device A Status:", actResA.status);
     if (actResA.status !== 200 || !actResA.data.signature) {
       throw new Error("Device A activation failed! Response: " + JSON.stringify(actResA.data));
     }
     console.log("✓ Device A successfully activated. Ed25519 Signature length:", actResA.data.signature.length);
+
+    // Network metadata for admin visibility (client_ip / ip_country from CF edge; UA from request)
+    const actMetaRaw = execWranglerJSON(
+      `SELECT client_ip, ip_country, user_agent FROM activations WHERE license_code = '${testLic}' ORDER BY id DESC LIMIT 1;`
+    );
+    const actMeta = actMetaRaw[0].results[0];
+    console.log("Activation network meta:", actMeta);
+    if (!actMeta || !actMeta.client_ip) {
+      throw new Error("Expected client_ip on new activation (CF-Connecting-IP), got: " + JSON.stringify(actMeta));
+    }
+    if (!actMeta.user_agent || !String(actMeta.user_agent).includes('EQT-E2E-Activate')) {
+      throw new Error("Expected user_agent to capture request UA, got: " + JSON.stringify(actMeta));
+    }
+    console.log("✓ Activation network meta captured (client_ip + user_agent).");
 
     // 1.1 Online reconciliation must return a complete re-signed certificate.
     // /api/v1/verify returns status/tier/certificate_signature/signature (hashes are in signed payload, not response body).

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
   import type {
     Activation,
@@ -8,11 +8,17 @@
     LicenseTier
   } from '../lib/types';
 
+  const AUTO_REFRESH_MS = 20_000;
+
   let licenses = $state<License[]>([]);
   let loading = $state(true);
+  let refreshing = $state(false);
   let errorMsg = $state('');
   let actionMsg = $state('');
   let searchQuery = $state('');
+  let lastRefreshedAt = $state<string>('');
+  let autoRefresh = $state(true);
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   let showGenerateModal = $state(false);
   let selectedLicense = $state<License | null>(null);
@@ -43,19 +49,70 @@
     return `uuid:${shortHash(act.uuid_hash)} · cpu:${shortHash(act.cpu_hash)} · disk:${shortHash(act.disk_hash)}`;
   }
 
-  async function loadLicenses() {
-    loading = true;
-    errorMsg = '';
+  function deviceNetworkLine(act: Activation): string {
+    const parts: string[] = [];
+    if (act.ip_country) parts.push(act.ip_country);
+    if (act.client_ip) parts.push(act.client_ip);
+    return parts.length ? parts.join(' · ') : 'IP 未记录（旧激活）';
+  }
+
+  function latestActivationHint(lic: License): string {
+    if (!lic.activations?.length) return '';
+    const sorted = [...lic.activations].sort((a, b) =>
+      String(b.activated_at || '').localeCompare(String(a.activated_at || ''))
+    );
+    const latest = sorted[0];
+    if (!latest) return '';
+    const geo = latest.ip_country || latest.client_ip;
+    if (!geo) return '';
+    return latest.ip_country
+      ? `${latest.ip_country}${latest.client_ip ? ' ' + latest.client_ip : ''}`
+      : String(latest.client_ip);
+  }
+
+  async function loadLicenses(opts: { silent?: boolean } = {}) {
+    const silent = !!opts.silent;
+    if (silent) {
+      refreshing = true;
+    } else {
+      loading = true;
+    }
+    if (!silent) errorMsg = '';
     try {
       const params: Record<string, string> = {};
       if (searchQuery.trim()) params.q = searchQuery.trim();
       const data = await adminFetch<{ licenses: License[] }>('/api/v1/admin/licenses', { params });
       licenses = data.licenses || [];
+      // Keep unbind modal selection in sync when silent refresh brings new activations
+      if (selectedLicense) {
+        const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
+        if (refreshed) selectedLicense = refreshed;
+      }
+      lastRefreshedAt = new Date().toLocaleTimeString();
     } catch (err: any) {
-      errorMsg = err.message || '加载授权列表失败';
-      licenses = [];
+      if (!silent) {
+        errorMsg = err.message || '加载授权列表失败';
+        licenses = [];
+      }
     } finally {
       loading = false;
+      refreshing = false;
+    }
+  }
+
+  function startAutoRefresh() {
+    stopAutoRefresh();
+    if (!autoRefresh) return;
+    refreshTimer = setInterval(() => {
+      if (actionBusy || generating || showGenerateModal) return;
+      loadLicenses({ silent: true });
+    }, AUTO_REFRESH_MS);
+  }
+
+  function stopAutoRefresh() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
     }
   }
 
@@ -165,6 +222,11 @@
 
   onMount(() => {
     loadLicenses();
+    startAutoRefresh();
+  });
+
+  onDestroy(() => {
+    stopAutoRefresh();
   });
 </script>
 
@@ -172,9 +234,20 @@
   <div class="header-row">
     <div>
       <h2>授权码与订单管控</h2>
-      <p class="subtitle">全库授权检索、手动发码、吊销与设备解绑</p>
+      <p class="subtitle">全库授权检索、手动发码、吊销与设备解绑 · 列表 {AUTO_REFRESH_MS / 1000}s 近实时刷新</p>
     </div>
     <div class="actions">
+      <label class="auto-refresh-toggle" title="静默轮询授权与设备绑定状态">
+        <input
+          type="checkbox"
+          bind:checked={autoRefresh}
+          onchange={() => (autoRefresh ? startAutoRefresh() : stopAutoRefresh())}
+        />
+        自动刷新
+      </label>
+      <button class="btn btn-secondary" onclick={() => loadLicenses()} disabled={loading || refreshing}>
+        {refreshing ? '刷新中…' : '立即刷新'}
+      </button>
       <button class="btn btn-primary" onclick={() => { showGenerateModal = true; lastGeneratedCode = null; copyHint = ''; }}>
         + 手动生成授权码
       </button>
@@ -190,9 +263,12 @@
         bind:value={searchQuery}
         onkeydown={(e) => e.key === 'Enter' && loadLicenses()}
       />
-      <button class="btn btn-secondary" onclick={loadLicenses} disabled={loading}>
+      <button class="btn btn-secondary" onclick={() => loadLicenses()} disabled={loading}>
         搜索
       </button>
+      {#if lastRefreshedAt}
+        <span class="refresh-meta">上次更新 {lastRefreshedAt}{refreshing ? ' · 同步中' : ''}</span>
+      {/if}
     </div>
   </div>
 
@@ -237,6 +313,11 @@
                 <span class="device-info">
                   {lic.active_devices_count} / {lic.max_devices}
                 </span>
+                {#if latestActivationHint(lic)}
+                  <div class="device-geo-hint" title="最近一次激活的 IP / 国家">
+                    {latestActivationHint(lic)}
+                  </div>
+                {/if}
               </td>
               <td>
                 {lic.buyer_email ||
@@ -375,6 +456,9 @@
                 <div class="dev-time">
                   激活于: {act.activated_at ? new Date(act.activated_at).toLocaleString() : '-'}
                 </div>
+                <div class="dev-net" title={act.user_agent || ''}>
+                  网络: {deviceNetworkLine(act)}
+                </div>
               </div>
               <button
                 class="btn btn-danger btn-sm"
@@ -407,7 +491,31 @@
   .subtitle { font-size: 0.875rem; color: var(--text-muted); }
 
   .filter-bar { padding: 1rem 1.5rem; }
-  .search-group { display: flex; gap: 0.75rem; width: 100%; }
+  .search-group { display: flex; gap: 0.75rem; width: 100%; align-items: center; flex-wrap: wrap; }
+  .actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+  .auto-refresh-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+  }
+  .refresh-meta { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+  .device-geo-hint {
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+  .dev-net {
+    margin-top: 0.2rem;
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    opacity: 0.9;
+  }
 
   .table-container { padding: 0; overflow-x: auto; }
   .data-table { width: 100%; border-collapse: collapse; text-align: left; }

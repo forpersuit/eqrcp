@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS activations (
     disk_hash TEXT,
     device_id TEXT DEFAULT NULL,
     activated_at TEXT NOT NULL,
+    client_ip TEXT DEFAULT NULL,     -- CF-Connecting-IP at activate time
+    ip_country TEXT DEFAULT NULL,    -- CF-IPCountry (ISO-3166-1 alpha-2) or XX
+    user_agent TEXT DEFAULT NULL,    -- truncated UA for device-class hints
     FOREIGN KEY (license_code) REFERENCES licenses(license_code)
 );
 
