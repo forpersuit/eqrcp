@@ -38,6 +38,12 @@
 
 ---
 
+## 相关：运维管理后台
+
+用户自助 Portal 之外的 **Admin 控制台**（发码、吊销、错误审计）文档在 [`docs/admin/`](../admin/README.md)，工程在 `cloudflare/eqt-admin/`。
+
+---
+
 ## 维护规范 (Maintenance Guidelines)
 
 - 所有新增的支付网关、Webhook 处理逻辑或授权漏洞修复，必须同步在此目录更新相关文档。

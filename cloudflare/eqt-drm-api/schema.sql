@@ -1,4 +1,7 @@
 -- D1 Database Schema for EQT DRM
+-- SSOT for table shapes used by eqt-drm-api and admin contracts (docs/admin/api-contract.md).
+-- licenses: PK is license_code (no auto-increment id). Sort admin lists by created_at.
+-- activations: unbind by id (activation_id). No device_fingerprint / device_name columns.
 
 CREATE TABLE IF NOT EXISTS licenses (
     license_code TEXT PRIMARY KEY,
@@ -49,4 +52,16 @@ CREATE TABLE IF NOT EXISTS unbind_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_unbind_license ON unbind_records(license_code);
+
+-- Admin / ops audit log (also ensured at runtime by ensureAuditLogTable)
+CREATE TABLE IF NOT EXISTS system_error_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level TEXT NOT NULL DEFAULT 'ERROR',       -- 'ERROR', 'WARN', 'CRITICAL'
+    category TEXT NOT NULL,
+    error_message TEXT NOT NULL,
+    context_json TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_error_logs_created ON system_error_logs(created_at);
 

@@ -1,88 +1,116 @@
-# EQT 管理员后台管理系统与错误审计中心设计文档 (Admin Dashboard Architecture & Error Audit Design)
+# EQT 管理员后台管理系统与错误审计中心设计文档
 
 ## 1. 核心架构与设计原则
 
 为了在保障极低运维成本的前提下提供高效、安全的授权管控与实时运维审计能力，EQT 管理员后台系统遵循以下第一性原理：
 
-1. **绝对遮蔽与技术错误零暴露 (Zero Error Exposure)**：
-   * 所有前端/客户端交互接口面向普通用户时，绝对剥离 `D1_ERROR`、`SQLITE_...`、数据库表名、代码变量、网络栈异常等任何底层技术细节。
-   * 普通用户仅能看到经过多语言过滤的安全业务提示（例如：《验证码已失效，请重新发送》）。
-2. **D1 实时日志审计 (Audit Log DB System)**：
-   * 具体的代码报错、数据库约束冲突、SMTP 握手失败及 Paddle 履约异常等，全量静默持久化至 Cloudflare D1 的 `system_error_logs` 审计表中。
-3. **技术栈与生态复用**：
-   * 前端构建路径位于 `cloudflare/eqt-admin/`，使用 **Svelte 5 + Vite + TypeScript** 框架构建，与 EQT Web/Chat v2 组件化交互规范保持 100% 一致。
-   * 样式技术选型采用 **Vanilla CSS + Modern Design Tokens (CSS 变量)**，保持与全站 UI 设计系统完全一致，零额外 CSS 依赖与编译开销。
-   * 后端无缝复用 Cloudflare Workers (`eqt-drm-api`) 与 Cloudflare D1 存储，零额外服务器开销。部署托管于 Cloudflare Pages (`admin.eqt.net.im`)。
+1. **绝对遮蔽与技术错误零暴露 (Zero Error Exposure)**  
+   * 面向**普通用户**的接口绝对剥离 `D1_ERROR`、表名、堆栈等底层细节。  
+   * 普通用户仅见多语言安全业务提示。  
+   * **管理端**可展示完整技术日志（与用户侧相反）。
+
+2. **D1 实时日志审计**  
+   * 代码异常、SMTP / Paddle 等失败静默写入 D1 `system_error_logs`，供管理台消费。
+
+3. **技术栈与生态复用**  
+   * 前端：`cloudflare/eqt-admin/`（**Svelte 5 + Vite + TypeScript**，以该目录 `package.json` 为准）。  
+   * 样式：**Vanilla CSS + Design Tokens（CSS 变量）**。  
+   * 后端：复用 `cloudflare/eqt-drm-api` + D1。  
+   * 托管目标：Cloudflare Pages（`admin.eqt.net.im`）。
+
+业务背景与用户自助门户见 [`docs/payment/`](payment/README.md)。  
+**分阶段落地、缺口与 API 字段契约**见 [`docs/admin/`](admin/README.md)（行动计划 / gap / contract / progress）。
 
 ---
 
-## 2. 技术选型与架构规范 (Tech Stack & Architecture)
+## 2. 技术选型与架构规范
 
-| 层级 | 选用技术 / 规范 | 选型依据与原理 |
+| 层级 | 选用技术 / 规范 | 说明 |
 | :--- | :--- | :--- |
-| **前端框架** | **Svelte 5 + Vite 8 + TypeScript** | 与 `pkg/chat/v2/web` 技术栈完全一致；Svelte 5 Runes (`$state`, `$derived`) 极佳的响应式表达力，轻量高效，适合中后台表格、模态框与状态管理。 |
-| **CSS 样式选型** | **Vanilla CSS + Design Tokens (CSS 变量)** | 沿用项目标准的现代暗黑/浅色 Theme 变量系统，原生 CSS Scoped 隔离，打包无臃肿依赖，兼具高性能与设计精美度。 |
-| **工程目录** | `cloudflare/eqt-admin/` | 与 `cloudflare/eqt-website`、`cloudflare/eqt-drm-api` 保持同级目录规范。 |
-| **文档与进度** | `docs/admin/` | 详细实现规划、进度跟踪及运维指南存放在 `docs/admin/` 目录。 |
-| **鉴权与 Session** | `X-Admin-Secret` + `sessionStorage` | 秘钥保存在浏览器 `sessionStorage`（标签页关闭即清空），所有 API 请求自动注入 `X-Admin-Secret` 头部；鉴权失败统一 401 重定向至 Login 页。 |
+| 前端框架 | Svelte 5 + Vite + TypeScript | 与 Chat v2 同类；Runes 适合中后台状态 |
+| CSS | Vanilla CSS + Design Tokens | 无 Tailwind 构建依赖 |
+| 工程目录 | `cloudflare/eqt-admin/` | 与 `eqt-website`、`eqt-drm-api` 同级 |
+| 文档 | `docs/admin/` | 计划、缺口、契约、进度 |
+| 鉴权 | `X-Admin-Secret` + `sessionStorage` | 标签关闭即清；401 回登录 |
+| 设备主键 | `activations.id`（`activation_id`） | 与用户 `/user/unbind-device` 对齐；**无** `device_fingerprint` 列 |
 
 ---
 
-## 3. D1 数据库表结构设计 (`system_error_logs`)
+## 3. D1 表（管理相关）
 
-在 Cloudflare D1 数据库中建立专用的审计日志表：
+完整 SSOT：`cloudflare/eqt-drm-api/schema.sql`。
+
+### 3.1 `system_error_logs`
 
 ```sql
 CREATE TABLE IF NOT EXISTS system_error_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    level TEXT NOT NULL DEFAULT 'ERROR',       -- 'ERROR', 'WARN', 'CRITICAL'
-    category TEXT NOT NULL,                    -- 'CHECKOUT_SEND_CODE', 'CHECKOUT_VERIFY', 'PADDLE_WEBHOOK', 'SMTP_CONNECT'
-    error_message TEXT NOT NULL,               -- 完整底层堆栈及异常排查细节
-    context_json TEXT,                         -- 附带请求上下文（如请求 URL、IP、操作 Email 等）
-    created_at TEXT NOT NULL                   -- ISO 格式时间戳
+    level TEXT NOT NULL DEFAULT 'ERROR',
+    category TEXT NOT NULL,
+    error_message TEXT NOT NULL,
+    context_json TEXT,
+    created_at TEXT NOT NULL
 );
 ```
 
----
+### 3.2 授权与设备（摘要）
 
-## 4. Svelte 后台前端管理界面四大模块
-
-管理员后台 SPA 主要包含四大核心板块：
-
-### 4.1 错误审计中心 (Error Audit Center)
-- **实时日志看板**：倒序分页列出 D1 `system_error_logs` 最新错误日志，高亮标出 `CRITICAL` 告警。
-- **一键 JSON 堆栈展开**：点击日志行可展开查看具体的上下文信息（如 `context_json` 及完整错误堆栈）。
-- **分类过滤与搜索**：支持按 `Category`（发信失败、D1 约束、Paddle 签名失败等）和关键词搜索。
-- **日志清理**：支持管理员一键归档或清空指定范围的历史日志。
-
-### 4.2 授权码与订单管控 (License & Order Management)
-- **全库授权检索**：按 Email Hash、`license_code` 或 Paddle `transaction_id` 快速检索全量授权。
-- **手动生成/补发**：管理员可在界面上一键为客户生成 `PLUS` 永久/年付授权码并自动/手动发信。
-- **授权吊销 (Revoke)**：修改状态为 `revoked`，客户端下次 `/verify` 将收回授权并擦除本地 `.lic` 凭证。
-- **设备指纹解绑**：查阅该授权绑定的设备列表，支持一键清空指纹或解绑特定设备。
-
-### 4.3 发信引擎与系统健康 (System Health & Probes)
-- **SMTP 健康检测**：测试与 `MAIL_SEND_SERVER` 的 465 端口 TLS 握手与发信探针状态。
-- **Paddle 履约监控**：实时展示最新 Webhook 接收与回调对账记录，支持异常 Webhook 状态诊断。
-
-### 4.4 反馈中心与系统概览 (Feedback & Overview)
-- **全局 KPI 指标**：总授权数、今日激活数、近 24 小时错误统计及发信成功率。
-- **用户反馈集成**：集成查看来自 `eqt-feedback-api` 的用户意见与 Telegram 消息列表。
+* `licenses`：主键 `license_code`（**无**数字 id）；含 tier/status/设备上限/到期/邮箱哈希/Paddle 字段。  
+* `activations`：`id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at`。  
+* `unbind_records`：用户侧年解绑限额；Admin 解绑策略见 api-contract。
 
 ---
 
-## 5. 后端 API 路由安全与对齐规范
+## 4. 四大业务模块
 
-管理员 API 位于 `eqt-drm-api` 服务中，受 `ADMIN_SECRET` 严格安全隔离。所有路由统一采用 `/api/v1/admin/*`：
+### 4.1 错误审计中心
+
+* 倒序列表、`CRITICAL` 高亮、展开 `context_json`  
+* 分类/关键词过滤（可先客户端，后服务端）  
+* 清空历史日志（需 CORS 支持 DELETE 或 clear 别名）
+
+### 4.2 授权码与订单管控
+
+* 按 email / `license_code` / Paddle `transaction_id` 检索  
+* 手动生成（展示并复制码；后续可补发邮件）  
+* 吊销 → `status=revoked`  
+* 按 `activation_id` 解绑或清空该码全部设备
+
+### 4.3 发信与系统健康
+
+* 阶段 1：配置是否就绪 + D1 计数  
+* 阶段 3+：SMTP 真探针、Webhook 履约记录
+
+### 4.4 概览与反馈
+
+* KPI：授权总数、错误日志积压、DB 状态（深化指标后置）  
+* 反馈中心对接 `eqt-feedback-api`（后置）
+
+---
+
+## 5. 后端 Admin 路由
+
+所有请求 Header：`X-Admin-Secret`。未授权 **401**。`ADMIN_SECRET` 未配置时 admin **不得放行**（阶段 1）。
 
 | 动作 | 方法 & 路径 | 说明 |
 | :--- | :--- | :--- |
-| **日志查询** | `GET /api/v1/admin/error-logs` | 分页拉取 `system_error_logs` 日志记录 |
-| **日志清理** | `DELETE /api/v1/admin/error-logs` | 清空或删除历史审计日志 |
-| **授权生成** | `POST /api/v1/admin/generate` | 管理员生成授权码（兼容 `/generate-license` 别名） |
-| **授权检索** | `GET /api/v1/admin/licenses` | 按 email/code/transaction_id 查询全库授权 |
-| **授权吊销** | `POST /api/v1/admin/revoke` | 吊销指定授权码（兼容 `/revoke-license` 别名） |
-| **设备解绑** | `POST /api/v1/admin/unbind` | 管理员解绑指定授权下的设备指纹 |
-| **健康诊断** | `GET /api/v1/admin/health` | 触发 SMTP 连通性测试及系统服务诊断 |
+| 日志查询 | `GET /api/v1/admin/error-logs` | 拉取审计日志 |
+| 日志清理 | `DELETE /api/v1/admin/error-logs` | 清空（CORS 需含 DELETE） |
+| 授权生成 | `POST /api/v1/admin/generate` | 别名 `/generate-license` |
+| 授权检索 | `GET /api/v1/admin/licenses` | `created_at` 排序 + 真实 activations |
+| 授权吊销 | `POST /api/v1/admin/revoke` | 别名 `/revoke-license` |
+| 设备解绑 | `POST /api/v1/admin/unbind` | body：`license_code` + 可选 `activation_id` |
+| 健康诊断 | `GET /api/v1/admin/health` | metrics + config 布尔 |
 
-所有请求必须包含 Header `X-Admin-Secret: <ADMIN_SECRET>`。非管理员请求统一响应 `401 Unauthorized`。
+**字段级请求/响应 JSON** 见 [`docs/admin/api-contract.md`](admin/api-contract.md)。  
+**推进顺序** 见 [`docs/admin/action-plan.md`](admin/action-plan.md)。
+
+---
+
+## 6. 与 Portal / 应急运维
+
+| 方式 | 何时用 |
+| :--- | :--- |
+| 用户 Portal | 用户自助查码、解绑、退款 |
+| Admin SPA | 日常运维目标态 |
+| D1 Console / wrangler | Admin 未就绪或紧急手改（见 payment/paddle-payment.md §4） |

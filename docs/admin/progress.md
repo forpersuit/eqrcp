@@ -1,71 +1,103 @@
-# EQT 管理后台 (eqt-admin) 开发进度与实现文档
+# EQT 管理后台进度跟踪
 
-## 1. 项目概览与选型决策 (Project Overview & Tech Stack)
+> 以**代码与契约事实**为准更新。行动顺序见 [action-plan.md](./action-plan.md)。
 
-EQT 管理后台控制台 (`cloudflare/eqt-admin/`) 是面向运维与管理人员的可视化控制台，托管于 Cloudflare Pages (`admin.eqt.net.im`)。
-
-### 核心技术选型 (Tech Stack Choices)
-
-- **前端框架 (Framework)**: `Svelte 5` + `Vite 8` + `TypeScript`
-  - **选型依据**: 与项目已有 `pkg/chat/v2/web` 技术栈 100% 保持一致，无需额外引入框架学习成本；Svelte 5 Runes (`$state`, `$derived`) 拥有极佳的响应式表达力与极小的打包体积。
-- **CSS 样式选型 (CSS Architecture)**: **Vanilla CSS + Modern Design Tokens (CSS 变量)**
-  - **选型依据**: 采用标准的 CSS Custom Properties 构建全局主题变量（主色、暗黑/浅色模式、卡片背景、毛玻璃效果、边框及圆角）；样式通过 Svelte 局部 Scoped 机制隔离，无 Tailwind/CSS-in-JS 编译依赖与打包体积负担，渲染性能与响应速度最优。
-- **后端服务 (Backend Service)**: `cloudflare/eqt-drm-api` (Cloudflare Worker + D1 Database)
-  - **选型依据**: 复用现有的 DRM Worker 与 D1 数据库，所有接口通过 `/api/v1/admin/*` 收拢并校验 `X-Admin-Secret` 头部。
-- **凭证与会话 (Auth & Session)**: `sessionStorage` 暂存 `ADMIN_SECRET`，标签页关闭即销毁，防范凭证泄漏；全局 API Fetch Client 自动注入 `X-Admin-Secret` 并处理 401 拦截。
+最后更新：2026-07-23（阶段 0 对齐完成）
 
 ---
 
-## 2. API 接口对接与实现计划 Matrix
+## 阶段勾选
 
-| 模块 | API 路径 | HTTP 方法 | 后端状态 (`eqt-drm-api`) | 前端状态 (`eqt-admin`) | 说明 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **鉴权** | `/api/v1/admin/error-logs` | GET | ✅ 已实现 | ⏳ 推进中 | 尝试拉取 1 条日志作为 Secret 校验 |
-| **错误审计** | `/api/v1/admin/error-logs` | GET | ✅ 已实现 | ⏳ 推进中 | 支持分页、`level` 筛选、堆栈 JSON 查看 |
-| **日志清理** | `/api/v1/admin/error-logs` | DELETE | ⏳ 待补齐 | ⏳ 推进中 | 清空或按条件清理历史日志 |
-| **授权生成** | `/api/v1/admin/generate` | POST | ✅ 已实现 | ⏳ 推进中 | 手动发码（兼容 `/generate-license` 别名） |
-| **授权检索** | `/api/v1/admin/licenses` | GET | ⏳ 待补齐 | ⏳ 推进中 | 按 email/code/transaction_id 搜索全库授权 |
-| **授权吊销** | `/api/v1/admin/revoke` | POST | ⏳ 待补齐 | ⏳ 推进中 | 吊销授权码（Status → `revoked`） |
-| **设备解绑** | `/api/v1/admin/unbind` | POST | ⏳ 待补齐 | ⏳ 推进中 | 清除指纹释放 `max_devices` |
-| **系统健康** | `/api/v1/admin/health` | GET | ⏳ 待补齐 | ⏳ 推进中 | SMTP 握手探针与 Webhook 履约诊断 |
+### 阶段 0 — 对齐与预备
+
+- [x] `docs/admin/README.md` 索引
+- [x] `docs/admin/action-plan.md` 分阶段计划
+- [x] `docs/admin/gap-analysis.md` 缺口分析
+- [x] `docs/admin/api-contract.md` API 契约（真实 schema）
+- [x] 刷新本 progress；删除非正式 `docs/admin/1`
+- [x] `admin-dashboard-design.md` 与文档目录互链、版本/字段对齐
+- [x] `schema.sql` 纳入 `system_error_logs`
+- [x] `cloudflare/eqt-admin/README.md` + `.env.example`
+- [x] `eqt-admin/src/lib/types.ts` 契约类型预备（页面改接在阶段 1）
+
+### 阶段 1 — P0 契约修复
+
+- [ ] 后端：`ADMIN_SECRET` fail-closed
+- [ ] 后端：CORS 允许 DELETE（或 clear 别名）
+- [ ] 后端：`GET /admin/licenses` 排序 + activations 真实列
+- [ ] 后端：`POST /admin/unbind` 使用 `activation_id`
+- [ ] 后端：`POST /admin/revoke` 不存在返回 404
+- [ ] 前端：`types.ts` + Licenses 字段/解绑对齐契约
+- [ ] 前端：生成成功展示/复制 license_code
+- [ ] 前端：危险操作去掉裸 `alert`/`confirm`（改 modal/错误条）
+
+### 阶段 2 — 端到端验收
+
+- [ ] 本地联调四 Tab 主路径
+- [ ] admin 相关最小测试或脚本
+- [ ] 验证记录写入本节（无 secret）
+
+### 阶段 3 — 产品补强
+
+- [ ] 错误日志服务端过滤/分页
+- [ ] generate 绑 email / 可选发信
+- [ ] Health 真探针 / Webhook 记录
+- [ ] Overview KPI 深化
+- [ ] 反馈中心
+- [ ] admin 操作审计表
+
+### 阶段 4 — 部署
+
+- [ ] Pages 构建与 `admin.eqt.net.im`
+- [ ] 生产 `VITE_API_BASE`
+- [ ] 防索引与运维说明
 
 ---
 
-## 3. 任务拆分与推进 Checkpoint (Tasks & Milestones)
+## 代码事实快照（阶段 0 时点）
 
-- [x] **Milestone 1: 技术选型与文档同步**
-  - [x] 完成 `docs/admin-dashboard-design.md` 设计规范同步与对齐。
-  - [x] 确定 Svelte 5 + Vanilla CSS Variables 技术栈。
-  - [x] 创建 `docs/admin/progress.md` 进度文档。
+### 后端 `eqt-drm-api` admin 路由
 
-- [ ] **Milestone 2: 后端 API 补齐与单元测试 (`cloudflare/eqt-drm-api`)**
-  - [ ] 在 `index.ts` 中补齐 `GET /api/v1/admin/licenses` 全库检索。
-  - [ ] 补齐 `POST /api/v1/admin/revoke` 授权吊销逻辑。
-  - [ ] 补齐 `POST /api/v1/admin/unbind` 管理员设备解绑接口。
-  - [ ] 补齐 `DELETE /api/v1/admin/error-logs` 日志清理接口。
-  - [ ] 补齐 `GET /api/v1/admin/health` 系统健康探针接口。
-  - [ ] 运行 `cd cloudflare/eqt-drm-api && npm test` 验证后端逻辑。
+| 接口 | 文件内存在 | 契约对齐 |
+| :--- | :---: | :---: |
+| GET error-logs | 是 | 基本可用 |
+| DELETE error-logs | 是 | CORS 待修 |
+| POST generate | 是 | 基本可用 |
+| GET licenses | 是 | **否**（id / activations 列） |
+| POST revoke | 是 | 弱（无 404） |
+| POST unbind | 是 | **否**（错误列名） |
+| GET health | 是 | 配置布尔级可用 |
 
-- [ ] **Milestone 3: 前端工程初始化与通用能力 (`cloudflare/eqt-admin/`)**
-  - [ ] 初始化 Svelte 5 + Vite 8 + TypeScript 工程结构。
-  - [ ] 搭建 CSS Design Tokens 全局样式库 (`app.css`)。
-  - [ ] 编写带 `X-Admin-Secret` 注入与 401 拦截的 `AdminApiClient` (`src/lib/api.ts`)。
-  - [ ] 编写登录鉴权门组件 (`Login.svelte`) 与 sessionStorage 控制逻辑。
+### 前端 `eqt-admin`
 
-- [ ] **Milestone 4: 四大业务模块 UI 实现**
-  - [ ] **错误审计中心 (`ErrorAudit.svelte`)**: 分页卡片列表、CRITICAL 高亮、JSON 堆栈模态框展开、条件筛选。
-  - [ ] **授权与订单管控 (`Licenses.svelte`)**: 搜索框、授权表格/卡片、手动生成授权对话框 (`GenerateModal.svelte`)、吊销与解绑确认框。
-  - [ ] **发信与系统健康 (`SystemHealth.svelte`)**: SMTP 状态看板、测试连通性按钮、Paddle Webhook 接收日志。
-  - [ ] **概览与反馈面板 (`Overview.svelte`)**: 顶栏 KPI 统计卡片与反馈列表预留。
+| 页面 | 壳子 | 主路径可用预期 |
+| :--- | :---: | :--- |
+| Login | 是 | 在 secret 正确且 Worker 可达时可用 |
+| Overview | 是 | 依赖 health |
+| ErrorAudit | 是 | 列表可用；清空依赖 CORS |
+| Licenses | 是 | **解绑/设备展示预期失败至阶段 1** |
+| SystemHealth | 是 | 配置徽章可用 |
 
-- [ ] **Milestone 5: 构建部署与 E2E 验证**
-  - [ ] 前端打包测试 `npm run build`。
-  - [ ] 使用 `chrome-devtools-mcp` 或端到端模拟测试各模态框与面板渲染。
+### 技术栈事实
+
+- 工程：`cloudflare/eqt-admin/`
+- 依赖：Svelte 5 + Vite（见该目录 `package.json` / lock，当前为 Vite 6 线）
+- API 默认：`VITE_API_BASE` 或代码内 fallback（开发用 Worker URL）
 
 ---
 
-## 4. Definition of Done (完成标准)
+## 验证记录
 
-1. `cloudflare/eqt-drm-api` 具备完整的 `/api/v1/admin/*` 管理类 API，测试用例 100% 通过。
-2. `cloudflare/eqt-admin/` 零 Build 错误、样式端庄且完全匹配现代暗黑/高精细度 UI 规范。
-3. `git` 工作区干净，提交规范，并通过智能 Git 推送工具同步至远程仓库。
+（阶段 2 起填写：日期、环境 sandbox/prod、命令、结果。禁止写入 secret。）
+
+| 日期 | 环境 | 做了什么 | 结果 |
+| :--- | :--- | :--- | :--- |
+| — | — | — | — |
+
+---
+
+## 契约变更日志
+
+| 日期 | 摘要 |
+| :--- | :--- |
+| 2026-07-23 | 初版 api-contract：冻结 activation_id、created_at 排序、禁用虚构设备字段 |
