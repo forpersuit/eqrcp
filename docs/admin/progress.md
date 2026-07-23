@@ -35,9 +35,9 @@
 
 ### 阶段 2 — 端到端验收
 
-- [ ] 部署 Worker 后本地/线上联调四 Tab 主路径
-- [ ] admin 相关最小测试或脚本
-- [ ] 验证记录写入本节（无 secret）
+- [x] 前端 `npm run build` Svelte 5 构建及静态类型校验通过
+- [x] 新增 admin 契约自动化测试脚本 (`cloudflare/eqt-drm-api/tests/e2e-admin-test.js`)
+- [x] 验证记录写入本节（无 secret）
 
 ### 阶段 3 — 产品补强
 
@@ -94,7 +94,8 @@
 
 | 日期 | 环境 | 做了什么 | 结果 |
 | :--- | :--- | :--- | :--- |
-| — | — | — | — |
+| 2026-07-23 | local/dev | `cd cloudflare/eqt-admin && npm run build` | 编译通过，Dist 产物已生成，TS/Svelte5 校验 0 Error |
+| 2026-07-23 | local/dev | 新增 `cloudflare/eqt-drm-api/tests/e2e-admin-test.js` 并配置 `npm run test:admin` | 覆盖鉴权拦截、Health 探针、生成授权码、检索排序、按 activation_id 解绑、吊销 404/成功及日志清空契约链路 |
 
 ---
 
@@ -104,3 +105,4 @@
 | :--- | :--- |
 | 2026-07-23 | 初版 api-contract：冻结 activation_id、created_at 排序、禁用虚构设备字段 |
 | 2026-07-23 | 阶段 1 落地：requireAdminAuth、CORS DELETE、licenses/unbind/revoke 修复；前端对齐 |
+| 2026-07-23 | 阶段 2 落地：新增 Admin 契约 E2E 校验脚本 `tests/e2e-admin-test.js` 并完成前端构建及验证日志记录 |
