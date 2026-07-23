@@ -505,13 +505,15 @@ function render() {
         runningMode = 'chat';
     }
 
+    const getModeTitle = (m) => (runningMode && runningMode !== m ? t('confirm_switch_mode') : '');
+
     const newHTML = `
         <main class="shell">
             <header class="topbar">
                 <nav class="mode-switch" aria-label="Transfer modes">
-                    <button class="${state.mode === 'share' ? 'active' : (runningMode && runningMode !== 'share' ? 'disabled-mode' : '')}" data-mode="share">${t('share')}</button>
-                    <button class="${state.mode === 'receive' ? 'active' : (runningMode && runningMode !== 'receive' ? 'disabled-mode' : '')}" data-mode="receive">${t('receive')}</button>
-                    <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat">${t('chat')}</button>
+                    <button class="${state.mode === 'share' ? 'active' : (runningMode && runningMode !== 'share' ? 'disabled-mode' : '')}" data-mode="share" title="${escapeHTML(getModeTitle('share'))}">${t('share')}</button>
+                    <button class="${state.mode === 'receive' ? 'active' : (runningMode && runningMode !== 'receive' ? 'disabled-mode' : '')}" data-mode="receive" title="${escapeHTML(getModeTitle('receive'))}">${t('receive')}</button>
+                    <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat" title="${escapeHTML(getModeTitle('chat'))}">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
                     ${!hasPaidLicense() ? `

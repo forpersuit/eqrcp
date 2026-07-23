@@ -201,8 +201,14 @@ h2 {
     font-size: 13px;
     font-weight: 600;
     color: var(--muted);
-    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s;
+    transition: background-color 0.2s, color 0.2s, box-shadow 0.2s, opacity 0.2s;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.mode-switch button:not(.active):hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--ink);
 }
 
 .mode-switch .active {
@@ -211,11 +217,18 @@ h2 {
     font-weight: 700;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.03);
     border: 0.5px solid rgba(0, 0, 0, 0.04);
+    cursor: default;
 }
 
 .mode-switch button.disabled-mode {
-    opacity: 0.4;
-    cursor: not-allowed;
+    opacity: 0.7;
+    cursor: pointer;
+}
+
+.mode-switch button.disabled-mode:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--ink);
 }
 
 :global(.dark) .mode-switch {
@@ -228,11 +241,22 @@ h2 {
     color: #94a3b8;
 }
 
+:global(.dark) .mode-switch button:not(.active):hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+}
+
+:global(.dark) .mode-switch button.disabled-mode:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f8fafc;
+}
+
 :global(.dark) .mode-switch .active {
     background: #1e293b;
     color: #f8fafc;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
     border-color: rgba(255, 255, 255, 0.05);
+    cursor: default;
 }
 
 .tool-button,
