@@ -174,7 +174,8 @@
     ? t.freeQuotaDegraded
     : getTranslation('freeQuotaRemaining', currentLang).replace('{time}', formatQuotaClock(remainingSeconds));
   $: quotaPillUrgent = !isPaid && !freeDegraded && remainingSeconds > 0 && remainingSeconds <= 60;
-  $: showQuotaPill = !isPaid;
+  // Free countdown only on desktop/host session chrome — not on mobile browser title bar.
+  $: showQuotaPill = !isPaid && !isMobileLayout;
 
   // React to theme changes and inject CSS variables
   function hexToRgb(hex: string): string | null {

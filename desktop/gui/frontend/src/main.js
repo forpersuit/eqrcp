@@ -1660,14 +1660,12 @@ function updateReceiveTransferActiveUI(task) {
 
 function renderChat() {
     const task = activeChatTask();
-    const remaining = chatRemainingMs();
-    const exhausted = !hasPaidLicense() && remaining <= 0;
     if (!task) {
+        // No free-tier countdown on the pre-start screen — live clock lives in Chat V2 header only.
         return `
             <div class="chat-start">
                 <div>
                     <div class="eyebrow">${t('session_mode')}</div>
-                    <p id="chat-quota-text">${chatQuotaText()}</p>
                 </div>
                 <div class="chat-illustration-wrapper">
                     <img src="${chatIllustrationURL}" alt="Chat Onboarding" style="pointer-events: none; user-select: none; opacity: 0.85;" />
@@ -5101,10 +5099,7 @@ function scheduleChatUsageTimer() {
 }
 
 function updateChatQuotaSurface() {
-    const text = document.querySelector('#chat-quota-text');
-    if (text) {
-        text.textContent = chatQuotaText();
-    }
+    // Pre-start chat screen intentionally has no countdown surface.
     const button = document.querySelector('#start-chat');
     if (button) {
         button.disabled = state.busy;

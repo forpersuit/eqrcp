@@ -37,20 +37,20 @@ type ClientInfo struct {
 // Not every field is used by every command. Keeping one envelope makes the v2
 // protocol easy to log, test, and evolve without reflection-heavy decoding.
 type CommandEnvelope struct {
-	Type       CommandType `json:"type"`
-	CommandID  string      `json:"commandId,omitempty"`
-	Client     ClientInfo  `json:"client,omitempty"`
-	ClientID   string      `json:"clientId,omitempty"`
-	AfterSeq   int64       `json:"afterSeq,omitempty"`
-	JoinSeq    int64       `json:"joinSeq,omitempty"`
+	Type      CommandType `json:"type"`
+	CommandID string      `json:"commandId,omitempty"`
+	Client    ClientInfo  `json:"client,omitempty"`
+	ClientID  string      `json:"clientId,omitempty"`
+	AfterSeq  int64       `json:"afterSeq,omitempty"`
+	JoinSeq   int64       `json:"joinSeq,omitempty"`
 	// BeforeSeq is the exclusive upper bound for load_history (typically the
 	// oldest seq the client already has). Zero means no upper bound.
-	BeforeSeq  int64       `json:"beforeSeq,omitempty"`
+	BeforeSeq int64 `json:"beforeSeq,omitempty"`
 	// Limit is the max message events for load_history / connect replay page.
-	Limit      int         `json:"limit,omitempty"`
-	Text       string      `json:"text,omitempty"`
-	MessageID  string      `json:"messageId,omitempty"`
-	TransferID string      `json:"transferId,omitempty"`
-	BytesDone  int64       `json:"bytesDone,omitempty"`
-	BytesTotal int64       `json:"bytesTotal,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+	Text       string `json:"text,omitempty"`
+	MessageID  string `json:"messageId,omitempty"`
+	TransferID string `json:"transferId,omitempty"`
+	BytesDone  int64  `json:"bytesDone,omitempty"`
+	BytesTotal int64  `json:"bytesTotal,omitempty"`
 }

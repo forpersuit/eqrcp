@@ -177,12 +177,13 @@ func (m *Manager) HasRemoteClient() bool
 
 ### 5.4 P1 已完成：倒计时 UI + GUI SSOT
 
-- **展示位置**：Chat V2 标题栏右侧、设备列表按钮左侧 `.quota-pill`（embedded 桌面 iframe 也显示）。
+- **展示位置**：Chat V2 标题栏右侧、设备列表按钮左侧 `.quota-pill`（**仅桌面 / 非 mobile layout**；桌面 embedded iframe 显示）。
+- **不显示**：Chat 模式 Start 开始页；移动端浏览器标题栏（`isMobileLayout` + CSS）。
 - **数据**：`GET /chat-v2/{token}/info` 返回 `usedSeconds` / `remainingSeconds` / `freeDegraded`；前端 2s 轮询。
 - **付费**：隐藏倒计时胶囊；非嵌入页可显示套餐徽章。
 - **降级态**：胶囊文案「已降级」+ 灰色；≤60s 琥珀色脉冲。
 - **点击**：打开 license 面板（今日额度说明 + 非嵌入时可链到 pricing）。
-- **GUI 外壳**：去掉 localStorage 双轨计时；预启动页文案读 `status.usedSeconds`；会话中倒计时只在 iframe 标题栏。
+- **GUI 外壳**：去掉 localStorage 双轨计时；Start 页不展示额度文案。
 
 ### 5.5 P2 待续：Legacy 有序退役
 

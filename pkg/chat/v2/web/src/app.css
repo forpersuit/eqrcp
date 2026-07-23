@@ -801,15 +801,9 @@ h1 {
     .limit-status-pill {
         display: none !important;
     }
+    /* Mobile title bar: never show free-tier countdown capsule. */
     .quota-pill {
-        height: 32px;
-        padding: 0 8px;
-        font-size: 11px;
-        gap: 4px;
-    }
-    .quota-pill svg {
-        height: 12px;
-        width: 12px;
+        display: none !important;
     }
     .device-pill {
         height: 32px;
