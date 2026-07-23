@@ -2,8 +2,9 @@
 
 > 以**代码与契约事实**为准更新。行动顺序见 [action-plan.md](./action-plan.md)。
 
-最后更新：2026-07-23（P2 完成：操作审计 UI、SMTP/Paddle/D1 真探针、鉴权限流、生产域名实测）
+最后更新：2026-07-23（Admin v1 交付；IMPORTANT_ 配置/发布/债文档落地；目录整理）
 
+**运维必读**：[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) · [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) · [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)
 ---
 
 ## 阶段勾选
@@ -70,15 +71,16 @@
 
 > 对照 `docs/admin/*` 与代码事实的审查：P0 主链路后端可用，但 progress 对「完成度」偏乐观；测试偏烟测。
 
-### 综合成熟度（审查时点）
+### 综合成熟度
 
-| 维度 | 评分 | 说明 |
-| :--- | :---: | :--- |
-| 后端 P0 主链路 | ~90% | 鉴权/发码/检索/吊销/解绑/日志 API 可用 |
-| 前端主路径 | ~75% | Licenses/ErrorAudit 好；Health 字段错位 |
-| E2E 测试深度 | ~45% | `test:admin` 可绿，断言偏浅 |
-| 文档 SSOT | 滞后 | `api-contract` / `gap-analysis` / action-plan 状态行未跟代码 |
+| 维度 | 审查时点 | **修复+生产实测后** | 说明 |
+| :--- | :---: | :---: | :--- |
+| 后端 Admin API | ~90% | **~95%** | 契约对齐 + 探针 + 限流 + 审计 |
+| 前端主路径 | ~75% | **~90%** | 五 Tab + OpsAudit + Health 探针 UI |
+| E2E / 验证 | ~45% | **~80%** | `test:admin` 深化 + 生产鉴权冒烟 |
+| 文档 | 滞后 | **~90%** | IMPORTANT_* 为运维 SSOT；gap 已标历史 |
 
+剩余债清单见 [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)，不在此重复展开。
 ### P0 — 正确性（本轮必须完成）
 
 | # | 项 | 状态 | 说明 |
@@ -197,3 +199,4 @@
 | 2026-07-23 | 阶段 1–4 主链路落地记录 |
 | 2026-07-23 | 审查+修复：Health FE/BE 字段对齐、E2E 深化（activation unbind/filter）、契约文档同步、Chrome 冒烟 |
 | 2026-07-23 | P2：probes(smtp/paddle/db)、recent_events、admin 鉴权 429 限流、OpsAudit UI；eqt-admin/eqt-drm-api 小版本 1.1.0 |
+| 2026-07-23 | 文档整理：IMPORTANT_admin-config / release / debt；README 分层；gap-analysis 标 HISTORICAL |

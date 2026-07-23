@@ -386,7 +386,7 @@ GET /api/v1/admin/health
 | 探针 | 行为 |
 | :--- | :--- |
 | `smtp` | TLS 连接 + EHLO + AUTH LOGIN + QUIT（不发信）；超时约 4s；env 不全则 `skipped: true` |
-| `paddle` | 有 webhook secret 即配置级 ok；若有 `PADDLE_API_KEY` 则 GET Paddle API |
+| `paddle` | 有 webhook secret 即配置级 ok；若有 `PADDLE_API_KEY` 则 GET Paddle API。mode 示例：`webhook_secret_present` / `api_reachable` / `webhook_ok_api_key_invalid`（key 403 但仍算 ok） |
 | `db` | `SELECT 1` |
 
 `recent_events`：`system_error_logs` 中 PADDLE_* / SMTP_* 最近 15 条（故障时间线代理，非完整 Webhook 成功履约流水）。

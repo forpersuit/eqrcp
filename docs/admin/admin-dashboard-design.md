@@ -18,9 +18,9 @@
    * 后端：复用 `cloudflare/eqt-drm-api` + D1。  
    * 托管目标：Cloudflare Pages（`admin.eqt.net.im`）。
 
-业务背景与用户自助门户见 [`docs/payment/`](payment/README.md)。  
-**分阶段落地、缺口与 API 字段契约**见 [`docs/admin/`](admin/README.md)（行动计划 / gap / contract / progress）。
-
+业务背景与用户自助门户见 [`docs/payment/`](../payment/README.md)。  
+**配置 / 发布 / 技术债（必读）**：[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) · [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) · [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)。  
+**API 契约**：[api-contract.md](./api-contract.md)。**进度**：[progress.md](./progress.md)。
 ---
 
 ## 2. 技术选型与架构规范
@@ -78,14 +78,13 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
 
 ### 4.3 发信与系统健康
 
-* 阶段 1：配置是否就绪 + D1 计数  
-* 阶段 3+：SMTP 真探针、Webhook 履约记录
+* **已落地**：配置就绪徽章 + D1 KPI + SMTP TLS/AUTH 真探针 + Paddle/D1 探针 + `recent_events`（失败类时间线代理）  
+* **后置**：Webhook 成功履约完整流水（见 IMPORTANT_admin-debt）
 
 ### 4.4 概览与反馈
 
-* KPI：授权总数、错误日志积压、DB 状态（深化指标后置）  
-* 反馈中心对接 `eqt-feedback-api`（后置）
-
+* **已落地**：KPI（含 active/today/24h errors）+ 可点击快捷入口（含操作审计）  
+* **后置**：反馈中心对接 `eqt-feedback-api`
 ---
 
 ## 5. 后端 Admin 路由
@@ -100,11 +99,11 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
 | 授权检索 | `GET /api/v1/admin/licenses` | `created_at` 排序 + 真实 activations |
 | 授权吊销 | `POST /api/v1/admin/revoke` | 别名 `/revoke-license` |
 | 设备解绑 | `POST /api/v1/admin/unbind` | body：`license_code` + 可选 `activation_id` |
-| 健康诊断 | `GET /api/v1/admin/health` | metrics + config 布尔 |
+| 健康诊断 | `GET /api/v1/admin/health` | metrics + config + probes + recent_events |
+| 操作审计 | `GET /api/v1/admin/audit-logs` | 高危写操作轨迹 |
 
-**字段级请求/响应 JSON** 见 [`docs/admin/api-contract.md`](admin/api-contract.md)。  
-**推进顺序** 见 [`docs/admin/action-plan.md`](admin/action-plan.md)。
-
+**字段级请求/响应 JSON** 见 [api-contract.md](./api-contract.md)。  
+**发布与配置** 见 IMPORTANT_admin-* 。
 ---
 
 ## 6. 与 Portal / 应急运维

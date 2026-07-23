@@ -1,6 +1,7 @@
 # EQT 管理后台生产运维与灾备手册 (Ops Guide)
 
-> 本文档面向 EQT 运维团队，指导 Cloudflare Pages / Worker 部署、`ADMIN_SECRET` 密钥轮换与应急通道操作。
+> 本文档面向 EQT 运维团队，指导 Cloudflare Pages / Worker 部署、`ADMIN_SECRET` 密钥轮换与应急通道操作。  
+> **配置参数全集**见 [IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md)；**日常发布习惯**见 [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)。
 
 ---
 

@@ -17,8 +17,9 @@
 | **3** | 产品补强 | 按优先级增量 | 发信/分页/真探针/审计日志等 | 阶段 2 |
 | **4** | 部署上线 | Pages + 域名 + 运维 | `admin.eqt.net.im` 可访问 | 阶段 2 最低，建议 3 部分完成 |
 
-**当前所处位置：阶段 0–4 主链路 + P2（真探针 / 操作审计 UI / 鉴权限流 / 生产域名实测）已完成。后置：反馈中心对接、可选 CF 边缘 Rate Limit 规则、Worker 生产部署探针新字段。**
-
+**当前所处位置：阶段 0–4 + P2 已完成，Admin v1 可日常使用。**  
+**运维必读**：[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) · [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) · [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)。  
+**后置**：反馈中心、多管理员、边缘 WAF 限流等（见 debt 文档）。本文阶段性任务保留作历史计划，**新工作以 IMPORTANT_* + progress 为准**。
 ---
 
 ## 阶段 0 — 对齐与预备（本阶段）
