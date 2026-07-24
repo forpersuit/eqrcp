@@ -172,12 +172,12 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">Ed25519 / Admin Secret</div>
-            <div class="probe-desc">签名私钥与管理端密钥</div>
+            <div class="probe-name">Ed25519 / Cloudflare Access</div>
+            <div class="probe-desc">签名私钥与 Admin Access JWT 配置</div>
           </div>
-          <span class={`badge badge-${cfgBadge(health.config.ed25519_key_configured && health.config.admin_secret_configured).cls}`}>
-            Ed25519: {health.config.ed25519_key_configured ? 'OK' : 'NO'} · Admin:
-            {health.config.admin_secret_configured ? 'OK' : 'NO'}
+          <span class={`badge badge-${cfgBadge(!!health.config.ed25519_key_configured && !!health.config.access_configured).cls}`}>
+            Ed25519: {health.config.ed25519_key_configured ? 'OK' : 'NO'} · Access:
+            {health.config.access_configured ? 'OK' : 'NO'}
           </span>
         </div>
       </div>

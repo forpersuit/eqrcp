@@ -197,7 +197,8 @@ export async function handleDrmRoutes(
       license.buyer_email_hash || null,
       uuid_hash || "",
       cpu_hash || "",
-      disk_hash || ""
+      disk_hash || "",
+      { deviceId: device_id || null }
     );
     if (blacklistCheck.isAbusive) {
       const key = blacklistCheck.reasonKey || (blacklistCheck.kind === 'device' ? 'blacklist_device' : 'blacklist_email');
@@ -428,7 +429,8 @@ export async function handleDrmRoutes(
       license.buyer_email_hash || null,
       uuid_hash || "",
       cpu_hash || "",
-      disk_hash || ""
+      disk_hash || "",
+      { deviceId: (body as any).device_id || null }
     );
     if (blacklistCheck.isAbusive) {
       const key = blacklistCheck.reasonKey || (blacklistCheck.kind === 'device' ? 'blacklist_device' : 'blacklist_email');

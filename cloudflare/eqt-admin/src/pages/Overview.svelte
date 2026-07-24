@@ -114,6 +114,11 @@
         <p>支持按邮箱/码/交易号全库检索、手动发码、吊销作废与绑定设备管理。</p>
       </button>
 
+      <button type="button" class="link-card" onclick={() => go('blacklist')}>
+        <h4>🚫 黑名单管理</h4>
+        <p>手工封禁/解封邮箱与设备码；与自动滥用窗口并行生效。</p>
+      </button>
+
       <button type="button" class="link-card" onclick={() => go('health')}>
         <h4>🌐 发信引擎与系统健康</h4>
         <p>SMTP/Paddle 真探针、配置就绪度与近期履约相关事件时间线。</p>

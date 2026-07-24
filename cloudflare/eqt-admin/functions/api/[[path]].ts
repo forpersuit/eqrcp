@@ -37,7 +37,6 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     "content-type",
     "accept",
     "cf-access-jwt-assertion",
-    "x-admin-secret",
     "authorization",
   ];
   for (const [k, v] of context.request.headers) {

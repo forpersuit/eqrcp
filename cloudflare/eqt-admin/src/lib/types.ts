@@ -6,7 +6,23 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'health';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health';
+
+/** GET/POST /api/v1/admin/blacklist */
+export interface ManualBlacklistEntry {
+  id: number;
+  kind: 'email' | 'device' | string;
+  email?: string | null;
+  email_hash?: string | null;
+  device_id?: string | null;
+  uuid_hash?: string | null;
+  cpu_hash?: string | null;
+  disk_hash?: string | null;
+  reason?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  active: number | boolean;
+}
 
 /** Row shape from activations table */
 export interface Activation {
@@ -75,6 +91,9 @@ export interface AdminHealthConfig {
   paddle_webhook_configured?: boolean;
   r2_configured: boolean;
   ed25519_key_configured?: boolean;
+  /** Cloudflare Access TEAM_DOMAIN + AUD present on Worker */
+  access_configured?: boolean;
+  /** @deprecated removed — Access JWT only */
   admin_secret_configured?: boolean;
 }
 

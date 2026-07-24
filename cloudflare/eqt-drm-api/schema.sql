@@ -89,4 +89,24 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at);
 
+-- Operator-managed bans (email / device). Auto abuse window is separate (see blacklist.ts).
+CREATE TABLE IF NOT EXISTS manual_blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,                 -- 'email' | 'device'
+    email TEXT DEFAULT NULL,
+    email_hash TEXT DEFAULT NULL,
+    device_id TEXT DEFAULT NULL,
+    uuid_hash TEXT DEFAULT NULL,
+    cpu_hash TEXT DEFAULT NULL,
+    disk_hash TEXT DEFAULT NULL,
+    reason TEXT DEFAULT NULL,
+    created_by TEXT DEFAULT NULL,
+    created_at TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1  -- 0 = unbanned (soft)
+);
+
+CREATE INDEX IF NOT EXISTS idx_manual_bl_email_hash ON manual_blacklist(email_hash);
+CREATE INDEX IF NOT EXISTS idx_manual_bl_device_id ON manual_blacklist(device_id);
+CREATE INDEX IF NOT EXISTS idx_manual_bl_active ON manual_blacklist(active);
+
 

@@ -1,9 +1,5 @@
 import { Env } from '../types';
-import {
-  clearAdminAuthFailures,
-  isAdminAuthRateLimited,
-  recordAdminAuthFailure
-} from './rate-limit';
+import { ensureManualBlacklistTable } from './blacklist';
 import { verifyCloudflareAccessJwt } from './cf-access-jwt';
 
 export function getCorsHeaders(request: Request): Record<string, string> {
@@ -22,7 +18,7 @@ export function getCorsHeaders(request: Request): Record<string, string> {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, X-Admin-Secret, Cf-Access-Jwt-Assertion",
+      "Content-Type, Authorization, Cf-Access-Jwt-Assertion",
   };
 }
 
@@ -114,6 +110,9 @@ export async function ensureDrmTables(env: Env): Promise<void> {
     console.error("Failed to ensure DRM D1 tables:", err);
   }
   await ensureLicenseSourceColumns(env);
+  await ensureDeviceIdColumn(env);
+  await ensureActivationNetworkColumns(env);
+  await ensureManualBlacklistTable(env);
 }
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */
@@ -132,28 +131,6 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
   }
 }
 
-function clientIpFromRequest(request: Request): string {
-  const xff = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  if (xff) return xff;
-  return (
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    ""
-  );
-}
-
-function timingSafeEqualStr(a: string, b: string): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  const len = Math.max(a.length, b.length);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < len; i++) {
-    const ca = i < a.length ? a.charCodeAt(i) : 0;
-    const cb = i < b.length ? b.charCodeAt(i) : 0;
-    diff |= ca ^ cb;
-  }
-  return diff === 0;
-}
-
 function accessConfigured(env: Env): boolean {
   return !!(env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD);
 }
@@ -165,142 +142,81 @@ function parseAllowedEmails(env: Env): string[] {
 }
 
 /**
- * Admin route guard:
- * 1) Cloudflare Access JWT (Cf-Access-Jwt-Assertion) when CF_ACCESS_* configured
- * 2) X-Admin-Secret fallback when allowed (local dev / break-glass)
- *
- * - Neither Access nor ADMIN_SECRET usable → 503
- * - CF_ACCESS_REQUIRE_JWT=true → secret path disabled
- * - Wrong secret → 401 + in-isolate rate limit
+ * Local wrangler / e2e only: TEAM_DOMAIN=local.dev + AUD=local-dev
+ * accepts header Cf-Access-Jwt-Assertion: local.<email>
+ */
+function tryLocalDevJwt(
+  jwt: string,
+  env: Env
+): { ok: true; email: string } | { ok: false } {
+  const team = (env.CF_ACCESS_TEAM_DOMAIN || "").toLowerCase();
+  const aud = env.CF_ACCESS_AUD || "";
+  if (team !== "local.dev" || aud !== "local-dev") return { ok: false };
+  if (!jwt.startsWith("local.")) return { ok: false };
+  const email = jwt.slice("local.".length).trim().toLowerCase();
+  if (!email.includes("@")) return { ok: false };
+  const allowed = parseAllowedEmails(env);
+  if (allowed.length && !allowed.includes(email)) return { ok: false };
+  return { ok: true, email };
+}
+
+/**
+ * Admin route guard — Cloudflare Access JWT only (no ADMIN_SECRET).
+ * Header: Cf-Access-Jwt-Assertion
  */
 export async function requireAdminAuth(
   request: Request,
   env: Env,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
-  const clientIp = clientIpFromRequest(request);
-  const accessOn = accessConfigured(env);
-  const requireJwt = String(env.CF_ACCESS_REQUIRE_JWT || "").toLowerCase() === "true";
-  const allowSecret =
-    !requireJwt &&
-    !!env.ADMIN_SECRET &&
-    (String(env.CF_ACCESS_ALLOW_SECRET || "true").toLowerCase() !== "false" || !accessOn);
-
-  // --- Path 1: Cloudflare Access JWT ---
-  if (accessOn) {
-    const jwt =
-      request.headers.get("Cf-Access-Jwt-Assertion") ||
-      request.headers.get("cf-access-jwt-assertion");
-    if (jwt) {
-      const result = await verifyCloudflareAccessJwt(
-        jwt,
-        env.CF_ACCESS_TEAM_DOMAIN!,
-        env.CF_ACCESS_AUD!,
-        parseAllowedEmails(env)
-      );
-      if (result.ok) {
-        clearAdminAuthFailures(clientIp);
-        await ensureDrmTables(env);
-        // Stash verified identity for handlers (optional header for audit)
-        (request as any).__adminEmail = result.email;
-        return null;
-      }
-      // Invalid JWT: do not fall through silently if requireJwt
-      if (requireJwt) {
-        return new Response(
-          JSON.stringify({
-            error: result.error || "Invalid Cloudflare Access JWT",
-            code: "ACCESS_JWT_INVALID"
-          }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      // else try secret fallback below
-    } else if (requireJwt) {
-      return new Response(
-        JSON.stringify({
-          error: "Cloudflare Access JWT required",
-          code: "ACCESS_JWT_REQUIRED"
-        }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-  }
-
-  // --- Path 2: shared ADMIN_SECRET (dev / transition / break-glass) ---
-  if (!allowSecret) {
-    if (!accessOn && !env.ADMIN_SECRET) {
-      return new Response(
-        JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET / CF Access missing)" }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+  if (!accessConfigured(env)) {
     return new Response(
       JSON.stringify({
-        error: "Unauthorized (Access JWT required; secret login disabled)",
+        error: "Admin API not configured (CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD missing)",
+        code: "ACCESS_NOT_CONFIGURED"
+      }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const jwt =
+    request.headers.get("Cf-Access-Jwt-Assertion") ||
+    request.headers.get("cf-access-jwt-assertion");
+
+  if (!jwt) {
+    return new Response(
+      JSON.stringify({
+        error: "Cloudflare Access JWT required",
         code: "ACCESS_JWT_REQUIRED"
       }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  if (!env.ADMIN_SECRET) {
-    return new Response(
-      JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET missing)" }),
-      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
-  const adminSecret = request.headers.get("X-Admin-Secret");
-  if (!adminSecret) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  if (timingSafeEqualStr(adminSecret, env.ADMIN_SECRET)) {
-    clearAdminAuthFailures(clientIp);
+  const local = tryLocalDevJwt(jwt, env);
+  if (local.ok) {
     await ensureDrmTables(env);
-    (request as any).__adminEmail = "secret-operator";
+    (request as any).__adminEmail = local.email;
     return null;
   }
 
-  if (isAdminAuthRateLimited(clientIp)) {
-    return new Response(
-      JSON.stringify({
-        error: "Too many failed admin auth attempts. Try again later.",
-        code: "ADMIN_AUTH_RATE_LIMITED"
-      }),
-      {
-        status: 429,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Retry-After": "300"
-        }
-      }
-    );
+  const result = await verifyCloudflareAccessJwt(
+    jwt,
+    env.CF_ACCESS_TEAM_DOMAIN!,
+    env.CF_ACCESS_AUD!,
+    parseAllowedEmails(env)
+  );
+  if (result.ok) {
+    await ensureDrmTables(env);
+    (request as any).__adminEmail = result.email;
+    return null;
   }
-  recordAdminAuthFailure(clientIp);
-  if (isAdminAuthRateLimited(clientIp)) {
-    return new Response(
-      JSON.stringify({
-        error: "Too many failed admin auth attempts. Try again later.",
-        code: "ADMIN_AUTH_RATE_LIMITED"
-      }),
-      {
-        status: 429,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Retry-After": "300"
-        }
-      }
-    );
-  }
-  return new Response(JSON.stringify({ error: "Unauthorized" }), {
-    status: 401,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+
+  return new Response(
+    JSON.stringify({
+      error: result.error || "Invalid Cloudflare Access JWT",
+      code: "ACCESS_JWT_INVALID"
+    }),
+    { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 }

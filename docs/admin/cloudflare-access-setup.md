@@ -81,9 +81,7 @@ echo -n "<AUD-from-dashboard>" | CLOUDFLARE_API_TOKEN="" npx wrangler secret put
 
 建议 **先** 配齐 `TEAM_DOMAIN` + `AUD` 并验证 JWT 登录成功，**再** 设 `CF_ACCESS_REQUIRE_JWT=true`。
 
-**生产状态（2026-07-24）**：`wrangler.toml` `[vars]` 已设 `CF_ACCESS_REQUIRE_JWT=true` 与 `CF_ACCESS_ALLOWED_EMAILS=admin@eqt.net.im`。验证：仅 `X-Admin-Secret` → `401 ACCESS_JWT_REQUIRED`；Access app JWT / 同源 `/api` → `200`。
-
-`ADMIN_SECRET` 可保留作 break-glass（仅 `REQUIRE_JWT` 未开时有效），或轮换后仅本地 `wrangler dev` 使用。
+**生产状态（2026-07-24+）**：Admin API **仅**接受 Cloudflare Access JWT（`Cf-Access-Jwt-Assertion`）。`ADMIN_SECRET` / `X-Admin-Secret` **已移除**。`CF_ACCESS_ALLOWED_EMAILS=admin@eqt.net.im`。本地 e2e：`CF_ACCESS_TEAM_DOMAIN=local.dev` + `CF_ACCESS_AUD=local-dev` + header `local.admin@eqt.net.im`。
 
 ---
 

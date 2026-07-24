@@ -5,7 +5,7 @@ const { spawn, execSync } = require('child_process');
 const path = require('path');
 
 const TARGET_URL = process.env.TEST_TARGET_URL || 'http://127.0.0.1:8787';
-const ADMIN_SECRET = process.env.TEST_ADMIN_SECRET || 'test-admin-secret';
+const LOCAL_JWT = process.env.TEST_ADMIN_JWT || 'local.admin@eqt.net.im';
 const PROJECT_ROOT = path.join(__dirname, '..');
 
 /** Health config keys required by docs/admin/api-contract.md + admin SPA */
@@ -77,7 +77,7 @@ function logStep(stepNum, title) {
 }
 
 function authHeaders() {
-  return { 'X-Admin-Secret': ADMIN_SECRET };
+  return { 'Cf-Access-Jwt-Assertion': LOCAL_JWT };
 }
 
 /** Insert a row into local D1 (wrangler --local). Used when activate needs Ed25519. */
@@ -116,7 +116,12 @@ async function ensureServerRunning() {
     console.log('No running server detected. Auto-launching local wrangler dev...');
     const child = spawn(
       'npx',
-      ['wrangler', 'dev', '--local', '--port', '8787', '--var', `ADMIN_SECRET:${ADMIN_SECRET}`],
+      [
+        'wrangler', 'dev', '--local', '--port', '8787',
+        '--var', 'CF_ACCESS_TEAM_DOMAIN:local.dev',
+        '--var', 'CF_ACCESS_AUD:local-dev',
+        '--var', 'CF_ACCESS_ALLOWED_EMAILS:admin@eqt.net.im'
+      ],
       {
         cwd: PROJECT_ROOT,
         stdio: 'pipe',
@@ -143,52 +148,30 @@ async function runAdminTestSuite() {
   let createdLicenseCode = null;
   let activationId = null;
 
-  // 1. Auth
-  logStep(1, 'Authentication Fail-Closed Interception');
+  // 1. Auth — Access JWT only
+  logStep(1, 'Authentication Fail-Closed (Access JWT required)');
   const noAuthRes = await makeRequest('/api/v1/admin/health', 'GET');
   console.log('No Auth Header Status:', noAuthRes.status, 'Response:', noAuthRes.data);
   if (noAuthRes.status !== 401 && noAuthRes.status !== 503) {
-    throw new Error(`Expected 401/503 for missing admin secret header, got ${noAuthRes.status}`);
+    throw new Error(`Expected 401/503 for missing JWT, got ${noAuthRes.status}`);
   }
-  console.log('✓ Correctly intercepted request with missing X-Admin-Secret header.');
+  console.log('✓ Missing Cf-Access-Jwt-Assertion rejected.');
 
-  const wrongAuthRes = await makeRequest('/api/v1/admin/health', 'GET', {
-    'X-Admin-Secret': 'invalid-secret-key-12345'
+  const secretHeaderRes = await makeRequest('/api/v1/admin/health', 'GET', {
+    'X-Admin-Secret': 'should-not-work-anymore'
   });
-  console.log('Invalid Auth Header Status:', wrongAuthRes.status);
-  if (wrongAuthRes.status !== 401) {
-    throw new Error(`Expected 401 for wrong admin secret, got ${wrongAuthRes.status}`);
+  if (secretHeaderRes.status === 200) {
+    throw new Error('X-Admin-Secret must not grant access after secret removal');
   }
-  console.log('✓ Correctly intercepted request with wrong X-Admin-Secret header.');
+  console.log('✓ X-Admin-Secret alone rejected (status', secretHeaderRes.status + ').');
 
-  // Query secret must not authenticate
-  const querySecretRes = await makeRequest(
-    `/api/v1/admin/health?secret=${encodeURIComponent(ADMIN_SECRET)}`,
-    'GET'
-  );
-  if (querySecretRes.status === 200) {
-    throw new Error('Query ?secret= must not grant admin access');
+  const badJwtRes = await makeRequest('/api/v1/admin/health', 'GET', {
+    'Cf-Access-Jwt-Assertion': 'local.not-allowed@example.com'
+  });
+  if (badJwtRes.status === 200) {
+    throw new Error('Disallowed local.dev email must not authenticate');
   }
-  console.log('✓ Query ?secret= rejected (status', querySecretRes.status + ').');
-
-  // Rate limit: isolated IP via X-Forwarded-For (does not lock the test suite IP)
-  logStep('1b', 'Admin Auth Rate Limit (429 after repeated failures)');
-  const bruteIp = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
-  let lastBrute = null;
-  for (let i = 0; i < 12; i++) {
-    lastBrute = await makeRequest('/api/v1/admin/health', 'GET', {
-      'X-Admin-Secret': 'wrong-key-for-rate-limit',
-      'X-Forwarded-For': bruteIp
-    });
-  }
-  console.log('After 12 wrong secrets from', bruteIp, 'status=', lastBrute?.status);
-  if (lastBrute?.status !== 429) {
-    throw new Error(`Expected 429 rate limit after repeated failures, got ${lastBrute?.status}`);
-  }
-  if (lastBrute?.data?.code !== 'ADMIN_AUTH_RATE_LIMITED') {
-    throw new Error(`Expected ADMIN_AUTH_RATE_LIMITED code, got ${JSON.stringify(lastBrute?.data)}`);
-  }
-  console.log('✓ Rate limit returns 429 with ADMIN_AUTH_RATE_LIMITED.');
+  console.log('✓ Disallowed local JWT rejected (status', badJwtRes.status + ').');
 
   // 2. Health contract keys + live probes shape
   logStep(2, 'System Health Probe + Config Key Contract + probes');
@@ -425,7 +408,7 @@ async function runAdminTestSuite() {
   const optRes = await makeRequest('/api/v1/admin/error-logs', 'OPTIONS', {
     Origin: 'http://localhost:3001',
     'Access-Control-Request-Method': 'DELETE',
-    'Access-Control-Request-Headers': 'Content-Type, X-Admin-Secret'
+    'Access-Control-Request-Headers': 'Content-Type, Cf-Access-Jwt-Assertion'
   });
   const allowMethods = String(
     optRes.headers['access-control-allow-methods'] || optRes.headers['Access-Control-Allow-Methods'] || ''
@@ -524,6 +507,40 @@ async function runAdminTestSuite() {
     throw new Error(`CLEAR_LOGS audit details incomplete: ${JSON.stringify(clearD)}`);
   }
   console.log('✓ Audit details_json enriched for GENERATE/UNBIND/REVOKE/CLEAR_LOGS.');
+
+  // Manual blacklist
+  logStep('BL', 'Manual blacklist email + device');
+  const blEmail = `e2e-ban-${Date.now()}@example.com`;
+  const blAdd = await makeRequest('/api/v1/admin/blacklist', 'POST', authHeaders(), {
+    kind: 'email',
+    email: blEmail,
+    reason: 'e2e-test'
+  });
+  if (blAdd.status !== 200 || !blAdd.data?.entry?.id) {
+    throw new Error(`blacklist add failed: ${JSON.stringify(blAdd.data)}`);
+  }
+  const blId = blAdd.data.entry.id;
+  const blDev = await makeRequest('/api/v1/admin/blacklist', 'POST', authHeaders(), {
+    kind: 'device',
+    device_id: `DEV-E2E-${Date.now()}`,
+    reason: 'e2e-device'
+  });
+  if (blDev.status !== 200 || !blDev.data?.entry?.id) {
+    throw new Error(`blacklist device add failed: ${JSON.stringify(blDev.data)}`);
+  }
+  const blList = await makeRequest(
+    '/api/v1/admin/blacklist?q=' + encodeURIComponent(blEmail),
+    'GET',
+    authHeaders()
+  );
+  if (blList.status !== 200 || !(blList.data.entries || []).some((e) => e.id === blId)) {
+    throw new Error('blacklist list missing new email entry');
+  }
+  const blDel = await makeRequest(`/api/v1/admin/blacklist/${blId}`, 'DELETE', authHeaders());
+  if (blDel.status !== 200 || blDel.data?.entry?.active !== 0) {
+    throw new Error(`blacklist unban failed: ${JSON.stringify(blDel.data)}`);
+  }
+  console.log('✓ Manual blacklist add/list/unban ok.');
 
   console.log('\n==================================================');
   console.log('🎉🎉 ALL ADMIN API CONTRACT TESTS PASSED DETERMINISTICALLY! 🎉🎉');

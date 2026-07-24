@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { isAuthenticated, clearAdminSecret, getAdminAuthMode, accessLogoutUrl } from './lib/auth';
+  import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
   import OpsAudit from './pages/OpsAudit.svelte';
   import Licenses from './pages/Licenses.svelte';
+  import Blacklist from './pages/Blacklist.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
   import type { AdminTab } from './lib/types';
 
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
-  const authMode = getAdminAuthMode();
 
   function handleLogout() {
-    clearAdminSecret();
+    clearAccessSession();
     const accessOut = accessLogoutUrl();
-    if (authMode === 'access' && accessOut) {
+    if (accessOut) {
       window.location.href = accessOut;
       return;
     }
@@ -31,7 +31,6 @@
   <Login />
 {:else}
   <div class="admin-layout">
-    <!-- Sidebar Navigation -->
     <aside class="sidebar card">
       <div class="brand">
         <span class="brand-logo">EQT</span> Admin
@@ -72,6 +71,14 @@
 
         <button
           class="nav-item"
+          class:active={currentTab === 'blacklist'}
+          onclick={() => (currentTab = 'blacklist')}
+        >
+          <span class="nav-icon">🚫</span> 黑名单管理
+        </button>
+
+        <button
+          class="nav-item"
           class:active={currentTab === 'health'}
           onclick={() => (currentTab = 'health')}
         >
@@ -81,12 +88,11 @@
 
       <div class="sidebar-footer">
         <button class="btn btn-secondary logout-btn" onclick={handleLogout}>
-          {authMode === 'access' ? '退出 (Access Logout)' : '退出登录 (Clear Secret)'}
+          退出 (Access Logout)
         </button>
       </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="main-content">
       {#if currentTab === 'overview'}
         <Overview onNavigate={navigateTo} />
@@ -96,6 +102,8 @@
         <OpsAudit />
       {:else if currentTab === 'licenses'}
         <Licenses />
+      {:else if currentTab === 'blacklist'}
+        <Blacklist />
       {:else if currentTab === 'health'}
         <SystemHealth />
       {/if}

@@ -4,6 +4,12 @@ import { ensureAuditLogTable } from '../utils/error-logger';
 import { activationAuditSnapshot, ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
 import { sendDRMEmail } from '../services/smtp';
 import { runHealthProbes } from '../utils/probes';
+import {
+  addManualBlacklist,
+  deactivateManualBlacklist,
+  listManualBlacklist,
+  type ManualBlacklistKind
+} from '../utils/blacklist';
 
 export async function handleAdminRoutes(
   request: Request,
@@ -569,7 +575,7 @@ export async function handleAdminRoutes(
         paddle_webhook_configured: paddleConfigured,
         r2_configured: r2Configured,
         ed25519_key_configured: Boolean(env.ED25519_PRIVATE_KEY),
-        admin_secret_configured: Boolean(env.ADMIN_SECRET)
+        access_configured: Boolean(env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD)
       },
       probes: {
         smtp: probes.smtp,
@@ -578,6 +584,116 @@ export async function handleAdminRoutes(
       },
       recent_events: recentEvents
     }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 8. Manual blacklist management (email / device)
+  if (url.pathname === "/api/v1/admin/blacklist" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const kind = (url.searchParams.get("kind") || "").trim();
+    const q = (url.searchParams.get("q") || "").trim();
+    const includeInactive = url.searchParams.get("include_inactive") === "1";
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 200);
+    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+
+    const { rows, total } = await listManualBlacklist(env, {
+      kind: kind || undefined,
+      q: q || undefined,
+      activeOnly: !includeInactive,
+      limit,
+      offset
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      entries: rows,
+      total,
+      limit,
+      offset
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  if (url.pathname === "/api/v1/admin/blacklist" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const kind = String(body.kind || "").toLowerCase() as ManualBlacklistKind;
+    const operator = String((request as any).__adminEmail || "");
+    const result = await addManualBlacklist(env, {
+      kind,
+      email: body.email,
+      device_id: body.device_id,
+      uuid_hash: body.uuid_hash,
+      cpu_hash: body.cpu_hash,
+      disk_hash: body.disk_hash,
+      reason: body.reason,
+      created_by: operator
+    });
+
+    if (!result.ok) {
+      return new Response(JSON.stringify({ error: result.error }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    await logAdminAudit(
+      env,
+      "BLACKLIST_ADD",
+      "BLACKLIST",
+      String(result.row.id),
+      { kind: result.row.kind, email: result.row.email, device_id: result.row.device_id, reason: result.row.reason },
+      clientIp
+    );
+
+    return new Response(JSON.stringify({ success: true, entry: result.row }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // DELETE /api/v1/admin/blacklist/:id  (soft unban)
+  const blDeleteMatch = url.pathname.match(/^\/api\/v1\/admin\/blacklist\/(\d+)$/);
+  if (blDeleteMatch && request.method === "DELETE") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const id = parseInt(blDeleteMatch[1], 10);
+    const row = await deactivateManualBlacklist(env, id);
+    if (!row) {
+      return new Response(JSON.stringify({ error: "Blacklist entry not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    await logAdminAudit(
+      env,
+      "BLACKLIST_REMOVE",
+      "BLACKLIST",
+      String(id),
+      { kind: row.kind, email: row.email, device_id: row.device_id },
+      clientIp
+    );
+
+    return new Response(JSON.stringify({ success: true, entry: row }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

@@ -12,8 +12,7 @@ database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 [vars]
 # Public CDN base for installs/updates (NOT a secret — see docs/admin/IMPORTANT_drm-secrets.md)
 R2_PUBLIC_URL = "https://download.eqt.net.im"
-# Production lock: Admin API accepts Cloudflare Access JWT only (X-Admin-Secret disabled)
-CF_ACCESS_REQUIRE_JWT = "true"
+# Admin API is Access-JWT only (no ADMIN_SECRET). TEAM_DOMAIN/AUD are secrets.
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
 MAIL_SENDER = "noreply@eqt.net.im"
 MAIL_SENDER_PASSWORD = "q4W62}bWtR"

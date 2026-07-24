@@ -1,20 +1,17 @@
-import { getAdminSecret, clearAdminSecret, getAdminAuthMode } from './auth';
+import { clearAccessSession, isAuthenticated } from './auth';
 
 /**
  * Base URL:
- * - Local/dev secret mode: VITE_API_BASE=http://127.0.0.1:8787 (direct Worker)
- * - Production Access mode: empty / same-origin → Pages Function proxies /api/* → lic.eqt.net.im
- * Contract: docs/admin/api-contract.md
+ * - Production Access: empty → same-origin /api via Pages Function → lic.eqt.net.im
+ * - Local override: VITE_API_BASE=http://127.0.0.1:8787 (still needs Access JWT header from CF edge
+ *   or local.dev test JWT; browser Access cookies only work on admin.eqt.net.im)
  */
 function resolveApiBase(): string {
   const envBase = import.meta.env.VITE_API_BASE;
   if (envBase !== undefined && envBase !== null && String(envBase).length > 0) {
     return String(envBase).replace(/\/$/, '');
   }
-  if (getAdminAuthMode() === 'access') {
-    return ''; // same-origin /api via Pages Function
-  }
-  return 'https://lic.eqt.net.im';
+  return '';
 }
 
 export interface ApiOptions extends RequestInit {
@@ -22,13 +19,6 @@ export interface ApiOptions extends RequestInit {
 }
 
 export async function adminFetch<T = any>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  const mode = getAdminAuthMode();
-  const secret = getAdminSecret();
-
-  if (mode === 'secret' && !secret) {
-    throw new Error('未设置 Admin Secret');
-  }
-
   const { params, headers: optHeaders, ...fetchInit } = options;
   const API_BASE = resolveApiBase();
 
@@ -43,26 +33,20 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     ...((optHeaders as Record<string, string>) || {})
   };
 
-  // Secret mode (or break-glass while Access also accepts secret)
-  if (secret) {
-    headers['X-Admin-Secret'] = secret;
-  }
-
   const response = await fetch(urlStr, {
     ...fetchInit,
     headers,
-    credentials: mode === 'access' ? 'same-origin' : 'omit'
+    credentials: 'same-origin'
   });
 
   if (response.status === 401) {
-    clearAdminSecret();
-    // Access: bounce to reload so CF Access login can re-run
-    if (mode === 'access' && !secret) {
+    clearAccessSession();
+    if (isAuthenticated() === false) {
       window.location.href = window.location.pathname + '?auth=retry';
-      throw new Error('Cloudflare Access 会话无效或未登录');
+    } else {
+      window.location.reload();
     }
-    window.location.reload();
-    throw new Error('鉴权凭证已失效或不正确');
+    throw new Error('Cloudflare Access 会话无效或未登录');
   }
 
   if (response.status === 503) {
