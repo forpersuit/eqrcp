@@ -144,7 +144,9 @@
     </footer>
 
     <!-- Custom Toast Notification System -->
-    <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-2"></div>
+    <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <!-- Tailwind CDN safelist: classes toggled only via JS must appear in static HTML -->
+    <div class="hidden opacity-100 scale-100 break-words shrink-0 leading-snug items-start" aria-hidden="true"></div>
 
     <!-- Confirm Refund Modal -->
     <div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
@@ -546,6 +548,8 @@
                 "unbind_success": "Appareil délié avec succès !",
                 "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
                 "toast_login_success": "Connexion réussie !",
+                "toast_refund_success": "Remboursement traité avec succès.",
+                "toast_error": "Une erreur s'est produite :",
                 "footer_copy": "© 2026 EQT (Easy QR Transfer). Tous droits réservés."
             }
         };
@@ -627,32 +631,45 @@
             }
         }
 
-        // Show Toast Notifications
+        // Show Toast Notifications (in-app only — never browser alert)
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            // Avoid dumping multi-KB API payloads into the UI
+            let text = message == null ? '' : String(message);
+            text = text.replace(/\s+/g, ' ').trim();
+            if (text.length > 220) text = text.slice(0, 220) + '…';
+            if (!text) text = type === 'error' ? 'Error' : 'OK';
+
             const toast = document.createElement('div');
-            toast.className = `glass-panel px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border transition-all duration-300 translate-y-2 opacity-0 max-w-sm ${
-                type === 'error' ? 'border-red-500/30 text-red-400 bg-red-950/20' : 'border-primary/30 text-primary bg-emerald-950/20'
+            toast.className = `glass-panel px-4 py-3 rounded-xl shadow-xl flex items-start gap-2 border transition-all duration-300 translate-y-2 opacity-0 max-w-sm break-words ${
+                type === 'error' ? 'border-red-500/40 text-red-300 bg-red-950/40' : 'border-primary/30 text-primary bg-emerald-950/20'
             }`;
             
-            const icon = type === 'error' ? 'error' : 'check_circle';
-            toast.innerHTML = `
-                <span class="material-symbols-outlined text-lg">${icon}</span>
-                <span class="text-sm font-medium">${message}</span>
-            `;
-            
+            const icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined text-lg shrink-0 mt-0.5';
+            icon.textContent = type === 'error' ? 'error' : 'check_circle';
+
+            const label = document.createElement('span');
+            label.className = 'text-sm font-medium leading-snug';
+            label.textContent = text;
+
+            toast.appendChild(icon);
+            toast.appendChild(label);
             container.appendChild(toast);
             
             // Animate in
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 toast.classList.add('toast-active');
-            }, 50);
+            });
 
-            // Remove after 4s
+            // Errors stay longer so "no reaction" is not mistaken
+            const ttl = type === 'error' ? 8000 : 4500;
             setTimeout(() => {
                 toast.classList.remove('toast-active');
                 setTimeout(() => toast.remove(), 300);
-            }, 4000);
+            }, ttl);
         }
 
         // Send validation code (passes UI language)
@@ -930,6 +947,7 @@
         function showUnbindModal(licenseCode, activationId, deviceId, remainingUnbinds, maxUnbinds) {
             state.unbindPendingData = { licenseCode, activationId, deviceId };
             const modal = document.getElementById('unbind-modal');
+            if (!modal) return;
             const box = modal.querySelector('div');
             
             document.getElementById('unbind-modal-device-key').textContent = deviceId;
@@ -941,22 +959,27 @@
             document.getElementById('unbind-modal-quota-badge').textContent = quotaText;
             document.getElementById('unbind-policy-text-box').textContent = dict.unbind_policy_desc || '';
             
-            modal.classList.remove('pointer-events-none');
+            modal.classList.remove('pointer-events-none', 'opacity-0');
             modal.classList.add('opacity-100');
-            box.classList.remove('scale-95');
-            box.classList.add('scale-100');
+            if (box) {
+                box.classList.remove('scale-95');
+                box.classList.add('scale-100');
+            }
         }
 
         // Hide Unbind Confirm Modal
         function hideUnbindModal() {
             state.unbindPendingData = null;
             const modal = document.getElementById('unbind-modal');
+            if (!modal) return;
             const box = modal.querySelector('div');
             
-            modal.classList.add('pointer-events-none');
+            modal.classList.add('pointer-events-none', 'opacity-0');
             modal.classList.remove('opacity-100');
-            box.classList.add('scale-95');
-            box.classList.remove('scale-100');
+            if (box) {
+                box.classList.add('scale-95');
+                box.classList.remove('scale-100');
+            }
         }
 
         // Confirm Unbind submit
@@ -992,28 +1015,34 @@
             }
         }
 
-        // Show Confirm Modal
+        // Show Confirm Modal (toggle opacity-0/100 explicitly — both must not stay on node)
         function showConfirmModal(license) {
             state.refundPendingCode = license;
             const modal = document.getElementById('confirm-modal');
+            if (!modal) return;
             const box = modal.querySelector('div');
             
-            modal.classList.remove('pointer-events-none');
+            modal.classList.remove('pointer-events-none', 'opacity-0');
             modal.classList.add('opacity-100');
-            box.classList.remove('scale-95');
-            box.classList.add('scale-100');
+            if (box) {
+                box.classList.remove('scale-95');
+                box.classList.add('scale-100');
+            }
         }
 
         // Hide Confirm Modal
         function hideConfirmModal() {
             state.refundPendingCode = null;
             const modal = document.getElementById('confirm-modal');
+            if (!modal) return;
             const box = modal.querySelector('div');
             
-            modal.classList.add('pointer-events-none');
+            modal.classList.add('pointer-events-none', 'opacity-0');
             modal.classList.remove('opacity-100');
-            box.classList.add('scale-95');
-            box.classList.remove('scale-100');
+            if (box) {
+                box.classList.add('scale-95');
+                box.classList.remove('scale-100');
+            }
         }
 
         // Confirm ok (single-flight lock — prevent double refund clicks)
@@ -1026,7 +1055,8 @@
             if (okBtn) okBtn.disabled = true;
 
             hideConfirmModal();
-            showToast(translations[state.lang].refund_pending);
+            const dict = translations[state.lang] || translations.en;
+            showToast(dict.refund_pending || 'Refund Processing...');
 
             try {
                 const res = await fetch(`${API_BASE}/api/v1/user/refund`, {
@@ -1038,16 +1068,24 @@
                     body: JSON.stringify({ license_code: license, lang: state.lang })
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = {};
+                }
+                if (!res.ok) {
+                    throw new Error(data.error || dict.toast_error || 'Refund failed');
+                }
 
-                showToast(data.message || translations[state.lang].toast_refund_success);
+                showToast(data.message || dict.toast_refund_success || 'Refund success');
                 
                 // Reload data
                 await loadLicenses();
 
             } catch (err) {
-                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
+                const prefix = dict.toast_error || 'Error:';
+                showToast(`${prefix} ${err.message || err}`, 'error');
             } finally {
                 state.refundInFlight = false;
                 if (okBtn) okBtn.disabled = false;

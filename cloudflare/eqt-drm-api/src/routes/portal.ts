@@ -4,6 +4,56 @@ import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
 
+/** E2E / fixture transaction IDs that must never hit live Paddle Adjustments. */
+function isSyntheticTestTransactionId(transactionId: string): boolean {
+  return /^(txn_test_|txn_chrome_|txn_mock_|txn_e2e_)/i.test(transactionId);
+}
+
+/** Paddle Billing production/sandbox txn ids look like txn_01h69x8hxms4md3eqt4k2n0uex */
+function isPlausiblePaddleTransactionId(transactionId: string): boolean {
+  return /^txn_01[a-z0-9]{16,}$/i.test(transactionId);
+}
+
+/** Never leak raw Paddle JSON dumps to the browser toast. */
+function sanitizeRefundPublicError(err: unknown, reqLang: string): string {
+  const raw = err instanceof Error ? err.message : String(err || '');
+  // Known Paddle shapes we map to friendly copy
+  if (/invalid_url|not[_ ]found|transaction.*not found/i.test(raw)) {
+    return getApiTranslation('paddle_transaction_invalid', reqLang);
+  }
+  if (/already.?refund|adjustment/i.test(raw) && /conflict|invalid/i.test(raw)) {
+    return getApiTranslation('license_already_revoked', reqLang);
+  }
+  // Strip embedded JSON / multi-line dumps
+  const firstLine = raw.split('\n')[0] || '';
+  const withoutJson = firstLine.replace(/\{[\s\S]*$/, '').trim();
+  if (!withoutJson || withoutJson.length < 8 || /Failed to fetch transaction|Paddle refund/i.test(withoutJson)) {
+    return getApiTranslation('refund_failed', reqLang);
+  }
+  return withoutJson.length > 160 ? withoutJson.slice(0, 160) + '…' : withoutJson;
+}
+
+async function revokeLicenseAndNotify(
+  env: Env,
+  ctx: ExecutionContext,
+  license: any,
+  license_code: string,
+  sessionEmail: string,
+  reqLang: string
+): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
+  ).bind(license_code).run();
+
+  const notifyEmail = sessionEmail || license.buyer_email;
+  if (notifyEmail) {
+    const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : (license.tier || "EQT"));
+    const t = getRefundRevokeEmailTemplate(reqLang);
+    const emailHtml = renderEmailWrapper(t.title, t.body(license_code, planName));
+    ctx.waitUntil(sendDRMEmail(env, notifyEmail, t.subject, emailHtml));
+  }
+}
+
 export async function handlePortalRoutes(
   request: Request,
   env: Env,
@@ -261,6 +311,36 @@ export async function handlePortalRoutes(
       });
     }
 
+    // Fixture / e2e orders: never call Paddle; locally revoke so portal testing has a complete path.
+    if (isSyntheticTestTransactionId(transactionId)) {
+      try {
+        await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang);
+        return new Response(JSON.stringify({
+          success: true,
+          message: getApiTranslation("refund_test_local_success", reqLang),
+          local_only: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        console.error("Local test refund error:", err);
+        return new Response(JSON.stringify({
+          error: getApiTranslation("refund_failed", reqLang)
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    if (!isPlausiblePaddleTransactionId(transactionId)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("paddle_transaction_invalid", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const paddleApiKey = env.PADDLE_API_KEY;
     if (!paddleApiKey) {
       return new Response(JSON.stringify({ error: getApiTranslation("paddle_not_configured", reqLang) }), {
@@ -318,19 +398,8 @@ export async function handlePortalRoutes(
 
       const adjData = await adjRes.json();
 
-      // Revoke local license immediately
-      await env.DB.prepare(
-        "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
-      ).bind(license_code).run();
-
-      // Async multi-language revoke notice (portal path — do not rely only on webhook)
-      const notifyEmail = session.email || license.buyer_email;
-      if (notifyEmail) {
-        const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : (license.tier || "EQT"));
-        const t = getRefundRevokeEmailTemplate(reqLang);
-        const emailHtml = renderEmailWrapper(t.title, t.body(license_code, planName));
-        ctx.waitUntil(sendDRMEmail(env, notifyEmail, t.subject, emailHtml));
-      }
+      // Revoke local license immediately + async multi-language revoke notice
+      await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang);
 
       return new Response(JSON.stringify({
         success: true,
@@ -348,7 +417,7 @@ export async function handlePortalRoutes(
         transaction_id: transactionId || null
       }));
       return new Response(JSON.stringify({
-        error: err.message || getApiTranslation("refund_failed", reqLang)
+        error: sanitizeRefundPublicError(err, reqLang)
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }

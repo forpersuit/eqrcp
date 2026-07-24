@@ -126,6 +126,25 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Rückerstattung eingeleitet. Ihre Lizenz wurde widerrufen.",
     fr: "Remboursement initié. Votre licence a été révoquée."
   },
+  /** Synthetic / e2e transaction IDs (txn_test_*, etc.) — local revoke only, no Paddle money movement. */
+  refund_test_local_success: {
+    zh: "测试订单已本地吊销（无真实支付渠道退款）",
+    en: "Test license revoked locally (no real payment-channel refund)",
+    ja: "テスト注文をローカルで失効しました（実返金なし）",
+    ko: "테스트 주문이 로컬에서 취소되었습니다(실제 환불 없음)",
+    es: "Licencia de prueba revocada localmente (sin reembolso real)",
+    de: "Testlizenz lokal widerrufen (keine echte Erstattung)",
+    fr: "Licence de test révoquée localement (pas de vrai remboursement)"
+  },
+  paddle_transaction_invalid: {
+    zh: "关联的交易单号无效，无法向支付渠道发起退款",
+    en: "Associated transaction ID is invalid; cannot refund via payment channel",
+    ja: "関連取引IDが無効なため返金できません",
+    ko: "연결된 거래 ID가 유효하지 않아 환불할 수 없습니다",
+    es: "El ID de transacción asociado no es válido",
+    de: "Zugehörige Transaktions-ID ist ungültig",
+    fr: "L'identifiant de transaction associé est invalide"
+  },
   refund_failed: {
     zh: "退款处理失败，请稍后重试",
     en: "Failed to process refund",
