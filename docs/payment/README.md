@@ -41,11 +41,13 @@
 
 用户自助 Portal（查授权 / 解绑 / 退款）文档见 **[`docs/portal/`](../portal/README.md)**。
 
+**产品正式发布总清单**（配置收口、Paddle live、验收）：[`docs/IMPORTANT_product-release.md`](../IMPORTANT_product-release.md)。
+
 ---
 
 ## 相关：运维管理后台
 
-用户自助 Portal 之外的 **Admin 控制台**（发码、吊销、错误审计）文档在 [`docs/admin/`](../admin/README.md)，工程在 `cloudflare/eqt-admin/`。
+用户自助 Portal 之外的 **Admin 控制台**（发码、吊销、黑名单、错误审计）文档在 [`docs/admin/`](../admin/README.md)，工程在 `cloudflare/eqt-admin/`。
 
 ---
 

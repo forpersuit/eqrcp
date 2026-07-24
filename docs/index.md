@@ -48,6 +48,7 @@ Environment variables use the `EQT_` prefix.
 
 ## Planning & Docs
 
+- **[正式发布清单 (Product Launch Checklist)](IMPORTANT_product-release.md)** — 上线前配置/口径/验收；下一版范围
 - [Payment & Licensing System Docs (支付与授权系统文档)](payment/README.md)
 - [Product Presentation & Merchant Compliance (支付合规页)](product-landing.md)
 - [Auto-Update Design & Settings (自动更新设计)](IMPORTANT_auto-update-design.md)
@@ -59,6 +60,7 @@ Environment variables use the `EQT_` prefix.
 - [Desktop platform notes](desktop-platform-notes.md)
 - [Windows validation checklist](windows-validation-checklist.md)
 - [Security notes](security-notes.md)
+- [Admin 文档目录](admin/README.md) · [Portal 文档目录](portal/README.md)
 
 ## License
 

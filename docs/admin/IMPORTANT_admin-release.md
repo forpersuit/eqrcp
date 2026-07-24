@@ -3,7 +3,7 @@
 > **必读**：Admin 相关改动的发布顺序、验收与禁止事项。  
 > 违反「契约 → 后端 → 前端 → 测 → 双部署」顺序是生产事故的主要来源。
 
-关联：[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) · [api-contract.md](./api-contract.md) · [ops-guide.md](./ops-guide.md) · [progress.md](./progress.md)
+关联：[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md) · [api-contract.md](./api-contract.md) · [ops-guide.md](./ops-guide.md) · [progress.md](./progress.md) · **[产品正式发布清单](../IMPORTANT_product-release.md)**
 
 ---
 

@@ -2,9 +2,9 @@
 
 运维管理后台：**`cloudflare/eqt-admin`**（SPA）+ **`eqt-drm-api`** 的 `/api/v1/admin/*`。
 
-与用户 Portal（`eqt-website/portal.html`）**完全分离**：Portal = 购买邮箱用户；Admin = 持有 `ADMIN_SECRET` 的运维。用户 Portal 文档：[`docs/portal/`](../portal/README.md)。
+与用户 Portal（`eqt-website/portal.html`）**完全分离**：Portal = 购买邮箱用户；Admin = **Cloudflare Access JWT**（仅允许运维邮箱，无 `ADMIN_SECRET`）。用户 Portal 文档：[`docs/portal/`](../portal/README.md)。
 
-**主线状态（2026-07-23）**：Admin **v1 可日常使用**（登录、KPI、错误审计、操作审计、发码/吊销/解绑、真探针健康、生产 `admin.eqt.net.im`）。后置项见 [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)。
+**主线状态（2026-07-25）**：Admin **v1 可日常使用**（Access 登录、KPI、错误审计、操作审计、发码/吊销/解绑、手工黑名单、真探针健康、生产 `admin.eqt.net.im`）。产品正式发布总清单见 **[IMPORTANT_product-release.md](../IMPORTANT_product-release.md)**；Admin 债见 [IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)。
 
 ---
 
@@ -12,6 +12,7 @@
 
 | 顺序 | 文档 | 说明 |
 | :---: | :--- | :--- |
+| 0 | **[产品正式发布清单](../IMPORTANT_product-release.md)** | 上线前全产品配置 / 验收 / 下一版范围 |
 | 1 | **[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md)** | **必读**：运行要配哪些参数 |
 | 2 | **[cloudflare-access-setup.md](./cloudflare-access-setup.md)** | **推荐**：Access 锁 Admin + JWT 护 API |
 | 3 | **[IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)** | **必读**：如何改代码、测、双部署 |

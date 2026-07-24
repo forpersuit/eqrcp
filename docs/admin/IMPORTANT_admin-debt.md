@@ -3,7 +3,7 @@
 > 基于 2026-07-23 生产实测与代码审查。  
 > **主线 Admin v1 已可交付**；下列为剩余债，按优先级处理，避免 silent average。
 
-关联：[progress.md](./progress.md) · [api-contract.md](./api-contract.md) · [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)
+关联：[progress.md](./progress.md) · [api-contract.md](./api-contract.md) · [IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md) · **[产品正式发布清单](../IMPORTANT_product-release.md)**
 
 ---
 

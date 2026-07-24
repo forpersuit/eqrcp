@@ -2,17 +2,18 @@
 
 用户自助授权门户：**`cloudflare/eqt-website/portal.html`** + **`eqt-drm-api`** 的 `/api/v1/auth/*` 与 `/api/v1/user/*`。
 
-与 Admin（`eqt-admin`，持 `ADMIN_SECRET`）**完全分离**：
+与 Admin（`eqt-admin`，Cloudflare Access JWT）**完全分离**：
 
 | | 用户 Portal | 管理 Admin |
 | :--- | :--- | :--- |
-| 身份 | 购买邮箱 + 邮件验证码会话 | `ADMIN_SECRET` |
-| 能力 | 查自己的授权、解绑设备、自助退款 | 全库检索、发码、吊销、审计 |
+| 身份 | 购买邮箱 + 邮件验证码会话 | Cloudflare Access（运维邮箱） |
+| 能力 | 查自己的授权、解绑设备、自助退款 | 全库检索、发码、吊销、黑名单、审计 |
 | 文档 | **本目录** | [`docs/admin/`](../admin/README.md) |
 
 **线上**：页面 `https://www.eqt.net.im/portal.html`，API `https://lic.eqt.net.im`。
 
-支付/DRM 业务背景：[`docs/payment/`](../payment/README.md)。
+支付/DRM 业务背景：[`docs/payment/`](../payment/README.md)。  
+**产品正式发布总清单**：[IMPORTANT_product-release.md](../IMPORTANT_product-release.md)。
 
 ---
 
@@ -20,6 +21,7 @@
 
 | 顺序 | 文档 | 说明 |
 | :---: | :--- | :--- |
+| 0 | **[产品正式发布清单](../IMPORTANT_product-release.md)** | 上线前配置 / 验收 / 下一版 |
 | 1 | **[overview.md](./overview.md)** | 产品定位、UI、功能与副作用 |
 | 2 | **[api-contract.md](./api-contract.md)** | API 请求/响应契约（改接口先改它） |
 | 3 | **[progress.md](./progress.md)** | 修复进度勾选与验证记录 |
