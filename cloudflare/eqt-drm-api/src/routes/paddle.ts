@@ -1,9 +1,10 @@
 import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID } from '../types';
 import { verifyPaddleSignature } from '../utils/crypto';
-import { sendDRMEmail } from '../services/smtp';
+import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { ensureLicenseSourceColumns } from '../utils/auth';
 import { revokeByPaddleSubSql, revokeByPaddleTxnSql } from '../utils/license-source';
+import { getLicenseRevokeEmailTemplate } from '../i18n';
 
 export async function handlePaddleRoutes(
   request: Request,
@@ -232,31 +233,9 @@ export async function handlePaddleRoutes(
 
       if (license && license.buyer_email) {
         const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-        const emailHtml = `
-          <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
-            <h2 style="color: #ef4444;">您的 EQT 许可证授权已吊销</h2>
-            <p>您的退款申请已处理完成，或授权订阅因中止而被注销。以下是受影响的许可证明细：</p>
-            <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
-              <tr>
-                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
-                <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 14px; text-decoration: line-through; color: #888;">${license.license_code}</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">当前状态 (Status)</td>
-                <td style="padding: 10px; border: 1px solid #ddd; color: #ef4444; font-weight: bold;">已吊销 (Revoked) · 原因: 退款</td>
-              </tr>
-            </table>
-            <p><strong>注意：</strong>该激活码下的所有已激活设备在下次联网同步（或最迟 7 天租约过期）时，软件将自动注销降级至免费体验版。</p>
-            <p>感谢您曾经使用 EQT，如果您有任何其他问题或需要重新激活服务，欢迎随时前往我们的官网。</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。</p>
-          </div>
-        `;
-        ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销与退款通知", emailHtml));
+        const t = getLicenseRevokeEmailTemplate("zh", "refund");
+        const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
+        ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
       }
 
       return new Response(JSON.stringify({ message: "License revoked due to refund", revoke_reason: "refund" }), {
@@ -284,16 +263,9 @@ export async function handlePaddleRoutes(
 
         if (license && license.buyer_email) {
           const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-          const reasonLabel = reason === "chargeback" ? "银行拒付 / Chargeback" : "退款 / Refund";
-          const emailHtml = `
-            <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
-              <h2 style="color: #ef4444;">您的 EQT 许可证授权已吊销</h2>
-              <p>支付渠道通知：${reasonLabel}。对应授权已立即失效。</p>
-              <p>激活码：<code>${license.license_code}</code> · 套餐：${planName}</p>
-              <p>已激活设备将在下次联网对账时自动降级为免费版。</p>
-            </div>
-          `;
-          ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销通知", emailHtml));
+          const t = getLicenseRevokeEmailTemplate("zh", reason);
+          const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
+          ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
         }
 
         return new Response(JSON.stringify({
@@ -324,31 +296,9 @@ export async function handlePaddleRoutes(
 
         if (license && license.buyer_email) {
           const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-          const emailHtml = `
-            <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
-              <h2 style="color: #ef4444;">您的 EQT 订阅许可证已失效</h2>
-              <p>您的 EQT 尊享服务订阅已中止，授权已失效。以下是受影响的许可证明细：</p>
-              <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
-                <tr>
-                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td>
-                  <td style="padding: 10px; border: 1px solid #ddd;">${planName}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
-                  <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 14px; text-decoration: line-through; color: #888;">${license.license_code}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">原因 (Reason)</td>
-                  <td style="padding: 10px; border: 1px solid #ddd;">订阅已取消或扣款失败</td>
-                </tr>
-              </table>
-              <p><strong>注意：</strong>该激活码下的所有已激活设备在下一次联网同步时，软件将自动降级至免费体验版。</p>
-              <p>感谢您曾经使用 EQT，如果您有任何其他问题或需要重新激活服务，欢迎随时前往我们的官网进行续费。</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-              <p style="font-size: 12px; color: #888;">此邮件由系统自动发送，请勿直接回复。</p>
-            </div>
-          `;
-          ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权失效通知", emailHtml));
+          const t = getLicenseRevokeEmailTemplate("zh", "subscription");
+          const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
+          ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
         }
 
         return new Response(JSON.stringify({ message: "License revoked due to subscription cancellation or non-payment" }), {

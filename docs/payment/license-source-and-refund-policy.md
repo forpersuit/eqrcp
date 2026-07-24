@@ -203,11 +203,49 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 - [x] Pricing 结账 Modal 链到 Terms + Refund Policy  
 - [ ] purchase 年付与 `duration_days`/`expires_at` 语义彻底分离（双重过期 SSOT，避免影响现网年付）  
 
+### 5.4 异常行为 / 风险邮箱·激活码如何识别
+
+**当前可识别的信号（已有数据，无需猜）**：
+
+| 信号 | 数据依据 | 风险含义 |
+| :--- | :--- | :--- |
+| 退款吊销 | `status=revoked` + `revoke_reason=refund` + `source=purchase` | 正常退款或薅羊毛 |
+| 拒付吊销 | `revoke_reason=chargeback` | 盗刷/争议高优先 |
+| 滚动 365 天 ≥2 次 purchase 退款/拒付 | 黑名单逻辑（邮箱 hash / 设备 3 选 2） | **限制后续激活** |
+| 多设备快速激活 | `activations` 时间密度 + `max_devices` | 共享码嫌疑 |
+| 无 Paddle 却要退款 | Portal 门禁拒绝 | 非 purchase 误操作 |
+| Admin 吊销 | `revoke_reason=admin` | 人工风控，**通常不退款** |
+
+**不是三个 status**：退款与拒付都落在 `status=revoked`，靠 `revoke_reason` 区分。  
+**吊销 ≠ 退款**：`admin` / `subscription` / `test` 吊销**不自动退钱**。
+
+**运维查询示例**：
+
+```sql
+-- 近 365 天 purchase 退款/拒付次数按邮箱
+SELECT buyer_email, buyer_email_hash, COUNT(*) AS hits
+FROM licenses
+WHERE status = 'revoked'
+  AND source = 'purchase'
+  AND (revoke_reason IN ('refund','chargeback') OR revoke_reason IS NULL)
+  AND COALESCE(revoked_at, created_at) >= datetime('now', '-365 days')
+GROUP BY buyer_email, buyer_email_hash
+HAVING hits >= 1
+ORDER BY hits DESC;
+
+-- 某设备指纹是否命中黑名单窗口（配合 activations join）
+SELECT l.license_code, l.revoke_reason, l.revoked_at, a.device_id
+FROM activations a
+JOIN licenses l ON l.license_code = a.license_code
+WHERE a.device_id = '220b0d36b727' AND l.status = 'revoked';
+```
+
 ### P2
 
 - [ ] Pro 订阅与中继流量计量  
 - [ ] 权益时间轴合并（多码 → 单 entitlement）  
 - [ ] Admin 列表筛选 source / revoke_reason  
+- [ ] Admin 风险信号面板（上述 SQL 产品化）  
 
 ---
 

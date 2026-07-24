@@ -2169,6 +2169,16 @@ function renderSettingsPanel() {
                         <button type="button" class="ghost" id="dev-max-quota" style="padding: 8px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '最大额度'}</button>
                         <button type="button" class="ghost" id="dev-force-sync" style="padding: 8px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || '在线对账'}</button>
                     </div>
+
+                    <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin: 0 0 12px; box-sizing: border-box; width: 100%;">
+                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('dev_inject_license') || '注入激活码（Dev）'}</div>
+                        <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                            <input type="text" id="dev-license-code" value="${escapeHTML(state.devLicenseCode || '')}" placeholder="EQT-PLUS-…" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; font-family: var(--font-mono);" />
+                            <button type="button" id="dev-inject-license" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap; color: var(--accent); border-color: var(--accent); font-weight: 700;">${t('dev_inject_btn') || '注入'}</button>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; line-height: 1.4;">${t('dev_inject_hint') || '调用线上 /activate，等同于 About 面板兑换。测试完请在云端吊销并清理。'}</div>
+                        ${state.devInjectMsg ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devInjectError ? '#ef4444' : 'var(--accent)'};">${escapeHTML(state.devInjectMsg)}</div>` : ''}
+                    </div>
                     
                     <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
                         ${t('btn_exit_dev_mode') || '退出开发者模式'}
@@ -4294,6 +4304,43 @@ function bindSettingsControls() {
                     syncLicenseFromStatus(state.status);
                 } catch (_) {}
             }
+            render();
+            openPanel('settings');
+        }
+    });
+
+    document.querySelector('#dev-license-code')?.addEventListener('input', (e) => {
+        state.devLicenseCode = String(e.target?.value || '');
+    });
+
+    document.querySelector('#dev-inject-license')?.addEventListener('click', async () => {
+        const code = String(state.devLicenseCode || document.querySelector('#dev-license-code')?.value || '')
+            .trim()
+            .toUpperCase();
+        state.devInjectError = false;
+        state.devInjectMsg = '';
+        if (!code) {
+            state.devInjectError = true;
+            state.devInjectMsg = t('dev_inject_empty') || '请输入激活码';
+            render();
+            openPanel('settings');
+            return;
+        }
+        try {
+            state.devInjectMsg = t('dev_inject_working') || '正在注入…';
+            render();
+            openPanel('settings');
+            await ActivateLicense(code);
+            await loadStatusData();
+            state.devInjectError = false;
+            state.devInjectMsg = (t('dev_inject_ok') || '注入成功') + ': ' + code;
+            state.notice = state.devInjectMsg;
+            render();
+            openPanel('settings');
+        } catch (error) {
+            state.devInjectError = true;
+            state.devInjectMsg = String(error?.message || error || 'inject failed');
+            state.error = state.devInjectMsg;
             render();
             openPanel('settings');
         }

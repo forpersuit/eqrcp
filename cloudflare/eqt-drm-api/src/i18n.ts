@@ -496,99 +496,132 @@ export function getDeviceNoticeTemplate(lang: string) {
   return DEVICE_NOTIFICATION_I18N[norm] || DEVICE_NOTIFICATION_I18N['zh'] || DEVICE_NOTIFICATION_I18N['en'];
 }
 
-/** Portal self-service refund → revoke notification (7 languages). */
-export const REFUND_REVOKE_EMAIL_I18N: Record<string, {
+/**
+ * License status became revoked — emails are keyed by revoke_reason.
+ * Refund (money back) and revoke (entitlement removed) are related but not identical:
+ * - refund: payment reversed AND license revoked
+ * - chargeback: bank dispute AND license revoked (may not be "customer refund")
+ * - admin/subscription/test: revoke without a customer-facing refund
+ */
+type RevokeMail = {
   subject: string;
   title: string;
   body: (lic: string, tier: string) => string;
-}> = {
-  zh: {
-    subject: "【EQT】许可证授权吊销与退款通知",
-    title: "您的 EQT 许可证授权已吊销",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">您的退款申请已提交并处理，以下授权已被立即吊销：</p>
+};
+
+function revokeMailBlock(lic: string, tier: string, statusLine: string): string {
+  return `
       <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>套餐：</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>激活码：</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>状态：</strong> 已吊销</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">已激活设备将在下次联网对账（或最迟 7 天租约到期）时自动降级为免费版。退款到账时间以支付渠道为准。</p>`
+        <p style="margin: 4px 0; color: #334155;"><strong>Plan / 套餐：</strong> ${tier}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>License / 激活码：</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
+        <p style="margin: 4px 0; color: #ef4444;"><strong>Status：</strong> ${statusLine}</p>
+      </div>`;
+}
+
+const REVOKE_EMAIL_BY_REASON: Record<string, Record<string, RevokeMail>> = {
+  refund: {
+    zh: {
+      subject: "【EQT】退款已处理 · 授权已失效",
+      title: "退款已处理",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">您的<strong>退款</strong>申请已处理完成。款项将退回原支付方式（到账时间以支付渠道为准）。</p>
+      <p style="color: #475569; font-size: 14px;">作为退款的结果，以下<strong>付费授权已失效</strong>（与「仅吊销不退款」不同）：</p>
+      ${revokeMailBlock(lic, tier, '已退款 · 授权失效')}
+      <p style="color: #64748b; font-size: 13px;">已激活设备将在下次联网对账（或最迟 7 天租约）时自动降级为免费版。</p>`
+    },
+    en: {
+      subject: "[EQT] Refund processed · license entitlement ended",
+      title: "Refund processed",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Your <strong>refund</strong> has been processed. Funds return to the original payment method (timing depends on your provider).</p>
+      <p style="color: #475569; font-size: 14px;">As a result of the refund, the following <strong>paid entitlement has ended</strong>:</p>
+      ${revokeMailBlock(lic, tier, 'Refunded · entitlement ended')}
+      <p style="color: #64748b; font-size: 13px;">Activated devices will downgrade on the next online sync (or within the 7-day offline grace period).</p>`
+    }
   },
-  en: {
-    subject: "[EQT] License Revoked — Refund Notification",
-    title: "Your EQT license has been revoked",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">Your refund request has been submitted. The following license is revoked immediately:</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>Plan:</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>License:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>Status:</strong> Revoked</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">Activated devices will downgrade on the next online sync (or within the 7-day offline grace period). Refund timing depends on your payment provider.</p>`
+  chargeback: {
+    zh: {
+      subject: "【EQT】支付争议/拒付 · 授权已失效",
+      title: "支付争议导致授权失效",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">支付渠道通知：该订单发生<strong>银行拒付/争议（chargeback）</strong>。这<strong>不是</strong>客户自助退款流程。</p>
+      <p style="color: #475569; font-size: 14px;">对应付费授权已失效：</p>
+      ${revokeMailBlock(lic, tier, '拒付 · 授权失效')}
+      <p style="color: #64748b; font-size: 13px;">已激活设备将在下次联网对账时降级为免费版。如有疑问请联系 support@eqt.net.im。</p>`
+    },
+    en: {
+      subject: "[EQT] Payment dispute / chargeback · license ended",
+      title: "Chargeback: entitlement ended",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Our payment provider reported a <strong>chargeback / payment dispute</strong> on this order. This is <strong>not</strong> a customer self-service refund.</p>
+      <p style="color: #475569; font-size: 14px;">The related paid entitlement has ended:</p>
+      ${revokeMailBlock(lic, tier, 'Chargeback · entitlement ended')}
+      <p style="color: #64748b; font-size: 13px;">Devices will downgrade on the next online sync. Contact support@eqt.net.im if you need help.</p>`
+    }
   },
-  ja: {
-    subject: "【EQT】ライセンス失効・返金のお知らせ",
-    title: "EQT ライセンスが失効しました",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">返金申請を受け付け、以下のライセンスを直ちに失効しました：</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>プラン：</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>ライセンス：</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>状態：</strong> 失効</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">アクティブな端末は次回のオンライン同期（または最大7日間のオフライン猶予後）に無料版へ降格します。</p>`
+  admin: {
+    zh: {
+      subject: "【EQT】授权已吊销（运营处理）",
+      title: "授权已吊销",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">您的授权已被运营侧<strong>吊销</strong>。本次处理<strong>不包含退款</strong>（除非另行通知支付渠道）。</p>
+      ${revokeMailBlock(lic, tier, '已吊销 · 非退款')}
+      <p style="color: #64748b; font-size: 13px;">已激活设备将在下次联网对账时降级为免费版。</p>`
+    },
+    en: {
+      subject: "[EQT] License revoked (operator action)",
+      title: "License revoked",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Your license was <strong>revoked by the operator</strong>. This action <strong>does not include a refund</strong> unless separately processed by the payment provider.</p>
+      ${revokeMailBlock(lic, tier, 'Revoked · no refund')}
+      <p style="color: #64748b; font-size: 13px;">Devices will downgrade on the next online sync.</p>`
+    }
   },
-  ko: {
-    subject: "【EQT】라이선스 취소 및 환불 안내",
-    title: "EQT 라이선스가 취소되었습니다",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">환불 요청이 접수되어 다음 라이선스가 즉시 취소되었습니다:</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>요금제:</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>라이선스:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>상태:</strong> 취소됨</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">활성화된 기기는 다음 온라인 동기화(또는 최대 7일 오프라인 유예 후)에 무료 버전으로 전환됩니다.</p>`
+  subscription: {
+    zh: {
+      subject: "【EQT】订阅已结束 · 授权失效",
+      title: "订阅已结束",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">您的订阅已取消、逾期或暂停，对应授权已失效。<strong>这不是退款通知</strong>。</p>
+      ${revokeMailBlock(lic, tier, '订阅结束 · 授权失效')}
+      <p style="color: #64748b; font-size: 13px;">如需继续使用，请前往官网重新订阅。</p>`
+    },
+    en: {
+      subject: "[EQT] Subscription ended · license inactive",
+      title: "Subscription ended",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">Your subscription was canceled, past due, or paused. The license is no longer active. <strong>This is not a refund notice.</strong></p>
+      ${revokeMailBlock(lic, tier, 'Subscription ended')}
+      <p style="color: #64748b; font-size: 13px;">Resubscribe on the website if you want to continue.</p>`
+    }
   },
-  es: {
-    subject: "[EQT] Licencia revocada — Aviso de reembolso",
-    title: "Su licencia EQT ha sido revocada",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">Su solicitud de reembolso fue procesada. La siguiente licencia queda revocada de inmediato:</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>Plan:</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>Licencia:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>Estado:</strong> Revocada</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">Los dispositivos activados volverán a la versión gratuita en la próxima sincronización (o en el plazo de gracia de 7 días).</p>`
-  },
-  de: {
-    subject: "[EQT] Lizenz widerrufen — Erstattungsbenachrichtigung",
-    title: "Ihre EQT-Lizenz wurde widerrufen",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">Ihre Erstattungsanfrage wurde übermittelt. Die folgende Lizenz ist sofort widerrufen:</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>Tarif:</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>Lizenz:</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>Status:</strong> Widerrufen</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">Aktivierte Geräte werden bei der nächsten Online-Synchronisation (oder spätestens nach 7 Tagen Offline-Grace) auf die Free-Version zurückgestuft.</p>`
-  },
-  fr: {
-    subject: "[EQT] Licence révoquée — Notification de remboursement",
-    title: "Votre licence EQT a été révoquée",
-    body: (lic, tier) => `
-      <p style="color: #475569; font-size: 14px;">Votre demande de remboursement a été prise en compte. La licence suivante est révoquée immédiatement :</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 16px 0; font-size: 14px;">
-        <p style="margin: 4px 0; color: #334155;"><strong>Offre :</strong> ${tier}</p>
-        <p style="margin: 4px 0; color: #334155;"><strong>Licence :</strong> <span style="font-family: monospace; text-decoration: line-through; color: #888;">${lic}</span></p>
-        <p style="margin: 4px 0; color: #ef4444;"><strong>Statut :</strong> Révoquée</p>
-      </div>
-      <p style="color: #64748b; font-size: 13px;">Les appareils activés repasseront en version gratuite à la prochaine synchronisation (ou sous 7 jours de grâce hors ligne).</p>`
+  test: {
+    zh: {
+      subject: "【EQT】[测试] 授权已本地吊销",
+      title: "测试吊销",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">这是<strong>测试路径</strong>的本地吊销通知，无真实支付退款。</p>
+      ${revokeMailBlock(lic, tier, '测试吊销')}`
+    },
+    en: {
+      subject: "[EQT] [Test] License revoked locally",
+      title: "Test revoke",
+      body: (lic, tier) => `
+      <p style="color: #475569; font-size: 14px;">This is a <strong>test-path</strong> local revoke. No real payment refund.</p>
+      ${revokeMailBlock(lic, tier, 'Test revoke')}`
+    }
   }
 };
 
-export function getRefundRevokeEmailTemplate(lang: string) {
+/** Prefer reason-specific templates; fallback to refund copy for unknown reasons. */
+export function getLicenseRevokeEmailTemplate(lang: string, reason: string = 'refund'): RevokeMail {
   const norm = (lang || 'en').toLowerCase().substring(0, 2);
-  return REFUND_REVOKE_EMAIL_I18N[norm] || REFUND_REVOKE_EMAIL_I18N['en'];
+  const r = (reason || 'refund').toLowerCase();
+  const byReason = REVOKE_EMAIL_BY_REASON[r] || REVOKE_EMAIL_BY_REASON.refund;
+  return byReason[norm] || byReason.en || REVOKE_EMAIL_BY_REASON.refund.en;
+}
+
+/** @deprecated use getLicenseRevokeEmailTemplate(lang, 'refund') */
+export function getRefundRevokeEmailTemplate(lang: string) {
+  return getLicenseRevokeEmailTemplate(lang, 'refund');
 }

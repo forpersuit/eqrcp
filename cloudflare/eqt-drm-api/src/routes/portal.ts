@@ -1,5 +1,5 @@
 import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
-import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getRefundRevokeEmailTemplate } from '../i18n';
+import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getLicenseRevokeEmailTemplate } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
@@ -49,7 +49,7 @@ async function revokeLicenseAndNotify(
   const notifyEmail = sessionEmail || license.buyer_email;
   if (notifyEmail) {
     const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : (license.tier || "EQT"));
-    const t = getRefundRevokeEmailTemplate(reqLang);
+    const t = getLicenseRevokeEmailTemplate(reqLang, reason);
     const emailHtml = renderEmailWrapper(t.title, t.body(license_code, planName));
     ctx.waitUntil(sendDRMEmail(env, notifyEmail, t.subject, emailHtml));
   }

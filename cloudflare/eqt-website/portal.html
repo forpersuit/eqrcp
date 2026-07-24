@@ -223,6 +223,13 @@
                 "status_active": "Active",
                 "status_refunded": "Refunded",
                 "status_revoked": "Revoked",
+                "source_label": "Source",
+                "source_purchase": "Purchase",
+                "source_promo": "Promo",
+                "source_admin": "Admin",
+                "source_test": "Test",
+                "entitlement_lifetime": "Lifetime",
+                "entitlement_term": "Term",
                 "created_at": "Purchased On",
                 "paddle_transaction": "Transaction ID",
                 "paddle_subscription": "Subscription ID",
@@ -273,6 +280,13 @@
                 "status_active": "已生效",
                 "status_refunded": "已退款",
                 "status_revoked": "已吊销",
+                "source_label": "来源",
+                "source_purchase": "付费购买",
+                "source_promo": "活动赠送",
+                "source_admin": "官方发放",
+                "source_test": "测试夹具",
+                "entitlement_lifetime": "终身",
+                "entitlement_term": "限期",
                 "created_at": "购买日期",
                 "paddle_transaction": "交易单号",
                 "paddle_subscription": "订阅单号",
@@ -807,9 +821,22 @@
                 const card = document.createElement('div');
                 card.className = 'bg-surface-variant/40 border border-white/10 rounded-xl p-6 space-y-4';
 
+                const dict = translations[state.lang] || translations.en;
                 const statusColor = lic.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30';
                 const statusKey = 'status_' + lic.status;
-                const statusLabel = translations[state.lang][statusKey] || lic.status.toUpperCase();
+                const statusLabel = dict[statusKey] || lic.status.toUpperCase();
+                const sourceKey = 'source_' + (lic.source || 'admin');
+                const sourceLabel = dict[sourceKey] || (lic.source || '—');
+                const isLifetime = !lic.duration_days && (lic.expires_at === 'LIFETIME' || !lic.expires_at);
+                const entitlementLabel = isLifetime
+                    ? (dict.entitlement_lifetime || 'Lifetime')
+                    : (dict.entitlement_term || 'Term');
+                const sourceColor = {
+                    purchase: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
+                    promo: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+                    admin: 'bg-violet-500/10 text-violet-300 border-violet-500/30',
+                    test: 'bg-slate-500/10 text-slate-300 border-slate-500/30'
+                }[lic.source] || 'bg-white/5 text-on-surface-variant border-white/10';
                 
                 const dateLocales = { zh: 'zh-CN', en: 'en-US', ja: 'ja-JP', ko: 'ko-KR', es: 'es-ES', de: 'de-DE', fr: 'fr-FR' };
                 const createdDate = new Date(lic.created_at).toLocaleDateString(dateLocales[state.lang] || 'en-US', {
@@ -877,16 +904,19 @@
                                 <span class="material-symbols-outlined text-base">content_copy</span>
                             </button>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap justify-end">
                             <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${statusLabel}</span>
                             <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">${lic.tier}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold border ${sourceColor}" title="${dict.source_label || 'Source'}">${sourceLabel}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 text-on-surface-variant border border-white/10">${entitlementLabel}</span>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-6 text-xs text-on-surface-variant">
-                        <div><span class="font-medium text-white/50">${translations[state.lang].created_at}:</span> ${createdDate}</div>
-                        <div><span class="font-medium text-white/50">${translations[state.lang].paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
-                        ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${translations[state.lang].paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
+                        <div><span class="font-medium text-white/50">${dict.source_label || 'Source'}:</span> ${sourceLabel}${lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}</div>
+                        <div><span class="font-medium text-white/50">${dict.created_at}:</span> ${createdDate}</div>
+                        <div><span class="font-medium text-white/50">${dict.paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
+                        ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${dict.paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
                     </div>
 
                     <!-- Annual Unbind Quota Banner -->
