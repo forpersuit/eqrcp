@@ -61,14 +61,12 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
 ```
 
 ### 3.3 薅羊毛退款黑名单防御拦截 (Abusive Refund Blacklist)
-为了防止恶意买家利用 14 天冷静期进行“购买 ➔ 激活 ➔ 退款 ➔ 再购买 ➔ 再退款”的循环白嫖，云端内置了自动化黑名单拦截模块：
-1. **触发规则**：当任一**买家邮箱哈希**（`buyer_email_hash`）或**客户端设备物理指纹**（主板 UUID、CPU 序列号、系统盘序列号经 3选2 加权比对）在 D1 历史中累计匹配的**已退款/已吊销（`revoked`）许可证次数 $\ge 2$ 次**时，该邮箱/设备指纹将被云端永久列入风控黑名单。
+为了防止恶意买家利用 14 天冷静期进行“购买 ➔ 激活 ➔ 退款 ➔ 再购买 ➔ 再退款”的循环白嫖，云端内置了自动化黑名单拦截模块（政策 SSOT：[`license-source-and-refund-policy.md`](./license-source-and-refund-policy.md)；对外披露：Terms + Refund Policy）：
+1. **触发规则（滚动 365 天）**：当任一**买家邮箱哈希**（`buyer_email_hash`）或**客户端设备物理指纹**（3 选 2）在过去 **365 天**内，匹配到 **≥ 2 次 purchase 类** 退款/拒付吊销（`status=revoked` 且 `source=purchase` 或遗留真 `txn_01…`，时间取 `revoked_at` 或回退 `created_at`）时，拦截后续激活。活动码/admin/test 吊销不计入。
 2. **拦截关卡**：
-   * **激活阶段（`/api/v1/activate`）**：当用户尝试在该设备上激活新的激活码时，Worker 会提前检测黑名单并立刻拦截，拒绝注册新绑定，返回 `403 Forbidden` 并吐出：
-     `{"error":"This device is blacklisted due to multiple refund/revocation activities."}` 或
-     `{"error":"This email address is blacklisted due to multiple refund/revocation activities."}`。
-   * **对账阶段（`/api/v1/verify`）**：即使该设备使用某种手段绕过了激活，在每次离线对账时同样会做实时校验强行拦截阻断，确保证书无法被离线签名，降级为免费版。
-3. **技术特性**：黑名单逻辑采用云端 D1 历史数据动态关联查询与内存判定，遵循与客户端完全一致的加权硬件指纹比对算法与空值防呆机制，**零数据库迁移负担**，微秒级高效闭环。
+   * **激活阶段（`/api/v1/activate`）**：检测黑名单并 `403`，文案说明 rolling 365-day 限制。
+   * **对账阶段（`/api/v1/verify`）**：既有吊销态仍会拒绝，确保本地证书无法续签。
+3. **技术特性**：加权指纹空值防呆；与 `licenses.source` / `revoked_at` 字段联动。
 
 ---
 

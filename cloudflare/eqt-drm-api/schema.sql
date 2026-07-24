@@ -8,12 +8,14 @@ CREATE TABLE IF NOT EXISTS licenses (
     tier TEXT NOT NULL,          -- 'PLUS' or 'PRO'
     status TEXT NOT NULL DEFAULT 'active', -- 'active', 'suspended', 'revoked'
     max_devices INTEGER DEFAULT 2,
-    expires_at TEXT,             -- ISO format time, or 'LIFETIME'
+    expires_at TEXT,             -- ISO format time, or 'LIFETIME' (promo: redeem-by deadline when duration_days set)
     duration_days INTEGER DEFAULT NULL,
     buyer_email_hash TEXT DEFAULT NULL,
     buyer_email TEXT DEFAULT NULL,
     paddle_transaction_id TEXT DEFAULT NULL,
     paddle_subscription_id TEXT DEFAULT NULL,
+    source TEXT DEFAULT NULL,    -- 'purchase' | 'promo' | 'admin' | 'test'
+    revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
     created_at TEXT NOT NULL
 );
 

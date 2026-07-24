@@ -74,6 +74,8 @@ export async function ensureDrmTables(env: Env): Promise<void> {
             buyer_email TEXT DEFAULT NULL,
             paddle_transaction_id TEXT DEFAULT NULL,
             paddle_subscription_id TEXT DEFAULT NULL,
+            source TEXT DEFAULT NULL,
+            revoked_at TEXT DEFAULT NULL,
             created_at TEXT NOT NULL
         )
       `),
@@ -101,6 +103,22 @@ export async function ensureDrmTables(env: Env): Promise<void> {
     ]);
   } catch (err) {
     console.error("Failed to ensure DRM D1 tables:", err);
+  }
+  await ensureLicenseSourceColumns(env);
+}
+
+/** Idempotent ALTERs for license origin + abuse-window timestamps. */
+export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
+  const alters = [
+    "ALTER TABLE licenses ADD COLUMN source TEXT DEFAULT NULL",
+    "ALTER TABLE licenses ADD COLUMN revoked_at TEXT DEFAULT NULL",
+  ];
+  for (const sql of alters) {
+    try {
+      await env.DB.prepare(sql).run();
+    } catch {
+      // Column already exists
+    }
   }
 }
 

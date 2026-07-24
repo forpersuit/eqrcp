@@ -14,6 +14,9 @@ export interface Env {
   PADDLE_API_KEY?: string;
 }
 
+/** purchase | promo | admin | test — see docs/payment/license-source-and-refund-policy.md */
+export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
+
 export interface License {
   license_code: string;
   tier: 'PLUS' | 'PRO';
@@ -25,6 +28,8 @@ export interface License {
   buyer_email: string | null;
   paddle_transaction_id: string | null;
   paddle_subscription_id: string | null;
+  source?: LicenseSource | string | null;
+  revoked_at?: string | null;
   created_at: string;
 }
 
@@ -63,3 +68,5 @@ export const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
 // Business Logic Constants
 export const MAX_YEARLY_UNBINDS = 4;
 export const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+/** Rolling 365-day abusive refund/chargeback revocations before activate block. */
+export const MAX_YEARLY_ABUSIVE_REFUNDS = 2;

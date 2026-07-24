@@ -212,7 +212,9 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 * **API 地址自动转换**：通过检测 `PADDLE_API_KEY` 前缀（`pdl_sdbx_`）自动路由至沙箱 `sandbox-api.paddle.com` 或生产 API `api.paddle.com`。
 * **退款行项 ID 陷阱**：在创建退款（`POST /adjustments`）时，其 `items` 数组的 `item_id` 属性格式为 `txnitm_...`。该 ID **不能**从 `GET /transactions/{id}` 的 `data.items` 列表中直接提取（items 数组仅有 price schema，无 item ID）；**必须**从 `data.details.line_items` 数组里读取每个 item 的 `id` (以 `txnitm_` 开头)，否则将报 items 校验失败及 item_id 缺失错误。
 * **合成/测试交易单号**：E2E 夹具常用 `txn_test_*` / `txn_chrome_*` / `txn_mock_*` / `txn_e2e_*`。这些 ID **绝不能**打真实 Paddle Adjustments（会返回 `invalid_url`，前端表现为“点了没反应/授权不变”）。Portal `POST /user/refund` 对合成单号走**本地吊销**路径并返回 `refund_test_local_success`；真实单号须匹配 `txn_01…` 才调用 Paddle。对外错误必须经 `sanitizeRefundPublicError`，禁止把 Paddle 原始 JSON 直接塞进 toast。
-* **排查口令**：`CLOUDFLARE_API_TOKEN="" npx wrangler d1 execute eqt-drm-db --remote --command "SELECT license_code,status,paddle_transaction_id FROM licenses WHERE license_code='…'"` + `system_error_logs` 中 `PADDLE_API_ERROR`。
+* **授权来源 `source`**：`purchase|promo|admin|test`（方案 SSOT：`docs/payment/license-source-and-refund-policy.md`）。仅 `purchase`+真 `txn_01` 可 Portal 退款；promo 有兑换窗且不累加；终身同 tier 拒叠。吊销写 `revoked_at`。
+* **滥用退款黑名单**：滚动 **365 天**内 purchase 类吊销 ≥2（邮箱或设备 3 选 2）则拦截激活；条款见 `terms.html` / `refund.html`。
+* **排查口令**：`CLOUDFLARE_API_TOKEN="" npx wrangler d1 execute eqt-drm-db --remote --command "SELECT license_code,status,source,paddle_transaction_id,revoked_at FROM licenses WHERE license_code='…'"` + `system_error_logs` 中 `PADDLE_API_ERROR`。
 
 ### 6.4 激活邮箱传输与离线签名兼容性设计
 为了在 EQT 软件的激活状态中显示购买授权对应的邮箱，采用了**非签名的明文元数据传输**设计，以达成 100% 的向后兼容性（Zero Regression）：

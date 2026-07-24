@@ -134,7 +134,7 @@ export async function handleAdminRoutes(
     if (denied) return denied;
 
     const body: any = await request.json();
-    const { tier, max_devices, expires_in_days, duration_days, buyer_email, send_email } = body;
+    const { tier, max_devices, expires_in_days, duration_days, buyer_email, send_email, source: rawSource } = body;
 
     if (tier !== "PLUS" && tier !== "PRO") {
       return new Response(JSON.stringify({ error: "Invalid tier. Must be 'PLUS' or 'PRO'" }), {
@@ -142,6 +142,10 @@ export async function handleAdminRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
+    // Admin may mint promo (campaign) or admin (support/internal). Never purchase/test here.
+    const sourceRaw = String(rawSource || "admin").trim().toLowerCase();
+    const source = sourceRaw === "promo" ? "promo" : "admin";
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const randBytes = new Uint8Array(6);
@@ -157,8 +161,20 @@ export async function handleAdminRoutes(
     }
 
     const maxDev = max_devices ? Number(max_devices) : 2;
-    const durDays = duration_days !== undefined ? Number(duration_days) : null;
+    const durDays = duration_days !== undefined && duration_days !== null && duration_days !== ""
+      ? Number(duration_days)
+      : null;
     const cleanEmail = (buyer_email || "").trim();
+
+    // Promo codes should have a redeem-by window; duration_days = post-activate entitlement.
+    if (source === "promo" && (!expires_in_days || Number(expires_in_days) <= 0)) {
+      return new Response(JSON.stringify({
+        error: "Promo licenses require expires_in_days (redeem-by window)"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     let emailHash: string | null = null;
     if (cleanEmail) {
@@ -168,7 +184,7 @@ export async function handleAdminRoutes(
     }
 
     await env.DB.prepare(
-      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       licenseCode,
       tier,
@@ -178,6 +194,7 @@ export async function handleAdminRoutes(
       durDays,
       emailHash,
       cleanEmail || null,
+      source,
       new Date().toISOString()
     ).run();
 
@@ -229,7 +246,7 @@ export async function handleAdminRoutes(
       send_email_requested: Boolean(send_email),
       email_sent: emailSent,
       status: 'active',
-      source: 'admin_manual'
+      source
     }, clientIp));
 
     return new Response(JSON.stringify({
@@ -237,6 +254,7 @@ export async function handleAdminRoutes(
       license_code: licenseCode,
       tier: tier,
       max_devices: maxDev,
+      source,
       expires_at: expiresAt,
       duration_days: durDays,
       buyer_email: cleanEmail || null,
@@ -339,7 +357,9 @@ export async function handleAdminRoutes(
     ).bind(license_code).all();
     const activationsAtRevoke = (actRes.results || []).map(activationAuditSnapshot);
 
-    await env.DB.prepare("UPDATE licenses SET status = 'revoked' WHERE license_code = ?").bind(license_code).run();
+    await env.DB.prepare(
+      "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE license_code = ?"
+    ).bind(new Date().toISOString(), license_code).run();
     ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {
       license_code,
       previous_status: existing.status,

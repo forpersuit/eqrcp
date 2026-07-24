@@ -36,6 +36,9 @@
 10. **[套餐层级设计 (Tier Design)](tier-design.md)**
    - 商业化定价与套餐限制的详细设计。
 
+11. **[授权来源、累加与退款开发方案 (License Source & Refund Policy)](license-source-and-refund-policy.md)**
+   - `source`（purchase/promo/admin/test）、兑换窗、累加、Portal 退款门禁、滚动 365 天滥用黑名单、条款披露与 P0/P1 清单。
+
 用户自助 Portal（查授权 / 解绑 / 退款）文档见 **[`docs/portal/`](../portal/README.md)**。
 
 ---

@@ -3,16 +3,13 @@ import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getRefu
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
-
-/** E2E / fixture transaction IDs that must never hit live Paddle Adjustments. */
-function isSyntheticTestTransactionId(transactionId: string): boolean {
-  return /^(txn_test_|txn_chrome_|txn_mock_|txn_e2e_)/i.test(transactionId);
-}
-
-/** Paddle Billing production/sandbox txn ids look like txn_01h69x8hxms4md3eqt4k2n0uex */
-function isPlausiblePaddleTransactionId(transactionId: string): boolean {
-  return /^txn_01[a-z0-9]{16,}$/i.test(transactionId);
-}
+import {
+  isLicenseRefundable,
+  isRealPaddleTransactionId,
+  isSyntheticTestTransactionId,
+  normalizeLicenseSource
+} from '../utils/license-source';
+import { ensureLicenseSourceColumns } from '../utils/auth';
 
 /** Never leak raw Paddle JSON dumps to the browser toast. */
 function sanitizeRefundPublicError(err: unknown, reqLang: string): string {
@@ -42,8 +39,8 @@ async function revokeLicenseAndNotify(
   reqLang: string
 ): Promise<void> {
   await env.DB.prepare(
-    "UPDATE licenses SET status = 'revoked' WHERE license_code = ?"
-  ).bind(license_code).run();
+    "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE license_code = ?"
+  ).bind(new Date().toISOString(), license_code).run();
 
   const notifyEmail = sessionEmail || license.buyer_email;
   if (notifyEmail) {
@@ -63,6 +60,7 @@ export async function handlePortalRoutes(
 ): Promise<Response | null> {
   // 0.3 Get user licenses history and status
   if (url.pathname === "/api/v1/user/licenses" && request.method === "GET") {
+    await ensureLicenseSourceColumns(env);
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -103,9 +101,12 @@ export async function handlePortalRoutes(
       ).bind(lic.license_code, oneYearAgoIso).first<any>();
       const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
       const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
+      const source = normalizeLicenseSource(lic.source, lic.paddle_transaction_id);
 
       list.push({
         ...lic,
+        source,
+        refundable: isLicenseRefundable({ ...lic, source }),
         activations: activations,
         used_unbinds: unbindCount,
         remaining_unbinds: remainingUnbinds,
@@ -246,6 +247,7 @@ export async function handlePortalRoutes(
 
   // 0.4 Refund license
   if (url.pathname === "/api/v1/user/refund" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
 
@@ -303,16 +305,11 @@ export async function handlePortalRoutes(
       });
     }
 
+    const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
     const transactionId = license.paddle_transaction_id;
-    if (!transactionId) {
-      return new Response(JSON.stringify({ error: getApiTranslation("no_paddle_transaction", reqLang) }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
 
-    // Fixture / e2e orders: never call Paddle; locally revoke so portal testing has a complete path.
-    if (isSyntheticTestTransactionId(transactionId)) {
+    // Fixture / e2e: allow local revoke only for explicit test source or synthetic txn
+    if (source === "test" || isSyntheticTestTransactionId(transactionId || "")) {
       try {
         await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang);
         return new Response(JSON.stringify({
@@ -334,7 +331,22 @@ export async function handlePortalRoutes(
       }
     }
 
-    if (!isPlausiblePaddleTransactionId(transactionId)) {
+    // Promo / admin / non-purchase: never refundable via portal
+    if (!isLicenseRefundable({ ...license, source })) {
+      return new Response(JSON.stringify({ error: getApiTranslation("refund_not_allowed_for_source", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!transactionId) {
+      return new Response(JSON.stringify({ error: getApiTranslation("no_paddle_transaction", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!isRealPaddleTransactionId(transactionId)) {
       return new Response(JSON.stringify({ error: getApiTranslation("paddle_transaction_invalid", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }

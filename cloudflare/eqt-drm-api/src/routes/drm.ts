@@ -1,10 +1,11 @@
 import { Env } from '../types';
 import { extractRequestLang, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
-import { ensureDeviceIdColumn, ensureActivationNetworkColumns } from '../utils/auth';
+import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest } from '../utils/rate-limit';
+import { normalizeLicenseSource } from '../utils/license-source';
 
 function activationClientMeta(request: Request): {
   client_ip: string | null;
@@ -33,6 +34,7 @@ export async function handleDrmRoutes(
   if (url.pathname === "/api/v1/activate" && request.method === "POST") {
     await ensureDeviceIdColumn(env);
     await ensureActivationNetworkColumns(env);
+    await ensureLicenseSourceColumns(env);
     const body: any = await request.json();
     const reqLang = extractRequestLang(request, body);
     const { license_code, uuid_hash, cpu_hash, disk_hash, device_id } = body;
@@ -63,6 +65,8 @@ export async function handleDrmRoutes(
       });
     }
 
+    const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+
     // Check for abusive refund blacklists (both email hash and device fingerprint)
     const blacklistCheck = await checkAbusiveRefundBlacklist(
       env,
@@ -76,6 +80,27 @@ export async function handleDrmRoutes(
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
+    }
+
+    // Promo (and admin codes that use dual-expiration): expires_at is redeem-by deadline
+    const usesRedeemWindow =
+      licenseSource === "promo" ||
+      (licenseSource === "admin" &&
+        license.duration_days !== null &&
+        license.duration_days !== undefined &&
+        license.expires_at &&
+        license.expires_at !== "LIFETIME");
+
+    if (usesRedeemWindow && license.expires_at && license.expires_at !== "LIFETIME") {
+      const redeemBy = new Date(license.expires_at).getTime();
+      if (!Number.isNaN(redeemBy) && redeemBy < Date.now()) {
+        return new Response(JSON.stringify({
+          error: "This license code has passed its redeem deadline and can no longer be activated."
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     let baseExpiresAt = license.expires_at || "LIFETIME";
@@ -147,10 +172,11 @@ export async function handleDrmRoutes(
     // Calculate dynamic expiration if the device has other active and unexpired license activations
     let remainingMs = 0;
     const nowMs = Date.now();
-    
+    let hasSameTierLifetime = false;
+
     // Find existing activations for this device fingerprint
     const activeDevices = await env.DB.prepare(`
-      SELECT l.expires_at FROM activations a
+      SELECT l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE (a.uuid_hash = ? OR a.cpu_hash = ? OR a.disk_hash = ?)
         AND l.license_code != ?
@@ -159,9 +185,24 @@ export async function handleDrmRoutes(
 
     if (activeDevices.results && activeDevices.results.length > 0) {
       for (const item of activeDevices.results) {
-        if (item.expires_at === "LIFETIME") {
-          remainingMs = -1; // Already has a lifetime license, no need to accumulate
-          break;
+        const itemIsLifetime =
+          item.expires_at === "LIFETIME" ||
+          (item.duration_days === null && item.expires_at === "LIFETIME");
+        // Certificate may store absolute LIFETIME on device; also treat null duration + LIFETIME row
+        const certLifetime = item.expires_at === "LIFETIME";
+        if (certLifetime && item.tier === license.tier) {
+          hasSameTierLifetime = true;
+        }
+        if (certLifetime || itemIsLifetime) {
+          if (item.tier === license.tier) {
+            remainingMs = -1;
+            break;
+          }
+          continue;
+        }
+        // Promo never stacks remaining time from other codes
+        if (licenseSource === "promo") {
+          continue;
         }
         if (item.expires_at) {
           const expTime = new Date(item.expires_at).getTime();
@@ -175,8 +216,24 @@ export async function handleDrmRoutes(
       }
     }
 
+    // Lifetime same-tier: cannot stack another code of the same tier
+    if (hasSameTierLifetime || remainingMs === -1) {
+      const newIsLifetime =
+        baseExpiresAt === "LIFETIME" ||
+        (license.duration_days === null && (license.expires_at === "LIFETIME" || !license.expires_at));
+      if (newIsLifetime || licenseSource === "promo" || remainingMs === -1) {
+        return new Response(JSON.stringify({
+          error: "This device already has a lifetime license of the same tier; stacking is not allowed."
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
     let finalExpiresAt = baseExpiresAt;
-    if (finalExpiresAt !== "LIFETIME" && remainingMs > 0) {
+    // Purchase term stacking only (promo never stacks)
+    if (licenseSource === "purchase" && finalExpiresAt !== "LIFETIME" && remainingMs > 0) {
       const newExpDate = new Date(finalExpiresAt);
       // Accumulate the remaining time of the old license
       const finalDate = new Date(newExpDate.getTime() + remainingMs);

@@ -146,12 +146,13 @@ export async function handlePaddleRoutes(
         emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
       }
 
-      // Write to DB
+      // Write to DB (paid fulfillment is always source=purchase)
       await env.DB.prepare(`
         INSERT INTO licenses (
           license_code, tier, status, max_devices, expires_at, duration_days,
-          buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id,
+          source, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         licenseCode,
         tier,
@@ -163,6 +164,7 @@ export async function handlePaddleRoutes(
         buyerEmail || null,
         transactionId,
         subscriptionId,
+        "purchase",
         new Date().toISOString()
       ).run();
 
@@ -220,8 +222,8 @@ export async function handlePaddleRoutes(
       ).bind(transactionId).first<any>();
 
       await env.DB.prepare(
-        "UPDATE licenses SET status = 'revoked' WHERE paddle_transaction_id = ?"
-      ).bind(transactionId).run();
+        "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE paddle_transaction_id = ?"
+      ).bind(new Date().toISOString(), transactionId).run();
 
       if (license && license.buyer_email) {
         const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
@@ -269,8 +271,8 @@ export async function handlePaddleRoutes(
         ).bind(subscriptionId).first<any>();
 
         await env.DB.prepare(
-          "UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?"
-        ).bind(subscriptionId).run();
+          "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE paddle_subscription_id = ?"
+        ).bind(new Date().toISOString(), subscriptionId).run();
 
         if (license && license.buyer_email) {
           const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);

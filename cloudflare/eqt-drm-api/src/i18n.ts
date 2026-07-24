@@ -108,6 +108,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Keine zugehörige Paddle-Transaktion für diese Lizenz gefunden",
     fr: "Aucune transaction Paddle associée à cette licence"
   },
+  refund_not_allowed_for_source: {
+    zh: "该授权为活动赠送或非购买渠道发放，不支持自助退款",
+    en: "This license is promotional or non-purchase and is not eligible for self-service refund",
+    ja: "キャンペーン等の非購入ライセンスのため返金できません",
+    ko: "프로모션/비구매 라이선스는 자가 환불이 불가합니다",
+    es: "Esta licencia promocional o no comprada no admite reembolso autoservicio",
+    de: "Promo-/Nicht-Kauf-Lizenzen sind nicht selbst erstattungsfähig",
+    fr: "Licence promotionnelle ou non achetée : remboursement libre-service indisponible"
+  },
   paddle_not_configured: {
     zh: "退款服务暂时不可用，请稍后重试或联系支持",
     en: "Refund service is temporarily unavailable",
