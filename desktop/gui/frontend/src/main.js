@@ -2285,6 +2285,7 @@ function renderAboutPanel() {
 
     let redeemDetail = '';
     let expiryDetail = '';
+    let freeQuotaPills = [];
     if (isPaid && license?.redeemedAt && isParseableLicenseDate(license.redeemedAt)) {
         redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
         let expVal = '';
@@ -2299,8 +2300,11 @@ function renderAboutPanel() {
                 expiryDetail += ` (${expiryText})`;
             }
         }
-    } else {
+    } else if (isPaid) {
         redeemDetail = chatQuotaText();
+    } else {
+        // Free tier: show Chat remaining time + Share/Receive full-feature quotas.
+        freeQuotaPills = freeTierQuotaTexts();
     }
     
     let warningBox = '';
@@ -2309,6 +2313,7 @@ function renderAboutPanel() {
             plan = t('paid_locked_clock');
             redeemDetail = t('locked_rollback');
             expiryDetail = '';
+            freeQuotaPills = [];
             warningBox = `
                 <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                     <strong>⚠️ ${t('locked_rollback')}：</strong>
@@ -2319,6 +2324,7 @@ function renderAboutPanel() {
             plan = `${license.tier.toUpperCase()} ${t('license_locked_limit')}`;
             redeemDetail = t('license_locked_server');
             expiryDetail = '';
+            freeQuotaPills = [];
             warningBox = `
                 <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
                     <strong>⚠️ ${t('license_verify_failed')}</strong>
@@ -2346,6 +2352,7 @@ function renderAboutPanel() {
                     <div class="about-plan-body">
                         <div class="about-plan-title">${escapeHTML(plan)}</div>
                         <div class="about-plan-meta">
+                            ${freeQuotaPills.map((text) => `<span class="about-plan-pill">${escapeHTML(text)}</span>`).join('')}
                             ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
                             ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
                             ${(hasPaidLicense() && state.status?.buyerEmail) ? `
@@ -5156,6 +5163,45 @@ function chatQuotaText() {
     }
     // Pre-start hint: remaining daily free chat time (live countdown is in Chat V2 header).
     return t('chat_top_time', { time: formatDuration(remaining) });
+}
+
+const FREE_FULL_FEATURE_TRANSFERS = 5;
+
+function shareRemainingCount() {
+    const used = Math.max(0, Number(state.status?.usedTransfers || 0));
+    return Math.max(0, FREE_FULL_FEATURE_TRANSFERS - used);
+}
+
+function receiveRemainingCount() {
+    const used = Math.max(0, Number(state.status?.usedReceiveTransfers || 0));
+    return Math.max(0, FREE_FULL_FEATURE_TRANSFERS - used);
+}
+
+function shareQuotaText() {
+    if (hasPaidLicense()) {
+        return '';
+    }
+    const remaining = shareRemainingCount();
+    if (remaining <= 0) {
+        return t('share_quota_used_up');
+    }
+    return t('share_quota_remaining', { count: remaining, total: FREE_FULL_FEATURE_TRANSFERS });
+}
+
+function receiveQuotaText() {
+    if (hasPaidLicense()) {
+        return '';
+    }
+    const remaining = receiveRemainingCount();
+    if (remaining <= 0) {
+        return t('receive_quota_used_up');
+    }
+    return t('receive_quota_remaining', { count: remaining, total: FREE_FULL_FEATURE_TRANSFERS });
+}
+
+// Free-tier pills for About plan: Chat remaining time + Share/Receive full-feature quotas.
+function freeTierQuotaTexts() {
+    return [chatQuotaText(), shareQuotaText(), receiveQuotaText()].filter(Boolean);
 }
 
 function chatStartButtonText() {
