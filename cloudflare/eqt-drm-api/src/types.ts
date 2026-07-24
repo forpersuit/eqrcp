@@ -79,5 +79,5 @@ export const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
 // Business Logic Constants
 export const MAX_YEARLY_UNBINDS = 4;
 export const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-/** Rolling 365-day abusive refund/chargeback revocations before activate block. */
-export const MAX_YEARLY_ABUSIVE_REFUNDS = 2;
+/** Rolling 365-day abusive refund/chargeback revocations before block (≥3 i.e. >2). */
+export const MAX_YEARLY_ABUSIVE_REFUNDS = 3;

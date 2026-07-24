@@ -52,7 +52,7 @@ function wasEverActivated(row: { act_n?: number | null; unbind_n?: number | null
  * Gate B — device: activate-time only (fingerprint known).
  *
  * Counts only purchase-like revocations that were ever activated.
- * Threshold: MAX_YEARLY_ABUSIVE_REFUNDS (2).
+ * Threshold: MAX_YEARLY_ABUSIVE_REFUNDS (3, i.e. more than two).
  */
 export async function checkAbusiveRefundBlacklist(
   env: Env,

@@ -118,7 +118,7 @@ source        = 码从哪来（purchase / promo / …）
 4. 我们 **必须吊销** 对应 `paddle_transaction_id` 的授权码，否则等于白嫖。  
 5. 这与「用户在 Portal 点申请退款」不同：拒付由银行发起，用户未必配合。
 
-黑名单统计的是：**滚动 365 天内，purchase 类且 `revoke_reason ∈ {refund, chargeback}`（或遗留空原因）的吊销次数 ≥ 2**。
+黑名单统计的是：**滚动 365 天内，purchase 类且 `revoke_reason ∈ {refund, chargeback}`（或遗留空原因）的吊销次数 ≥ 3（即 >2）**。
 
 ### 5.1 正常自助退款
 
@@ -144,7 +144,7 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 | :--- | :--- |
 | 窗口 | **过去 365 天**（`COALESCE(revoked_at, created_at)`） |
 | 计数对象 | 仅 **purchase 类** 吊销（`source=purchase` 或遗留真 `txn_01…`） |
-| 阈值 | 同一 `buyer_email_hash` **或** 同一设备指纹（3 选 2）累计 **≥ 2** 次 |
+| 阈值 | 同一 `buyer_email_hash` **或** 同一设备指纹（3 选 2）累计 **≥ 3** 次（>2） |
 | 拦截点 | `/api/v1/activate`（及既有 verify 路径若调用） |
 | 披露 | **Terms of Use** + **Refund Policy** + 结账前可链到退款政策 |
 
@@ -177,7 +177,7 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 
 - 14 天购买冷静期（仅付费订单）  
 - 活动/赠送码不可退款  
-- 滚动 365 天内，同一邮箱或设备因退款/拒付导致的授权吊销达到 2 次，可能拒绝后续激活  
+- 滚动 365 天内，同一邮箱或设备因退款/拒付导致的授权吊销达到 3 次，可能拒绝后续激活  
 - 盗刷/拒付由支付渠道处理，授权将随交易吊销
 
 ---
@@ -211,7 +211,7 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 | :--- | :--- | :--- |
 | 退款吊销 | `status=revoked` + `revoke_reason=refund` + `source=purchase` | 正常退款或薅羊毛 |
 | 拒付吊销 | `revoke_reason=chargeback` | 盗刷/争议高优先 |
-| 滚动 365 天 ≥2 次 **已激活** purchase 退款/拒付 | 黑名单（邮箱 hash **或** 设备 3 选 2） | **限制购买/激活** |
+| 滚动 365 天 ≥3 次 **已激活** purchase 退款/拒付 | 黑名单（邮箱 hash **或** 设备 3 选 2） | **限制购买/激活** |
 | 多设备快速激活 | `activations` 时间密度 + `max_devices` | 共享码嫌疑 |
 | 无 Paddle 却要退款 | Portal 门禁拒绝 | 非 purchase 误操作 |
 | Admin 吊销 | `revoke_reason=admin` | 人工风控，**通常不退款** |
@@ -231,7 +231,7 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 1. 仅 `source=purchase` 且 `revoke_reason ∈ {refund, chargeback}`（或遗留空 reason 的 purchase）。  
 2. **仅统计曾经激活过的码**：`activations` 仍有记录 **或** `unbind_records` 有记录。  
 3. **从未激活就退款：不计入黑名单**（用户未使用权益）。  
-4. 窗口：滚动 **365 天**；阈值：**≥ 2**。  
+4. 窗口：滚动 **365 天**；阈值：**≥ 3**（>2）。  
 5. **手续费**：是否对「仅邮箱退款」收取手续费由 **Paddle MoR** 政策决定，不在 DRM 黑名单逻辑内；产品侧在 Refund Policy 说明「到账/手续费以支付渠道为准」。  
 
 ### 5.6 Dev 注入激活 vs 手动激活
@@ -278,5 +278,5 @@ WHERE a.device_id = '220b0d36b727' AND l.status = 'revoked';
 1. Paddle 购买码：`source=purchase`，Portal 可退款。  
 2. Admin 默认码：`source=admin`，Portal **无**退款按钮；API 拒退。  
 3. promo：过兑换窗激活 403；不过窗可兑；不可退。  
-4. 同一邮箱 365 天内 2 次 purchase 吊销后，第三次激活被拒。  
+4. 同一邮箱 365 天内 3 次 purchase（已激活）退款/拒付吊销后，后续购买/激活被拒。  
 5. 盗刷模拟：Webhook refunded → 码 revoked → verify 403。  

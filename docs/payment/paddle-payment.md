@@ -62,7 +62,7 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
 
 ### 3.3 薅羊毛退款黑名单防御拦截 (Abusive Refund Blacklist)
 为了防止恶意买家利用 14 天冷静期进行“购买 ➔ 激活 ➔ 退款 ➔ 再购买 ➔ 再退款”的循环白嫖，云端内置了自动化黑名单拦截模块（政策 SSOT：[`license-source-and-refund-policy.md`](./license-source-and-refund-policy.md)；对外披露：Terms + Refund Policy）：
-1. **触发规则（滚动 365 天）**：当任一**买家邮箱哈希**（`buyer_email_hash`）或**客户端设备物理指纹**（3 选 2）在过去 **365 天**内，匹配到 **≥ 2 次 purchase 类** 退款/拒付吊销（`status=revoked` 且 `source=purchase` 或遗留真 `txn_01…`，时间取 `revoked_at` 或回退 `created_at`）时，拦截后续激活。活动码/admin/test 吊销不计入。
+1. **触发规则（滚动 365 天）**：当任一**买家邮箱哈希**（`buyer_email_hash`）或**客户端设备物理指纹**（3 选 2）在过去 **365 天**内，匹配到 **≥ 3 次**（>2）**已激活过**的 purchase 退款/拒付吊销时，拦截结账邮箱与后续激活。活动码/admin/test 吊销、**从未激活即退款** 不计入。
 2. **拦截关卡**：
    * **激活阶段（`/api/v1/activate`）**：检测黑名单并 `403`，文案说明 rolling 365-day 限制。
    * **对账阶段（`/api/v1/verify`）**：既有吊销态仍会拒绝，确保本地证书无法续签。

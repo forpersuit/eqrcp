@@ -135,6 +135,19 @@ function clientIpFromRequest(request: Request): string {
   );
 }
 
+/** Best-effort constant-time string compare for admin secret. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const len = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < len; i++) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0;
+    const cb = i < b.length ? b.charCodeAt(i) : 0;
+    diff |= ca ^ cb;
+  }
+  return diff === 0;
+}
+
 /**
  * Admin route guard (docs/admin/api-contract.md):
  * - ADMIN_SECRET unset → 503 fail-closed
@@ -165,7 +178,8 @@ export async function requireAdminAuth(
     });
   }
 
-  if (adminSecret === env.ADMIN_SECRET) {
+  // Constant-time compare when lengths match (mitigates trivial timing probes).
+  if (timingSafeEqualStr(adminSecret, env.ADMIN_SECRET)) {
     clearAdminAuthFailures(clientIp);
     await ensureDrmTables(env);
     return null;
