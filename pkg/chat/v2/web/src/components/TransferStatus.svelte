@@ -161,7 +161,7 @@
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     padding: 10px;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 0.7rem;
     line-height: 1.4;
     display: flex;

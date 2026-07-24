@@ -16,6 +16,12 @@
     --chat-head-height: 62px;
     --message-actions-min-width: 70px;
     --messages-bottom-space: clamp(16px, 2.2vh, 22px);
+    /* Keep in sync with desktop/gui/frontend/src/style.css */
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --font-size-root: 15px;
+    --font-weight-title: 700;
+    --font-weight-strong: 600;
 }
 @supports (height: 100dvh) {
     :root { --chat-viewport-height: 100dvh; }
@@ -25,13 +31,26 @@ html, body, #app {
     height: 100%;
     overscroll-behavior: none;
 }
+html {
+    font-family: var(--font-ui);
+    font-size: var(--font-size-root);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
 body {
     background: var(--bg);
     color: var(--ink);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 15px;
+    font-family: var(--font-ui);
+    font-size: inherit;
+    font-weight: 400;
     overflow: hidden;
     height: 100%;
+}
+button,
+input,
+select,
+textarea {
+    font: inherit;
 }
 .chat-viewport {
     height: 100%;
@@ -137,7 +156,7 @@ html.embedded-chat .chat-head-title h1 {
     background: var(--accent);
     color: #ffffff;
     font-size: 10px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     padding: 2px 7px;
     border-radius: 4px;
     margin-left: 8px;
@@ -173,7 +192,7 @@ h1 {
     cursor: pointer;
     display: inline-flex;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     gap: 6px;
     height: 36px;
     padding: 0 11px;
@@ -216,7 +235,7 @@ h1 {
     cursor: pointer;
     display: inline-flex;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     gap: 7px;
     height: 36px;
     overflow: hidden;
@@ -307,7 +326,7 @@ h1 {
 .lang-panel-title {
     color: var(--muted);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: 4px;
@@ -366,7 +385,7 @@ h1 {
 .license-panel-title {
     color: var(--muted);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -374,7 +393,7 @@ h1 {
     align-self: flex-start;
     border-radius: 6px;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     padding: 4px 8px;
     text-transform: uppercase;
 }
@@ -424,7 +443,7 @@ h1 {
     color: #ef4444;
 }
 .license-info-row span.font-bold {
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 .license-solution-text {
     color: var(--ink);
@@ -436,7 +455,7 @@ h1 {
 .device-panel-title {
     color: var(--muted);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -494,7 +513,7 @@ h1 {
     border-radius: 999px;
     color: var(--device-text, var(--accent-strong));
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     text-transform: uppercase;
 }
 .device-detail {
@@ -845,7 +864,7 @@ h1 {
     color: var(--accent-strong);
     display: inline-flex;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     height: 32px;
     justify-content: center;
     width: 32px;
@@ -1009,7 +1028,7 @@ button.file-card:hover {
     display: inline-flex;
     flex: 0 0 42px;
     font-size: 11px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     justify-content: center;
     letter-spacing: 0.04em;
     min-height: 42px;

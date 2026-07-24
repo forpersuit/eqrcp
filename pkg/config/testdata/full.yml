@@ -1,6 +1,6 @@
 bind: 10.20.30.40
 fqdn: mylan.com
-interface: eth2
+interface: eth0
 keepalive: false
 output: /path/to/default/output/dir
 path: random

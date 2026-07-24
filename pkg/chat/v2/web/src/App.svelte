@@ -1457,7 +1457,7 @@
         </div>
         <div class="session-collapsible" class:collapsed={!showUrl}>
           <div class="url-row">
-            <input value={joinUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: monospace; font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
+            <input value={joinUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
             <button class="side-btn" type="button" on:click={handleCopyUrl} style="flex-shrink: 0;">
               {copied ? t.copied : t.copy}
             </button>

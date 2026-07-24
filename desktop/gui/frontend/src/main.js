@@ -2152,7 +2152,7 @@ function renderSettingsPanel() {
                             <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
                         </div>
                         <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4; margin-bottom: 4px;">
-                            ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--text-primary); font-family: monospace;">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
+                            ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--text-primary); font-family: var(--font-mono);">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
                         </div>
                         <div style="font-size: 11px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 8px 12px; margin-top: 8px; line-height: 1.45; text-align: left;">
                             ⚠️ <strong>${t('privacy_warning_title')}</strong>：${t('privacy_warning_desc')}
@@ -2396,7 +2396,7 @@ function renderAboutPanel() {
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Device ID</span>
-                    <span style="font-size: 13px; font-weight: 700; font-family: monospace; color: var(--text-primary); letter-spacing: 0.08em; user-select: text;">${escapeHTML(state.status?.deviceID || '------')}</span>
+                    <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text;">${escapeHTML(state.status?.deviceID || '------')}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>

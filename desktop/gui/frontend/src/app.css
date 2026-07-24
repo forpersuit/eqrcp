@@ -9,10 +9,25 @@
     --warning: #c58a1a;
     --wash: #edf2eb;
     --bg: #f7f9fb;
+    /* Mirror style.css so panels stay consistent if loaded alone in preview. */
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+    --font-weight-title: 700;
+    --font-weight-strong: 600;
 }
 
 body {
     --wails-drop-target: drop;
+    font-family: var(--font-ui);
+}
+
+/* Title / badge weights: prefer 700 over 900 so About / Settings / shell match. */
+.shell,
+.overlay,
+.modal,
+.settings-panel,
+.about-panel {
+    font-family: var(--font-ui);
 }
 
 .shell {
@@ -62,7 +77,7 @@ body {
     display: inline-flex;
     flex: 0 0 auto;
     font-size: 18px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     gap: 8px;
 }
 
@@ -76,7 +91,7 @@ body {
     background: var(--accent);
     color: #fff;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     padding: 2px 6px;
     border-radius: 4px;
     margin-left: 8px;
@@ -110,7 +125,7 @@ body {
     color: var(--ink);
     display: inline-flex;
     font-size: 12px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     height: 30px;
     padding: 0 10px;
     white-space: nowrap;
@@ -119,7 +134,7 @@ body {
 .eyebrow {
     color: var(--accent);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
@@ -268,7 +283,7 @@ h2 {
     color: var(--ink);
     cursor: pointer;
     display: inline-flex;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     height: 38px;
     gap: 8px;
     justify-content: center;
@@ -418,7 +433,7 @@ h2 {
 
 .drop-title {
     font-size: 26px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 
 .drop-subtitle {
@@ -782,7 +797,7 @@ dd {
     cursor: help;
     display: inline-flex;
     font-size: 11px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     height: 18px;
     justify-content: center;
     width: 18px;
@@ -794,7 +809,7 @@ dd {
     border-radius: 999px;
     color: var(--accent-strong);
     font-size: 11px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     padding: 3px 7px;
 }
 
@@ -819,7 +834,7 @@ dd {
 
 .chat-count {
     font-size: 22px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
 }
 
 .side-count {
@@ -827,7 +842,7 @@ dd {
     border-radius: 999px;
     color: var(--accent-strong);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     padding: 5px 9px;
 }
 
@@ -870,7 +885,7 @@ dd {
     color: #14533f;
     display: inline-flex;
     font-size: 12px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     height: 34px;
     justify-content: center;
     overflow: hidden;
@@ -1050,7 +1065,7 @@ dd {
 .receive-box label {
     color: var(--muted);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 
 .directory-row {
@@ -1098,12 +1113,12 @@ dd {
 
 .task-title {
     font-size: 18px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 
 .task-state {
     color: var(--warning);
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     margin-top: 4px;
 }
 
@@ -1161,7 +1176,7 @@ dl {
 
 dt {
     color: var(--muted);
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 
 dd {
@@ -1175,7 +1190,7 @@ dd {
     color: var(--muted);
     cursor: pointer;
     flex: 0 0 auto;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     height: 28px;
     line-height: 1;
     width: 28px;
@@ -1270,7 +1285,7 @@ dd {
 
 .qr-collapsed-url {
     color: var(--muted);
-    font-family: monospace;
+    font-family: var(--font-mono);
     background: #eef2eb;
     padding: 2px 6px;
     border-radius: 4px;
@@ -1335,7 +1350,7 @@ dd {
     color: var(--accent-strong);
     flex: 0 0 auto;
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     padding: 6px 10px;
 }
 
@@ -1409,7 +1424,7 @@ dd {
     border-radius: 999px;
     border: 1px solid var(--line);
     font-size: 11px;
-    font-weight: 900;
+    font-weight: var(--font-weight-title, 700);
     line-height: 1;
     padding: 5px 8px;
     text-transform: uppercase;
@@ -1606,7 +1621,7 @@ dd {
 .redeem-panel label {
     color: var(--muted);
     font-size: 13px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
 }
 
 .setting-label-with-help {
@@ -1919,7 +1934,7 @@ dd {
     align-items: center;
     gap: 6px;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-secondary, #64748b);
@@ -1955,7 +1970,7 @@ dd {
 
 .about-plan-title {
     font-size: 16px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     color: var(--text-primary, #0f172a);
     line-height: 1.25;
     letter-spacing: -0.01em;
@@ -2193,7 +2208,7 @@ dd {
     border: 1px solid var(--line);
     border-radius: 6px;
     color: var(--muted);
-    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font: 12px/1.5 var(--font-mono);
     margin: 0;
     max-height: 180px;
     overflow: auto;
@@ -2874,7 +2889,7 @@ dd {
     background: var(--accent);
     color: #ffffff;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--font-weight-title, 700);
     padding: 0 12px;
     border-radius: 6px;
     margin-right: 6px;

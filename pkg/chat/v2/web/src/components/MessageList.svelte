@@ -817,7 +817,7 @@
               position: absolute; 
               font-size: 8px; 
               font-weight: bold; 
-              font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+              font-family: var(--font-mono);
               line-height: 1;
               color: var(--accent-strong, #156f5a);
             ">{tipCountdown}</span>
