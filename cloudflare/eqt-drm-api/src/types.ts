@@ -1,11 +1,21 @@
 export interface Env {
   DB: D1Database;
   ED25519_PRIVATE_KEY: string; // 64-char hex string (32 bytes raw private key)
-  ADMIN_SECRET?: string;       // Secret header to allow manually generating licenses
-  GITHUB_TOKEN?: string;       // Optional token to prevent GitHub Rate Limit
-  GITHUB_REPO?: string;        // Optional repository path, default 'forpersuit/eqrcp'
-  R2_PUBLIC_URL?: string;      // Optional public CDN url for R2 assets download redirection
-  PADDLE_WEBHOOK_SECRET?: string; // Webhook secret key from Paddle notifications dashboard
+  ADMIN_SECRET?: string;       // Break-glass / local dev header X-Admin-Secret
+  /** e.g. myteam.cloudflareaccess.com — enables Access JWT path */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** Application Audience (AUD) tag from Zero Trust Application */
+  CF_ACCESS_AUD?: string;
+  /** Comma-separated allowlist; default admin@eqt.net.im */
+  CF_ACCESS_ALLOWED_EMAILS?: string;
+  /** When "true", reject X-Admin-Secret even if set (production lock) */
+  CF_ACCESS_REQUIRE_JWT?: string;
+  /** When "false" and Access configured, disable secret path (default allow secret) */
+  CF_ACCESS_ALLOW_SECRET?: string;
+  GITHUB_TOKEN?: string;
+  GITHUB_REPO?: string;
+  R2_PUBLIC_URL?: string;
+  PADDLE_WEBHOOK_SECRET?: string;
   MAIL_SENDER?: string;
   MAIL_SENDER_PASSWORD?: string;
   MAIL_SEND_SERVER?: string;

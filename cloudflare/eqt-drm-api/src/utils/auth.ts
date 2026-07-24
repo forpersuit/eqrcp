@@ -4,6 +4,7 @@ import {
   isAdminAuthRateLimited,
   recordAdminAuthFailure
 } from './rate-limit';
+import { verifyCloudflareAccessJwt } from './cf-access-jwt';
 
 export function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") || "";
@@ -20,30 +21,26 @@ export function getCorsHeaders(request: Request): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Secret",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Admin-Secret, Cf-Access-Jwt-Assertion",
   };
 }
 
+/**
+ * Ensure the activations table has the device_id column.
+ * Safe to call repeatedly (ignores "duplicate column" errors).
+ */
 export async function ensureDeviceIdColumn(env: Env): Promise<void> {
   try {
-    await env.DB.prepare("ALTER TABLE activations ADD COLUMN device_id TEXT DEFAULT NULL").run();
-  } catch (err) {
-    // Column already exists or table does not exist yet; ignore safely
-  }
-}
-
-/** Ensure verification_codes.created_at exists for 60s send-code rate limiting. */
-export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> {
-  try {
     await env.DB.prepare(
-      "ALTER TABLE verification_codes ADD COLUMN created_at TEXT DEFAULT NULL"
+      "ALTER TABLE activations ADD COLUMN device_id TEXT DEFAULT NULL"
     ).run();
   } catch (err) {
-    // Column already exists or table does not exist yet; ignore safely
+    // Column already exists — ignore
   }
 }
 
-/** Ensure activations network metadata columns for admin visibility / geo baselining. */
+/** Ensure activations has network meta columns (ip / country / ua). Idempotent. */
 export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
   const alters = [
     "ALTER TABLE activations ADD COLUMN client_ip TEXT DEFAULT NULL",
@@ -56,6 +53,17 @@ export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
     } catch (err) {
       // Column already exists; ignore
     }
+  }
+}
+
+/** Ensure verification_codes.created_at exists for 60s send-code rate limiting. */
+export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare(
+      "ALTER TABLE verification_codes ADD COLUMN created_at TEXT"
+    ).run();
+  } catch {
+    // column already exists
   }
 }
 
@@ -125,7 +133,6 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
 }
 
 function clientIpFromRequest(request: Request): string {
-  // Prefer explicit X-Forwarded-For when present (tests / reverse proxies), else CF edge IP.
   const xff = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   if (xff) return xff;
   return (
@@ -135,7 +142,6 @@ function clientIpFromRequest(request: Request): string {
   );
 }
 
-/** Best-effort constant-time string compare for admin secret. */
 function timingSafeEqualStr(a: string, b: string): boolean {
   if (typeof a !== "string" || typeof b !== "string") return false;
   const len = Math.max(a.length, b.length);
@@ -148,12 +154,24 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function accessConfigured(env: Env): boolean {
+  return !!(env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD);
+}
+
+function parseAllowedEmails(env: Env): string[] {
+  const raw = (env.CF_ACCESS_ALLOWED_EMAILS || "admin@eqt.net.im").trim();
+  if (!raw) return [];
+  return raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
 /**
- * Admin route guard (docs/admin/api-contract.md):
- * - ADMIN_SECRET unset → 503 fail-closed
- * - missing/wrong secret → 401 (strictly X-Admin-Secret header)
- * - repeated wrong secrets from same IP → 429 (in-isolate rate limit)
- * - correct secret always succeeds and clears the bucket (recovery path)
+ * Admin route guard:
+ * 1) Cloudflare Access JWT (Cf-Access-Jwt-Assertion) when CF_ACCESS_* configured
+ * 2) X-Admin-Secret fallback when allowed (local dev / break-glass)
+ *
+ * - Neither Access nor ADMIN_SECRET usable → 503
+ * - CF_ACCESS_REQUIRE_JWT=true → secret path disabled
+ * - Wrong secret → 401 + in-isolate rate limit
  */
 export async function requireAdminAuth(
   request: Request,
@@ -161,6 +179,70 @@ export async function requireAdminAuth(
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
   const clientIp = clientIpFromRequest(request);
+  const accessOn = accessConfigured(env);
+  const requireJwt = String(env.CF_ACCESS_REQUIRE_JWT || "").toLowerCase() === "true";
+  const allowSecret =
+    !requireJwt &&
+    !!env.ADMIN_SECRET &&
+    (String(env.CF_ACCESS_ALLOW_SECRET || "true").toLowerCase() !== "false" || !accessOn);
+
+  // --- Path 1: Cloudflare Access JWT ---
+  if (accessOn) {
+    const jwt =
+      request.headers.get("Cf-Access-Jwt-Assertion") ||
+      request.headers.get("cf-access-jwt-assertion");
+    if (jwt) {
+      const result = await verifyCloudflareAccessJwt(
+        jwt,
+        env.CF_ACCESS_TEAM_DOMAIN!,
+        env.CF_ACCESS_AUD!,
+        parseAllowedEmails(env)
+      );
+      if (result.ok) {
+        clearAdminAuthFailures(clientIp);
+        await ensureDrmTables(env);
+        // Stash verified identity for handlers (optional header for audit)
+        (request as any).__adminEmail = result.email;
+        return null;
+      }
+      // Invalid JWT: do not fall through silently if requireJwt
+      if (requireJwt) {
+        return new Response(
+          JSON.stringify({
+            error: result.error || "Invalid Cloudflare Access JWT",
+            code: "ACCESS_JWT_INVALID"
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // else try secret fallback below
+    } else if (requireJwt) {
+      return new Response(
+        JSON.stringify({
+          error: "Cloudflare Access JWT required",
+          code: "ACCESS_JWT_REQUIRED"
+        }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // --- Path 2: shared ADMIN_SECRET (dev / transition / break-glass) ---
+  if (!allowSecret) {
+    if (!accessOn && !env.ADMIN_SECRET) {
+      return new Response(
+        JSON.stringify({ error: "Admin API not configured (ADMIN_SECRET / CF Access missing)" }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        error: "Unauthorized (Access JWT required; secret login disabled)",
+        code: "ACCESS_JWT_REQUIRED"
+      }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   if (!env.ADMIN_SECRET) {
     return new Response(
@@ -170,7 +252,6 @@ export async function requireAdminAuth(
   }
 
   const adminSecret = request.headers.get("X-Admin-Secret");
-  // Missing header → 401 without counting (login probes / readiness).
   if (!adminSecret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -178,14 +259,13 @@ export async function requireAdminAuth(
     });
   }
 
-  // Constant-time compare when lengths match (mitigates trivial timing probes).
   if (timingSafeEqualStr(adminSecret, env.ADMIN_SECRET)) {
     clearAdminAuthFailures(clientIp);
     await ensureDrmTables(env);
+    (request as any).__adminEmail = "secret-operator";
     return null;
   }
 
-  // Wrong secret: rate-limit then 401
   if (isAdminAuthRateLimited(clientIp)) {
     return new Response(
       JSON.stringify({
@@ -203,7 +283,6 @@ export async function requireAdminAuth(
     );
   }
   recordAdminAuthFailure(clientIp);
-  // If this failure crossed the threshold, surface 429 immediately.
   if (isAdminAuthRateLimited(clientIp)) {
     return new Response(
       JSON.stringify({

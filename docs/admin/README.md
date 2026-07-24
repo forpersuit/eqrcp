@@ -13,8 +13,9 @@
 | 顺序 | 文档 | 说明 |
 | :---: | :--- | :--- |
 | 1 | **[IMPORTANT_admin-config.md](./IMPORTANT_admin-config.md)** | **必读**：运行要配哪些参数 |
-| 2 | **[IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)** | **必读**：如何改代码、测、双部署 |
-| 3 | **[IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)** | 已知债与解法优先级 |
+| 2 | **[cloudflare-access-setup.md](./cloudflare-access-setup.md)** | **推荐**：Access 锁 Admin + JWT 护 API |
+| 3 | **[IMPORTANT_admin-release.md](./IMPORTANT_admin-release.md)** | **必读**：如何改代码、测、双部署 |
+| 4 | **[IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md)** | 已知债与解法优先级 |
 | — | **[IMPORTANT_drm-secrets.md](./IMPORTANT_drm-secrets.md)** | **DRM 全量 Secret/vars**、key 从哪生成、R2 为何不是 secret |
 | — | **[IMPORTANT_r2-distribution.md](./IMPORTANT_r2-distribution.md)** | R2 下载、禁止 GitHub 作源、zip/签名 |
 | — | **[IMPORTANT_paddle-api-and-errors.md](./IMPORTANT_paddle-api-and-errors.md)** | API Key 生成/用途、Paddle 错误审计 |

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isAuthenticated, clearAdminSecret } from './lib/auth';
+  import { isAuthenticated, clearAdminSecret, getAdminAuthMode, accessLogoutUrl } from './lib/auth';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
@@ -10,9 +10,15 @@
 
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
+  const authMode = getAdminAuthMode();
 
   function handleLogout() {
     clearAdminSecret();
+    const accessOut = accessLogoutUrl();
+    if (authMode === 'access' && accessOut) {
+      window.location.href = accessOut;
+      return;
+    }
     authed = false;
   }
 
@@ -75,7 +81,7 @@
 
       <div class="sidebar-footer">
         <button class="btn btn-secondary logout-btn" onclick={handleLogout}>
-          退出登录 (Clear Secret)
+          {authMode === 'access' ? '退出 (Access Logout)' : '退出登录 (Clear Secret)'}
         </button>
       </div>
     </aside>

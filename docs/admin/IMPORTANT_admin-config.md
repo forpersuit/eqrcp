@@ -16,7 +16,10 @@
 | 层级 | 名称 | 放哪里 | 必填 | 作用 |
 | :--- | :--- | :--- | :---: | :--- |
 | Worker 绑定 | `DB` (D1 `eqt-drm-db`) | `wrangler.toml` `[[d1_databases]]` | **是** | licenses / activations / logs / audit |
-| Worker Secret | `ADMIN_SECRET` | `wrangler secret put ADMIN_SECRET` | **是** | Admin 鉴权；**未配置则全部 `/api/v1/admin/*` → 503** |
+| Worker Secret | `ADMIN_SECRET` | `wrangler secret put ADMIN_SECRET` | 本地/过渡 **是**；生产可关 | Secret 路径；Access 生产可 `CF_ACCESS_REQUIRE_JWT=true` 禁用 |
+| Worker | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | secret 或 vars | 生产 **推荐** | Cloudflare Access JWT 校验；见 [cloudflare-access-setup.md](./cloudflare-access-setup.md) |
+| Worker | `CF_ACCESS_ALLOWED_EMAILS` | vars | 建议 | 默认 `admin@eqt.net.im` |
+| Worker | `CF_ACCESS_REQUIRE_JWT` | vars | 生产锁死时 **true** | 禁用 `X-Admin-Secret` |
 | Worker Secret | `ED25519_PRIVATE_KEY` | `wrangler secret put` | 建议是* | 客户端激活签证书；Admin 列表/发码不依赖，但健康页与整体 DRM 需要 |
 | 前端构建 | `VITE_API_BASE` | Pages 构建环境 / 本地 `.env` | **是** | API 根 URL，**无尾斜杠**；生产必须 `https://lic.eqt.net.im` |
 | 浏览器运行时 | 运维输入的 Secret | 仅 `sessionStorage`（键 `eqt_admin_secret`） | **是** | 与 Worker `ADMIN_SECRET` 一致；关闭标签即清 |
@@ -70,10 +73,11 @@ npm run dev   # 默认 :3001
 
 | 项 | 要求 |
 | :--- | :--- |
-| Admin 前端 | 生产 `https://admin.eqt.net.im`（Pages 项目 `eqt-admin`） |
+| Admin 前端 | 生产 `https://admin.eqt.net.im`（Pages 项目 `eqt-admin`）+ **Cloudflare Access** |
 | DRM API | 生产 `https://lic.eqt.net.im`（Worker `eqt-drm-api`） |
+| 同源反代 | Pages `functions/api/[[path]].ts`：`admin.../api/*` → `lic.../api/*` 并转发 Access JWT |
 | CORS | Worker `getCorsHeaders`：Origin 含 `eqt.net.im` / `pages.dev` / `localhost` / `127.0.0.1` 时回显该 Origin；Methods 含 **DELETE** |
-| 前端请求 | 仅 Header `X-Admin-Secret`；**禁止**依赖 `?secret=` |
+| 前端请求 | Access 模式：同源 `/api` + JWT；Secret 模式：`X-Admin-Secret`；**禁止** `?secret=` |
 
 ---
 
@@ -89,10 +93,12 @@ npm run dev   # 默认 :3001
 | **`R2_PUBLIC_URL`** | ❌ **不必** | ✅ **推荐** | — | — |
 | `GITHUB_TOKEN` | ✅ 可选 | ❌ | — | — |
 | `GITHUB_REPO` | — | ✅ 可选 | — | — |
-| `VITE_API_BASE` | — | — | ✅ 构建期写入 bundle | — |
-| 运维口令（与 ADMIN_SECRET 相同） | — | — | ❌ 不要写进前端 env 发布 | ✅ 登录输入 |
+| `VITE_API_BASE` | — | — | ✅ 构建期；生产 Access 模式**留空**（同源 `/api`） | — |
+| `VITE_ADMIN_AUTH_MODE` | — | — | ✅ `access` / `secret` | — |
+| `VITE_CF_ACCESS_TEAM_DOMAIN` | — | — | ✅ Access 登出用 | — |
+| 运维口令（与 ADMIN_SECRET 相同） | — | — | ❌ 不要写进前端 env 发布 | ✅ 仅 secret 模式 |
 
-**注意**：`VITE_*` 在 `npm run build` 时打进静态 JS，只能放 **公开 API 基址**，绝不能放 `ADMIN_SECRET`。
+**注意**：`VITE_*` 在 `npm run build` 时打进静态 JS，只能放 **公开配置**，绝不能放 `ADMIN_SECRET`。Access 配置见 [cloudflare-access-setup.md](./cloudflare-access-setup.md)。
 
 ---
 
