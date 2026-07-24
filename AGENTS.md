@@ -76,7 +76,7 @@ When changing product branding, logo, or desktop icons, check every visible and 
 - `desktop/gui/build/appicon.png` feeds Wails app icon generation.
 - `desktop/gui/build/windows/icon.ico` feeds Windows executable and installer icons.
 - `desktop/gui/frontend/src/assets/images/logo-universal.png` feeds the tray icon and visible desktop GUI logo surfaces.
-- `pages/assets/favicon.png` and `pages/assets/eqt-logo-mark.png` feed browser templates through server routes; do not inline large PNGs into templates.
+- `pkg/pages/assets/favicon.png`, `pkg/pages/assets/eqt-logo-mark.png`, and `pkg/pages/assets/eqt-logo-horizontal.png` feed browser templates through server routes; do not inline large PNGs into templates.
 - `desktop/gui/frontend/src/main.js` and `desktop/gui/frontend/src/app.css` control visible in-app logo usage such as the top bar, About panel, and favicon.
 - `desktop/gui/tray.go` embeds `logo-universal.png`; rebuild after replacing that file.
 

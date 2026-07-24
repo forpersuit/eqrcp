@@ -29,12 +29,15 @@ func main() {
 	writePNG("desktop/gui/frontend/src/assets/images/logo-universal.png", resize(img, 32))
 	writePNG("desktop/gui/frontend/src/assets/images/logo-mark.png", resize(img, 96))
 	writePNG("desktop/gui/frontend/src/assets/images/favicon.png", resize(img, 32))
-	writePNG("pages/assets/eqt-logo-mark.png", resize(img, 96))
-	writePNG("pages/assets/favicon.png", resize(img, 32))
+	writePNG("pkg/pages/assets/eqt-logo-mark.png", resize(img, 96))
+	writePNG("pkg/pages/assets/favicon.png", resize(img, 32))
 	writeICO("desktop/gui/build/windows/icon.ico", img, []int{256, 128, 64, 48, 32, 16})
 
 	horizontal := readPNG(horizontalSource)
-	writePNG("desktop/gui/frontend/src/assets/images/logo-horizontal.png", resizeToWidth(cropBrandLockup(horizontal), 512))
+	// Tight lockup for About + browser brand surfaces.
+	lockup := resizeToWidth(cropBrandLockup(horizontal), 512)
+	writePNG("desktop/gui/frontend/src/assets/images/logo-horizontal.png", lockup)
+	writePNG("pkg/pages/assets/eqt-logo-horizontal.png", lockup)
 }
 
 func readPNG(path string) image.Image {
@@ -88,15 +91,47 @@ func resizeTo(src image.Image, width, height int) image.Image {
 	return dst
 }
 
+// cropBrandLockup trims empty margins so About / page logos keep only the brand mark.
+// Works with the current transparent lockup source (and any similar tight horizontal art).
 func cropBrandLockup(src image.Image) image.Image {
 	bounds := src.Bounds()
-	// The horizontal design source has presentation padding; the About UI needs the brand lockup.
-	return crop(src, image.Rect(
-		bounds.Min.X+bounds.Dx()*8/100,
-		bounds.Min.Y+bounds.Dy()*30/100,
-		bounds.Min.X+bounds.Dx()*92/100,
-		bounds.Min.Y+bounds.Dy()*72/100,
-	))
+	minX, minY := bounds.Max.X, bounds.Max.Y
+	maxX, maxY := bounds.Min.X-1, bounds.Min.Y-1
+	found := false
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			_, _, _, a := src.At(x, y).RGBA()
+			if a < 0x1000 {
+				continue
+			}
+			found = true
+			if x < minX {
+				minX = x
+			}
+			if y < minY {
+				minY = y
+			}
+			if x > maxX {
+				maxX = x
+			}
+			if y > maxY {
+				maxY = y
+			}
+		}
+	}
+	if !found {
+		return src
+	}
+	// Keep a small breathing margin around the mark.
+	padX := (maxX - minX + 1) * 3 / 100
+	padY := (maxY - minY + 1) * 3 / 100
+	if padX < 4 {
+		padX = 4
+	}
+	if padY < 4 {
+		padY = 4
+	}
+	return crop(src, image.Rect(minX-padX, minY-padY, maxX+1+padX, maxY+1+padY))
 }
 
 func crop(src image.Image, rect image.Rectangle) image.Image {
