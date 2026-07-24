@@ -26,6 +26,17 @@
     setTimeout(resizeComposer, 0);
   }
 
+  /** Desktop: Enter sends, Shift+Enter inserts newline. Mobile keeps Enter as newline. */
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    const mobileLayout =
+      typeof window !== 'undefined' &&
+      (window.innerWidth <= 820 || window.matchMedia('(pointer: coarse)').matches);
+    if (mobileLayout) return;
+    e.preventDefault();
+    handleSubmit(e);
+  }
+
   const isEmbedded = typeof window !== 'undefined' && window.parent !== window;
 
   function triggerFileInput(e: Event) {
@@ -142,6 +153,7 @@
         autocomplete="off" 
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
+        on:keydown={handleKeydown}
       ></textarea>
       <div class="composer-actions-right">
         <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown|preventDefault>

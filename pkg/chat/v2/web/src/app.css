@@ -1039,6 +1039,44 @@ button.file-card:hover {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.file-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    width: 100%;
+}
+.file-inline-btn {
+    appearance: none;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(24, 33, 31, 0.12);
+    border-radius: 999px;
+    color: var(--ink, #18211f);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    min-height: 28px;
+    padding: 4px 10px;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.file-inline-btn:hover {
+    background: #fff;
+    border-color: rgba(var(--accent-rgb, 21, 111, 90), 0.28);
+}
+.file-inline-btn.primary {
+    background: var(--accent-wash, rgba(21, 111, 90, 0.12));
+    border-color: var(--accent, #156f5a);
+    color: var(--accent-strong, #156f5a);
+}
+.file-inline-btn.danger {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #dc2626;
+}
+.message.mine .file-inline-actions {
+    justify-content: flex-end;
+}
 .message-footer {
     align-items: center;
     display: flex;

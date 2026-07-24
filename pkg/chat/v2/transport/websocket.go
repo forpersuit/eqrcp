@@ -301,6 +301,11 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
 				continue
 			}
+			// Only the desktop host may force-offline other devices.
+			if cl.Peer != "desktop" {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorUnauthorized, "only host can kick clients")
+				continue
+			}
 			if targetClient := sess.GetClient(cmd.ClientID); targetClient != nil {
 				if h.kickClientHost != nil {
 					h.kickClientHost(targetClient.Token, targetClient.Join)

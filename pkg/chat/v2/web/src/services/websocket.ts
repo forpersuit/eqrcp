@@ -99,15 +99,13 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Register Page Visibility listener to suspend actively on sleep
+    // Page visibility: keep the control-plane socket open while backgrounded.
+    // Mobile OS may still kill the socket; only reconnect when the page is visible again.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.isSuspended = true;
-          if (this.ws) {
-            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
-            this.ws.close(1000, "page_hidden");
-          }
+          this.sendLog(`[SYSTEM] Page hidden; keeping WebSocket open (no active close).`);
         } else if (document.visibilityState === 'visible') {
           this.isSuspended = false;
           if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
@@ -148,6 +146,7 @@ export class ChatWebSocketClient {
       chatActions.addSystemMessage('WebSocket connection established.');
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
+      chatActions.setReconnectExhausted(false);
       
       let preferredTheme = localStorage.getItem('eqt_chat_theme') || this.themeParam || 'theme-0';
       if (this.clientPeer === 'desktop') {
@@ -414,7 +413,13 @@ export class ChatWebSocketClient {
 
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      chatActions.addSystemMessage('Reached maximum WebSocket reconnect attempts. Please refresh page.');
+      chatActions.setReconnectExhausted(true);
+      const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+      chatActions.addSystemMessage(
+        currentLang === 'en'
+          ? 'Reached maximum reconnect attempts. Use Reconnect or refresh the page.'
+          : '已达到最大重连次数。请点击重新连接或刷新页面。'
+      );
       return;
     }
 
@@ -588,8 +593,8 @@ export class ChatWebSocketClient {
   }
 
   /**
-   * Explicit resume after this tab was superseded by another tab of the same peer.
-   * Clears the manual-close latch and reconnects; does not run on visibility alone.
+   * Explicit resume after peer replacement or exhausted auto-reconnect.
+   * Clears the manual-close latch / attempt counter and reconnects.
    */
   public resumeConnection(): void {
     if (!this.isManualClosed && this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -598,7 +603,9 @@ export class ChatWebSocketClient {
     this.isManualClosed = false;
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
-    this.sendLog('[SYSTEM] User requested resumeConnection after peer replacement.');
+    chatActions.setReconnectExhausted(false);
+    chatActions.setSessionStatus('active');
+    this.sendLog('[SYSTEM] User requested resumeConnection.');
     this.connect();
   }
 

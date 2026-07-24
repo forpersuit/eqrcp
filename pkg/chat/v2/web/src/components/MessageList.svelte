@@ -1070,6 +1070,59 @@
                           </div>
                         </div>
                       </div>
+                      <!-- H2: primary file actions inline (menu remains for secondary actions) -->
+                      {#if !msg.recalled && $chatSessionStatus === 'active'}
+                        <div class="file-inline-actions">
+                          {#if mine}
+                            {#if ulTx && ulTx.state === 'running'}
+                              <button
+                                type="button"
+                                class="file-inline-btn danger"
+                                on:click|stopPropagation={() => handleCancel(ulTx.id)}
+                              >{getTranslation('cancelUpload', currentLang)}</button>
+                            {:else if isEmbedded && (msg.filePath || msg.fileName)}
+                              <button
+                                type="button"
+                                class="file-inline-btn"
+                                on:click|stopPropagation={() => handleOpenFolder(msg)}
+                              >{getTranslation('openInFolder', currentLang)}</button>
+                            {/if}
+                          {:else if !msg.uploading}
+                            {#if dlTx && dlTx.state === 'running'}
+                              <button
+                                type="button"
+                                class="file-inline-btn danger"
+                                on:click|stopPropagation={() => handleCancel(dlTx.id)}
+                              >{getTranslation('cancelDownload', currentLang)}</button>
+                            {:else if dlTx && dlTx.state === 'failed'}
+                              <button
+                                type="button"
+                                class="file-inline-btn"
+                                on:click|stopPropagation={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}
+                              >{getTranslation('retryDownload', currentLang)}</button>
+                            {:else if isDownloaded}
+                              <button
+                                type="button"
+                                class="file-inline-btn"
+                                on:click|stopPropagation={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}
+                              >{isEmbedded ? getTranslation('download', currentLang) : getTranslation('redownload', currentLang)}</button>
+                              {#if isEmbedded && (msg.filePath || msg.fileName)}
+                                <button
+                                  type="button"
+                                  class="file-inline-btn"
+                                  on:click|stopPropagation={() => handleOpenFolder(msg)}
+                                >{getTranslation('openInFolder', currentLang)}</button>
+                              {/if}
+                            {:else}
+                              <button
+                                type="button"
+                                class="file-inline-btn primary"
+                                on:click|stopPropagation={() => handleDownload(msg.id, msg.fileName || '', msg.size || 0, false)}
+                              >{getTranslation('downloadFile', currentLang)}</button>
+                            {/if}
+                          {/if}
+                        </div>
+                      {/if}
                     </div>
                   </div>
                 {/if}

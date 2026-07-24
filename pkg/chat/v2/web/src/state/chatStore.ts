@@ -1,5 +1,8 @@
 import { writable } from 'svelte/store';
 import type { Message, Device, TransferEvent } from '../services/types';
+import { shouldSurfaceSystemNotice } from './systemNotice';
+
+export { shouldSurfaceSystemNotice } from './systemNotice';
 
 export const messages = writable<Message[]>([]);
 export const peers = writable<Device[]>([]);
@@ -7,6 +10,8 @@ export const transfers = writable<Record<string, TransferEvent>>({});
 export const connState = writable<'connecting' | 'connected' | 'disconnected'>('disconnected');
 export const currentDevice = writable<Device | null>(null);
 export const systemMessages = writable<string[]>([]); // For in-app notifications
+/** True after auto-reconnect attempts are exhausted; cleared on successful connect / manual resume. */
+export const reconnectExhausted = writable(false);
 /** active=normal; replaced=same peer took over in another tab; kicked/left=terminal offline */
 export const chatSessionStatus = writable<'active' | 'replaced' | 'kicked' | 'left'>('active');
 /** True when older message pages remain above the join boundary. */
@@ -124,12 +129,28 @@ export const chatActions = {
     connState.set(state);
   },
 
+  setReconnectExhausted(exhausted: boolean) {
+    reconnectExhausted.set(exhausted);
+  },
+
   setCurrentDevice(device: Device | null) {
     currentDevice.set(device);
   },
 
   addSystemMessage(msg: string) {
-    systemMessages.update(list => [...list, `${new Date().toLocaleTimeString()}: ${msg}`]);
+    const stamped = `${new Date().toLocaleTimeString()}: ${msg}`;
+    systemMessages.update(list => [...list, stamped]);
+    // H1: surface notices in the main message list so users see errors without TransferStatus mounted.
+    if (shouldSurfaceSystemNotice(msg)) {
+      const notice: Message = {
+        id: `sys-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sender: 'system',
+        type: 'system',
+        text: msg,
+        createdAt: new Date().toISOString(),
+      };
+      messages.update(list => [...list, notice]);
+    }
   },
 
   clearSystemMessages() {

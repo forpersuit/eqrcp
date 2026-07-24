@@ -769,6 +769,15 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Erneut verbinden',
     fr: 'Reconnecter'
   },
+  reconnectExhaustedHint: {
+    zh: '连接已断开且自动重连失败。可点击重新连接，无需刷新整页。',
+    en: 'Disconnected and auto-reconnect failed. Tap Reconnect without refreshing the page.',
+    ja: '切断され、自動再接続に失敗しました。ページを再読み込みせず「再接続」を押してください。',
+    ko: '연결이 끊겼고 자동 재연결에 실패했습니다. 새로고침 없이 다시 연결을 누르세요.',
+    es: 'Desconectado y falló la reconexión automática. Pulse Reconectar sin recargar la página.',
+    de: 'Getrennt und automatische Wiederverbindung fehlgeschlagen. Tippen Sie auf Erneut verbinden, ohne die Seite neu zu laden.',
+    fr: 'Déconnecté et échec de la reconnexion auto. Appuyez sur Reconnecter sans recharger la page.'
+  },
   desktopTip: {
     zh: '提示：移动端向左/右滑动气泡，或在桌面端右键点击气泡，可唤起操作菜单。',
     en: 'Tip: Swipe left/right on bubble (mobile) or right-click (desktop) to open context menu.',

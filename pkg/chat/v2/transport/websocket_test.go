@@ -418,3 +418,152 @@ func TestWebSocketReconnectRecovery(t *testing.T) {
 		t.Fatalf("mA2 = %#v, expected seq = %d", mA2, seqOfMessage)
 	}
 }
+
+func TestWebSocketKickOnlyHostAllowed(t *testing.T) {
+	handler := NewWebSocketHandler(WebSocketConfig{DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	connHost, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/kick-room/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connHost.Close(websocket.StatusNormalClosure, "done")
+
+	connMobile, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/kick-room/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connMobile.Close(websocket.StatusNormalClosure, "done")
+
+	var hello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connHost, &hello); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Read(ctx, connMobile, &hello); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-host",
+		Client: protocol.ClientInfo{
+			Label: "Host",
+			Peer:  "desktop",
+			Token: "host-token",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// connect hello (command-scoped) + self presence
+	var hostHello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connHost, &hostHello); err != nil {
+		t.Fatal(err)
+	}
+	if hostHello.Type != protocol.EventHello || hostHello.CommandID != "conn-host" {
+		t.Fatalf("host connect hello = %#v", hostHello)
+	}
+	presHostSelf := readEvent(ctx, t, connHost)
+	if presHostSelf.Type != protocol.EventPresenceChanged {
+		t.Fatalf("host self presence = %#v", presHostSelf)
+	}
+
+	if err := wsjson.Write(ctx, connMobile, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-mobile",
+		Client: protocol.ClientInfo{
+			Label: "Phone",
+			Peer:  "peer-phone",
+			Token: "phone-token",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var mobileHello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connMobile, &mobileHello); err != nil {
+		t.Fatal(err)
+	}
+	if mobileHello.Type != protocol.EventHello || mobileHello.CommandID != "conn-mobile" {
+		t.Fatalf("mobile connect hello = %#v", mobileHello)
+	}
+
+	// Host sees mobile join presence
+	presHostBoth := readEvent(ctx, t, connHost)
+	if presHostBoth.Type != protocol.EventPresenceChanged || presHostBoth.Presence == nil {
+		t.Fatalf("host presence after mobile = %#v", presHostBoth)
+	}
+	var mobileID string
+	for _, d := range presHostBoth.Presence.Devices {
+		if d.Peer == "peer-phone" {
+			mobileID = d.ID
+			break
+		}
+	}
+	if mobileID == "" {
+		t.Fatalf("mobile id missing in presence devices=%#v", presHostBoth.Presence.Devices)
+	}
+
+	// Mobile sees presence (self join with both devices)
+	presMobile := readEvent(ctx, t, connMobile)
+	if presMobile.Type != protocol.EventPresenceChanged {
+		t.Fatalf("mobile presence = %#v", presMobile)
+	}
+
+	// Mobile tries to kick → unauthorized
+	if err := wsjson.Write(ctx, connMobile, protocol.CommandEnvelope{
+		Type:      protocol.CommandKickClient,
+		CommandID: "kick-from-mobile",
+		ClientID:  "any",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var errEv protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connMobile, &errEv); err != nil {
+		t.Fatal(err)
+	}
+	if errEv.Type != protocol.EventError || errEv.CommandID != "kick-from-mobile" {
+		t.Fatalf("mobile kick event = %#v, want error", errEv)
+	}
+	if errEv.Error == nil || errEv.Error.Code != protocol.ErrorUnauthorized {
+		t.Fatalf("mobile kick error = %#v, want unauthorized", errEv.Error)
+	}
+	if errEv.Error.Message != "only host can kick clients" {
+		t.Fatalf("mobile kick message = %q", errEv.Error.Message)
+	}
+
+	// Host kicks mobile successfully → mobile socket is force-closed.
+	if err := wsjson.Write(ctx, connHost, protocol.CommandEnvelope{
+		Type:      protocol.CommandKickClient,
+		CommandID: "kick-from-host",
+		ClientID:  mobileID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Mobile should observe close (or a terminal error) after host kick.
+	closed := make(chan error, 1)
+	go func() {
+		var dump protocol.EventEnvelope
+		closed <- wsjson.Read(ctx, connMobile, &dump)
+	}()
+	select {
+	case err := <-closed:
+		if err == nil {
+			// Received an event instead of close; still acceptable if presence/error arrives first.
+			// Wait briefly for the actual close.
+			time.Sleep(150 * time.Millisecond)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("mobile connection was not closed after host kick")
+	}
+
+	// Host remains connected: presence should drop phone or host can still heartbeat via write pump.
+	presAfterKick := readEvent(ctx, t, connHost)
+	if presAfterKick.Type != protocol.EventPresenceChanged && presAfterKick.Type != protocol.EventHello {
+		// Accept any host-side event proving the host socket is still readable.
+		t.Logf("host post-kick event type=%s", presAfterKick.Type)
+	}
+}

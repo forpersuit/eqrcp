@@ -15,11 +15,16 @@ function canResume(opts: {
   isManualClosed: boolean;
   sessionStatus: 'active' | 'replaced' | 'kicked' | 'left';
   wsOpen: boolean;
+  reconnectExhausted?: boolean;
 }): boolean {
   if (opts.sessionStatus === 'kicked' || opts.sessionStatus === 'left') {
     return false;
   }
   if (opts.sessionStatus === 'replaced' && opts.isManualClosed) {
+    return true;
+  }
+  // M1: exhausted auto-reconnect still allows explicit resume while session is active.
+  if (opts.reconnectExhausted && opts.sessionStatus === 'active' && !opts.wsOpen) {
     return true;
   }
   if (!opts.isManualClosed && opts.wsOpen) {
@@ -43,6 +48,10 @@ assert(
 assert(
   canResume({ isManualClosed: true, sessionStatus: 'left', wsOpen: false }) === false,
   'left session must not resume via peer-replaced button'
+);
+assert(
+  canResume({ isManualClosed: false, sessionStatus: 'active', wsOpen: false, reconnectExhausted: true }) === true,
+  'exhausted reconnect should allow explicit resume'
 );
 
 console.log('resumeConnection.test.ts: all assertions passed');

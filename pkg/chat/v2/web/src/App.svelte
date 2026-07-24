@@ -4,7 +4,7 @@
   import MessageComposer from './components/MessageComposer.svelte';
   import { getTranslation } from './lib/i18n';
   import { ChatWebSocketClient } from './services/websocket';
-  import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus } from './state/chatStore';
+  import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted } from './state/chatStore';
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
 
@@ -413,7 +413,18 @@
     }
   }
 
+  function isChatHost(): boolean {
+    const peer = client?.clientPeer || $currentDevice?.peer || localStorage.getItem('chat_peer') || '';
+    return peer === 'desktop';
+  }
+
   function handleKickDevice(devId: string, label: string) {
+    if (!isChatHost()) {
+      chatActions.addSystemMessage(
+        currentLang === 'en' ? 'Only the host can force devices offline.' : '仅主机可强制设备下线。'
+      );
+      return;
+    }
     if (client) {
       client.kickClient(devId);
     }
@@ -1258,9 +1269,11 @@
                         {/if}
                       {:else}
                         <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label}</strong>
-                        <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626; flex-shrink: 0;" on:click={() => handleKickDevice(dev.id, dev.label)} title={t.kickOffline}>
-                          <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 12h10M17 8l4 4-4 4M15 4H9a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>
-                        </button>
+                        {#if isChatHost()}
+                          <button class="icon-button danger" style="padding: 2px; width: 22px; height: 22px; color: #dc2626; flex-shrink: 0;" on:click={() => handleKickDevice(dev.id, dev.label)} title={t.kickOffline}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 12h10M17 8l4 4-4 4M15 4H9a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>
+                          </button>
+                        {/if}
                       {/if}
                     </div>
                     <div class="device-detail-meta" style="font-size: 10px; color: #666; display: flex; flex-direction: column; gap: 2px; text-align: left;">
@@ -1331,9 +1344,13 @@
         </div>
       </header>
 
-      {#if $chatSessionStatus === 'replaced'}
+      {#if $chatSessionStatus === 'replaced' || ($reconnectExhausted && $connState !== 'connected' && $chatSessionStatus === 'active')}
         <div class="session-resume-banner" role="status">
-          <span class="session-resume-text">{getTranslation('tabReplacedHint', currentLang)}</span>
+          <span class="session-resume-text">
+            {$chatSessionStatus === 'replaced'
+              ? getTranslation('tabReplacedHint', currentLang)
+              : getTranslation('reconnectExhaustedHint', currentLang)}
+          </span>
           <button
             type="button"
             class="session-resume-btn"
