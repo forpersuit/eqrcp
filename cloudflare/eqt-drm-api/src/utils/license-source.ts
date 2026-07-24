@@ -51,9 +51,13 @@ export function isPurchaseLikeRevocation(license: {
 }): boolean {
   const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
   if (source !== 'purchase') return false;
-  // Count refunds & chargebacks; legacy rows with empty reason still count if purchase-like.
   const reason = (license.revoke_reason || '').toLowerCase();
+  // Explicit money-movement reasons only. Legacy null is treated as refund-like
+  // unless tagged admin/test/subscription (ops archive).
   if (!reason) return true;
+  if (reason === 'admin' || reason === 'test' || reason === 'subscription' || reason === 'expired') {
+    return false;
+  }
   return reason === 'refund' || reason === 'chargeback';
 }
 

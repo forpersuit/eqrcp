@@ -23,6 +23,130 @@ function activationClientMeta(request: Request): {
   return { client_ip, ip_country, user_agent };
 }
 
+/**
+ * Other active licenses already bound to this physical device.
+ * Prefer device_id; never match empty fingerprint fields (SQL `col = ''` would false-positive).
+ * Fall back to 3-of-2 fingerprint match in application code.
+ */
+async function findPeerActiveLicensesOnDevice(
+  env: Env,
+  licenseCode: string,
+  deviceId: string,
+  uuidHash: string,
+  cpuHash: string,
+  diskHash: string
+): Promise<any[]> {
+  const peers: any[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (rows: any[] | null | undefined) => {
+    for (const row of rows || []) {
+      if (!row?.license_code || row.license_code === licenseCode) continue;
+      if (seen.has(row.license_code)) continue;
+      seen.add(row.license_code);
+      peers.push(row);
+    }
+  };
+
+  const dev = (deviceId || "").trim();
+  if (dev) {
+    const byDevice = await env.DB.prepare(`
+      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE a.device_id = ? AND l.license_code != ? AND l.status = 'active'
+    `).bind(dev, licenseCode).all<any>();
+    pushUnique(byDevice.results);
+  }
+
+  // Fingerprint candidates: only non-empty equality (avoids matching blank cpu_hash rows)
+  const clauses: string[] = [];
+  const binds: string[] = [];
+  if (uuidHash) {
+    clauses.push("a.uuid_hash = ?");
+    binds.push(uuidHash);
+  }
+  if (cpuHash) {
+    clauses.push("a.cpu_hash = ?");
+    binds.push(cpuHash);
+  }
+  if (diskHash) {
+    clauses.push("a.disk_hash = ?");
+    binds.push(diskHash);
+  }
+
+  if (clauses.length > 0) {
+    const sql = `
+      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash,
+             l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE l.license_code != ? AND l.status = 'active'
+        AND (${clauses.join(" OR ")})
+    `;
+    const cand = await env.DB.prepare(sql).bind(licenseCode, ...binds).all<any>();
+    for (const row of cand.results || []) {
+      if (!matchFingerprint(
+        uuidHash || "", cpuHash || "", diskHash || "",
+        row.uuid_hash || "", row.cpu_hash || "", row.disk_hash || ""
+      )) {
+        continue;
+      }
+      pushUnique([row]);
+    }
+  }
+
+  return peers;
+}
+
+function evaluateStacking(
+  peerLicenses: any[],
+  licenseTier: string,
+  licenseSource: string,
+  baseExpiresAt: string,
+  durationDays: number | null | undefined
+): { remainingMs: number; hasSameTierLifetime: boolean; blockReason: string | null } {
+  let remainingMs = 0;
+  const nowMs = Date.now();
+  let hasSameTierLifetime = false;
+
+  for (const item of peerLicenses) {
+    const certLifetime = item.expires_at === "LIFETIME";
+    if (certLifetime && item.tier === licenseTier) {
+      hasSameTierLifetime = true;
+      remainingMs = -1;
+      break;
+    }
+    if (certLifetime) continue;
+    if (licenseSource === "promo") continue;
+    if (item.expires_at) {
+      const expTime = new Date(item.expires_at).getTime();
+      if (expTime > nowMs) {
+        const diff = expTime - nowMs;
+        if (diff > remainingMs) remainingMs = diff;
+      }
+    }
+  }
+
+  const newIsLifetime =
+    baseExpiresAt === "LIFETIME" ||
+    ((durationDays === null || durationDays === undefined) &&
+      (baseExpiresAt === "LIFETIME" || !baseExpiresAt));
+
+  // Same-tier lifetime already on device → block another lifetime or promo; term purchase may still extend only if not lifetime peer
+  if (hasSameTierLifetime) {
+    if (newIsLifetime || licenseSource === "promo") {
+      return {
+        remainingMs: -1,
+        hasSameTierLifetime: true,
+        blockReason: "This device already has a lifetime license of the same tier; stacking is not allowed."
+      };
+    }
+  }
+
+  return { remainingMs, hasSameTierLifetime, blockReason: null };
+}
+
 export async function handleDrmRoutes(
   request: Request,
   env: Env,
@@ -116,7 +240,7 @@ export async function handleDrmRoutes(
       }
     }
 
-    // Fetch existing activations
+    // Fetch existing activations for THIS license code
     const { results: activations } = await env.DB.prepare(
       "SELECT * FROM activations WHERE license_code = ?"
     ).bind(license_code).all<any>();
@@ -130,6 +254,34 @@ export async function handleDrmRoutes(
         isAlreadyActivated = true;
         break;
       }
+      // Also treat same device_id as already activated on this code
+      if (device_id && act.device_id && act.device_id === device_id) {
+        isAlreadyActivated = true;
+        break;
+      }
+    }
+
+    // Peer licenses on this device — stacking decision BEFORE writing a new activation row
+    const peerLicenses = await findPeerActiveLicensesOnDevice(
+      env,
+      license_code,
+      device_id || "",
+      uuid_hash || "",
+      cpu_hash || "",
+      disk_hash || ""
+    );
+    const stack = evaluateStacking(
+      peerLicenses,
+      license.tier,
+      licenseSource,
+      baseExpiresAt,
+      license.duration_days
+    );
+    if (stack.blockReason && !isAlreadyActivated) {
+      return new Response(JSON.stringify({ error: stack.blockReason }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // If not already activated, check limit and insert new activation
@@ -169,68 +321,7 @@ export async function handleDrmRoutes(
       }
     }
 
-    // Calculate dynamic expiration if the device has other active and unexpired license activations
-    let remainingMs = 0;
-    const nowMs = Date.now();
-    let hasSameTierLifetime = false;
-
-    // Find existing activations for this device fingerprint
-    const activeDevices = await env.DB.prepare(`
-      SELECT l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id FROM activations a
-      JOIN licenses l ON a.license_code = l.license_code
-      WHERE (a.uuid_hash = ? OR a.cpu_hash = ? OR a.disk_hash = ?)
-        AND l.license_code != ?
-        AND l.status = 'active'
-    `).bind(uuid_hash || "", cpu_hash || "", disk_hash || "", license_code).all<any>();
-
-    if (activeDevices.results && activeDevices.results.length > 0) {
-      for (const item of activeDevices.results) {
-        const itemIsLifetime =
-          item.expires_at === "LIFETIME" ||
-          (item.duration_days === null && item.expires_at === "LIFETIME");
-        // Certificate may store absolute LIFETIME on device; also treat null duration + LIFETIME row
-        const certLifetime = item.expires_at === "LIFETIME";
-        if (certLifetime && item.tier === license.tier) {
-          hasSameTierLifetime = true;
-        }
-        if (certLifetime || itemIsLifetime) {
-          if (item.tier === license.tier) {
-            remainingMs = -1;
-            break;
-          }
-          continue;
-        }
-        // Promo never stacks remaining time from other codes
-        if (licenseSource === "promo") {
-          continue;
-        }
-        if (item.expires_at) {
-          const expTime = new Date(item.expires_at).getTime();
-          if (expTime > nowMs) {
-            const diff = expTime - nowMs;
-            if (diff > remainingMs) {
-              remainingMs = diff;
-            }
-          }
-        }
-      }
-    }
-
-    // Lifetime same-tier: cannot stack another code of the same tier
-    if (hasSameTierLifetime || remainingMs === -1) {
-      const newIsLifetime =
-        baseExpiresAt === "LIFETIME" ||
-        (license.duration_days === null && (license.expires_at === "LIFETIME" || !license.expires_at));
-      if (newIsLifetime || licenseSource === "promo" || remainingMs === -1) {
-        return new Response(JSON.stringify({
-          error: "This device already has a lifetime license of the same tier; stacking is not allowed."
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    }
-
+    const remainingMs = stack.remainingMs;
     let finalExpiresAt = baseExpiresAt;
     // Purchase term stacking only (promo never stacks)
     if (licenseSource === "purchase" && finalExpiresAt !== "LIFETIME" && remainingMs > 0) {
