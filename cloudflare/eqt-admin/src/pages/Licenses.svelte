@@ -29,7 +29,10 @@
 
   let genTier = $state<LicenseTier>('PLUS');
   let genMaxDevices = $state(2);
+  /** admin = 客服补发；promo = 活动码（必须兑换窗 + 使用天数） */
+  let genSource = $state<'admin' | 'promo'>('admin');
   let genExpiresInDays = $state<string>('');
+  let genDurationDays = $state<string>('');
   let genBuyerEmail = $state('');
   let genSendEmail = $state(false);
   let lastGeneratedCode = $state<string | null>(null);
@@ -126,11 +129,24 @@
     try {
       const body: Record<string, unknown> = {
         tier: genTier,
-        max_devices: Number(genMaxDevices) || 2
+        max_devices: Number(genMaxDevices) || 2,
+        source: genSource
       };
-      const days = genExpiresInDays.trim() ? Number(genExpiresInDays) : null;
-      if (days && days > 0) {
-        body.expires_in_days = days;
+      const redeemDays = genExpiresInDays.trim() ? Number(genExpiresInDays) : null;
+      if (redeemDays && redeemDays > 0) {
+        body.expires_in_days = redeemDays;
+      }
+      const useDays = genDurationDays.trim() ? Number(genDurationDays) : null;
+      if (useDays !== null && !Number.isNaN(useDays) && useDays >= 0) {
+        body.duration_days = useDays;
+      }
+      if (genSource === 'promo') {
+        if (!redeemDays || redeemDays <= 0) {
+          throw new Error('活动码必须填写兑换截止天数（redeem-by）');
+        }
+        if (useDays === null || Number.isNaN(useDays) || useDays < 0) {
+          throw new Error('活动码必须填写兑换后使用天数（duration_days，0 表示即刻过期不推荐）');
+        }
       }
       if (genBuyerEmail.trim()) {
         body.buyer_email = genBuyerEmail.trim();
@@ -142,7 +158,8 @@
         body: JSON.stringify(body)
       });
       lastGeneratedCode = res.license_code;
-      actionMsg = `已生成授权码 ${res.license_code}${res.email_sent ? '（通知邮件已并发投递）' : ''}`;
+      const srcLabel = res.source || genSource;
+      actionMsg = `已生成授权码 ${res.license_code}（source=${srcLabel}）${res.email_sent ? '（通知邮件已并发投递）' : ''}`;
       await loadLicenses();
     } catch (err: any) {
       errorMsg = '生成授权码失败: ' + (err.message || String(err));
@@ -290,6 +307,7 @@
           <tr>
             <th>授权码 (License Code)</th>
             <th>类型</th>
+            <th>来源</th>
             <th>状态</th>
             <th>设备配额</th>
             <th>买家 Email</th>
@@ -305,8 +323,13 @@
               </td>
               <td><span class="badge badge-active">{lic.tier}</span></td>
               <td>
+                <span class="badge badge-active" title="purchase=付费 promo=活动 admin=人工 test=夹具">
+                  {lic.source || '—'}
+                </span>
+              </td>
+              <td>
                 <span class={`badge badge-${lic.status === 'active' ? 'active' : 'revoked'}`}>
-                  {lic.status}
+                  {lic.status}{lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}
                 </span>
               </td>
               <td>
@@ -363,6 +386,15 @@
       <h3>手动生成授权码</h3>
       <form onsubmit={handleGenerate} class="gen-form">
         <div class="form-group">
+          <label for="source-select">来源 (source):</label>
+          <select id="source-select" class="input" bind:value={genSource}>
+            <option value="admin">admin — 客服补发 / 内测（不可 Portal 退款）</option>
+            <option value="promo">promo — 活动分享码（有兑换窗，不可退款，不累加）</option>
+          </select>
+          <p class="field-hint">付费购买码只能由 Paddle 履约自动写入 source=purchase，此处不可选。</p>
+        </div>
+
+        <div class="form-group">
           <label for="tier-select">订阅类型 (Tier):</label>
           <select id="tier-select" class="input" bind:value={genTier}>
             <option value="PLUS">PLUS</option>
@@ -376,8 +408,17 @@
         </div>
 
         <div class="form-group">
-          <label for="exp-days">有效期天数 (留空为 LIFETIME 永久):</label>
-          <input id="exp-days" type="number" class="input" placeholder="例如 365" bind:value={genExpiresInDays} min="1" />
+          <label for="exp-days">
+            {genSource === 'promo' ? '兑换截止天数 redeem-by（必填）' : '绝对过期天数 expires_in_days（留空 = LIFETIME）'}
+          </label>
+          <input id="exp-days" type="number" class="input" placeholder={genSource === 'promo' ? '例如 30（天内必须兑换）' : '例如 365'} bind:value={genExpiresInDays} min="1" />
+        </div>
+
+        <div class="form-group">
+          <label for="dur-days">
+            {genSource === 'promo' ? '兑换后使用天数 duration_days（必填）' : '兑换后使用天数 duration_days（选填，与双重过期配合）'}
+          </label>
+          <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' ? '例如 14' : '留空则不用相对时长'} bind:value={genDurationDays} min="0" />
         </div>
 
         <div class="form-group">
@@ -527,6 +568,7 @@
   .action-btns { display: flex; gap: 0.5rem; }
 
   .gen-form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+  .field-hint { margin: 0.35rem 0 0; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
   .form-group label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
   .confirm-text { margin: 1rem 0; color: var(--text-secondary); line-height: 1.6; }
   .danger-title { color: var(--accent-danger); }

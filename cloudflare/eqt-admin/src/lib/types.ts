@@ -24,6 +24,9 @@ export interface Activation {
 }
 
 /** licenses row + admin-computed fields */
+export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test' | string;
+export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired' | string;
+
 export interface License {
   license_code: string;
   tier: LicenseTier | string;
@@ -35,6 +38,9 @@ export interface License {
   buyer_email_hash?: string | null;
   paddle_transaction_id?: string | null;
   paddle_subscription_id?: string | null;
+  source?: LicenseSource | null;
+  revoked_at?: string | null;
+  revoke_reason?: RevokeReason | null;
   created_at: string;
   active_devices_count: number;
   activations: Activation[];
@@ -115,6 +121,8 @@ export interface GenerateLicenseBody {
   duration_days?: number | null;
   buyer_email?: string;
   send_email?: boolean;
+  /** admin (default) | promo — purchase is only via Paddle */
+  source?: 'admin' | 'promo';
 }
 
 export interface GenerateLicenseResponse {
@@ -125,6 +133,7 @@ export interface GenerateLicenseResponse {
   expires_at: string;
   duration_days: number | null;
   status: string;
+  source?: string;
   buyer_email?: string | null;
   email_sent?: boolean;
 }

@@ -39,7 +39,7 @@ export async function checkAbusiveRefundBlacklist(
   // 1. Email-based (purchase-like revokes in rolling year)
   if (buyerEmailHash) {
     const { results: revokedByEmail } = await env.DB.prepare(
-      `SELECT source, paddle_transaction_id, revoked_at, created_at
+      `SELECT source, paddle_transaction_id, revoke_reason, revoked_at, created_at
        FROM licenses
        WHERE buyer_email_hash = ? AND status = 'revoked'`
     ).bind(buyerEmailHash).all<any>();
@@ -65,7 +65,7 @@ export async function checkAbusiveRefundBlacklist(
   if (uuidHash || cpuHash || diskHash) {
     const { results: revokedActivations } = await env.DB.prepare(`
       SELECT a.uuid_hash, a.cpu_hash, a.disk_hash,
-             l.source, l.paddle_transaction_id, l.revoked_at, l.created_at
+             l.source, l.paddle_transaction_id, l.revoke_reason, l.revoked_at, l.created_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE l.status = 'revoked'

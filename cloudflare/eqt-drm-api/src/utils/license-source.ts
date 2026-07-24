@@ -47,7 +47,37 @@ export function isLicenseRefundable(license: {
 export function isPurchaseLikeRevocation(license: {
   source?: string | null;
   paddle_transaction_id?: string | null;
+  revoke_reason?: string | null;
 }): boolean {
   const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
-  return source === 'purchase';
+  if (source !== 'purchase') return false;
+  // Count refunds & chargebacks; legacy rows with empty reason still count if purchase-like.
+  const reason = (license.revoke_reason || '').toLowerCase();
+  if (!reason) return true;
+  return reason === 'refund' || reason === 'chargeback';
+}
+
+/** Shared SQL helper: mark license revoked with timestamp + reason (idempotent on reason if already set). */
+export function revokeLicenseSql(): string {
+  return `UPDATE licenses
+    SET status = 'revoked',
+        revoked_at = COALESCE(revoked_at, ?),
+        revoke_reason = COALESCE(revoke_reason, ?)
+    WHERE license_code = ?`;
+}
+
+export function revokeByPaddleTxnSql(): string {
+  return `UPDATE licenses
+    SET status = 'revoked',
+        revoked_at = COALESCE(revoked_at, ?),
+        revoke_reason = COALESCE(revoke_reason, ?)
+    WHERE paddle_transaction_id = ?`;
+}
+
+export function revokeByPaddleSubSql(): string {
+  return `UPDATE licenses
+    SET status = 'revoked',
+        revoked_at = COALESCE(revoked_at, ?),
+        revoke_reason = COALESCE(revoke_reason, ?)
+    WHERE paddle_subscription_id = ?`;
 }

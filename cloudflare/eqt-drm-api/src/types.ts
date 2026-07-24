@@ -30,8 +30,19 @@ export interface License {
   paddle_subscription_id: string | null;
   source?: LicenseSource | string | null;
   revoked_at?: string | null;
+  /** Why status became revoked — not a separate lifecycle status. */
+  revoke_reason?: string | null;
   created_at: string;
 }
+
+/** Reasons for status=revoked (orthogonal to status). */
+export type RevokeReason =
+  | 'refund'
+  | 'chargeback'
+  | 'subscription'
+  | 'admin'
+  | 'test'
+  | 'expired';
 
 export interface Activation {
   id: number;

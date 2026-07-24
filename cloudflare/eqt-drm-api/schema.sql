@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     paddle_subscription_id TEXT DEFAULT NULL,
     source TEXT DEFAULT NULL,    -- 'purchase' | 'promo' | 'admin' | 'test'
     revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
+    revoke_reason TEXT DEFAULT NULL, -- 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | …
     created_at TEXT NOT NULL
 );
 

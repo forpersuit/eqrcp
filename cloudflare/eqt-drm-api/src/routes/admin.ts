@@ -358,9 +358,14 @@ export async function handleAdminRoutes(
     const activationsAtRevoke = (actRes.results || []).map(activationAuditSnapshot);
 
     await env.DB.prepare(
-      "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE license_code = ?"
+      `UPDATE licenses
+       SET status = 'revoked',
+           revoked_at = COALESCE(revoked_at, ?),
+           revoke_reason = COALESCE(revoke_reason, 'admin')
+       WHERE license_code = ?`
     ).bind(new Date().toISOString(), license_code).run();
     ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {
+      revoke_reason: 'admin',
       license_code,
       previous_status: existing.status,
       new_status: 'revoked',

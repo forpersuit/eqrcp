@@ -7,7 +7,8 @@ import {
   isLicenseRefundable,
   isRealPaddleTransactionId,
   isSyntheticTestTransactionId,
-  normalizeLicenseSource
+  normalizeLicenseSource,
+  revokeLicenseSql
 } from '../utils/license-source';
 import { ensureLicenseSourceColumns } from '../utils/auth';
 
@@ -36,11 +37,14 @@ async function revokeLicenseAndNotify(
   license: any,
   license_code: string,
   sessionEmail: string,
-  reqLang: string
+  reqLang: string,
+  reason: string = 'refund'
 ): Promise<void> {
-  await env.DB.prepare(
-    "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE license_code = ?"
-  ).bind(new Date().toISOString(), license_code).run();
+  await env.DB.prepare(revokeLicenseSql()).bind(
+    new Date().toISOString(),
+    reason,
+    license_code
+  ).run();
 
   const notifyEmail = sessionEmail || license.buyer_email;
   if (notifyEmail) {
@@ -311,7 +315,7 @@ export async function handlePortalRoutes(
     // Fixture / e2e: allow local revoke only for explicit test source or synthetic txn
     if (source === "test" || isSyntheticTestTransactionId(transactionId || "")) {
       try {
-        await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang);
+        await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang, 'test');
         return new Response(JSON.stringify({
           success: true,
           message: getApiTranslation("refund_test_local_success", reqLang),

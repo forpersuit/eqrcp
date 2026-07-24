@@ -2,6 +2,8 @@ import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID } from '../types';
 import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
+import { ensureLicenseSourceColumns } from '../utils/auth';
+import { revokeByPaddleSubSql, revokeByPaddleTxnSql } from '../utils/license-source';
 
 export async function handlePaddleRoutes(
   request: Request,
@@ -12,6 +14,7 @@ export async function handlePaddleRoutes(
 ): Promise<Response | null> {
   // 3.5.1 Paddle Webhook: fulfillment and cancellation/refund
   if (url.pathname === "/api/v1/paddle/webhook" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
     const rawBody = await request.text();
     const signature = request.headers.get("paddle-signature");
     const webhookSecret = env.PADDLE_WEBHOOK_SECRET;
@@ -212,7 +215,7 @@ export async function handlePaddleRoutes(
       });
     }
 
-    // Revoke license on refund
+    // Revoke license on refund (status remains revoked; reason=refund — not a separate status)
     if (eventType === "transaction.refunded") {
       const transactionId = data.id;
 
@@ -221,9 +224,11 @@ export async function handlePaddleRoutes(
         "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
       ).bind(transactionId).first<any>();
 
-      await env.DB.prepare(
-        "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE paddle_transaction_id = ?"
-      ).bind(new Date().toISOString(), transactionId).run();
+      await env.DB.prepare(revokeByPaddleTxnSql()).bind(
+        new Date().toISOString(),
+        "refund",
+        transactionId
+      ).run();
 
       if (license && license.buyer_email) {
         const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
@@ -242,7 +247,7 @@ export async function handlePaddleRoutes(
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">当前状态 (Status)</td>
-                <td style="padding: 10px; border: 1px solid #ddd; color: #ef4444; font-weight: bold;">已吊销 (Revoked)</td>
+                <td style="padding: 10px; border: 1px solid #ddd; color: #ef4444; font-weight: bold;">已吊销 (Revoked) · 原因: 退款</td>
               </tr>
             </table>
             <p><strong>注意：</strong>该激活码下的所有已激活设备在下次联网同步（或最迟 7 天租约过期）时，软件将自动注销降级至免费体验版。</p>
@@ -254,10 +259,51 @@ export async function handlePaddleRoutes(
         ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销与退款通知", emailHtml));
       }
 
-      return new Response(JSON.stringify({ message: "License revoked due to refund" }), {
+      return new Response(JSON.stringify({ message: "License revoked due to refund", revoke_reason: "refund" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
+    }
+
+    // Chargeback / adjustment-driven money movement (Paddle Billing)
+    // action may be refund | chargeback | credit — we only revoke on refund/chargeback.
+    if (eventType === "adjustment.created" || eventType === "adjustment.updated") {
+      const action = String(data.action || data.type || "").toLowerCase();
+      const transactionId = data.transaction_id || data.transactionId || null;
+      if (transactionId && (action === "chargeback" || action === "refund")) {
+        const reason = action === "chargeback" ? "chargeback" : "refund";
+        const license = await env.DB.prepare(
+          "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
+        ).bind(transactionId).first<any>();
+
+        await env.DB.prepare(revokeByPaddleTxnSql()).bind(
+          new Date().toISOString(),
+          reason,
+          transactionId
+        ).run();
+
+        if (license && license.buyer_email) {
+          const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+          const reasonLabel = reason === "chargeback" ? "银行拒付 / Chargeback" : "退款 / Refund";
+          const emailHtml = `
+            <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+              <h2 style="color: #ef4444;">您的 EQT 许可证授权已吊销</h2>
+              <p>支付渠道通知：${reasonLabel}。对应授权已立即失效。</p>
+              <p>激活码：<code>${license.license_code}</code> · 套餐：${planName}</p>
+              <p>已激活设备将在下次联网对账时自动降级为免费版。</p>
+            </div>
+          `;
+          ctx.waitUntil(sendDRMEmail(env, license.buyer_email, "【EQT】许可证授权吊销通知", emailHtml));
+        }
+
+        return new Response(JSON.stringify({
+          message: `License revoked due to adjustment ${action}`,
+          revoke_reason: reason
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Revoke license on subscription cancel / suspend
@@ -270,9 +316,11 @@ export async function handlePaddleRoutes(
           "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
         ).bind(subscriptionId).first<any>();
 
-        await env.DB.prepare(
-          "UPDATE licenses SET status = 'revoked', revoked_at = COALESCE(revoked_at, ?) WHERE paddle_subscription_id = ?"
-        ).bind(new Date().toISOString(), subscriptionId).run();
+        await env.DB.prepare(revokeByPaddleSubSql()).bind(
+          new Date().toISOString(),
+          "subscription",
+          subscriptionId
+        ).run();
 
         if (license && license.buyer_email) {
           const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
