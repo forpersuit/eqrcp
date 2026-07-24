@@ -226,8 +226,8 @@ export class ChatWebSocketClient {
         const currentLang = localStorage.getItem('eqt_lang') || 'zh';
         chatActions.addSystemMessage(
           currentLang === 'en'
-            ? 'This tab was disconnected because the same device reconnected in another tab.'
-            : '本标签页已断开：同一设备在其他标签页重新连接了本会话。'
+            ? 'This tab was replaced: the same device opened this chat in another tab. Use Reconnect here, or continue in the other tab.'
+            : '本标签页已被顶替：同一设备在其他标签页打开了本会话。可点「重新连接」恢复本页，或继续使用另一标签页。'
         );
         this.sendLog(`[SYSTEM] WebSocket closed: replaced_by_peer. Stopping reconnect.`);
         return;
@@ -298,9 +298,8 @@ export class ChatWebSocketClient {
         chatActions.setSessionStatus('active');
         chatActions.clearTransfers();
         chatActions.resetHistoryPager();
-        if (event.commandId && event.commandId.startsWith('init-')) {
-          chatActions.addSystemMessage(`Registered presence roster as ${this.clientLabel}.`);
-        }
+        // Do not surface "Registered presence roster as …" into the chat stream —
+        // join/rename/leave already have user-facing presence system messages.
         // Initialize join sequence boundary for new clients
         const keyJoin = `eqt_join_seq_${this.token}`;
         if (!localStorage.getItem(keyJoin) && event.seq !== undefined && event.seq > 0) {
@@ -379,11 +378,23 @@ export class ChatWebSocketClient {
           const isMineOrGui = event.transfer.clientId === this.clientPeer || isGuiHost;
           
           if ((event.transfer.clientId === this.clientPeer || (isUploadJob && isMineOrGui)) && event.transfer.messageId) {
-            if (event.type === 'transfer_started' || event.type === 'transfer_progress' || event.type === 'transfer_completed') {
-              chatActions.markMessageDownloaded(event.transfer.messageId);
-            }
+            // M4: only terminal completed should flip downloaded / upload-complete flags.
+            // Marking on started/progress made bubbles look finished while still transferring.
             if (event.type === 'transfer_completed') {
+              if (!isUploadJob) {
+                chatActions.markMessageDownloaded(event.transfer.messageId);
+              }
               chatActions.markMessageUploadComplete(event.transfer.messageId);
+            }
+            if (event.type === 'transfer_failed' && event.transfer.clientId === this.clientPeer) {
+              const name = event.transfer.fileName || event.transfer.messageId || '';
+              const err = event.transfer.error || 'unknown error';
+              const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+              chatActions.addSystemMessage(
+                currentLang === 'en'
+                  ? `Transfer failed for "${name}": ${err}`
+                  : `传输失败「${name}」: ${err}`
+              );
             }
           }
           this.sendLog(`[TRANSFER] Event=${event.type}, clientId=${event.transfer.clientId}, messageId=${event.transfer.messageId}, bytes=${event.transfer.bytesDone}/${event.transfer.bytesTotal}, state=${event.transfer.state}`);

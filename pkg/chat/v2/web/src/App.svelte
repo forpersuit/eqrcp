@@ -821,11 +821,26 @@
     }
   }
 
-  function performFileUpload(messageId: string, file: File) {
-    chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Uploading file: ${file.name}...` 
-      : `正在上传文件: ${file.name}...`);
-    
+  /** Free over-quota hard limit — keep aligned with backend freeChatMaxAttachmentBytes. */
+  const FREE_MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+
+  // M6: serialise browser uploads so multi-select does not fan out parallel XHRs.
+  let uploadQueue: Array<{ file: File; name: string }> = [];
+  let uploadQueueRunning = false;
+
+  function localizeUploadError(raw: string): string {
+    const text = (raw || '').trim();
+    if (/2MB free limit|exceeds 2MB|file size exceeds 2MB/i.test(text)) {
+      return getTranslation('freeFileTooLarge', currentLang);
+    }
+    return text;
+  }
+
+  function performFileUpload(messageId: string, file: File, onTerminal?: () => void) {
+    const finish = () => {
+      if (onTerminal) onTerminal();
+    };
+
     if (client) {
       client.sendLog(`[ACTION] Starting file upload for: ${file.name} (Size: ${file.size} bytes, Message ID: ${messageId})`);
     }
@@ -843,7 +858,6 @@
     activeUploads.set('ul-' + messageId, xhr);
     xhr.open('POST', uploadUrl, true);
 
-    // Track upload progress locally and update the transfers store
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const percent = Math.round((e.loaded / e.total) * 100);
@@ -866,7 +880,6 @@
       }
     };
 
-    // Upload complete handler
     xhr.onload = () => {
       activeUploads.delete('ul-' + messageId);
       if (xhr.status >= 200 && xhr.status < 300) {
@@ -874,18 +887,17 @@
         if (client) {
           client.sendLog(`[ACTION] Completed file upload for: ${file.name} (Message ID: ${messageId})`);
         }
-        // Locally clear the transfer progress and mark uploading as complete to lift the mask
         transfers.update(map => {
           delete map['ul-' + messageId];
           return map;
         });
         chatActions.markMessageUploadComplete(messageId);
+        finish();
       } else {
-        handleError(new Error(xhr.responseText || `Upload failed with status ${xhr.status}`));
+        handleError(new Error(localizeUploadError(xhr.responseText || `Upload failed with status ${xhr.status}`)));
       }
     };
 
-    // Upload abort handler
     xhr.onabort = () => {
       isAborted = true;
       activeUploads.delete('ul-' + messageId);
@@ -906,12 +918,12 @@
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Upload cancelled for: ${file.name}`
         : `已取消上传文件: ${file.name}`);
+      finish();
     };
 
-    // Upload error handler
     xhr.onerror = () => {
       activeUploads.delete('ul-' + messageId);
-      handleError(new Error('Network error during upload'));
+      handleError(new Error(currentLang === 'en' ? 'Network error during upload' : '上传时网络错误'));
     };
 
     function handleError(err: Error) {
@@ -937,51 +949,80 @@
       chatActions.addSystemMessage(currentLang === 'en'
         ? `Failed to upload "${file.name}": ${err.message}`
         : `上传文件 "${file.name}" 失败: ${err.message}`);
+      finish();
     }
 
     xhr.send(formData);
   }
 
+  function enqueueSendFile(file: File, name: string) {
+    if (!file) return;
+    // M8: client-side precheck when free degraded
+    if (!isPaid && freeDegraded && file.size > FREE_MAX_ATTACHMENT_BYTES) {
+      chatActions.addSystemMessage(getTranslation('freeFileTooLarge', currentLang));
+      return;
+    }
+    const wasBusy = uploadQueueRunning || uploadQueue.length > 0;
+    uploadQueue.push({ file, name });
+    if (wasBusy) {
+      chatActions.addSystemMessage(`${getTranslation('uploadQueued', currentLang)} ${name}`);
+    }
+    drainUploadQueue();
+  }
+
+  async function drainUploadQueue() {
+    if (uploadQueueRunning) return;
+    uploadQueueRunning = true;
+    while (uploadQueue.length > 0) {
+      const item = uploadQueue.shift()!;
+      try {
+        await uploadOneFile(item.file, item.name);
+      } catch (err: any) {
+        console.error('Failed to add attachment:', err);
+        chatActions.addSystemMessage(currentLang === 'en'
+          ? `Failed to add attachment "${item.name}": ${localizeUploadError(err?.message || String(err))}`
+          : `添加文件 "${item.name}" 失败: ${localizeUploadError(err?.message || String(err))}`);
+      }
+    }
+    uploadQueueRunning = false;
+  }
+
+  function uploadOneFile(file: File, name: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const initUrl = `/chat-v2/${token}/upload/init`;
+      fetch(initUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fileName: name,
+          size: file.size,
+          sender: client?.clientLabel || $currentDevice?.label || 'Me',
+          avatar: $currentDevice?.avatar || '',
+          peer: client?.clientPeer || localStorage.getItem('chat_peer') || ''
+        })
+      })
+      .then(r => {
+        if (!r.ok) {
+          return r.text().then(t => { throw new Error(t); });
+        }
+        return r.json();
+      })
+      .then(msg => {
+        const msgID = msg.id;
+        console.log('Attachment registered successfully, messageID:', msgID);
+        chatActions.addMessage(msg);
+        performFileUpload(msgID, file, () => resolve());
+      })
+      .catch(reject);
+    });
+  }
+
   function handleSendFile(e: CustomEvent<{ file: File; name: string; size: number; type: string }>) {
     const { file, name } = e.detail;
     if (!file) return;
-
-    chatActions.addSystemMessage(currentLang === 'en' 
-      ? `Added file "${name}". Initializing upload...` 
-      : `已添加文件 "${name}"。正在初始化上传...`);
-
-    const initUrl = `/chat-v2/${token}/upload/init`;
-    fetch(initUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fileName: name,
-        size: file.size,
-        sender: client?.clientLabel || $currentDevice?.label || 'Me',
-        avatar: $currentDevice?.avatar || '',
-        peer: client?.clientPeer || localStorage.getItem('chat_peer') || ''
-      })
-    })
-    .then(r => {
-      if (!r.ok) {
-        return r.text().then(t => { throw new Error(t); });
-      }
-      return r.json();
-    })
-    .then(msg => {
-      const msgID = msg.id;
-      console.log('Attachment registered successfully, messageID:', msgID);
-      chatActions.addMessage(msg);
-      performFileUpload(msgID, file);
-    })
-    .catch(err => {
-      console.error('Failed to add attachment:', err);
-      chatActions.addSystemMessage(currentLang === 'en'
-        ? `Failed to add attachment "${name}": ${err.message}`
-        : `添加文件 "${name}" 失败: ${err.message}`);
-    });
+    enqueueSendFile(file, name);
   }
 
   function handleStartDownload(e: CustomEvent<{ messageId: string; filename: string; size: number; isPaid: boolean }>) {
@@ -991,6 +1032,17 @@
 
     const peer = client['clientPeer'] || 'desktop';
     const transferId = 'dl-' + messageId + '-' + peer;
+    // M4: seed running state so UI does not look idle / falsely completed before server events.
+    chatActions.updateTransfer({
+      id: transferId,
+      messageId,
+      clientId: peer,
+      fileName: filename,
+      bytesDone: 0,
+      bytesTotal: size || 0,
+      percent: 0,
+      state: 'running'
+    } as any);
     client.startTransfer(transferId);
     client.sendLog(`[ACTION] Initiated download for file: ${filename} (Size: ${size} bytes, Message ID: ${messageId})`);
 
@@ -1011,10 +1063,6 @@
       link.click();
       document.body.removeChild(link);
     }
-
-    chatActions.addSystemMessage(currentLang === 'en'
-      ? `Initiated download for: ${filename}`
-      : `开始下载文件: ${filename}`);
   }
 
   function handleCancelDownload(e: CustomEvent<string>) {
@@ -1050,14 +1098,17 @@
     }, 50);
   }
 
-  function handleResendFile(e: CustomEvent<{ name: string; size: number }>) {
-    if (client) {
-      const filePayload = JSON.stringify({
-        type: 'file',
-        fileName: e.detail.name,
-        size: e.detail.size
-      });
-      client.sendText(filePayload);
+  /** M5: never fake a file via sendText JSON — ask user to re-pick the file. */
+  function handleResendFile(_e: CustomEvent<{ name: string; size: number }>) {
+    chatActions.addSystemMessage(getTranslation('resendPickFile', currentLang));
+    if (isEmbedded) {
+      const requestId = 'select-' + Math.random().toString(36).substring(2, 11);
+      window.parent.postMessage({ type: 'select-files', requestId }, '*');
+      return;
+    }
+    const input = document.querySelector('.composer input[type="file"]') as HTMLInputElement | null;
+    if (input) {
+      input.click();
     }
   }
 

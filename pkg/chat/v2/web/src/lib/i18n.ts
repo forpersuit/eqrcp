@@ -752,13 +752,40 @@ export const translations: Record<string, Record<Lang, string>> = {
     fr: 'Chargement des messages plus anciens…'
   },
   tabReplacedHint: {
-    zh: '本标签页已断开：同一设备在其他标签页连接了本会话。',
-    en: 'This tab is offline: the same device connected in another tab.',
-    ja: 'このタブは切断されました。同じデバイスが別のタブで接続しています。',
-    ko: '이 탭이 연결 해제되었습니다. 같은 기기가 다른 탭에서 연결되었습니다.',
-    es: 'Esta pestaña está desconectada: el mismo dispositivo se conectó en otra pestaña.',
-    de: 'Dieser Tab ist offline: dasselbe Gerät ist in einem anderen Tab verbunden.',
-    fr: 'Cet onglet est hors ligne : le même appareil s’est connecté dans un autre onglet.'
+    zh: '同一设备在其他标签页打开了本会话，本页已暂停。可点「重新连接」恢复，或继续用另一标签页。',
+    en: 'The same device opened this chat in another tab, so this page paused. Tap Reconnect here, or continue in the other tab.',
+    ja: '同じデバイスが別タブで接続したため、このタブは一時停止しました。「再接続」するか、もう一方のタブを使ってください。',
+    ko: '같은 기기가 다른 탭에서 이 채팅을 열어 이 페이지가 일시 중지되었습니다. 여기서 다시 연결하거나 다른 탭을 계속 사용하세요.',
+    es: 'El mismo dispositivo abrió este chat en otra pestaña; esta página se pausó. Pulse Reconectar o siga en la otra pestaña.',
+    de: 'Dasselbe Gerät hat diesen Chat in einem anderen Tab geöffnet; diese Seite ist pausiert. Tippen Sie auf Erneut verbinden oder nutzen Sie den anderen Tab.',
+    fr: 'Le même appareil a ouvert ce chat dans un autre onglet ; cette page est en pause. Reconnectez ici ou continuez dans l’autre onglet.'
+  },
+  resendPickFile: {
+    zh: '请重新选择文件后发送（无法直接重发已撤回/取消的附件）。',
+    en: 'Please pick the file again to send (cannot resend a recalled/cancelled attachment directly).',
+    ja: 'ファイルを再度選択して送信してください（取り消し済み添付は直接再送できません）。',
+    ko: '파일을 다시 선택해 보내 주세요(회수/취소된 첨부는 바로 재전송할 수 없습니다).',
+    es: 'Vuelva a elegir el archivo para enviarlo (no se puede reenviar un adjunto anulado/cancelado).',
+    de: 'Bitte Datei erneut auswählen (zurückgerufene/abgebrochene Anhänge können nicht direkt erneut gesendet werden).',
+    fr: 'Resélectionnez le fichier à envoyer (pièce jointe rappelée/annulée non renvoyable directement).'
+  },
+  freeFileTooLarge: {
+    zh: '免费超额后单文件不能超过 2MB，请升级或压缩后重试。',
+    en: 'Over free quota, each attachment must be ≤2MB. Upgrade or compress and retry.',
+    ja: '無料枠超過後は添付1件あたり2MBまでです。アップグレードするか圧縮して再試行してください。',
+    ko: '무료 한도 초과 후 첨부 파일은 2MB 이하여야 합니다. 업그레이드하거나 압축 후 다시 시도하세요.',
+    es: 'Tras el cupo gratis, cada adjunto debe ser ≤2MB. Actualice o comprima e intente de nuevo.',
+    de: 'Über dem Gratis-Kontingent max. 2MB pro Anhang. Upgraden oder komprimieren und erneut versuchen.',
+    fr: 'Hors quota gratuit, chaque pièce jointe doit faire ≤2 Mo. Passez à un forfait ou compressez puis réessayez.'
+  },
+  uploadQueued: {
+    zh: '文件已加入发送队列…',
+    en: 'File queued for upload…',
+    ja: 'アップロード待ちに追加しました…',
+    ko: '업로드 대기열에 추가됨…',
+    es: 'Archivo en cola de subida…',
+    de: 'Datei in Upload-Warteschlange…',
+    fr: 'Fichier mis en file d’envoi…'
   },
   reconnectSession: {
     zh: '重新连接',

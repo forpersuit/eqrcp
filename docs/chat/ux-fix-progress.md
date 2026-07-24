@@ -1,7 +1,7 @@
 # Chat 模式用户交互修复进度
 
 > **以代码事实为准更新**。问题定义与证据见 [ux-interaction-analysis.md](./ux-interaction-analysis.md)。  
-> 最后更新：2026-07-24（阶段 1 P0 + M1 已落地，v1.16.4）
+> 最后更新：2026-07-24（P1 除 M3/M7 外已落地，v1.16.5）
 
 ---
 
@@ -10,18 +10,18 @@
 | 维度 | 状态 |
 | :--- | :--- |
 | 分析文档 | 完成 |
-| 修复实施 | **阶段 1 完成**；M1 完成；阶段 2 其余 pending |
-| 建议首批 | ~~P0：H1 → H2 → H3~~ **已完成** |
+| 修复实施 | **阶段 1 完成**；**阶段 2：M1/M2/M4/M5/M6/M8 完成**；M3/M7 **明确不做** |
+| 版本 | v1.16.5 |
 
 **综合成熟度（交互可用性）**
 
 | 维度 | 审查时点 | **本轮后** | 目标 |
 | :--- | :---: | :---: | :---: |
-| 错误/状态可见性 | ~20% | **~90%** | ~95% |
-| 文件主路径 discoverability | ~30% | **~85%** | ~90% |
-| 连接生命周期 | ~50% | **~85%** | ~90% |
-| 权限与额度沟通 | ~55% | **~80%** | ~90% |
-| 发送与附件次级路径 | ~60% | **~75%** | ~90% |
+| 错误/状态可见性 | ~20% | **~92%** | ~95% |
+| 文件主路径 discoverability | ~30% | **~88%** | ~90% |
+| 连接生命周期 | ~50% | **~88%** | ~90% |
+| 权限与额度沟通 | ~55% | **~80%**（手机不展示额度 pill，由 GUI tier 承担） | ~90% |
+| 发送与附件次级路径 | ~60% | **~88%** | ~90% |
 
 ---
 
@@ -38,45 +38,36 @@
 
 ### 阶段 1 — P0 反馈与主路径（高优先级）
 
-| ID | 项 | 状态 | 主要改动点 |
-| :--- | :--- | :---: | :--- |
-| H1 | 挂载应用内系统通知（`systemMessages` → 消息列表系统气泡） | [x] | `chatStore.addSystemMessage` + `systemNotice.ts` |
-| H2 | 文件气泡内联主操作：下载 / 进度 / 取消 | [x] | `MessageList.svelte` + `app.css` |
-| H3 | 切后台勿无条件掐断 WS（保留连接；可见时再补连） | [x] | `websocket.ts` visibility 策略 |
-| H4 | 桌面 Enter 发送、Shift+Enter 换行 | [x] | `MessageComposer.svelte` |
-| H5 | Kick 仅 host；前端隐藏非 host 踢人入口 | [x] | `transport/websocket.go`、`App.svelte` |
-
-**阶段 1 退出标准**
-
-- [x] 上传失败 / WS 错误 / 命令失败在主界面可见（系统气泡；Chrome 可见 replaced/额度等 notice）
-- [x] 新用户无需长按即可发现并完成下载（内联 Download/Cancel/Retry）
-- [x] 手机切后台再回前台：不主动 close WS；可见后可继续发消息
-- [x] 桌面键盘 Enter 可发送文本
-- [x] 非 host 无法踢人；host 可踢 remote（Go 测试 + 前端隐藏 kick）
-- [x] `go test ./pkg/chat/v2/...` 通过；`pkg/chat/v2/web` 构建通过
+| ID | 项 | 状态 |
+| :--- | :--- | :---: |
+| H1 | 系统通知进消息流 | [x] |
+| H2 | 文件气泡内联主操作 | [x] |
+| H3 | 切后台勿无条件掐断 WS | [x] |
+| H4 | 桌面 Enter 发送 | [x] |
+| H5 | Kick 仅 host | [x] |
 
 ---
 
 ### 阶段 2 — P1 连接、传输与额度（中优先级）
 
-| ID | 项 | 状态 | 主要改动点 |
+| ID | 项 | 状态 | 说明 |
 | :--- | :--- | :---: | :--- |
-| M1 | 重连用尽后：断线 banner + 一键重连 | [x] | `reconnectExhausted` store、`App.svelte` banner、`resumeConnection` |
-| M2 | 多标签互顶：首次/文案更清晰（可选：peer 区分） | [ ] | `websocket.ts`、i18n |
-| M3 | 上传中对接收方显示占位（「对方正在发送…」） | [ ] | 服务端可见性 / 前端过滤与气泡 |
-| M4 | 浏览器下载终态与 transfer 事件对齐（失败可标） | [ ] | `MessageList` / download 路径 |
-| M5 | 修复「重新发送文件」：真实 upload 或禁用假路径 | [ ] | `App.svelte` `handleResendFile` |
-| M6 | 多文件串行上传队列 | [ ] | `MessageComposer` / sendFile 调度 |
-| M7 | 手机显示额度 pill 或降级态；文档与实现一致 | [ ] | `App.svelte`、`docs/chat/*` |
-| M8 | 选文件前置校验 2MB/额度 + 本地化系统气泡 | [ ] | 前端预检 + `attachments` 错误映射 |
+| M1 | 重连用尽 banner + 一键重连 | [x] | v1.16.4 |
+| M2 | 多标签互顶文案更清晰 | [x] | banner + system notice 文案说明「点重新连接 / 或用另一标签」 |
+| M3 | 上传中对接收方显示占位 | **[x] 不做** | 见下方「产品决策 · 文件分享与 M3」 |
+| M4 | 浏览器下载终态对齐 | [x] | 下载开始 seed `running`；仅 `transfer_completed` 才标 downloaded；失败推系统气泡 |
+| M5 | 假重发文件 | [x] | 禁止 `sendText(JSON file)`；提示重选文件并打开选择器 |
+| M6 | 多文件串行上传队列 | [x] | `uploadQueue` 串行 init+XHR，多选排队提示 |
+| M7 | 手机显示额度 pill | **[x] 不做** | 移动端不展示超额/倒计时 pill；tier 在 GUI 端现有标记即可，**不改显示** |
+| M8 | 选文件前置 2MB + 本地化错误 | [x] | free degraded 时 >2MB 前置拦截；服务端 2MB 文案映射中文 |
 
 **阶段 2 退出标准**
 
-- [x] 断网/重连耗尽后用户可一键恢复（`reconnectExhausted` banner + `resumeConnection`）
-- [ ] 对方上传大文件时本端有占位，不出现长时间「空白像丢消息」
-- [ ] 重发文件能再次传成功，或菜单不再提供假「重发」
-- [ ] 多选大文件不因并行把移动端打挂（串行可验证）
-- [ ] 免费超额/2MB 拒绝有中文应用内提示；手机可见额度或降级态
+- [x] 断网/重连耗尽可一键恢复  
+- [x] ~~上传占位~~ → **明确不做**（架构决策）  
+- [x] 重发文件不再假路径  
+- [x] 多选串行上传  
+- [x] 2MB 前置中文提示；**手机额度 pill 不做**  
 
 ---
 
@@ -84,70 +75,73 @@
 
 | ID | 项 | 状态 |
 | :--- | :--- | :---: |
-| L1 | 浏览器页拖放有效或明确禁用提示 | [ ] |
-| L2 | image 类型预览（可选 video/audio 后续） | [ ] |
-| L3 | 设备详情并发数用真实数据 | [ ] |
-| L4 | 输入框右键：系统菜单优先或 Clipboard 失败回退 | [ ] |
-| L5 | 踢/退出恢复路径缩短或「撤销踢人」窗口期 | [ ] |
-| L6 | 连接中/已断开更明显状态条 | [ ] |
-| L7 | 历史「加载更早消息」显式按钮 | [ ] |
+| L1–L7 | 见分析文档 | [ ] 未开工 |
 
 ---
 
-## 本轮实现摘要（2026-07-24）
+## 产品决策 · 文件分享与 M3（2026-07-24）
 
-### 代码
+### 当前机制（保持不变，发布以此为准）
+
+```text
+发送端（手机/浏览器/GUI）
+  → HTTP 上传到 Host（桌面 GUI / chat 服务）
+  → Host 落盘 / 登记 attachment
+  → 就绪后各端各自 HTTP 下载
+
+旁路设备：上传过程中不广播半成品气泡；Host 侧可跟上传进度；
+下载完成后才对全员可见「可下载」文件消息（既有 bypass 规则）。
+```
+
+### 为何不做 M3「对方正在发送…」
+
+1. **语义上**：非 Host 端并不「接收流式上传」——它们只是之后下载已就绪附件。对它们显示「对方正在发送」容易误解成 P2P/直传。  
+2. **可见性**：上传进度本来就主要服务 **发送方 + GUI Host**；旁路端故意不看半成品，避免噪声。  
+3. **发布约束**：不改动当前文件分享架构；过段时间发版即以此模型为准。
+
+### 对当前方式的看法（记录，非改造计划）
+
+- **优点**：实现简单、Host 可做权限/限速/落盘、多端一致下载、与免费额度/带宽策略易挂钩。  
+- **代价**：大文件上传完成前，旁路端消息区可能短暂「空白」——这是架构取舍，不是遗漏的占位 UI。  
+- **结论**：保持现状；不在 P1 引入接收方占位。
+
+---
+
+## 其它本轮杂项
+
+| 项 | 处理 |
+| :--- | :--- |
+| `Registered presence roster as xxx` | **已删除**（不再写入系统气泡；握手仅记日志） |
+| M7 手机额度 pill | **不做**；`showQuotaPill = !isPaid && !isMobileLayout` 保持 |
+
+---
+
+## 本轮实现摘要（v1.16.5）
 
 | 区域 | 变更 |
 | :--- | :--- |
-| `pkg/chat/v2/web/src/state/systemNotice.ts` | H1 纯函数：哪些 notice 进消息流 |
-| `pkg/chat/v2/web/src/state/chatStore.ts` | `addSystemMessage` 写流；`reconnectExhausted` |
-| `pkg/chat/v2/web/src/services/websocket.ts` | H3 后台不断连；M1 重连耗尽；resume 清状态 |
-| `pkg/chat/v2/web/src/components/MessageComposer.svelte` | H4 Enter 发送 |
-| `pkg/chat/v2/web/src/components/MessageList.svelte` | H2 内联下载/取消/重试 |
-| `pkg/chat/v2/web/src/App.svelte` | H5 host-only kick UI；M1 banner |
-| `pkg/chat/v2/transport/websocket.go` | H5 后端 only `peer==desktop` 可 kick |
-| `pkg/version/version.go` | `v1.16.3` → `v1.16.4` |
+| `websocket.ts` | 去掉 roster 注册提示；互顶文案；transfer 终态标记修正；失败系统气泡 |
+| `App.svelte` | 串行上传队列；2MB 前置校验；假重发→重选文件；下载 seed running |
+| `i18n.ts` | tabReplaced / resendPickFile / freeFileTooLarge / uploadQueued |
+| `uploadPolicy.test.ts` | M6/M8 契约测试 |
+| `version.go` | v1.16.5 |
 
 ### 测试
 
 | 命令 | 结果 |
 | :--- | :--- |
-| `go test ./pkg/chat/v2/...` | 通过（含 `TestWebSocketKickOnlyHostAllowed`） |
-| `node --experimental-strip-types src/state/systemNotice.test.ts` 等 | 通过 |
-| `npm run build`（`pkg/chat/v2/web`） | 通过 |
-| Chrome 9222 三设备仿真（token 房间） | 通过：文本互通、H3 不主动 close、H5 非 host 无踢、H1 系统气泡/替换 banner、H2 CSS 内联样式 |
-
----
-
-## 建议实施顺序（下一批）
-
-1. **M5** 假重发文件  
-2. **M3** 上传中接收方占位  
-3. **M8** 2MB/额度前置中文提示  
-4. **M6** 多文件串行  
-5. **M7** 手机额度 pill  
-
----
-
-## 验证清单（每项合并前）
-
-- [x] 改动范围仅触及目标 ID，无无关重构  
-- [x] 通知一律应用内（系统气泡 / toast），禁止 `alert`  
-- [x] 多语言：新增 `reconnectExhaustedHint` 走 i18n  
-- [x] `go test ./pkg/chat/v2/...`  
-- [x] 前端 `pkg/chat/v2/web` 构建通过  
-- [x] Chrome 9222 Chat v2 三设备冒烟  
-- [x] 本文件勾选 + 修订记录更新  
+| `go test ./pkg/chat/v2/...` | （提交前跑） |
+| node 契约测试（systemNotice / uploadPolicy / …） | （提交前跑） |
+| `npm run build` chat v2 web | （提交前跑） |
 
 ---
 
 ## 已完成记录
 
-| 日期 | ID | 摘要 | 验证 | 提交/版本 |
-| :--- | :--- | :--- | :--- | :--- |
-| 2026-07-24 | — | 分析与进度文档建立 | 文档审阅 | `3c9af0c` |
-| 2026-07-24 | H1–H5, M1 | 系统通知进消息流；文件内联操作；后台不断 WS；Enter 发送；host-only kick；重连耗尽 banner | `go test ./pkg/chat/v2/...`；node 契约测试；web build；Chrome 9222 E2E | v1.16.4 |
+| 日期 | ID | 摘要 | 版本 |
+| :--- | :--- | :--- | :--- |
+| 2026-07-24 | H1–H5, M1 | P0 + 重连 banner | v1.16.4 |
+| 2026-07-24 | M2/M4/M5/M6/M8 + 去 roster 文案；M3/M7 决策不做 | P1 收尾 | v1.16.5 |
 
 ---
 
@@ -155,5 +149,6 @@
 
 | 日期 | 说明 |
 | :--- | :--- |
-| 2026-07-24 | 首版：按 H/M/L 建立阶段勾选与退出标准；修复尚未开工 |
-| 2026-07-24 | 阶段 1 + M1 落地并完成单测/构建/Chrome 9222 仿真 |
+| 2026-07-24 | 首版勾选 |
+| 2026-07-24 | 阶段 1 + M1 |
+| 2026-07-24 | P1：M2/M4/M5/M6/M8；M3/M7 产品决策不做；去掉 presence roster 提示 |
