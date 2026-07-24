@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { extractRequestLang, getDeviceNoticeTemplate } from '../i18n';
+import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
@@ -191,7 +191,7 @@ export async function handleDrmRoutes(
 
     const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
 
-    // Check for abusive refund blacklists (both email hash and device fingerprint)
+    // Gate A email + Gate B device (rolling 365d, activated purchase refunds/chargebacks only)
     const blacklistCheck = await checkAbusiveRefundBlacklist(
       env,
       license.buyer_email_hash || null,
@@ -200,7 +200,12 @@ export async function handleDrmRoutes(
       disk_hash || ""
     );
     if (blacklistCheck.isAbusive) {
-      return new Response(JSON.stringify({ error: blacklistCheck.reason }), {
+      const key = blacklistCheck.reasonKey || (blacklistCheck.kind === 'device' ? 'blacklist_device' : 'blacklist_email');
+      return new Response(JSON.stringify({
+        error: getApiTranslation(key, reqLang) || blacklistCheck.reason,
+        reason_key: key,
+        blacklist_kind: blacklistCheck.kind
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -390,6 +395,7 @@ export async function handleDrmRoutes(
   // 1.5. Verifying / Syncing license status (Always-Sync & 7-day grace period verification)
   if (url.pathname === "/api/v1/verify" && request.method === "POST") {
     const body: any = await request.json();
+    const reqLang = extractRequestLang(request, body);
     const { license_code, uuid_hash, cpu_hash, disk_hash } = body;
 
     if (!license_code) {
@@ -425,7 +431,12 @@ export async function handleDrmRoutes(
       disk_hash || ""
     );
     if (blacklistCheck.isAbusive) {
-      return new Response(JSON.stringify({ error: blacklistCheck.reason }), {
+      const key = blacklistCheck.reasonKey || (blacklistCheck.kind === 'device' ? 'blacklist_device' : 'blacklist_email');
+      return new Response(JSON.stringify({
+        error: getApiTranslation(key, reqLang) || blacklistCheck.reason,
+        reason_key: key,
+        blacklist_kind: blacklistCheck.kind
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

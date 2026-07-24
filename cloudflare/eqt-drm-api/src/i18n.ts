@@ -117,6 +117,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Promo-/Nicht-Kauf-Lizenzen sind nicht selbst erstattungsfähig",
     fr: "Licence promotionnelle ou non achetée : remboursement libre-service indisponible"
   },
+  blacklist_email: {
+    zh: "该邮箱在过去 365 天内因已激活授权的退款/拒付次数过多，暂时无法购买或激活。请更换邮箱或联系 support@eqt.net.im。",
+    en: "This email is restricted for 365 days due to multiple refund/chargeback revocations on activated licenses. Use another email or contact support@eqt.net.im.",
+    ja: "このメールアドレスは、過去365日以内の有効化済みライセンスの返金/チャージバックが多いため制限されています。",
+    ko: "이 이메일은 최근 365일 내 활성화된 라이선스의 환불/차지백이 많아 제한되었습니다.",
+    es: "Este correo está restringido por múltiples reembolsos/contracargos de licencias activadas en 365 días.",
+    de: "Diese E-Mail ist wegen mehrfacher Erstattungen/Chargebacks aktivierter Lizenzen (365 Tage) eingeschränkt.",
+    fr: "Cet e-mail est restreint en raison de remboursements/chargebacks répétés sur licences activées (365 jours)."
+  },
+  blacklist_device: {
+    zh: "该设备在过去 365 天内因退款/拒付次数过多，无法在此设备激活。请更换设备激活，或若刚用其他邮箱购买可申请退款后改用其他设备。",
+    en: "This device is restricted for 365 days due to multiple refund/chargeback revocations. Activate on another device, or request a refund if you just purchased with a different email.",
+    ja: "この端末は返金/チャージバックが多いため制限されています。別の端末で有効化するか、返金後に別端末をご利用ください。",
+    ko: "이 기기는 환불/차지백이 많아 제한되었습니다. 다른 기기에서 활성화하거나 환불 후 다른 기기를 사용하세요.",
+    es: "Este dispositivo está restringido por reembolsos/contracargos. Use otro dispositivo o solicite reembolso.",
+    de: "Dieses Gerät ist wegen Erstattungen/Chargebacks eingeschränkt. Anderes Gerät nutzen oder Erstattung beantragen.",
+    fr: "Cet appareil est restreint (remboursements/chargebacks). Utilisez un autre appareil ou demandez un remboursement."
+  },
   paddle_not_configured: {
     zh: "退款服务暂时不可用，请稍后重试或联系支持",
     en: "Refund service is temporarily unavailable",

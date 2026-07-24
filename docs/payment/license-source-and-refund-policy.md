@@ -211,13 +211,37 @@ Paddle adjustment chargeback → revoke_reason=chargeback
 | :--- | :--- | :--- |
 | 退款吊销 | `status=revoked` + `revoke_reason=refund` + `source=purchase` | 正常退款或薅羊毛 |
 | 拒付吊销 | `revoke_reason=chargeback` | 盗刷/争议高优先 |
-| 滚动 365 天 ≥2 次 purchase 退款/拒付 | 黑名单逻辑（邮箱 hash / 设备 3 选 2） | **限制后续激活** |
+| 滚动 365 天 ≥2 次 **已激活** purchase 退款/拒付 | 黑名单（邮箱 hash **或** 设备 3 选 2） | **限制购买/激活** |
 | 多设备快速激活 | `activations` 时间密度 + `max_devices` | 共享码嫌疑 |
 | 无 Paddle 却要退款 | Portal 门禁拒绝 | 非 purchase 误操作 |
 | Admin 吊销 | `revoke_reason=admin` | 人工风控，**通常不退款** |
 
 **不是三个 status**：退款与拒付都落在 `status=revoked`，靠 `revoke_reason` 区分。  
 **吊销 ≠ 退款**：`admin` / `subscription` / `test` 吊销**不自动退钱**。
+
+### 5.5 黑名单双门禁（邮箱 + 设备）
+
+| 门禁 | 时机 | 命中对象 | 用户提示 |
+| :--- | :--- | :--- | :--- |
+| **Gate A 邮箱** | 结账 `checkout/send-code` + `verify-code`；激活时也查 | 购买邮箱 hash | 换邮箱 / 联系支持 |
+| **Gate B 设备** | 仅激活 `/activate`（此时才有指纹） | 设备 3 选 2 | **换设备激活**，或若刚用新邮箱购买可 **申请退款** 后改设备 |
+
+**计数规则（防误伤）**：
+
+1. 仅 `source=purchase` 且 `revoke_reason ∈ {refund, chargeback}`（或遗留空 reason 的 purchase）。  
+2. **仅统计曾经激活过的码**：`activations` 仍有记录 **或** `unbind_records` 有记录。  
+3. **从未激活就退款：不计入黑名单**（用户未使用权益）。  
+4. 窗口：滚动 **365 天**；阈值：**≥ 2**。  
+5. **手续费**：是否对「仅邮箱退款」收取手续费由 **Paddle MoR** 政策决定，不在 DRM 黑名单逻辑内；产品侧在 Refund Policy 说明「到账/手续费以支付渠道为准」。  
+
+### 5.6 Dev 注入激活 vs 手动激活
+
+| 路径 | 调用 | 效果 |
+| :--- | :--- | :--- |
+| About 面板兑换 | `ActivateLicense(code)` → `ActivateLicenseOnline` → `POST /api/v1/activate` | 云端写 activation + 签 `.lic` |
+| Dev「注入激活码」 | **同一** `ActivateLicense(code)` | **完全相同** |
+
+因此 Dev 注入可用于高效回归；仍走线上 DRM，**不是**本地伪造付费态。
 
 **运维查询示例**：
 

@@ -5,6 +5,7 @@ import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
 import { ensureVerificationCodesCreatedAt } from '../utils/auth';
 import { clientIpFromRequest } from '../utils/rate-limit';
+import { checkEmailBlacklist } from '../utils/blacklist';
 
 const SEND_CODE_COOLDOWN_MS = 60_000;
 const OTP_VERIFY_WINDOW_MS = 15 * 60 * 1000;
@@ -88,6 +89,19 @@ export async function handleAuthRoutes(
     }
     email = email.trim().toLowerCase();
     const storageKey = verificationStorageKey("checkout", email);
+    const reqLang = (lang || "en").toString().substring(0, 2);
+
+    // Gate A: purchase-time email blacklist (before OTP / Paddle)
+    const emailBl = await checkEmailBlacklist(env, email);
+    if (emailBl.isAbusive) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("blacklist_email", reqLang) || emailBl.reason,
+        reason_key: "blacklist_email"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     // Rate limit: check if a code was sent in the last 60 seconds
     if (await isSendCodeRateLimited(env, storageKey)) {
@@ -137,6 +151,18 @@ export async function handleAuthRoutes(
     if (await isOtpVerifyBlocked(env, failKey)) {
       return new Response(JSON.stringify({ error: getApiTranslation("too_many_verify_attempts", reqLang) }), {
         status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Gate A again at verify (defense in depth if status changed after send-code)
+    const emailBlVerify = await checkEmailBlacklist(env, email);
+    if (emailBlVerify.isAbusive) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("blacklist_email", reqLang) || emailBlVerify.reason,
+        reason_key: "blacklist_email"
+      }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
