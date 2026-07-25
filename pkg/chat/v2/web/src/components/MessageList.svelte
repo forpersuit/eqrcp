@@ -1201,9 +1201,9 @@
     max-width: 280px;
     min-width: 0;
     background: #ffffff;
-    border: 1px solid var(--line, rgba(21, 111, 90, 0.18));
+    border: none;
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.08);
     padding: 4px;
     display: flex;
     flex-direction: column;
@@ -1299,8 +1299,8 @@
   
   :global(.dark) .bubble-context-menu {
     background: #0f172a;
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   }
   
   :global(.dark) .menu-item {
