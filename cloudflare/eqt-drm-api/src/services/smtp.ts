@@ -237,21 +237,33 @@ export async function sendDRMEmail(env: Env, to: string, subject: string, html: 
   }
 
   const port = parseInt(portStr) || 465;
-  try {
-    await sendMailViaSmtp({
-      sender,
-      senderPass: pass,
-      host,
-      port,
-      to,
-      subject,
-      html
-    });
-    console.log(`DRM SMTP Send Success: Email successfully sent to ${to} with subject "${subject}"`);
-  } catch (err: any) {
-    console.error(`DRM SMTP Send Error to ${to}:`, err.message || err);
-    await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to, subject });
+  let lastErr: any = null;
+
+  // Try up to 2 attempts (initial + 1 retry for transient edge socket drops)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await sendMailViaSmtp({
+        sender,
+        senderPass: pass,
+        host,
+        port,
+        to,
+        subject,
+        html
+      });
+      console.log(`DRM SMTP Send Success (attempt ${attempt}): Email successfully sent to ${to} with subject "${subject}"`);
+      return;
+    } catch (err: any) {
+      lastErr = err;
+      console.error(`DRM SMTP Send Attempt ${attempt} Error to ${to}:`, err.message || err);
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
   }
+
+  await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', lastErr, { to, subject });
+  throw lastErr;
 }
 
 
