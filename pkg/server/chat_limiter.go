@@ -10,17 +10,18 @@ import (
 	"sync"
 	"time"
 
+	"eqt/pkg/chat/v2/bandwidth"
 	"eqt/pkg/config"
 )
 
 // Free-tier Chat daily quota and attachment degradation (data plane only).
 const (
 	// FreeChatDailySeconds is the daily full-feature chat allowance for unpaid users (5 minutes).
-	FreeChatDailySeconds = 300
+	FreeChatDailySeconds = bandwidth.DefaultFreeChatDailySeconds
 	// FreeChatMaxAttachmentBytes is the per-file size cap after free chat quota is exhausted.
-	FreeChatMaxAttachmentBytes = 10 * 1024 * 1024
+	FreeChatMaxAttachmentBytes = bandwidth.DefaultFreeChatMaxAttachmentBytes
 	// FreeChatDegradedBytesPerSec is the attachment transfer cap after free chat quota is exhausted.
-	FreeChatDegradedBytesPerSec = 100 * 1024
+	FreeChatDegradedBytesPerSec = bandwidth.DefaultFreeChatDegradedBytesPerSec
 )
 
 // FreeChatDegraded reports whether free chat should run in attachment-degraded mode.

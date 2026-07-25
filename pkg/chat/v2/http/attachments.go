@@ -19,9 +19,8 @@ import (
 	"eqt/pkg/chat/v2/transfer"
 )
 
-// freeChatMaxAttachmentBytes mirrors server.FreeChatMaxAttachmentBytes (10MB) for free over-quota uploads.
-// Kept local to avoid an import cycle (server → chathttp).
-const freeChatMaxAttachmentBytes = 10 * 1024 * 1024
+// freeChatMaxAttachmentBytes references bandwidth.DefaultFreeChatMaxAttachmentBytes for free over-quota uploads.
+const freeChatMaxAttachmentBytes int64 = bandwidth.DefaultFreeChatMaxAttachmentBytes
 
 // handleLocalAttachmentRegister registers a local file attachment from the GUI host.
 func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {

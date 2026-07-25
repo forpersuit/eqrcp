@@ -7,6 +7,7 @@
   import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted, displayFileName } from './state/chatStore';
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
+  import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
 
   if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -836,7 +837,7 @@
   }
 
   /** Free over-quota hard limit — keep aligned with backend freeChatMaxAttachmentBytes. */
-  const FREE_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+  const FREE_MAX_ATTACHMENT_BYTES = DEFAULT_FREE_MAX_ATTACHMENT_BYTES;
 
   // M6: serialise browser uploads so multi-select does not fan out parallel XHRs.
   let uploadQueue: Array<{ file: File; name: string }> = [];

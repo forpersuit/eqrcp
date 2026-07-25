@@ -2,8 +2,9 @@
  * Contract tests for M6/M8 upload policy helpers.
  * Run: node --experimental-strip-types src/services/uploadPolicy.test.ts
  */
+import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './quotaConfig.ts';
 
-const FREE_MAX = 10 * 1024 * 1024;
+const FREE_MAX = DEFAULT_FREE_MAX_ATTACHMENT_BYTES;
 
 function shouldBlockFreeOverQuota(opts: {
   isPaid: boolean;
