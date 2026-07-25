@@ -9,8 +9,8 @@ type Policy struct {
 const (
 	// DefaultFreeChatDailySeconds is the daily full-feature chat allowance for unpaid users (5 minutes).
 	DefaultFreeChatDailySeconds = 300
-	// DefaultFreeChatMaxAttachmentBytes is the per-file size cap after free chat quota is exhausted (10MB).
-	DefaultFreeChatMaxAttachmentBytes = 10 * 1024 * 1024
+	// DefaultFreeChatMaxAttachmentBytes is the per-file size cap after free chat quota is exhausted (4MB).
+	DefaultFreeChatMaxAttachmentBytes = 4 * 1024 * 1024
 	// DefaultFreeChatDegradedBytesPerSec is the attachment transfer rate cap after free chat quota is exhausted (100 KB/s).
 	DefaultFreeChatDegradedBytesPerSec = 100 * 1024
 )

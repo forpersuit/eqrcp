@@ -30,13 +30,13 @@ export const translations: Record<string, Record<Lang, string>> = {
     fr: 'Limité'
   },
   freeQuotaHint: {
-    zh: '今日免费 Chat 额度；仅对端连入后计时。超额后附件限速 100KB/s、单文件 ≤10MB，文本不受影响。',
-    en: 'Daily free chat time. Counts only while a remote peer is online. After quota: attachments 100KB/s and ≤10MB; text stays free.',
-    ja: '本日の無料チャット枠。相手接続中のみ計測。超過後は添付100KB/s・10MBまで、テキストは影響なし。',
-    ko: '오늘 무료 채팅 시간. 상대 연결 시에만 측정. 초과 후 첨부 100KB/s·10MB, 텍스트는 유지.',
-    es: 'Tiempo gratis diario. Solo cuenta con un peer remoto. Tras el cupo: adjuntos 100KB/s y ≤10MB; el texto sigue.',
-    de: 'Tägliches Gratis-Chat-Kontingent. Zählt nur mit Remote-Peer. Danach: Anhänge 100KB/s und ≤10MB; Text bleibt frei.',
-    fr: 'Quota chat gratuit du jour. Compte seulement avec un pair distant. Après: pièces jointes 100KB/s et ≤10Mo; le texte reste libre.'
+    zh: '今日免费 Chat 额度；仅对端连入后计时。超额后附件限速 100KB/s、单文件 ≤4MB，文本不受影响。',
+    en: 'Daily free chat time. Counts only while a remote peer is online. After quota: attachments 100KB/s and ≤4MB; text stays free.',
+    ja: '本日の無料チャット枠。相手接続中のみ計測。超過後は添付100KB/s・4MBまで、テキストは影響なし。',
+    ko: '오늘 무료 채팅 시간. 상대 연결 시에만 측정. 초과 후 첨부 100KB/s·4MB, 텍스트는 유지.',
+    es: 'Tiempo gratis diario. Solo cuenta con un peer remoto. Tras el cupo: adjuntos 100KB/s y ≤4MB; el texto sigue.',
+    de: 'Tägliches Gratis-Chat-Kontingent. Zählt nur mit Remote-Peer. Danach: Anhänge 100KB/s und ≤4MB; Text bleibt frei.',
+    fr: 'Quota chat gratuit du jour. Compte seulement avec un pair distant. Après: pièces jointes 100KB/s et ≤4Mo; le texte reste libre.'
   },
   freeQuotaDaily: {
     zh: '每日免费额度',
@@ -57,13 +57,13 @@ export const translations: Record<string, Record<Lang, string>> = {
     fr: "Utilisé aujourd'hui"
   },
   freeQuotaAttachmentPolicy: {
-    zh: '超额附件：100KB/s · ≤10MB',
-    en: 'Over quota: 100KB/s · ≤10MB files',
-    ja: '超過時: 100KB/s・10MBまで',
-    ko: '초과 시: 100KB/s · 10MB 이하',
-    es: 'Tras cupo: 100KB/s · ≤10MB',
-    de: 'Über Kontingent: 100KB/s · ≤10MB',
-    fr: 'Hors quota: 100Ko/s · ≤10Mo'
+    zh: '超额附件：100KB/s · ≤4MB',
+    en: 'Over quota: 100KB/s · ≤4MB files',
+    ja: '超過時: 100KB/s・4MBまで',
+    ko: '초과 시: 100KB/s · 4MB 이하',
+    es: 'Tras cupo: 100KB/s · ≤4MB',
+    de: 'Über Kontingent: 100KB/s · ≤4MB',
+    fr: 'Hors quota: 100Ko/s · ≤4Mo'
   },
   freeQuotaUpgrade: {
     zh: '升级解锁无限 Chat',
@@ -770,13 +770,13 @@ export const translations: Record<string, Record<Lang, string>> = {
     fr: 'Resélectionnez le fichier à envoyer (pièce jointe rappelée/annulée non renvoyable directement).'
   },
   freeFileTooLarge: {
-    zh: '免费超额后单文件不能超过 10MB，请升级或压缩后重试。',
-    en: 'Over free quota, each attachment must be ≤10MB. Upgrade or compress and retry.',
-    ja: '無料枠超過後は添付1件あたり10MBまでです。アップグレードするか圧縮して再試行してください。',
-    ko: '무료 한도 초과 후 첨부 파일은 10MB 이하여야 합니다. 업그레이드하거나 압축 후 다시 시도하세요.',
-    es: 'Tras el cupo gratis, cada adjunto debe ser ≤10MB. Actualice o comprima e intente de nuevo.',
-    de: 'Über dem Gratis-Kontingent max. 10MB pro Anhang. Upgraden oder komprimieren und erneut versuchen.',
-    fr: 'Hors quota gratuit, chaque pièce jointe doit faire ≤10 Mo. Passez à un forfait ou compressez puis réessayez.'
+    zh: '免费超额后单文件不能超过 4MB，请升级或压缩后重试。',
+    en: 'Over free quota, each attachment must be ≤4MB. Upgrade or compress and retry.',
+    ja: '無料枠超過後は添付1件あたり4MBまでです。アップグレードするか圧縮して再試行してください。',
+    ko: '무료 한도 초과 후 첨부 파일은 4MB 이하여야 합니다. 업그레이드하거나 압축 후 다시 시도하세요.',
+    es: 'Tras el cupo gratis, cada adjunto debe ser ≤4MB. Actualice o comprima e intente de nuevo.',
+    de: 'Über dem Gratis-Kontingent max. 4MB pro Anhang. Upgraden oder komprimieren und erneut versuchen.',
+    fr: 'Hors quota gratuit, chaque pièce jointe doit faire ≤4 Mo. Passez à un forfait ou compressez puis réessayez.'
   },
   uploadQueued: {
     zh: '文件已加入发送队列…',

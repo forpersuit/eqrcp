@@ -3,7 +3,7 @@
  * Keeps limits and speed caps aligned with backend bandwidth.Policy.
  */
 
-export const DEFAULT_FREE_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_FREE_MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 export const DEFAULT_FREE_DEGRADED_BYTES_PER_SEC = 100 * 1024;
 
 /** Formats byte size to human-readable MB string (e.g. 10MB). */
