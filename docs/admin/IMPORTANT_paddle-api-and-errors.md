@@ -34,9 +34,12 @@ npx wrangler secret list   # 确认名称存在（看不到值）
 | Webhook 验签 + 写 license | **否** | 只需 `PADDLE_WEBHOOK_SECRET` |
 | Webhook 载荷缺邮箱时补拉 customer | **是** | `GET /customers/{id}` |
 | 用户 Portal 自助退款 | **是** | `GET /transactions/...` + `POST /adjustments` |
+| 用户 Portal 取消订阅 | **是** | `POST /subscriptions/{id}/cancel` |
+| 用户 Portal 发票/收据 | **是** | `GET /transactions/{id}/invoice` 或 customer portal-sessions |
 | Admin 健康深探针 | **可选** | `GET /event-types`；失败 mode=`webhook_ok_api_key_invalid` 仍 **ok=true**（Webhook 在） |
 
-**结论**：只做「Paddle 推 Webhook → 发码」可暂不配 API Key；要做 **Portal 退款** 或稳定补邮箱，必须配 **与 Webhook 同一环境（live/sandbox）** 的有效 key。
+**结论**：只做「Paddle 推 Webhook → 发码」可暂不配 API Key；要做 **Portal 退款 / 取消 / 发票** 或稳定补邮箱，必须配 **与 Webhook 同一环境（live/sandbox）** 的有效 key。  
+**发版阻塞**：若 Secret 仍是 **`pdl_sdbx_…` sandbox**，生产 live 订单的退款/取消/发票会失败或打到沙箱——上线前必须换成 **live** key（见发布清单 R2）。
 
 ---
 

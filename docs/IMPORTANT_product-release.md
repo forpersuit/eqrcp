@@ -51,7 +51,7 @@
 | # | 事项 | 为何必须 | 建议动作 | 状态 |
 | :---: | :--- | :--- | :--- | :---: |
 | R1 | **关掉生产 `TEST_MAIL_RECEIVER`** | 曾配置 `TEST_MAIL_RECEIVER=tmp@…`，OTP/邮件可能被拐到测试箱 | 生产 **删除该 var**；确认 OTP 进买家邮箱。**2026-07-25**：已从 `wrangler.toml` 移除；若 Dashboard 仍残留 Plaintext var 请手删 | [~] 仓库侧已去；Dashboard 再确认 |
-| R2 | **Paddle 生产 vs Sandbox** | 曾用 sandbox 退款链路；API key 探针可出现 `webhook_ok_api_key_invalid` | 确认 **live 商品 / Webhook / API key**；Portal 退款依赖 `PADDLE_API_KEY` 时必须有效 | [ ] |
+| R2 | **Paddle 生产 vs Sandbox** | **当前 `PADDLE_API_KEY` 仍为 sandbox**（`pdl_sdbx_`）时：Portal **退款 / 取消订阅 / 发票** 只打沙箱 API，**live 真单不可用** | 换 **live** `PADDLE_API_KEY` + live 商品 ID + live Webhook；`wrangler secret put PADDLE_API_KEY` | [ ] **阻塞发版** |
 | R3 | **密钥明文（债 D9）** | SMTP / Webhook / TG token 曾在 git 与 toml 明文 | 迁 `wrangler secret`；**轮换**已暴露口令 | **[x] 2026-07-25** 见 §2.2 |
 | R4 | **R2 更新与安装包** | 客户端更新依赖 R2，无则 503 | 验收：官网下载、桌面检查更新、安装签名均走生产 CDN | [ ] |
 | R5 | **条款 / 定价页与代码一致** | 黑名单 ≥3 / 365 天、退款门禁、source 已写代码 | 扫 `terms` / `refund` / `pricing` 文案 | **[x] 2026-07-25** 见 §2.3 |
@@ -199,20 +199,17 @@ Body:    category / version / os / message / imageUrl
 
 | 步 | 做法 | 工作量 | 依赖 |
 | :---: | :--- | :---: | :--- |
-| **I0** | Portal 文案 + 链接：**「发票与收据由 Paddle 提供」** → 链到 Paddle 客户账单页 / 官方说明；客服邮箱 `support@eqt.net.im` 协助 | **极小** | 无代码 API |
-| **I1** | 卡片展示 `paddle_transaction_id`（已有）旁加「在 Paddle 查看订单」深链（若 API/portal 支持按 txn 打开） | 小 | Paddle Customer Portal 配置 |
-| **I2** | 可选：服务端用 `PADDLE_API_KEY` 拉 `GET /transactions/{id}` 或 invoices 相关端点，返回 **Paddle 托管的 PDF/页面 URL** 给前端新开标签（**不**自己生成 PDF） | 中 | API 权限 + live key |
-| **I3** | 自建 PDF 发票 | **不做**（与 MoR 职责冲突、税务合规成本高） | — |
-
-**建议默认路径**：**I0 + I1 即可满足发布后对客**；I2 仅当用户强烈要求「一键打开 PDF」再做。
+| **I0** | Portal 顶部说明：发票由 Paddle MoR 开具 + support@ | **[x] 2026-07-25** |
+| **I1** | 卡片「发票 / 收据」→ `POST /user/invoice-link` 开 PDF 或客户门户 | **[x] 2026-07-25**（依赖有效 `PADDLE_API_KEY`；**live 发版前须换非 sandbox key**） |
+| **I2** | （已并入 I1：优先 invoice PDF，失败再 portal） | 已合入 |
+| **I3** | 自建 PDF 发票 | **不做** |
 
 #### C. 排期建议（相对发布）
 
 | 时机 | 做啥 |
 | :--- | :--- |
-| **发布前** | **不必**做 Cancel UI / 发票 API；条款已写支持邮箱 + Paddle；年付用户可暂时：Paddle 邮件里的管理链接 / 联系 support |
-| **发布后第一迭代** | I0 文案 + C0 深链（半天级） |
-| **有年付投诉量后再** | C1/C2 内嵌取消；I2 交易发票 URL |
+| **发布前** | **R2：PADDLE_API_KEY 换 live**（否则退款/取消/发票全是沙箱）；真人验收购买+发票按钮 |
+| **已完成** | Cancel C1/C2；续费同码；发票 I0/I1 |
 
 #### D. 与现有代码锚点
 

@@ -226,6 +226,42 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Abo-Kündigung fehlgeschlagen. support@eqt.net.im kontaktieren",
     fr: "Échec de l'annulation. Contactez support@eqt.net.im"
   },
+  invoice_not_available: {
+    zh: "该授权没有可查询的 Paddle 交易单，无法打开发票",
+    en: "No Paddle transaction is linked; invoice is not available",
+    ja: "関連する Paddle 取引がないため請求書を開けません",
+    ko: "연결된 Paddle 거래가 없어 인보이스를 열 수 없습니다",
+    es: "No hay transacción de Paddle; factura no disponible",
+    de: "Keine Paddle-Transaktion verknüpft; Rechnung nicht verfügbar",
+    fr: "Aucune transaction Paddle ; facture indisponible"
+  },
+  invoice_paddle_unavailable: {
+    zh: "账单服务暂时不可用。请将交易单号发给 support@eqt.net.im 协助查询",
+    en: "Billing service is temporarily unavailable. Email support@eqt.net.im with your transaction ID",
+    ja: "請求サービスは一時利用不可です。取引IDを support@eqt.net.im までお送りください",
+    ko: "청구 서비스를 일시적으로 사용할 수 없습니다. 거래 ID를 support@eqt.net.im 으로 보내 주세요",
+    es: "Servicio de facturación no disponible. Escriba a support@eqt.net.im con el ID de transacción",
+    de: "Abrechnung vorübergehend nicht verfügbar. Transaktions-ID an support@eqt.net.im senden",
+    fr: "Facturation indisponible. Envoyez l'ID de transaction à support@eqt.net.im"
+  },
+  invoice_manual_help: {
+    zh: "请复制交易单号，发送至 support@eqt.net.im，或登录 Paddle 发给您的账单邮件查看发票",
+    en: "Copy the transaction ID and email support@eqt.net.im, or open the receipt email from Paddle",
+    ja: "取引IDをコピーして support@eqt.net.im へ送るか、Paddle の領収メールをご確認ください",
+    ko: "거래 ID를 복사해 support@eqt.net.im 으로 보내거나 Paddle 영수증 메일을 확인하세요",
+    es: "Copie el ID de transacción y escriba a support@eqt.net.im, o abra el correo de Paddle",
+    de: "Transaktions-ID kopieren und an support@eqt.net.im senden, oder die Paddle-Mail öffnen",
+    fr: "Copiez l'ID de transaction et écrivez à support@eqt.net.im, ou ouvrez l'e-mail Paddle"
+  },
+  invoice_failed: {
+    zh: "打开发票失败，请稍后重试或联系 support@eqt.net.im",
+    en: "Could not open invoice. Try again or contact support@eqt.net.im",
+    ja: "請求書を開けませんでした。support@eqt.net.im までご連絡ください",
+    ko: "인보이스를 열 수 없습니다. support@eqt.net.im 으로 문의해 주세요",
+    es: "No se pudo abrir la factura. Contacte support@eqt.net.im",
+    de: "Rechnung konnte nicht geöffnet werden. support@eqt.net.im kontaktieren",
+    fr: "Impossible d'ouvrir la facture. Contactez support@eqt.net.im"
+  },
   license_not_active: {
     zh: "该授权当前不可用（已吊销或暂停），无法解绑设备",
     en: "License is not active (revoked or suspended); unbind is not allowed",

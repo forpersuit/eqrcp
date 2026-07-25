@@ -226,7 +226,41 @@ Checkout 对应：`/checkout/send-code` / `verify-code` 使用键 **`checkout:{e
 }
 ```
 
-列表字段：`GET /user/licenses` 每项含 **`cancellable`**（boolean）。
+列表字段：`GET /user/licenses` 每项含 **`cancellable`**（boolean）、**`invoiceable`**（boolean，真实 Paddle txn）。
+
+---
+
+### `POST /api/v1/user/invoice-link`
+
+> **I0/I1**：发票/收据由 **Paddle MoR** 开具；EQT 不生成 PDF，只打开 Paddle 链接或给出人工协助信息。
+
+**Body**
+
+```json
+{ "license_code": "EQT-PLUS-...", "lang": "zh" }
+```
+
+**校验**：Session + ownership；`paddle_transaction_id` 为真实 `txn_01…`；需 `PADDLE_API_KEY`。
+
+**副作用（只读 Paddle）**
+
+1. 优先 `GET /transactions/{id}/invoice` → 临时 **PDF URL**（`type: invoice_pdf`）  
+2. 否则 `GET transaction` → `POST /customers/{id}/portal-sessions` → 客户门户（`type: customer_portal`）  
+3. 再否则 `type: manual` + `transaction_id` + `support@eqt.net.im` 文案  
+
+**200**
+
+```json
+{
+  "success": true,
+  "type": "invoice_pdf",
+  "url": "https://...",
+  "transaction_id": "txn_01...",
+  "sandbox": false
+}
+```
+
+**注意**：`PADDLE_API_KEY` 为 **sandbox**（`pdl_sdbx_`）时 `sandbox: true`，仅沙箱交易可开；**生产发版须换成 live key**。
 
 ---
 

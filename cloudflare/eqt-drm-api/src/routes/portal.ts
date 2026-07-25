@@ -115,6 +115,8 @@ export async function handlePortalRoutes(
         source,
         refundable: isLicenseRefundable({ ...lic, source }),
         cancellable: isLicenseCancellable({ ...lic, source }),
+        // Real Paddle purchase txn → can open invoice/receipt via Paddle API
+        invoiceable: isRealPaddleTransactionId(lic.paddle_transaction_id),
         activations: activations,
         used_unbinds: unbindCount,
         remaining_unbinds: remainingUnbinds,
@@ -609,6 +611,187 @@ export async function handlePortalRoutes(
       }));
       return new Response(JSON.stringify({
         error: getApiTranslation("cancel_failed", reqLang)
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+  }
+
+  // 0.6 Invoice / receipt link (Paddle MoR — temporary PDF or customer portal URL)
+  if (url.pathname === "/api/v1/user/invoice-link" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const transactionId = license.paddle_transaction_id as string | null;
+    if (!transactionId || !isRealPaddleTransactionId(transactionId)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_not_available", reqLang),
+        support_email: "support@eqt.net.im"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const paddleApiKey = env.PADDLE_API_KEY;
+    if (!paddleApiKey) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_paddle_unavailable", reqLang),
+        support_email: "support@eqt.net.im",
+        transaction_id: transactionId
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+    const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+    const authHeaders = { Authorization: `Bearer ${paddleApiKey}` };
+
+    try {
+      // Prefer official invoice PDF URL for this transaction (Paddle Billing)
+      const invRes = await fetch(`${paddleBaseUrl}/transactions/${transactionId}/invoice`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      if (invRes.ok) {
+        const invJson: any = await invRes.json().catch(() => ({}));
+        const pdfUrl = invJson?.data?.url || invJson?.url || null;
+        if (pdfUrl && typeof pdfUrl === "string") {
+          return new Response(JSON.stringify({
+            success: true,
+            type: "invoice_pdf",
+            url: pdfUrl,
+            transaction_id: transactionId,
+            sandbox: isSandbox
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      // Fallback: open Paddle customer portal session (manage bills / receipts)
+      const txRes = await fetch(`${paddleBaseUrl}/transactions/${transactionId}`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      if (!txRes.ok) {
+        const errBody = await txRes.text();
+        throw new Error(`Paddle transaction fetch failed: ${errBody}`);
+      }
+      const txJson: any = await txRes.json();
+      const customerId =
+        txJson?.data?.customer_id ||
+        (typeof txJson?.data?.customer === "string" ? txJson.data.customer : null) ||
+        txJson?.data?.customer?.id ||
+        null;
+
+      if (customerId) {
+        const portalBody: Record<string, unknown> = {};
+        if (license.paddle_subscription_id) {
+          portalBody.subscription_ids = [license.paddle_subscription_id];
+        }
+        const portalRes = await fetch(`${paddleBaseUrl}/customers/${customerId}/portal-sessions`, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(portalBody)
+        });
+        if (portalRes.ok) {
+          const portalJson: any = await portalRes.json().catch(() => ({}));
+          const portalUrl =
+            portalJson?.data?.urls?.general?.overview ||
+            portalJson?.data?.urls?.overview ||
+            portalJson?.data?.url ||
+            null;
+          if (portalUrl && typeof portalUrl === "string") {
+            return new Response(JSON.stringify({
+              success: true,
+              type: "customer_portal",
+              url: portalUrl,
+              transaction_id: transactionId,
+              sandbox: isSandbox
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+      }
+
+      // Soft fallback: user can still copy txn id and mail support
+      return new Response(JSON.stringify({
+        success: true,
+        type: "manual",
+        transaction_id: transactionId,
+        support_email: "support@eqt.net.im",
+        message: getApiTranslation("invoice_manual_help", reqLang),
+        sandbox: isSandbox
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      console.error("Invoice link error:", err);
+      ctx.waitUntil(logSystemError(env, "PADDLE_API_ERROR", "ERROR", err, {
+        path: url.pathname,
+        action: "portal_invoice_link",
+        transaction_id: transactionId
+      }));
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_failed", reqLang),
+        support_email: "support@eqt.net.im",
+        transaction_id: transactionId
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
