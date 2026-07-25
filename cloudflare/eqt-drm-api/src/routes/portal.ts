@@ -4,8 +4,11 @@ import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
 import {
+  isLicenseCancellable,
   isLicenseRefundable,
+  isRealPaddleSubscriptionId,
   isRealPaddleTransactionId,
+  isSyntheticTestSubscriptionId,
   isSyntheticTestTransactionId,
   normalizeLicenseSource,
   revokeLicenseSql
@@ -111,6 +114,7 @@ export async function handlePortalRoutes(
         ...lic,
         source,
         refundable: isLicenseRefundable({ ...lic, source }),
+        cancellable: isLicenseCancellable({ ...lic, source }),
         activations: activations,
         used_unbinds: unbindCount,
         remaining_unbinds: remainingUnbinds,
@@ -434,6 +438,177 @@ export async function handlePortalRoutes(
       }));
       return new Response(JSON.stringify({
         error: sanitizeRefundPublicError(err, reqLang)
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+  }
+
+  // 0.5 Cancel subscription (immediate revoke — not a refund)
+  if (url.pathname === "/api/v1/user/cancel-subscription" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status === "revoked") {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_already_revoked", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+    const subscriptionId = license.paddle_subscription_id as string | null;
+
+    if (!isLicenseCancellable({ ...license, source })) {
+      return new Response(JSON.stringify({ error: getApiTranslation("cancel_not_allowed", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // E2E / fixture: synthetic sub id → local revoke only (no Paddle)
+    if (
+      source === "test" ||
+      isSyntheticTestSubscriptionId(subscriptionId || "") ||
+      isSyntheticTestTransactionId(license.paddle_transaction_id || "")
+    ) {
+      try {
+        await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang, "subscription");
+        return new Response(JSON.stringify({
+          success: true,
+          message: getApiTranslation("cancel_test_local_success", reqLang),
+          local_only: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        console.error("Local test cancel error:", err);
+        return new Response(JSON.stringify({
+          error: getApiTranslation("cancel_failed", reqLang)
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    if (!subscriptionId || !isRealPaddleSubscriptionId(subscriptionId)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("no_paddle_subscription", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const paddleApiKey = env.PADDLE_API_KEY;
+    if (!paddleApiKey) {
+      return new Response(JSON.stringify({ error: getApiTranslation("paddle_not_configured", reqLang) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+    const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+
+    try {
+      // Product decision (2026-07-25): cancel → effective immediately + local revoke now
+      const cancelRes = await fetch(`${paddleBaseUrl}/subscriptions/${subscriptionId}/cancel`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${paddleApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          effective_from: "immediately"
+        })
+      });
+
+      if (!cancelRes.ok) {
+        const errBody = await cancelRes.text();
+        // Already canceled on Paddle: still revoke local so Portal matches
+        const already =
+          /already.?cancel|subscription_?canceled|canceled|cancelled/i.test(errBody) ||
+          cancelRes.status === 409;
+        if (!already) {
+          throw new Error(`Paddle subscription cancel failed: ${errBody}`);
+        }
+      }
+
+      let paddleCancel: unknown = null;
+      try {
+        paddleCancel = await cancelRes.json();
+      } catch {
+        paddleCancel = null;
+      }
+
+      await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang, "subscription");
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: getApiTranslation("cancel_success", reqLang),
+        paddle: paddleCancel
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      console.error("Cancel subscription error:", err);
+      ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'ERROR', err, {
+        path: url.pathname,
+        action: 'portal_cancel_subscription',
+        subscription_id: subscriptionId || null
+      }));
+      return new Response(JSON.stringify({
+        error: getApiTranslation("cancel_failed", reqLang)
       }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }

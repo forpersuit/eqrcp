@@ -76,33 +76,26 @@
 | `wrangler secret put MAIL_SENDER_PASSWORD` / `PADDLE_WEBHOOK_SECRET` | 生产 Secret 列表可见 |
 | `eqt-feedback-api` 删除 toml 中 `TELEGRAM_BOT_TOKEN` | 已部署 + `secret put` |
 | 非敏感 SMTP 主机 / From / 端口 | 仍为 `[vars]`（符合 secrets 文档） |
-| **仍建议运维**：SMTP 密码与 Paddle Webhook secret **轮换**（曾进 git 历史，改 secret 值即可，无需再改代码） | 运维待办 |
+| **SMTP 口令** | 用户已更新 `MAIL_SENDER_PASSWORD` secret | 已处理 |
+| **Webhook secret** | 见 §2.2.1：通常**不必**为「迁 secret」再换 | 可选 |
 
-### 2.2.1 「SMTP 密码 / Webhook 密码」分别是什么？
+### 2.2.1 「SMTP 密码 / Webhook 密码」分别是什么？要不要换？
 
 二者**不是**同一种东西，也**不是** Cloudflare 账号密码。
 
-| 名称（环境变量） | 是什么 | 谁发的 / 哪里拿 | 干什么用 | 丢了会怎样 |
-| :--- | :--- | :--- | :--- | :--- |
-| **`MAIL_SENDER_PASSWORD`** | **邮箱 SMTP 登录口令**（或「应用专用密码」） | 你的邮件服务商（当前主机 `smtpserver.301098.xyz`，发件身份 `noreply@eqt.net.im`） | Worker 用 SMTP 发 OTP、激活码、吊销通知等 | 发不出业务邮件；Admin 健康页 SMTP 探针失败 |
-| **`PADDLE_WEBHOOK_SECRET`** | **Paddle Webhook 签名密钥**（不是用户登录密码） | Paddle → Developer tools → **Notifications** → 你的 destination → **Secret key**（形如 `pdl_ntfset_…`） | 校验 `Paddle-Signature`，确认「订单完成 / 退款 / 订阅取消」事件真是 Paddle 发的 | 伪造 webhook 可能被接受，或真实履约被拒（401） |
-| （相关但不同）**`PADDLE_API_KEY`** | **Paddle 服务端 API Key** | Paddle → Authentication → API keys（`pdl_…` / 沙箱 `pdl_sdbx_…`） | Portal **退款**、补拉 customer 邮箱等主动调 Paddle API | 自助退款 / 部分 webhook 补全失败 |
+| 名称（环境变量） | 是什么 | 谁发的 / 哪里拿 | 干什么用 |
+| :--- | :--- | :--- | :--- |
+| **`MAIL_SENDER_PASSWORD`** | **邮箱 SMTP 登录口令** | 邮件服务商（`noreply@eqt.net.im`） | Worker 发 OTP / 激活码 / 吊销信 |
+| **`PADDLE_WEBHOOK_SECRET`** | **Paddle Webhook 签名密钥**（不是登录密码） | Paddle → Notifications → destination → **Secret key**（`pdl_ntfset_…`） | 校验 `Paddle-Signature` |
+| **`PADDLE_API_KEY`** | Paddle **服务端 API Key** | Authentication → API keys | Portal 退款 / **取消订阅** 等主动 API |
 
-**一句话**：
+**关于「Webhook 最初是不是 secret put？为什么要换？」**
 
-- **SMTP 密码** = 让 `noreply@` **能登录邮件服务器发信**。  
-- **Webhook secret** = 让 DRM 能 **验真 Paddle 推送**（买了码、退了款、订没了）。  
-
-轮换步骤（无需改业务代码）：
-
-```bash
-# 1) 邮件商后台改 SMTP 密码后：
-cd cloudflare/eqt-drm-api
-echo -n '新SMTP密码' | npx wrangler secret put MAIL_SENDER_PASSWORD
-
-# 2) Paddle Notifications 里 Rotate secret 后：
-echo -n '新pdl_ntfset_…' | npx wrangler secret put PADDLE_WEBHOOK_SECRET
-```
+- 正常做法本来就是 **`wrangler secret put PADDLE_WEBHOOK_SECRET`**，不必定期轮换。  
+- 2026-07-21 有一次为修绑定，把**同一 secret 明文写进了** `wrangler.toml` 并进 git（commit `8229ce1`）。  
+- 2026-07-25 已从 toml **删掉明文**并重新以 Secret 绑定。  
+- **若该值从未出现在公开 fork/泄露渠道，可以不换**；只有担心 git 历史被外人看到时，才在 Paddle 后台 Rotate 再 `secret put`。  
+- **SMTP** 同理：你已更新 `MAIL_SENDER_PASSWORD` 即可；与 Webhook 无关。
 
 完整表见 [admin/IMPORTANT_drm-secrets.md](./admin/IMPORTANT_drm-secrets.md)。
 
@@ -187,12 +180,12 @@ Body:    category / version / os / message / imageUrl
 
 | 步 | 做法 | 工作量 | 依赖 |
 | :---: | :--- | :---: | :--- |
-| **C0** | **深链 Paddle 客户门户**（Customer Portal / manage subscription 链接）：Portal 卡片上「管理订阅 / 取消续费」外链 | 小 | Paddle 后台开启 Customer Portal；能拼出或缓存 portal URL |
-| **C1** | **自建 Cancel 按钮** → `POST /api/v1/user/cancel-subscription` → 服务端 `PADDLE_API_KEY` 调 Paddle Billing `POST /subscriptions/{id}/cancel`（scheduled / immediately 二选一产品拍板） | 中 | 有效 **live** `PADDLE_API_KEY`；ownership 校验同 refund |
-| **C2** | UI：二次确认 Modal + 明确「不退款 / 授权何时失效」+ 成功后刷新列表；Webhook 到账后状态变 `revoked` 的提示 | 中 | C1 + 现有 webhook |
-| **C3** | E2E：sandbox 年付单 cancel → 库状态 / 邮件 | 小 | sandbox 订阅商品 |
+| **C0** | 深链 Paddle 客户门户 | 可选；已被 C1 覆盖主路径 |
+| **C1** | **自建 Cancel** → `POST /api/v1/user/cancel-subscription` → Paddle `effective_from: immediately` + **立刻本地 revoke** | **[x] 2026-07-25** |
+| **C2** | UI：二次确认 Modal（明确非退款 / 立刻失效）+ 刷新列表 | **[x] 2026-07-25**（`portal.html`） |
+| **C3** | E2E：sandbox 年付 cancel | 可选后续 |
 
-**建议默认路径**：**先 C0 上线**（最快、合规由 Paddle 托管取消流），有数据后再做 C1 内嵌取消。
+**产品拍板**：取消后 **立刻 revoke**（与 webhook `subscription.canceled` 一致；API 路径不等待 webhook）。
 
 #### B. 发票（Invoice）
 
@@ -287,6 +280,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | **R5** | 通过 | pricing 兜底 2→3；terms/refund/pricing i18n 与 ≥3/365 一致 |
 | 2026-07-25 | agent | 反馈计划 | 文档 | §4.1 + feedback-design §6；F0 邮件通道下一版 |
 | 2026-07-25 | agent | 同步清单 | 文档 | §2.2.1 SMTP/Webhook 释义；§4.2 Cancel/发票推进 |
+| 2026-07-25 | agent | Cancel C1/C2 | 通过 | `cancel-subscription` 立刻 revoke；Portal UI；Worker `f934e80d…`；Pages 已发 |
 | | | | | |
 
 ---

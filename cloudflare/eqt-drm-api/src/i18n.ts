@@ -181,6 +181,51 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Rückerstattung fehlgeschlagen",
     fr: "Échec du traitement du remboursement"
   },
+  no_paddle_subscription: {
+    zh: "该授权无关联的订阅，无法取消续费",
+    en: "No subscription is linked to this license",
+    ja: "このライセンスに関連するサブスクリプションがありません",
+    ko: "이 라이선스에 연결된 구독이 없습니다",
+    es: "No hay suscripción asociada a esta licencia",
+    de: "Kein Abonnement mit dieser Lizenz verknüpft",
+    fr: "Aucun abonnement associé à cette licence"
+  },
+  cancel_not_allowed: {
+    zh: "该授权无法取消订阅（非年付订阅或状态不可用）",
+    en: "This license cannot cancel a subscription (not an active yearly subscription)",
+    ja: "このライセンスではサブスクリプションを解約できません",
+    ko: "이 라이선스는 구독을 취소할 수 없습니다",
+    es: "Esta licencia no puede cancelar una suscripción",
+    de: "Für diese Lizenz kann kein Abonnement gekündigt werden",
+    fr: "Cette licence ne peut pas annuler d'abonnement"
+  },
+  cancel_success: {
+    zh: "订阅已取消，授权已立即失效（这不是退款）",
+    en: "Subscription canceled. License revoked immediately (this is not a refund).",
+    ja: "サブスクリプションを解約し、ライセンスは即時失効しました（返金ではありません）",
+    ko: "구독이 취소되었고 라이선스가 즉시 해제되었습니다(환불 아님)",
+    es: "Suscripción cancelada. Licencia revocada de inmediato (no es un reembolso).",
+    de: "Abo gekündigt. Lizenz sofort widerrufen (keine Erstattung).",
+    fr: "Abonnement annulé. Licence révoquée immédiatement (ce n'est pas un remboursement)."
+  },
+  cancel_test_local_success: {
+    zh: "测试订阅已本地取消并吊销（未调用 Paddle）",
+    en: "Test subscription canceled locally (no Paddle call)",
+    ja: "テスト購読をローカルで解約しました（Paddle 未呼出）",
+    ko: "테스트 구독이 로컬에서 취소되었습니다(Paddle 호출 없음)",
+    es: "Suscripción de prueba cancelada localmente (sin Paddle)",
+    de: "Test-Abo lokal gekündigt (kein Paddle-Aufruf)",
+    fr: "Abonnement de test annulé localement (sans Paddle)"
+  },
+  cancel_failed: {
+    zh: "取消订阅失败，请稍后重试或联系 support@eqt.net.im",
+    en: "Failed to cancel subscription. Try again or contact support@eqt.net.im",
+    ja: "解約に失敗しました。support@eqt.net.im までご連絡ください",
+    ko: "구독 취소에 실패했습니다. support@eqt.net.im 으로 문의해 주세요",
+    es: "No se pudo cancelar la suscripción. Contacte support@eqt.net.im",
+    de: "Abo-Kündigung fehlgeschlagen. support@eqt.net.im kontaktieren",
+    fr: "Échec de l'annulation. Contactez support@eqt.net.im"
+  },
   license_not_active: {
     zh: "该授权当前不可用（已吊销或暂停），无法解绑设备",
     en: "License is not active (revoked or suspended); unbind is not allowed",

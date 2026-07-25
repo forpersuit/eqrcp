@@ -104,6 +104,8 @@ Checkout 对应：`/checkout/send-code` / `verify-code` 使用键 **`checkout:{e
       "created_at": "...",
       "paddle_transaction_id": "...",
       "paddle_subscription_id": null,
+      "refundable": true,
+      "cancellable": false,
       "activations": [ { "id": 1, "uuid_hash": "...", "activated_at": "...", "device_id": "..." } ],
       "used_unbinds": 0,
       "remaining_unbinds": 4,
@@ -185,6 +187,46 @@ Checkout 对应：`/checkout/send-code` / `verify-code` 使用键 **`checkout:{e
   "adjustment": { }
 }
 ```
+
+---
+
+### `POST /api/v1/user/cancel-subscription`
+
+> **产品决策（2026-07-25）**：取消订阅 → Paddle `effective_from: immediately` + **本地立刻 revoke**。  
+> **不是退款**（不创建 adjustment；`revoke_reason=subscription` 不计入滥用退款黑名单）。
+
+**Body**
+
+```json
+{ "license_code": "EQT-PLUS-...", "lang": "zh" }
+```
+
+**校验**
+
+1. Session + ownership（同 unbind）  
+2. `status !== 'revoked'`  
+3. `cancellable === true` 语义：`active` + 有效 `paddle_subscription_id`（`sub_01…` 或测试 `sub_test_…`）  
+4. 真实订阅需配置 `PADDLE_API_KEY`  
+
+**副作用**
+
+1. Paddle `POST /subscriptions/{id}/cancel` body `{ "effective_from": "immediately" }`  
+2. 本地立刻 `status=revoked`，`revoke_reason=subscription`  
+3. 异步订阅结束邮件（`getLicenseRevokeEmailTemplate(..., 'subscription')`）  
+4. 测试/合成 sub id：仅本地吊销，`local_only: true`  
+5. Paddle 已取消（409 / already canceled）仍本地吊销，保证 Portal 一致  
+
+**200**
+
+```json
+{
+  "success": true,
+  "message": "...",
+  "paddle": { }
+}
+```
+
+列表字段：`GET /user/licenses` 每项含 **`cancellable`**（boolean）。
 
 ---
 

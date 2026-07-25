@@ -130,6 +130,32 @@ async function main() {
     assert(testRow.source === 'test', 'test code source=test in list');
   }
 
+  // 4) cancel-subscription local path for synthetic sub id
+  wranglerSql(
+    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test', paddle_subscription_id='sub_test_cancel_e2e' WHERE license_code='${testCode}'`
+  );
+  const list2 = await request('GET', '/api/v1/user/licenses', null, {
+    Authorization: `Bearer ${token}`
+  });
+  const testRow2 = (list2.json.licenses || []).find((l) => l.license_code === testCode);
+  assert(testRow2 && testRow2.cancellable === true, 'test code with sub_test_ is cancellable');
+  const rCancel = await request('POST', '/api/v1/user/cancel-subscription', {
+    license_code: testCode,
+    lang: 'zh'
+  }, { Authorization: `Bearer ${token}` });
+  assert(rCancel.status === 200 && rCancel.json.local_only === true, 'cancel-subscription local 200');
+  const rowCancel = wranglerSql(
+    `SELECT status, revoke_reason FROM licenses WHERE license_code='${testCode}'`
+  );
+  const licCancel = rowCancel[0].results[0];
+  assert(
+    licCancel.status === 'revoked' && licCancel.revoke_reason === 'subscription',
+    'cancel revoke_reason=subscription'
+  );
+  wranglerSql(
+    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
+  );
+
   wranglerSql(`DELETE FROM user_sessions WHERE session_token='${token}'`);
   console.log('=== all checks passed ===');
 }

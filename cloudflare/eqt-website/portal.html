@@ -162,6 +162,20 @@
         </div>
     </div>
 
+    <!-- Confirm Cancel Subscription Modal (not a refund) -->
+    <div id="cancel-sub-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
+        <div class="w-full max-w-md bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-6 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="space-y-2">
+                <h3 class="text-xl font-bold text-white" data-i18n="cancel_sub_confirm_title">Cancel subscription?</h3>
+                <p class="text-on-surface-variant text-sm leading-relaxed" data-i18n="cancel_sub_confirm_desc">Canceling ends the subscription immediately and revokes this license now. This is not a refund—no money is returned. Devices lose Plus on the next online check.</p>
+            </div>
+            <div class="flex gap-3">
+                <button id="cancel-sub-dismiss-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Back</button>
+                <button id="cancel-sub-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_cancel_sub_btn">Yes, Cancel Subscription</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Confirm Unbind Modal -->
     <div id="unbind-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
         <div class="w-full max-w-lg bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-5 shadow-2xl transform scale-95 transition-transform duration-300">
@@ -237,6 +251,12 @@
                 "device_id": "Device Key",
                 "activated_on": "Activated On",
                 "request_refund": "Request Refund",
+                "cancel_subscription": "Cancel subscription",
+                "cancel_sub_pending": "Canceling subscription...",
+                "cancel_sub_confirm_title": "Cancel subscription?",
+                "cancel_sub_confirm_desc": "This ends the subscription immediately and revokes the license now. This is not a refund—no money is returned. Devices lose Plus on the next online check.",
+                "confirm_cancel_sub_btn": "Yes, cancel subscription",
+                "toast_cancel_sub_success": "Subscription canceled. License revoked.",
                 "refund_pending": "Refund Processing...",
                 "refund_confirm_title": "Confirm Refund",
                 "refund_confirm_desc": "Are you sure you want to request a refund? The license code will be suspended immediately and all active devices will revert to the free version.",
@@ -294,6 +314,12 @@
                 "device_id": "设备物理指纹",
                 "activated_on": "激活时间",
                 "request_refund": "申请退款",
+                "cancel_subscription": "取消订阅",
+                "cancel_sub_pending": "正在取消订阅...",
+                "cancel_sub_confirm_title": "确认取消订阅？",
+                "cancel_sub_confirm_desc": "取消后订阅立即结束，授权码将立刻吊销。这不是退款，不会退回款项。已激活设备将在下次联网对账时降为免费版。",
+                "confirm_cancel_sub_btn": "确认取消订阅",
+                "toast_cancel_sub_success": "订阅已取消，授权已吊销。",
                 "refund_pending": "正在处理退款...",
                 "refund_confirm_title": "确认申请退款？",
                 "refund_confirm_desc": "您确定要对这笔交易申请退款吗？退款提交后，此激活码将被永久吊销，绑定的所有设备将在下次联网对账时自动降级为免费版。",
@@ -344,6 +370,12 @@
                 "device_id": "デバイスキー",
                 "activated_on": "アクティベート日時",
                 "request_refund": "返金を申請",
+                "cancel_subscription": "サブスク解約",
+                "cancel_sub_pending": "解約処理中...",
+                "cancel_sub_confirm_title": "サブスクリプションを解約しますか？",
+                "cancel_sub_confirm_desc": "解約すると直ちに終了し、ライセンスは即時失効します。返金ではありません。次回オンライン同期で無料版に戻ります。",
+                "confirm_cancel_sub_btn": "解約する",
+                "toast_cancel_sub_success": "解約しました。ライセンスは失効しています。",
                 "refund_pending": "返金処理中...",
                 "refund_confirm_title": "返金を申請しますか？",
                 "refund_confirm_desc": "返金を申請するとライセンスは無効化され、すべてのデバイスが無料版にダウングレードされます。",
@@ -394,6 +426,12 @@
                 "device_id": "기기 키",
                 "activated_on": "인증일",
                 "request_refund": "환불 신청",
+                "cancel_subscription": "구독 취소",
+                "cancel_sub_pending": "구독 취소 중...",
+                "cancel_sub_confirm_title": "구독을 취소하시겠습니까?",
+                "cancel_sub_confirm_desc": "구독이 즉시 종료되고 라이선스가 바로 해제됩니다. 환불이 아닙니다. 다음 온라인 동기화 시 무료 버전으로 전환됩니다.",
+                "confirm_cancel_sub_btn": "구독 취소 확인",
+                "toast_cancel_sub_success": "구독이 취소되었고 라이선스가 해제되었습니다.",
                 "refund_pending": "환불 처리 중...",
                 "refund_confirm_title": "환불을 신청하시겠습니까?",
                 "refund_confirm_desc": "환불 시 라이선스가 즉시 해제되며 연결된 모든 기기가 무료 버전으로 전환됩니다.",
@@ -444,6 +482,12 @@
                 "device_id": "Clave de dispositivo",
                 "activated_on": "Activado el",
                 "request_refund": "Solicitar reembolso",
+                "cancel_subscription": "Cancelar suscripción",
+                "cancel_sub_pending": "Cancelando suscripción...",
+                "cancel_sub_confirm_title": "¿Cancelar suscripción?",
+                "cancel_sub_confirm_desc": "La suscripción termina de inmediato y la licencia se revoca ahora. No es un reembolso. Los dispositivos pasan a gratis en la próxima sincronización.",
+                "confirm_cancel_sub_btn": "Sí, cancelar suscripción",
+                "toast_cancel_sub_success": "Suscripción cancelada. Licencia revocada.",
                 "refund_pending": "Procesando reembolso...",
                 "refund_confirm_title": "¿Confirmar reembolso?",
                 "refund_confirm_desc": "Una vez reembolsada, la licencia se revocará de inmediato y todos los dispositivos volverán a la versión gratuita.",
@@ -494,6 +538,12 @@
                 "device_id": "Geräteschlüssel",
                 "activated_on": "Aktiviert am",
                 "request_refund": "Rückerstattung beantragen",
+                "cancel_subscription": "Abo kündigen",
+                "cancel_sub_pending": "Abo wird gekündigt...",
+                "cancel_sub_confirm_title": "Abo kündigen?",
+                "cancel_sub_confirm_desc": "Das Abo endet sofort und die Lizenz wird jetzt widerrufen. Keine Erstattung. Geräte werden beim nächsten Online-Check zur Free-Version.",
+                "confirm_cancel_sub_btn": "Ja, Abo kündigen",
+                "toast_cancel_sub_success": "Abo gekündigt. Lizenz widerrufen.",
                 "refund_pending": "Rückerstattung wird bearbeitet...",
                 "refund_confirm_title": "Rückerstattung bestätigen?",
                 "refund_confirm_desc": "Nach der Rückerstattung wird die Lizenz sofort gesperrt und alle aktiven Geräte kehren zur kostenlosen Version zurück.",
@@ -544,6 +594,12 @@
                 "device_id": "Clé d'appareil",
                 "activated_on": "Activé le",
                 "request_refund": "Demander un remboursement",
+                "cancel_subscription": "Annuler l'abonnement",
+                "cancel_sub_pending": "Annulation en cours...",
+                "cancel_sub_confirm_title": "Annuler l'abonnement ?",
+                "cancel_sub_confirm_desc": "L'abonnement se termine immédiatement et la licence est révoquée maintenant. Ce n'est pas un remboursement. Les appareils repassent en gratuit à la prochaine synchronisation.",
+                "confirm_cancel_sub_btn": "Oui, annuler l'abonnement",
+                "toast_cancel_sub_success": "Abonnement annulé. Licence révoquée.",
                 "refund_pending": "Remboursement en cours...",
                 "refund_confirm_title": "Confirmer le remboursement ?",
                 "refund_confirm_desc": "Une fois remboursée, la licence sera révoquée et tous les appareils reviendront à la version gratuite.",
@@ -580,9 +636,11 @@
             token: '',
             licenses: [],
             refundPendingCode: null,
+            cancelPendingCode: null,
             unbindPendingData: null,
             timer: null,
-            refundInFlight: false
+            refundInFlight: false,
+            cancelInFlight: false
         };
 
         const langNames = {
@@ -884,17 +942,29 @@
                     `;
                 }
 
-                // Refund only for purchase-eligible licenses (API sets refundable)
-                let actionBtnHtml = '';
+                // Refund / cancel-subscription (API sets refundable / cancellable)
+                const actionBtns = [];
                 const canRefund = lic.status === 'active' && lic.refundable === true;
+                const canCancelSub = lic.status === 'active' && lic.cancellable === true;
+                if (canCancelSub) {
+                    actionBtns.push(`
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <span class="material-symbols-outlined text-sm">event_busy</span>
+                            <span>${dict.cancel_subscription || translations[state.lang].cancel_subscription || 'Cancel subscription'}</span>
+                        </button>
+                    `);
+                }
                 if (canRefund) {
-                    actionBtnHtml = `
+                    actionBtns.push(`
                         <button class="refund-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
                             <span class="material-symbols-outlined text-sm">history_toggle_off</span>
                             <span>${translations[state.lang].request_refund}</span>
                         </button>
-                    `;
+                    `);
                 }
+                const actionBtnHtml = actionBtns.length
+                    ? `<div class="flex flex-wrap gap-2 justify-end">${actionBtns.join('')}</div>`
+                    : '';
 
                 card.innerHTML = `
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -970,6 +1040,14 @@
                 btn.addEventListener('click', () => {
                     const license = btn.getAttribute('data-license');
                     showConfirmModal(license);
+                });
+            });
+
+            // Wire cancel-subscription buttons
+            container.querySelectorAll('.cancel-sub-trigger-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const license = btn.getAttribute('data-license');
+                    showCancelSubModal(license);
                 });
             });
         }
@@ -1123,6 +1201,75 @@
             }
         }
 
+        function showCancelSubModal(license) {
+            state.cancelPendingCode = license;
+            const modal = document.getElementById('cancel-sub-modal');
+            if (!modal) return;
+            const box = modal.querySelector('div');
+            modal.classList.remove('pointer-events-none', 'opacity-0');
+            modal.classList.add('opacity-100');
+            if (box) {
+                box.classList.remove('scale-95');
+                box.classList.add('scale-100');
+            }
+        }
+
+        function hideCancelSubModal() {
+            state.cancelPendingCode = null;
+            const modal = document.getElementById('cancel-sub-modal');
+            if (!modal) return;
+            const box = modal.querySelector('div');
+            modal.classList.add('pointer-events-none', 'opacity-0');
+            modal.classList.remove('opacity-100');
+            if (box) {
+                box.classList.add('scale-95');
+                box.classList.remove('scale-100');
+            }
+        }
+
+        async function handleConfirmCancelSub() {
+            const license = state.cancelPendingCode;
+            if (!license || state.cancelInFlight) return;
+
+            state.cancelInFlight = true;
+            const okBtn = document.getElementById('cancel-sub-ok-btn');
+            if (okBtn) okBtn.disabled = true;
+
+            hideCancelSubModal();
+            const dict = translations[state.lang] || translations.en;
+            showToast(dict.cancel_sub_pending || 'Canceling subscription...');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/user/cancel-subscription`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ license_code: license, lang: state.lang })
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = {};
+                }
+                if (!res.ok) {
+                    throw new Error(data.error || dict.toast_error || 'Cancel failed');
+                }
+
+                showToast(data.message || dict.toast_cancel_sub_success || 'Subscription canceled');
+                await loadLicenses();
+            } catch (err) {
+                const prefix = dict.toast_error || 'Error:';
+                showToast(`${prefix} ${err.message || err}`, 'error');
+            } finally {
+                state.cancelInFlight = false;
+                if (okBtn) okBtn.disabled = false;
+            }
+        }
+
         // Logout (best-effort server session revoke + clear local)
         async function handleLogout() {
             const token = state.token;
@@ -1200,6 +1347,10 @@
             // Confirm refund modal
             document.getElementById('confirm-cancel-btn').addEventListener('click', hideConfirmModal);
             document.getElementById('confirm-ok-btn').addEventListener('click', handleConfirmRefund);
+
+            // Confirm cancel-subscription modal
+            document.getElementById('cancel-sub-dismiss-btn').addEventListener('click', hideCancelSubModal);
+            document.getElementById('cancel-sub-ok-btn').addEventListener('click', handleConfirmCancelSub);
 
             // Confirm unbind modal
             document.getElementById('unbind-cancel-btn').addEventListener('click', hideUnbindModal);

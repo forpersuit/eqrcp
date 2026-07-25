@@ -61,7 +61,7 @@
 
 | 项 | 原因 | 推进路径 |
 | :--- | :--- | :--- |
-| 订阅 cancel UI | 发布不阻塞；webhook 已吊销 | 见 [IMPORTANT_product-release.md](../IMPORTANT_product-release.md) **§4.2**：先 **C0 深链 Paddle**，再 C1 自建 API |
+| 订阅 cancel UI | **已落地 2026-07-25** | `POST /user/cancel-subscription` + Portal 按钮；**立刻 revoke**；见 api-contract |
 | 发票入口 | MoR 发票属 Paddle | 同上 **§4.2**：先 **I0 文案+链接**，勿自建 PDF |
 | 持久化 `refunded` 状态 | 统一 `revoked` | 保持 |
 | Portal Chrome UX E2E | 以 API E2E 为准 | 可选 |
