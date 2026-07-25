@@ -8,7 +8,8 @@
 export function isDevDebugNotice(msg: string): boolean {
   if (!msg) return false;
   const t = msg.trimStart();
-  if (t.startsWith('[App]')) return true;
+  // Generic tech bracket tags like [App], [Debug], [WebSocket], [IO], etc.
+  if (/^\[(App|Debug|Chat|WebSocket|Transfer|Attachment|IO|SystemDebug|Trace)\]/i.test(t)) return true;
   // Protocol / transport engineering strings (never user vocabulary)
   if (t.startsWith('WebSocket ')) return true;
   if (t.startsWith('Heartbeat timeout')) return true;
@@ -16,8 +17,8 @@ export function isDevDebugNotice(msg: string): boolean {
   if (t.startsWith('Server Error:')) return true;
   if (t.startsWith('Connection setup failed')) return true;
   if (t.startsWith('Cannot send command')) return true;
-  // Internal product terms that mean nothing to end users
-  if (/附件注册|Attachment registration|register(ing|ed)? attachment|selected-files/i.test(t)) {
+  // Internal engineering & protocol vocabulary
+  if (/附件注册|Attachment registration|register(ing|ed)? attachment|selected-files|registerLocalAttachment|postMessage|iframe-log|chat-debug-notice/i.test(t)) {
     return true;
   }
   return false;

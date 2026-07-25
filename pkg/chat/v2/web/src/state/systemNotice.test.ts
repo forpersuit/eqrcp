@@ -18,6 +18,10 @@ assert(shouldSurfaceSystemNotice('文件下载失败，请重试。', false) ===
 
 // --- engineering: hidden unless dev ---
 assert(isDevDebugNotice('[App] 开始注册附件: /x') === true, '[App] is debug');
+assert(isDevDebugNotice('[Debug] IPC msg') === true, '[Debug] is debug');
+assert(isDevDebugNotice('[IO] Disk read') === true, '[IO] is debug');
+assert(isDevDebugNotice('registerLocalAttachment failed') === true, 'registerLocalAttachment is debug');
+assert(isDevDebugNotice('postMessage iframe-log') === true, 'postMessage is debug');
 assert(isDevDebugNotice('Attachment registration failed: boom') === true, 'registration jargon is debug');
 assert(isDevDebugNotice('附件注册失败: boom') === true, '注册 jargon is debug');
 assert(isDevDebugNotice('WebSocket encountered an error.') === true, 'WebSocket jargon is debug');
@@ -26,6 +30,7 @@ assert(isDevDebugNotice('Heartbeat timeout (30s). Re-establishing connection.') 
 assert(isDevDebugNotice('Cannot send command. WebSocket is not open.') === true, 'cannot send command is debug');
 
 assert(shouldSurfaceSystemNotice('[App] 注册成功: a', false) === false, '[App] hidden when dev off');
+assert(shouldSurfaceSystemNotice('[Debug] Socket payload', false) === false, '[Debug] hidden when dev off');
 assert(shouldSurfaceSystemNotice('WebSocket connection established.', false) === false, 'ws established hidden');
 assert(shouldSurfaceSystemNotice('Attachment registration failed: x', false) === false, 'registration fail hidden when not user copy');
 assert(shouldSurfaceSystemNotice('[App] 注册成功: a', true) === true, '[App] shown in dev');
