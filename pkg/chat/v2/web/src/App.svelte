@@ -845,7 +845,7 @@
 
   function localizeUploadError(raw: string): string {
     const text = (raw || '').trim();
-    if (/10MB free limit|exceeds 10MB|file size exceeds 10MB|2MB free limit|exceeds 2MB/i.test(text)) {
+    if (/10MB free limit|exceeds 10MB|file size exceeds 10MB|4MB free limit|exceeds 4MB|2MB free limit|exceeds 2MB/i.test(text)) {
       return getTranslation('freeFileTooLarge', currentLang);
     }
     return text;

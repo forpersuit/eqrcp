@@ -555,7 +555,7 @@ func (s *Server) Chat() error {
 					degradationNotified = true
 					if s.chatV2Handler != nil {
 						s.chatV2Handler.BroadcastSystemMessage(
-							"今日免费 Chat 额度已用尽：附件限速 100KB/s，单文件不超过 2MB。文本消息不受影响。",
+							"今日免费 Chat 额度已用尽：附件限速 100KB/s，单文件不超过 4MB。文本消息不受影响。",
 						)
 					}
 				}
@@ -1019,7 +1019,7 @@ func (session *chatSession) handleAttachmentUpload(w http.ResponseWriter, r *htt
 		}
 		if isFreeLimitExceeded && header.Size > FreeChatMaxAttachmentBytes {
 			file.Close()
-			http.Error(w, "File size exceeds 2MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
+			http.Error(w, "File size exceeds 4MB free limit. Please upgrade.", http.StatusRequestEntityTooLarge)
 			return
 		}
 		message, err := session.saveAttachmentWithAvatar(sender, avatar, token, safeChatFilename(header.Filename), header.Header.Get("Content-Type"), header.Size, file, tempID, duration, width, height)
