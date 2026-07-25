@@ -843,9 +843,22 @@
   let uploadQueue: Array<{ file: File; name: string }> = [];
   let uploadQueueRunning = false;
 
-  function localizeUploadError(raw: string): string {
+  function parseAndLocalizeError(raw: string): string {
     const text = (raw || '').trim();
-    if (/10MB free limit|exceeds 10MB|file size exceeds 10MB|4MB free limit|exceeds 4MB|2MB free limit|exceeds 2MB/i.test(text)) {
+    if (!text) return getTranslation('uploadFailed', currentLang);
+
+    // 1. 优先解析标准结构化 JSON 错误码 (Structured Error Code)
+    try {
+      if (text.startsWith('{') && text.endsWith('}')) {
+        const parsed = JSON.parse(text);
+        if (parsed.code === 'FREE_FILE_TOO_LARGE' || parsed.code === 'ERR_FILE_TOO_LARGE') {
+          return getTranslation('freeFileTooLarge', currentLang);
+        }
+      }
+    } catch (_) {}
+
+    // 2. 兼容降级模式 (Fallback for legacy backend text)
+    if (/free limit|exceeds \d+MB|file size exceeds/i.test(text)) {
       return getTranslation('freeFileTooLarge', currentLang);
     }
     return text;
@@ -909,7 +922,7 @@
         chatActions.markMessageUploadComplete(messageId);
         finish();
       } else {
-        handleError(new Error(localizeUploadError(xhr.responseText || `Upload failed with status ${xhr.status}`)));
+        handleError(new Error(parseAndLocalizeError(xhr.responseText || `Upload failed with status ${xhr.status}`)));
       }
     };
 
@@ -995,7 +1008,7 @@
         await uploadOneFile(item.file, item.name);
       } catch (err: any) {
         console.error('Failed to add attachment:', err);
-        const friendly = localizeUploadError(err?.message || String(err));
+        const friendly = parseAndLocalizeError(err?.message || String(err));
         chatActions.addSystemMessage(currentLang === 'en'
           ? `Could not send "${item.name}". ${friendly}`
           : `无法发送「${item.name}」。${friendly}`);
