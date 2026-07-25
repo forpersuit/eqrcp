@@ -281,6 +281,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | 反馈计划 | 文档 | §4.1 + feedback-design §6；F0 邮件通道下一版 |
 | 2026-07-25 | agent | 同步清单 | 文档 | §2.2.1 SMTP/Webhook 释义；§4.2 Cancel/发票推进 |
 | 2026-07-25 | agent | Cancel C1/C2 | 通过 | `cancel-subscription` 立刻 revoke；Portal UI；Worker `f934e80d…`；Pages 已发 |
+| 2026-07-25 | agent | 年付续费同码 | 通过 | `transaction.completed` 按 `subscription_id` 延长 expires_at，不新发码 |
 | | | | | |
 
 ---

@@ -31,10 +31,26 @@ D1 数据库对 `licenses` 表追加了以下两个字段以建立关系型对�
 * `paddle_subscription_id TEXT DEFAULT NULL`: 关联的 Paddle 订阅 ID，用来应对年付订阅用户的周期性续费及退订状态转移。
 
 ### 2.2 自动订单履约 (`transaction.completed`)
+
 当用户在前端收银台支付成功后，Paddle 瞬间向接口推送 `transaction.completed` 事件。Worker 进行以下处理：
-1. **查重校验**：以 `transactionId` 在 `licenses` 表中查重，若已存在记录则直接幂等返回已存在的激活码，防止重复写库。
-2. **算法生成激活码**：生成格式为 `EQT-PLUS-YYYYMMDD-RANDOM-CHECK` 的序列号，其中 `CHECK` 位采用 Tier-Date-Random 拼接后的 MD5 前 4 位大写散列，与本地 Go 校验脚本完全对齐。
-3. **入库 D1**：将生成的激活码、邮箱的 SHA-256 哈希值、买断/年付的天数及交易 ID 绑定写入 D1。同时前端 `pricing.html` 的暗色毛玻璃 Modal 经过每秒 1 次的轮询（`/api/v1/paddle/license-query`）成功捕获该激活码，并呈现在页面正中供用户一键复制。
+
+1. **查重校验**：以 `transactionId` 在 `licenses` 表中查重，若已存在记录则直接幂等返回已存在的激活码，防止重复写库。  
+2. **首购**：生成激活码 `EQT-PLUS-YYYYMMDD-RANDOM-CHECK`，写入 D1（年付绑定 `paddle_subscription_id`，`expires_at = now+365`）。  
+3. **年付续费（同一订阅）**：**不轮换激活码**。若 `subscription_id` 已有 license：  
+   - 延长 `expires_at`（`max(now, 原到期) + 365 天`）  
+   - `status = active`，清空 `revoked_at` / `revoke_reason`（欠费恢复也走此路径）  
+   - 将 `paddle_transaction_id` 更新为**本周期**交易（便于本周期退款对账）  
+   - 发「续费成功 · 激活码不变」邮件  
+4. 前端 `pricing.html` 轮询 `/api/v1/paddle/license-query` 展示首购激活码。
+
+**产品模型（SSOT）**
+
+| 角色 | 谁负责 |
+| :--- | :--- |
+| 自动扣费 / 账单 | **Paddle**（订阅） |
+| 激活码 | **首购生成一次**，续费**不换码** |
+| 权益状态 | 写在**同一** license：`status` + `expires_at` + `paddle_subscription_id` |
+| 取消 / 欠费 | webhook → 该码 `revoked`（`revoke_reason=subscription`） |
 
 ---
 

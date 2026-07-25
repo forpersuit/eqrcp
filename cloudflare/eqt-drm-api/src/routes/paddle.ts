@@ -121,13 +121,102 @@ export async function handlePaddleRoutes(
       const tier = "PLUS";
       let expiresAt = "LIFETIME";
       let durationDays: number | null = null;
+      const YEARLY_MS = 365 * 86400 * 1000;
 
       if (matchedPriceId === PRICE_YEARLY_ID) {
         durationDays = 365;
-        expiresAt = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
+        expiresAt = new Date(Date.now() + YEARLY_MS).toISOString();
       }
 
-      // Generate license code
+      // Hash email for buyer_email_hash
+      let emailHash = "";
+      if (buyerEmail) {
+        const te = new TextEncoder();
+        const emailHashBuf = await crypto.subtle.digest("SHA-256", te.encode(buyerEmail.trim().toLowerCase()));
+        emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+      }
+
+      // --- Yearly renewal: same subscription keeps ONE license code (Paddle auto-bills) ---
+      // Product SSOT: do not mint a new code on each billing cycle; extend expires_at + keep status active.
+      if (matchedPriceId === PRICE_YEARLY_ID && subscriptionId) {
+        const subLicense = await env.DB.prepare(
+          `SELECT license_code, expires_at, status, buyer_email, paddle_transaction_id
+           FROM licenses WHERE paddle_subscription_id = ?
+           ORDER BY created_at ASC LIMIT 1`
+        ).bind(subscriptionId).first<any>();
+
+        if (subLicense?.license_code) {
+          let newExpires = expiresAt;
+          if (subLicense.expires_at && subLicense.expires_at !== "LIFETIME") {
+            const prev = new Date(subLicense.expires_at).getTime();
+            const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
+            newExpires = new Date(base + YEARLY_MS).toISOString();
+          } else if (subLicense.expires_at === "LIFETIME") {
+            newExpires = "LIFETIME";
+          }
+
+          // Point paddle_transaction_id at latest paid txn (idempotency + refund of current period)
+          await env.DB.prepare(`
+            UPDATE licenses SET
+              status = 'active',
+              expires_at = ?,
+              duration_days = COALESCE(duration_days, ?),
+              paddle_transaction_id = ?,
+              revoked_at = NULL,
+              revoke_reason = NULL,
+              buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+              buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+            WHERE license_code = ?
+          `).bind(
+            newExpires,
+            durationDays,
+            transactionId,
+            buyerEmail || null,
+            emailHash || null,
+            subLicense.license_code
+          ).run();
+
+          if (buyerEmail) {
+            const planName = "EQT Plus";
+            const expiresStr = newExpires === "LIFETIME" ? "Lifetime" : new Date(newExpires).toLocaleDateString();
+            const emailHtml = `
+          <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
+            <h2 style="color: #10b981;">【EQT】年付订阅已续费成功</h2>
+            <p>Paddle 已完成本周期扣费。您的<strong>激活码不变</strong>，权益已延长：</p>
+            <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${subLicense.license_code}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">新有效期至</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">状态</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">active（续费成功已恢复/保持）</td>
+              </tr>
+            </table>
+            <p style="font-size: 13px; color: #64748b;">已激活设备下次联网对账时会刷新本地证书有效期，无需重新输入激活码。</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="font-size: 12px; color: #888;">此邮件由系统自动发送。如需取消订阅请使用客户 Portal。</p>
+          </div>`;
+            ctx.waitUntil(sendDRMEmail(env, buyerEmail, "【EQT】年付订阅续费成功 · 激活码不变", emailHtml));
+          }
+
+          return new Response(JSON.stringify({
+            message: "Subscription renewed; existing license extended",
+            license_code: subLicense.license_code,
+            renewed: true,
+            expires_at: newExpires
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      // --- First fulfillment: mint a new license code ---
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const charSet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
       let randStr = "";
@@ -142,13 +231,6 @@ export async function handlePaddleRoutes(
       const checkHashBuf = await crypto.subtle.digest("MD5", encoder.encode(checkSumPayload));
       const checkHex = Array.prototype.map.call(new Uint8Array(checkHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('').slice(0, 4).toUpperCase();
       const licenseCode = `EQT-${tier}-${todayStr}-${randStr}-${checkHex}`;
-
-      // Hash email for buyer_email_hash
-      let emailHash = "";
-      if (buyerEmail) {
-        const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(buyerEmail.trim().toLowerCase()));
-        emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
-      }
 
       // Write to DB (paid fulfillment is always source=purchase)
       await env.DB.prepare(`
