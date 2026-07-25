@@ -82,7 +82,7 @@ async function main() {
   // 1) test license still local-refundable
   const testCode = 'EQT-PLUS-20260721-ZQFCAN-A451';
   wranglerSql(
-    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test' WHERE license_code='${testCode}'`
+    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test', buyer_email='${email}', paddle_transaction_id='txn_test_smoke_001' WHERE license_code='${testCode}'`
   );
   const r1 = await request('POST', '/api/v1/user/refund', { license_code: testCode, lang: 'zh' }, {
     Authorization: `Bearer ${token}`
@@ -96,7 +96,7 @@ async function main() {
 
   // restore test code
   wranglerSql(
-    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test' WHERE license_code='${testCode}'`
+    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test', buyer_email='${email}', paddle_transaction_id='txn_test_smoke_001' WHERE license_code='${testCode}'`
   );
 
   // 2) admin/promo not refundable — pick any admin source row with buyer email if present
@@ -125,10 +125,12 @@ async function main() {
   });
   assert(list.status === 200 && Array.isArray(list.json.licenses), 'licenses list 200');
   const testRow = (list.json.licenses || []).find((l) => l.license_code === testCode);
-  if (testRow) {
-    assert(testRow.refundable === false, 'test code refundable=false in list');
-    assert(testRow.source === 'test', 'test code source=test in list');
+  if (!testRow) {
+    console.error('DEBUG testRow missing. list.json.licenses codes:', (list.json.licenses || []).map(x => ({ code: x.license_code, email: x.buyer_email })));
   }
+  assert(!!testRow, 'found testRow in licenses list');
+  assert(testRow.refundable === false, 'test code refundable=false in list');
+  assert(testRow.source === 'test', 'test code source=test in list');
 
   // 4) cancel-subscription local path for synthetic sub id
   wranglerSql(

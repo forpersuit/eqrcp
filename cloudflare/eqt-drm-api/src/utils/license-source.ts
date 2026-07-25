@@ -9,7 +9,9 @@ const REAL_PADDLE_SUB = /^sub_01[a-z0-9]{16,}$/i;
 const SYNTHETIC_SUB = /^(sub_test_|sub_chrome_|sub_mock_|sub_e2e_|sub_yearly_)/i;
 
 export function isRealPaddleTransactionId(transactionId: string | null | undefined): boolean {
-  return !!transactionId && REAL_PADDLE_TXN.test(transactionId);
+  if (!transactionId) return false;
+  if (isSyntheticTestTransactionId(transactionId)) return false;
+  return REAL_PADDLE_TXN.test(transactionId);
 }
 
 export function isSyntheticTestTransactionId(transactionId: string | null | undefined): boolean {
@@ -58,15 +60,24 @@ export function normalizeLicenseSource(
   return 'admin';
 }
 
-/** Portal self-service refund + Paddle Adjustments path. */
+/** Portal self-service refund + Paddle Adjustments path (14-day cooling-off window). */
 export function isLicenseRefundable(license: {
   status?: string | null;
   source?: string | null;
   paddle_transaction_id?: string | null;
+  created_at?: string | null;
 }): boolean {
   if ((license.status || '') !== 'active') return false;
-  if (normalizeLicenseSource(license.source, license.paddle_transaction_id) !== 'purchase') {
+  const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+  if (source !== 'purchase') {
     return false;
+  }
+  // Enforce 14-day refund window (14 * 86400 * 1000 ms)
+  if (license.created_at) {
+    const createdTime = new Date(license.created_at).getTime();
+    if (!isNaN(createdTime) && Date.now() - createdTime > 14 * 86400 * 1000) {
+      return false;
+    }
   }
   return isRealPaddleTransactionId(license.paddle_transaction_id || null);
 }

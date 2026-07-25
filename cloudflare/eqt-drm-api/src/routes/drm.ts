@@ -107,45 +107,17 @@ function evaluateStacking(
   durationDays: number | null | undefined,
   reqLang: string = "en"
 ): { remainingMs: number; hasSameTierLifetime: boolean; blockReason: string | null } {
-  let remainingMs = 0;
-  const nowMs = Date.now();
-  let hasSameTierLifetime = false;
-
-  for (const item of peerLicenses) {
-    const certLifetime = item.expires_at === "LIFETIME";
-    if (certLifetime && item.tier === licenseTier) {
-      hasSameTierLifetime = true;
-      remainingMs = -1;
-      break;
-    }
-    if (certLifetime) continue;
-    if (licenseSource === "promo") continue;
-    if (item.expires_at) {
-      const expTime = new Date(item.expires_at).getTime();
-      if (expTime > nowMs) {
-        const diff = expTime - nowMs;
-        if (diff > remainingMs) remainingMs = diff;
-      }
-    }
+  // All cross-code stacking is strictly disabled by product policy.
+  // Users must unbind existing active license on device before activating a different license code.
+  if (peerLicenses && peerLicenses.length > 0) {
+    return {
+      remainingMs: 0,
+      hasSameTierLifetime: false,
+      blockReason: getApiTranslation("cross_code_stacking_blocked", reqLang)
+    };
   }
 
-  const newIsLifetime =
-    baseExpiresAt === "LIFETIME" ||
-    ((durationDays === null || durationDays === undefined) &&
-      (baseExpiresAt === "LIFETIME" || !baseExpiresAt));
-
-  // Same-tier lifetime already on device → block another lifetime or promo; term purchase may still extend only if not lifetime peer
-  if (hasSameTierLifetime) {
-    if (newIsLifetime || licenseSource === "promo") {
-      return {
-        remainingMs: -1,
-        hasSameTierLifetime: true,
-        blockReason: getApiTranslation("lifetime_stacking_blocked", reqLang)
-      };
-    }
-  }
-
-  return { remainingMs, hasSameTierLifetime, blockReason: null };
+  return { remainingMs: 0, hasSameTierLifetime: false, blockReason: null };
 }
 
 export async function handleDrmRoutes(

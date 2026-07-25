@@ -172,6 +172,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Zugehörige Transaktions-ID ist ungültig",
     fr: "L'identifiant de transaction associé est invalide"
   },
+  cross_code_stacking_blocked: {
+    zh: "当前设备已绑定生效中的其它授权码。系统不支持多个激活码直接叠加，请先解绑旧设备后再使用新激活码。",
+    en: "Current device is bound to another active license. Stacking across different license codes is disabled. Please unbind the existing license first.",
+    ja: "現在のデバイスは他の有効なライセンスにバインドされています。複数のライセンスコードの直接重複はサポートされていません。解約・解除後に再試行してください。",
+    ko: "현재 기기에 다른 활성 라이선스가 바인딩되어 있습니다. 서로 다른 라이선스 코드의 직접 중복은 지원되지 않습니다. 기존 기기 해제 후 다시 시도해 주세요.",
+    es: "El dispositivo actual está vinculado a otra licencia activa. No se permite la superposición de diferentes códigos. Desvincule la licencia existente primero.",
+    de: "Das aktuelle Gerät ist an eine andere aktive Lizenz gebunden. Das Stapeln verschiedener Lizenzcodes ist deaktiviert. Bitte entkoppeln Sie zuerst die bestehende Lizenz.",
+    fr: "L'appareil actuel est lié à une autre licence active. Le cumul de codes de licence différents est désactivé. Veuillez d'abord dissocier la licence existante."
+  },
+  lifetime_stacking_blocked: {
+    zh: "当前设备已绑定生效中的其它授权码。系统不支持多个激活码直接叠加，请先解绑旧设备后再使用新激活码。",
+    en: "Current device is bound to another active license. Stacking across different license codes is disabled. Please unbind the existing license first.",
+    ja: "現在のデバイスは他の有効なライセンスにバインドされています。複数のライセンスコードの直接重複はサポートされていません。解約・解除後に再試行してください。",
+    ko: "현재 기기에 다른 활성 라이선스가 바인딩되어 있습니다. 서로 다른 라이선스 코드의 직접 중복은 지원되지 않습니다. 기존 기기 해제 후 다시 시도해 주세요.",
+    es: "El dispositivo actual está vinculado a otra licencia activa. No se permite la superposición de diferentes códigos. Desvincule la licencia existente primero.",
+    de: "Das aktuelle Gerät ist an eine andere aktive Lizenz gebunden. Das Stapeln verschiedener Lizenzcodes ist deaktiviert. Bitte entkoppeln Sie zuerst die bestehende Lizenz.",
+    fr: "L'appareil actuel est lié à une autre licence active. Le cumul de codes de licence différents est désactivé. Veuillez d'abord dissocier la licence existante."
+  },
   refund_failed: {
     zh: "退款处理失败，请稍后重试",
     en: "Failed to process refund",
