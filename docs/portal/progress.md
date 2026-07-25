@@ -2,7 +2,7 @@
 
 > 以**代码与契约事实**为准更新。功能说明见 [overview.md](./overview.md)，契约见 [api-contract.md](./api-contract.md)。
 
-最后更新：2026-07-24（阶段 4 完成；Chrome 9222 Portal 验收通过）
+最后更新：2026-07-25（阶段 4 完成；Cancel/发票推进路径挂到 product-release §4.2）
 
 ---
 
@@ -59,14 +59,15 @@
 
 #### 阶段 4 仍不做（产品/架构后置）
 
-| 项 | 原因 |
-| :--- | :--- |
-| 订阅 cancel UI | 产品未要求 |
-| 持久化 `refunded` 状态 | 统一 `revoked` |
-| Portal Chrome UX E2E | 以 API E2E 为准 |
-| 改邮箱 / 重发 license / 发票 | 产品边界外 |
-| SMTP 默认密码 fallback 移除 | 运维密钥债 |
-| Session 改 HttpOnly Cookie | 跨域架构成本 |
+| 项 | 原因 | 推进路径 |
+| :--- | :--- | :--- |
+| 订阅 cancel UI | 发布不阻塞；webhook 已吊销 | 见 [IMPORTANT_product-release.md](../IMPORTANT_product-release.md) **§4.2**：先 **C0 深链 Paddle**，再 C1 自建 API |
+| 发票入口 | MoR 发票属 Paddle | 同上 **§4.2**：先 **I0 文案+链接**，勿自建 PDF |
+| 持久化 `refunded` 状态 | 统一 `revoked` | 保持 |
+| Portal Chrome UX E2E | 以 API E2E 为准 | 可选 |
+| 改邮箱 / 重发 license | 产品边界外 | 后置 |
+| SMTP 默认密码 fallback 移除 | 运维密钥债（`auth.ts` 硬编码 fallback） | 随密钥轮换删 fallback |
+| Session 改 HttpOnly Cookie | 跨域架构成本 | 后置 |
 
 ---
 

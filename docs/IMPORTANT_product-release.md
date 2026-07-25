@@ -2,7 +2,7 @@
 
 > **用途**：正式上线前的「配置收口 + 口径确认 + 验收」清单。  
 > **原则**：功能主链路已齐；发布前优先安全/环境/对客口径，体验债不挡发布则进下一版。  
-> **状态**：2026-07-25 更新 — **R3 / R5 已收口**；其余项待排查勾选。
+> **状态**：2026-07-25 同步 — **R3 / R5 已收口**；补 **SMTP/Webhook 是什么**、**Portal 订阅 cancel / 发票推进路径**。
 
 关联：
 
@@ -78,6 +78,34 @@
 | 非敏感 SMTP 主机 / From / 端口 | 仍为 `[vars]`（符合 secrets 文档） |
 | **仍建议运维**：SMTP 密码与 Paddle Webhook secret **轮换**（曾进 git 历史，改 secret 值即可，无需再改代码） | 运维待办 |
 
+### 2.2.1 「SMTP 密码 / Webhook 密码」分别是什么？
+
+二者**不是**同一种东西，也**不是** Cloudflare 账号密码。
+
+| 名称（环境变量） | 是什么 | 谁发的 / 哪里拿 | 干什么用 | 丢了会怎样 |
+| :--- | :--- | :--- | :--- | :--- |
+| **`MAIL_SENDER_PASSWORD`** | **邮箱 SMTP 登录口令**（或「应用专用密码」） | 你的邮件服务商（当前主机 `smtpserver.301098.xyz`，发件身份 `noreply@eqt.net.im`） | Worker 用 SMTP 发 OTP、激活码、吊销通知等 | 发不出业务邮件；Admin 健康页 SMTP 探针失败 |
+| **`PADDLE_WEBHOOK_SECRET`** | **Paddle Webhook 签名密钥**（不是用户登录密码） | Paddle → Developer tools → **Notifications** → 你的 destination → **Secret key**（形如 `pdl_ntfset_…`） | 校验 `Paddle-Signature`，确认「订单完成 / 退款 / 订阅取消」事件真是 Paddle 发的 | 伪造 webhook 可能被接受，或真实履约被拒（401） |
+| （相关但不同）**`PADDLE_API_KEY`** | **Paddle 服务端 API Key** | Paddle → Authentication → API keys（`pdl_…` / 沙箱 `pdl_sdbx_…`） | Portal **退款**、补拉 customer 邮箱等主动调 Paddle API | 自助退款 / 部分 webhook 补全失败 |
+
+**一句话**：
+
+- **SMTP 密码** = 让 `noreply@` **能登录邮件服务器发信**。  
+- **Webhook secret** = 让 DRM 能 **验真 Paddle 推送**（买了码、退了款、订没了）。  
+
+轮换步骤（无需改业务代码）：
+
+```bash
+# 1) 邮件商后台改 SMTP 密码后：
+cd cloudflare/eqt-drm-api
+echo -n '新SMTP密码' | npx wrangler secret put MAIL_SENDER_PASSWORD
+
+# 2) Paddle Notifications 里 Rotate secret 后：
+echo -n '新pdl_ntfset_…' | npx wrangler secret put PADDLE_WEBHOOK_SECRET
+```
+
+完整表见 [admin/IMPORTANT_drm-secrets.md](./admin/IMPORTANT_drm-secrets.md)。
+
 ### 2.3 R5 收口记录（2026-07-25）
 
 | 表面 | 规则 | 核对 |
@@ -108,14 +136,14 @@
 
 ## 4. 明确下一版（不影响「特别使用」）
 
-| 模块 | 下一版内容 |
-| :--- | :--- |
-| **Chat** | 多媒体预览；移动端下载路径 / 打开目录（需 App 壳）；气泡细节 polish；单击下载 + 详情 sheet |
-| **Portal** | 订阅 cancel UI；改邮箱 / 重发 license / 发票；HttpOnly session |
-| **Admin** | 自动黑名单可视化；多管理员；Webhook 成功时间线；**反馈中心只读对接**（读 feedback D1，非 DRM） |
-| **GUI 反馈（独立服务）** | 见下方 §4.1 — **优先打通邮件通知** |
-| **支付 / 增长** | 更细 CRM、批量运营、营销码运营台 |
-| **工程** | Admin SPA Playwright；更多 CI E2E |
+| 模块 | 下一版内容 | 优先级建议 |
+| :--- | :--- | :---: |
+| **Chat** | 多媒体预览；移动端下载路径 / 打开目录（需 App 壳）；气泡细节 polish；单击下载 + 详情 sheet | 体验 |
+| **Portal** | **订阅 cancel UI**；**发票入口**；改邮箱 / 重发 license；HttpOnly session | 见 §4.2 |
+| **Admin** | 自动黑名单可视化；多管理员；Webhook 成功时间线；**反馈中心只读对接**（读 feedback D1，非 DRM） | 运维 |
+| **GUI 反馈（独立服务）** | 见 §4.1 — **优先打通邮件通知** | P0 |
+| **支付 / 增长** | 更细 CRM、批量运营、营销码运营台 | 后置 |
+| **工程** | Admin SPA Playwright；更多 CI E2E | 后置 |
 
 这些都不挡住：「能买、能激活、能传文件、能自助解绑/退款、能运维」。
 
@@ -141,6 +169,69 @@ Body:    category / version / os / message / imageUrl
 ```
 
 **为何不是「先只发邮件、砍 Worker」**：现网 GUI 已走 `POST https://feedback.eqt.net.im/goal`（WebP 压缩 + Go 桥 + D1/R2）。邮件是 **通知通道**，不是替换入库；Admin 日后列表仍依赖 D1。
+
+### 4.2 下一版 · Portal「订阅 Cancel UI」与「发票」如何推进
+
+> 现状：Portal 阶段 4 **已具备**登录 / 列表 / 解绑 / 自助退款；`paddle_subscription_id` 已展示；**Webhook 已处理** `subscription.canceled` / past_due / paused → 吊销。  
+> **缺口只在用户侧「主动操作入口」与「账单凭证入口」**，不在 DRM 吊销模型本身。
+
+#### A. 订阅 Cancel UI（年付订阅用户）
+
+| 项 | 说明 |
+| :--- | :--- |
+| **适用对象** | 仅 `paddle_subscription_id` 非空 **且** 当前仍为年付订阅权益的 license（终身买断 **无** 订阅可取消） |
+| **产品语义** | **取消续费 / 结束订阅 ≠ 退款**。Cancel 后：当前周期是否立刻吊销，以 Paddle 配置与 webhook 为准（现网 webhook 在 canceled/past_due/paused 时 **会 revoke**——实现前须产品确认：是「到期后失效」还是「立即失效」） |
+| **与退款关系** | 14 天冷静期要退钱 → 走已有 **Refund**；仅不想下一年扣款 → 走 **Cancel**。UI 文案必须拆开 |
+
+**推荐推进步骤（由浅到深）**：
+
+| 步 | 做法 | 工作量 | 依赖 |
+| :---: | :--- | :---: | :--- |
+| **C0** | **深链 Paddle 客户门户**（Customer Portal / manage subscription 链接）：Portal 卡片上「管理订阅 / 取消续费」外链 | 小 | Paddle 后台开启 Customer Portal；能拼出或缓存 portal URL |
+| **C1** | **自建 Cancel 按钮** → `POST /api/v1/user/cancel-subscription` → 服务端 `PADDLE_API_KEY` 调 Paddle Billing `POST /subscriptions/{id}/cancel`（scheduled / immediately 二选一产品拍板） | 中 | 有效 **live** `PADDLE_API_KEY`；ownership 校验同 refund |
+| **C2** | UI：二次确认 Modal + 明确「不退款 / 授权何时失效」+ 成功后刷新列表；Webhook 到账后状态变 `revoked` 的提示 | 中 | C1 + 现有 webhook |
+| **C3** | E2E：sandbox 年付单 cancel → 库状态 / 邮件 | 小 | sandbox 订阅商品 |
+
+**建议默认路径**：**先 C0 上线**（最快、合规由 Paddle 托管取消流），有数据后再做 C1 内嵌取消。
+
+#### B. 发票（Invoice）
+
+| 项 | 说明 |
+| :--- | :--- |
+| **事实** | EQT 是 **Paddle MoR**；发票/税务单据的权威方是 **Paddle**，不是 EQT 自开发票 PDF |
+| **终身单** | 按 **transaction** 有收据/发票；Portal 已有 `paddle_transaction_id` |
+| **年付** | 每期续费各有 transaction；订阅维度可在 Paddle 账单历史查看 |
+
+**推荐推进步骤**：
+
+| 步 | 做法 | 工作量 | 依赖 |
+| :---: | :--- | :---: | :--- |
+| **I0** | Portal 文案 + 链接：**「发票与收据由 Paddle 提供」** → 链到 Paddle 客户账单页 / 官方说明；客服邮箱 `support@eqt.net.im` 协助 | **极小** | 无代码 API |
+| **I1** | 卡片展示 `paddle_transaction_id`（已有）旁加「在 Paddle 查看订单」深链（若 API/portal 支持按 txn 打开） | 小 | Paddle Customer Portal 配置 |
+| **I2** | 可选：服务端用 `PADDLE_API_KEY` 拉 `GET /transactions/{id}` 或 invoices 相关端点，返回 **Paddle 托管的 PDF/页面 URL** 给前端新开标签（**不**自己生成 PDF） | 中 | API 权限 + live key |
+| **I3** | 自建 PDF 发票 | **不做**（与 MoR 职责冲突、税务合规成本高） | — |
+
+**建议默认路径**：**I0 + I1 即可满足发布后对客**；I2 仅当用户强烈要求「一键打开 PDF」再做。
+
+#### C. 排期建议（相对发布）
+
+| 时机 | 做啥 |
+| :--- | :--- |
+| **发布前** | **不必**做 Cancel UI / 发票 API；条款已写支持邮箱 + Paddle；年付用户可暂时：Paddle 邮件里的管理链接 / 联系 support |
+| **发布后第一迭代** | I0 文案 + C0 深链（半天级） |
+| **有年付投诉量后再** | C1/C2 内嵌取消；I2 交易发票 URL |
+
+#### D. 与现有代码锚点
+
+| 能力 | 现状 |
+| :--- | :--- |
+| 展示 `paddle_subscription_id` | `portal.html` 卡片已渲染 |
+| 订阅取消 → 吊销 | `paddle.ts` webhook `subscription.canceled` / updated |
+| 退款 | `portal.ts` `POST .../refund` + adjustments |
+| 发票 API | **无** |
+| Cancel API | **无**（仅 webhook 被动） |
+
+契约增量将来写入 [portal/api-contract.md](./portal/api-contract.md)；进度勾选写入 [portal/progress.md](./portal/progress.md)。
 
 ---
 
@@ -195,6 +286,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | **R3** | 通过 | toml迁 secret；drm + feedback 已 deploy |
 | 2026-07-25 | agent | **R5** | 通过 | pricing 兜底 2→3；terms/refund/pricing i18n 与 ≥3/365 一致 |
 | 2026-07-25 | agent | 反馈计划 | 文档 | §4.1 + feedback-design §6；F0 邮件通道下一版 |
+| 2026-07-25 | agent | 同步清单 | 文档 | §2.2.1 SMTP/Webhook 释义；§4.2 Cancel/发票推进 |
 | | | | | |
 
 ---
@@ -202,4 +294,5 @@ Body:    category / version / os / message / imageUrl
 ## 8. 一句话
 
 **功能上已够正式发布；发布前要「定配置 + 定口径 + 跑通真人闭环」，而不是再开大功能。**  
-R3/R5 已收口；仍优先确认 `TEST_MAIL_RECEIVER` 残留、Paddle live 与真人闭环。反馈邮件通道进下一版，不挡发布。
+R3/R5 已收口；仍优先确认 `TEST_MAIL_RECEIVER` 残留、Paddle live 与真人闭环。  
+订阅 Cancel / 发票以 **Paddle 深链（C0/I0）** 为第一刀，不挡发布；反馈邮件 F0 与内嵌 Cancel（C1）进下一版。
