@@ -873,12 +873,30 @@
 
             const sendBtn = document.getElementById('send-code-btn');
             state.sendCodeInFlight = true;
+            
+            // Instant optimistic feedback: Start 60s cooldown immediately upon click
+            let cooldown = 60;
             if (sendBtn) {
                 sendBtn.disabled = true;
-                sendBtn.textContent = dict.sending_code || 'Sending...';
+                sendBtn.textContent = `${cooldown}s`;
             }
-            setSendCodeStatus(dict.sending_code || 'Sending code, please wait...', 'info');
-            
+            setSendCodeStatus(dict.sending_code || 'Sending verification code, please wait...', 'info');
+
+            if (state.timer) clearInterval(state.timer);
+            state.timer = setInterval(() => {
+                cooldown--;
+                if (cooldown <= 0) {
+                    clearInterval(state.timer);
+                    state.sendCodeInFlight = false;
+                    if (sendBtn) {
+                        sendBtn.disabled = false;
+                        sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
+                    }
+                } else {
+                    if (sendBtn) sendBtn.textContent = `${cooldown}s`;
+                }
+            }, 1000);
+
             try {
                 const res = await fetch(`${API_BASE}/api/v1/auth/send-code`, {
                     method: 'POST',
@@ -887,13 +905,13 @@
                 });
                 
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
+                if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
 
-                const successMsg = dict.toast_code_sent || 'Verification code sent to your email.';
+                const successMsg = `✅ ${dict.toast_code_sent || 'Verification code sent to your email.'} (${email})`;
                 setSendCodeStatus(successMsg, 'success');
-                showToast(successMsg);
+                showToast(dict.toast_code_sent || 'Verification code sent to your email.');
                 
-                // Enable inputs
+                // Enable inputs and focus code field automatically
                 const codeInput = document.getElementById('login-code');
                 const submitBtn = document.getElementById('login-submit-btn');
                 if (codeInput) {
@@ -908,24 +926,6 @@
                     console.log("[DEBUG] Autocompleted verification code:", data.code);
                 }
 
-                // Start cooldown timer
-                let cooldown = 60;
-                if (sendBtn) sendBtn.textContent = `${cooldown}s`;
-                if (state.timer) clearInterval(state.timer);
-                state.timer = setInterval(() => {
-                    cooldown--;
-                    if (cooldown <= 0) {
-                        clearInterval(state.timer);
-                        state.sendCodeInFlight = false;
-                        if (sendBtn) {
-                            sendBtn.disabled = false;
-                            sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
-                        }
-                    } else {
-                        if (sendBtn) sendBtn.textContent = `${cooldown}s`;
-                    }
-                }, 1000);
-                
             } catch (err) {
                 const errMsg = err.message || '';
                 const isRateLimited = errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
@@ -937,38 +937,19 @@
                     }, 3000);
                 }
 
-                if (isRateLimited) {
-                    const warnMsg = errMsg || 'Request too frequent. 60s cooldown started.';
-                    setSendCodeStatus(warnMsg, 'warning');
-                    let cooldown = 60;
-                    if (sendBtn) {
-                        sendBtn.disabled = true;
-                        sendBtn.textContent = `${cooldown}s`;
-                    }
+                if (!isRateLimited) {
+                    // Cancel cooldown on actual errors (e.g. 404 No purchase record or network error)
                     if (state.timer) clearInterval(state.timer);
-                    state.timer = setInterval(() => {
-                        cooldown--;
-                        if (cooldown <= 0) {
-                            clearInterval(state.timer);
-                            state.sendCodeInFlight = false;
-                            if (sendBtn) {
-                                sendBtn.disabled = false;
-                                sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
-                            }
-                        } else {
-                            if (sendBtn) sendBtn.textContent = `${cooldown}s`;
-                        }
-                    }, 1000);
-                } else {
                     state.sendCodeInFlight = false;
                     if (sendBtn) {
                         sendBtn.disabled = false;
                         sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
                     }
-                    setSendCodeStatus(errMsg, 'error');
+                    setSendCodeStatus(`❌ ${errMsg}`, 'error');
+                    showToast(errMsg, 'error');
+                } else {
+                    setSendCodeStatus(`⏱️ ${errMsg || 'Request too frequent. 60s cooldown in progress.'}`, 'warning');
                 }
-
-                showToast(errMsg.startsWith('http') ? (dict.toast_error || 'Error') : errMsg, 'error');
             }
         }
 
