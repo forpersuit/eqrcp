@@ -139,4 +139,5 @@
 | :--- | :--- | :--- | :---: | :--- |
 | 2026-07-25 | Go 单元测试 | `go test ./...` | **PASS** | 100% 通过（Go 后端全模块测试） |
 | 2026-07-25 | `tests/verify-license-source.js` | 本地 Mock 来源门禁与 cancel-subscription | **PASS** | 冒烟测试全部通过，cancellable / revoke_reason='subscription' 验证正常 |
+| 2026-07-25 | `tests/verify-yearly-renewal.js` | 年付到期自动续费 (不换码/展期365天/单号更新) | **PASS** | 自动续费验证全部通过，激活码代码保持一致，Expires 精确增加 365 天 |
 | 2026-07-25 | `tests/closed-loop-simulation.js` | 闭环模拟：激活/退款门禁/黑名单≥3 | **PASS** | 验证通过 |
