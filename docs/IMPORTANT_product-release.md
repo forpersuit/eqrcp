@@ -132,7 +132,7 @@
 | 模块 | 下一版内容 | 优先级建议 |
 | :--- | :--- | :---: |
 | **Chat** | 多媒体预览；移动端下载路径 / 打开目录（需 App 壳）；气泡细节 polish；单击下载 + 详情 sheet | 体验 |
-| **Portal** | **订阅 cancel UI**；**发票入口**；改邮箱 / 重发 license；HttpOnly session | 见 §4.2 |
+| **Portal** | **【已完成】自动续费独立开关 (Auto-Renew Toggle)**；**【已完成】打通 Paddle PDF/账单发票入口**；**【已完成】消除即时吊销与退款混淆按钮**；改邮箱 / 重发 license；HttpOnly session | 见 §4.2 |
 | **Admin** | 自动黑名单可视化；多管理员；Webhook 成功时间线；**反馈中心只读对接**（读 feedback D1，非 DRM） | 运维 |
 | **GUI 反馈（独立服务）** | 见 §4.1 — **优先打通邮件通知** | P0 |
 | **支付 / 增长** | 更细 CRM、批量运营、营销码运营台 | 后置 |
@@ -168,24 +168,24 @@ Body:    category / version / os / message / imageUrl
 > 现状：Portal 阶段 4 **已具备**登录 / 列表 / 解绑 / 自助退款；`paddle_subscription_id` 已展示；**Webhook 已处理** `subscription.canceled` / past_due / paused → 吊销。  
 > **缺口只在用户侧「主动操作入口」与「账单凭证入口」**，不在 DRM 吊销模型本身。
 
-#### A. 订阅 Cancel UI（年付订阅用户）
+#### A. 自动续费独立开关 (Auto-Renew Toggle — 替代歧义取消按钮)
 
 | 项 | 说明 |
 | :--- | :--- |
-| **适用对象** | 仅 `paddle_subscription_id` 非空 **且** 当前仍为年付订阅权益的 license（终身买断 **无** 订阅可取消） |
-| **产品语义** | **取消续费 / 结束订阅 ≠ 退款**。Cancel 后：当前周期是否立刻吊销，以 Paddle 配置与 webhook 为准（现网 webhook 在 canceled/past_due/paused 时 **会 revoke**——实现前须产品确认：是「到期后失效」还是「立即失效」） |
-| **与退款关系** | 14 天冷静期要退钱 → 走已有 **Refund**；仅不想下一年扣款 → 走 **Cancel**。UI 文案必须拆开 |
+| **适用对象** | 仅 `paddle_subscription_id` 非空 **且** 当前仍为年付订阅权益的 license（终身买断 **无** 自动续费） |
+| **产品语义** | **关闭自动续费 (Auto-Renew Off) ≠ 退款 ≠ 即刻吊销**。关闭续费后：传递 `effective_from: "next_billing_period"` 给 Paddle。**本地授权保持 `status = 'active'`（绝不吊销授权！今年剩余已付费天数可完全正常畅享使用）**；仅记录 `auto_renew = 0`，到期后自然截止停止扣款。 |
+| **与退款关系** | 14 天冷静期要退钱 → 走已有 **Refund**（退钱并吊销）；仅不想下一年扣款 → 走 **自动续费开关 Toggle**（关下期扣费，本期继续用）。移除引发客诉的即时强行吊销按钮。 |
 
-**推荐推进步骤（由浅到深）**：
+**落地与上线步骤**：
 
-| 步 | 做法 | 工作量 | 依赖 |
-| :---: | :--- | :---: | :--- |
-| **C0** | 深链 Paddle 客户门户 | 可选；已被 C1 覆盖主路径 |
-| **C1** | **自建 Cancel** → `POST /api/v1/user/cancel-subscription` → Paddle `effective_from: immediately` + **立刻本地 revoke** | **[x] 2026-07-25** |
-| **C2** | UI：二次确认 Modal（明确非退款 / 立刻失效）+ 刷新列表 | **[x] 2026-07-25**（`portal.html`） |
-| **C3** | E2E：sandbox 年付 cancel | 可选后续 |
+| 步 | 做法 | 状态 |
+| :---: | :--- | :---: |
+| **T0** | **自建自动续费切换 API** → `POST /api/v1/user/toggle-auto-renew` → Paddle `effective_from: next_billing_period` + 本地 `auto_renew` 状态打标 | **[x] 2026-07-25** |
+| **T1** | UI：微交互卡片控制按钮 `[ 🔄 自动续费：开启 ]` / `[ 🔄 自动续费：已关闭 ]` + 全套 7 国语言动态 Toast 提示 | **[x] 2026-07-25**（`portal.html`） |
+| **T2** | 界面收敛：物理移除引发退款与吊销混淆的粗暴 `[取消订阅]` (Immediate Revoke) 按钮 | **[x] 2026-07-25** |
+| **T3** | 文案修正：将 `source_test` 来源中文正式更名为“测试”（去除工业化“夹具”词汇） | **[x] 2026-07-25** |
 
-**产品拍板**：取消后 **立刻 revoke**（与 webhook `subscription.canceled` 一致；API 路径不等待 webhook）。
+**最终拍板**：关闭自动续费 **保持本期权益 active**（符合常规 SaaS 使用习惯，规避强行吊销引起的抗议）；退款则即刻吊销。
 
 #### B. 发票（Invoice）
 

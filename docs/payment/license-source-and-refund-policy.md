@@ -101,7 +101,7 @@ Pro 一阶（STUN / 失败中继流量）与激活码解耦：权益在 license�
 | `chargeback` | **拒付（退单）**：持卡人向银行争议交易，银行从商户侧扣回款项（常与盗刷相关） | Paddle `adjustment` 的 `action=chargeback`（或等价争议事件） |
 | `subscription` | 订阅取消 / 欠费 / 暂停 | `subscription.canceled` / `past_due` / `paused` |
 | `admin` | 运营人工吊销 | Admin `POST /revoke` |
-| `test` | 测试夹具本地吊销 | `source=test` Portal 路径 |
+| `test` | 测试 | 自动化测试、E2E 测试生成的测试码（`sub_test_...` / `txn_test_...`） | 仅在后台/Portal 支持本地 Mock 模拟测试 |
 | `expired` | （预留）过期作废 | 未来任务 |
 
 ```text

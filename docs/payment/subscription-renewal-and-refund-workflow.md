@@ -24,21 +24,21 @@
                   └────────────────────┬─────────────────────┘
                                        │
      ┌─────────────────────────────────┼─────────────────────────────────┐
-     │ 场景 A: 订阅续费                │ 场景 B: 取消续费                │ 场景 C: 冷静期退款
+     │ 场景 A: 订阅续费                │ 场景 B: 关闭自动续费            │ 场景 C: 冷静期退款
      ▼                                 ▼                                 ▼
 ┌───────────────────────────┐     ┌───────────────────────────┐     ┌───────────────────────────┐
-│ Paddle 到期自动扣款        │     │ 用户在 Portal 点击“取消订阅”│     │ 用户在 Portal 点击“退款”   │
-│ 触发 transaction.completed│     │ 或在 Paddle 控制台取消     │     │ 或在 Paddle 控制台退款     │
+│ Paddle 到期自动扣款        │     │ 用户在 Portal 关自动续费  │     │ 用户在 Portal 点击“退款”   │
+│ 触发 transaction.completed│     │ 或在 Paddle 控制台关续费  │     │ 或在 Paddle 控制台退款     │
 └────────────┬──────────────┘     └────────────┬──────────────┘     └────────────┬──────────────┘
              │                                 │                                 │
-             │ 按 sub_xxx 找到原激活码         │ 调 Paddle cancel API            │ 调 Paddle adjustment API
-             │                                 │ 或收到 subscription.canceled    │ 或收到 transaction.refunded
+             │ 按 sub_xxx 找到原激活码         │ 调 Paddle cancel (next_period)  │ 调 Paddle adjustment API
+             │                                 │ 设置 auto_renew = 0             │ 或收到 transaction.refunded
              ▼                                 ▼                                 ▼
 ┌───────────────────────────┐     ┌───────────────────────────┐     ┌───────────────────────────┐
-│ 激活码保持不变 (代码不变)   │     │ 状态重置:                  │     │ 状态重置:                  │
-│ expires_at += 365 天      │     │ status = 'revoked'        │     │ status = 'revoked'        │
-│ paddle_transaction_id=222 │     │ revoke_reason='subscription'│   │ revoke_reason='refund'    │
-│ 发送【续费成功】邮件       │     │ 发送【取消订阅】邮件      │     │ 评估是否触发 ≥3 次黑名单  │
+│ 激活码保持不变 (代码不变)   │     │ 授权保持生效 (status active)│     │ 状态重置:                  │
+│ expires_at += 365 天      │     │ auto_renew = 0            │     │ status = 'revoked'        │
+│ paddle_transaction_id=222 │     │ 本期继续享用至到期日      │     │ revoke_reason='refund'    │
+│ 发送【续费成功】邮件       │     │ 下个周期停止自动扣费      │     │ 评估是否触发 ≥3 次黑名单  │
 └───────────────────────────┘     └───────────────────────────┘     └───────────────────────────┘
 ```
 
