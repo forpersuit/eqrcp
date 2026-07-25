@@ -1,5 +1,29 @@
 # Chat v2 Progress
 
+> **文档状态**：⚠️ 历史进度快照（已过时，勿当作当前完成度）  
+> **快照日期**：2026-07-07  
+> **整理日期**：2026-07-25  
+> **为何保留**：记录 Phase 0–4 落地顺序与当时风险；**不要**按文中「Phase 5 not started / handler not mounted」判断现状。
+
+## 现状补丁（2026-07-25，代码为准）
+
+| 原文断言（2026-07-07） | 现状 |
+| :--- | :--- |
+| Phase 5 Desktop/Wails 未开始 | GUI 已嵌入 `/chat-v2`；`enableChatV2` 默认 true |
+| v2 handler 未挂生产路由 | `pkg/server/chat.go` 挂载 `/chat-v2/`；legacy `/chat` 301 到 v2 |
+| HTTP skeleton 返回 not implemented | 完整 Svelte UI + WS + 附件上下载 |
+| 后续以双栈并行为主 | 权威路径 V2；Legacy 有序退役（见 free-tier 文档 L2–L4） |
+
+**后续跟踪请读**：
+
+- 交互修复：[ux-fix-progress.md](./ux-fix-progress.md)（至 v1.16.5+）
+- Free 额度：[free-tier-usage-analysis.md](./free-tier-usage-analysis.md)
+- 工程设计：[v2-engineering-plan.md](./v2-engineering-plan.md)
+
+---
+
+## 历史正文（以下未再同步）
+
 Last updated: 2026-07-07
 
 ## Current Status

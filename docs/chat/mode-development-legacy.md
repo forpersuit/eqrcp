@@ -1,4 +1,15 @@
-# Chat Mode Development Progress
+# Chat Mode Development Progress（Legacy）
+
+> **文档状态**：⚠️ 历史文档（Legacy Chat / SSE 时代）  
+> **原文件**：`docs/chat-mode-development.md`  
+> **整理日期**：2026-07-25  
+> **为何过时**：
+> - 描述的是 **SSE + HTTP POST** 的第一代 Chat（`/chat/{token}`、`pages/chat.tmpl.html`）
+> - 文中「Future: WebSocket migration」已由 **Chat V2** 完成（`pkg/chat/v2`，WS 控制面）
+> - 移动端 visibility 断连策略在 V2 中已重做（见 [ux-interaction-analysis.md](./ux-interaction-analysis.md) H3）
+>
+> **仍有参考价值**：会话心智（短时局域网会话）、桌面 agent 任务生命周期、与 send/receive 分离的状态模型。  
+> **当前权威路径**：`/chat-v2/*` + Svelte UI；目录索引见 [README.md](./README.md)。
 
 First principle: chat mode is a local session, not a one-time transfer. The QR
 code should grant access to one short-lived LAN conversation where desktop and

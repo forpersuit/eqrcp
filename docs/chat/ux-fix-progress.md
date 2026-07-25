@@ -32,7 +32,7 @@
 - [x] 交互缺点分析落入 `docs/chat/ux-interaction-analysis.md`
 - [x] 本修复进度文档 `docs/chat/ux-fix-progress.md`
 - [x] `docs/chat/README.md` 索引更新
-- [ ] 可选：与 `docs/chat-v2-progress.md` 交叉引用一轮
+- [x] 与 `docs/chat/v2-progress.md` 交叉引用（2026-07-25 文档整理）
 
 ---
 

@@ -1,9 +1,18 @@
 # Chat v2 Engineering Plan
 
+> **文档状态**：设计参考（仍有效）  
+> **整理日期**：2026-07-25  
+> **说明**：架构边界（WS 控制面 / HTTP 数据面 / 带宽调度 / Svelte UI）与分阶段 DoD 仍是实现依据。  
+> **现状补丁（代码为准）**：
+> - Chat V2 已是默认路径；`EnableChatV2` 默认 `true`；legacy `/chat/*` **301 → `/chat-v2/*`**
+> - Phase 0–4 已落地；桌面 GUI 通过 iframe 嵌入 `/chat-v2`（设置里仍保留 enableChatV2 开关）
+> - 进度快照见 [v2-progress.md](./v2-progress.md)（历史）；交互修复见 [ux-fix-progress.md](./ux-fix-progress.md)
+
 ## Goal
 
 Chat v2 is a parallel rewrite of chat mode. It must not modify or regress the
 existing `/chat/{token}` implementation until v2 has passed staged acceptance.
+（Cutover 已基本完成：legacy 仅作重定向与遗留代码，主路径为 `/chat-v2`。）
 
 The target architecture is:
 

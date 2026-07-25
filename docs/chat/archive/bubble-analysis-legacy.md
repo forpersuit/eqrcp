@@ -1,6 +1,13 @@
-# Chat Bubble Implementation Analysis
+# Chat Bubble Implementation Analysis（Legacy 归档）
 
-> File: [`pages/pages.go`](../pages/pages.go) and [`pages/*.tmpl.html`](../pages)  
+> **文档状态**：🗄️ 已归档（仅历史参考）  
+> **原文件**：`docs/chat-bubble-analysis.md`  
+> **日期**：2026-05-10  
+> **为何归档**：分析对象是 **legacy** `pages/chat.tmpl.html` 单体气泡 CSS/JS。  
+> 当前 Chat 主 UI 为 **`pkg/chat/v2/web`（Svelte）**；legacy 页仅 301 到 V2，本文不再指导实现。  
+> 相关影响评估见同目录 [bubble-impact-legacy.md](./bubble-impact-legacy.md)。
+
+> File: legacy `pages/chat.tmpl.html` / `pages/pages.go`（历史路径）  
 > Date: 2026-05-10
 
 ---

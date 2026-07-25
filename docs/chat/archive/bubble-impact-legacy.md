@@ -1,8 +1,12 @@
-# Chat Bubble 优化：效果 vs 风险评估报告
+# Chat Bubble 优化：效果 vs 风险评估报告（Legacy 归档）
 
-> 日期：2026-05-10  
-> 基于：[`docs/chat-bubble-analysis.md`](chat-bubble-analysis.md)  
-> 代码入口：[`pages/pages.go`](../pages/pages.go) 通过 [`pages/chat.tmpl.html`](../pages/chat.tmpl.html) 提供 Chat 页面
+> **文档状态**：🗄️ 已归档（仅历史参考）  
+> **原文件**：`docs/chat-bubble-impact.md`  
+> **日期**：2026-05-10  
+> **基于**：[bubble-analysis-legacy.md](./bubble-analysis-legacy.md)  
+> **为何归档**：针对 legacy 模板 7 项气泡 CSS/JS 优化的风险表；主路径已迁 Svelte V2，不再作为实施清单。
+
+> 代码入口（历史）：`pages/chat.tmpl.html`
 
 ---
 

@@ -1,4 +1,17 @@
-这是一份关于 **移动端 H5 浏览器** 与 **GUI 桌面端** 在大文件发送、接收场景下，从**历史隐患**到**最新优化落地**的技术对照梳理。
+# Chat 文件传输：四象限隐患与优化对照
+
+> **文档状态**：⚠️ 部分过时（策略仍有参考，路径锚点混有 Legacy）  
+> **原文件**：`docs/chat_mode_file_trans.md`  
+> **整理日期**：2026-07-25  
+> **过时点**：
+> - 多处锚点指向 `pages/chat.tmpl.html`、legacy `handleAttachmentDownload`、**SSE** 进度广播
+> - 主路径已是 Chat V2：`pkg/chat/v2` WebSocket transfer 事件 + HTTP 附件；原生 `<a download>` 仍是浏览器下载原则
+> - 串行 `uploadQueue`、旁路设备过滤等结论与 V2 一致，但实现文件已迁移
+>
+> **配套**：Free 超额附件限速/2MB 见 [free-tier-usage-analysis.md](./free-tier-usage-analysis.md)；  
+> 旁路「上传中不可见」产品决策见 [ux-fix-progress.md](./ux-fix-progress.md)（M3 不做）。
+
+这是一份关于 **移动端 H5 浏览器** 与 **GUI 桌面端** 在大文件发送、接收场景下，从**历史隐患**到**优化落地**的技术对照梳理。
 
 我们围绕 **“内存安全（防 OOM）”**、**“断点续传（防抖高可用）”** 以及 **“精简气泡渲染（零预加载开销）”** 三个核心指标进行了完整重构。
 

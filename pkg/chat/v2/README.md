@@ -53,4 +53,6 @@ go test ./...
 ```
 
 When a phase changes browser-visible behavior, it must also include
-`/chrome-test` evidence as described in `docs/chat-v2-engineering-plan.md`.
+`/chrome-test` evidence as described in `docs/chat/v2-engineering-plan.md`.
+
+See also the curated chat docs index: `docs/chat/README.md`.

@@ -232,8 +232,7 @@ Planning documents:
 
 - [Test analysis](docs/test-analysis.md)
 - [Desktop integration plan](docs/desktop-integration-plan.md)
-- [Chat mode development](docs/chat-mode-development.md)
-- [Chat reconnection testing](docs/chat-reconnection-testing.md)
+- [Chat 模式文档目录](docs/chat/README.md)
 - [Desktop platform notes](docs/desktop-platform-notes.md)
 - [Security notes](docs/security-notes.md)
 
