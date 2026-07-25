@@ -3,10 +3,10 @@
 export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
 
 const REAL_PADDLE_TXN = /^txn_01[a-z0-9]{16,}$/i;
-const SYNTHETIC_TXN = /^(txn_test_|txn_chrome_|txn_mock_|txn_e2e_)/i;
+const SYNTHETIC_TXN = /^(txn_test_|txn_chrome_|txn_mock_|txn_e2e_|txn_yearly_)/i;
 /** Live/sandbox subscription ids look like sub_01…; test fixtures use sub_test_ / sub_e2e_ */
 const REAL_PADDLE_SUB = /^sub_01[a-z0-9]{16,}$/i;
-const SYNTHETIC_SUB = /^(sub_test_|sub_chrome_|sub_mock_|sub_e2e_)/i;
+const SYNTHETIC_SUB = /^(sub_test_|sub_chrome_|sub_mock_|sub_e2e_|sub_yearly_)/i;
 
 export function isRealPaddleTransactionId(transactionId: string | null | undefined): boolean {
   return !!transactionId && REAL_PADDLE_TXN.test(transactionId);

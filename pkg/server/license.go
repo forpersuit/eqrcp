@@ -233,20 +233,39 @@ func VerifyLocalLicense() bool {
 // ActivateLicenseOnline calls the CF Workers API to activate this device
 // with the provided license code. On success, saves .lic locally and updates state.
 func ActivateLicenseOnline(licenseCode string) error {
+	return ActivateLicenseOnlineWithLang(licenseCode, "")
+}
+
+// ActivateLicenseOnlineWithLang calls the CF Workers API with language metadata
+func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
 
-	reqBody, _ := json.Marshal(map[string]string{
+	reqMap := map[string]string{
 		"license_code": licenseCode,
 		"uuid_hash":    uuid,
 		"cpu_hash":     cpu,
 		"disk_hash":    disk,
 		"device_id":    GetDeviceStableID(),
-	})
+	}
+	if lang != "" {
+		reqMap["lang"] = lang
+	}
+
+	reqBody, _ := json.Marshal(reqMap)
 
 	apiURL := fmt.Sprintf("%s/api/v1/activate", getLicenseServer())
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return fmt.Errorf("activation request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if lang != "" {
+		req.Header.Set("Accept-Language", lang)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("activation request failed: %w", err)
 	}

@@ -290,6 +290,8 @@
                 "device_target_label": "Target Device Key:",
                 "unbinding": "Unbinding...",
                 "unbind_success": "Device unbound successfully!",
+                "auto_renew_on_btn": "Auto-renew: ON",
+                "auto_renew_off_btn": "Auto-renew: OFF",
                 "toast_code_sent": "Verification code sent to your email.",
                 "toast_login_success": "Successfully logged in!",
                 "toast_refund_success": "Refund adjustment created successfully!",
@@ -361,7 +363,9 @@
                 "device_target_label": "目标设备指纹:",
                 "unbinding": "解绑中...",
                 "unbind_success": "设备解绑成功！",
-                "toast_code_sent": "验证码已成功发往您的邮箱。",
+                "auto_renew_on_btn": "自动续费：开启",
+                "auto_renew_off_btn": "自动续费：已关闭",
+                "toast_code_sent": "验证码已发送至您的邮箱，请注意查收。",
                 "toast_login_success": "登录成功！",
                 "toast_refund_success": "退款成功！授权已被吊销。",
                 "toast_error": "发生错误：",
@@ -1017,11 +1021,22 @@
                     `;
                 }
 
-                // Invoice / cancel / refund (API sets invoiceable / cancellable / refundable)
+                // Invoice / auto-renew toggle / cancel / refund (API sets invoiceable / cancellable / refundable)
                 const actionBtns = [];
                 const canInvoice = lic.invoiceable === true && !!lic.paddle_transaction_id;
                 const canRefund = lic.status === 'active' && lic.refundable === true;
                 const canCancelSub = lic.status === 'active' && lic.cancellable === true;
+                const canToggleAutoRenew = lic.status === 'active' && Boolean(lic.paddle_subscription_id);
+
+                if (canToggleAutoRenew) {
+                    const isAutoRenewOn = lic.auto_renew !== 0;
+                    actionBtns.push(`
+                        <button class="toggle-auto-renew-btn flex items-center gap-1.5 ${isAutoRenewOn ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/40'} border px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-current-renew="${isAutoRenewOn ? '1' : '0'}">
+                            <span class="material-symbols-outlined text-sm">${isAutoRenewOn ? 'sync' : 'sync_disabled'}</span>
+                            <span>${isAutoRenewOn ? (dict.auto_renew_on_btn || 'Auto-renew: ON') : (dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
+                        </button>
+                    `);
+                }
                 if (canInvoice) {
                     actionBtns.push(`
                         <button class="invoice-trigger-btn flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white border border-sky-500/30 hover:border-sky-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-txn="${lic.paddle_transaction_id || ''}">
@@ -1088,7 +1103,7 @@
 
                     ${activationsHtml}
 
-                    <div class="flex justify-end pt-2">
+                    <div class="flex justify-end pt-3 border-t border-white/5 mt-2">
                         ${actionBtnHtml}
                     </div>
                 `;
@@ -1491,6 +1506,42 @@
             // Confirm unbind modal
             document.getElementById('unbind-cancel-btn').addEventListener('click', hideUnbindModal);
             document.getElementById('unbind-ok-btn').addEventListener('click', handleConfirmUnbind);
+
+            // Delegate click events on licenses container for toggle-auto-renew
+            document.getElementById('licenses-container').addEventListener('click', async (e) => {
+                const toggleBtn = e.target.closest('.toggle-auto-renew-btn');
+                if (toggleBtn) {
+                    const license = toggleBtn.getAttribute('data-license');
+                    const currentRenew = toggleBtn.getAttribute('data-current-renew') === '1';
+                    const targetRenew = !currentRenew;
+                    toggleBtn.disabled = true;
+                    try {
+                        const res = await fetch(`${API_BASE}/api/v1/user/toggle-auto-renew`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${state.token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                license_code: license,
+                                auto_renew: targetRenew,
+                                lang: state.lang
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                            showToast(data.message || 'Auto-renewal status updated', 'success');
+                            await loadLicenses();
+                        } else {
+                            showToast(data.error || 'Failed to update auto-renewal status', 'error');
+                        }
+                    } catch (err) {
+                        showToast(`Error: ${err.message}`, 'error');
+                    } finally {
+                        toggleBtn.disabled = false;
+                    }
+                }
+            });
         }
 
         function applyUrlEmailAutoFill() {

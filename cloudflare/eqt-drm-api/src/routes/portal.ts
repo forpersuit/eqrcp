@@ -58,6 +58,14 @@ async function revokeLicenseAndNotify(
   }
 }
 
+async function ensureAutoRenewColumn(env: Env) {
+  try {
+    await env.DB.prepare("ALTER TABLE licenses ADD COLUMN auto_renew INTEGER DEFAULT 1").run();
+  } catch (_) {
+    // Column already exists
+  }
+}
+
 export async function handlePortalRoutes(
   request: Request,
   env: Env,
@@ -65,12 +73,140 @@ export async function handlePortalRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
-  // 0.3 Get user licenses history and status
+  // 0.1 Send login verification code
+  if (url.pathname === "/api/v1/user/send-code" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    await ensureAutoRenewColumn(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+    const email = (body.email || "").trim().toLowerCase();
+
+    if (!email || !email.includes("@")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(email);
+
+    // Gate A: Check email-based refund blacklist gate
+    const emailBlacklist = await checkEmailRefundBlacklist(env, emailHash);
+    if (emailBlacklist.isAbusive) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("blacklist_email", reqLang) || emailBlacklist.reason,
+        reason_key: "blacklist_email"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Purchase check: Email must exist in licenses table as buyer_email OR buyer_email_hash
+    const countRow = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ?"
+    ).bind(email, emailHash).first<any>();
+
+    if (!countRow || Number(countRow.cnt) <= 0) {
+      return new Response(JSON.stringify({ error: getApiTranslation("no_purchase_history", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { results: recent } = await env.DB.prepare(
+      "SELECT created_at FROM auth_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(email).all<any>();
+
+    if (recent && recent.length > 0) {
+      const lastTime = new Date(recent[0].created_at).getTime();
+      if (Date.now() - lastTime < 60 * 1000) {
+        return new Response(JSON.stringify({ error: getApiTranslation("rate_limited", reqLang) }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+
+    await env.DB.prepare(
+      "INSERT INTO auth_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(email, code, expiresAt, new Date().toISOString()).run();
+
+    const template = AUTH_CODE_EMAIL_I18N[reqLang] || AUTH_CODE_EMAIL_I18N['zh'] || AUTH_CODE_EMAIL_I18N['en'];
+    const emailHtml = renderEmailWrapper(template.title, `
+      <p style="color: #475569; font-size: 14px;">${template.bodyText}</p>
+      <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 28px; font-weight: bold; letter-spacing: 4px; text-align: center; color: #0f172a; margin: 16px 0;">
+        ${code}
+      </div>
+      <p style="color: #64748b; font-size: 13px;">${template.validityText}</p>
+    `);
+
+    ctx.waitUntil(sendDRMEmail(env, email, template.subject, emailHtml));
+
+    return new Response(JSON.stringify({ success: true, message: getApiTranslation("toast_code_sent", reqLang) }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.2 Verify code & Login
+  if (url.pathname === "/api/v1/user/verify-code" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    await ensureAutoRenewColumn(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+    const email = (body.email || "").trim().toLowerCase();
+    const code = (body.code || "").trim();
+
+    if (!email || !code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const record = await env.DB.prepare(
+      "SELECT * FROM auth_codes WHERE email = ? AND code = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(email, code).first<any>();
+
+    if (!record || new Date(record.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    await env.DB.prepare("DELETE FROM auth_codes WHERE email = ?").bind(email).run();
+
+    const token = crypto.randomUUID();
+    const sessionExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+    await env.DB.prepare(
+      "INSERT INTO user_sessions (email, session_token, expires_at, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(email, token, sessionExpires, new Date().toISOString()).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      token,
+      email,
+      expires_at: sessionExpires
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.3 Fetch User Licenses & Activations
   if (url.pathname === "/api/v1/user/licenses" && request.method === "GET") {
     await ensureLicenseSourceColumns(env);
+    await ensureAutoRenewColumn(env);
+    const reqLang = extractRequestLang(request);
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -82,7 +218,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: "Session expired or invalid" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -92,10 +228,10 @@ export async function handlePortalRoutes(
     const emailHash = await sha256Hex(email);
 
     const { results: licenses } = await env.DB.prepare(
-      "SELECT * FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ? ORDER BY created_at DESC"
-    ).bind(emailHash, email).all<any>();
+      "SELECT * FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ? ORDER BY created_at DESC"
+    ).bind(email, emailHash).all<any>();
 
-    const oneYearAgoIso = new Date(Date.now() - ONE_YEAR_MS).toISOString();
+    const oneYearAgoIso = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
 
     const list: any[] = [];
     for (const lic of licenses) {
@@ -113,6 +249,8 @@ export async function handlePortalRoutes(
       list.push({
         ...lic,
         source,
+        auto_renew: lic.auto_renew === 0 ? 0 : 1,
+        auto_renew_toggleable: lic.status === 'active' && Boolean(lic.paddle_subscription_id),
         refundable: isLicenseRefundable({ ...lic, source }),
         cancellable: isLicenseCancellable({ ...lic, source }),
         // Real Paddle purchase txn → can open invoice/receipt via Paddle API
@@ -445,6 +583,102 @@ export async function handlePortalRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+  }
+
+  // 0.4.5 Toggle Auto-Renew (Auto-Renew Off keeps license active until expires_at!)
+  if (url.pathname === "/api/v1/user/toggle-auto-renew" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    await ensureAutoRenewColumn(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code, auto_renew } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const targetAutoRenew = auto_renew === false || auto_renew === 0 ? 0 : 1;
+    const subscriptionId = license.paddle_subscription_id as string | null;
+
+    // Next billing period cancel on Paddle if turning off auto-renew
+    if (targetAutoRenew === 0 && subscriptionId && isRealPaddleSubscriptionId(subscriptionId)) {
+      const paddleApiKey = env.PADDLE_API_KEY;
+      if (paddleApiKey) {
+        const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+        const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+        try {
+          await fetch(`${paddleBaseUrl}/subscriptions/${subscriptionId}/cancel`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${paddleApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              effective_from: "next_billing_period"
+            })
+          });
+        } catch (e) {
+          console.error("Paddle next_billing_period cancel warning:", e);
+        }
+      }
+    }
+
+    // Update D1 database (KEEP license.status = 'active' so current paid period remains usable!)
+    await env.DB.prepare(
+      "UPDATE licenses SET auto_renew = ? WHERE license_code = ?"
+    ).bind(targetAutoRenew, license_code).run();
+
+    const msgKey = targetAutoRenew === 1 ? "auto_renew_on_success" : "auto_renew_off_success";
+    return new Response(JSON.stringify({
+      success: true,
+      auto_renew: targetAutoRenew,
+      message: getApiTranslation(msgKey, reqLang)
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   // 0.5 Cancel subscription (immediate revoke — not a refund)

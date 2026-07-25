@@ -333,6 +333,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Este dispositivo ya tiene una licencia de por vida del mismo nivel",
     de: "Dieses Gerät verfügt bereits über eine lebenslange Lizenz desselben Tarifs",
     fr: "Cet appareil dispose déjà d'une licence à vie du même niveau"
+  },
+  auto_renew_off_success: {
+    zh: "自动续费已关闭。您的 Plus 权益可继续正常使用至到期日，届时将不会自动扣费。",
+    en: "Auto-renewal disabled. Your Plus status remains active until expiration date, and you will not be billed again.",
+    ja: "自動更新をオフにしました。有効期限まで Plus 機能を引き続きご利用いただけます。",
+    ko: "자동 갱신이 해제되었습니다. 만료일까지 Plus 혜택을 계속 이용할 수 있습니다.",
+    es: "Renovación automática desactivada. Su estado Plus permanece activo hasta la fecha de expiración.",
+    de: "Automatische Verlängerung deaktiviert. Ihr Plus-Status bleibt bis zum Ablaufdatum aktiv.",
+    fr: "Renouvellement automatique désactivé. Votre statut Plus reste actif jusqu'à la date d'expiration."
+  },
+  auto_renew_on_success: {
+    zh: "自动续费已开启。将于到期日自动扣费续订阅。",
+    en: "Auto-renewal enabled. Your subscription will renew automatically on the expiration date.",
+    ja: "自動更新をオンにしました。有効期限日に自動的に更新されます。",
+    ko: "자동 갱신이 설정되었습니다. 만료일에 자동으로 갱신됩니다.",
+    es: "Renovación automática activada. Su suscripción se renovará automáticamente en la fecha de expiración.",
+    de: "Automatische Verlängerung aktiviert. Ihr Abonnement wird am Ablaufdatum automatisch verlängert.",
+    fr: "Renouvellement automatique activé. Votre abonnement se renouveltera automatiquement à la date d'expiration."
   }
 };
 
