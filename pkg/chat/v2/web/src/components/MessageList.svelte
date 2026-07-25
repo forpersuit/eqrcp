@@ -38,6 +38,9 @@
   let prevScrollHeight = 0;
   let prevScrollTop = 0;
 
+  // Dynamic spacer to push scrollable area for context menu if near bottom
+  let menuSpacerHeight = 0;
+
   beforeUpdate(() => {
     if (!messagesEl || messages.length === 0) return;
     const firstId = messages[0]?.id || '';
@@ -502,6 +505,7 @@
     activeBubbleEl = null;
     activeMenuOptions = [];
     confirmingIndex = null;
+    menuSpacerHeight = 0;
     if (confirmTimeout) {
       clearTimeout(confirmTimeout);
       confirmTimeout = null;
@@ -556,7 +560,7 @@
     return `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
   }
 
-  function adjustMenuPosition() {
+  async function adjustMenuPosition(isRetry = false) {
     const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
     if (!menuEl || !activeBubbleEl) return;
     
@@ -573,45 +577,81 @@
     });
 
     // 2. 动态计算菜单宽度 (基于最长文字宽度 + 32px menu-item padding + 8px menu container padding + 2px border)
-    // 菜单容器左右 padding 各 4px = 8px; border 各 1px = 2px; menu-item 左右 padding 各 16px = 32px; 共 42px
     const targetW = Math.max(100, Math.min(280, maxTextW + 42));
-    
-    // 应用计算宽度
     menuEl.style.width = `${targetW}px`;
 
-    // 使用设置后的宽度和高度进行定位计算
     const menuW = menuEl.offsetWidth;
     const menuH = menuEl.offsetHeight;
 
-    // 输出宽度计算结果和菜单内实际文字宽度到控制台日志
-    console.log(`[BubbleMenu] Width calculation result: ${menuW}px, Max item text width: ${maxTextW}px, Target content width: ${targetW}px`);
-
-    const bubbleRect = activeBubbleEl.getBoundingClientRect();
     const winW = window.innerWidth;
     const winH = window.innerHeight;
 
-    // 默认展示在下方
-    let top = bubbleRect.bottom + 8;
+    // 3. 计算聊天历史视口 (messagesEl) 与底部 Input 输入框 (composer) 的准确边界
+    const messagesRect = messagesEl ? messagesEl.getBoundingClientRect() : { top: 0, bottom: winH, left: 0, right: winW, width: winW, height: winH };
+    const composerEl = document.querySelector('.composer-container, .composer, .message-composer') as HTMLElement;
+    const composerTop = composerEl ? composerEl.getBoundingClientRect().top : messagesRect.bottom;
+
+    const vMinTop = Math.max(8, messagesRect.top + 8);
+    const vMaxBottom = Math.min(winH - 8, composerTop - 8);
+
+    const bubbleRect = activeBubbleEl.getBoundingClientRect();
+
+    // 4. 计算超长气泡在聊天视口内的有效可见区域切片 (Visible Slice)
+    const visibleTop = Math.max(bubbleRect.top, vMinTop);
+    const visibleBottom = Math.min(bubbleRect.bottom, vMaxBottom);
+
+    // 优先尝试放在下方
+    let top = visibleBottom + 8;
     menuIsBelow = true;
 
-    // 判断如果下方空间不够且上方空间足够，则显示在上方
-    if (top + menuH > winH && bubbleRect.top - menuH - 8 > 0) {
-      top = bubbleRect.top - menuH - 8;
+    const fitsBelow = top + menuH <= vMaxBottom;
+    const fitsAbove = visibleTop - 8 - menuH >= vMinTop;
+
+    if (fitsBelow) {
+      // 下方空间足够
+      top = visibleBottom + 8;
+      menuIsBelow = true;
+    } else if (fitsAbove) {
+      // 上方空间足够
+      top = visibleTop - 8 - menuH;
       menuIsBelow = false;
+    } else {
+      // 上下直放空间均不足，判断是否属于最底部气泡触碰 Input 边界的场景
+      const distToComposer = vMaxBottom - bubbleRect.bottom;
+      if (!isRetry && distToComposer < menuH + 16 && messagesEl) {
+        const requiredBump = Math.ceil(menuH + 24 - Math.max(0, distToComposer));
+        if (requiredBump > 0) {
+          menuSpacerHeight = requiredBump;
+          await tick();
+          messagesEl.scrollTop += requiredBump;
+          await tick();
+          return adjustMenuPosition(true);
+        }
+      }
+
+      // 如果撑高后或针对超长贯穿气泡依然无法完整容纳，收敛限制在视口安全范围内
+      if (bubbleRect.bottom > vMaxBottom) {
+        top = Math.max(vMinTop, vMaxBottom - menuH);
+        menuIsBelow = false;
+      } else {
+        top = vMinTop;
+        menuIsBelow = true;
+      }
     }
 
-    // 水平居中对齐
+    // 5. 水平居中对齐与视口边缘防溢出保护
     let left = bubbleRect.left + bubbleRect.width / 2 - menuW / 2;
+    const vLeft = Math.max(8, messagesRect.left + 8);
+    const vRight = Math.min(winW - 8, messagesRect.right - 8);
 
-    // 溢出屏幕左/右侧保护
-    if (left + menuW > winW - 12) {
-      left = winW - menuW - 12;
+    if (left + menuW > vRight) {
+      left = vRight - menuW;
     }
-    if (left < 12) {
-      left = 12;
+    if (left < vLeft) {
+      left = vLeft;
     }
 
-    // 计算气泡中心点在菜单上的相对 X 坐标百分比（供小箭头对齐气泡中心）
+    // 6. 计算气泡中心点在菜单上的相对 X 坐标百分比
     const bubbleCenterX = bubbleRect.left + bubbleRect.width / 2;
     const relativeX = bubbleCenterX - left;
     arrowXPercent = Math.max(10, Math.min(90, (relativeX / menuW) * 100));
@@ -1086,6 +1126,7 @@
         <span>{getTranslation('emptyTips', currentLang)}</span>
       </div>
     {/each}
+    <div style="height: {menuSpacerHeight}px; min-height: 0px; flex-shrink: 0; transition: height 0.15s ease-out;" aria-hidden="true"></div>
   </div>
 
   <button class="scroll-arrow" class:visible={!followLatest && !isNearBottomValue} on:click={scrollToBottom} aria-label="Jump to latest message" title="Latest message">
