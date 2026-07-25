@@ -108,6 +108,12 @@
                     <button id="send-code-btn" class="bg-white/5 hover:bg-white/10 border border-white/10 text-primary px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap" data-i18n="send_code_btn">Send Code</button>
                 </div>
 
+                <!-- Inline Send Code Status Message Banner -->
+                <div id="send-code-status-msg" style="display: none;" class="text-xs rounded-xl p-3 border transition-all duration-300 flex items-start gap-2">
+                    <span id="send-code-status-icon" class="material-symbols-outlined text-base shrink-0 mt-0.5">info</span>
+                    <span id="send-code-status-text" class="leading-relaxed font-medium"></span>
+                </div>
+
                 <button id="login-submit-btn" class="w-full bg-primary hover:bg-primary/90 text-background py-3.5 rounded-xl font-semibold transition-all duration-300 active:scale-[0.98] shadow-lg shadow-primary/20 flex justify-center items-center gap-2" disabled>
                     <span data-i18n="login_btn">Verify & Login</span>
                 </button>
@@ -818,6 +824,36 @@
             }, ttl);
         }
 
+        function setSendCodeStatus(text, type = 'info') {
+            const banner = document.getElementById('send-code-status-msg');
+            const icon = document.getElementById('send-code-status-icon');
+            const label = document.getElementById('send-code-status-text');
+            if (!banner || !label) return;
+
+            if (!text) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            banner.style.display = 'flex';
+            banner.className = 'text-xs rounded-xl p-3 border transition-all duration-300 flex items-start gap-2 ' + {
+                success: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+                error: 'bg-red-500/10 text-red-300 border-red-500/30',
+                warning: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+                info: 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+            }[type];
+
+            if (icon) {
+                icon.textContent = {
+                    success: 'check_circle',
+                    error: 'error',
+                    warning: 'schedule',
+                    info: 'hourglass_top'
+                }[type];
+            }
+            label.textContent = text;
+        }
+
         // Send validation code (passes UI language)
         async function handleSendCode() {
             if (state.sendCodeInFlight) return;
@@ -828,7 +864,9 @@
             
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!email || !emailRegex.test(email)) {
-                showToast(dict.toast_enter_valid_email || 'Please enter a valid email address', 'error');
+                const msg = dict.toast_enter_valid_email || 'Please enter a valid email address';
+                setSendCodeStatus(msg, 'error');
+                showToast(msg, 'error');
                 if (emailInput) emailInput.focus();
                 return;
             }
@@ -839,6 +877,7 @@
                 sendBtn.disabled = true;
                 sendBtn.textContent = dict.sending_code || 'Sending...';
             }
+            setSendCodeStatus(dict.sending_code || 'Sending code, please wait...', 'info');
             
             try {
                 const res = await fetch(`${API_BASE}/api/v1/auth/send-code`, {
@@ -850,7 +889,9 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error);
 
-                showToast(dict.toast_code_sent || 'Verification code sent to your email.');
+                const successMsg = dict.toast_code_sent || 'Verification code sent to your email.';
+                setSendCodeStatus(successMsg, 'success');
+                showToast(successMsg);
                 
                 // Enable inputs
                 const codeInput = document.getElementById('login-code');
@@ -897,6 +938,8 @@
                 }
 
                 if (isRateLimited) {
+                    const warnMsg = errMsg || 'Request too frequent. 60s cooldown started.';
+                    setSendCodeStatus(warnMsg, 'warning');
                     let cooldown = 60;
                     if (sendBtn) {
                         sendBtn.disabled = true;
@@ -922,6 +965,7 @@
                         sendBtn.disabled = false;
                         sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
                     }
+                    setSendCodeStatus(errMsg, 'error');
                 }
 
                 showToast(errMsg.startsWith('http') ? (dict.toast_error || 'Error') : errMsg, 'error');
