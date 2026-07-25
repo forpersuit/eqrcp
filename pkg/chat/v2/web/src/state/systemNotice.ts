@@ -1,38 +1,16 @@
 /**
  * Chat system notices — first principle:
- * What appears in the message stream must be meaningful to a normal user
- * (what happened + optional next step). Implementation jargon is debug-only.
+ * Explicit method dispatch defines notice category (isDebug = true/false).
+ * No brittle string blacklists or regex guessing.
  */
-
-/** Explicit process / engineering logs (legacy [App] prefix or known technical shapes). */
-export function isDevDebugNotice(msg: string): boolean {
-  if (!msg) return false;
-  const t = msg.trimStart();
-  // Generic tech bracket tags like [App], [Debug], [WebSocket], [IO], etc.
-  if (/^\[(App|Debug|Chat|WebSocket|Transfer|Attachment|IO|SystemDebug|Trace)\]/i.test(t)) return true;
-  // Protocol / transport engineering strings (never user vocabulary)
-  if (t.startsWith('WebSocket ')) return true;
-  if (t.startsWith('Heartbeat timeout')) return true;
-  if (t.startsWith('Failed to parse server event')) return true;
-  if (t.startsWith('Server Error:')) return true;
-  if (t.startsWith('Connection setup failed')) return true;
-  if (t.startsWith('Cannot send command')) return true;
-  // Internal engineering & protocol vocabulary
-  if (/附件注册|Attachment registration|register(ing|ed)? attachment|selected-files|registerLocalAttachment|postMessage|iframe-log|chat-debug-notice/i.test(t)) {
-    return true;
-  }
-  return false;
-}
 
 /**
- * Whether a notice may appear as a chat bubble.
- * - User notices: always (non-empty).
- * - Debug notices: only when Dev Debug Mode is on.
+ * Whether a notice should surface in the chat message stream.
+ * - Regular user notice (isDebug = false): always surfaces.
+ * - Debug notice (isDebug = true): surfaces only when devDebugMode is ON.
  */
-export function shouldSurfaceSystemNotice(msg: string, isDevDebug = false): boolean {
-  if (!msg || !msg.trim()) return false;
-  if (isDevDebugNotice(msg)) return isDevDebug;
-  return true;
+export function shouldSurfaceNotice(isDebug: boolean, isDevDebug: boolean): boolean {
+  return !isDebug || isDevDebug;
 }
 
 /** Basename for user-facing file copy (path or name). */
@@ -42,3 +20,4 @@ export function displayFileName(pathOrName: string): string {
   const i = s.lastIndexOf('/');
   return i >= 0 ? s.slice(i + 1) : s;
 }
+

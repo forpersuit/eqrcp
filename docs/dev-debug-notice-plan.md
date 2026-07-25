@@ -1,62 +1,41 @@
-# Chat 界面系统消息与 Dev 调试模式（用户语义优先）
+# Chat 界面系统消息与 Dev 调试模式开关方案
 
-> **状态**：✅ 已按用户语义重做（v1.16.20，2026-07-25）  
-> **第一性原理**：进聊天气泡的文字必须是普通用户能懂的「发生了什么 / 可以怎么做」；实现细节（注册、WebSocket、心跳、Server Error code）**不是**用户消息。
+## 一、 问题背景与第一性原理设计
+
+在 GUI 端发送文件或拖拽上传时，技术事件与调试记录（如 `[App] 收到 selected-files 文件消息...`、`[App] 开始注册附件...`）混入用户聊天框，会严重影响界面质感与用户体验。
+
+按照 **第一性原理（First Principle）**：
+> **“调试的就是调试的，常规信息就是常规信息。”**  
+> 调试信息与用户通知的分类，应当在信息产生点（Call Site）由开发者通过显式 API （Explicit Typing / Explicit Method Dispatch）确定，而不是在事后依靠魔改正则或字符串黑名单进行隐式猜测。
+
+### 分派架构对比：
+
+| API 方法 | 语义与意图 | 结构标记 | UI 显示策略 (默认) | 日志记录策略 |
+| :--- | :--- | :--- | :--- | :--- |
+| **`chatActions.addDebugNotice(msg)`** | 显式标记为**内部技术调试/过程日志** | `isDebug = true` | **隐藏**（只在 Dev 调试模式开启时渲染为气泡） | **100% 全量输出**（发送至 `logToGui` 及后台系统日志） |
+| **`chatActions.addSystemMessage(msg)`** | 显式标记为**面向用户的常规系统通知** | `isDebug = false` | **正常显示**（渲染为用户可读的系统卡片） | **100% 全量输出** |
 
 ---
 
-## 一、为什么「附件注册失败」不对
+## 二、 简捷判定机制与零黑名单
 
-| 文案 | 用户听懂了吗？ | 判定 |
-| :--- | :---: | :--- |
-| `附件注册失败: …` / `Attachment registration failed` | 否（「注册」是实现词） | **调试信息**，不该默认进气泡 |
-| `无法分享「报告.pdf」，请重试。` | 是 | **用户消息** |
-| `[App] 开始注册附件: C:\…` | 否 | 调试 |
-| `WebSocket closed: …. Reconnecting…` | 否 | 调试；用户侧应是「连接已断开，正在重新连接…」 |
+在 `systemNotice.ts` 中彻底移除了依靠正则/词库字符串探查的脆弱黑名单，判定逻辑简化为纯粹的结构化布尔逻辑：
 
-上一轮仅去掉 `[App]` 前缀仍把「注册失败」当用户消息 —— **前缀过滤不够**，必须按**语义**分流。
-
----
-
-## 二、分流规则
-
-```text
-addSystemMessage(msg)  → 用户气泡（默认显示）  文案必须口语化
-addDebugNotice(msg)    → 仅诊断：systemMessages + logToGui；Dev 开时才进气泡
+```ts
+export function shouldSurfaceNotice(isDebug: boolean, isDevDebug: boolean): boolean {
+  return !isDebug || isDevDebug;
+}
 ```
 
-| 类型 | API | 示例 |
-| :--- | :--- | :--- |
-| 用户结果 | `addSystemMessage` | 无法分享/发送「名」；下载失败请重试；被踢；重连耗尽；连接断开正在重连 |
-| 过程/协议 | `addDebugNotice` | `[App]…`、local register 成功/开始、WS established/error/parse、Heartbeat、Server Error 原文 |
-
-**兜底**：`shouldSurfaceSystemNotice` / `isDevDebugNotice` 仍会把「附件注册 / WebSocket / Server Error…」当调试，防止漏网。
-
-### Dev 开关（不变）
-
-- 默认关  
-- `?debug=1` / `?dev=1`、`localStorage.chat_dev_debug`、`window.__setChatDevDebug(true)`
+### 运行机制：
+1. **常规通知 (`isDebug = false`)**：`!isDebug` 为 `true`，必定显示到 UI 界面。
+2. **调试通知 (`isDebug = true`)**：是否显示完全取决于 `isDevDebug`（即 `devDebugMode` 开关状态）。
+3. **日志通道**：无论 `isDebug` 与 `devDebugMode` 为何值，`systemMessages` 列表与桌面 `logToGui` 始终 100% 全量无损接收。
 
 ---
 
-## 三、代码落点
+## 三、 状态切换与控制途径
 
-| 文件 | 职责 |
-| :--- | :--- |
-| `systemNotice.ts` | `isDevDebugNotice` / `shouldSurfaceSystemNotice` / `displayFileName` |
-| `chatStore.ts` | `addSystemMessage` / `addDebugNotice` / `devDebugMode` |
-| `App.svelte` | 本地分享失败 → 用户文案；过程 → debug |
-| `websocket.ts` | 协议错误 → debug；断线/超时 → 口语化用户文案 |
-
----
-
-## 四、对「刚才 chat 调整」的复盘
-
-| 调整 | 对不对 | 修正 |
-| :--- | :---: | :--- |
-| 隐藏 `[App]` 过程日志 | 对方向 | 保留；并改为显式 `addDebugNotice` |
-| Dev 开关 | 对 | 保留 |
-| 把注册失败改成无 `[App]` 仍显示「附件注册失败」 | **错** | 改为「无法分享「文件名」，请重试」+ 细节进 debug |
-| 连接/WS 工程句直接进气泡 | **错** | 用户句 + debug 原文 |
-
-**验收**：默认聊天流里不应出现「注册 / WebSocket / Heartbeat / Server Error / [App]」；失败应是「无法分享/发送/下载 + 文件名 + 请重试」类句子。
+- **本地持久化**：存储于 `localStorage.getItem('chat_dev_debug') === 'true'`。
+- **URL 快捷激活**：支持带参数 `?debug=1` 或 `?dev=1` 初始化开启。
+- **动态控制 API**：提供 `chatActions.setDevDebugMode(enabled: boolean)`，并挂载 `window.__setChatDevDebug(enabled)` 供 DevTools / GUI 随时一键切换。

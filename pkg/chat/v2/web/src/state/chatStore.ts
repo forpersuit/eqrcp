@@ -1,8 +1,8 @@
 import { get, writable } from 'svelte/store';
 import type { Message, Device, TransferEvent } from '../services/types';
-import { isDevDebugNotice, shouldSurfaceSystemNotice } from './systemNotice';
+import { shouldSurfaceNotice, displayFileName } from './systemNotice';
 
-export { shouldSurfaceSystemNotice, isDevDebugNotice, displayFileName } from './systemNotice';
+export { shouldSurfaceNotice, displayFileName } from './systemNotice';
 
 export const messages = writable<Message[]>([]);
 export const peers = writable<Device[]>([]);
@@ -183,14 +183,11 @@ export const chatActions = {
     this.pushSystemNotice(msg, true);
   },
 
-  pushSystemNotice(msg: string, forceDebug: boolean) {
+  pushSystemNotice(msg: string, isDebug: boolean) {
     if (!msg || !msg.trim()) return;
     const stamped = `${new Date().toLocaleTimeString()}: ${msg}`;
     systemMessages.update(list => [...list, stamped]);
-    const treatAsDebug = forceDebug || isDevDebugNotice(msg);
-    const surface = treatAsDebug
-      ? get(devDebugMode)
-      : shouldSurfaceSystemNotice(msg, get(devDebugMode));
+    const surface = shouldSurfaceNotice(isDebug, get(devDebugMode));
     if (surface) {
       const notice: Message = {
         id: `sys-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
