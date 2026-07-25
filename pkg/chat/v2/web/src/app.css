@@ -986,7 +986,7 @@ h1 {
     display: grid;
     gap: 8px;
     max-width: 100%;
-    min-width: min(220px, 100%);
+    min-width: 0;
     width: 100%;
 }
 .attachment-card.file-attachment {

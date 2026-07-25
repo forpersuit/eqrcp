@@ -131,9 +131,9 @@ echo "Building Windows CLI artifacts..."
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then
     echo "Building Windows Wails GUI (consolidated)..."
-    rm -f /tmp/wailsbindings || true
+    rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
-    rm -f /tmp/wailsbindings || true
+    rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     # The Wails GUI binary is the consolidated 3-in-1 tool. Overwrite eqt.exe.
     cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
   fi

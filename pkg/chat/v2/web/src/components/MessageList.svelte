@@ -1199,13 +1199,11 @@
     z-index: 10000;
     width: max-content;
     max-width: 280px;
-    min-width: 100px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(21, 111, 90, 0.15);
+    min-width: 0;
+    background: #ffffff;
+    border: 1px solid var(--line, rgba(21, 111, 90, 0.18));
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
     padding: 4px;
     display: flex;
     flex-direction: column;
@@ -1221,25 +1219,25 @@
     border-style: solid;
     z-index: 10001;
     border-width: 0 6px 6px 6px;
-    border-color: transparent transparent rgba(255, 255, 255, 0.85) transparent;
+    border-color: transparent transparent #ffffff transparent;
     top: -6px;
     left: var(--arrow-x, 50%);
     transform: translateX(-50%);
   }
 
   :global(.dark) .bubble-context-menu::after {
-    border-color: transparent transparent rgba(15, 23, 42, 0.85) transparent;
+    border-color: transparent transparent #0f172a transparent;
   }
 
   .bubble-context-menu.above::after {
     border-width: 6px 6px 0 6px;
-    border-color: rgba(255, 255, 255, 0.85) transparent transparent transparent;
+    border-color: #ffffff transparent transparent transparent;
     top: auto;
     bottom: -6px;
   }
 
   :global(.dark) .bubble-context-menu.above::after {
-    border-color: rgba(15, 23, 42, 0.85) transparent transparent transparent;
+    border-color: #0f172a transparent transparent transparent;
   }
 
   @keyframes menu-fade-in {
@@ -1300,9 +1298,9 @@
   }
   
   :global(.dark) .bubble-context-menu {
-    background: rgba(15, 23, 42, 0.85);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    background: #0f172a;
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   }
   
   :global(.dark) .menu-item {
