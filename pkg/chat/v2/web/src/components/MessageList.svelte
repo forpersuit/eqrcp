@@ -909,6 +909,10 @@
             text = getTranslation('sysJoinedVia', currentLang).replaceAll('{platform}', platform);
           }
 
+          if (/今日免费 Chat 额度已用尽|Daily free chat quota exhausted|free limit/i.test(text)) {
+            return getTranslation('quotaExhaustedBroadcast', currentLang);
+          }
+
           if (text.includes('{sender}')) {
             const meText = getTranslation('me', currentLang) + ` (${msg.sender})`;
             const senderRepl = isMe && msg.sender ? meText : (msg.sender || '');

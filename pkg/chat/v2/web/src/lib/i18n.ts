@@ -38,6 +38,15 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Tägliches Gratis-Chat-Kontingent. Zählt nur mit Remote-Peer. Danach: Anhänge 100KB/s und ≤4MB; Text bleibt frei.',
     fr: 'Quota chat gratuit du jour. Compte seulement avec un pair distant. Après: pièces jointes 100KB/s et ≤4Mo; le texte reste libre.'
   },
+  quotaExhaustedBroadcast: {
+    zh: '今日免费 Chat 额度已用尽：附件限速 100KB/s，单文件不超过 4MB。文本消息不受影响。',
+    en: 'Daily free chat quota exhausted: attachments limited to 100KB/s, max file 4MB. Text is unaffected.',
+    ja: '本日の無料チャット枠が終了しました: 添付速度100KB/s制限、単一ファイル最大4MBまで。テキストは影響ありません。',
+    ko: '오늘 무료 채팅 한도가 소진되었습니다: 첨부 100KB/s 제한, 단일 파일 최대 4MB. 텍스트는 제한 없음.',
+    es: 'Cupo diario gratis agotado: adjuntos limitados a 100KB/s, archivo máx. 4MB. El texto no se ve afectado.',
+    de: 'Tägliches Gratis-Chat-Kontingent verbraucht: Anhänge auf 100KB/s beschränkt, max. 4MB pro Datei. Text bleibt unberührt.',
+    fr: 'Quota chat gratuit du jour épuisé: pièces jointes limitées à 100Ko/s, max 4Mo par fichier. Le texte reste inchangé.'
+  },
   freeQuotaDaily: {
     zh: '每日免费额度',
     en: 'Daily free allowance',
