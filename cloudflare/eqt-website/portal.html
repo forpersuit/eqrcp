@@ -1021,11 +1021,10 @@
                     `;
                 }
 
-                // Invoice / auto-renew toggle / cancel / refund (API sets invoiceable / cancellable / refundable)
+                // Invoice / auto-renew toggle / refund (API sets invoiceable / refundable)
                 const actionBtns = [];
                 const canInvoice = lic.invoiceable === true && !!lic.paddle_transaction_id;
                 const canRefund = lic.status === 'active' && lic.refundable === true;
-                const canCancelSub = lic.status === 'active' && lic.cancellable === true;
                 const canToggleAutoRenew = lic.status === 'active' && Boolean(lic.paddle_subscription_id);
 
                 if (canToggleAutoRenew) {
@@ -1042,14 +1041,6 @@
                         <button class="invoice-trigger-btn flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white border border-sky-500/30 hover:border-sky-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-txn="${lic.paddle_transaction_id || ''}">
                             <span class="material-symbols-outlined text-sm">receipt_long</span>
                             <span>${dict.invoice_btn || 'Invoice / receipt'}</span>
-                        </button>
-                    `);
-                }
-                if (canCancelSub) {
-                    actionBtns.push(`
-                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
-                            <span class="material-symbols-outlined text-sm">event_busy</span>
-                            <span>${dict.cancel_subscription || translations[state.lang].cancel_subscription || 'Cancel subscription'}</span>
                         </button>
                     `);
                 }
