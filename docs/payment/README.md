@@ -39,6 +39,9 @@
 11. **[授权来源、累加与退款开发方案 (License Source & Refund Policy)](license-source-and-refund-policy.md)**
    - `source`（purchase/promo/admin/test）、兑换窗、累加、Portal 退款门禁、滚动 365 天滥用黑名单、条款披露与 P0/P1 清单。
 
+12. **[订阅续费/退款严格流程与测试验证方案 (Subscription Renewal & Refund Workflow)](subscription-renewal-and-refund-workflow.md)**
+   - 一订阅一码续费延期机制、取消订阅与冷静期退款全流程、Dev 模式兑换 API 与 Paddle Sandbox 两阶段测试方案。
+
 用户自助 Portal（查授权 / 解绑 / 退款）文档见 **[`docs/portal/`](../portal/README.md)**。
 
 **产品正式发布总清单**（配置收口、Paddle live、验收）：[`docs/IMPORTANT_product-release.md`](../IMPORTANT_product-release.md)。
