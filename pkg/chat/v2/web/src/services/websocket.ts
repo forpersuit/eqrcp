@@ -99,13 +99,17 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Page visibility: keep the control-plane socket open while backgrounded.
-    // Mobile OS may still kill the socket; only reconnect when the page is visible again.
+    // Page visibility: actively close socket with 1000 page_hidden on backgrounding
+    // to comply with WS RFC 6455 and avoid OS TCP suspension timeout accumulation.
+    // Immediately reset reconnect attempts and reconnect on foreground visibility.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.isSuspended = true;
-          this.sendLog(`[SYSTEM] Page hidden; keeping WebSocket open (no active close).`);
+          if (this.ws) {
+            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
+            this.ws.close(1000, "page_hidden");
+          }
         } else if (document.visibilityState === 'visible') {
           this.isSuspended = false;
           if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
@@ -134,12 +138,7 @@ export class ChatWebSocketClient {
       this.ws = new WebSocket(wsUrl);
       this.setupHandlers();
     } catch (err: any) {
-      chatActions.addSystemMessage(
-        (localStorage.getItem('eqt_lang') || 'zh') === 'en'
-          ? 'Could not connect. Retrying…'
-          : '无法连接，正在重试…'
-      );
-      chatActions.addDebugNotice(`Connection setup failed: ${err.message}`);
+      chatActions.addDebugNotice(`Connection setup failed: ${err.message}. Retrying...`);
       this.handleReconnect();
     }
   }
@@ -271,10 +270,6 @@ export class ChatWebSocketClient {
         return;
       }
       if (!this.isManualClosed) {
-        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
-        chatActions.addSystemMessage(
-          currentLang === 'en' ? 'Connection lost. Reconnecting…' : '连接已断开，正在重新连接…'
-        );
         chatActions.addDebugNotice(`WebSocket closed: ${event.reason || 'No reason given'}. Reconnecting...`);
         this.sendLog(`[SYSTEM] WebSocket closed: reason=${event.reason || 'none'}. Reconnecting...`);
         this.handleReconnect();
@@ -462,10 +457,6 @@ export class ChatWebSocketClient {
     this.lastHeartbeatAck = Date.now();
     this.heartbeatIntervalId = setInterval(() => {
       if (Date.now() - this.lastHeartbeatAck > 30000) {
-        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
-        chatActions.addSystemMessage(
-          currentLang === 'en' ? 'Connection timed out. Reconnecting…' : '连接超时，正在重新连接…'
-        );
         chatActions.addDebugNotice('Heartbeat timeout (30s). Re-establishing connection.');
         this.ws?.close();
         return;
