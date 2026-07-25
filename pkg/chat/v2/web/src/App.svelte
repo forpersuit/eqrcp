@@ -4,7 +4,7 @@
   import MessageComposer from './components/MessageComposer.svelte';
   import { getTranslation } from './lib/i18n';
   import { ChatWebSocketClient } from './services/websocket';
-  import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted } from './state/chatStore';
+  import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted, displayFileName } from './state/chatStore';
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
 
@@ -267,12 +267,14 @@
       const remaining = Math.max(0, Number(event.data.until || 0) - Date.now());
       startQRPulse(remaining);
     } else if (event.data.type === 'chat-debug-notice') {
-      chatActions.addSystemMessage(event.data.message);
+      chatActions.addDebugNotice(event.data.message || '');
     } else if (event.data.type === 'selected-files') {
       const paths: string[] = event.data.paths || [];
-      chatActions.addSystemMessage(currentLang === 'en'
-        ? `[App] Received selected-files message: ${JSON.stringify(paths)}`
-        : `[App] 收到 selected-files 文件消息: ${JSON.stringify(paths)}`);
+      chatActions.addDebugNotice(
+        currentLang === 'en'
+          ? `[App] Received selected-files message: ${JSON.stringify(paths)}`
+          : `[App] 收到 selected-files 文件消息: ${JSON.stringify(paths)}`
+      );
       logToGui(`handleMessage type selected-files paths: ${JSON.stringify(paths)}`);
       paths.forEach(p => {
         registerLocalAttachment(p);
@@ -297,9 +299,12 @@
       if (client) {
         client.sendLog(`[ERROR] Download failed for Message ID: ${messageId}, Error: ${error}`);
       }
-      chatActions.addSystemMessage(currentLang === 'en'
-        ? `Download attachment failed: ${error}`
-        : `下载附件失败: ${error}`);
+      chatActions.addSystemMessage(
+        currentLang === 'en'
+          ? 'File download failed. Please try again.'
+          : '文件下载失败，请重试。'
+      );
+      chatActions.addDebugNotice(`download-failed messageId=${messageId} error=${error}`);
       chatActions.updateTransfer({
         id: 'dl-' + messageId + '-' + peer,
         state: 'failed',
@@ -346,9 +351,12 @@
   }
 
   function registerLocalAttachment(filePath: string) {
-    chatActions.addSystemMessage(currentLang === 'en'
-      ? `[App] Started registering attachment: ${filePath}`
-      : `[App] 开始注册附件: ${filePath}`);
+    const prettyName = displayFileName(filePath) || filePath;
+    chatActions.addDebugNotice(
+      currentLang === 'en'
+        ? `[App] Started registering attachment: ${filePath}`
+        : `[App] 开始注册附件: ${filePath}`
+    );
     logToGui(`registerLocalAttachment called with: ${filePath}`);
     const hostToken = localStorage.getItem('chat_host_token') || '';
     const url = `/chat-v2/${token}/attachments/local?hostToken=${encodeURIComponent(hostToken)}`;
@@ -377,16 +385,21 @@
       return r.json();
     })
     .then(message => {
-      chatActions.addSystemMessage(currentLang === 'en'
-        ? `[App] Registration success: ${message.fileName}`
-        : `[App] 注册成功: ${message.fileName}`);
+      chatActions.addDebugNotice(
+        currentLang === 'en'
+          ? `[App] Registration success: ${message.fileName}`
+          : `[App] 注册成功: ${message.fileName}`
+      );
       logToGui(`Successfully registered local attachment response: ${JSON.stringify(message)}`);
     })
     .catch(err => {
-      // User-facing (no [App] prefix) so it surfaces even when Dev Debug Mode is off.
-      chatActions.addSystemMessage(currentLang === 'en'
-        ? `Attachment registration failed: ${err.message}`
-        : `附件注册失败: ${err.message}`);
+      // User vocabulary: share/send file failed — not "registration".
+      chatActions.addSystemMessage(
+        currentLang === 'en'
+          ? `Could not share "${prettyName}". Please try again.`
+          : `无法分享「${prettyName}」，请重试。`
+      );
+      chatActions.addDebugNotice(`local attachment register failed: ${err?.message || err}`);
       logToGui(`Failed to register local attachment: ${err.message}`, true);
     });
   }
@@ -948,8 +961,9 @@
         return map;
       });
       chatActions.addSystemMessage(currentLang === 'en'
-        ? `Failed to upload "${file.name}": ${err.message}`
-        : `上传文件 "${file.name}" 失败: ${err.message}`);
+        ? `Could not send "${file.name}". Please try again.`
+        : `无法发送「${file.name}」，请重试。`);
+      chatActions.addDebugNotice(`upload failed ${file.name}: ${err.message}`);
       finish();
     }
 
@@ -980,9 +994,11 @@
         await uploadOneFile(item.file, item.name);
       } catch (err: any) {
         console.error('Failed to add attachment:', err);
+        const friendly = localizeUploadError(err?.message || String(err));
         chatActions.addSystemMessage(currentLang === 'en'
-          ? `Failed to add attachment "${item.name}": ${localizeUploadError(err?.message || String(err))}`
-          : `添加文件 "${item.name}" 失败: ${localizeUploadError(err?.message || String(err))}`);
+          ? `Could not send "${item.name}". ${friendly}`
+          : `无法发送「${item.name}」。${friendly}`);
+        chatActions.addDebugNotice(`add attachment failed ${item.name}: ${err?.message || err}`);
       }
     }
     uploadQueueRunning = false;

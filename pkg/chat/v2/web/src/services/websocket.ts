@@ -134,7 +134,12 @@ export class ChatWebSocketClient {
       this.ws = new WebSocket(wsUrl);
       this.setupHandlers();
     } catch (err: any) {
-      chatActions.addSystemMessage(`Connection setup failed: ${err.message}`);
+      chatActions.addSystemMessage(
+        (localStorage.getItem('eqt_lang') || 'zh') === 'en'
+          ? 'Could not connect. Retrying…'
+          : '无法连接，正在重试…'
+      );
+      chatActions.addDebugNotice(`Connection setup failed: ${err.message}`);
       this.handleReconnect();
     }
   }
@@ -143,7 +148,7 @@ export class ChatWebSocketClient {
     if (!this.ws) return;
 
     this.ws.onopen = () => {
-      chatActions.addSystemMessage('WebSocket connection established.');
+      chatActions.addDebugNotice('WebSocket connection established.');
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       chatActions.setReconnectExhausted(false);
@@ -202,12 +207,12 @@ export class ChatWebSocketClient {
         const payload: EventEnvelope = JSON.parse(event.data);
         this.handleEvent(payload);
       } catch (err: any) {
-        chatActions.addSystemMessage(`Failed to parse server event: ${err.message}`);
+        chatActions.addDebugNotice(`Failed to parse server event: ${err.message}`);
       }
     };
 
     this.ws.onerror = (err) => {
-      chatActions.addSystemMessage('WebSocket encountered an error.');
+      chatActions.addDebugNotice('WebSocket encountered an error.');
       this.sendLog(`[SYSTEM] WebSocket encountered an error.`);
     };
 
@@ -266,11 +271,15 @@ export class ChatWebSocketClient {
         return;
       }
       if (!this.isManualClosed) {
-        chatActions.addSystemMessage(`WebSocket closed: ${event.reason || 'No reason given'}. Reconnecting...`);
+        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+        chatActions.addSystemMessage(
+          currentLang === 'en' ? 'Connection lost. Reconnecting…' : '连接已断开，正在重新连接…'
+        );
+        chatActions.addDebugNotice(`WebSocket closed: ${event.reason || 'No reason given'}. Reconnecting...`);
         this.sendLog(`[SYSTEM] WebSocket closed: reason=${event.reason || 'none'}. Reconnecting...`);
         this.handleReconnect();
       } else {
-        chatActions.addSystemMessage('WebSocket closed manually.');
+        chatActions.addDebugNotice('WebSocket closed manually.');
         this.sendLog(`[SYSTEM] WebSocket closed manually.`);
       }
     };
@@ -390,11 +399,13 @@ export class ChatWebSocketClient {
               const name = event.transfer.fileName || event.transfer.messageId || '';
               const err = event.transfer.error || 'unknown error';
               const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+              const label = name || (currentLang === 'en' ? 'file' : '文件');
               chatActions.addSystemMessage(
                 currentLang === 'en'
-                  ? `Transfer failed for "${name}": ${err}`
-                  : `传输失败「${name}」: ${err}`
+                  ? `Could not transfer "${label}". Please try again.`
+                  : `「${label}」传输失败，请重试。`
               );
+              chatActions.addDebugNotice(`Transfer failed for "${name}": ${err}`);
             }
           }
           this.sendLog(`[TRANSFER] Event=${event.type}, clientId=${event.transfer.clientId}, messageId=${event.transfer.messageId}, bytes=${event.transfer.bytesDone}/${event.transfer.bytesTotal}, state=${event.transfer.state}`);
@@ -412,7 +423,11 @@ export class ChatWebSocketClient {
 
       case 'error':
         if (event.error) {
-          chatActions.addSystemMessage(`Server Error: [${event.error.code}] ${event.error.message}`);
+          const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+          chatActions.addSystemMessage(
+            currentLang === 'en' ? 'Something went wrong. Please try again.' : '操作失败，请稍后重试。'
+          );
+          chatActions.addDebugNotice(`Server Error: [${event.error.code}] ${event.error.message}`);
           this.sendLog(`[SERVER-ERROR] Code=${event.error.code}, Msg=${event.error.message}`);
         }
         break;
@@ -447,7 +462,11 @@ export class ChatWebSocketClient {
     this.lastHeartbeatAck = Date.now();
     this.heartbeatIntervalId = setInterval(() => {
       if (Date.now() - this.lastHeartbeatAck > 30000) {
-        chatActions.addSystemMessage('Heartbeat timeout (30s). Re-establishing connection.');
+        const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+        chatActions.addSystemMessage(
+          currentLang === 'en' ? 'Connection timed out. Reconnecting…' : '连接超时，正在重新连接…'
+        );
+        chatActions.addDebugNotice('Heartbeat timeout (30s). Re-establishing connection.');
         this.ws?.close();
         return;
       }
@@ -599,7 +618,13 @@ export class ChatWebSocketClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(command));
     } else {
-      chatActions.addSystemMessage('Cannot send command. WebSocket is not open.');
+      const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+      chatActions.addSystemMessage(
+        currentLang === 'en'
+          ? 'Not connected. Message could not be sent.'
+          : '当前未连接，消息未能发送。'
+      );
+      chatActions.addDebugNotice('Cannot send command. WebSocket is not open.');
     }
   }
 

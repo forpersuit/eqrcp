@@ -1,8 +1,8 @@
 import { get, writable } from 'svelte/store';
 import type { Message, Device, TransferEvent } from '../services/types';
-import { shouldSurfaceSystemNotice } from './systemNotice';
+import { isDevDebugNotice, shouldSurfaceSystemNotice } from './systemNotice';
 
-export { shouldSurfaceSystemNotice, isDevDebugNotice } from './systemNotice';
+export { shouldSurfaceSystemNotice, isDevDebugNotice, displayFileName } from './systemNotice';
 
 export const messages = writable<Message[]>([]);
 export const peers = writable<Device[]>([]);
@@ -168,12 +168,30 @@ export const chatActions = {
     }
   },
 
+  /**
+   * User-facing notice only. Text must be plain-language (what happened / what to do).
+   * Prefer this for failures the user can act on.
+   */
   addSystemMessage(msg: string) {
+    this.pushSystemNotice(msg, false);
+  },
+
+  /**
+   * Engineering / process log. Always stored for diagnostics; chat bubble only in Dev Debug Mode.
+   */
+  addDebugNotice(msg: string) {
+    this.pushSystemNotice(msg, true);
+  },
+
+  pushSystemNotice(msg: string, forceDebug: boolean) {
+    if (!msg || !msg.trim()) return;
     const stamped = `${new Date().toLocaleTimeString()}: ${msg}`;
-    // Always keep full trail in systemMessages (TransferStatus / diagnostics).
     systemMessages.update(list => [...list, stamped]);
-    // H1 + Dev filter: user-facing notices in chat stream; [App] only when dev debug on.
-    if (shouldSurfaceSystemNotice(msg, get(devDebugMode))) {
+    const treatAsDebug = forceDebug || isDevDebugNotice(msg);
+    const surface = treatAsDebug
+      ? get(devDebugMode)
+      : shouldSurfaceSystemNotice(msg, get(devDebugMode));
+    if (surface) {
       const notice: Message = {
         id: `sys-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sender: 'system',
