@@ -929,7 +929,7 @@
         };
         return map;
       });
-      chatActions.addSystemMessage(currentLang === 'en'
+      chatActions.addDebugNotice(currentLang === 'en'
         ? `Upload cancelled for: ${file.name}`
         : `已取消上传文件: ${file.name}`);
       finish();
@@ -980,7 +980,7 @@
     const wasBusy = uploadQueueRunning || uploadQueue.length > 0;
     uploadQueue.push({ file, name });
     if (wasBusy) {
-      chatActions.addSystemMessage(`${getTranslation('uploadQueued', currentLang)} ${name}`);
+      chatActions.addDebugNotice(`${getTranslation('uploadQueued', currentLang)} ${name}`);
     }
     drainUploadQueue();
   }
@@ -1117,7 +1117,7 @@
 
   /** M5: never fake a file via sendText JSON — ask user to re-pick the file. */
   function handleResendFile(_e: CustomEvent<{ name: string; size: number }>) {
-    chatActions.addSystemMessage(getTranslation('resendPickFile', currentLang));
+    chatActions.addDebugNotice(getTranslation('resendPickFile', currentLang));
     if (isEmbedded) {
       const requestId = 'select-' + Math.random().toString(36).substring(2, 11);
       window.parent.postMessage({ type: 'select-files', requestId }, '*');
