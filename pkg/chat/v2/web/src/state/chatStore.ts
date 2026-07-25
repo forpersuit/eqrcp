@@ -1,15 +1,17 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import type { Message, Device, TransferEvent } from '../services/types';
 import { shouldSurfaceSystemNotice } from './systemNotice';
 
-export { shouldSurfaceSystemNotice } from './systemNotice';
+export { shouldSurfaceSystemNotice, isDevDebugNotice } from './systemNotice';
 
 export const messages = writable<Message[]>([]);
 export const peers = writable<Device[]>([]);
 export const transfers = writable<Record<string, TransferEvent>>({});
 export const connState = writable<'connecting' | 'connected' | 'disconnected'>('disconnected');
 export const currentDevice = writable<Device | null>(null);
-export const systemMessages = writable<string[]>([]); // For in-app notifications
+export const systemMessages = writable<string[]>([]); // For in-app notifications (includes [App] debug lines)
+/** Dev Debug Mode: when true, [App] process logs also appear in the chat stream. Default off. */
+export const devDebugMode = writable(false);
 /** True after auto-reconnect attempts are exhausted; cleared on successful connect / manual resume. */
 export const reconnectExhausted = writable(false);
 /** active=normal; replaced=same peer took over in another tab; kicked/left=terminal offline */
@@ -19,6 +21,23 @@ export const historyHasMore = writable(false);
 /** Exclusive cursor for load_history (oldest seq currently in the UI page window). */
 export const historyOldestSeq = writable(0);
 export const historyLoading = writable(false);
+
+function initDevDebugModeFromEnvironment(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debug') === '1' || params.get('dev') === '1') {
+      devDebugMode.set(true);
+      localStorage.setItem('chat_dev_debug', 'true');
+    } else if (localStorage.getItem('chat_dev_debug') === 'true') {
+      devDebugMode.set(true);
+    }
+  } catch {
+    // ignore storage / SSR edge cases
+  }
+}
+
+initDevDebugModeFromEnvironment();
 
 // Actions - Only update state through explicit actions
 export const chatActions = {
@@ -137,11 +156,24 @@ export const chatActions = {
     currentDevice.set(device);
   },
 
+  setDevDebugMode(enabled: boolean) {
+    const on = !!enabled;
+    devDebugMode.set(on);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('chat_dev_debug', on ? 'true' : 'false');
+      } catch {
+        // ignore
+      }
+    }
+  },
+
   addSystemMessage(msg: string) {
     const stamped = `${new Date().toLocaleTimeString()}: ${msg}`;
+    // Always keep full trail in systemMessages (TransferStatus / diagnostics).
     systemMessages.update(list => [...list, stamped]);
-    // H1: surface notices in the main message list so users see errors without TransferStatus mounted.
-    if (shouldSurfaceSystemNotice(msg)) {
+    // H1 + Dev filter: user-facing notices in chat stream; [App] only when dev debug on.
+    if (shouldSurfaceSystemNotice(msg, get(devDebugMode))) {
       const notice: Message = {
         id: `sys-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sender: 'system',
@@ -226,3 +258,12 @@ export const chatActions = {
     transfers.set({});
   }
 };
+
+// DevTools / GUI bridge: window.__setChatDevDebug(true|false)
+if (typeof window !== 'undefined') {
+  (window as unknown as { __setChatDevDebug?: (enabled: boolean) => void }).__setChatDevDebug = (
+    enabled: boolean
+  ) => {
+    chatActions.setDevDebugMode(!!enabled);
+  };
+}

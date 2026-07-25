@@ -383,9 +383,10 @@
       logToGui(`Successfully registered local attachment response: ${JSON.stringify(message)}`);
     })
     .catch(err => {
+      // User-facing (no [App] prefix) so it surfaces even when Dev Debug Mode is off.
       chatActions.addSystemMessage(currentLang === 'en'
-        ? `[App] Registration failed: ${err.message}`
-        : `[App] 注册失败: ${err.message}`);
+        ? `Attachment registration failed: ${err.message}`
+        : `附件注册失败: ${err.message}`);
       logToGui(`Failed to register local attachment: ${err.message}`, true);
     });
   }

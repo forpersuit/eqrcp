@@ -245,6 +245,7 @@
                 "entitlement_lifetime": "Lifetime",
                 "entitlement_term": "Term",
                 "created_at": "Purchased On",
+                "expires_at": "Valid until",
                 "paddle_transaction": "Transaction ID",
                 "paddle_subscription": "Subscription ID",
                 "activations": "Activated Devices",
@@ -308,6 +309,7 @@
                 "entitlement_lifetime": "终身",
                 "entitlement_term": "限期",
                 "created_at": "购买日期",
+                "expires_at": "有效期至",
                 "paddle_transaction": "交易单号",
                 "paddle_subscription": "订阅单号",
                 "activations": "已绑定的设备",
@@ -364,6 +366,7 @@
                 "status_refunded": "返金済み",
                 "status_revoked": "失効",
                 "created_at": "購入日",
+                "expires_at": "有効期限",
                 "paddle_transaction": "取引ID",
                 "paddle_subscription": "サブスクリプションID",
                 "activations": "アクティベート済みデバイス",
@@ -420,6 +423,7 @@
                 "status_refunded": "환불됨",
                 "status_revoked": "취소됨",
                 "created_at": "구매일",
+                "expires_at": "유효 기간",
                 "paddle_transaction": "거래 ID",
                 "paddle_subscription": "구독 ID",
                 "activations": "인증된 기기",
@@ -476,6 +480,7 @@
                 "status_refunded": "Reembolsado",
                 "status_revoked": "Revocado",
                 "created_at": "Fecha de compra",
+                "expires_at": "Válido hasta",
                 "paddle_transaction": "ID de Transacción",
                 "paddle_subscription": "ID de Subscripción",
                 "activations": "Dispositivos activados",
@@ -532,6 +537,7 @@
                 "status_refunded": "Erstattet",
                 "status_revoked": "Widerrufen",
                 "created_at": "Gekauft am",
+                "expires_at": "Gültig bis",
                 "paddle_transaction": "Transaktions-ID",
                 "paddle_subscription": "Abonnement-ID",
                 "activations": "Aktivierte Geräte",
@@ -588,6 +594,7 @@
                 "status_refunded": "Remboursé",
                 "status_revoked": "Révoqué",
                 "created_at": "Acheté le",
+                "expires_at": "Valable jusqu'au",
                 "paddle_transaction": "ID de transaction",
                 "paddle_subscription": "ID d'abonnement",
                 "activations": "Appareils activés",
@@ -900,6 +907,16 @@
                 const createdDate = new Date(lic.created_at).toLocaleDateString(dateLocales[state.lang] || 'en-US', {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
+                // Yearly renewals extend this same field — show current entitlement end on the code card.
+                let expiresLabel = dict.entitlement_lifetime || 'Lifetime';
+                if (!isLifetime && lic.expires_at && lic.expires_at !== 'LIFETIME') {
+                    const expMs = new Date(lic.expires_at).getTime();
+                    expiresLabel = Number.isFinite(expMs)
+                        ? new Date(lic.expires_at).toLocaleDateString(dateLocales[state.lang] || 'en-US', {
+                            year: 'numeric', month: 'long', day: 'numeric'
+                        })
+                        : String(lic.expires_at);
+                }
 
                 const remainingUnbinds = lic.remaining_unbinds !== undefined ? lic.remaining_unbinds : 4;
                 const maxUnbinds = lic.max_yearly_unbinds !== undefined ? lic.max_yearly_unbinds : 4;
@@ -985,6 +1002,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-6 text-xs text-on-surface-variant">
                         <div><span class="font-medium text-white/50">${dict.source_label || 'Source'}:</span> ${sourceLabel}${lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}</div>
                         <div><span class="font-medium text-white/50">${dict.created_at}:</span> ${createdDate}</div>
+                        <div><span class="font-medium text-white/50">${dict.expires_at || 'Valid until'}:</span> <span class="text-white/90">${expiresLabel}</span></div>
                         <div><span class="font-medium text-white/50">${dict.paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
                         ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${dict.paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
                     </div>
