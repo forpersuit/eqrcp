@@ -18,7 +18,7 @@ const (
 	// FreeChatDailySeconds is the daily full-feature chat allowance for unpaid users (5 minutes).
 	FreeChatDailySeconds = 300
 	// FreeChatMaxAttachmentBytes is the per-file size cap after free chat quota is exhausted.
-	FreeChatMaxAttachmentBytes = 2 * 1024 * 1024
+	FreeChatMaxAttachmentBytes = 10 * 1024 * 1024
 	// FreeChatDegradedBytesPerSec is the attachment transfer cap after free chat quota is exhausted.
 	FreeChatDegradedBytesPerSec = 100 * 1024
 )

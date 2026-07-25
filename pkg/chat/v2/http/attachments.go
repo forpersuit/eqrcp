@@ -19,9 +19,9 @@ import (
 	"eqt/pkg/chat/v2/transfer"
 )
 
-// freeChatMaxAttachmentBytes mirrors server.FreeChatMaxAttachmentBytes (2MB) for free over-quota uploads.
+// freeChatMaxAttachmentBytes mirrors server.FreeChatMaxAttachmentBytes (10MB) for free over-quota uploads.
 // Kept local to avoid an import cycle (server → chathttp).
-const freeChatMaxAttachmentBytes = 2 * 1024 * 1024
+const freeChatMaxAttachmentBytes = 10 * 1024 * 1024
 
 // handleLocalAttachmentRegister registers a local file attachment from the GUI host.
 func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
@@ -75,7 +75,7 @@ func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.R
 	fileName := filepath.Base(req.Path)
 	size := info.Size()
 	if !h.attachmentUnrestricted() && size > freeChatMaxAttachmentBytes {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
 		return
 	}
 	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
@@ -151,7 +151,7 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 	}
 
 	if !h.attachmentUnrestricted() && req.Size > freeChatMaxAttachmentBytes {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
 		return
 	}
 
@@ -224,7 +224,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 
 	unrestricted := h.attachmentUnrestricted()
 	if !unrestricted && header.Size > freeChatMaxAttachmentBytes {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 2MB free limit. Please upgrade."), fields...)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
 		return
 	}
 

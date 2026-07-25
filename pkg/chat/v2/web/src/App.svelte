@@ -836,7 +836,7 @@
   }
 
   /** Free over-quota hard limit — keep aligned with backend freeChatMaxAttachmentBytes. */
-  const FREE_MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+  const FREE_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
   // M6: serialise browser uploads so multi-select does not fan out parallel XHRs.
   let uploadQueue: Array<{ file: File; name: string }> = [];
@@ -844,7 +844,7 @@
 
   function localizeUploadError(raw: string): string {
     const text = (raw || '').trim();
-    if (/2MB free limit|exceeds 2MB|file size exceeds 2MB/i.test(text)) {
+    if (/10MB free limit|exceeds 10MB|file size exceeds 10MB|2MB free limit|exceeds 2MB/i.test(text)) {
       return getTranslation('freeFileTooLarge', currentLang);
     }
     return text;

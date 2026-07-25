@@ -3,7 +3,7 @@
  * Run: node --experimental-strip-types src/services/uploadPolicy.test.ts
  */
 
-const FREE_MAX = 2 * 1024 * 1024;
+const FREE_MAX = 10 * 1024 * 1024;
 
 function shouldBlockFreeOverQuota(opts: {
   isPaid: boolean;
@@ -24,11 +24,11 @@ function assert(cond: boolean, msg: string): void {
 
 assert(
   shouldBlockFreeOverQuota({ isPaid: false, freeDegraded: true, size: FREE_MAX + 1 }) === true,
-  'free degraded + >2MB blocked'
+  'free degraded + >10MB blocked'
 );
 assert(
   shouldBlockFreeOverQuota({ isPaid: false, freeDegraded: true, size: FREE_MAX }) === false,
-  'exactly 2MB allowed'
+  'exactly 10MB allowed'
 );
 assert(
   shouldBlockFreeOverQuota({ isPaid: false, freeDegraded: false, size: FREE_MAX + 1 }) === false,
@@ -36,7 +36,7 @@ assert(
 );
 assert(
   shouldBlockFreeOverQuota({ isPaid: true, freeDegraded: true, size: FREE_MAX + 1 }) === false,
-  'paid not blocked by free 2MB rule'
+  'paid not blocked by free 10MB rule'
 );
 assert(shouldSerialiseUploads() === true, 'uploads remain serial');
 
