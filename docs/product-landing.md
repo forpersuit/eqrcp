@@ -57,5 +57,5 @@ EQT 提供灵活的付费版本，以解锁无限制的局域网 Chat 聊天通�
 ## 4. 联系我们 (Contact Support)
 
 如果在激活、支付或使用过程中遇到任何问题，欢迎通过以下渠道与我们联系：
-* **支持信箱 (Email)**：support@eqt.dev
+* **支持信箱 (Email)**：support@eqt.net.im
 * **GitHub Issue 反馈**：[https://github.com/forpersuit/eqt/issues](https://github.com/forpersuit/eqt/issues)

@@ -5740,7 +5740,7 @@ function collectFeedback() {
 function feedbackMailto(body, category = 'Feedback') {
     const subject = encodeURIComponent(`EQT ${category}`);
     const encodedBody = encodeURIComponent(body || buildDiagnostics());
-    return `mailto:jinxpeeter@outlook.com?subject=${subject}&body=${encodedBody}`;
+    return `mailto:support@eqt.net.im?subject=${subject}&body=${encodedBody}`;
 }
 
 function cleanLocalAddressError(err) {

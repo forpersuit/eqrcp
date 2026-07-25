@@ -14,16 +14,15 @@ database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 R2_PUBLIC_URL = "https://download.eqt.net.im"
 # Admin API is Access-JWT only (no ADMIN_SECRET). TEAM_DOMAIN/AUD are secrets.
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+# Non-sensitive SMTP identity / host (password → wrangler secret MAIL_SENDER_PASSWORD)
 MAIL_SENDER = "noreply@eqt.net.im"
-MAIL_SENDER_PASSWORD = "q4W62}bWtR"
 MAIL_SEND_SERVER = "smtpserver.301098.xyz"
 MAIL_SEND_SAFE_PORT = "465"
-TEST_MAIL_RECEIVER = "tmp@301098.xyz"
-PADDLE_WEBHOOK_SECRET = "pdl_ntfset_01kxypg9ghrbrymheqbcjxhzt5_2AXS+FE+VGHMCShesn7R6E17ThC0VZyl"
+# PRODUCTION: do NOT set TEST_MAIL_RECEIVER (R1). Local/dev only via .dev.vars if needed.
+# PADDLE_WEBHOOK_SECRET → wrangler secret (never commit)
+# MAIL_SENDER_PASSWORD → wrangler secret (never commit)
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true },
   { pattern = "download.eqt.net.im", custom_domain = true }
 ]
-
-

@@ -64,7 +64,7 @@
   3. 成功提交后，不仅重置 state，还会物理清理文本域 DOM 节点的值，防范用户不小心触发重复提交。
 
 * **支持手动 Fallback 复制**
-  如遇用户本地网络隔离或自动发送失败，前端提供“Copy feedback”一键复制按钮。程序会将当前表单正文、选中的反馈类型、以及详细的系统诊断日志（包含 CPU/OS/Arch/Version）合并格式化，拷贝至系统剪贴板。提示用户可通过手动发送邮件给开发者（`jinxpeeter@outlook.com`）。
+  如遇用户本地网络隔离或自动发送失败，前端提供“Copy feedback”一键复制按钮。程序会将当前表单正文、选中的反馈类型、以及详细的系统诊断日志（包含 CPU/OS/Arch/Version）合并格式化，拷贝至系统剪贴板。提示用户可手动发送至官方支持邮箱 **`support@eqt.net.im`**（勿再使用个人 outlook）。
 
 ### 3.2 桌面端 Go 后端中转 (Wails Bridge)
 
@@ -264,3 +264,65 @@ export default {
   }
 };
 ```
+
+---
+
+## 6. 演进决策（2026-07-25）：邮件通道 + 与 DRM / Admin 边界
+
+### 6.1 第一性原理
+
+| 问题 | 结论 |
+| :--- | :--- |
+| 反馈要不要进 DRM（`lic.eqt.net.im` / license D1）？ | **不要**。授权、支付、黑名单与产品意见是不同域；混库会污染运维与权限模型。 |
+| 反馈要不要进 Admin？ | **只读展示可以**（Admin 债 D8），但是 **读 `eqt-feedback-db`**，不是发码/吊销 API。 |
+| 现在邮箱服务已通，要不要改成纯 mailto？ | **不要砍 Worker**。GUI 已依赖 `feedback.eqt.net.im` 做压缩图 + 入库；邮件是 **通知通道**。 |
+| 先打通什么？ | **F0：Worker 发信到 support@**（运维可在邮箱里处理），再 F2 Admin 列表。 |
+
+### 6.2 推荐身份（与产品约定一致）
+
+```text
+From:     sendfeedback@eqt.net.im     # 系统发件身份
+To:       support@eqt.net.im          # 统一收件
+Reply-To: <用户填写的 contact>        # 有则填，便于直接回复用户
+Subject:  [EQT Feedback] {category} · {version}
+Body:     文本 + 诊断字段 + 截图 URL（R2，勿内联大图）
+```
+
+**约束**：
+
+1. **禁止**把用户邮箱当 `From`（SPF/DMARC 失败、像钓鱼）。  
+2. 若 SMTP 账号目前只能以 `noreply@eqt.net.im` 认证发信：  
+   - 短期：`From = noreply@eqt.net.im`，Subject 带 `[EQT Feedback]`，To 仍为 `support@`。  
+   - 中期：在邮件服务商为 `sendfeedback@eqt.net.im` 开别名/同权发信。  
+3. `eqt-feedback-api` 使用 **自己的** `MAIL_*` Secret（可与 DRM 同 SMTP 主机，但 **独立 Worker secret**，不 import DRM env）。  
+4. 生产 **不要** 用 `TEST_MAIL_RECEIVER` 拐反馈信。
+
+### 6.3 目标数据流
+
+```text
+GUI (Wails)
+  → POST feedback.eqt.net.im/goal
+  → eqt-feedback-api
+       ├─ R2 截图（可选）
+       ├─ D1 feedbacks（eqt-feedback-db）     ← 权威存储
+       ├─ Email → support@eqt.net.im          ← F0 通知（下一版）
+       └─ Telegram（可选辅通道，已有）
+  → 日后 Admin 反馈中心 ──只读──► 同一 D1 / 列表 API
+```
+
+**不经过**：`eqt-drm-api`、Paddle、license 表、激活路径。
+
+### 6.4 分阶段计划（写入发布清单 §4.1）
+
+| 阶段 | 交付 | 验收 |
+| :--- | :--- | :--- |
+| **F0** | Worker 异步 SMTP：入库成功后发信 To=`support@eqt.net.im` | 桌面提交一条反馈，support 邮箱收到含 category/version/imageUrl 的信 |
+| **F1** | GUI mailto / 文案 fallback → `support@eqt.net.im` | **已完成 2026-07-25**（`main.js` + `i18n.js`） |
+| **F2** | Admin 反馈列表（Access JWT，跨服务只读） | 运维可在 Admin 翻历史，无需翻邮箱 |
+| **F3** | 已读/标签、TG 降级为可选 | 体验增强 |
+
+### 6.5 安全要点
+
+- `TELEGRAM_BOT_TOKEN`、`MAIL_SENDER_PASSWORD` 必须 **Secret**（2026-07-25 已从 feedback/drm toml 明文迁出）。  
+- 公开 `POST /goal` 需后续考虑：边缘限流、简单 honeypot 或 token，防刷爆 SMTP 配额（F0 实现时一并评估）。  
+- 截图仅存 R2；邮件只带 URL，避免 Worker 内存与邮件体积爆炸。

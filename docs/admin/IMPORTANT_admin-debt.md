@@ -20,8 +20,8 @@
 | D5 | 解绑后客户端最长 ~7 天离线有效 | P2（产品） | 设计如此 | 文档/对客说明；急停需吊销 + 等 verify；非 Admin bug |
 | D6 | 无多管理员身份 | P3 | 后置 | 单 secret 足够；若要多人：操作者 ID + 审计 `operator_id` + 独立凭证 |
 | D7 | Webhook **成功**履约无时间线 | P3 | 后置 | 成功路径写 `admin_audit` 或独立 `webhook_events` 表，再给 Health 消费 |
-| D8 | 反馈中心未接 `eqt-feedback-api` | P3 | 后置 | 独立 PR：跨域鉴权 + 只读列表 |
-| D9 | `wrangler.toml` 含 SMTP/Paddle 明文 vars | P1（安全） | 存量 | 迁 `wrangler secret`；从 toml 删除明文；轮换密码 |
+| D8 | 反馈中心未接 `eqt-feedback-api` | P3 | 后置 | 独立 PR：跨域鉴权 + 只读列表；见 [feedback-design.md](../feedback-design.md) §6（F2） |
+| D9 | `wrangler.toml` 含 SMTP/Paddle 明文 vars | P1（安全） | **已收口（2026-07-25）** | 明文已删；`MAIL_SENDER_PASSWORD` / `PADDLE_WEBHOOK_SECRET` / feedback `TELEGRAM_BOT_TOKEN` 已 secret；**建议轮换**曾进 git 的口令 |
 | D10 | `gap-analysis.md` 过时 | P2（文档） | **本次整理** | 标为历史快照；现状以 progress + IMPORTANT_* 为准 |
 | D11 | 前端无自动化 E2E（仅 Chrome 手工/脚本） | P3 | 可选 | Playwright 登录 + 五 Tab 烟测挂 CI |
 | D12 | R2 / 部分徽章仅 env 布尔 | P3 | 可接受 | 需要时再加 HEAD 探针 |

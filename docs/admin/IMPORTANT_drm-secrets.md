@@ -80,7 +80,7 @@ npx wrangler deploy --var R2_PUBLIC_URL:https://download.eqt.net.im
 | **`ED25519_PRIVATE_KEY`** | **DRM 激活是** | 签发客户端 license 证书；无则 `/activate` 失败 | **自建一次、永久保管**：64 字符 hex（32 字节 raw seed）。见下方 §3.1。公钥需与客户端校验逻辑一致 |
 | **`PADDLE_API_KEY`** | 建议 | Portal 退款；Webhook 缺邮箱时拉 customer；健康深探针 | Paddle → **Developer tools → Authentication → API keys** → 创建 **server-side** key（`pdl_...` / 沙箱 `pdl_sdbx_...`）。Live/Sandbox **各一套**，勿混用 |
 | **`PADDLE_WEBHOOK_SECRET`** | **支付履约是** | 校验 `Paddle-Signature` | Paddle → **Developer tools → Notifications** → 选 endpoint（URL 指向 `https://lic.eqt.net.im/api/v1/paddle/webhook`）→ **Secret key**（常 `pdl_ntfset_...`） |
-| **`MAIL_SENDER_PASSWORD`** | 发信是 | SMTP AUTH | 你的 SMTP 服务商面板（邮箱密码或应用专用密码） |
+| **`MAIL_SENDER_PASSWORD`** | 发信是 | SMTP AUTH | 你的 SMTP 服务商面板（邮箱密码或应用专用密码）。**禁止**写入 `wrangler.toml`（2026-07-25 已迁 Secret） |
 | **`GITHUB_TOKEN`** | 可选 | 拉 GitHub release **元数据**（提高 rate limit） | GitHub → Settings → Developer settings → **Personal access tokens** → classic/fine-grained，`public_repo` 或 repo 只读即可。**不是**用户下载源 |
 
 写入示例：
@@ -104,7 +104,7 @@ echo -n 'ghp_...' | npx wrangler secret put GITHUB_TOKEN
 | **`MAIL_SEND_SERVER`** | 发信是 | SMTP 主机 | 服务商文档，如 `smtpserver.example.com` |
 | **`MAIL_SEND_SAFE_PORT`** | 建议 | 默认 `465` | 服务商要求的 TLS 端口 |
 | **`GITHUB_REPO`** | 可选 | 默认 `forpersuit/eqrcp` | `owner/repo` 字符串，仅用于读 release 列表 |
-| **`TEST_MAIL_RECEIVER`** | 仅测试 | 验证码改寄测试箱 | 开发用；**生产勿依赖** |
+| **`TEST_MAIL_RECEIVER`** | 仅测试 | 验证码改寄测试箱 | 开发用 `.dev.vars`；**生产 toml 已移除**；Dashboard 若残留请手删（发布清单 R1） |
 
 ### 2.3 绑定（非 env）
 
@@ -193,14 +193,15 @@ Admin 健康页 SMTP 探针会 AUTH 后 QUIT（不发真实业务信）。
 | 稳定读 release 元数据 | 可选 `GITHUB_TOKEN` |
 
 **已配置 `PADDLE_API_KEY`（secret put）后**：健康探针应变为 `api_reachable`（200）或继续 `webhook_ok_api_key_invalid`（key 与环境不匹配时）。  
-**还缺的常见项**：`R2_PUBLIC_URL` 进 **vars**、`PADDLE_WEBHOOK_SECRET` / SMTP 密码迁出 toml 明文（见债 D9）。
+**D9（明文 secret）**：2026-07-25 已从生产 toml 迁出 `MAIL_SENDER_PASSWORD` / `PADDLE_WEBHOOK_SECRET`；建议轮换曾进 git 的口令。
 
 ---
 
 ## 5. 与当前仓库 `wrangler.toml` 的关系
 
 - 绑定 `DB`、`routes`（`lic.eqt.net.im` / `download.eqt.net.im`）在 toml。  
-- **历史**：部分 SMTP / `PADDLE_WEBHOOK_SECRET` 曾写在 `[vars]` 明文 → **应迁 Secret 并轮换**（[IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md) D9）。  
+- **历史**：部分 SMTP / `PADDLE_WEBHOOK_SECRET` 曾写在 `[vars]` 明文 → **2026-07-25 已迁 Secret**；仍建议**轮换**口令（[IMPORTANT_admin-debt.md](./IMPORTANT_admin-debt.md) D9）。  
+
 - **`R2_PUBLIC_URL` 推荐加进 `[vars]`**，不要为了「统一」硬塞进 Secret。  
 - 真实值只以 Cloudflare 控制台 / `wrangler secret list` 为准，**不以 git 为准**。
 

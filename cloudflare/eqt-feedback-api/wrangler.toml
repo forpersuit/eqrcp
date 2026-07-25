@@ -15,9 +15,11 @@ binding = "BUCKET"
 bucket_name = "eqt-feedback-bucket"
 
 [vars]
-TELEGRAM_BOT_TOKEN = "8981665918:AAFjSEXkxAwuG6LNMEBdCVrLU0KVIs8S1h4"
-# Set to the target Chat ID or Channel ID where notifications will be sent
-TELEGRAM_CHAT_ID = "1880182104" 
+# Non-sensitive notification target (token → wrangler secret TELEGRAM_BOT_TOKEN)
+TELEGRAM_CHAT_ID = "1880182104"
+# Future email path (plan): From sendfeedback@ / To support@ via secrets
+# MAIL_SENDER, MAIL_SEND_SERVER, MAIL_SEND_SAFE_PORT as vars when enabled
+# MAIL_SENDER_PASSWORD, FEEDBACK_MAIL_TO as secrets when enabled
 
 routes = [
   { pattern = "feedback.eqt.net.im/goal", custom_domain = true },
