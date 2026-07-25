@@ -104,7 +104,8 @@ function evaluateStacking(
   licenseTier: string,
   licenseSource: string,
   baseExpiresAt: string,
-  durationDays: number | null | undefined
+  durationDays: number | null | undefined,
+  reqLang: string = "en"
 ): { remainingMs: number; hasSameTierLifetime: boolean; blockReason: string | null } {
   let remainingMs = 0;
   const nowMs = Date.now();
@@ -139,7 +140,7 @@ function evaluateStacking(
       return {
         remainingMs: -1,
         hasSameTierLifetime: true,
-        blockReason: "This device already has a lifetime license of the same tier; stacking is not allowed."
+        blockReason: getApiTranslation("lifetime_stacking_blocked", reqLang)
       };
     }
   }
@@ -164,7 +165,7 @@ export async function handleDrmRoutes(
     const { license_code, uuid_hash, cpu_hash, disk_hash, device_id } = body;
 
     if (!license_code) {
-      return new Response(JSON.stringify({ error: "Missing license_code" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_license_code", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -176,14 +177,14 @@ export async function handleDrmRoutes(
     ).bind(license_code).first<any>();
 
     if (!license) {
-      return new Response(JSON.stringify({ error: "Invalid license code" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     if (license.status !== "active") {
-      return new Response(JSON.stringify({ error: "License is suspended or revoked" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -225,7 +226,7 @@ export async function handleDrmRoutes(
       const redeemBy = new Date(license.expires_at).getTime();
       if (!Number.isNaN(redeemBy) && redeemBy < Date.now()) {
         return new Response(JSON.stringify({
-          error: "This license code has passed its redeem deadline and can no longer be activated."
+          error: getApiTranslation("license_redeem_expired", reqLang)
         }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -239,7 +240,7 @@ export async function handleDrmRoutes(
     } else if (license.expires_at && license.expires_at !== "LIFETIME") {
       const expires = new Date(license.expires_at);
       if (expires.getTime() < Date.now()) {
-        return new Response(JSON.stringify({ error: "License has expired" }), {
+        return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -281,7 +282,8 @@ export async function handleDrmRoutes(
       license.tier,
       licenseSource,
       baseExpiresAt,
-      license.duration_days
+      license.duration_days,
+      reqLang
     );
     if (stack.blockReason && !isAlreadyActivated) {
       return new Response(JSON.stringify({ error: stack.blockReason }), {
@@ -293,7 +295,7 @@ export async function handleDrmRoutes(
     // If not already activated, check limit and insert new activation
     if (!isAlreadyActivated) {
       if (activations.length >= license.max_devices) {
-        return new Response(JSON.stringify({ error: `Activation limit reached (max ${license.max_devices} devices)` }), {
+        return new Response(JSON.stringify({ error: getApiTranslation("max_devices_reached", reqLang) }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });

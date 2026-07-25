@@ -279,6 +279,60 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Demasiados intentos fallidos. Espere 15 minutos e inténtelo de nuevo.",
     de: "Zu viele fehlgeschlagene Versuche. Bitte in 15 Minuten erneut versuchen.",
     fr: "Trop de tentatives échouées. Réessayez dans 15 minutes."
+  },
+  missing_license_code: {
+    zh: "激活码不能为空",
+    en: "Missing license code",
+    ja: "ライセンスコードを入力してください",
+    ko: "라이선스 코드를 입력해 주세요",
+    es: "Falta el código de licencia",
+    de: "Lizenzcode fehlt",
+    fr: "Code de licence manquant"
+  },
+  license_suspended_or_revoked: {
+    zh: "该授权码当前不可用（已暂停使用、退款或吊销）",
+    en: "License is suspended, refunded, or revoked",
+    ja: "このライセンスは停止、返金、または失効しています",
+    ko: "라이선스가 정지, 환불 또는 취소되었습니다",
+    es: "La licencia está suspendida, reembolsada o revocada",
+    de: "Lizenz ist ausgesetzt, erstattet oder widerrufen",
+    fr: "La licence est suspendue, remboursée ou révoquée"
+  },
+  license_redeem_expired: {
+    zh: "该授权码已超过兑换截止时间，无法继续激活",
+    en: "This license code has passed its redeem deadline and can no longer be activated.",
+    ja: "このライセンスコードは引き換え期限を過ぎているため有効化できません。",
+    ko: "이 라이선스 코드는 교환 만료일이 지나 더 이상 활성화할 수 없습니다.",
+    es: "Este código de licencia ha pasado su fecha límite de canje.",
+    de: "Dieser Lizenzcode hat seine Einlösefrist überschritten.",
+    fr: "Ce code de licence a dépassé sa date limite d'activation."
+  },
+  license_expired: {
+    zh: "该授权码已超过有效期",
+    en: "License has expired",
+    ja: "ライセンスの有効期限が切れています",
+    ko: "라이선스 유효 기간이 만료되었습니다",
+    es: "La licencia ha expirado",
+    de: "Lizenz ist abgelaufen",
+    fr: "La licence a expiré"
+  },
+  max_devices_reached: {
+    zh: "该授权码激活设备数量已达上限（可通过 Portal 解绑旧设备）",
+    en: "Maximum number of devices reached for this license (unbind old devices in Portal)",
+    ja: "このライセンスのアクティベーション端末数が上限に達しました",
+    ko: "이 라이선스의 기기 활성화 수가 최대 한도에 도달했습니다",
+    es: "Se alcanzó el número máximo de dispositivos para esta licencia",
+    de: "Maximale Anzahl an Geräten für diese Lizenz erreicht",
+    fr: "Nombre maximal d'appareils atteint pour cette licence"
+  },
+  lifetime_stacking_blocked: {
+    zh: "该设备已激活同级别的终身买断授权，无需重复叠加激活",
+    en: "This device already has a lifetime license of the same tier; stacking is not allowed.",
+    ja: "この端末には既に同ランクの永久ライセンスが有効化されています",
+    ko: "이 기기에는 이미 동일한 등급의 영구 라이선스가 활성화되어 있습니다",
+    es: "Este dispositivo ya tiene una licencia de por vida del mismo nivel",
+    de: "Dieses Gerät verfügt bereits über eine lebenslange Lizenz desselben Tarifs",
+    fr: "Cet appareil dispose déjà d'une licence à vie du même niveau"
   }
 };
 
