@@ -319,6 +319,104 @@
             color: var(--danger);
             box-shadow: 0 4px 12px rgba(180, 35, 24, 0.03);
         }
+
+        /* 核心区域一：Dropzone 文件选择 */
+        .dropzone-box {
+            border: 2px dashed #a5cfc9;
+            border-radius: 10px;
+            background: var(--surface-soft);
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dropzone-box:hover, .dropzone-box.drag-over {
+            border-color: var(--accent);
+            background: rgba(15, 118, 110, 0.05);
+        }
+        .dropzone-label {
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 0;
+        }
+        .dropzone-icon {
+            font-size: 32px;
+            line-height: 1;
+        }
+        .dropzone-text strong {
+            display: block;
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .dropzone-text span {
+            display: block;
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        /* 核心区域二：发送文本折叠 Accordion */
+        .text-accordion-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .text-accordion-card.expanded {
+            border-color: #86b7b1;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+        }
+        .text-accordion-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: #fafcfb;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s ease;
+        }
+        .text-accordion-header:hover {
+            background: var(--surface-soft);
+        }
+        .accordion-title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .accordion-icon {
+            font-size: 16px;
+        }
+        .accordion-title-wrapper strong {
+            font-size: 14px;
+            color: var(--text);
+        }
+        .accordion-badge {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .accordion-chevron-wrapper {
+            display: flex;
+            align-items: center;
+        }
+        .accordion-chevron {
+            font-size: 11px;
+            color: var(--muted);
+            transition: transform 0.25s ease;
+            display: inline-block;
+        }
+        .text-accordion-card.expanded .accordion-chevron {
+            transform: rotate(180deg);
+        }
+        .text-accordion-content {
+            padding: 0 14px 14px;
+            border-top: 1px solid var(--line);
+        }
     </style>
 </head>
 <body>
@@ -338,32 +436,51 @@
         </header>
         <div id="quota-banner" style="margin-bottom: 18px; display: none;"></div>
         <form id="upload-form" class="upload-composer">
-            <div class="composer-meta">
-                <div>
-                    <strong class="label" data-i18n="composer">Composer</strong>
-                    <div class="hint" data-i18n="composer_hint">Text becomes a .txt file. Shift+Enter keeps a new line.</div>
+            <!-- 核心区域一：添加文件传输 -->
+            <div class="dropzone-box" id="dropzone">
+                <label for="files" class="dropzone-label">
+                    <span class="dropzone-icon">&#128194;</span>
+                    <div class="dropzone-text">
+                        <strong data-i18n="add_files_title">Click or drop files here</strong>
+                        <span data-i18n="add_files_subtitle">Select multiple files</span>
+                    </div>
+                </label>
+                <input class="form-control-file" type="file" id="files" name="files" multiple hidden>
+            </div>
+            <div id="selected-file-container"></div>
+            <div id="pasted-file-container" style="display: none;"></div>
+
+            <!-- 核心区域二：发送文本（默认折叠） -->
+            <div class="text-accordion-card" id="text-accordion-card">
+                <div class="text-accordion-header" id="text-accordion-toggle">
+                    <div class="accordion-title-wrapper">
+                        <span class="accordion-icon">&#128221;</span>
+                        <strong data-i18n="send_text_title">Send text</strong>
+                        <span class="accordion-badge" data-i18n="send_text_badge">(Saved as .txt)</span>
+                    </div>
+                    <div class="accordion-chevron-wrapper">
+                        <span class="accordion-chevron" id="text-accordion-chevron">&#9660;</span>
+                    </div>
                 </div>
-                <div class="composer-actions">
-                    <label for="files" class="btn btn-secondary" data-i18n="add_files">Add files</label>
-                    <input class="form-control-file" type="file" id="files" name="files" multiple hidden>
+                <div class="text-accordion-content" id="text-accordion-content" style="display: none;">
+                    <div class="text-accordion-inner">
+                        <div style="margin-top: 10px;">
+                            <label for="plaintext-title" data-i18n="file_name_label">Text file name</label>
+                            <input class="form-control" id="plaintext-title" data-i18n-placeholder="file_name_placeholder" placeholder="Optional file name">
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <label for="plaintext-text" data-i18n="text_label">Text</label>
+                            <textarea class="form-control" id="plaintext-text" data-i18n-placeholder="text_placeholder" placeholder="Type your text here..."></textarea>
+                            <div class="hint" data-i18n="composer_hint" style="margin-top: 4px;">Text becomes a .txt file. Shift+Enter keeps a new line.</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="composer-grid">
-                <div>
-                    <label for="plaintext-title" data-i18n="file_name_label">Text file name</label>
-                    <input class="form-control" id="plaintext-title" data-i18n-placeholder="file_name_placeholder" placeholder="Optional file name">
-                </div>
-                <div>
-                    <label for="plaintext-text" data-i18n="text_label">Text</label>
-                    <textarea class="form-control" id="plaintext-text" data-i18n-placeholder="text_placeholder" placeholder="Write text or paste files here"></textarea>
-                </div>
-                <div id="selected-file-container"></div>
-                <div id="pasted-file-container"></div>
-                <div class="error" id="upload-error" aria-live="polite"></div>
-                <div class="submit-row" style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                    <input class="btn" type="submit" id="submit" name="submit" data-i18n-value="btn_transfer" value="Transfer">
-                    <button class="btn" type="button" id="stop-btn" style="display: none; background: #e53e3e; color: #fff; border: none;" data-i18n="btn_stop">Stop</button>
-                </div>
+
+            <div class="error" id="upload-error" aria-live="polite"></div>
+            <div class="submit-row" style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 4px;">
+                <input class="btn" type="submit" id="submit" name="submit" data-i18n-value="btn_transfer" value="Transfer" style="flex: 1; min-height: 44px;">
+                <button class="btn" type="button" id="stop-btn" style="display: none; background: #e53e3e; color: #fff; border: none; flex: 1; min-height: 44px;" data-i18n="btn_stop">Stop</button>
             </div>
         </form>
         <div class="lang-switch-container">
@@ -383,14 +500,18 @@
         var pageTranslations = {
             zh: {
                 title: '从此设备发送',
-                subtitle: '您可以添加文件、粘贴截图或直接输入文本。EQT 将为您自动保存到接收端电脑中。',
+                subtitle: '您可以添加文件或直接发送文本。EQT 将为您自动保存到接收端电脑中。',
                 composer: '文本编辑器',
                 composer_hint: '输入的文本将被保存为 .txt 文件。换行请按 Shift+Enter。',
                 add_files: '添加文件',
+                add_files_title: '点击选择文件或拖拽文件到此处',
+                add_files_subtitle: '支持选择多个文件',
+                send_text_title: '发送文本',
+                send_text_badge: '(自动保存为 .txt)',
                 file_name_label: '文本文件名',
                 file_name_placeholder: '可选的文件名（留空自动生成）',
                 text_label: '文本内容',
-                text_placeholder: '在这里直接输入文字，或在此处粘贴截图或文件',
+                text_placeholder: '在这里直接输入需要发送的文本...',
                 btn_transfer: '开始传输',
                 btn_transferring: '正在传输...',
                 btn_stop: '停止',
@@ -415,14 +536,18 @@
             },
             en: {
                 title: 'Send from this device',
-                subtitle: 'Add files, paste an image, or write text. EQT saves everything on the receiving computer.',
+                subtitle: 'Add files or send text. EQT saves everything on the receiving computer.',
                 composer: 'Composer',
                 composer_hint: 'Text becomes a .txt file. Shift+Enter keeps a new line.',
                 add_files: 'Add files',
+                add_files_title: 'Click or drop files here',
+                add_files_subtitle: 'Select multiple files',
+                send_text_title: 'Send Text',
+                send_text_badge: '(Saved as .txt)',
                 file_name_label: 'Text file name',
                 file_name_placeholder: 'Optional file name',
                 text_label: 'Text',
-                text_placeholder: 'Write text or paste files here',
+                text_placeholder: 'Type your text here...',
                 btn_transfer: 'Transfer',
                 btn_transferring: 'Transferring...',
                 btn_stop: 'Stop',
@@ -447,14 +572,18 @@
             },
             ja: {
                 title: 'このデバイスから送信',
-                subtitle: 'ファイルを追加、スクリーンショットを貼り付け、またはテキストを直接入力できます。EQT が受信側のコンピュータに自动的に保存します。',
+                subtitle: 'ファイルの追加またはテキストの送信ができます。EQTは受信側のコンピューターにすべて保存します。',
                 composer: 'テキストエディタ',
                 composer_hint: '入力されたテキストは .txt ファイルとして保存されます。改行は Shift+Enter を押してください。',
                 add_files: 'ファイルを追加',
+                add_files_title: 'クリックまたはドロップでファイルを選択',
+                add_files_subtitle: '複数ファイルの選択に対応',
+                send_text_title: 'テキストを送信',
+                send_text_badge: '(.txt として自動保存)',
                 file_name_label: 'テキストファイル名',
-                file_name_placeholder: '任意のファイル名（空欄の場合は自动生成）',
+                file_name_placeholder: '任意のファイル名（空欄の場合は自動生成）',
                 text_label: 'テキスト内容',
-                text_placeholder: 'ここにテキストを直接入力するか、スクリーンショットやファイルを貼り付けます',
+                text_placeholder: 'ここにテキストを直接入力...',
                 btn_transfer: '転送開始',
                 btn_transferring: '転送中...',
                 btn_stop: '停止',
@@ -479,14 +608,18 @@
             },
             ko: {
                 title: '이 기기에서 전송',
-                subtitle: '파일을 추가하거나 스크린샷을 붙여넣거나 텍스트를 직접 입력할 수 있습니다. EQT가 수신 측 컴퓨터에 자동으로 저장합니다.',
+                subtitle: '파일을 추가하거나 텍스트를 직접 전송할 수 있습니다. EQT는 수신 컴퓨터에 모든 것을 저장합니다.',
                 composer: '텍스트 편집기',
                 composer_hint: '입력한 텍스트는 .txt 파일로 저장됩니다. 줄바꿈은 Shift+Enter를 누르세요.',
                 add_files: '파일 추가',
+                add_files_title: '클릭하거나 파일을 여기에 끌어다 놓으세요',
+                add_files_subtitle: '여러 파일 선택 지원',
+                send_text_title: '텍스트 전송',
+                send_text_badge: '(.txt로 자동 저장)',
                 file_name_label: '텍스트 파일 이름',
                 file_name_placeholder: '선택적 파일 이름 (비워 두면 자동 생성)',
                 text_label: '텍스트 내용',
-                text_placeholder: '여기에 텍스트를 직접 입력하거나 스크린샷 또는 파일을 붙여넣으십시오',
+                text_placeholder: '여기에 텍스트를 직접 입력...',
                 btn_transfer: '전송 시작',
                 btn_transferring: '전송 중...',
                 btn_stop: '중지',
@@ -511,14 +644,18 @@
             },
             es: {
                 title: 'Enviar desde este dispositivo',
-                subtitle: 'Puede añadir archivos, pegar capturas de pantalla o escribir texto directamente. EQT lo guardará automáticamente en el ordenador receptor.',
+                subtitle: 'Agregue archivos o envíe texto directamente. EQT guarda todo en la computadora receptora.',
                 composer: 'Editor de texto',
                 composer_hint: 'El texto introducido se guardará como un archivo .txt. Pulse Shift+Enter para una nueva línea.',
                 add_files: 'Añadir archivos',
+                add_files_title: 'Haga clic o arrastre archivos aquí',
+                add_files_subtitle: 'Admite la selección de múltiples archivos',
+                send_text_title: 'Enviar texto',
+                send_text_badge: '(Guardado como .txt)',
                 file_name_label: 'Nombre del archivo de texto',
                 file_name_placeholder: 'Nombre de archivo opcional (vacío para generación automática)',
                 text_label: 'Contenido del texto',
-                text_placeholder: 'Escriba texto directamente aquí, o pegue capturas de pantalla o archivos',
+                text_placeholder: 'Escriba texto directamente aquí...',
                 btn_transfer: 'Iniciar transferencia',
                 btn_transferring: 'Transfiriendo...',
                 btn_stop: 'Detener',
@@ -543,14 +680,18 @@
             },
             de: {
                 title: 'Von diesem Gerät senden',
-                subtitle: 'Sie können Dateien hinzufügen, Screenshots einfügen oder Text direkt eingeben. EQT speichert dies automatisch auf dem Empfänger-Computer.',
+                subtitle: 'Fügen Sie Dateien hinzu oder senden Sie Text. EQT speichert alles auf dem Empfänger-Computer.',
                 composer: 'Text-Editor',
                 composer_hint: 'Eingegebener Text wird als .txt Datei gespeichert. Drücken Sie Shift+Enter für eine neue Zeile.',
                 add_files: 'Dateien hinzufügen',
+                add_files_title: 'Klicken oder Dateien hierhin ziehen',
+                add_files_subtitle: 'Unterstützt die Auswahl mehrerer Dateien',
+                send_text_title: 'Text senden',
+                send_text_badge: '(Als .txt gespeichert)',
                 file_name_label: 'Dateiname des Textes',
                 file_name_placeholder: 'Optionaler Dateiname (leer lassen für automatische Generierung)',
                 text_label: 'Textinhalt',
-                text_placeholder: 'Geben Sie hier Text direkt ein, oder fügen Sie Screenshots oder Dateien ein',
+                text_placeholder: 'Geben Sie hier Text direkt ein...',
                 btn_transfer: 'Übertragung starten',
                 btn_transferring: 'Übertrage...',
                 btn_stop: 'Stoppen',
@@ -575,14 +716,18 @@
             },
             fr: {
                 title: 'Envoyer depuis cet appareil',
-                subtitle: 'Vous pouvez ajouter des fichiers, coller des captures d\'écran ou saisir du texte directement. EQT les enregistrera automatiquement sur l\'ordinateur destinataire.',
+                subtitle: 'Ajoutez des fichiers ou envoyez du texte. EQT enregistre tout sur l\'ordinateur destinataire.',
                 composer: 'Éditeur de texte',
                 composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
                 add_files: 'Ajouter des fichiers',
+                add_files_title: 'Cliquez ou déposez des fichiers ici',
+                add_files_subtitle: 'Prend en charge la sélection de plusieurs fichiers',
+                send_text_title: 'Envoyer du texte',
+                send_text_badge: '(Enregistré au format .txt)',
                 file_name_label: 'Nom du fichier texte',
                 file_name_placeholder: 'Nom de fichier facultatif (laisser vide pour génération automatique)',
                 text_label: 'Contenu du texte',
-                text_placeholder: 'Saisissez du texte directement ici, o coller des captures d\'écran ou des fichiers',
+                text_placeholder: 'Saisissez du texte directement ici...',
                 btn_transfer: 'Démarrer le transfert',
                 btn_transferring: 'Transfert en cours...',
                 btn_stop: 'Arrêter',
@@ -617,27 +762,24 @@
             fr: true
         };
         var serverLang = '{{.Lang}}';
-        var currentLang = 'zh';
-        var userLang = 'zh';
+        var userLang = 'en';
         try {
-            var rawLang = navigator.language || navigator.userLanguage || 'zh';
-            userLang = (rawLang && typeof rawLang === 'string') ? rawLang.toLowerCase().split('-')[0] : 'zh';
+            var rawLang = navigator.language || navigator.userLanguage || '';
+            if (rawLang && typeof rawLang === 'string') {
+                userLang = rawLang.toLowerCase().split('-')[0];
+            }
         } catch (e) {
             console.error("Language detection error:", e);
         }
-        if (supportedLangs[serverLang]) {
-            currentLang = serverLang;
-        } else if (supportedLangs[userLang]) {
-            currentLang = userLang;
-        } else {
-            currentLang = 'en';
-        }
+
+        var currentLang = supportedLangs[userLang] ? userLang : 'en';
+
         var savedLang = window.localStorage.getItem('eqt-page-lang') || window.localStorage.getItem('eqt_lang');
         if (savedLang) {
             savedLang = savedLang.toLowerCase().split('-')[0];
-        }
-        if (savedLang && supportedLangs[savedLang]) {
-            currentLang = savedLang;
+            if (supportedLangs[savedLang]) {
+                currentLang = savedLang;
+            }
         }
         document.cookie = "eqt-lang=" + encodeURIComponent(currentLang) + ";path=/;max-age=31536000";
 
@@ -713,6 +855,51 @@
         var pastedFileContainer = document.getElementById('pasted-file-container');
         var errorBox = document.getElementById('upload-error');
         
+        var accordionToggle = document.getElementById('text-accordion-toggle');
+        var accordionCard = document.getElementById('text-accordion-card');
+        var accordionContent = document.getElementById('text-accordion-content');
+
+        function toggleTextAccordion(expand) {
+            if (!accordionCard || !accordionContent) return;
+            var isCurrentlyExpanded = accordionCard.classList.contains('expanded');
+            var shouldExpand = typeof expand === 'boolean' ? expand : !isCurrentlyExpanded;
+            if (shouldExpand) {
+                accordionCard.classList.add('expanded');
+                accordionContent.style.display = 'block';
+            } else {
+                accordionCard.classList.remove('expanded');
+                accordionContent.style.display = 'none';
+            }
+        }
+
+        if (accordionToggle) {
+            accordionToggle.addEventListener('click', function() {
+                toggleTextAccordion();
+            });
+        }
+
+        var dropzone = document.getElementById('dropzone');
+        if (dropzone) {
+            dropzone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropzone.classList.add('drag-over');
+            });
+            dropzone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                dropzone.classList.remove('drag-over');
+            });
+            dropzone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropzone.classList.remove('drag-over');
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                    for (var i = 0; i < e.dataTransfer.files.length; i++) {
+                        addFileToAccumulated(e.dataTransfer.files[i]);
+                    }
+                    renderFiles();
+                }
+            });
+        }
+
         var currentTusUpload = null;
         var isUploadStopped = false;
         var isUploading = false;
@@ -755,6 +942,9 @@
             if (!draft) { return; }
             titleInput.value = draft.title || '';
             textArea.value = draft.text || '';
+            if (draft.title || draft.text) {
+                toggleTextAccordion(true);
+            }
         }
 
         function resizeTextArea() {
