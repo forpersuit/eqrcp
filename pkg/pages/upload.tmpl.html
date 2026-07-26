@@ -219,23 +219,27 @@
             min-height: 18px;
         }
         .lang-switch-container {
-            position: fixed;
-            bottom: 16px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
+            display: flex;
+            justify-content: center;
+            margin-top: 24px;
+            margin-bottom: 12px;
         }
         #page-lang-select {
             background: var(--surface);
             border: 1px solid var(--line);
             border-radius: 6px;
-            color: var(--text);
+            color: var(--muted);
             cursor: pointer;
             font-size: 13px;
             font-weight: 600;
             outline: none;
-            padding: 6px 8px;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+            padding: 6px 10px;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            transition: all 0.2s ease;
+        }
+        #page-lang-select:hover {
+            border-color: var(--accent);
+            color: var(--text);
         }
         @media (max-width: 560px) {
             main {
