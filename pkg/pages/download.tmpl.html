@@ -391,10 +391,10 @@
             </div>
 
             <!-- 待接收文件标题与统计信息横向排列 -->
-            <div class="section-title-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                <span class="section-title" style="margin-bottom: 0;" data-i18n="saved_file">File to Receive</span>
-                <span id="transfer-stats-meta" class="transfer-stats-meta" style="font-size: 13px; color: var(--text-secondary); font-weight: 600;" data-count="{{.Count}}" data-size="{{.FileSize}}">
-                    {{.Count}} {{if eq .Count 1}}file{{else}}files{{end}} · {{.FileSize}}
+            <div class="section-title-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+                <span class="section-title" style="margin-bottom: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-i18n="saved_file">File to Receive</span>
+                <span id="transfer-stats-meta" class="transfer-stats-meta" style="font-size: 13px; color: var(--text-secondary); font-weight: 600; flex-shrink: 0; white-space: nowrap; text-align: right;" data-count="{{.Count}}" data-size="{{.FileSize}}">
+                    {{.Count}} · {{.FileSize}}
                 </span>
             </div>
             
@@ -892,8 +892,7 @@
             if (statsEl) {
                 var count = parseInt(statsEl.getAttribute('data-count') || '1', 10);
                 var sizeStr = statsEl.getAttribute('data-size') || '';
-                var metaTpl = (count > 1 ? dict.stats_meta_multiple : dict.stats_meta_single) || (count > 1 ? '{count} files · {size}' : '{count} file · {size}');
-                statsEl.textContent = metaTpl.replace('{count}', count).replace('{size}', sizeStr);
+                statsEl.textContent = count + ' · ' + sizeStr;
             }
             
             var count = {{.Count}};
