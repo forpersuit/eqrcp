@@ -256,6 +256,23 @@
             background: #cbece3;
         }
 
+        /* 待传输文件列表视窗（最多显示6条高度，滚动查看且无滚动条） */
+        .files-scroll-viewport {
+            max-height: 270px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .files-scroll-viewport::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        .files-scroll-viewport .file-item-row:last-child {
+            border-bottom: none !important;
+        }
+
         .hint {
             position: absolute;
             bottom: 32px;
@@ -355,7 +372,7 @@
                 <!-- 成功时显示的已下载文件面板 -->
                 <div id="downloaded-files-panel" style="display: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; text-align: left;">
                     <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;" data-i18n="downloaded_files_title">Downloaded Files:</div>
-                    <div id="downloaded-files-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                    <div id="downloaded-files-list" class="files-scroll-viewport" style="display: flex; flex-direction: column; gap: 6px;"></div>
                 </div>
             </div>
 
@@ -371,7 +388,7 @@
             
             <div id="files-list-container" style="text-align: left; margin-bottom: 20px;">
                 {{if gt .Count 1}}
-                    <div style="border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                    <div class="files-scroll-viewport" style="border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
                         {{range $index, $element := .Files}}
                             <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line);">
                                 <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
