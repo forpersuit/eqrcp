@@ -58,8 +58,8 @@ func TestFromArgsDirectoryZipName(t *testing.T) {
 		_ = got.Delete()
 	}()
 
-	if got.Filename != "photos-directory-20260422-010203.zip" {
-		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "photos-directory-20260422-010203.zip")
+	if got.Filename != "EQT_SHARE_20260422_010203.zip" {
+		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "EQT_SHARE_20260422_010203.zip")
 	}
 	if !got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = false, want true")
@@ -96,8 +96,8 @@ func TestFromArgsMultipleFilesZipName(t *testing.T) {
 		_ = got.Delete()
 	}()
 
-	if got.Filename != "eqt-multiple-files-20260422-010203.zip" {
-		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "eqt-multiple-files-20260422-010203.zip")
+	if got.Filename != "EQT_SHARE_20260422_010203.zip" {
+		t.Fatalf("FromArgs() Filename = %q, want %q", got.Filename, "EQT_SHARE_20260422_010203.zip")
 	}
 	if !got.DeleteAfterTransfer {
 		t.Fatal("FromArgs() DeleteAfterTransfer = false, want true")

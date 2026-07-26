@@ -3,7 +3,6 @@ package body
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"eqt/pkg/util"
@@ -77,23 +76,8 @@ func FromArgs(args []string, zipFlag bool) (Body, error) {
 }
 
 func zipDownloadName(args []string, zipFlag bool, hasDir bool) string {
-	timestamp := zipTimestamp().Format("20060102-150405")
-	if len(args) > 1 {
-		return "eqt-multiple-files-" + timestamp + ".zip"
-	}
-	base := filepath.Base(args[0])
-	if hasDir {
-		return strings.TrimSuffix(base, string(filepath.Separator)) + "-directory-" + timestamp + ".zip"
-	}
-	if zipFlag {
-		ext := filepath.Ext(base)
-		name := strings.TrimSuffix(base, ext)
-		if name == "" {
-			name = "eqt"
-		}
-		return name + "-zipped-" + timestamp + ".zip"
-	}
-	return "eqt-files-" + timestamp + ".zip"
+	timestamp := zipTimestamp().Format("20060102_150405")
+	return "EQT_SHARE_" + timestamp + ".zip"
 }
 
 func displayItems(args []string) []string {
