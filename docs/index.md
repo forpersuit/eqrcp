@@ -49,6 +49,7 @@ Environment variables use the `EQT_` prefix.
 ## Planning & Docs
 
 - **[正式发布清单 (Product Launch Checklist)](IMPORTANT_product-release.md)** — 上线前配置/口径/验收；下一版范围
+- **[Paddle 商家 KYB 与合规开通指南](IMPORTANT_paddle-kyb-company-guide.md)** — 公司注册优势、KYB 认证、域名审核及出口结汇
 - [Payment & Licensing System Docs (支付与授权系统文档)](payment/README.md)
 - [Product Presentation & Merchant Compliance (支付合规页)](product-landing.md)
 - [Auto-Update Design & Settings (自动更新设计)](IMPORTANT_auto-update-design.md)
