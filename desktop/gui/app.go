@@ -177,11 +177,11 @@ func (a *App) startup(ctx context.Context) {
 		a.agent.log = logger.NewWithWriter(a.agent.baseFlags.Quiet, a.logger)
 	}
 	a.downloads = make(map[string]context.CancelFunc)
-	go func() {
-		if err := a.agent.loadHistory(); err != nil {
-			wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
-		}
-	}()
+
+	// 同步预加载历史记录，确保前端初次请求 AgentStatus() 时能够立刻拿到完整历史
+	if err := a.agent.loadHistory(); err != nil {
+		wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
+	}
 
 	// 启动成功，延迟 5 秒后更新 LastSuccessfulVersion 并清理旧的备份文件
 	go func() {
