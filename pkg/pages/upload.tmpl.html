@@ -323,40 +323,49 @@
         /* 核心区域一：Dropzone 文件选择 */
         .dropzone-box {
             border: 2px dashed #a5cfc9;
-            border-radius: 10px;
+            border-radius: 12px;
             background: var(--surface-soft);
-            padding: 24px 16px;
+            padding: 26px 16px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
+            margin-bottom: 8px;
         }
         .dropzone-box:hover, .dropzone-box.drag-over {
             border-color: var(--accent);
-            background: rgba(15, 118, 110, 0.05);
+            background: rgba(15, 118, 110, 0.06);
+            transform: translateY(-1px);
         }
         .dropzone-label {
             cursor: pointer;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             margin-bottom: 0;
+            user-select: none;
         }
-        .dropzone-icon {
-            font-size: 32px;
-            line-height: 1;
-        }
-        .dropzone-text strong {
-            display: block;
-            color: var(--text);
-            font-size: 15px;
+        .btn-add-files {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: #ffffff;
             font-weight: 700;
+            font-size: 15px;
+            padding: 10px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
+            transition: all 0.2s ease;
+            pointer-events: none; /* Let label handle click */
         }
-        .dropzone-text span {
-            display: block;
+        .dropzone-box:hover .btn-add-files {
+            background: var(--accent-strong);
+            box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
+        }
+        .dropzone-hint {
             color: var(--muted);
             font-size: 13px;
-            margin-top: 2px;
         }
 
         /* 核心区域二：发送文本折叠 Accordion */
@@ -365,6 +374,7 @@
             border-radius: 10px;
             background: #fff;
             overflow: hidden;
+            margin-top: 14px;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .text-accordion-card.expanded {
@@ -439,11 +449,11 @@
             <!-- 核心区域一：添加文件传输 -->
             <div class="dropzone-box" id="dropzone">
                 <label for="files" class="dropzone-label">
-                    <span class="dropzone-icon">&#128194;</span>
-                    <div class="dropzone-text">
-                        <strong data-i18n="add_files_title">Click or drop files here</strong>
-                        <span data-i18n="add_files_subtitle">Select multiple files</span>
-                    </div>
+                    <span class="btn-add-files">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        <span data-i18n="add_files">Add files</span>
+                    </span>
+                    <span class="dropzone-hint" data-i18n="add_files_hint">Supports multiple files (drag files on desktop)</span>
                 </label>
                 <input class="form-control-file" type="file" id="files" name="files" multiple hidden>
             </div>
@@ -504,6 +514,7 @@
                 composer: '文本编辑器',
                 composer_hint: '输入的文本将被保存为 .txt 文件。换行请按 Shift+Enter。',
                 add_files: '添加文件',
+                add_files_hint: '支持选择多个文件 (电脑端可直接拖拽)',
                 add_files_title: '点击选择文件或拖拽文件到此处',
                 add_files_subtitle: '支持选择多个文件',
                 send_text_title: '发送文本',
@@ -540,6 +551,7 @@
                 composer: 'Composer',
                 composer_hint: 'Text becomes a .txt file. Shift+Enter keeps a new line.',
                 add_files: 'Add files',
+                add_files_hint: 'Supports multiple files (drag files on desktop)',
                 add_files_title: 'Click or drop files here',
                 add_files_subtitle: 'Select multiple files',
                 send_text_title: 'Send Text',
@@ -576,6 +588,7 @@
                 composer: 'テキストエディタ',
                 composer_hint: '入力されたテキストは .txt ファイルとして保存されます。改行は Shift+Enter を押してください。',
                 add_files: 'ファイルを追加',
+                add_files_hint: '複数ファイルに対応 (PCではドラッグ可)',
                 add_files_title: 'クリックまたはドロップでファイルを選択',
                 add_files_subtitle: '複数ファイルの選択に対応',
                 send_text_title: 'テキストを送信',
@@ -612,6 +625,7 @@
                 composer: '텍스트 편집기',
                 composer_hint: '입력한 텍스트는 .txt 파일로 저장됩니다. 줄바꿈은 Shift+Enter를 누르세요.',
                 add_files: '파일 추가',
+                add_files_hint: '여러 파일 지원 (PC에서는 드래그 가능)',
                 add_files_title: '클릭하거나 파일을 여기에 끌어다 놓으세요',
                 add_files_subtitle: '여러 파일 선택 지원',
                 send_text_title: '텍스트 전송',
@@ -648,6 +662,7 @@
                 composer: 'Editor de texto',
                 composer_hint: 'El texto introducido se guardará como un archivo .txt. Pulse Shift+Enter para una nueva línea.',
                 add_files: 'Añadir archivos',
+                add_files_hint: 'Admite múltiples archivos (arrastrar en escritorio)',
                 add_files_title: 'Haga clic o arrastre archivos aquí',
                 add_files_subtitle: 'Admite la selección de múltiples archivos',
                 send_text_title: 'Enviar texto',
@@ -684,6 +699,7 @@
                 composer: 'Text-Editor',
                 composer_hint: 'Eingegebener Text wird als .txt Datei gespeichert. Drücken Sie Shift+Enter für eine neue Zeile.',
                 add_files: 'Dateien hinzufügen',
+                add_files_hint: 'Unterstützt mehrere Dateien (Auf PC ziehbar)',
                 add_files_title: 'Klicken oder Dateien hierhin ziehen',
                 add_files_subtitle: 'Unterstützt die Auswahl mehrerer Dateien',
                 send_text_title: 'Text senden',
@@ -720,6 +736,7 @@
                 composer: 'Éditeur de texte',
                 composer_hint: 'Le texte saisi sera enregistré sous forme de fichier .txt. Appuyez sur Shift+Enter pour sauter une ligne.',
                 add_files: 'Ajouter des fichiers',
+                add_files_hint: 'Prend en charge plusieurs fichiers (glisser sur PC)',
                 add_files_title: 'Cliquez ou déposez des fichiers ici',
                 add_files_subtitle: 'Prend en charge la sélection de plusieurs fichiers',
                 send_text_title: 'Envoyer du texte',
