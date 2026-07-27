@@ -215,7 +215,7 @@
   function handleGlobeResize() {
     if (globeInstance && globeContainerRef) {
       const w = globeContainerRef.clientWidth || 800;
-      const h = globeContainerRef.clientHeight || 480;
+      const h = globeContainerRef.clientHeight || 340;
       globeInstance.width(w).height(h);
     }
   }
@@ -271,7 +271,7 @@
     function resize2D() {
       if (!canvas2D || !globeContainerRef) return;
       canvas2D.width = globeContainerRef.clientWidth || 800;
-      canvas2D.height = globeContainerRef.clientHeight || 480;
+      canvas2D.height = globeContainerRef.clientHeight || 340;
     }
     resize2D();
 
@@ -419,7 +419,7 @@
       <h3>🌐 3D 实时拓扑与全球节点流动大屏</h3>
       <span class="badge badge-info">{isFallback2D ? '2D 高性能回退' : 'WebGL 硬件加速'}</span>
     </div>
-    <div class="globe-wrapper" bind:this={globeContainerRef}></div>
+    <div class="globe-wrapper" style="height: 320px;" bind:this={globeContainerRef}></div>
   </div>
 
   <!-- Active Rooms Table -->
@@ -516,7 +516,7 @@
   .page-container {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
   }
 
   .header-section {
@@ -526,15 +526,15 @@
   }
 
   .page-title {
-    font-size: 1.75rem;
-    font-weight: 800;
+    font-size: 1.35rem;
+    font-weight: 700;
     color: var(--text-primary);
   }
 
   .page-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--text-secondary);
-    margin-top: 0.25rem;
+    margin-top: 0.2rem;
   }
 
   .action-bar {
@@ -547,7 +547,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     cursor: pointer;
   }
@@ -555,17 +555,17 @@
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1.25rem;
+    gap: 1rem;
   }
 
   .stat-card {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 1.25rem;
+    padding: 0.85rem 1.1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .stat-card.blue { border-top: 3px solid #38bdf8; }
@@ -574,13 +574,13 @@
   .stat-card.cyan { border-top: 3px solid #06b6d4; }
 
   .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: var(--text-primary);
   }
 
   .stat-label {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
   }
 
@@ -590,11 +590,11 @@
   }
 
   .card-header {
-    padding: 1.25rem 1.5rem;
+    padding: 0.75rem 1.25rem;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .flex-between {
@@ -602,14 +602,15 @@
   }
 
   .card-header h3 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
     margin: 0;
   }
 
   .globe-wrapper {
     width: 100%;
-    height: 480px;
+    height: 320px !important;
+    max-height: 38vh !important;
     background: #020617;
     position: relative;
     overflow: hidden;
@@ -621,8 +622,8 @@
   }
 
   .btn-sm {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.8rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
     background: transparent;
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
@@ -644,12 +645,12 @@
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .data-table th,
   .data-table td {
-    padding: 1rem 1.25rem;
+    padding: 0.65rem 1rem;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
   }
