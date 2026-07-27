@@ -1186,10 +1186,18 @@
   let channelNotice = '';
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
   $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme + "&lang=" + currentLang;
-  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}#chat:${token}`;
+  $: wanUrl = `https://eqt.net.im/p/chat?token=${token}&join=${joinToken}`;
   $: activeUrl = (qrChannelMode === 'wan' && isPaid) ? wanUrl : joinUrl;
+  function renderInlineQRSVG(urlStr: string): string {
+    if (typeof window !== 'undefined' && typeof (window as any).generateQRSVGDataURL === 'function') {
+      const res = (window as any).generateQRSVGDataURL(urlStr);
+      if (res) return res;
+    }
+    return `/chat-v2/${token}/qr.png?text=${encodeURIComponent(urlStr)}&join=${joinToken}`;
+  }
+
   $: activeQrImgSrc = (qrChannelMode === 'wan' && isPaid)
-    ? `/chat-v2/${token}/qr.png?text=${encodeURIComponent(wanUrl)}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`
+    ? renderInlineQRSVG(wanUrl)
     : `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
 
   function setChannelMode(mode: 'lan' | 'wan') {

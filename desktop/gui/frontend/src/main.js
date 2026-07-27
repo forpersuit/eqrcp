@@ -10,6 +10,7 @@ import shareIllustrationURL from './assets/images/share.png';
 import receiveIllustrationURL from './assets/images/receive.png';
 import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
+import './vendor/qrcode.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 
@@ -701,24 +702,24 @@ function renderShare() {
 state.qrChannelMode = state.qrChannelMode || 'lan';
 
 function sanitizeWanP2PUrl(targetUrl, action) {
-    if (!targetUrl) return `https://eqt.net.im/p/#${action || 'share'}`;
+    const act = action || 'share';
+    if (!targetUrl) return `https://eqt.net.im/p/${act}`;
     try {
         const parsed = new URL(targetUrl);
         const params = new URLSearchParams();
         const token = parsed.searchParams.get('token');
         const join = parsed.searchParams.get('join');
-        if (token) params.set('token', token);
-        if (join) params.set('join', join);
-        
         const pathSegments = parsed.pathname.split('/').filter(Boolean);
         const lastSegment = pathSegments[pathSegments.length - 1] || '';
-        const pathToken = (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat') ? lastSegment : '';
+        const rawToken = (token || (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat' ? lastSegment : ''));
+
+        if (rawToken) params.set('token', rawToken);
+        if (join) params.set('join', join);
         
         const searchStr = params.toString() ? `?${params.toString()}` : '';
-        const tag = pathToken ? `:${pathToken}` : '';
-        return `https://eqt.net.im/p/${searchStr}#${action || 'share'}${tag}`;
+        return `https://eqt.net.im/p/${act}${searchStr}`;
     } catch (e) {
-        return `https://eqt.net.im/p/#${action || 'share'}`;
+        return `https://eqt.net.im/p/${act}`;
     }
 }
 
@@ -5881,8 +5882,21 @@ function qrImageURL(pageUrl) {
     if (!pageUrl) {
         return '';
     }
+    if (typeof window !== 'undefined' && typeof window.generateQRSVGDataURL === 'function') {
+        const svgData = window.generateQRSVGDataURL(pageUrl);
+        if (svgData) return svgData;
+    }
+    const currentTask = state.status?.current || state.status?.chat || activeChatTask();
+    let localOrigin = '';
+    if (currentTask && currentTask.pageUrl) {
+        try {
+            localOrigin = new URL(currentTask.pageUrl).origin;
+        } catch (e) {}
+    }
+    const baseServerUrl = localOrigin || window.location.origin;
+
     if (pageUrl.startsWith('https://eqt.net.im/')) {
-        return `/qr/image?text=${encodeURIComponent(pageUrl)}`;
+        return `${baseServerUrl}/qr/image?text=${encodeURIComponent(pageUrl)}`;
     }
     try {
         const url = new URL(pageUrl);
