@@ -2492,6 +2492,30 @@ function renderPlanComparisonPanel() {
                     </ul>
                 </div>
 
+                <!-- PRO 月付卡片 -->
+                <div class="plan-card plan-card-premium" style="border: 1.2px solid var(--accent); border-radius: 16px; padding: 24px; background: var(--bg-hover); display: flex; flex-direction: column; text-align: left; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
+                    <div style="margin-bottom: 16px; border-bottom: 1.2px solid var(--line); padding-bottom: 14px;">
+                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">Flexible Subscription</span>
+                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('pro_monthly_title') || 'PRO 月付订阅'}</h3>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_pro_desc_short') || '灵活月度订阅，随时取消，解锁局域网满速与无限传输。'}</p>
+                        <div style="font-size: 26px; font-weight: 900; color: var(--accent); margin-top: 14px;">$2.99 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">/ ${t('month_unit') || '月'}</span></div>
+                    </div>
+                    <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <strong>${t('plan_feature_pro_sub') || '解锁局域网物理满速传输'}</strong>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <strong>${t('plan_feature_chat_unlimit') || '无限量 Chat 时间（绝不限额）'}</strong>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <span>${t('plan_feature_unlimit_transfer') || '高并发无限度极速发送与接收文件'}</span>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <span>${t('plan_feature_cancel_anytime') || '灵活月度订阅，可随时取消'}</span>
+                        </li>
+                    </ul>
+                </div>
+
                 <!-- PLUS / PLUS U 付费卡片 -->
                 <div class="plan-card plan-card-premium featured" style="border: 2px solid var(--accent); border-radius: 16px; padding: 24px; background: var(--bg); display: flex; flex-direction: column; text-align: left; position: relative; box-shadow: 0 10px 30px rgba(47, 158, 115, 0.08), 0 2px 8px rgba(47, 158, 115, 0.03); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
                     <div style="position: absolute; top: -9px; right: 20px; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; font-size: 9.5px; font-weight: 900; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.2);">Recommended</div>
