@@ -64,11 +64,12 @@ export async function handlePaddleRoutes(
 
     console.log("PADDLE_WEBHOOK_EVENT:", JSON.stringify(event));
 
-    const eventType = event.event_type;
-    const data = event.data || {};
+    try {
+      const eventType = event.event_type;
+      const data = event.data || {};
 
-    // 1. Event: transaction.completed -> Fullfill new license or extend subscription
-    if (eventType === "transaction.completed") {
+      // 1. Event: transaction.completed -> Fullfill new license or extend subscription
+      if (eventType === "transaction.completed") {
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
       const customerId = data.customer_id || null;
