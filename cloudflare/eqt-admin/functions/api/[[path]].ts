@@ -42,36 +42,30 @@ export async function onRequest(context: PagesContext): Promise<Response> {
 
   upstreamBase = upstreamBase.replace(/\/$/, "");
 
-  // Incoming: /api/<subPath>  → upstream /api/<subPath>
+  // Incoming: /api/<subPath> → upstream /api/<subPath>
   const target = `${upstreamBase}/api/${subPath}${reqUrl.search}`;
 
   const headers = new Headers();
-  // Forward content + auth-related headers only (avoid hop-by-hop noise)
+  // Forward content + auth-related headers
   const allow = [
     "content-type",
     "accept",
     "cf-access-jwt-assertion",
+    "cf-access-authenticated-user-email",
     "authorization",
+    "cookie",
   ];
   for (const [k, v] of context.request.headers) {
-    if (allow.includes(k.toLowerCase())) {
+    const lowerKey = k.toLowerCase();
+    if (allow.includes(lowerKey) || lowerKey.startsWith("cf-access-")) {
       headers.set(k, v);
     }
   }
 
-  // Cloudflare exposes identity via header or CF_Authorization cookie on Access host
-  let jwt =
+  // Ensure Cf-Access-Jwt-Assertion is passed if present in header or CF_Authorization cookie
+  const jwt =
     context.request.headers.get("Cf-Access-Jwt-Assertion") ||
     context.request.headers.get("cf-access-jwt-assertion");
-
-  if (!jwt) {
-    const cookieHeader = context.request.headers.get("cookie") || "";
-    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
-    if (match && match[1]) {
-      jwt = match[1].trim();
-    }
-  }
-
   if (jwt) {
     headers.set("Cf-Access-Jwt-Assertion", jwt);
   }
@@ -104,20 +98,6 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       headers: outHeaders,
     });
   } catch (err: any) {
-    if (target.includes("signal.eqt.net.im")) {
-      try {
-        const fallbackTarget = target.replace("https://signal.eqt.net.im", "https://eqt-p2p-signal.leeyelon.workers.dev");
-        const fallbackUpstream = await fetch(fallbackTarget, init);
-        const outHeaders = new Headers(fallbackUpstream.headers);
-        outHeaders.delete("content-encoding");
-        outHeaders.delete("transfer-encoding");
-        return new Response(fallbackUpstream.body, {
-          status: fallbackUpstream.status,
-          statusText: fallbackUpstream.statusText,
-          headers: outHeaders,
-        });
-      } catch (fErr) {}
-    }
     return new Response(JSON.stringify({
       error: `Upstream service unavailable (${err?.message || "connection error"})`,
       target

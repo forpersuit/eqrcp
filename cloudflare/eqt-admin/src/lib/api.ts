@@ -44,12 +44,11 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
   if (
     response.status === 401 ||
     data?.code === 'ACCESS_JWT_REQUIRED' ||
-    data?.code === 'ACCESS_JWT_INVALID' ||
-    (typeof data?.error === 'string' && data.error.includes('Access JWT'))
+    data?.code === 'ACCESS_JWT_INVALID'
   ) {
     clearAccessSession();
-    window.location.href = accessLoginUrl();
-    throw new Error('Cloudflare Access 会话已失效，正在跳转至登录页…');
+    window.location.reload();
+    throw new Error('Cloudflare Access 会话无效或未登录');
   }
 
   if (response.status === 503) {

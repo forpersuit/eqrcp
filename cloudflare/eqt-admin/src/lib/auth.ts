@@ -2,7 +2,7 @@ const ACCESS_OK_KEY = 'eqt_admin_access_ok';
 
 /**
  * Admin is Cloudflare Access only (production + same-origin /api JWT).
- * Local SPA still probes Access-style session after edge login; no ADMIN_SECRET.
+ * Local SPA probes Access session after edge login.
  */
 export function markAccessAuthenticated(): void {
   sessionStorage.setItem(ACCESS_OK_KEY, '1');
