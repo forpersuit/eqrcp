@@ -700,18 +700,32 @@ function renderShare() {
 
 state.qrChannelMode = state.qrChannelMode || 'lan';
 
+function sanitizeWanP2PUrl(targetUrl, action) {
+    if (!targetUrl) return `https://eqt.net.im/p/#${action || 'share'}`;
+    try {
+        const parsed = new URL(targetUrl);
+        const params = new URLSearchParams();
+        const token = parsed.searchParams.get('token');
+        const join = parsed.searchParams.get('join');
+        if (token) params.set('token', token);
+        if (join) params.set('join', join);
+        
+        const pathSegments = parsed.pathname.split('/').filter(Boolean);
+        const lastSegment = pathSegments[pathSegments.length - 1] || '';
+        const pathToken = (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat') ? lastSegment : '';
+        
+        const searchStr = params.toString() ? `?${params.toString()}` : '';
+        const tag = pathToken ? `:${pathToken}` : '';
+        return `https://eqt.net.im/p/${searchStr}#${action || 'share'}${tag}`;
+    } catch (e) {
+        return `https://eqt.net.im/p/#${action || 'share'}`;
+    }
+}
+
 function getWanP2PUrl(task) {
     if (!task || !task.pageUrl) return 'https://eqt.net.im/p/';
     const baseAction = task.action || 'share';
-    try {
-        const parsed = new URL(task.pageUrl);
-        const search = parsed.search || '';
-        const pathSegments = parsed.pathname.split('/').filter(Boolean);
-        const pathToken = pathSegments[pathSegments.length - 1] || 'active';
-        return `https://eqt.net.im/p/${search}#${baseAction}_${pathToken}`;
-    } catch (e) {
-        return `https://eqt.net.im/p/#${baseAction}`;
-    }
+    return sanitizeWanP2PUrl(task.pageUrl, baseAction);
 }
 
 function renderActiveTaskQR() {

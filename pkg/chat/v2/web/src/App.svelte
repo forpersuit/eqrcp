@@ -1186,21 +1186,21 @@
   let channelNotice = '';
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
   $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme + "&lang=" + currentLang;
-  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}#chat:${token}`;
-  $: activeUrl = (qrChannelMode === 'wan' && isPaid) ? wanUrl : joinUrl;
-  $: activeQrImgSrc = (qrChannelMode === 'wan' && isPaid)
+  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}#chat:${token}`;
+  $: activeUrl = (qrChannelMode === 'wan') ? wanUrl : joinUrl;
+  $: activeQrImgSrc = (qrChannelMode === 'wan')
     ? `/chat-v2/${token}/qr.png?text=${encodeURIComponent(wanUrl)}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`
     : `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
 
   function setChannelMode(mode: 'lan' | 'wan') {
+    qrChannelMode = mode;
     if (mode === 'wan' && !isPaid) {
       channelNotice = currentLang === 'en'
-        ? 'Pro Feature: Please activate Pro subscription for public WebRTC P2P connection'
+        ? 'Pro Feature: Please activate Pro subscription for full P2P performance'
         : 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅';
-      setTimeout(() => channelNotice = '', 3000);
-      return;
+    } else {
+      channelNotice = '';
     }
-    qrChannelMode = mode;
   }
 
   function handleCopyUrl() {
