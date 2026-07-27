@@ -5881,16 +5881,8 @@ function qrImageURL(pageUrl) {
     if (!pageUrl) {
         return '';
     }
-    const currentTask = state.status?.current || activeChatTask();
-    const localBaseUrl = currentTask?.pageUrl || state.status?.chat?.pageUrl || '';
-    if (localBaseUrl) {
-        try {
-            const loc = new URL(localBaseUrl);
-            loc.pathname = '/qr/image';
-            loc.search = `?text=${encodeURIComponent(pageUrl)}`;
-            loc.hash = '';
-            return loc.toString();
-        } catch {}
+    if (pageUrl.startsWith('https://eqt.net.im/')) {
+        return `/qr/image?text=${encodeURIComponent(pageUrl)}`;
     }
     try {
         const url = new URL(pageUrl);
@@ -5902,7 +5894,7 @@ function qrImageURL(pageUrl) {
         } else {
             url.pathname = '/qr/image';
         }
-        url.search = `?text=${encodeURIComponent(pageUrl)}`;
+        url.search = '';
         url.hash = '';
         return url.toString();
     } catch {
