@@ -109,11 +109,12 @@
 
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
     grad.addColorStop(0, '#020617');
-    grad.addColorStop(0.5, '#091328');
+    grad.addColorStop(0.5, '#0b192e');
     grad.addColorStop(1, '#020617');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Draw latitude / longitude grid
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 32) {
@@ -129,27 +130,33 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
-    const drawContinentBlob = (cx: number, cy: number, rx: number, ry: number) => {
-      for (let x = cx - rx; x <= cx + rx; x += 12) {
-        for (let y = cy - ry; y <= cy + ry; y += 12) {
-          const dx = (x - cx) / rx;
-          const dy = (y - cy) / ry;
-          if (dx * dx + dy * dy <= 1 + (Math.random() * 0.3 - 0.15)) {
-            ctx.beginPath();
-            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-    };
+    // Vector Continent Outlines (Eurasia, Americas, Africa, Australia)
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+    ctx.lineWidth = 1.5;
 
-    drawContinentBlob(750, 180, 140, 90);
-    drawContinentBlob(260, 160, 120, 80);
-    drawContinentBlob(340, 340, 70, 100);
-    drawContinentBlob(540, 140, 60, 50);
-    drawContinentBlob(530, 270, 80, 100);
-    drawContinentBlob(820, 360, 70, 50);
+    function drawPolygon(coords: [number, number][]) {
+      if (coords.length === 0) return;
+      ctx.beginPath();
+      ctx.moveTo(coords[0][0], coords[0][1]);
+      for (let i = 1; i < coords.length; i++) {
+        ctx.lineTo(coords[i][0], coords[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Eurasia / Asia
+    drawPolygon([[600, 100], [880, 120], [920, 220], [780, 260], [680, 240], [620, 160]]);
+    // North America
+    drawPolygon([[180, 100], [380, 110], [340, 220], [220, 230], [160, 170]]);
+    // South America
+    drawPolygon([[280, 250], [380, 270], [340, 420], [300, 440], [260, 320]]);
+    // Africa
+    drawPolygon([[480, 180], [600, 190], [580, 340], [520, 380], [460, 240]]);
+    // Australia
+    drawPolygon([[780, 330], [880, 340], [860, 420], [770, 410]]);
 
     return canvas.toDataURL();
   }
@@ -171,11 +178,11 @@
           origWarn.apply(console, args);
         };
 
-        const textureUrl = generateProceduralEarthTexture();
         // @ts-ignore
         globeInstance = window.Globe()
           (globeContainerRef)
-          .globeImageUrl(textureUrl)
+          .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg')
+          .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
           .backgroundColor('#020617')
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
