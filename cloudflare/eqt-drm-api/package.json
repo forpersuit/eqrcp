@@ -11,7 +11,8 @@
     "db:init:remote": "wrangler d1 execute eqt-drm-db --remote --file=./schema.sql",
     "test:e2e": "node tests/e2e-drm-test.js",
     "test:admin": "node tests/e2e-admin-test.js",
-    "test:renewal": "node tests/verify-subscription-renewals.js"
+    "test:renewal": "node tests/verify-subscription-renewals.js",
+    "test:sandbox": "node tests/test-sandbox-checkout-flow.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",
