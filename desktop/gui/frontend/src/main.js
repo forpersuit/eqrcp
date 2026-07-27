@@ -701,17 +701,17 @@ function renderShare() {
 state.qrChannelMode = state.qrChannelMode || 'lan';
 
 function getWanP2PUrl(task) {
-    if (!task) return 'https://eqt.net.im/p/';
+    if (!task || !task.pageUrl) return 'https://eqt.net.im/p/';
     const baseAction = task.action || 'share';
-    let roomTag = task.id || 'active';
-    if (task.pageUrl) {
-        try {
-            const parsed = new URL(task.pageUrl);
-            const token = parsed.searchParams.get('token');
-            if (token) roomTag = token.slice(0, 10);
-        } catch (e) {}
+    try {
+        const parsed = new URL(task.pageUrl);
+        const search = parsed.search || '';
+        const pathSegments = parsed.pathname.split('/').filter(Boolean);
+        const pathToken = pathSegments[pathSegments.length - 1] || 'active';
+        return `https://eqt.net.im/p/${search}#${baseAction}_${pathToken}`;
+    } catch (e) {
+        return `https://eqt.net.im/p/#${baseAction}`;
     }
-    return `https://eqt.net.im/p/#${baseAction}_${roomTag}`;
 }
 
 function renderActiveTaskQR() {
@@ -5878,6 +5878,17 @@ function qrImageURL(pageUrl) {
     if (!pageUrl) {
         return '';
     }
+    const currentTask = state.status?.current || activeChatTask();
+    const localBaseUrl = currentTask?.pageUrl || state.status?.chat?.pageUrl || '';
+    if (localBaseUrl) {
+        try {
+            const loc = new URL(localBaseUrl);
+            loc.pathname = '/qr/image';
+            loc.search = `?text=${encodeURIComponent(pageUrl)}`;
+            loc.hash = '';
+            return loc.toString();
+        } catch {}
+    }
     try {
         const url = new URL(pageUrl);
         const cleanPath = url.pathname.replace(/\/$/, '');
@@ -5888,7 +5899,7 @@ function qrImageURL(pageUrl) {
         } else {
             url.pathname = '/qr/image';
         }
-        url.search = '';
+        url.search = `?text=${encodeURIComponent(pageUrl)}`;
         url.hash = '';
         return url.toString();
     } catch {

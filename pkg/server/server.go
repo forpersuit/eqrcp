@@ -748,6 +748,16 @@ func (s *Server) ServeQR(url string) error {
 
 	s.mux.HandleFunc(imagePath, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
+		if textParam := r.URL.Query().Get("text"); textParam != "" {
+			if customImg, err := qr.RenderImage(textParam); err == nil {
+				var buf bytes.Buffer
+				if err := png.Encode(&buf, customImg); err == nil {
+					w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+					_, _ = w.Write(buf.Bytes())
+					return
+				}
+			}
+		}
 		w.Header().Set("Content-Length", strconv.Itoa(len(qrBytes)))
 		_, _ = w.Write(qrBytes)
 	})
