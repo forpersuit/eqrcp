@@ -698,6 +698,64 @@ function renderShare() {
 
 
 
+state.qrChannelMode = state.qrChannelMode || 'lan';
+
+function getWanP2PUrl(task) {
+    if (!task) return 'https://eqt.net.im/p/';
+    const baseAction = task.action || 'share';
+    let roomTag = task.id || 'active';
+    if (task.pageUrl) {
+        try {
+            const parsed = new URL(task.pageUrl);
+            const token = parsed.searchParams.get('token');
+            if (token) roomTag = token.slice(0, 10);
+        } catch (e) {}
+    }
+    return `https://eqt.net.im/p/#${baseAction}_${roomTag}`;
+}
+
+function renderQRHeroHtml(task, isExpanded) {
+    if (!isExpanded) return '';
+    if (!task || !task.pageUrl) {
+        return `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>`;
+    }
+
+    const isPaidPro = !!(state.status?.isPaid && state.status?.licenseTier === 'PRO');
+    const activeMode = state.qrChannelMode || 'lan';
+
+    const lanUrl = task.pageUrl;
+    const wanUrl = getWanP2PUrl(task);
+    const activeUrl = (activeMode === 'wan' && isPaidPro) ? wanUrl : lanUrl;
+    const qrImg = qrImageURL(activeUrl);
+
+    const isWanActive = activeMode === 'wan' && isPaidPro;
+
+    return `
+        <div class="qr-hero" data-active-mode="${activeMode}">
+            <div class="qr-channel-tabs">
+                <button class="qr-channel-tab ${activeMode === 'lan' ? 'active' : ''} set-qr-channel-action" data-channel="lan" title="${escapeAttr(t('qr_channel_lan_desc'))}">
+                    🌐 ${t('qr_channel_lan')}
+                </button>
+                <button class="qr-channel-tab wan-tab ${activeMode === 'wan' && isPaidPro ? 'active' : ''} set-qr-channel-action" data-channel="wan" title="${escapeAttr(t('qr_channel_wan_desc'))}">
+                    ⚡ ${t('qr_channel_wan')} ${isPaidPro ? '<span class="pro-badge-mini">PRO</span>' : ''}
+                </button>
+            </div>
+
+            <img src="${escapeAttr(qrImg)}" alt="Transfer QR code" style="transition: opacity 0.2s ease;" />
+
+            <div class="qr-channel-diag-bar ${isWanActive ? 'wan-mode' : ''}">
+                <span class="qr-channel-diag-dot ${isWanActive ? 'wan' : ''}"></span>
+                <span>${isWanActive ? t('qr_channel_wan_desc') : t('qr_channel_lan_desc')}</span>
+            </div>
+
+            <div style="display: flex; gap: 8px; width: 100%; max-width: 320px;">
+                <button class="ghost open-qr" style="flex: 1;" data-open-url="${escapeAttr(activeUrl)}">${t('open_in_browser')}</button>
+                <button class="ghost copy-qr-url-action" style="padding: 6px 12px;" data-copy-url="${escapeAttr(activeUrl)}" title="${escapeAttr(isWanActive ? t('qr_channel_copy_wan') : t('qr_channel_copy_lan'))}">📋</button>
+            </div>
+        </div>
+    `;
+}
+
 function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
 
@@ -745,12 +803,7 @@ function renderShareTransfer(task) {
             </div>
             
             <div id="share-qr-wrapper">
-                ${isQRExpanded && qrImage ? `
-                    <div class="qr-hero">
-                        <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                        <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                    </div>
-                ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+                ${renderQRHeroHtml(task, isQRExpanded)}
             </div>
             
             <div id="devices-progress-wrapper">${renderDeviceProgressHtml(task)}</div>
@@ -1046,12 +1099,9 @@ function renderReceiveTransfer(task) {
                 </div>
             </div>
             
-            ${isQRExpanded && qrImage ? `
-                <div class="qr-hero">
-                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                </div>
-            ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            <div id="receive-qr-wrapper">
+                ${renderQRHeroHtml(task, isQRExpanded)}
+            </div>
             
             <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
 
@@ -3091,6 +3141,34 @@ function refreshHistoryListInDOM() {
     document.querySelectorAll('.remove-path').forEach((button) => {
         button.addEventListener('click', removePath);
     });
+    document.addEventListener('click', (e) => {
+        const channelBtn = e.target.closest('.set-qr-channel-action');
+        if (channelBtn) {
+            const channel = channelBtn.dataset.channel;
+            const isPaidPro = !!(state.status?.isPaid && state.status?.licenseTier === 'PRO');
+            if (channel === 'wan' && !isPaidPro) {
+                showToast(t('qr_channel_pro_tip') || 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅');
+                return;
+            }
+            state.qrChannelMode = channel;
+            renderActiveTaskUI();
+            return;
+        }
+
+        const copyBtn = e.target.closest('.copy-qr-url-action');
+        if (copyBtn) {
+            const copyUrl = copyBtn.dataset.copyUrl;
+            if (copyUrl) {
+                copyToClipboard(copyUrl).then(() => {
+                    showToast((t('copied') || '已复制') + `: ${copyUrl}`);
+                }).catch(() => {
+                    showToast(copyUrl);
+                });
+            }
+            return;
+        }
+    });
+
     document.querySelector('#start-share')?.addEventListener('click', startShare);
     document.querySelector('#start-chat')?.addEventListener('click', startChat);
     document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
