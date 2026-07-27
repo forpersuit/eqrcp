@@ -354,27 +354,21 @@ func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
 	}
 
 	join := strings.TrimSpace(info.Join)
-	lastJoin := s.clientThemeJoins[c.Peer]
 	existingTheme := s.clientThemes[c.Peer]
 
-	// Check if this is explicitly a new scan with a different join token
-	isExplicitNewScan := join != "" && lastJoin != "" && join != lastJoin
+	// A scan action is identified by a present join token or explicitly flagged new scan.
+	// 1. Any scan action (fresh QR scan) triggers a new random theme allocation/color switch for the peer.
+	// 2. Reconnections or page restores (join is empty after address bar cleanup) strictly reuse the existing theme.
+	isScanAction := join != "" || info.IsNewScan
 
-	// Re-use existing theme for the same peer if already assigned in session history and not an explicit new join token scan
-	if !isExplicitNewScan {
+	if !isScanAction {
 		if s.validChatTheme(existingTheme) {
 			c.Theme = existingTheme
-			if join != "" {
-				s.clientThemeJoins[c.Peer] = join
-			}
 			return
 		}
 		// If no theme assigned yet, but client supplied a valid non-conflicting preferred theme from localStorage
 		if s.validChatTheme(info.Theme) && !s.themeInUseByOtherClientLocked(c.Peer, info.Theme) {
 			s.clientThemes[c.Peer] = info.Theme
-			if join != "" {
-				s.clientThemeJoins[c.Peer] = join
-			}
 			c.Theme = info.Theme
 			return
 		}
