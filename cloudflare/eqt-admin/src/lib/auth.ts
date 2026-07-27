@@ -22,9 +22,8 @@ export function accessLogoutUrl(): string {
   return `${window.location.origin}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
 
-/** Access login: send user directly to CF Access login endpoint when JWT is missing or invalid. */
+/** Access login: send user directly to app root so Cloudflare Access edge can handle login/session */
 export function accessLoginUrl(): string {
-  const returnTo = encodeURIComponent(window.location.origin + '/');
-  return `${window.location.origin}/cdn-cgi/access/login?returnTo=${returnTo}`;
+  return window.location.origin + '/';
 }
 
