@@ -2556,6 +2556,9 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <strong>${t('plan_feature_includes_plus') || '包含 Plus 授权的全部高级功能'}</strong>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <strong>${t('plan_feature_public_net') || '解除局域网限制，支持公网与蜂窝网络跨网传输'}</strong>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
                             ${checkGreen} <span>${t('plan_feature_cancel_anytime') || '灵活按月订阅，可随时取消'}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
@@ -2574,6 +2577,7 @@ function renderPlanComparisonPanel() {
                     <li>${t('important_rule1') || '• 套餐不可叠加：单台设备同一时间仅能生效一个有效授权，无法直接叠加。若需更换套餐，需先在 Cloud Portal 解绑。'}</li>
                     <li>${t('important_rule2') || '• 解绑额度限制：每张授权码在过去 365 天内最多允许解绑 4 次。'}</li>
                     <li>${t('important_rule3') || '• 禁止多次激活后退款：请勿频繁购买激活后申请退款。多次激活退款的设备与邮箱将被风险封禁，后续设备将无法正常激活任何套餐。'}</li>
+                    <li>${t('important_rule4') || '• 移动流量消耗提醒：Pro 模式解除局域网限制并支持公网数据传输。如使用移动蜂窝网络 (4G/5G) 传输大文件，请务必注意手机或设备的流量消耗与套餐资费。'}</li>
                 </ul>
             </div>
             
@@ -2757,6 +2761,19 @@ function formatErrorMessage(errMsg) {
     // Check cross-code stacking error (device bound to another active license)
     if (errMsg.includes('bound to another active license') || errMsg.includes('Stacking across different license codes') || errMsg.includes('cross_code_stacking_blocked') || errMsg.includes('当前设备已绑定')) {
         return t('cross_code_stacking_blocked');
+    }
+
+    if (errMsg.includes('license not found') || errMsg.includes('License not found') || errMsg.includes('license_not_found')) {
+        return t('license_not_found_err');
+    }
+    if (errMsg.includes('suspended') || errMsg.includes('revoked') || errMsg.includes('license_suspended_or_revoked')) {
+        return t('license_suspended_err');
+    }
+    if (errMsg.includes('license expired') || errMsg.includes('license_expired')) {
+        return t('license_expired_err');
+    }
+    if (errMsg.includes('maximum number of devices') || errMsg.includes('unbind old devices')) {
+        return t('device_limit_reached_err');
     }
 
     return errMsg;
@@ -5409,21 +5426,19 @@ function confirmRedeem() {
 
     ActivateLicense(code).then(async function() {
         const redeemedAt = new Date().toISOString();
-        // result.codeDate is the redeem-code date token (YYYYMMDD), not certificate expiry.
-        // loadStatusData/syncLicenseFromStatus overwrites codeDate with server licenseExpiresAt.
         saveLicense({
             tier: result.tier,
             codeHash: checksum(`${code}:stored`, 10),
             redeemedAt: redeemedAt,
             codeDate: 'LIFETIME',
         });
-        state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
+        state.redeemMessage = t('redeem_success_msg', { tier: getLicenseDisplayName({ tier: result.tier }) });
         state.tempRedeemCode = ''; // Clear on success
         stopChatUsage();
         await loadStatusData();
     }).catch(function(e) {
         state.redeemMessage = '';
-        state.redeemError = e || 'Activation failed. Please check network and code validity.';
+        state.redeemError = formatErrorMessage(e) || t('redeem_failed_msg');
     }).finally(function() {
         state.isActivating = false;
         render();
@@ -5436,7 +5451,7 @@ function resetLicense() {
     ResetLicense().then(async function() {
         window.localStorage.removeItem(licenseStorageKey);
         state.license = null;
-        state.redeemMessage = 'Activation reset on this device.';
+        state.redeemMessage = t('redeem_reset_success');
         state.redeemError = '';
         if (state.mode === 'chat') {
             startChatUsage();
@@ -5444,6 +5459,7 @@ function resetLicense() {
         await loadStatusData();
         render();
     }).catch(function(e) {
+        state.redeemError = formatErrorMessage(e) || t('reset_failed_msg');
         state.redeemError = e || 'Failed to reset activation.';
         render();
     }).finally(function() {
@@ -5484,11 +5500,11 @@ function triggerManualRefresh() {
 function validateRedeemCode(code) {
     const parts = code.split('-');
     if (parts.length < 3 || parts[0] !== 'EQT') {
-        return {ok: false, error: 'Invalid code format.'};
+        return {ok: false, error: t('invalid_code_format')};
     }
     const tier = parts[1];
     if (tier !== 'PLUS' && tier !== 'PRO') {
-        return {ok: false, error: 'Unknown paid tier.'};
+        return {ok: false, error: t('unknown_paid_tier')};
     }
     const date = parts[2];
     return {ok: true, tier: tier, codeDate: date};

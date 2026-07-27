@@ -70,19 +70,35 @@ export async function handlePaddleRoutes(
       const eventType = event.event_type;
       const data = event.data || {};
 
-      // Extract buyer checkout page language from custom_data or passthrough or headers
+      // Extract buyer checkout page language from custom_data, passthrough, DB verification history, or headers
       const customData = (data as Record<string, unknown>).custom_data as Record<string, unknown> | undefined;
       const passthroughStr = (data as Record<string, unknown>).passthrough as string | undefined;
-      let buyerLang = String(customData?.lang || customData?.buyer_lang || "");
+      let buyerLang = String(customData?.lang || customData?.buyer_lang || "").trim();
 
       if (!buyerLang && passthroughStr) {
         try {
           const parsed = JSON.parse(passthroughStr);
-          buyerLang = String(parsed.lang || parsed.buyer_lang || "");
+          buyerLang = String(parsed.lang || parsed.buyer_lang || "").trim();
         } catch (_) {
           // ignore non-json passthrough
         }
       }
+
+      let buyerEmail = data.customer?.email || data.user?.email || "";
+      if (buyerEmail) buyerEmail = buyerEmail.trim().toLowerCase();
+
+      // Fallback: Check D1 checkout_verifications table for recent verification language by buyerEmail
+      if (!buyerLang && buyerEmail) {
+        try {
+          const lastVer = await env.DB.prepare(
+            "SELECT lang FROM checkout_verifications WHERE email = ? ORDER BY created_at DESC LIMIT 1"
+          ).bind(buyerEmail).first<any>();
+          if (lastVer && lastVer.lang) {
+            buyerLang = String(lastVer.lang).trim();
+          }
+        } catch (_) {}
+      }
+
       if (!buyerLang) {
         buyerLang = extractRequestLang(request);
       }
@@ -92,8 +108,6 @@ export async function handlePaddleRoutes(
         const transactionId = data.id;
         const subscriptionId = data.subscription_id || null;
         const customerId = data.customer_id || null;
-
-        let buyerEmail = data.customer?.email || data.user?.email || "";
 
         // Fallback: If email missing, query Paddle API using API key
         if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
