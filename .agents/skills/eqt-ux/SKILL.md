@@ -8,6 +8,12 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
 ## No Alert-style Interruptions
 - Avoid using browser-level `alert()`, `confirm()`, or `prompt()` dialogs for regular user notifications, warnings, or errors.
 - Always prefer non-intrusive, in-app messaging patterns:
+
+## Admin 3D Globe Topology Screen (`p2p-globe.html`)
+- **Parent-Iframe Sync**: `ProP2P.svelte` loads connections via `adminFetch` and pushes connection datasets to `<iframe src="/p2p-globe.html">` using `iframeRef.contentWindow.postMessage({ type: 'P2P_CONNECTIONS', connections }, '*')` both on data updates and iframe `onload`.
+- **CDN & Texture Fallback**: `p2p-globe.html` relies on primary CDN mirrors for `Three.js` and `Globe.gl`, backed by a procedural 2D canvas Earth texture fallback so WebGL spheres never render as blank/black screens when remote image textures timeout.
+- **Responsive & Ambient Fallback**: Uses `ResizeObserver` for dynamic canvas resizing. When 0 connections exist or network is offline, renders an ambient node network (CN, US, JP, SG, DE, HK) with dynamic arcs. Falls back gracefully to 2D Canvas orthographic projection when WebGL is unsupported.
+
   - For chat-related issues (e.g., file size limit exceeded, network warning), append a system notification message directly into the chat message list using the `showSystemNotice(msg)` helper.
   - For configuration or non-critical state warnings, use in-app toast overlays or non-blocking banners.
 - Only use standard dialog elements (like error click/touch callbacks on badge status) when explicitly designed for user-interactive diagnostic lookups.

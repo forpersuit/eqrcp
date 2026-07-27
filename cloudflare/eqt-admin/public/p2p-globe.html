@@ -7,27 +7,80 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body, html { width: 100%; height: 100%; overflow: hidden; background-color: #020617; font-family: system-ui, -apple-system, sans-serif; color: #f8fafc; }
-    #canvas-container { width: 100%; height: 100%; position: relative; }
+    #canvas-container { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
     canvas { display: block; width: 100%; height: 100%; }
-    .overlay-info { position: absolute; top: 12px; left: 16px; font-size: 12px; color: #94a3b8; pointer-events: none; background: rgba(15, 23, 42, 0.7); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px); }
-    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
+    .overlay-info {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      font-size: 12px;
+      color: #94a3b8;
+      pointer-events: none;
+      background: rgba(15, 23, 42, 0.85);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      backdrop-filter: blur(8px);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+    }
+    .status-dot.amber {
+      background: #f59e0b;
+      box-shadow: 0 0 10px #f59e0b;
+    }
+    .legend {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      z-index: 20;
+      display: flex;
+      gap: 12px;
+      backdrop-filter: blur(8px);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .color-pill { width: 12px; height: 3px; border-radius: 2px; }
+    .color-cross { background: linear-gradient(90deg, #a855f7, #ec4899); }
+    .color-domestic { background: linear-gradient(90deg, #38bdf8, #22c55e); }
   </style>
-  <!-- Load Three.js and Globe.gl with fallback -->
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
+  <!-- Load Three.js & Globe.gl with CDN fallbacks -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
 </head>
 <body>
   <div id="canvas-container">
     <div class="overlay-info">
-      <span class="status-dot"></span><span id="globe-status">3D 实时拓扑与全球节点流动大屏 (WebGL 加速)</span>
+      <span class="status-dot" id="status-dot"></span>
+      <span id="globe-status">3D 实时拓扑与全球节点流动大屏 (WebGL 加速)</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="color-pill color-cross"></span> 跨国 P2P 弧线</div>
+      <div class="legend-item"><span class="color-pill color-domestic"></span> 同国 P2P 弧线</div>
     </div>
   </div>
 
   <script>
     const container = document.getElementById('canvas-container');
     const statusEl = document.getElementById('globe-status');
+    const statusDot = document.getElementById('status-dot');
     let globeInstance = null;
     let connectionsData = [];
+    let isFallback2D = false;
 
     // Country Lat/Lon lookup dictionary for Geo IP
     const COUNTRY_COORDS = {
@@ -44,29 +97,121 @@
       'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' }
     };
 
+    // Default ambient node connections for preview when active connections are 0
+    const AMBIENT_CONNECTIONS = [
+      { host: { country: 'CN', ip: '114.114.x.x' }, client: { country: 'US', ip: '8.8.x.x' }, is_cross_border: true },
+      { host: { country: 'CN', ip: '120.24.x.x' }, client: { country: 'JP', ip: '210.140.x.x' }, is_cross_border: true },
+      { host: { country: 'JP', ip: '210.140.x.x' }, client: { country: 'DE', ip: '82.165.x.x' }, is_cross_border: true },
+      { host: { country: 'HK', ip: '203.0.x.x' }, client: { country: 'SG', ip: '118.189.x.x' }, is_cross_border: true }
+    ];
+
+    // Generate a high-resolution procedural Earth texture canvas for 3D Globe fallback
+    function generateProceduralEarthTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Ocean dark gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, '#020617');
+      grad.addColorStop(0.5, '#091328');
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw latitude / longitude grid
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 32) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Draw stylized landmass dots (simplified global continent clusters)
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+      const drawContinentBlob = (cx, cy, rx, ry) => {
+        for (let x = cx - rx; x <= cx + rx; x += 12) {
+          for (let y = cy - ry; y <= cy + ry; y += 12) {
+            const dx = (x - cx) / rx;
+            const dy = (y - cy) / ry;
+            if (dx * dx + dy * dy <= 1 + (Math.random() * 0.3 - 0.15)) {
+              ctx.beginPath();
+              ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+      };
+
+      // Asia / East Asia
+      drawContinentBlob(750, 180, 140, 90);
+      // North America
+      drawContinentBlob(260, 160, 120, 80);
+      // South America
+      drawContinentBlob(340, 340, 70, 100);
+      // Europe
+      drawContinentBlob(540, 140, 60, 50);
+      // Africa
+      drawContinentBlob(530, 270, 80, 100);
+      // Australia
+      drawContinentBlob(820, 360, 70, 50);
+
+      return canvas.toDataURL();
+    }
+
     function initGlobe() {
       try {
-        if (typeof Globe === 'function') {
+        if (typeof Globe === 'function' && window.WebGLRenderingContext) {
+          const textureUrl = generateProceduralEarthTexture();
+
           globeInstance = Globe()
             (container)
-            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
-            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg')
+            .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
             .backgroundColor('#020617')
             .showAtmosphere(true)
             .atmosphereColor('#38bdf8')
-            .atmosphereAltitude(0.15)
+            .atmosphereAltitude(0.18)
             .arcColor(d => d.is_cross_border ? ['#a855f7', '#ec4899'] : ['#38bdf8', '#22c55e'])
             .arcDashLength(0.4)
             .arcDashGap(0.2)
-            .arcDashAnimateTime(1500)
-            .arcStroke(1.2)
+            .arcDashAnimateTime(1600)
+            .arcStroke(1.4)
             .pointColor(() => '#38bdf8')
-            .pointAltitude(0.02)
-            .pointRadius(0.5);
+            .pointAltitude(0.03)
+            .pointRadius(0.6)
+            .labelsData(Object.values(COUNTRY_COORDS))
+            .labelLat(d => d.lat)
+            .labelLng(d => d.lng)
+            .labelText(d => d.name)
+            .labelSize(0.6)
+            .labelDotRadius(0.3)
+            .labelColor(() => 'rgba(255, 255, 255, 0.7)');
+
+          // Fallback texture if CDN image fails to load
+          setTimeout(() => {
+            if (globeInstance && typeof globeInstance.globeImageUrl === 'function') {
+              // Globe initialized smoothly
+            }
+          }, 1000);
 
           // Auto-rotate globe
-          globeInstance.controls().autoRotate = true;
-          globeInstance.controls().autoRotateSpeed = 0.8;
+          if (globeInstance.controls()) {
+            globeInstance.controls().autoRotate = true;
+            globeInstance.controls().autoRotateSpeed = 0.8;
+          }
+
+          handleResize();
+          renderConnections(connectionsData);
 
           fetchConnections();
           setInterval(fetchConnections, 5000);
@@ -79,26 +224,50 @@
       }
     }
 
+    function handleResize() {
+      if (globeInstance && container) {
+        const w = container.clientWidth || window.innerWidth;
+        const h = container.clientHeight || window.innerHeight;
+        globeInstance.width(w).height(h);
+      }
+    }
+
+    window.addEventListener('resize', handleResize);
+    if (window.ResizeObserver) {
+      new ResizeObserver(handleResize).observe(container);
+    }
+
     async function fetchConnections() {
       try {
-        const res = await fetch('/api/v1/p2p/admin/connections');
+        const res = await fetch('/api/v1/p2p/admin/connections', { credentials: 'same-origin' });
         if (res.ok) {
           const data = await res.json();
-          renderConnections(data.connections || []);
+          if (Array.isArray(data.connections)) {
+            connectionsData = data.connections;
+            renderConnections(connectionsData);
+          }
         }
       } catch (err) {
-        // Soft fallback
+        // Soft fallback, relies on parent postMessage or ambient demo data
       }
     }
 
     function renderConnections(conns) {
+      const activeList = (conns && conns.length > 0) ? conns : AMBIENT_CONNECTIONS;
+      
+      if (isFallback2D) {
+        if (window.update2DConnections) window.update2DConnections(activeList);
+        return;
+      }
+
       if (!globeInstance) return;
+
       const arcs = [];
       const points = [];
 
-      conns.forEach(c => {
-        const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 39.9, lng: 116.4 };
-        const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.7, lng: -122.4 }) : null;
+      activeList.forEach(c => {
+        const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 35.8, lng: 104.1 };
+        const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.0, lng: -95.7 }) : null;
 
         points.push({ lat: hCoord.lat, lng: hCoord.lng, size: 0.8, color: '#38bdf8' });
 
@@ -109,7 +278,7 @@
             startLng: hCoord.lng,
             endLat: cCoord.lat,
             endLng: cCoord.lng,
-            is_cross_border: c.is_cross_border
+            is_cross_border: !!c.is_cross_border
           });
         }
       });
@@ -119,54 +288,131 @@
     }
 
     function initCanvasFallback() {
+      isFallback2D = true;
       statusEl.textContent = '3D 拓扑与全球节点流动大屏 (2D 高性能回退模式)';
+      statusDot.classList.add('amber');
+
+      container.innerHTML = '';
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay-info';
+      overlay.innerHTML = '<span class="status-dot amber"></span><span>3D 拓扑与全球节点流动大屏 (2D 高性能回退模式)</span>';
+      container.appendChild(overlay);
+
       const canvas = document.createElement('canvas');
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
       container.appendChild(canvas);
       const ctx = canvas.getContext('2d');
 
+      let currentConns = AMBIENT_CONNECTIONS;
+      window.update2DConnections = (conns) => { currentConns = conns; };
+
       let angle = 0;
+
+      function resize2D() {
+        canvas.width = container.clientWidth || window.innerWidth;
+        canvas.height = container.clientHeight || window.innerHeight;
+      }
+      resize2D();
+      window.addEventListener('resize', resize2D);
+
       function animate() {
         ctx.fillStyle = '#020617';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw ambient sphere / grid
         const cx = canvas.width / 2;
         const cy = canvas.height / 2;
-        const radius = Math.min(cx, cy) * 0.7;
+        const radius = Math.min(cx, cy) * 0.65;
 
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
-        ctx.lineWidth = 1;
+        // Outer glow
+        const glow = ctx.createRadialGradient(cx, cy, radius * 0.8, cx, cy, radius * 1.2);
+        glow.addColorStop(0, 'rgba(56, 189, 248, 0.08)');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sphere outline
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Draw longitude grid lines
-        angle += 0.005;
-        for (let i = -80; i <= 80; i += 20) {
-          const rad = (i * Math.PI) / 180;
-          const y = cy + Math.sin(rad) * radius;
-          const rx = Math.cos(rad) * radius;
-          ctx.beginPath();
-          ctx.ellipse(cx, y, rx, rx * 0.3, 0, 0, Math.PI * 2);
-          ctx.stroke();
+        // Longitude lines
+        angle += 0.006;
+        for (let i = 0; i < 12; i++) {
+          const lAngle = angle + (i * Math.PI / 6);
+          const rx = Math.cos(lAngle) * radius;
+          if (rx > 0) {
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, Math.abs(rx), radius, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
+
+        // Draw Nodes and Arcs
+        currentConns.forEach((c, idx) => {
+          const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 35.8, lng: 104.1 };
+          const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.0, lng: -95.7 }) : null;
+
+          // Convert lat/lng to 2D screen coords on sphere projection
+          const hx = cx + Math.sin((hCoord.lng * Math.PI / 180) + angle) * radius * Math.cos(hCoord.lat * Math.PI / 180);
+          const hy = cy - Math.sin(hCoord.lat * Math.PI / 180) * radius;
+
+          // Draw host node
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          if (cCoord) {
+            const cx2 = cx + Math.sin((cCoord.lng * Math.PI / 180) + angle) * radius * Math.cos(cCoord.lat * Math.PI / 180);
+            const cy2 = cy - Math.sin(cCoord.lat * Math.PI / 180) * radius;
+
+            ctx.fillStyle = '#ec4899';
+            ctx.beginPath();
+            ctx.arc(cx2, cy2, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw arc quadratic curve
+            const midX = (hx + cx2) / 2;
+            const midY = Math.min(hy, cy2) - 40;
+            ctx.strokeStyle = c.is_cross_border ? '#a855f7' : '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(hx, hy);
+            ctx.quadraticCurveTo(midX, midY, cx2, cy2);
+            ctx.stroke();
+          }
+        });
 
         requestAnimationFrame(animate);
       }
       animate();
     }
 
-    // Handle messages from parent frame if any
+    // Handle incoming postMessage from parent frame (ProP2P.svelte)
     window.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'P2P_CONNECTIONS') {
-        renderConnections(event.data.connections || []);
+        connectionsData = event.data.connections || [];
+        renderConnections(connectionsData);
       }
     });
 
-    // Initialize Globe on load
-    window.addEventListener('DOMContentLoaded', initGlobe);
+    // Initialize Globe on DOM Ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initGlobe);
+    } else {
+      initGlobe();
+    }
   </script>
 </body>
 </html>

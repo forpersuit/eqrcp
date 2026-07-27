@@ -21,18 +21,36 @@
       : connections
   );
 
+  function sendConnectionsToIframe(conns: P2PConnection[]) {
+    if (iframeRef && iframeRef.contentWindow) {
+      try {
+        iframeRef.contentWindow.postMessage({
+          type: 'P2P_CONNECTIONS',
+          connections: JSON.parse(JSON.stringify(conns))
+        }, '*');
+      } catch (e) {
+        console.warn('Failed to postMessage to globe iframe:', e);
+      }
+    }
+  }
+
   async function loadConnections() {
     try {
       errorMsg = null;
       const res = await adminFetch<P2PConnectionsResponse>('/api/v1/p2p/admin/connections');
       if (res && Array.isArray(res.connections)) {
         connections = [...res.connections];
+        sendConnectionsToIframe(connections);
       }
     } catch (err: any) {
       errorMsg = err.message || '获取 P2P 会话失败';
     } finally {
       loading = false;
     }
+  }
+
+  function handleIframeLoad() {
+    sendConnectionsToIframe(connections);
   }
 
   async function destroyRoom(roomId: string) {
@@ -131,6 +149,7 @@
         title="3D P2P Connection Globe"
         class="globe-iframe"
         bind:this={iframeRef}
+        onload={handleIframeLoad}
       ></iframe>
     </div>
   </div>
