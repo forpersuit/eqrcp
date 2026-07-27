@@ -714,6 +714,34 @@ function getWanP2PUrl(task) {
     return `https://eqt.net.im/p/#${baseAction}_${roomTag}`;
 }
 
+function renderActiveTaskQR() {
+    const task = state.status?.current || activeChatTask();
+    
+    const shareQrWrapper = document.getElementById('share-qr-wrapper');
+    if (shareQrWrapper && task) {
+        const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
+        const shouldCollapse = isSharedOrReceived;
+        const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+        shareQrWrapper.innerHTML = renderQRHeroHtml(task, isQRExpanded);
+    }
+
+    const receiveQrWrapper = document.getElementById('receive-qr-wrapper');
+    if (receiveQrWrapper && task) {
+        const files = task.savedFiles || [];
+        const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
+        const shouldCollapse = isSharedOrReceived;
+        const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+        receiveQrWrapper.innerHTML = renderQRHeroHtml(task, isQRExpanded);
+    }
+
+    const chatQrContent = document.querySelector('.chat-qr-panel .chat-qr-content');
+    if (chatQrContent) {
+        const chatTask = activeChatTask();
+        const chatUrl = chatTask?.pageUrl || '';
+        chatQrContent.innerHTML = renderQRHeroHtml(chatTask || { action: 'chat', pageUrl: chatUrl }, true);
+    }
+}
+
 function renderQRHeroHtml(task, isExpanded) {
     if (!isExpanded) return '';
     if (!task || !task.pageUrl) {
@@ -3153,7 +3181,7 @@ function refreshHistoryListInDOM() {
                 return;
             }
             state.qrChannelMode = channel;
-            render();
+            renderActiveTaskQR();
             return;
         }
 
