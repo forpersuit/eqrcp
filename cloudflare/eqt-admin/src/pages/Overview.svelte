@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
   import type { AdminHealthResponse, AdminTab } from '../lib/types';
 
@@ -27,19 +27,25 @@
   });
   let loading = $state(true);
 
+  let timer: any = null;
+
   async function loadStats() {
     try {
       const data = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
-      stats = {
-        total_licenses: data.metrics?.total_licenses || 0,
-        active_licenses: data.metrics?.active_licenses || 0,
-        today_activations: data.metrics?.today_activations || 0,
-        total_error_logs: data.metrics?.total_error_logs || 0,
-        errors_24h: data.metrics?.errors_24h || 0,
-        db_status: data.config?.db_status || 'ok'
-      };
+      if (data && data.metrics) {
+        stats = {
+          total_licenses: data.metrics.total_licenses || 0,
+          active_licenses: data.metrics.active_licenses || 0,
+          today_activations: data.metrics.today_activations || 0,
+          total_error_logs: data.metrics.total_error_logs || 0,
+          errors_24h: data.metrics.errors_24h || 0,
+          db_status: data.config?.db_status || 'ok'
+        };
+      }
     } catch {
-      stats.db_status = 'error';
+      if (stats.total_licenses === 0) {
+        stats.db_status = 'error';
+      }
     } finally {
       loading = false;
     }
@@ -51,6 +57,11 @@
 
   onMount(() => {
     loadStats();
+    timer = setInterval(loadStats, 15000);
+  });
+
+  onDestroy(() => {
+    if (timer) clearInterval(timer);
   });
 </script>
 
