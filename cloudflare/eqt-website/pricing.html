@@ -4,6 +4,7 @@
     <meta charset="utf-8"/>
     <script>
         if (window.location.hostname !== 'www.eqt.net.im' && 
+            !window.location.hostname.endsWith('.pages.dev') &&
             window.location.hostname !== 'localhost' && 
             !window.location.hostname.startsWith('127.0.0.1')) {
             window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
@@ -197,7 +198,7 @@
             </div>
             
             <!-- Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-lg items-stretch pt-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-lg items-stretch pt-8">
                 <!-- Free Tier -->
                 <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border-t border-t-white/5 bg-surface-container-low/20">
                     <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_free_title">Free</h3>
@@ -211,8 +212,20 @@
                     <a href="/" class="w-full py-3 glass-panel text-on-surface text-center rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md block font-medium" data-i18n="price_free_btn">Get Started</a>
                 </div>
 
+                <!-- Pro Monthly Tier -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border-t border-t-white/5 bg-surface-container-low/20">
+                    <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_pro_title">Pro Monthly</h3>
+                    <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$2.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_pro_period">/month</span></div>
+                    <ul class="space-y-md mb-8 flex-grow">
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat1">Uncapped local full speed</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat2">Unlimited session time &amp; files</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat3">Flexible monthly subscription</span></li>
+                    </ul>
+                    <button id="buy-pro-btn" class="w-full py-3 glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md font-medium" data-i18n="price_pro_btn">Subscribe Monthly</button>
+                </div>
+
                 <!-- Plus Lifetime (Highlighted) -->
-                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80 shadow-[0_0_30px_rgba(57,229,182,0.15)]">
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border border-primary glow-primary relative lg:-translate-y-4 bg-surface-container-low/80 shadow-[0_0_30px_rgba(57,229,182,0.15)]">
                     <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-secondary font-bold px-3 py-1 rounded-full font-label-sm text-label-sm text-xs" data-i18n="price_lifetime_badge">BEST VALUE</div>
                     <h3 class="font-headline-md text-headline-md text-primary mb-xs text-xl font-bold" data-i18n="price_lifetime_title">Plus Lifetime</h3>
                     <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$29.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_lifetime_period">/one-time</span></div>
@@ -227,7 +240,7 @@
 
                 <!-- Plus Yearly -->
                 <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border-t border-t-white/5 bg-surface-container-low/20">
-                    <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_yearly_title">Plus</h3>
+                    <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_yearly_title">Plus Yearly</h3>
                     <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$11.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_yearly_period">/year</span></div>
                     <ul class="space-y-md mb-8 flex-grow">
                         <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat1">Uncapped local full speed</span></li>
@@ -363,7 +376,13 @@
                 "price_lifetime_feat3": "终身免费升级",
                 "price_lifetime_feat4": "无限制文件大小与传输速度",
                 "price_lifetime_btn": "购买终身版",
-                "price_yearly_title": "年付专业版",
+                "price_pro_title": "Pro 月付",
+                "price_pro_period": "/ 月",
+                "price_pro_feat1": "解锁局域网物理满速",
+                "price_pro_feat2": "无限传输时间与文件数量",
+                "price_pro_feat3": "灵活月度订阅，随时取消",
+                "price_pro_btn": "按月订阅",
+                "price_yearly_title": "Plus 年付",
                 "price_yearly_period": "/ 年",
                 "price_yearly_feat1": "解锁局域网物理满速",
                 "price_yearly_feat2": "无限传输时间与文件数量",
