@@ -637,17 +637,24 @@ function renderShare() {
     if (activeTask) {
         return renderShareTransfer(activeTask);
     }
+    const isFreeQuotaExhausted = !state.status?.isPaid && ((state.status?.usedTransfers || 0) >= 5);
     const items = state.sharePaths.map((item, index) => {
         const path = typeof item === 'string' ? item : item.path;
         const name = typeof item === 'string' ? shortName(item) : item.name;
         const size = typeof item === 'string' ? '' : item.size;
+        const removeTitle = isFreeQuotaExhausted 
+            ? (t('unlock_remove_add_with_plus_pro') || 'Plus/Pro解锁删除/追加功能') 
+            : t('remove');
+        const disabledAttr = isFreeQuotaExhausted 
+            ? `disabled style="opacity: 0.45; cursor: not-allowed; pointer-events: auto;"` 
+            : '';
         return `
             <li>
                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding-right: 12px; overflow: hidden;">
                     <strong style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text-primary); font-size: 13px; max-width: 280px;" title="${escapeHTML(name)}">${escapeHTML(name)}</strong>
                     <span class="file-size-badge" style="font-size: 12px; color: var(--text-secondary); margin-left: auto; margin-right: 8px; flex-shrink: 0; font-weight: 500;">${escapeHTML(size)}</span>
                 </div>
-                <button class="icon-button remove-path" data-path-index="${index}" title="${t('remove')}">x</button>
+                <button class="icon-button remove-path" data-path-index="${index}" title="${escapeHTML(removeTitle)}" ${disabledAttr}>x</button>
             </li>
         `;
     }).join('');
@@ -4950,8 +4957,6 @@ function renderBusy() {
 async function removePath(event) {
     const isFreeQuotaExhausted = !state.status?.isPaid && ((state.status?.usedTransfers || 0) >= 5);
     if (isFreeQuotaExhausted) {
-        state.shareLimitNotice = t('free_over_quota_cannot_remove') || '免费额度已用完，常规 Free 模式下不可单独移除文件。如需更换传输文件请点击“清空”。';
-        render();
         return;
     }
     const index = Number(event.currentTarget.dataset.pathIndex);
@@ -4972,8 +4977,6 @@ async function addSharePaths(paths) {
     if (!paths || paths.length === 0) return;
     const isFreeQuotaExhausted = !state.status?.isPaid && ((state.status?.usedTransfers || 0) >= 5);
     if (isFreeQuotaExhausted && state.sharePaths.length > 0) {
-        state.shareLimitNotice = t('free_over_quota_cannot_add') || '免费额度已用完，常规 Free 模式下已加载文件不可追加修改。如需更改请先点击“清空”。';
-        render();
         return;
     }
     try {
