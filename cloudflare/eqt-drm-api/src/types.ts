@@ -82,6 +82,43 @@ export const PRICE_LIFETIME_ID = "pri_01kyhmkv4ppj10r4cdgw3sv48p";
 export const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
 export const PRICE_PRO_MONTHLY_ID = "pri_01kyhmv79rkyncryce1wjg9582";
 
+// Paddle Webhook & API Types
+export interface PaddleItem {
+  price?: {
+    id?: string;
+  };
+  price_id?: string;
+}
+
+export interface PaddleCustomer {
+  email?: string;
+}
+
+export interface PaddleUser {
+  email?: string;
+}
+
+export interface PaddleWebhookData {
+  id?: string;
+  subscription_id?: string;
+  customer_id?: string;
+  customer?: PaddleCustomer;
+  user?: PaddleUser;
+  items?: PaddleItem[];
+  status?: string;
+}
+
+export interface PaddleWebhookEvent {
+  event_type?: string;
+  data?: PaddleWebhookData;
+}
+
+export interface PaddleCustomerApiResponse {
+  data?: {
+    email?: string;
+  };
+}
+
 // Business Logic Constants
 export const MAX_YEARLY_UNBINDS = 4;
 export const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;

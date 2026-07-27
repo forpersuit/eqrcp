@@ -1,8 +1,9 @@
 import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
-import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getLicenseRevokeEmailTemplate } from '../i18n';
+import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getLicenseRevokeEmailTemplate, AUTH_CODE_EMAIL_I18N } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
+import { checkEmailBlacklist as checkEmailRefundBlacklist } from '../utils/blacklist';
 import {
   isLicenseCancellable,
   isLicenseRefundable,
