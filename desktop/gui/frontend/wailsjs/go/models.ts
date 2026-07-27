@@ -330,6 +330,26 @@ export namespace main {
 	    }
 	}
 	
+	export class LogFileInfo {
+	    name: string;
+	    path: string;
+	    size: string;
+	    modTime: string;
+	    exists: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogFileInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.modTime = source["modTime"];
+	        this.exists = source["exists"];
+	    }
+	}
 
 }
 

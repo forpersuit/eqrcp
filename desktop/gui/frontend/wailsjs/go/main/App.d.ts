@@ -28,6 +28,8 @@ export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;
 
 export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>>;
 
+export function GetLogFiles():Promise<Array<main.LogFileInfo>>;
+
 export function InstallUpdate(arg1:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;
@@ -59,8 +61,6 @@ export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSett
 export function SelectFiles():Promise<Array<string>>;
 
 export function SelectLogDirectory():Promise<string>;
-
-export function GetLogFiles():Promise<Array<any>>;
 
 export function SelectReceiveDirectory():Promise<string>;
 

@@ -54,6 +54,10 @@ export function GetFileInfos(arg1) {
   return window['go']['main']['App']['GetFileInfos'](arg1);
 }
 
+export function GetLogFiles() {
+  return window['go']['main']['App']['GetLogFiles']();
+}
+
 export function InstallUpdate(arg1) {
   return window['go']['main']['App']['InstallUpdate'](arg1);
 }
@@ -116,10 +120,6 @@ export function SelectFiles() {
 
 export function SelectLogDirectory() {
   return window['go']['main']['App']['SelectLogDirectory']();
-}
-
-export function GetLogFiles() {
-  return window['go']['main']['App']['GetLogFiles']();
 }
 
 export function SelectReceiveDirectory() {
