@@ -471,8 +471,17 @@ func (agent *desktopAgent) writeSettings(settings DesktopSettings) (DesktopSetti
 		}
 		agent.log.Infof("writeSettings: Updating server ViewportDebug flag to: %v", settings.ViewportDebug)
 		srv.ViewportDebug = settings.ViewportDebug
+		srv.ChatLogDir = settings.LogDir
 	}
 	return convertConfigSettings(saved), nil
+}
+
+func (agent *desktopAgent) UpdateLogDir(logDir string) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	if agent.activeServer != nil {
+		agent.activeServer.ChatLogDir = logDir
+	}
 }
 
 func (agent *desktopAgent) handleChatHostRename(newName string) {

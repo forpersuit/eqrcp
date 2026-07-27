@@ -36,6 +36,7 @@ import {
     SelectReceiveDirectory,
     SelectShareDirectory,
     SelectLogDirectory,
+    GetLogFiles,
     RightClickIntegrationStatus,
     Share,
     SetRightClickIntegrationEnabled,
@@ -2124,62 +2125,80 @@ function renderSettingsPanel() {
             </details>
             ${state.settings?.devMode ? `
             <details class="settings-advanced-details dev-details" style="margin-top: 16px; border-color: rgba(47, 158, 115, 0.3);" ${state.settingsDevOpen ? 'open' : ''}>
-                <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">${t('dev_options') || '开发者选项'}</summary>
+                <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">🛠️ ${t('dev_options') || '开发者选项'}</summary>
                 <div class="settings-advanced-content">
-                    <div class="setting-row">
-                        <div class="setting-copy">
-                            <strong>${t('enable_debug_logs')}</strong>
-                            <span>${t('dev_logs_desc')}</span>
+                    <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
+                        <div class="setting-row" style="margin-bottom: 8px;">
+                            <div class="setting-copy">
+                                <strong>${t('enable_debug_logs')}</strong>
+                                <span>${t('dev_logs_desc')}</span>
+                            </div>
+                            <div class="setting-control-stack">
+                                ${renderSwitch('dev-debug-log', state.settings?.debugLog)}
+                            </div>
                         </div>
-                        <div class="setting-control-stack">
-                            ${renderSwitch('dev-debug-log', state.settings?.debugLog)}
+                        <div class="setting-row" style="margin-bottom: 12px;">
+                            <div class="setting-copy">
+                                <strong>${t('enable_viewport_debug')}</strong>
+                                <span>${t('enable_viewport_debug_desc')}</span>
+                            </div>
+                            <div class="setting-control-stack">
+                                ${renderSwitch('dev-viewport-debug', state.settings?.viewportDebug)}
+                            </div>
                         </div>
-                    </div>
-                    <div class="setting-row">
-                        <div class="setting-copy">
-                            <strong>${t('enable_viewport_debug')}</strong>
-                            <span>${t('enable_viewport_debug_desc')}</span>
-                        </div>
-                        <div class="setting-control-stack">
-                            ${renderSwitch('dev-viewport-debug', state.settings?.viewportDebug)}
-                        </div>
-                    </div>
-                    
-                    <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin: 8px 0 16px; box-sizing: border-box; width: 100%;">
-                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('custom_log_dir')}</div>
-                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px; width: 100%;">
-                            <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder')}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; box-sizing: border-box;" readonly />
-                            <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
-                        </div>
-                        <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4; margin-bottom: 4px;">
-                            ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--text-primary); font-family: var(--font-mono);">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
-                        </div>
-                        <div style="font-size: 11px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 8px 12px; margin-top: 8px; line-height: 1.45; text-align: left;">
-                            ⚠️ <strong>${t('privacy_warning_title')}</strong>：${t('privacy_warning_desc')}
+
+                        <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
+                            <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px;">
+                                ${t('custom_log_dir') || '主日志保存目录'}
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%; margin-bottom: 12px;">
+                                <div id="dev-open-dir" title="${t('click_to_open_dir') || '点击在资源管理器中打开此目录'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
+                                    📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : 'Default directory'))}
+                                </div>
+                                <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || '选择目录...'}</button>
+                            </div>
+
+                            <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || '日志文件列表：'}</div>
+                            <div class="dev-log-files-list" style="display: flex; flex-direction: column; gap: 6px;">
+                                ${(state.logFiles && state.logFiles.length > 0) ? state.logFiles.map(file => `
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;">
+                                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                                            <span style="font-weight: 600; color: var(--text-primary); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📄 ${escapeHTML(file.name)}</span>
+                                            <span style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(file.path)}">${escapeHTML(file.path)} (${escapeHTML(file.size)})</span>
+                                        </div>
+                                        <button type="button" class="ghost btn-open-single-log" data-path="${escapeHTML(file.path)}" ${!file.exists ? 'disabled' : ''} style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 5px; margin: 0; white-space: nowrap; font-weight: 600;">
+                                            ${t('btn_open') || '打开'}
+                                        </button>
+                                    </div>
+                                `).join('') : `
+                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">${t('dev_no_log_files') || '暂无已生成的日志文件'}</div>
+                                `}
+                            </div>
                         </div>
                     </div>
 
-                    <div style="display: flex; gap: 10px; margin-bottom: 12px; width: 100%;">
-                        <button type="button" class="ghost" id="dev-open-log" style="flex: 1; padding: 8px 12px; font-size: 12px; border-radius: 6px; font-weight: 600;">${t('btn_open_log_file')}</button>
-                        <button type="button" class="ghost" id="dev-open-dir" style="flex: 1; padding: 8px 12px; font-size: 12px; border-radius: 6px; font-weight: 600;">${t('btn_open_log_dir')}</button>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; width: 100%;">
-                        <button type="button" class="ghost" id="dev-reset-quota" style="padding: 8px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置计时'}</button>
-                        <button type="button" class="ghost" id="dev-max-quota" style="padding: 8px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '最大额度'}</button>
-                        <button type="button" class="ghost" id="dev-force-sync" style="padding: 8px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || '在线对账'}</button>
-                    </div>
-
-                    <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin: 0 0 12px; box-sizing: border-box; width: 100%;">
-                        <div style="font-weight: 800; font-size: 12.5px; color: var(--accent); margin-bottom: 8px;">${t('dev_inject_license') || '注入激活码（Dev）'}</div>
-                        <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-                            <input type="text" id="dev-license-code" value="${escapeHTML(state.devLicenseCode || '')}" placeholder="EQT-PLUS-…" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; font-family: var(--font-mono);" />
-                            <button type="button" id="dev-inject-license" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap; color: var(--accent); border-color: var(--accent); font-weight: 700;">${t('dev_inject_btn') || '注入'}</button>
+                    <!-- Module 2: Billing & Quota Debug -->
+                    <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
+                        <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span>⚡</span> ${t('dev_section_billing') || '额度与授权测试'}
                         </div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; line-height: 1.4;">${t('dev_inject_hint') || '调用线上 /activate，等同于 About 面板兑换。测试完请在云端吊销并清理。'}</div>
-                        ${state.devInjectMsg ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devInjectError ? '#ef4444' : 'var(--accent)'};">${escapeHTML(state.devInjectMsg)}</div>` : ''}
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; width: 100%;">
+                            <button type="button" class="ghost" id="dev-reset-quota" style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置计时'}</button>
+                            <button type="button" class="ghost" id="dev-max-quota" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '最大额度'}</button>
+                            <button type="button" class="ghost" id="dev-force-sync" style="padding: 7px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || '在线对账'}</button>
+                        </div>
+                        <div style="padding: 10px 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; box-sizing: border-box; width: 100%;">
+                            <div style="font-weight: 700; font-size: 11.5px; color: var(--accent); margin-bottom: 6px;">${t('dev_inject_license') || '注入激活码（Dev）'}</div>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                                <input type="text" id="dev-license-code" value="${escapeHTML(state.devLicenseCode || '')}" placeholder="EQT-PLUS-…" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; font-family: var(--font-mono);" />
+                                <button type="button" id="dev-inject-license" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap; color: var(--accent); border-color: var(--accent); font-weight: 700;">${t('dev_inject_btn') || '注入'}</button>
+                            </div>
+                            <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">${t('dev_inject_hint') || '调用线上 /activate，等同于 About 面板兑换。'}</div>
+                            ${state.devInjectMsg ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devInjectError ? '#ef4444' : 'var(--accent)'};">${escapeHTML(state.devInjectMsg)}</div>` : ''}
+                        </div>
                     </div>
-                    
+
+                    <!-- Module 3: Exit Dev Mode -->
                     <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
                         ${t('btn_exit_dev_mode') || '退出开发者模式'}
                     </button>
@@ -3420,6 +3439,12 @@ function openPanel(panel) {
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
     if (panel === 'settings') {
+        if (typeof GetLogFiles === 'function') {
+            GetLogFiles().then((files) => {
+                state.logFiles = files;
+                render();
+            }).catch(() => {});
+        }
         ChatSaveDirectory().then((dir) => {
             state.chatSaveDir = dir;
             const btn = document.querySelector('#open-chat-save');
@@ -3827,8 +3852,6 @@ function syncSettingsFromDOM() {
     if (chatDownloadDir) state.settings.chatDownloadDir = chatDownloadDir.value;
     if (enableChatV2) state.settings.enableChatV2 = enableChatV2.checked;
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
-    const logDir = document.querySelector('#dev-log-dir');
-    if (logDir) state.settings.logDir = logDir.value.trim();
     if (iface) state.settings.interface = iface.value;
     if (port) state.settings.port = Number(port.value);
     if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
@@ -4206,6 +4229,9 @@ function bindSettingsControls() {
                 await saveSettingsData();
                 state.notice = t('log_dir_updated') || '日志保存路径已更新';
                 state.appInfo = await AppInfo();
+                if (typeof GetLogFiles === 'function') {
+                    state.logFiles = await GetLogFiles();
+                }
                 render();
                 openPanel('settings');
             }
@@ -4216,17 +4242,19 @@ function bindSettingsControls() {
         }
     });
 
-    document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
-        const logPath = state.appInfo?.logPath;
-        if (logPath) {
-            try {
-                await OpenPath(logPath);
-            } catch (error) {
-                state.error = 'Failed to open log: ' + error;
-                render();
-                openPanel('settings');
+    document.querySelectorAll('.btn-open-single-log').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const targetPath = e.currentTarget.getAttribute('data-path');
+            if (targetPath) {
+                try {
+                    await OpenPath(targetPath);
+                } catch (error) {
+                    state.error = 'Failed to open log: ' + error;
+                    render();
+                    openPanel('settings');
+                }
             }
-        }
+        });
     });
 
     document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {

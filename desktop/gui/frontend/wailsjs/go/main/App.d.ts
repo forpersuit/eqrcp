@@ -28,6 +28,8 @@ export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;
 
 export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>>;
 
+export function GetLogFiles():Promise<Array<main.LogFileInfo>>;
+
 export function InstallUpdate(arg1:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;

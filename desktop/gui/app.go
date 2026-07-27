@@ -897,7 +897,11 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 	}
 	a.setCloseBehavior(saved.CloseBehavior)
 	if a.logger != nil {
+		a.logger.SetLogDir(saved.LogDir)
 		a.logger.SetEnabled(saved.DebugLog || saved.DevMode)
+	}
+	if a.agent != nil {
+		a.agent.UpdateLogDir(saved.LogDir)
 	}
 	return saved, nil
 }
@@ -1049,6 +1053,13 @@ func (a *App) ValidateFreeTier(paths []string) string {
 }
 
 func (a *App) AppInfo() AppInfo {
+	logPath := ""
+	if a.logger != nil {
+		logPath = a.logger.GetFilePath()
+	}
+	if logPath == "" {
+		logPath = desktopLogFilePath()
+	}
 	info := AppInfo{
 		Product:     "EQT",
 		Name:        "Easy QR Transfer",
@@ -1057,7 +1068,7 @@ func (a *App) AppInfo() AppInfo {
 		AgentURL:    "",
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
-		LogPath:     desktopLogFilePath(),
+		LogPath:     logPath,
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
@@ -1075,6 +1086,92 @@ func (a *App) AppInfo() AppInfo {
 	}
 
 	return info
+}
+
+type LogFileInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Size    string `json:"size"`
+	ModTime string `json:"modTime"`
+	Exists  bool   `json:"exists"`
+}
+
+func formatLogFileSize(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+}
+
+func (a *App) GetLogFiles() []LogFileInfo {
+	var files []LogFileInfo
+
+	desktopPath := ""
+	if a.logger != nil {
+		desktopPath = a.logger.GetFilePath()
+	}
+	if desktopPath == "" {
+		desktopPath = desktopLogFilePath()
+	}
+
+	dir := filepath.Dir(desktopPath)
+
+	primaryLogs := []struct {
+		filename string
+		desc     string
+	}{
+		{"desktop.log", "桌面客户端主日志 (desktop.log)"},
+		{"cli.log", "命令行传输日志 (cli.log)"},
+	}
+
+	for _, item := range primaryLogs {
+		p := filepath.Join(dir, item.filename)
+		info := LogFileInfo{
+			Name: item.desc,
+			Path: p,
+		}
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			info.Size = formatLogFileSize(fi.Size())
+			info.ModTime = fi.ModTime().Format("15:04:05")
+			info.Exists = true
+		} else {
+			info.Size = "未生成"
+			info.Exists = false
+		}
+		files = append(files, info)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "session-") {
+				sessionDir := filepath.Join(dir, entry.Name())
+				devEntries, err := os.ReadDir(sessionDir)
+				if err == nil {
+					for _, devFile := range devEntries {
+						if !devFile.IsDir() && strings.HasSuffix(devFile.Name(), ".log") {
+							p := filepath.Join(sessionDir, devFile.Name())
+							info := LogFileInfo{
+								Name: fmt.Sprintf("会话诊断: %s (%s)", devFile.Name(), entry.Name()),
+								Path: p,
+							}
+							if fi, err := os.Stat(p); err == nil {
+								info.Size = formatLogFileSize(fi.Size())
+								info.ModTime = fi.ModTime().Format("15:04:05")
+								info.Exists = true
+							}
+							files = append(files, info)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return files
 }
 
 type GUIUpdateCheckResult struct {
