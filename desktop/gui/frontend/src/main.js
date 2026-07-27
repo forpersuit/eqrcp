@@ -2754,6 +2754,11 @@ function formatErrorMessage(errMsg) {
         return t('err_free_limit_files');
     }
 
+    // Check cross-code stacking error (device bound to another active license)
+    if (errMsg.includes('bound to another active license') || errMsg.includes('Stacking across different license codes') || errMsg.includes('cross_code_stacking_blocked') || errMsg.includes('当前设备已绑定')) {
+        return t('cross_code_stacking_blocked');
+    }
+
     return errMsg;
 }
 

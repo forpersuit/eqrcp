@@ -40,9 +40,17 @@ async function findPeerActiveLicensesOnDevice(
   const seen = new Set<string>();
 
   const pushUnique = (rows: any[] | null | undefined) => {
+    const now = Date.now();
     for (const row of rows || []) {
       if (!row?.license_code || row.license_code === licenseCode) continue;
       if (seen.has(row.license_code)) continue;
+      // Filter out licenses that are actually expired
+      if (row.expires_at && row.expires_at !== "LIFETIME") {
+        const expTime = new Date(row.expires_at).getTime();
+        if (!Number.isNaN(expTime) && expTime <= now) {
+          continue; // Skip expired peer license
+        }
+      }
       seen.add(row.license_code);
       peers.push(row);
     }
