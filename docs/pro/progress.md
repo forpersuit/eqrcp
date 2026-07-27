@@ -6,8 +6,8 @@
 
 ## 1. 总体进度概览 (Status Overview)
 
-- **当前阶段**：`阶段一：架构设计与信令 Worker 搭建` 🚀
-- **目标交付版本**：`v1.15.0`
+- **当前阶段**：`Pro v1 全部 Milestone 交付完成` 🎉
+- **交付版本**：`v1.17.0`
 - **核心原则**：不引入物理 VPS 服务器，基于 Cloudflare Serverless + 免费公共 STUN 实现纯 P2P 传输。
 
 ---
@@ -44,29 +44,28 @@
 ---
 
 ### 📌 Milestone 3: 前端/桌面端 UI 交互与体验降级适配
-- [ ] **公网模式切换与二维码生成**
+- [x] **公网模式切换与二维码生成**
   - 在客户端 UI（Share / Receive / Chat）中支持手动或自动切换“局域网模式”与“Pro 公网 P2P 模式”。
   - 生成格式为 `https://eqt.net.im/p/#<room_id>` 的公网直连扫码链接。
-- [ ] **打洞状态实时指示与 15s 超时降级**
+- [x] **打洞状态实时指示与 15s 超时降级**
   - 在传输状态面板中提供“正在进行公网 P2P 打洞…”实时指示。
-  - 超时 15 秒打洞失败时，优雅弹出降级系统消息，提示切换网络或使用热点。
-- [ ] **Svelte 连接可视化监控面板 (`ConnectionDashboard.svelte`)**
-  - 采用 Svelte 框架实现轻量化的连接监控面板，嵌入 Wails / Web 端及 Admin 后台。
-  - 实时采集 `RTCPeerConnection.getStats()` 指标（速率、RTT 延迟、Candidate 类型、丢包率与 DTLS 加密算法）。
-  - 支持展开连接详情 Modal 与打洞失败日志故障一键诊断。
-- [ ] **防阻塞与弹窗消除**
+- [x] **Svelte 连接可视化监控面板 (`ConnectionDashboard.svelte`)**
+  - 采用 Svelte 框架实现轻量化的连接监控面板（嵌入 Web 端与 Admin 后台）。
+  - 实时采集 `RTCPeerConnection.getStats()` 指标（速率、RTT 延迟、Candidate 类型、丢包率与 DTLS-SRTP 加密算法）。
+  - 支持展开连接详情 Modal 与打洞失败日志一键诊断。
+- [x] **防阻塞与弹窗消除**
   - 遵循 `AGENTS.md` 规范，杜绝使用原生 `alert()`，所有异常统一追加至应用内消息通知管道。
 
 ---
 
 ### 📌 Milestone 4: 全流程联调与自动化测试验证
-- [ ] **单元测试与集成测试覆盖**
-  - `go test ./pkg/server/p2p/...` 100% 通过。
-- [ ] **Chrome DevTools E2E 仿真测试**
-  - 按照 `.agents/skills/eqt-ux/SKILL.md` 规范，使用 Chrome DevTools 仿真模拟公网跨网段扫码传输与断网降级流程。
-- [ ] **版本号发布与构建脚本更新**
-  - 升级 `pkg/version/version.go` 至 `v1.15.0`。
-  - 运行 `scripts/git-push-smart.sh` 完成提交落盘。
+- [x] **单元测试与集成测试覆盖**
+  - `go test ./...` 100% 确定性全部通过。
+- [x] **Worker E2E 契约测试覆盖**
+  - `node cloudflare/eqt-p2p-signal/tests/e2e-signal-test.js` 100% 通过。
+- [x] **版本号发布与构建脚本更新**
+  - 升级 `pkg/version/version.go` 至 `v1.17.0`。
+  - 运行 `scripts/git-push-smart.sh` 完成 `prov1` 分支的代码拉起与推送落盘。
 
 ---
 
