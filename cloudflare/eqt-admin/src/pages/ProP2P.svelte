@@ -215,7 +215,7 @@
   function handleGlobeResize() {
     if (globeInstance && globeContainerRef) {
       const w = globeContainerRef.clientWidth || 800;
-      const h = globeContainerRef.clientHeight || 340;
+      const h = globeContainerRef.clientHeight || 420;
       globeInstance.width(w).height(h);
     }
   }
@@ -271,7 +271,7 @@
     function resize2D() {
       if (!canvas2D || !globeContainerRef) return;
       canvas2D.width = globeContainerRef.clientWidth || 800;
-      canvas2D.height = globeContainerRef.clientHeight || 340;
+      canvas2D.height = globeContainerRef.clientHeight || 420;
     }
     resize2D();
 
@@ -419,7 +419,7 @@
       <h3>🌐 3D 实时拓扑与全球节点流动大屏</h3>
       <span class="badge badge-info">{isFallback2D ? '2D 高性能回退' : 'WebGL 硬件加速'}</span>
     </div>
-    <div class="globe-wrapper" style="height: 320px;" bind:this={globeContainerRef}></div>
+    <div class="globe-wrapper" style="height: 420px;" bind:this={globeContainerRef}></div>
   </div>
 
   <!-- Active Rooms Table -->
@@ -516,7 +516,10 @@
   .page-container {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.25rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .header-section {
@@ -526,7 +529,7 @@
   }
 
   .page-title {
-    font-size: 1.35rem;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--text-primary);
   }
@@ -609,8 +612,8 @@
 
   .globe-wrapper {
     width: 100%;
-    height: 320px !important;
-    max-height: 38vh !important;
+    height: 420px !important;
+    max-height: 50vh !important;
     background: #020617;
     position: relative;
     overflow: hidden;
