@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import MessageList from './components/MessageList.svelte';
   import MessageComposer from './components/MessageComposer.svelte';
+  import ViewportDebugOverlay from './components/ViewportDebugOverlay.svelte';
   import { getTranslation } from './lib/i18n';
   import { ChatWebSocketClient } from './services/websocket';
   import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted, displayFileName } from './state/chatStore';
@@ -1527,6 +1528,7 @@
       </aside>
     </div>
   </main>
+  <ViewportDebugOverlay />
 </div>
 
 <style>
