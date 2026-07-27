@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EQT Pro P2P 3D Globe Topology</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #020617; font-family: system-ui, -apple-system, sans-serif; color: #f8fafc; }
+    #canvas-container { width: 100%; height: 100%; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .overlay-info { position: absolute; top: 12px; left: 16px; font-size: 12px; color: #94a3b8; pointer-events: none; background: rgba(15, 23, 42, 0.7); padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px); }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px; box-shadow: 0 0 8px #22c55e; }
+  </style>
+  <!-- Load Three.js and Globe.gl with fallback -->
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
+</head>
+<body>
+  <div id="canvas-container">
+    <div class="overlay-info">
+      <span class="status-dot"></span><span id="globe-status">3D 实时拓扑与全球节点流动大屏 (WebGL 加速)</span>
+    </div>
+  </div>
+
+  <script>
+    const container = document.getElementById('canvas-container');
+    const statusEl = document.getElementById('globe-status');
+    let globeInstance = null;
+    let connectionsData = [];
+
+    // Country Lat/Lon lookup dictionary for Geo IP
+    const COUNTRY_COORDS = {
+      'CN': { lat: 35.8617, lng: 104.1954, name: '中国' },
+      'US': { lat: 37.0902, lng: -95.7129, name: '美国' },
+      'JP': { lat: 36.2048, lng: 138.2529, name: '日本' },
+      'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
+      'HK': { lat: 22.3193, lng: 114.1694, name: '香港' },
+      'DE': { lat: 51.1657, lng: 10.4515, name: '德国' },
+      'GB': { lat: 55.3781, lng: -3.4360, name: '英国' },
+      'FR': { lat: 46.2276, lng: 2.2137, name: '法国' },
+      'AU': { lat: -25.2744, lng: 133.7751, name: '澳大利亚' },
+      'CA': { lat: 56.1304, lng: -106.3468, name: '加拿大' },
+      'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' }
+    };
+
+    function initGlobe() {
+      try {
+        if (typeof Globe === 'function') {
+          globeInstance = Globe()
+            (container)
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundColor('#020617')
+            .showAtmosphere(true)
+            .atmosphereColor('#38bdf8')
+            .atmosphereAltitude(0.15)
+            .arcColor(d => d.is_cross_border ? ['#a855f7', '#ec4899'] : ['#38bdf8', '#22c55e'])
+            .arcDashLength(0.4)
+            .arcDashGap(0.2)
+            .arcDashAnimateTime(1500)
+            .arcStroke(1.2)
+            .pointColor(() => '#38bdf8')
+            .pointAltitude(0.02)
+            .pointRadius(0.5);
+
+          // Auto-rotate globe
+          globeInstance.controls().autoRotate = true;
+          globeInstance.controls().autoRotateSpeed = 0.8;
+
+          fetchConnections();
+          setInterval(fetchConnections, 5000);
+        } else {
+          initCanvasFallback();
+        }
+      } catch (err) {
+        console.warn("Globe.gl WebGL initialization fallback:", err);
+        initCanvasFallback();
+      }
+    }
+
+    async function fetchConnections() {
+      try {
+        const res = await fetch('/api/v1/p2p/admin/connections');
+        if (res.ok) {
+          const data = await res.json();
+          renderConnections(data.connections || []);
+        }
+      } catch (err) {
+        // Soft fallback
+      }
+    }
+
+    function renderConnections(conns) {
+      if (!globeInstance) return;
+      const arcs = [];
+      const points = [];
+
+      conns.forEach(c => {
+        const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 39.9, lng: 116.4 };
+        const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.7, lng: -122.4 }) : null;
+
+        points.push({ lat: hCoord.lat, lng: hCoord.lng, size: 0.8, color: '#38bdf8' });
+
+        if (cCoord) {
+          points.push({ lat: cCoord.lat, lng: cCoord.lng, size: 0.8, color: '#ec4899' });
+          arcs.push({
+            startLat: hCoord.lat,
+            startLng: hCoord.lng,
+            endLat: cCoord.lat,
+            endLng: cCoord.lng,
+            is_cross_border: c.is_cross_border
+          });
+        }
+      });
+
+      globeInstance.arcsData(arcs);
+      globeInstance.pointsData(points);
+    }
+
+    function initCanvasFallback() {
+      statusEl.textContent = '3D 拓扑与全球节点流动大屏 (2D 高性能回退模式)';
+      const canvas = document.createElement('canvas');
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      container.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+
+      let angle = 0;
+      function animate() {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw ambient sphere / grid
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = Math.min(cx, cy) * 0.7;
+
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw longitude grid lines
+        angle += 0.005;
+        for (let i = -80; i <= 80; i += 20) {
+          const rad = (i * Math.PI) / 180;
+          const y = cy + Math.sin(rad) * radius;
+          const rx = Math.cos(rad) * radius;
+          ctx.beginPath();
+          ctx.ellipse(cx, y, rx, rx * 0.3, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
+
+    // Handle messages from parent frame if any
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'P2P_CONNECTIONS') {
+        renderConnections(event.data.connections || []);
+      }
+    });
+
+    // Initialize Globe on load
+    window.addEventListener('DOMContentLoaded', initGlobe);
+  </script>
+</body>
+</html>

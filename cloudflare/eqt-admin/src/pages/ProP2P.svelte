@@ -130,7 +130,7 @@
     </div>
     <div class="globe-wrapper">
       <iframe
-        src="https://eqt.net.im/p2p-globe.html"
+        src="/p2p-globe.html"
         title="3D P2P Connection Globe"
         class="globe-iframe"
         bind:this={iframeRef}
