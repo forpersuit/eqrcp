@@ -25,3 +25,12 @@ export function accessLogoutUrl(): string | null {
   const returnTo = encodeURIComponent(window.location.origin + '/');
   return `https://${team}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
+
+/** Access login: send user directly to CF Access login endpoint when JWT is missing or invalid. */
+export function accessLoginUrl(): string {
+  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'persuit.cloudflareaccess.com')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+  const returnTo = encodeURIComponent(window.location.origin + '/');
+  return `https://${team}/cdn-cgi/access/login/${window.location.hostname}?returnTo=${returnTo}`;
+}

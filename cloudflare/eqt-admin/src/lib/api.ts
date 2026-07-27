@@ -1,4 +1,4 @@
-import { clearAccessSession, isAuthenticated } from './auth';
+import { clearAccessSession, accessLoginUrl } from './auth';
 
 /**
  * Base URL:
@@ -39,18 +39,23 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     credentials: 'same-origin'
   });
 
-  if (response.status === 401) {
+  const data = await response.json().catch(() => ({}));
+
+  if (
+    response.status === 401 ||
+    data?.code === 'ACCESS_JWT_REQUIRED' ||
+    data?.code === 'ACCESS_JWT_INVALID' ||
+    (typeof data?.error === 'string' && data.error.includes('Access JWT'))
+  ) {
     clearAccessSession();
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Cloudflare Access 会话无效或未登录');
+    window.location.href = accessLoginUrl();
+    throw new Error('Cloudflare Access 会话已失效，正在跳转至登录页…');
   }
 
   if (response.status === 503) {
-    const data = await response.json().catch(() => ({}));
     throw new Error((data as any).error || 'Admin API 未配置');
   }
 
-  const data = await response.json();
   if (!response.ok || data.error) {
     throw new Error(data.error || `请求失败 (${response.status})`);
   }
