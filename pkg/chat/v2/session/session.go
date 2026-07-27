@@ -354,9 +354,28 @@ func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
 	}
 
 	join := strings.TrimSpace(info.Join)
-	if !info.IsNewScan {
-		if theme := s.clientThemes[c.Peer]; s.validChatTheme(theme) && (join == "" || s.clientThemeJoins[c.Peer] == join) {
-			c.Theme = theme
+	lastJoin := s.clientThemeJoins[c.Peer]
+	existingTheme := s.clientThemes[c.Peer]
+
+	// Check if this is explicitly a new scan with a different join token
+	isExplicitNewScan := join != "" && lastJoin != "" && join != lastJoin
+
+	// Re-use existing theme for the same peer if already assigned in session history and not an explicit new join token scan
+	if !isExplicitNewScan {
+		if s.validChatTheme(existingTheme) {
+			c.Theme = existingTheme
+			if join != "" {
+				s.clientThemeJoins[c.Peer] = join
+			}
+			return
+		}
+		// If no theme assigned yet, but client supplied a valid non-conflicting preferred theme from localStorage
+		if s.validChatTheme(info.Theme) && !s.themeInUseByOtherClientLocked(c.Peer, info.Theme) {
+			s.clientThemes[c.Peer] = info.Theme
+			if join != "" {
+				s.clientThemeJoins[c.Peer] = join
+			}
+			c.Theme = info.Theme
 			return
 		}
 	}

@@ -72,6 +72,10 @@ description: Guidelines for EQT user interface, notification styles, and UX rule
   - **Hard Boundaries & Composer Avoidance**: Ensure `vMaxBottom` respects the top boundary of the composer container (`.message-composer`). The menu must never overlap or cover the bottom input area.
   - **Dynamic Spacer Bump**: If a menu triggered at the bottom of the chat list lacks vertical space, dynamically inject a bottom spacer element (`menuSpacerHeight`), scroll `.messages` upwards, and position the menu gracefully. Restores space automatically when the menu is closed.
 
+- **Mobile Reconnection & Theme Consistency**:
+  - For non-desktop client peers, theme assignment strictly reuses the previously assigned theme for the same peer across background reconnections, page refreshes, and long disconnections.
+  - Theme changes only trigger upon a fresh QR scan with a distinct new join token.
+
 - **Mobile Keyboard Input Track-To-Bottom**:
   - When mobile input fields (like compose textareas) trigger a focus event or window visual viewport resizing, if the client is currently tracking the latest chat logs (`followLatest` is true), it must trigger multiple delayed scroll adjustments (e.g. at 0ms, 50ms, 150ms, 300ms, 500ms) scrolling the message container exactly to bottom (`messagesEl.scrollTop = messagesEl.scrollHeight`). This keeps the newest messages visible during virtual keyboard popups.
 - **Android Virtual Keyboard Layout Correction**:

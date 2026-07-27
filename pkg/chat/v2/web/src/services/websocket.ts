@@ -180,7 +180,7 @@ export class ChatWebSocketClient {
           theme: preferredTheme,
           join: this.joinParam,
           localJoin: this.localJoin,
-          isNewScan: isInitialConnect
+          isNewScan: Boolean(this.joinParam) && isInitialConnect
         },
         afterSeq: connectAfterSeq,
         joinSeq: savedJoinSeq
@@ -360,6 +360,9 @@ export class ChatWebSocketClient {
           const me = event.presence.devices.find(d => d.peer === this.clientPeer);
           if (me) {
             chatActions.setCurrentDevice(me);
+            if (me.theme) {
+              localStorage.setItem('eqt_chat_theme', me.theme);
+            }
           }
           this.sendLog(`[EVENT] Presence updated. Connected devices: ${event.presence.devices.map(d => d.label).join(', ')}`);
         }

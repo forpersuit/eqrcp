@@ -306,3 +306,50 @@ func TestSessionRecallMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestAssignThemePreservesThemeOnReconnect(t *testing.T) {
+	sess := NewSession("theme-preservation-room")
+
+	infoMobile := protocol.ClientInfo{
+		Label:     "Mobile Phone",
+		Peer:      "mobile-peer-123",
+		Join:      "join-token-aaa",
+		IsNewScan: true,
+	}
+
+	c1 := NewClient(infoMobile, nil)
+	sess.AssignTheme(c1, infoMobile)
+
+	initialTheme := c1.Theme
+	if initialTheme == "" {
+		t.Fatalf("initial theme should not be empty")
+	}
+
+	// 1. Mobile reconnects (page refresh or background reconnect) without new join token, even if IsNewScan is accidentally true
+	infoReconnect := protocol.ClientInfo{
+		Label:     "Mobile Phone",
+		Peer:      "mobile-peer-123",
+		Join:      "",
+		IsNewScan: true,
+	}
+	c2 := NewClient(infoReconnect, nil)
+	sess.AssignTheme(c2, infoReconnect)
+
+	if c2.Theme != initialTheme {
+		t.Fatalf("theme changed on reconnect: got %s, want %s", c2.Theme, initialTheme)
+	}
+
+	// 2. Mobile scans a completely new QR code with a different join token
+	infoNewScan := protocol.ClientInfo{
+		Label:     "Mobile Phone",
+		Peer:      "mobile-peer-123",
+		Join:      "join-token-bbb",
+		IsNewScan: true,
+	}
+	c3 := NewClient(infoNewScan, nil)
+	sess.AssignTheme(c3, infoNewScan)
+
+	if c3.Theme == initialTheme {
+		t.Fatalf("theme should change when a fresh join token is scanned, but stayed %s", c3.Theme)
+	}
+}
