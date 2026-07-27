@@ -63,9 +63,18 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   }
 
   // Ensure Cf-Access-Jwt-Assertion is passed if present in header or CF_Authorization cookie
-  const jwt =
+  let jwt =
     context.request.headers.get("Cf-Access-Jwt-Assertion") ||
     context.request.headers.get("cf-access-jwt-assertion");
+
+  if (!jwt) {
+    const cookieHeader = context.request.headers.get("cookie") || "";
+    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+    if (match && match[1]) {
+      jwt = match[1];
+    }
+  }
+
   if (jwt) {
     headers.set("Cf-Access-Jwt-Assertion", jwt);
   }
