@@ -805,3 +805,216 @@ export function getLicenseRevokeEmailTemplate(lang: string, reason: string = 're
 export function getRefundRevokeEmailTemplate(lang: string) {
   return getLicenseRevokeEmailTemplate(lang, 'refund');
 }
+
+// 7-Language Email Dictionaries for Purchase & Renewal
+export const PURCHASE_EMAIL_I18N: Record<string, {
+  subject: string;
+  title: string;
+  greeting: string;
+  intro: string;
+  tierLabel: string;
+  codeLabel: string;
+  expiresLabel: string;
+  devicesLabel: string;
+  howToActivateTitle: string;
+  howToActivateStep1: string;
+  howToActivateStep2: string;
+  footerNotice: string;
+}> = {
+  zh: {
+    subject: "【EQT】您的购买激活码与服务明细",
+    title: "购买确认与激活指引",
+    greeting: "感谢您购买 EQT Easy QR Transfer！",
+    intro: "您的付费订单已处理完成。以下是您的付费授权激活码明细：",
+    tierLabel: "授权级别 (Tier)",
+    codeLabel: "激活码 (License Code)",
+    expiresLabel: "有效期限 (Expires)",
+    devicesLabel: "最大激活设备数",
+    howToActivateTitle: "如何激活：",
+    howToActivateStep1: "打开 EQT 客户端，前往设置或关于面板。",
+    howToActivateStep2: "点击“输入激活码”并输入上述激活码，然后点击确认即可激活您的 EQT 尊享功能！",
+    footerNotice: "此邮件由系统自动发送，请勿直接回复。如有疑问，请访问官网或联系技术支持。"
+  },
+  en: {
+    subject: "[EQT] Your License Code & Order Confirmation",
+    title: "Order Confirmation & Activation Guide",
+    greeting: "Thank you for purchasing EQT Easy QR Transfer!",
+    intro: "Your payment order has been successfully processed. Here are your license details:",
+    tierLabel: "License Tier",
+    codeLabel: "License Code",
+    expiresLabel: "Expiration Date",
+    devicesLabel: "Max Activated Devices",
+    howToActivateTitle: "How to Activate:",
+    howToActivateStep1: "Open your EQT desktop app and navigate to Settings or About panel.",
+    howToActivateStep2: "Click 'Enter License Code', paste the code above, and submit to unlock premium features!",
+    footerNotice: "This is an automated notification. Please do not reply directly. Contact support if you need assistance."
+  },
+  ja: {
+    subject: "【EQT】ライセンスコードおよび購入完了のお知らせ",
+    title: "購入確認とアクティベーション手順",
+    greeting: "EQT (Easy QR Transfer) のご購入ありがとうございます！",
+    intro: "お支払いが完了いたしました。ライセンスの詳細は以下の通りです：",
+    tierLabel: "ライセンスプラン",
+    codeLabel: "ライセンスコード",
+    expiresLabel: "有効期限",
+    devicesLabel: "最大認証端末数",
+    howToActivateTitle: "アクティベーション手順：",
+    howToActivateStep1: "EQT クライアントを起動し、設定または About パネルを開きます。",
+    howToActivateStep2: "「ライセンスコード入力」をクリックし、上記コードを入力して適用してください。",
+    footerNotice: "このメールは自動送信されています。返信せず、ご質問はサポート窓口へお問い合わせください。"
+  },
+  ko: {
+    subject: "【EQT】라이선스 코드 및 결제 완료 안내",
+    title: "구매 확인 및 활성화 안내",
+    greeting: "EQT Easy QR Transfer를 구매해 주셔서 감사합니다!",
+    intro: "결제가 성공적으로 처리되었습니다. 라이선스 상세 정보는 다음과 같습니다:",
+    tierLabel: "라이선스 등급",
+    codeLabel: "라이선스 코드",
+    expiresLabel: "유효 기간",
+    devicesLabel: "최대 활성화 기기 수",
+    howToActivateTitle: "활성화 방법:",
+    howToActivateStep1: "EQT 데스크톱 앱을 열고 설정 또는 정보(About) 패널로 이동합니다.",
+    howToActivateStep2: "'라이선스 코드 입력'을 클릭하고 위 코드를 입력하여 고급 기능을 활성화하세요!",
+    footerNotice: "본 메일은 발신 전용입니다. 문의 사항이 있으시면 고객 지원으로 연락해 주세요."
+  },
+  es: {
+    subject: "[EQT] Su Código de Licencia y Confirmación de Compra",
+    title: "Confirmación de Pedido y Guía de Activación",
+    greeting: "¡Gracias por comprar EQT Easy QR Transfer!",
+    intro: "Su orden de pago ha sido procesada con éxito. Aquí están los detalles de su licencia:",
+    tierLabel: "Nivel de Licencia",
+    codeLabel: "Código de Licencia",
+    expiresLabel: "Fecha de Expiración",
+    devicesLabel: "Dispositivos Máximos",
+    howToActivateTitle: "Cómo Activar:",
+    howToActivateStep1: "Abra la aplicación EQT y vaya al panel de Configuración o Acerca de.",
+    howToActivateStep2: "Haga clic en 'Ingresar código de licencia', pegue el código anterior y confirme.",
+    footerNotice: "Este es un correo automático, por favor no responda directamente. Contacte a soporte si requiere ayuda."
+  },
+  de: {
+    subject: "[EQT] Ihr Lizenzcode & Kaufbestätigung",
+    title: "Bestellbestätigung & Aktivierungsanleitung",
+    greeting: "Vielen Dank für den Kauf von EQT Easy QR Transfer!",
+    intro: "Ihre Zahlung wurde erfolgreich verarbeitet. Hier sind Ihre Lizenzdetails:",
+    tierLabel: "Lizenz-Stufe",
+    codeLabel: "Lizenzcode",
+    expiresLabel: "Ablaufdatum",
+    devicesLabel: "Max. aktivierte Geräte",
+    howToActivateTitle: "So aktivieren Sie:",
+    howToActivateStep1: "Öffnen Sie die EQT-App und gehen Sie zum Einstellungen- oder Info-Bereich.",
+    howToActivateStep2: "Klicken Sie auf 'Lizenzcode eingeben', fügen Sie den Code ein und bestätigen Sie.",
+    footerNotice: "Dies ist eine automatische Benachrichtigung. Bitte antworten Sie nicht direkt darauf."
+  },
+  fr: {
+    subject: "[EQT] Votre Code de Licence et Confirmation de Commande",
+    title: "Confirmation de Commande & Guide d'Activation",
+    greeting: "Merci d'avoir acheté EQT Easy QR Transfer !",
+    intro: "Votre commande a été traitée avec succès. Voici les détails de votre licence :",
+    tierLabel: "Niveau de Licence",
+    codeLabel: "Code de Licence",
+    expiresLabel: "Date d'Expiration",
+    devicesLabel: "Appareils Max. Autorisés",
+    howToActivateTitle: "Comment Activer :",
+    howToActivateStep1: "Ouvrez l'application EQT et allez dans les Paramètres ou la section À Propos.",
+    howToActivateStep2: "Cliquez sur 'Saisir le code de licence', collez le code et validez.",
+    footerNotice: "Ceci est un e-mail automatique, veuillez ne pas y répondre directement."
+  }
+};
+
+export const RENEWAL_EMAIL_I18N: Record<string, {
+  subject: string;
+  title: string;
+  header: string;
+  intro: string;
+  codeLabel: string;
+  newExpiresLabel: string;
+  statusLabel: string;
+  statusText: string;
+  noteText: string;
+  footerNotice: string;
+}> = {
+  zh: {
+    subject: "【EQT】订阅已续费成功 · 激活码不变",
+    title: "订阅自动续费通知",
+    header: "【EQT】订阅已续费成功",
+    intro: "Paddle 已完成本周期扣费。您的<strong>激活码不变</strong>，服务权益已成功延展：",
+    codeLabel: "激活码",
+    newExpiresLabel: "新有效期至",
+    statusLabel: "状态",
+    statusText: "active（续费成功，保持生效）",
+    noteText: "已激活设备在下一次联网对账时会自动刷新本地证书有效期，无需手动重新输入激活码。",
+    footerNotice: "此邮件由系统自动发送。如需管理或取消订阅，请使用客户 Portal。"
+  },
+  en: {
+    subject: "[EQT] Subscription Renewed Successfully · License Code Unchanged",
+    title: "Subscription Renewal Notice",
+    header: "[EQT] Subscription Renewal Successful",
+    intro: "Paddle has completed billing for the current period. Your <strong>license code remains unchanged</strong> and validity has been extended:",
+    codeLabel: "License Code",
+    newExpiresLabel: "New Expiration Date",
+    statusLabel: "Status",
+    statusText: "active (renewed and valid)",
+    noteText: "Activated devices will automatically refresh their local license certificate during the next online sync. No manual entry is required.",
+    footerNotice: "This is an automated notification. Use the Customer Portal to manage or cancel subscriptions."
+  },
+  ja: {
+    subject: "【EQT】サブスクリプション自動更新完了のお知らせ",
+    title: "サブスクリプション更新通知",
+    header: "【EQT】サブスクリプション更新成功",
+    intro: "お支払いが完了しました。<strong>ライセンスコードは変更されず</strong>、有効期限が延長されました：",
+    codeLabel: "ライセンスコード",
+    newExpiresLabel: "新有効期限",
+    statusLabel: "ステータス",
+    statusText: "active（更新成功・有効）",
+    noteText: "認証済みの端末は、次回のオンライン確認時に自動的に証明書が更新されます。",
+    footerNotice: "このメールは自動送信されています。サブスクリプションの管理・キャンセルはポータルをご利用ください。"
+  },
+  ko: {
+    subject: "【EQT】구독 자동 갱신 완료 안내 · 라이선스 코드 유지",
+    title: "구독 갱신 안내",
+    header: "【EQT】구독 갱신 완료",
+    intro: "이번 주기 결제가 완료되었습니다. <strong>라이선스 코드는 동일하게 유지</strong>되며 유효 기간이 연장되었습니다:",
+    codeLabel: "라이선스 코드",
+    newExpiresLabel: "새 만료일",
+    statusLabel: "상태",
+    statusText: "active (갱신 완료 및 유효함)",
+    noteText: "활성화된 기기는 다음 온라인 동기화 시 로컬 라이선스 인증서가 자동으로 갱신됩니다.",
+    footerNotice: "본 메일은 자동 발송 메시지입니다. 구독 관리 및 취소는 고객 포털을 이용해 주세요."
+  },
+  es: {
+    subject: "[EQT] Suscripción Renovada Con Éxito · Código Sin Cambios",
+    title: "Aviso de Renovación de Suscripción",
+    header: "[EQT] Renovación de Suscripción Exitosa",
+    intro: "Paddle ha completado el pago del período actual. Su <strong>código de licencia no cambia</strong> y la validez se ha extendido:",
+    codeLabel: "Código de Licencia",
+    newExpiresLabel: "Nueva Fecha de Expiración",
+    statusLabel: "Estado",
+    statusText: "active (renovado y activo)",
+    noteText: "Los dispositivos activados actualizarán automáticamente su certificado en la próxima sincronización online.",
+    footerNotice: "Este es un correo automático. Utilice el Portal del Cliente para gestionar su suscripción."
+  },
+  de: {
+    subject: "[EQT] Abonnement erfolgreich verlängert · Lizenzcode unverändert",
+    title: "Abonnement-Verlängerungsbenachrichtigung",
+    header: "[EQT] Abonnement-Verlängerung erfolgreich",
+    intro: "Paddle hat die Abrechnung für die aktuelle Periode abgeschlossen. Ihr <strong>Lizenzcode bleibt unverändert</strong> und die Gültigkeit wurde verlängert:",
+    codeLabel: "Lizenzcode",
+    newExpiresLabel: "Neues Ablaufdatum",
+    statusLabel: "Status",
+    statusText: "active (verlängert und gültig)",
+    noteText: "Aktivierte Geräte aktualisieren Ihr lokales Lizenzzertifikat automatisch beim nächsten Online-Abgleich.",
+    footerNotice: "Dies ist eine automatische Benachrichtigung. Nutzen Sie das Kundenportal zur Verwaltung Ihres Abonnements."
+  },
+  fr: {
+    subject: "[EQT] Abonnement Renouvelé Avec Succès · Code Inchangé",
+    title: "Abonnement Renouvelé Avec Succès",
+    header: "[EQT] Renouvellement d'Abonnement Réussi",
+    intro: "Paddle a effectué le prélèvement pour la période en cours. Votre <strong>code de licence reste inchangé</strong> et la validité a été prolongée :",
+    codeLabel: "Code de Licence",
+    newExpiresLabel: "Nouvelle Date d'Expiration",
+    statusLabel: "Statut",
+    statusText: "active (renouvelé et actif)",
+    noteText: "Les appareils activés mettront automatiquement à jour leur certificat lors de la prochaine synchronisation en ligne.",
+    footerNotice: "Ceci est un message automatique. Utilisez le Portail Client pour gérer votre abonnement."
+  }
+};
