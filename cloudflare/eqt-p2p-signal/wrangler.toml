@@ -1,0 +1,16 @@
+name = "eqt-p2p-signal"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+
+# D1 Database binding sharing eqt-drm-db with eqt-drm-api
+[[d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db"
+database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
+
+[vars]
+CORS_ORIGIN = "*"
+
+routes = [
+  { pattern = "signal.eqt.net.im", custom_domain = true }
+]

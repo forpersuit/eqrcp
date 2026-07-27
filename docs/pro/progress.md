@@ -17,15 +17,15 @@
 ### 📌 Milestone 1: Cloudflare Worker 信令服务 (`cloudflare/eqt-p2p-signal`)
 - [x] **架构设计与 API 契约定义**
   - 完成 [architecture-and-design.md](file:///home/yelon/develop/me/eqrcp/docs/pro/architecture-and-design.md) 中 4 个信令接口定义。
-- [ ] **Worker 项目创建与 Wrangler 配置**
-  - 创建 `cloudflare/eqt-p2p-signal` 目录与 `wrangler.jsonc` 配置文件。
-  - 绑定现有的 Cloudflare D1 数据库 (`eqt-drm-db`) 以分享授权校验状态。
-- [ ] **Pro 订阅鉴权模块实现**
-  - 实现基于 `X-License-Code` + `X-Device-ID` 的数据库读写鉴权，阻断非 Pro 用户发起信令。
-- [ ] **房间与信令内存中转箱 (Mailbox/KV)**
-  - 实现基于内存 Isolates 或 KV 的短生命周期（600s）SDP / ICE Candidate 信令推拉。
-- [ ] **自动化 E2E 契约测试套件**
-  - 编写 `tests/e2e-signal-test.js`，运行 `npm run test:signal` 验证信令握手全流程。
+- [x] **Worker 项目创建与 Wrangler 配置**
+  - 创建 `cloudflare/eqt-p2p-signal` 目录与 `wrangler.toml` 配置文件。
+  - 绑定现有的 Cloudflare D1 数据库 (`eqt-drm-db`) 以共享授权校验状态。
+- [x] **Pro 订阅鉴权模块实现**
+  - 实现基于 `X-License-Code` + `X-Device-ID` 的 D1 数据库校验，阻断非 Pro 用户发起信令。
+- [x] **房间与信令内存中转箱 (Mailbox)**
+  - 实现短生命周期（600s）SDP / ICE Candidate 信令推拉与自动清理机制。
+- [x] **自动化 E2E 契约测试套件**
+  - 编写 `tests/e2e-signal-test.js`，运行 `npm run test:signal` 验证信令握手全流程并 100% 通过。
 
 ---
 

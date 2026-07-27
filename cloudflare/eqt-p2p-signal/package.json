@@ -1,0 +1,16 @@
+{
+  "name": "eqt-p2p-signal",
+  "version": "1.0.0",
+  "description": "Serverless P2P Signaling Engine for EQT Pro on Cloudflare Workers",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test:signal": "node tests/e2e-signal-test.js"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240101.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^4.113.0"
+  }
+}
