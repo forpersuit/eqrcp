@@ -36,6 +36,7 @@ import {
     SelectReceiveDirectory,
     SelectShareDirectory,
     SelectLogDirectory,
+    GetLogFiles,
     RightClickIntegrationStatus,
     Share,
     SetRightClickIntegrationEnabled,
@@ -2126,11 +2127,7 @@ function renderSettingsPanel() {
             <details class="settings-advanced-details dev-details" style="margin-top: 16px; border-color: rgba(47, 158, 115, 0.3);" ${state.settingsDevOpen ? 'open' : ''}>
                 <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">🛠️ ${t('dev_options') || '开发者选项'}</summary>
                 <div class="settings-advanced-content">
-                    <!-- Module 1: Log & Diagnostics -->
                     <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
-                        <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                            <span>📂</span> ${t('dev_section_logs') || '日志与诊断系统'}
-                        </div>
                         <div class="setting-row" style="margin-bottom: 8px;">
                             <div class="setting-copy">
                                 <strong>${t('enable_debug_logs')}</strong>
@@ -2151,18 +2148,31 @@ function renderSettingsPanel() {
                         </div>
 
                         <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
-                            <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                                <span>${t('custom_log_dir') || '主日志保存目录'}</span>
-                                <button type="button" class="ghost" id="dev-open-log" style="padding: 3px 8px; font-size: 11px; height: 24px; border-radius: 4px; font-weight: 600;">📄 ${t('btn_open_log_file') || '查看日志文件'}</button>
+                            <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px;">
+                                ${t('custom_log_dir') || '主日志保存目录'}
                             </div>
-                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%; margin-bottom: 12px;">
                                 <div id="dev-open-dir" title="${t('click_to_open_dir') || '点击在资源管理器中打开此目录'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
                                     📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : 'Default directory'))}
                                 </div>
                                 <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || '选择目录...'}</button>
                             </div>
-                            <div style="font-size: 10.5px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 6px; padding: 6px 10px; margin-top: 8px; line-height: 1.4; text-align: left;">
-                                ⚠️ <strong>${t('privacy_warning_title')}</strong>：${t('privacy_warning_desc')}
+
+                            <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || '日志文件列表：'}</div>
+                            <div class="dev-log-files-list" style="display: flex; flex-direction: column; gap: 6px;">
+                                ${(state.logFiles && state.logFiles.length > 0) ? state.logFiles.map(file => `
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;">
+                                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+                                            <span style="font-weight: 600; color: var(--text-primary); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📄 ${escapeHTML(file.name)}</span>
+                                            <span style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(file.path)}">${escapeHTML(file.path)} (${escapeHTML(file.size)})</span>
+                                        </div>
+                                        <button type="button" class="ghost btn-open-single-log" data-path="${escapeHTML(file.path)}" ${!file.exists ? 'disabled' : ''} style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 5px; margin: 0; white-space: nowrap; font-weight: 600;">
+                                            ${t('btn_open') || '打开'}
+                                        </button>
+                                    </div>
+                                `).join('') : `
+                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">暂无日志文件</div>
+                                `}
                             </div>
                         </div>
                     </div>
@@ -3429,6 +3439,12 @@ function openPanel(panel) {
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
     if (panel === 'settings') {
+        if (typeof GetLogFiles === 'function') {
+            GetLogFiles().then((files) => {
+                state.logFiles = files;
+                render();
+            }).catch(() => {});
+        }
         ChatSaveDirectory().then((dir) => {
             state.chatSaveDir = dir;
             const btn = document.querySelector('#open-chat-save');
@@ -4213,6 +4229,9 @@ function bindSettingsControls() {
                 await saveSettingsData();
                 state.notice = t('log_dir_updated') || '日志保存路径已更新';
                 state.appInfo = await AppInfo();
+                if (typeof GetLogFiles === 'function') {
+                    state.logFiles = await GetLogFiles();
+                }
                 render();
                 openPanel('settings');
             }
@@ -4223,17 +4242,19 @@ function bindSettingsControls() {
         }
     });
 
-    document.querySelector('#dev-open-log')?.addEventListener('click', async () => {
-        const logPath = state.appInfo?.logPath;
-        if (logPath) {
-            try {
-                await OpenPath(logPath);
-            } catch (error) {
-                state.error = 'Failed to open log: ' + error;
-                render();
-                openPanel('settings');
+    document.querySelectorAll('.btn-open-single-log').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const targetPath = e.currentTarget.getAttribute('data-path');
+            if (targetPath) {
+                try {
+                    await OpenPath(targetPath);
+                } catch (error) {
+                    state.error = 'Failed to open log: ' + error;
+                    render();
+                    openPanel('settings');
+                }
             }
-        }
+        });
     });
 
     document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {

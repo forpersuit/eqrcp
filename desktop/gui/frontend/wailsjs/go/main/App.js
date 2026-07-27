@@ -118,6 +118,10 @@ export function SelectLogDirectory() {
   return window['go']['main']['App']['SelectLogDirectory']();
 }
 
+export function GetLogFiles() {
+  return window['go']['main']['App']['GetLogFiles']();
+}
+
 export function SelectReceiveDirectory() {
   return window['go']['main']['App']['SelectReceiveDirectory']();
 }

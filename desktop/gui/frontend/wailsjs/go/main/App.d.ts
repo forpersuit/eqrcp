@@ -60,6 +60,8 @@ export function SelectFiles():Promise<Array<string>>;
 
 export function SelectLogDirectory():Promise<string>;
 
+export function GetLogFiles():Promise<Array<any>>;
+
 export function SelectReceiveDirectory():Promise<string>;
 
 export function SelectShareDirectory():Promise<string>;
