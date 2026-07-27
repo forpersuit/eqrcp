@@ -251,3 +251,22 @@ sequenceDiagram
   - **用户侧 (Wails / Web 端)**：在传输中或设置面板中点击“连接状态”，弹框显示当前任务的实时 WebRTC P2P 物理链路图解。
   - **管理端 (Portal / Admin 侧)**：Cloudflare Worker 在房间销毁时可异步上报不含隐私的元数据日志（如 `ice_status: "connected"`, `rtt: 45ms`, `duration: 120s`），供管理后台在可视化大屏上分析全网 P2P 打洞成功率。
 
+---
+
+## 8. 全球跨国 P2P 支持与 3D 地球连线大屏 (Global Cross-Border & 3D Connection Globe)
+
+### 8.1 跨国 P2P 通信可行性分析
+EQT Pro v1 架构**原生完全支持全球跨国 P2P 通信**（例如中国 PC 与美国手机直连）：
+1. **网络层连通性**：只要跨国双端均可从公共 STUN 探测到自身的公网 Candidate 地址，UDP P2P 通道即可完成直接打洞，数据无需经过第三方中转。
+2. **Cloudflare 300+ 边缘信令加速**：信令服务器 `signal.eqt.net.im` 运行在 Cloudflare Serverless 边缘节点，即使跨国的双方相距万里，信令握手也可以在 20~50ms 内瞬间完成。
+3. **国内外兼顾的多 STUN 池**：混合提供了国内（腾讯 `stun.qq.com`、小米 `stun.miwifi.com`）与海外（Cloudflare `stun.cloudflare.com`、Google `stun.l.google.com`）STUN 节点，确保跨国极高的打洞探针成功率。
+
+### 8.2 地理位置解析与 3D 连线大屏 (`p2p-globe.html`)
+管理后台可调用 `GET /api/v1/p2p/admin/connections` 接口，Cloudflare 会在 HTTP 头部自动注入以下无感地理元数据：
+- `CF-Connecting-IP` (客户端 IP)
+- `CF-IPCountry` (国家/地区代码，如 `CN`, `US`, `JP`, `DE`)
+- `cf.latitude` / `cf.longitude` (三维空间经纬度坐标)
+
+前端大屏通过 `cloudflare/eqt-website/p2p-globe.html` 渲染一个基于 Canvas 的 **3D 旋转星空物理地球**，在地球表面实时绘制跨国 P2P 连接双方之间动态高亮的 **流光抛物线弧线 (P2P Glowing Arcs)**，并在侧边栏展示当前全网所有的跨国会话列表。
+
+

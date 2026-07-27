@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EQT Pro 全球 P2P 直连实时 3D 地球监控大屏</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #030712;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      display: flex;
+      height: 100vh;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at center, #0b1528 0%, #030712 100%);
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .sidebar {
+      width: 360px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid rgba(51, 65, 85, 0.6);
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+    .header {
+      margin-bottom: 20px;
+    }
+    .header h2 {
+      font-size: 18px;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header p {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .stat-badge {
+      display: inline-block;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .conn-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .conn-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+    }
+    .conn-card.cross-border {
+      border-color: #38bdf8;
+      background: rgba(14, 165, 233, 0.1);
+    }
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    .flag-pair {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .geo-details {
+      font-size: 11px;
+      color: #94a3b8;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .cross-tag {
+      background: #0284c7;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .overlay-title {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      pointer-events: none;
+    }
+    .overlay-title h1 {
+      font-size: 22px;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .overlay-title p {
+      font-size: 12px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container">
+    <div class="overlay-title">
+      <h1>🌐 EQT Pro 全球 P2P 直连实时拓扑 3D 地球大屏</h1>
+      <p>Real-time Global P2P Connection Topology & Cross-Border Arcs</p>
+    </div>
+    <canvas id="globe-canvas"></canvas>
+  </div>
+
+  <div class="sidebar">
+    <div class="header">
+      <h2>🌐 实时连接监控 (Live Connections)</h2>
+      <p>基于 Cloudflare Serverless 信令节点 IP 归属与经纬度实时映射</p>
+      <div class="stat-badge" id="total-badge">活跃会话: 0 个</div>
+    </div>
+
+    <div class="conn-list" id="conn-list">
+      <!-- Connection cards will be injected dynamically -->
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('globe-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, radius;
+    let rotation = 0;
+
+    function resize() {
+      width = canvas.width = canvas.parentElement.clientWidth;
+      height = canvas.height = canvas.parentElement.clientHeight;
+      radius = Math.min(width, height) * 0.35;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Convert Lat/Lon to 3D Cartesian -> 2D Projected Screen Coordinates
+    function project(lat, lon, rot) {
+      const radLat = (lat * Math.PI) / 180;
+      const radLon = ((lon + rot) * Math.PI) / 180;
+      const x = radius * Math.cos(radLat) * Math.sin(radLon);
+      const y = -radius * Math.sin(radLat);
+      const z = radius * Math.cos(radLat) * Math.cos(radLon);
+      return {
+        x: width / 2 + x,
+        y: height / 2 + y,
+        visible: z > 0
+      };
+    }
+
+    // Sample mock connections for demonstration
+    let activeConnections = [
+      {
+        room_id: 'r8k3m9p1',
+        is_cross_border: true,
+        host: { country: 'CN', ip: '114.114.xxx.xxx', lat: 31.23, lon: 121.47 }, // Shanghai
+        client: { country: 'US', ip: '8.8.xxx.xxx', lat: 37.77, lon: -122.41 } // San Francisco
+      },
+      {
+        room_id: 'q2m4k8p9',
+        is_cross_border: true,
+        host: { country: 'JP', ip: '210.140.xxx.xxx', lat: 35.67, lon: 139.65 }, // Tokyo
+        client: { country: 'DE', ip: '82.165.xxx.xxx', lat: 52.52, lon: 13.40 } // Berlin
+      }
+    ];
+
+    function drawGlobe() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw Earth Sphere Body
+      const gradient = ctx.createRadialGradient(
+        width / 2 - radius * 0.3, height / 2 - radius * 0.3, radius * 0.1,
+        width / 2, height / 2, radius
+      );
+      gradient.addColorStop(0, '#1e293b');
+      gradient.addColorStop(0.8, '#0f172a');
+      gradient.addColorStop(1, '#020617');
+
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw Latitude & Longitude Grids
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.4)';
+      ctx.lineWidth = 1;
+      for (let lat = -60; lat <= 60; lat += 30) {
+        ctx.beginPath();
+        for (let lon = -180; lon <= 180; lon += 10) {
+          const p = project(lat, lon, rotation);
+          if (p.visible) {
+            if (lon === -180) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // Draw P2P Connection Arc Lines & Glowing Nodes
+      activeConnections.forEach(conn => {
+        if (!conn.host || !conn.client) return;
+        const pHost = project(conn.host.lat, conn.host.lon, rotation);
+        const pClient = project(conn.client.lat, conn.client.lon, rotation);
+
+        if (pHost.visible || pClient.visible) {
+          // Draw Glowing Arc Curve
+          const midX = (pHost.x + pClient.x) / 2;
+          const midY = (pHost.y + pClient.y) / 2 - radius * 0.25;
+
+          ctx.beginPath();
+          ctx.moveTo(pHost.x, pHost.y);
+          ctx.quadraticCurveTo(midX, midY, pClient.x, pClient.y);
+          ctx.strokeStyle = conn.is_cross_border ? '#38bdf8' : '#4ade80';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = conn.is_cross_border ? '#0284c7' : '#22c55e';
+          ctx.shadowBlur = 10;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          // Draw Host Node
+          if (pHost.visible) {
+            ctx.beginPath();
+            ctx.arc(pHost.x, pHost.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#38bdf8';
+            ctx.fill();
+          }
+
+          // Draw Client Node
+          if (pClient.visible) {
+            ctx.beginPath();
+            ctx.arc(pClient.x, pClient.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#818cf8';
+            ctx.fill();
+          }
+        }
+      });
+
+      rotation += 0.3;
+      requestAnimationFrame(drawGlobe);
+    }
+
+    function updateSidebar() {
+      const listEl = document.getElementById('conn-list');
+      const badgeEl = document.getElementById('total-badge');
+      badgeEl.innerText = `活跃会话: ${activeConnections.length} 个`;
+
+      listEl.innerHTML = activeConnections.map(c => `
+        <div class="conn-card ${c.is_cross_border ? 'cross-border' : ''}">
+          <div class="card-title">
+            <span class="flag-pair">🌐 ${c.host.country} ➔ ${c.client.country}</span>
+            ${c.is_cross_border ? '<span class="cross-tag">跨国直连</span>' : '<span class="cross-tag" style="background:#16a34a">同国直连</span>'}
+          </div>
+          <div class="geo-details">
+            <div><strong>Host:</strong> ${c.host.ip} (${c.host.country})</div>
+            <div><strong>Client:</strong> ${c.client.ip} (${c.client.country})</div>
+            <div><strong>Room ID:</strong> <code>${c.room_id}</code></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    drawGlobe();
+    updateSidebar();
+  </script>
+</body>
+</html>

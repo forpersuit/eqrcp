@@ -3,6 +3,13 @@ export interface Env {
   CORS_ORIGIN?: string;
 }
 
+interface DeviceGeo {
+  ip: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
 interface RoomState {
   id: string;
   licenseCode: string;
@@ -10,6 +17,8 @@ interface RoomState {
   clientToken: string;
   createdAt: number;
   expiresAt: number;
+  hostGeo: DeviceGeo;
+  clientGeo?: DeviceGeo;
   signals: SignalItem[];
 }
 
@@ -30,6 +39,36 @@ const DEFAULT_STUN_SERVERS = [
   'stun:stun.cloudflare.com:3478',
   'stun:stun.l.google.com:19302'
 ];
+
+// Fallback lat/lon dictionary for countries
+const COUNTRY_COORDS: Record<string, [number, number]> = {
+  CN: [35.8617, 104.1954],
+  US: [37.0902, -95.7129],
+  JP: [36.2048, 138.2529],
+  DE: [51.1657, 10.4515],
+  UK: [55.3781, -3.4360],
+  GB: [55.3781, -3.4360],
+  FR: [46.2276, 2.2137],
+  SG: [1.3521, 103.8198],
+  HK: [22.3193, 114.1694],
+  AU: [-25.2744, 133.7751]
+};
+
+function getGeoFromRequest(request: Request): DeviceGeo {
+  const ip = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  const country = request.headers.get('CF-IPCountry') || 'CN';
+  const cf: any = (request as any).cf || {};
+  let lat = cf.latitude ? parseFloat(cf.latitude) : 0;
+  let lon = cf.longitude ? parseFloat(cf.longitude) : 0;
+
+  if (lat === 0 && lon === 0) {
+    const fallback = COUNTRY_COORDS[country.toUpperCase()] || [35.8617, 104.1954];
+    lat = fallback[0];
+    lon = fallback[1];
+  }
+
+  return { ip, country, lat, lon };
+}
 
 function handleCORS(request: Request): Headers {
   const headers = new Headers();
@@ -84,16 +123,35 @@ export default {
           status: 'ok',
           service: 'eqt-p2p-signal',
           active_rooms: activeRooms.size,
+          global_regions_supported: true,
           timestamp: new Date().toISOString()
         });
       }
 
-      // 2. POST /api/v1/p2p/room/create — Create room with Pro tier verification
+      // 2. Admin 3D Globe API: GET /api/v1/p2p/admin/connections
+      if (request.method === 'GET' && path === '/api/v1/p2p/admin/connections') {
+        const connections = [];
+        for (const room of activeRooms.values()) {
+          connections.push({
+            room_id: room.id,
+            created_at: room.createdAt,
+            expires_at: room.expiresAt,
+            host: room.hostGeo,
+            client: room.clientGeo || null,
+            is_cross_border: room.clientGeo ? (room.hostGeo.country !== room.clientGeo.country) : false
+          });
+        }
+        return jsonResponse({
+          code: 200,
+          total_active: connections.length,
+          connections
+        });
+      }
+
+      // 3. POST /api/v1/p2p/room/create — Create room with Pro tier verification & Geo IP extraction
       if (request.method === 'POST' && path === '/api/v1/p2p/room/create') {
         const licenseCode = request.headers.get('X-License-Code') || '';
         const deviceId = request.headers.get('X-Device-ID') || '';
-
-        // Verification: If testing or mock header provided
         const isTesting = request.headers.get('X-Test-Mock') === 'true';
 
         if (!isTesting) {
@@ -101,7 +159,6 @@ export default {
             return jsonResponse({ code: 400, error: 'missing_license_code', message: 'Header X-License-Code is required' }, 400);
           }
 
-          // Verify License in Cloudflare D1
           const stmt = env.DB.prepare('SELECT license_code, tier, status, expires_at FROM licenses WHERE license_code = ?');
           const lic = await stmt.bind(licenseCode).first<any>();
 
@@ -125,6 +182,7 @@ export default {
           }
         }
 
+        const hostGeo = getGeoFromRequest(request);
         const roomId = generateRandomString(8);
         const hostToken = 'tok_host_' + generateRandomString(16);
         const clientToken = 'tok_client_' + generateRandomString(16);
@@ -138,6 +196,7 @@ export default {
           clientToken,
           createdAt: now,
           expiresAt: now + ttl,
+          hostGeo,
           signals: []
         };
 
@@ -151,12 +210,13 @@ export default {
             host_token: hostToken,
             client_token: clientToken,
             expires_at: Math.floor((now + ttl) / 1000),
+            host_geo: hostGeo,
             stun_servers: DEFAULT_STUN_SERVERS
           }
         });
       }
 
-      // 3. POST /api/v1/p2p/room/join — Join existing room
+      // 4. POST /api/v1/p2p/room/join — Join existing room & Client Geo IP extraction
       if (request.method === 'POST' && path === '/api/v1/p2p/room/join') {
         const body: any = await request.json().catch(() => ({}));
         const roomId = body.room_id || '';
@@ -166,17 +226,22 @@ export default {
         }
 
         const room = activeRooms.get(roomId)!;
+        room.clientGeo = getGeoFromRequest(request);
+
         return jsonResponse({
           code: 200,
           data: {
             room_id: roomId,
             client_token: room.clientToken,
+            host_geo: room.hostGeo,
+            client_geo: room.clientGeo,
+            is_cross_border: room.hostGeo.country !== room.clientGeo.country,
             stun_servers: DEFAULT_STUN_SERVERS
           }
         });
       }
 
-      // 4. POST /api/v1/p2p/signal/push — Push SDP / ICE Candidate signal
+      // 5. POST /api/v1/p2p/signal/push — Push SDP / ICE Candidate signal
       if (request.method === 'POST' && path === '/api/v1/p2p/signal/push') {
         const roomToken = request.headers.get('X-Room-Token') || '';
         const body: any = await request.json().catch(() => ({}));
@@ -209,7 +274,7 @@ export default {
         return jsonResponse({ code: 200, message: 'signal_buffered', signal_id: signalId });
       }
 
-      // 5. GET /api/v1/p2p/signal/poll — Poll pending signals
+      // 6. GET /api/v1/p2p/signal/poll — Poll pending signals
       if (request.method === 'GET' && path === '/api/v1/p2p/signal/poll') {
         const roomToken = request.headers.get('X-Room-Token') || '';
         const roomId = url.searchParams.get('room_id') || '';
@@ -230,7 +295,6 @@ export default {
           return jsonResponse({ code: 401, error: 'unauthorized_token', message: 'Invalid X-Room-Token' }, 401);
         }
 
-        // Return signals sent by the OTHER peer
         const targetSender = myRole === 'host' ? 'client' : 'host';
         const pendingSignals = room.signals.filter(s => s.sender === targetSender && s.id > since);
 
@@ -244,7 +308,7 @@ export default {
         });
       }
 
-      // 6. DELETE /api/v1/p2p/room — Destroy room mailbox
+      // 7. DELETE /api/v1/p2p/room — Destroy room mailbox
       if (request.method === 'DELETE' && path === '/api/v1/p2p/room') {
         const roomToken = request.headers.get('X-Room-Token') || '';
         const roomId = url.searchParams.get('room_id') || '';
