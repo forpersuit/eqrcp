@@ -30,14 +30,16 @@
 ---
 
 ### 📌 Milestone 2: Go 客户端 WebRTC P2P 引擎开发 (`pkg/server/p2p`)
-- [ ] **引入 pion/webrtc 依赖与包结构定义**
-  - 新增 `pkg/server/p2p` 目录，封装 PeerConnection 状态机。
-- [ ] **客户端信令客户端 (`p2p/signaling.go`)**
-  - 实现向 `signal.eqt.net.im` 发起 Room 创建、推拉 Offer/Answer 的 HTTP/WebSocket 通信逻辑。
-- [ ] **STUN 地址收集与 ICE 打洞**
-  - 配置 `stun:stun.cloudflare.com:3478` 与 `stun:stun.l.google.com:19302`。
-- [ ] **DataChannel 与既有 HTTP/WS 服务桥接**
-  - 将通过 WebRTC DataChannel 接收到的数据流桥接导入既有的 `server` 传输处理逻辑中。
+- [x] **引入 pion/webrtc 依赖与包结构定义**
+  - 引入 `github.com/pion/webrtc/v3` 库，新增 `pkg/server/p2p` 包封转 PeerConnection 状态机。
+- [x] **客户端信令客户端 (`p2p/signaling.go`)**
+  - 实现向 `signal.eqt.net.im` 发起 Room 创建、推拉 Offer/Answer/Candidates 及销毁房间的通信 SDK。
+- [x] **STUN 地址收集与 ICE 打洞**
+  - 集成兼顾国内与海外的多重高可用免费 STUN 候选列表（腾讯、小米、Cloudflare、Google）。
+- [x] **DataChannel 与既有 HTTP/WS 服务桥接 (`p2p/datachannel.go`)**
+  - 实现 `DataChannelConn`（封装 `io.ReadWriteCloser`），让 WebRTC DataChannel 支持透明双向字节流传输。
+- [x] **Go 单元测试覆盖 (`p2p/p2p_test.go`)**
+  - 编写并运行 `go test ./pkg/server/p2p/...` 验证状态切换与 15s 打洞超时机制，测试 100% 通过。
 
 ---
 
