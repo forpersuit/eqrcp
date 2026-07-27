@@ -4948,6 +4948,12 @@ function renderBusy() {
 }
 
 async function removePath(event) {
+    const isFreeQuotaExhausted = !state.status?.isPaid && ((state.status?.usedTransfers || 0) >= 5);
+    if (isFreeQuotaExhausted) {
+        state.shareLimitNotice = t('free_over_quota_cannot_remove') || '免费额度已用完，常规 Free 模式下不可单独移除文件。如需更换传输文件请点击“清空”。';
+        render();
+        return;
+    }
     const index = Number(event.currentTarget.dataset.pathIndex);
     state.sharePaths = state.sharePaths.filter((_, itemIndex) => itemIndex !== index);
     clearMessages();
@@ -4964,6 +4970,12 @@ async function removePath(event) {
 
 async function addSharePaths(paths) {
     if (!paths || paths.length === 0) return;
+    const isFreeQuotaExhausted = !state.status?.isPaid && ((state.status?.usedTransfers || 0) >= 5);
+    if (isFreeQuotaExhausted && state.sharePaths.length > 0) {
+        state.shareLimitNotice = t('free_over_quota_cannot_add') || '免费额度已用完，常规 Free 模式下已加载文件不可追加修改。如需更改请先点击“清空”。';
+        render();
+        return;
+    }
     try {
         const infos = await GetFileInfos(paths.filter(Boolean));
         if (infos && infos.length > 0) {
