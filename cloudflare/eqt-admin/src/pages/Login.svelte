@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { markAccessAuthenticated } from '../lib/auth';
+  import { markAccessAuthenticated, accessLoginUrl } from '../lib/auth';
   import { adminFetch } from '../lib/api';
+
+  let { onLoginSuccess }: { onLoginSuccess?: () => void } = $props();
 
   let loading = $state(false);
   let errorMessage = $state('');
@@ -10,17 +12,25 @@
     probing = true;
     errorMessage = '';
     try {
-      await adminFetch('/api/v1/admin/error-logs?limit=1');
+      await adminFetch('/api/v1/admin/error-logs?limit=1', { skipAutoRedirect: true });
       markAccessAuthenticated();
-      window.location.reload();
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        window.location.reload();
+      }
     } catch (err: any) {
       errorMessage =
         err.message ||
-        '未能通过 Cloudflare Access 鉴权。请确认已用 admin@eqt.net.im 登录 Access，且 Worker 已配置 CF_ACCESS_*。';
+        '未能通过 Cloudflare Access 鉴权。请确认已用授权账号登录 Access，或重新点击下方按钮登录。';
     } finally {
       probing = false;
       loading = false;
     }
+  }
+
+  function handleReLogin() {
+    window.location.href = accessLoginUrl();
   }
 
   queueMicrotask(() => {
@@ -44,21 +54,30 @@
 
     <div class="access-panel">
       <p class="access-desc">
-        通过 <strong>Cloudflare Access</strong> 鉴权（仅
-        <code>admin@eqt.net.im</code>）。边缘登录成功后将自动校验 API JWT。
+        通过 <strong>Cloudflare Access</strong> 鉴权防护。边缘登录成功后将自动校验 API JWT 权限。
       </p>
-      <button
-        type="button"
-        class="btn btn-primary login-btn"
-        disabled={probing || loading}
-        onclick={() => probeAccess()}
-      >
-        {probing ? '正在校验 Access 身份…' : '继续进入控制台'}
-      </button>
+      
+      <div class="actions">
+        <button
+          type="button"
+          class="btn btn-primary login-btn"
+          disabled={probing || loading}
+          onclick={() => probeAccess()}
+        >
+          {probing ? '正在校验 Access 身份…' : '校验身份并进入控制台'}
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-secondary relogin-btn"
+          onclick={handleReLogin}
+        >
+          重新登录 (Cloudflare Access)
+        </button>
+      </div>
+
       <p class="hint">
-        若反复失败：检查 Zero Trust Application / AUD、Worker
-        <code>CF_ACCESS_TEAM_DOMAIN</code> + <code>CF_ACCESS_AUD</code>，以及 Pages 同源
-        <code>/api</code> 反代是否部署。
+        若校验失败：请确认已用管理员账号登录 Access。如有必要，可点击“重新登录”跳转 Cloudflare 边缘鉴权。
       </p>
     </div>
   </div>
@@ -133,15 +152,10 @@
   }
 
   .hint {
-    margin-top: 1rem;
+    margin-top: 1.25rem;
     font-size: 0.75rem;
     color: var(--text-muted);
     line-height: 1.45;
-  }
-
-  .hint code,
-  .access-desc code {
-    font-size: 0.7rem;
-    color: #c4b5fd;
+    text-align: center;
   }
 </style>

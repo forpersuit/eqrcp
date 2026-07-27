@@ -16,10 +16,11 @@ function resolveApiBase(): string {
 
 export interface ApiOptions extends RequestInit {
   params?: Record<string, string>;
+  skipAutoRedirect?: boolean;
 }
 
 export async function adminFetch<T = any>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  const { params, headers: optHeaders, ...fetchInit } = options;
+  const { params, headers: optHeaders, skipAutoRedirect, ...fetchInit } = options;
   const API_BASE = resolveApiBase();
 
   let urlStr = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
@@ -47,11 +48,8 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     data?.code === 'ACCESS_JWT_INVALID'
   ) {
     clearAccessSession();
-    const loginUrl = accessLoginUrl();
-    if (loginUrl && !window.location.href.includes('login')) {
-      window.location.href = loginUrl;
-    } else {
-      window.location.reload();
+    if (!skipAutoRedirect && window.location.pathname !== '/' && window.location.pathname !== '') {
+      window.location.href = window.location.origin + '/';
     }
     throw new Error('Cloudflare Access 会话无效或未登录');
   }

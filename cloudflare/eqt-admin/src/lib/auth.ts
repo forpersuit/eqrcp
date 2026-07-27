@@ -16,21 +16,15 @@ export function isAuthenticated(): boolean {
   return sessionStorage.getItem(ACCESS_OK_KEY) === '1';
 }
 
-/** Access logout: send user to CF Access logout URL if team domain configured. */
-export function accessLogoutUrl(): string | null {
-  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'persuit.cloudflareaccess.com')
-    .replace(/^https?:\/\//, '')
-    .replace(/\/$/, '');
-  if (!team) return null;
+/** Access logout: send user to CF Access logout endpoint */
+export function accessLogoutUrl(): string {
   const returnTo = encodeURIComponent(window.location.origin + '/');
-  return `https://${team}/cdn-cgi/access/logout?returnTo=${returnTo}`;
+  return `${window.location.origin}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
 
 /** Access login: send user directly to CF Access login endpoint when JWT is missing or invalid. */
 export function accessLoginUrl(): string {
-  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'persuit.cloudflareaccess.com')
-    .replace(/^https?:\/\//, '')
-    .replace(/\/$/, '');
   const returnTo = encodeURIComponent(window.location.origin + '/');
-  return `https://${team}/cdn-cgi/access/login/${window.location.hostname}?returnTo=${returnTo}`;
+  return `${window.location.origin}/cdn-cgi/access/login?returnTo=${returnTo}`;
 }
+

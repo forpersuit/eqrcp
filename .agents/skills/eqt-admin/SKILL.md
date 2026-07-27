@@ -98,6 +98,7 @@ After every update and deployment to the Admin system, perform an automated E2E 
 ## 4. Operational Checklist & Best Practices
 
 - **Zero Security Compromise**: Never delete or weaken Cloudflare Access JWT validation or authorization checks in `functions/api/[[path]].ts` or `src/lib/api.ts`.
+- **Cloudflare Access Same-Origin Endpoints**: Use same-origin `/cdn-cgi/access/login` and `/cdn-cgi/access/logout` endpoints for Access authentication redirects rather than hardcoding external team domains to prevent 404 / `Unable to find Access organization` errors.
 - **In-App Notifications**: Use non-blocking banners or in-app toasts for warnings; avoid browser `alert()` or `prompt()`.
 - **Procedural Canvas Fallback**: Maintain procedural canvas fallback textures for `p2p-globe.html` so the 3D globe never turns black during external CDN outages.
 - **DoD Enforcement**: A task is only complete when:
@@ -105,3 +106,4 @@ After every update and deployment to the Admin system, perform an automated E2E 
   2. Deployment is executed (`wrangler pages deploy`).
   3. Git changes are committed and pushed via `scripts/git-push-smart.sh`.
   4. Chrome MCP DevTools verification is confirmed.
+

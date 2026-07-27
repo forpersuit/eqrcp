@@ -28,7 +28,7 @@ npm run dev                  # 默认 http://localhost:3001
 | 变量 | 说明 |
 | :--- | :--- |
 | `VITE_API_BASE` | 生产 Access：**留空**（同源 `/api`）。本地可指向 `http://127.0.0.1:8787`。 |
-| `VITE_CF_ACCESS_TEAM_DOMAIN` | Access 登出用 team domain（如 `persuit.cloudflareaccess.com`）。 |
+| `VITE_CF_ACCESS_TEAM_DOMAIN` | Access 登出用 team domain（如 `sageai.cloudflareaccess.com`）。 |
 | `VITE_CF_ACCESS_TEAM_DOMAIN` | 如 `xxxx.cloudflareaccess.com`，用于 Access 登出。 |
 
 **不要**把真实 secret 写入仓库；secret 仅 secret 模式下存 `sessionStorage`。

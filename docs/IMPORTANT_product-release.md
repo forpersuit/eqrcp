@@ -55,7 +55,7 @@
 | R3 | **密钥明文（债 D9）** | SMTP / Webhook / TG token 曾在 git 与 toml 明文 | 迁 `wrangler secret`；**轮换**已暴露口令 | **[x] 2026-07-25** 见 §2.2 |
 | R4 | **R2 更新与安装包** | 客户端更新依赖 R2，无则 503 | 验收：官网下载、桌面检查更新、安装签名均走生产 CDN | [ ] |
 | R5 | **条款 / 定价页与代码一致** | 黑名单 ≥3 / 365 天、退款门禁、source 已写代码 | 扫 `terms` / `refund` / `pricing` 文案 | **[x] 2026-07-25** 见 §2.3 |
-| R6 | **Admin Access 名单** | Admin API 仅 JWT；默认允许 `admin@eqt.net.im` | 确认生产 Access 应用、AUD、登出 team domain（`persuit.cloudflareaccess.com`） | [ ] |
+| R6 | **Admin Access 名单** | Admin API 仅 JWT；默认允许 `admin@eqt.net.im` | 确认生产 Access 应用、AUD、登出 team domain（`sageai.cloudflareaccess.com`） | [ ] |
 | R7 | **一次端到端验收（真人）** | 文档多、环境多，易漏配置 | 见 §5 验收脚本 | [ ] |
 
 ### 2.1 产品口径（发布前拍板，写进 FAQ 即可，不必改代码）

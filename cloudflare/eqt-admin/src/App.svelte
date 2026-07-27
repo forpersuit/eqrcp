@@ -16,12 +16,15 @@
 
   function handleLogout() {
     clearAccessSession();
+    authed = false;
     const accessOut = accessLogoutUrl();
     if (accessOut) {
       window.location.href = accessOut;
-      return;
     }
-    authed = false;
+  }
+
+  function handleLoginSuccess() {
+    authed = true;
   }
 
   function navigateTo(tab: AdminTab) {
@@ -29,8 +32,8 @@
   }
 </script>
 
-{#if false}
-  <Login />
+{#if !authed}
+  <Login onLoginSuccess={handleLoginSuccess} />
 {:else}
   <div class="admin-layout">
     <aside class="sidebar card">
