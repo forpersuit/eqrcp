@@ -58,8 +58,7 @@
     .color-cross { background: linear-gradient(90deg, #a855f7, #ec4899); }
     .color-domestic { background: linear-gradient(90deg, #38bdf8, #22c55e); }
   </style>
-  <!-- Load Three.js & Globe.gl with CDN fallbacks -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <!-- Load Globe.gl via high-speed CDN -->
   <script src="https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js"></script>
 </head>
 <body>
@@ -96,14 +95,6 @@
       'CA': { lat: 56.1304, lng: -106.3468, name: '加拿大' },
       'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' }
     };
-
-    // Default ambient node connections for preview when active connections are 0
-    const AMBIENT_CONNECTIONS = [
-      { host: { country: 'CN', ip: '114.114.x.x' }, client: { country: 'US', ip: '8.8.x.x' }, is_cross_border: true },
-      { host: { country: 'CN', ip: '120.24.x.x' }, client: { country: 'JP', ip: '210.140.x.x' }, is_cross_border: true },
-      { host: { country: 'JP', ip: '210.140.x.x' }, client: { country: 'DE', ip: '82.165.x.x' }, is_cross_border: true },
-      { host: { country: 'HK', ip: '203.0.x.x' }, client: { country: 'SG', ip: '118.189.x.x' }, is_cross_border: true }
-    ];
 
     // Generate a high-resolution procedural Earth texture canvas for 3D Globe fallback
     function generateProceduralEarthTexture() {
@@ -253,7 +244,7 @@
     }
 
     function renderConnections(conns) {
-      const activeList = (conns && conns.length > 0) ? conns : AMBIENT_CONNECTIONS;
+      const activeList = Array.isArray(conns) ? conns : [];
       
       if (isFallback2D) {
         if (window.update2DConnections) window.update2DConnections(activeList);

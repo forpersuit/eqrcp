@@ -36,13 +36,6 @@
     'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' }
   };
 
-  const AMBIENT_CONNECTIONS = [
-    { host: { country: 'CN', ip: '114.114.x.x' }, client: { country: 'US', ip: '8.8.x.x' }, is_cross_border: true },
-    { host: { country: 'CN', ip: '120.24.x.x' }, client: { country: 'JP', ip: '210.140.x.x' }, is_cross_border: true },
-    { host: { country: 'JP', ip: '210.140.x.x' }, client: { country: 'DE', ip: '82.165.x.x' }, is_cross_border: true },
-    { host: { country: 'HK', ip: '203.0.x.x' }, client: { country: 'SG', ip: '118.189.x.x' }, is_cross_border: true }
-  ];
-
   let globeInstance: any = null;
   let isFallback2D = $state(false);
   let canvas2D: HTMLCanvasElement | null = null;
@@ -164,15 +157,23 @@
   async function initGlobeEngine() {
     if (!globeContainerRef) return;
     try {
-      const loadPromise = Promise.all([
-        loadScript('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js'),
-        loadScript('https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js')
-      ]);
+      const loadPromise = loadScript('https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js');
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('CDN timeout')), 3000));
       await Promise.race([loadPromise, timeoutPromise]).catch(() => {});
 
       // @ts-ignore
       if (typeof window.Globe === 'function') {
+        // Suppress deprecated useLegacyLights warning from internal Globe.gl initialization
+        // @ts-ignore
+        if (window.THREE && window.THREE.WebGLRenderer) {
+          // @ts-ignore
+          Object.defineProperty(window.THREE.WebGLRenderer.prototype, 'useLegacyLights', {
+            get() { return false; },
+            set() {},
+            configurable: true
+          });
+        }
+
         const textureUrl = generateProceduralEarthTexture();
         // @ts-ignore
         globeInstance = window.Globe()
@@ -223,7 +224,7 @@
   }
 
   function renderGlobeData(conns: P2PConnection[]) {
-    const activeList = (conns && conns.length > 0) ? conns : AMBIENT_CONNECTIONS;
+    const activeList = Array.isArray(conns) ? conns : [];
 
     if (isFallback2D) {
       return;
@@ -313,7 +314,7 @@
         }
       }
 
-      const activeList = (connections && connections.length > 0) ? connections : AMBIENT_CONNECTIONS;
+      const activeList = Array.isArray(connections) ? connections : [];
       activeList.forEach((c: any) => {
         const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 35.8, lng: 104.1, name: '中国' };
         const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.0, lng: -95.7, name: '美国' }) : null;
