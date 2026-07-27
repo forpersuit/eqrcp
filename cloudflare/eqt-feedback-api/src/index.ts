@@ -54,6 +54,123 @@ export default {
       }
     }
 
+    // 2.5 Admin API Routing: GET /api/v1/admin/feedbacks
+    if (request.method === "GET" && (url.pathname === "/api/v1/admin/feedbacks" || url.pathname === "/admin/feedbacks")) {
+      try {
+        const category = url.searchParams.get("category");
+        const status = url.searchParams.get("status");
+        const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+        const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+
+        let countSql = "SELECT COUNT(*) as total FROM feedbacks WHERE 1=1";
+        let querySql = `SELECT id, category, contact, message, image_url, timestamp, client_version, client_os, created_at, COALESCE(status, 'unread') as status FROM feedbacks WHERE 1=1`;
+        const params: any[] = [];
+
+        if (category && category !== "all") {
+          countSql += " AND category = ?";
+          querySql += " AND category = ?";
+          params.push(category);
+        }
+
+        if (status && status !== "all") {
+          countSql += " AND COALESCE(status, 'unread') = ?";
+          querySql += " AND COALESCE(status, 'unread') = ?";
+          params.push(status);
+        }
+
+        querySql += " ORDER BY id DESC LIMIT ? OFFSET ?";
+        
+        const countStmt = env.DB.prepare(countSql);
+        const countResult: any = params.length > 0 ? await countStmt.bind(...params).first() : await countStmt.first();
+        const total = countResult?.total || 0;
+
+        const queryParams = [...params, limit, offset];
+        const { results } = await env.DB.prepare(querySql).bind(...queryParams).all();
+
+        return new Response(JSON.stringify({
+          code: 200,
+          success: true,
+          total,
+          feedbacks: results || []
+        }), {
+          status: 200,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Content-Type": "application/json"
+          }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 2.6 Admin API Routing: DELETE /api/v1/admin/feedbacks/:id
+    if (request.method === "DELETE" && (url.pathname.startsWith("/api/v1/admin/feedbacks/") || url.pathname.startsWith("/admin/feedbacks/"))) {
+      try {
+        const parts = url.pathname.split("/");
+        const id = parts[parts.length - 1];
+        if (!id || isNaN(Number(id))) {
+          return new Response(JSON.stringify({ error: "Invalid feedback ID" }), {
+            status: 400,
+            headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          });
+        }
+
+        await env.DB.prepare("DELETE FROM feedbacks WHERE id = ?").bind(id).run();
+
+        return new Response(JSON.stringify({
+          code: 200,
+          success: true,
+          message: "Feedback deleted successfully"
+        }), {
+          status: 200,
+          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 2.7 Admin API Routing: PATCH /api/v1/admin/feedbacks/:id
+    if (request.method === "PATCH" && (url.pathname.startsWith("/api/v1/admin/feedbacks/") || url.pathname.startsWith("/admin/feedbacks/"))) {
+      try {
+        const parts = url.pathname.split("/");
+        const id = parts[parts.length - 1];
+        const body: any = await request.json().catch(() => ({}));
+        const newStatus = body.status || 'resolved';
+
+        if (!id || isNaN(Number(id))) {
+          return new Response(JSON.stringify({ error: "Invalid feedback ID" }), {
+            status: 400,
+            headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          });
+        }
+
+        await env.DB.prepare("UPDATE feedbacks SET status = ? WHERE id = ?").bind(newStatus, id).run();
+
+        return new Response(JSON.stringify({
+          code: 200,
+          success: true,
+          message: "Feedback status updated",
+          status: newStatus
+        }), {
+          status: 200,
+          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+        });
+      }
+    }
+
     // 3. Routing: POST /goal or POST /
     if (request.method === "POST" && (url.pathname === "/goal" || url.pathname === "/")) {
       try {

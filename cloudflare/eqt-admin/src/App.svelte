@@ -7,6 +7,8 @@
   import Licenses from './pages/Licenses.svelte';
   import Blacklist from './pages/Blacklist.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
+  import ProP2P from './pages/ProP2P.svelte';
+  import Feedbacks from './pages/Feedbacks.svelte';
   import type { AdminTab } from './lib/types';
 
   let authed = $state(isAuthenticated());
@@ -43,6 +45,22 @@
           onclick={() => (currentTab = 'overview')}
         >
           <span class="nav-icon">📊</span> 全局概览
+        </button>
+
+        <button
+          class="nav-item"
+          class:active={currentTab === 'pro_p2p'}
+          onclick={() => (currentTab = 'pro_p2p')}
+        >
+          <span class="nav-icon">🚀</span> Pro P2P 直连
+        </button>
+
+        <button
+          class="nav-item"
+          class:active={currentTab === 'feedbacks'}
+          onclick={() => (currentTab = 'feedbacks')}
+        >
+          <span class="nav-icon">💬</span> 用户反馈中心
         </button>
 
         <button
@@ -96,6 +114,10 @@
     <main class="main-content">
       {#if currentTab === 'overview'}
         <Overview onNavigate={navigateTo} />
+      {:else if currentTab === 'pro_p2p'}
+        <ProP2P />
+      {:else if currentTab === 'feedbacks'}
+        <Feedbacks />
       {:else if currentTab === 'audit'}
         <ErrorAudit />
       {:else if currentTab === 'ops'}

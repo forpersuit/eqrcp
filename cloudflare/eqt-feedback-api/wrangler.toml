@@ -22,6 +22,5 @@ TELEGRAM_CHAT_ID = "1880182104"
 # MAIL_SENDER_PASSWORD, FEEDBACK_MAIL_TO as secrets when enabled
 
 routes = [
-  { pattern = "feedback.eqt.net.im/goal", custom_domain = true },
-  { pattern = "feedback.eqt.net.im/image/*", custom_domain = true }
+  { pattern = "feedback.eqt.net.im", custom_domain = true }
 ]

@@ -99,6 +99,16 @@
   <div class="quick-links card">
     <h3>核心业务模块快捷入口</h3>
     <div class="links-grid">
+      <button type="button" class="link-card" onclick={() => go('pro_p2p')}>
+        <h4>🚀 Pro P2P 直连与 3D 拓扑</h4>
+        <p>全球 3D WebRTC 广域网直连信令拓扑大屏、活跃传输房间与跨国节点管控。</p>
+      </button>
+
+      <button type="button" class="link-card" onclick={() => go('feedbacks')}>
+        <h4>💬 用户反馈中心</h4>
+        <p>收集并管理客户端用户提交的 Bug 报告、功能建议与高清附图界面问题。</p>
+      </button>
+
       <button type="button" class="link-card" onclick={() => go('audit')}>
         <h4>🚨 错误审计中心</h4>
         <p>实时排查 D1 system_error_logs，高亮查看 CRITICAL 堆栈与上下文信息。</p>

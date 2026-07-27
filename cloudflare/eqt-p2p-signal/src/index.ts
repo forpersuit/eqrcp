@@ -308,14 +308,15 @@ export default {
         });
       }
 
-      // 7. DELETE /api/v1/p2p/room — Destroy room mailbox
-      if (request.method === 'DELETE' && path === '/api/v1/p2p/room') {
+      // 7. DELETE /api/v1/p2p/room or /api/v1/p2p/admin/room — Destroy room mailbox
+      if (request.method === 'DELETE' && (path === '/api/v1/p2p/room' || path === '/api/v1/p2p/admin/room')) {
         const roomToken = request.headers.get('X-Room-Token') || '';
         const roomId = url.searchParams.get('room_id') || '';
+        const isAdmin = path.includes('/admin/') || request.headers.get('Cf-Access-Jwt-Assertion') !== null;
 
         if (roomId && activeRooms.has(roomId)) {
           const room = activeRooms.get(roomId)!;
-          if (roomToken === room.hostToken || roomToken === room.clientToken) {
+          if (isAdmin || roomToken === room.hostToken || roomToken === room.clientToken) {
             activeRooms.delete(roomId);
             return jsonResponse({ code: 200, message: 'room_destroyed' });
           }

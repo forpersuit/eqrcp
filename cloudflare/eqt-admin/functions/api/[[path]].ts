@@ -10,15 +10,20 @@
  */
 
 const DEFAULT_UPSTREAM = "https://lic.eqt.net.im";
+const DEFAULT_P2P_UPSTREAM = "https://signal.eqt.net.im";
+const DEFAULT_FEEDBACK_UPSTREAM = "https://feedback.eqt.net.im";
 
 interface PagesContext {
   request: Request;
   params: { path?: string | string[] };
-  env?: { DRM_API_UPSTREAM?: string };
+  env?: {
+    DRM_API_UPSTREAM?: string;
+    P2P_API_UPSTREAM?: string;
+    FEEDBACK_API_UPSTREAM?: string;
+  };
 }
 
 export async function onRequest(context: PagesContext): Promise<Response> {
-  const upstreamBase = (context.env?.DRM_API_UPSTREAM || DEFAULT_UPSTREAM).replace(/\/$/, "");
   const reqUrl = new URL(context.request.url);
 
   const pathParam = context.params.path;
@@ -27,6 +32,15 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     : pathParam
       ? String(pathParam)
       : "";
+
+  let upstreamBase = context.env?.DRM_API_UPSTREAM || DEFAULT_UPSTREAM;
+  if (subPath.startsWith("v1/p2p/") || subPath.startsWith("p2p/")) {
+    upstreamBase = context.env?.P2P_API_UPSTREAM || DEFAULT_P2P_UPSTREAM;
+  } else if (subPath.startsWith("v1/feedback/") || subPath.startsWith("feedback/") || subPath.includes("feedbacks")) {
+    upstreamBase = context.env?.FEEDBACK_API_UPSTREAM || DEFAULT_FEEDBACK_UPSTREAM;
+  }
+
+  upstreamBase = upstreamBase.replace(/\/$/, "");
 
   // Incoming: /api/<subPath>  → upstream /api/<subPath>
   const target = `${upstreamBase}/api/${subPath}${reqUrl.search}`;

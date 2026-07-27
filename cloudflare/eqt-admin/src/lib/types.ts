@@ -6,7 +6,49 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health' | 'pro_p2p' | 'feedbacks';
+
+export interface P2PDeviceGeo {
+  ip: string;
+  country: string;
+  lat: number;
+  lon: number;
+}
+
+export interface P2PConnection {
+  room_id: string;
+  created_at: number;
+  expires_at: number;
+  host: P2PDeviceGeo;
+  client: P2PDeviceGeo | null;
+  is_cross_border: boolean;
+}
+
+export interface P2PConnectionsResponse {
+  code: number;
+  total_active: number;
+  connections: P2PConnection[];
+}
+
+export interface FeedbackItem {
+  id: number;
+  category: 'bug' | 'transfer' | 'gui' | 'feature' | 'license' | 'other' | string;
+  contact: string | null;
+  message: string;
+  image_url: string | null;
+  timestamp: string;
+  client_version: string | null;
+  client_os: string | null;
+  status: 'unread' | 'resolved' | 'archived' | string;
+  created_at: string;
+}
+
+export interface FeedbacksResponse {
+  code: number;
+  success: boolean;
+  total: number;
+  feedbacks: FeedbackItem[];
+}
 
 /** GET/POST /api/v1/admin/blacklist */
 export interface ManualBlacklistEntry {

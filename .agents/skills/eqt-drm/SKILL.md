@@ -89,6 +89,13 @@ Wrangler CLI 会优先读取终端环境变量的 `CLOUDFLARE_API_TOKEN`，如�
     - `total_error_logs`: 异常日志积压总量
     - `errors_24h`: 最近 24 小时新增的系统异常日志数
   - 在 `schema.sql` 中为 `buyer_email_hash`, `created_at`, `admin_audit_logs(created_at)` 显式创建 B-Tree 索引，确保在海量库表数据下查询控制在微秒级返回。
+- **多 Worker Cloudflare Pages Proxy 与 Admin 扩展模块 (Multi-Worker Proxy & Admin Modules)**：
+  - `admin.eqt.net.im` 通过 `functions/api/[[path]].ts` 统一代理反向路由：
+    - `/api/v1/p2p/*` 路由至独立 Worker `eqt-p2p-signal` (`signal.eqt.net.im`)。
+    - `/api/v1/admin/feedbacks` 路由至独立 Worker `eqt-feedback-api` (`feedback.eqt.net.im`)。
+    - 其余 `/api/v1/*` 路由至 DRM 主 Worker `eqt-drm-api` (`lic.eqt.net.im`)。
+  - **Pro P2P 直连与 3D 拓扑大屏 (`ProP2P.svelte`)**：全屏集成 3D WebGL 节点动画大屏 (`p2p-globe.html`)，实时展现跨国/同国 P2P 传输弧线及节点坐标，提供强挂房间接口 `DELETE /api/v1/p2p/admin/room`。
+  - **用户反馈管理中心 (`Feedbacks.svelte`)**：`eqt-feedback-api` 追加 `GET /api/v1/admin/feedbacks`（支持分类/状态过滤/分页）、`PATCH /api/v1/admin/feedbacks/:id`（已解决/未处理状态流转）与 `DELETE /api/v1/admin/feedbacks/:id`，前端支持模态框查看 R2 高清截图附件及联系方式检索。
 
 ---
 
