@@ -1182,12 +1182,29 @@
     showLangPanel = false;
   }
 
+  let qrChannelMode: 'lan' | 'wan' = 'lan';
+  let channelNotice = '';
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
   $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme + "&lang=" + currentLang;
-  $: qrImgSrc = `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
+  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}#chat_${token.slice(0, 10)}`;
+  $: activeUrl = (qrChannelMode === 'wan' && isPaid) ? wanUrl : joinUrl;
+  $: activeQrImgSrc = (qrChannelMode === 'wan' && isPaid)
+    ? `${window.location.origin}/qr/image?text=${encodeURIComponent(wanUrl)}`
+    : `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
+
+  function setChannelMode(mode: 'lan' | 'wan') {
+    if (mode === 'wan' && !isPaid) {
+      channelNotice = currentLang === 'en'
+        ? 'Pro Feature: Please activate Pro subscription for public WebRTC P2P connection'
+        : 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅';
+      setTimeout(() => channelNotice = '', 3000);
+      return;
+    }
+    qrChannelMode = mode;
+  }
 
   function handleCopyUrl() {
-    navigator.clipboard.writeText(joinUrl).then(() => {
+    navigator.clipboard.writeText(activeUrl).then(() => {
       copied = true;
       setTimeout(() => copied = false, 2000);
     });
@@ -1483,13 +1500,39 @@
             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </div>
-        <p class="side-note">{t.scanQR}</p>
+
+        <div class="qr-channel-tabs" style="display: flex; gap: 6px; background: rgba(0,0,0,0.04); padding: 4px; border-radius: 8px; margin: 8px 0;">
+          <button
+            class="qr-channel-tab"
+            class:active={qrChannelMode === 'lan'}
+            style="flex: 1; padding: 6px; font-size: 11px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; {qrChannelMode === 'lan' ? 'background: #fff; color: var(--accent-strong); box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #666;'}"
+            on:click={() => setChannelMode('lan')}
+          >
+            🌐 {currentLang === 'en' ? 'LAN Direct' : '局域网直连'}
+          </button>
+          <button
+            class="qr-channel-tab"
+            class:active={qrChannelMode === 'wan'}
+            style="flex: 1; padding: 6px; font-size: 11px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; {qrChannelMode === 'wan' ? 'background: #fff; color: var(--accent-strong); box-shadow: 0 1px 3px rgba(0,0,0,0.1);' : 'background: transparent; color: #666;'}"
+            on:click={() => setChannelMode('wan')}
+          >
+            ⚡ {currentLang === 'en' ? 'Pro WAN P2P' : 'Pro 公网 P2P'}
+          </button>
+        </div>
+
+        {#if channelNotice}
+          <div style="font-size: 11px; color: #dc2626; background: rgba(220, 38, 38, 0.08); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px;">
+            {channelNotice}
+          </div>
+        {/if}
+
+        <p class="side-note">{qrChannelMode === 'wan' ? (currentLang === 'en' ? 'Pro WebRTC STUN P2P Tunnel' : 'Pro WebRTC STUN 打洞 · 0流量过云') : t.scanQR}</p>
         <div class="qr-frame">
-          <img class="qr" src={qrImgSrc} alt="Chat QR code">
+          <img class="qr" src={activeQrImgSrc} alt="Chat QR code">
         </div>
         <div class="session-collapsible" class:collapsed={!showUrl}>
           <div class="url-row">
-            <input value={joinUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
+            <input value={activeUrl} readonly style="background: #eef5ee; border: 1px solid var(--line); border-radius: 8px; font-family: var(--font-mono); font-size: 12px; padding: 6px 8px; width: 100%; box-sizing: border-box;">
             <button class="side-btn" type="button" on:click={handleCopyUrl} style="flex-shrink: 0;">
               {copied ? t.copied : t.copy}
             </button>
