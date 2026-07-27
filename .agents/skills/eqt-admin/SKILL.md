@@ -39,14 +39,23 @@ npm --prefix cloudflare/eqt-admin run build
 
 Verify that `dist/index.html` and `dist/p2p-globe.html` are cleanly generated without build warnings or missing bundles.
 
-### Step 2: Cloudflare Pages Deployment
-Deploy the compiled static bundle (`dist/`) and Workers Functions (`functions/`) directly to Cloudflare Pages:
+### Step 2: Cloudflare Pages Manual Deployment
+Deploy the compiled static bundle (`dist/`) and Workers Functions (`functions/`) directly to Cloudflare Pages.
 
+#### Method A: Run directly inside `cloudflare/eqt-admin` root directory (Recommended):
 ```sh
+cd cloudflare/eqt-admin
+npm run build
+npx wrangler pages deploy dist --project-name eqt-admin
+```
+
+#### Method B: Run from repository root:
+```sh
+npm --prefix cloudflare/eqt-admin run build
 npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name eqt-admin
 ```
 
-If Cloudflare API Tokens or specific environment parameters are required, pass them via environment variables:
+If Cloudflare Access environment parameters or API tokens are required:
 ```sh
 VITE_ADMIN_AUTH_MODE=access \
 VITE_CF_ACCESS_TEAM_DOMAIN=persuit.cloudflareaccess.com \
