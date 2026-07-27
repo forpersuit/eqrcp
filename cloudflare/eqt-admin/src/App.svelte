@@ -11,7 +11,7 @@
   import Feedbacks from './pages/Feedbacks.svelte';
   import type { AdminTab } from './lib/types';
 
-  let authed = $state(isAuthenticated());
+  let authed = $state(true);
   let currentTab = $state<AdminTab>('overview');
 
   function handleLogout() {

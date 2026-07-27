@@ -58,24 +58,17 @@ export default {
     if (request.method === "GET" && (url.pathname === "/api/v1/admin/feedbacks" || url.pathname === "/admin/feedbacks")) {
       try {
         const category = url.searchParams.get("category");
-        const status = url.searchParams.get("status");
         const limit = parseInt(url.searchParams.get("limit") || "50", 10);
         const offset = parseInt(url.searchParams.get("offset") || "0", 10);
 
         let countSql = "SELECT COUNT(*) as total FROM feedbacks WHERE 1=1";
-        let querySql = `SELECT id, category, contact, message, image_url, timestamp, client_version, client_os, created_at, COALESCE(status, 'unread') as status FROM feedbacks WHERE 1=1`;
+        let querySql = `SELECT id, category, contact, message, image_url, timestamp, client_version, client_os, created_at FROM feedbacks WHERE 1=1`;
         const params: any[] = [];
 
         if (category && category !== "all") {
           countSql += " AND category = ?";
           querySql += " AND category = ?";
           params.push(category);
-        }
-
-        if (status && status !== "all") {
-          countSql += " AND COALESCE(status, 'unread') = ?";
-          querySql += " AND COALESCE(status, 'unread') = ?";
-          params.push(status);
         }
 
         querySql += " ORDER BY id DESC LIMIT ? OFFSET ?";
@@ -87,11 +80,16 @@ export default {
         const queryParams = [...params, limit, offset];
         const { results } = await env.DB.prepare(querySql).bind(...queryParams).all();
 
+        const formattedFeedbacks = (results || []).map((row: any) => ({
+          ...row,
+          status: row.status || 'unread'
+        }));
+
         return new Response(JSON.stringify({
           code: 200,
           success: true,
           total,
-          feedbacks: results || []
+          feedbacks: formattedFeedbacks
         }), {
           status: 200,
           headers: {

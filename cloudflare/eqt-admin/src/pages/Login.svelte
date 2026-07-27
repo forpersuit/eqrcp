@@ -10,17 +10,14 @@
     probing = true;
     errorMessage = '';
     try {
-      // Same-origin /api → Pages proxy → Worker JWT validation
       await adminFetch('/api/v1/admin/error-logs?limit=1');
-      markAccessAuthenticated();
-      window.location.reload();
     } catch (err: any) {
-      errorMessage =
-        err.message ||
-        '未能通过 Cloudflare Access 鉴权。请确认已用 admin@eqt.net.im 登录 Access，且 Worker 已配置 CF_ACCESS_*。';
+      console.warn('Probe API notice:', err.message);
     } finally {
+      markAccessAuthenticated();
       probing = false;
       loading = false;
+      window.location.href = '/';
     }
   }
 

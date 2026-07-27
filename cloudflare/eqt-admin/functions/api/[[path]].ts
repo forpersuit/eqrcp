@@ -59,10 +59,19 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     }
   }
 
-  // Cloudflare may expose identity on Access-protected host
-  const jwt =
+  // Cloudflare exposes identity via header or CF_Authorization cookie on Access host
+  let jwt =
     context.request.headers.get("Cf-Access-Jwt-Assertion") ||
     context.request.headers.get("cf-access-jwt-assertion");
+
+  if (!jwt) {
+    const cookieHeader = context.request.headers.get("cookie") || "";
+    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+    if (match && match[1]) {
+      jwt = match[1].trim();
+    }
+  }
+
   if (jwt) {
     headers.set("Cf-Access-Jwt-Assertion", jwt);
   }
@@ -80,8 +89,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   }
 
   try {
-    const upstream = await fetch(target, init);
-    // Clone response with CORS-friendly headers for same-origin SPA (same host → fine)
+    let upstream = await fetch(target, init);
+    if (!upstream.ok && target.includes("signal.eqt.net.im")) {
+      const fallbackTarget = target.replace("https://signal.eqt.net.im", "https://eqt-p2p-signal.leeyelon.workers.dev");
+      const fbRes = await fetch(fallbackTarget, init);
+      if (fbRes.ok) upstream = fbRes;
+    }
     const outHeaders = new Headers(upstream.headers);
     outHeaders.delete("content-encoding");
     outHeaders.delete("transfer-encoding");
@@ -91,6 +104,20 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       headers: outHeaders,
     });
   } catch (err: any) {
+    if (target.includes("signal.eqt.net.im")) {
+      try {
+        const fallbackTarget = target.replace("https://signal.eqt.net.im", "https://eqt-p2p-signal.leeyelon.workers.dev");
+        const fallbackUpstream = await fetch(fallbackTarget, init);
+        const outHeaders = new Headers(fallbackUpstream.headers);
+        outHeaders.delete("content-encoding");
+        outHeaders.delete("transfer-encoding");
+        return new Response(fallbackUpstream.body, {
+          status: fallbackUpstream.status,
+          statusText: fallbackUpstream.statusText,
+          headers: outHeaders,
+        });
+      } catch (fErr) {}
+    }
     return new Response(JSON.stringify({
       error: `Upstream service unavailable (${err?.message || "connection error"})`,
       target

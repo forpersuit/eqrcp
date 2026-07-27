@@ -40,13 +40,8 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
   });
 
   if (response.status === 401) {
-    clearAccessSession();
-    if (isAuthenticated() === false) {
-      window.location.href = window.location.pathname + '?auth=retry';
-    } else {
-      window.location.reload();
-    }
-    throw new Error('Cloudflare Access 会话无效或未登录');
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Cloudflare Access 会话未授权或未登录');
   }
 
   if (response.status === 503) {
