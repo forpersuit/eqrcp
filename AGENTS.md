@@ -9,6 +9,7 @@
 - avoid alert-style prompts (such as browser-level alert dialogs) for user warnings, errors, or size limit messages; always use in-app notifications (e.g., appending system messages to the chat message list) instead
 - replace grep by rg
 - 一旦有功能增加，则小版本号+1
+- 【宪法红线】严禁为了解决新问题或方便调试而删除、破坏或削弱原有任何已有的安全校验、鉴权或防退化逻辑 (Strictly prohibited to delete or compromise existing security/auth logic)
 
 ## Project Structure & Module Organization
 
