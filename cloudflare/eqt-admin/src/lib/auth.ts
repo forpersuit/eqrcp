@@ -25,7 +25,7 @@ export function accessLogoutUrl(): string {
   return `https://${team}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
 
-/** Access login: send user directly to CF Access team portal */
+/** Access login: send user directly to CF Access official team portal */
 export function accessLoginUrl(): string {
   const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'sageai.cloudflareaccess.com')
     .replace(/^https?:\/\//, '')

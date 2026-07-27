@@ -48,10 +48,8 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     data?.code === 'ACCESS_JWT_INVALID'
   ) {
     clearAccessSession();
-    if (!skipAutoRedirect && window.location.pathname !== '/' && window.location.pathname !== '') {
-      window.location.href = window.location.origin + '/';
-    }
-    throw new Error('Cloudflare Access 会话无效或未登录');
+    window.location.href = accessLoginUrl();
+    throw new Error('Cloudflare Access 会话无效，正在跳转至 Access 登录页…');
   }
 
   if (response.status === 503) {

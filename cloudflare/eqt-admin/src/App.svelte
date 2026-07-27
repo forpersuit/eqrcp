@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
-  import Login from './pages/Login.svelte';
+  import { isAuthenticated, clearAccessSession, accessLogoutUrl, accessLoginUrl } from './lib/auth';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
   import OpsAudit from './pages/OpsAudit.svelte';
@@ -14,17 +13,16 @@
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
 
+  $effect(() => {
+    if (!authed) {
+      window.location.href = accessLoginUrl();
+    }
+  });
+
   function handleLogout() {
     clearAccessSession();
     authed = false;
-    const accessOut = accessLogoutUrl();
-    if (accessOut) {
-      window.location.href = accessOut;
-    }
-  }
-
-  function handleLoginSuccess() {
-    authed = true;
+    window.location.href = accessLogoutUrl();
   }
 
   function navigateTo(tab: AdminTab) {
@@ -33,7 +31,13 @@
 </script>
 
 {#if !authed}
-  <Login onLoginSuccess={handleLoginSuccess} />
+  <div class="access-redirecting-screen">
+    <div class="card redirect-card">
+      <div class="spinner"></div>
+      <h2>EQT Admin 安全控制台</h2>
+      <p>未检测到 Access 会话，正在自动跳转至 Cloudflare Access 官方登录页…</p>
+    </div>
+  </div>
 {:else}
   <div class="admin-layout">
     <aside class="sidebar card">
@@ -137,6 +141,49 @@
 {/if}
 
 <style>
+  .access-redirecting-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at top, #1e1b4b 0%, #0f172a 70%);
+    color: var(--text-primary);
+  }
+
+  .redirect-card {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    max-width: 420px;
+    width: 90%;
+  }
+
+  .redirect-card h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    color: var(--accent-primary);
+  }
+
+  .redirect-card p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1.25rem auto;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .admin-layout {
     display: flex;
     min-height: 100vh;
