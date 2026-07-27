@@ -105,6 +105,10 @@ export class ChatWebSocketClient {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
+          // Desktop GUI host stays active when minimized or hidden; never close connection actively.
+          if (this.clientPeer === 'desktop') {
+            return;
+          }
           this.isSuspended = true;
           if (this.ws) {
             this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
@@ -187,7 +191,7 @@ export class ChatWebSocketClient {
       });
       isInitialConnect = false;
 
-      // Clean query 'join' parameter from address bar to distinguish future page refreshes from a fresh scan
+      // Clean query 'join' parameter from address bar and reset joinParam field to distinguish future reconnections from fresh scan actions
       if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         if (url.searchParams.has('join')) {
@@ -195,6 +199,7 @@ export class ChatWebSocketClient {
           window.history.replaceState({}, document.title, url.pathname + url.search);
         }
       }
+      this.joinParam = '';
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
