@@ -79,17 +79,18 @@ export async function handleAuthRoutes(
   if (url.pathname === "/api/v1/checkout/send-code" && request.method === "POST") {
     const body: any = await request.json();
     let email = body.email;
-    const lang = body.lang || "en";
+    const reqLang = extractRequestLang(request, body);
 
     if (!email || typeof email !== "string" || !email.includes("@")) {
-      return new Response(JSON.stringify({ error: "Invalid email address" }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invalid_email", reqLang) || "Invalid email address"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
     email = email.trim().toLowerCase();
     const storageKey = verificationStorageKey("checkout", email);
-    const reqLang = (lang || "en").toString().substring(0, 2);
 
     // Gate A: purchase-time email blacklist (before OTP / Paddle)
     const emailBl = await checkEmailBlacklist(env, email);
@@ -105,7 +106,9 @@ export async function handleAuthRoutes(
 
     // Rate limit: check if a code was sent in the last 60 seconds
     if (await isSendCodeRateLimited(env, storageKey)) {
-      return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("send_code_rate_limited", reqLang) || "Please wait 60 seconds before requesting another code"
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -121,10 +124,13 @@ export async function handleAuthRoutes(
     ).bind(storageKey, code, expiresAt, createdAt).run();
 
     // Build localized email
-    const { subject, html } = buildCheckoutEmailHtml(lang, code);
+    const { subject, html } = buildCheckoutEmailHtml(reqLang, code);
     ctx.waitUntil(sendDRMEmail(env, email, subject, html));
 
-    return new Response(JSON.stringify({ success: true, message: "Verification code sent to your email" }), {
+    return new Response(JSON.stringify({
+      success: true,
+      message: getApiTranslation("code_sent_success", reqLang) || "Verification code sent to your email"
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

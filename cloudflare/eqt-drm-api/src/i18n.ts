@@ -253,6 +253,33 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Fehlender Parameter transaction_id",
     fr: "Paramètre transaction_id manquant"
   },
+  invalid_email: {
+    zh: "请输入有效的电子邮箱地址",
+    en: "Invalid email address",
+    ja: "有効なメールアドレスを入力してください",
+    ko: "유효한 이메일 주소를 입력하세요",
+    es: "Ingrese una dirección de correo válida",
+    de: "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+    fr: "Veuillez saisir une adresse e-mail valide"
+  },
+  send_code_rate_limited: {
+    zh: "请求频繁，请等待 60 秒后再重新获取验证码",
+    en: "Please wait 60 seconds before requesting another verification code",
+    ja: "リクエストが多すぎます。60秒待ってから再試行してください",
+    ko: "요청이 너무 잦습니다. 60초 후 다시 시도해 주세요",
+    es: "Por favor espere 60 segundos antes de solicitar otro código",
+    de: "Bitte warten Sie 60 Sekunden, bevor Sie einen neuen Code anfordern",
+    fr: "Veuillez attendre 60 secondes avant de demander un autre code"
+  },
+  code_sent_success: {
+    zh: "验证码已发送至您的邮箱，请查收",
+    en: "Verification code sent to your email successfully",
+    ja: "認証コードをメールに送信しました",
+    ko: "인증 코드가 이메일로 발송되었습니다",
+    es: "Código de verificación enviado a su correo",
+    de: "Bestätigungscode wurde an Ihre E-Mail gesendet",
+    fr: "Code de vérification envoyé à votre e-mail"
+  },
   license_pending_fulfillment: {
     zh: "激活码生成中，请等待支付确认完成",
     en: "License not generated yet, pending payment confirmation",

@@ -12,7 +12,8 @@
     "test:e2e": "node tests/e2e-drm-test.js",
     "test:admin": "node tests/e2e-admin-test.js",
     "test:renewal": "node tests/verify-subscription-renewals.js",
-    "test:sandbox": "node tests/test-sandbox-checkout-flow.js"
+    "test:sandbox": "node tests/test-sandbox-checkout-flow.js",
+    "test:lifecycle": "node tests/test-full-lifecycle-sandbox.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",
