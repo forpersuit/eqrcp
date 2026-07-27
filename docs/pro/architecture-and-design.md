@@ -200,3 +200,48 @@ sequenceDiagram
 1. **信令房间短生命周期 (TTL)**：所有创建的 P2P 信令房间默认最长存活 10 分钟（600秒）。超时自动从数据库/内存中擦除。
 2. **频率限制 (Rate Limiting)**：同一个 Pro 激活码或 IP 1 分钟内最多允许创建 10 个信令房间，防范被恶意脚本扫描刷接口。
 3. **信令房间鉴权 Token**：信令操作需校验由 Worker 签发的 `host_token` 与 `client_token`，防止第三方恶意注入伪造的 SDP/Candidate 载荷。
+
+---
+
+## 7. 实时连接可视化监控面板与 Svelte 前端架构 (Connection Dashboard)
+
+为了方便用户查看当前活跃的公网 P2P 连接状态、实时速率与链路质量，同时方便未来进行链路性能分析与排查，需设计专门的连接监控与分析面板：
+
+```
++-----------------------------------------------------------------------------------+
+|               P2P Connection Dashboard (Svelte 实时监控组件)                       |
+|                                                                                   |
+|  +--------------------+  +--------------------+  +-----------------------------+  |
+|  | 活跃连接卡片 (Active)|  | 实时速率 & 延迟 RTT |  | 链路类型 (Host/Reflexive)   |  |
+|  +--------------------+  +--------------------+  +-----------------------------+  |
+|                                                                                   |
+|  [展开详情] -> 链路握手日志 / Candidate 匹配对 / 丢包率波形 / 端到端加密算法        |
++-----------------------------------------------------------------------------------+
+```
+
+### 7.1 前端技术选型评估：为什么选择 Svelte？
+1. **统一的技术栈认知（零迁移成本）**：现有 EQT 的网页端（Chat v2 / 传输 Web UI）已全面采用 Svelte。保持一致可以最大化复用已有的 CSS 设计系统与组件逻辑。
+2. **无虚拟 DOM 与极小打包体积**：Svelte 打包产物无 runtime 开销（仅十几 KB），能够无缝嵌入到 Wails 桌面端或 Cloudflare Pages Admin 后台。
+3. **极佳的响应式状态管理**：利用 Svelte Store / Runes 处理 WebRTC 的高频 `.getStats()` 心跳推流，避免无关 DOM 的频繁重绘。
+
+### 7.2 核心分析数据采集指标 (WebRTC Stats Collector)
+监控面板通过订阅 `RTCPeerConnection.getStats()` 实时拉取以下关键指标：
+
+- **链路通信类型 (Connection Type)**：
+  - `localCandidateType` / `remoteCandidateType`（标识是否为 `srflx` 公网反射地址 / `host` 局域网地址）。
+  - `transportProtocol`（UDP / TCP）。
+- **实时传输质量 (Link Performance)**：
+  - `currentRoundTripTime` (当前网络 RTT 延迟，单位 ms)。
+  - `bytesSent` / `bytesReceived` (双向实时传输速率与总字节数)。
+  - `packetsLost` (数据包丢包率与丢包数)。
+- **安全性与协商参数 (Security Info)**：
+  - `dtlsCipher` / `srtpCipher` (例如：`TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`)。
+- **故障诊断轨迹 (Diagnostics Log)**：
+  - 记录 `iceGatheringState` -> `signalingState` -> `iceConnectionState` 的每一次状态变更时间戳，供打洞失败时一键导出或分析。
+
+### 7.3 配套模块划分与复用
+- **组件名**：`ConnectionDashboard.svelte` 与 `ConnectionDetailDrawer.svelte`
+- **通用能力**：
+  - **用户侧 (Wails / Web 端)**：在传输中或设置面板中点击“连接状态”，弹框显示当前任务的实时 WebRTC P2P 物理链路图解。
+  - **管理端 (Portal / Admin 侧)**：Cloudflare Worker 在房间销毁时可异步上报不含隐私的元数据日志（如 `ice_status: "connected"`, `rtt: 45ms`, `duration: 120s`），供管理后台在可视化大屏上分析全网 P2P 打洞成功率。
+

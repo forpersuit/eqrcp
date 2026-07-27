@@ -48,6 +48,10 @@
 - [ ] **打洞状态实时指示与 15s 超时降级**
   - 在传输状态面板中提供“正在进行公网 P2P 打洞…”实时指示。
   - 超时 15 秒打洞失败时，优雅弹出降级系统消息，提示切换网络或使用热点。
+- [ ] **Svelte 连接可视化监控面板 (`ConnectionDashboard.svelte`)**
+  - 采用 Svelte 框架实现轻量化的连接监控面板，嵌入 Wails / Web 端及 Admin 后台。
+  - 实时采集 `RTCPeerConnection.getStats()` 指标（速率、RTT 延迟、Candidate 类型、丢包率与 DTLS 加密算法）。
+  - 支持展开连接详情 Modal 与打洞失败日志故障一键诊断。
 - [ ] **防阻塞与弹窗消除**
   - 遵循 `AGENTS.md` 规范，杜绝使用原生 `alert()`，所有异常统一追加至应用内消息通知管道。
 
