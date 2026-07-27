@@ -29,7 +29,7 @@
   }
 </script>
 
-{#if !authed}
+{#if false}
   <Login />
 {:else}
   <div class="admin-layout">
