@@ -94,8 +94,11 @@ Wrangler CLI 会优先读取终端环境变量的 `CLOUDFLARE_API_TOKEN`，如�
     - `/api/v1/p2p/*` 路由至独立 Worker `eqt-p2p-signal` (`signal.eqt.net.im`)。
     - `/api/v1/admin/feedbacks` 路由至独立 Worker `eqt-feedback-api` (`feedback.eqt.net.im`)。
     - 其余 `/api/v1/*` 路由至 DRM 主 Worker `eqt-drm-api` (`lic.eqt.net.im`)。
-  - **Pro P2P 直连与 3D 拓扑大屏 (`ProP2P.svelte`)**：全屏集成 3D WebGL 节点动画大屏 (`p2p-globe.html`)，实时展现跨国/同国 P2P 传输弧线及节点坐标，提供强挂房间接口 `DELETE /api/v1/p2p/admin/room`。
-  - **用户反馈管理中心 (`Feedbacks.svelte`)**：`eqt-feedback-api` 追加 `GET /api/v1/admin/feedbacks`（支持分类/状态过滤/分页）、`PATCH /api/v1/admin/feedbacks/:id`（已解决/未处理状态流转）与 `DELETE /api/v1/admin/feedbacks/:id`，前端支持模态框查看 R2 高清截图附件及联系方式检索。
+  - **Access JWT 强一致性鉴权 (Strict Access JWT Parity)**：
+    - 所有被 Pages 反代处理 Admin 请求的后端微服务 Worker (`eqt-drm-api`, `eqt-p2p-signal`, `eqt-feedback-api`) 必须**全量继承统一的 `cf-access-jwt.ts` 验签与 `requireAdminAuth` 路由守护模块**。
+    - 严禁在新增或扩展后端 Worker 管理类接口时偷懒放行或用 `path.includes('/admin/')` / 伪造 Header 判定代替真正 RS256 签名校验；环境变量统一要求配置 `CF_ACCESS_ALLOWED_EMAILS`。
+  - **Pro P2P 直连与 3D 拓扑大屏 (`ProP2P.svelte`)**：全屏集成 3D WebGL 节点动画大屏 (`p2p-globe.html`)，实时展现跨国/同国 P2P 传输弧线及节点坐标，提供强挂房间接口 `DELETE /api/v1/p2p/admin/room`（经 Access JWT 拦截保护）。
+  - **用户反馈管理中心 (`Feedbacks.svelte`)**：`eqt-feedback-api` 追加 `GET /api/v1/admin/feedbacks`（支持分类/状态过滤/分页）、`PATCH /api/v1/admin/feedbacks/:id`（已解决/未处理状态流转）与 `DELETE /api/v1/admin/feedbacks/:id`（均经 Access JWT 拦截保护），前端支持模态框查看 R2 高清截图附件及联系方式检索。
 
 ---
 

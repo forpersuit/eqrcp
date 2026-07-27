@@ -89,6 +89,9 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       const fbRes = await fetch(fallbackTarget, init);
       if (fbRes.ok) upstream = fbRes;
     }
+    if (!upstream.ok) {
+      console.warn(`[Proxy Upstream Warning] target=${target} status=${upstream.status} statusText=${upstream.statusText}`);
+    }
     const outHeaders = new Headers(upstream.headers);
     outHeaders.delete("content-encoding");
     outHeaders.delete("transfer-encoding");
@@ -98,6 +101,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       headers: outHeaders,
     });
   } catch (err: any) {
+    console.error(`[Proxy Upstream Error] target=${target} message=${err?.message || "connection error"}`);
     return new Response(JSON.stringify({
       error: `Upstream service unavailable (${err?.message || "connection error"})`,
       target

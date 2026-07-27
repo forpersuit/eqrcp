@@ -60,18 +60,17 @@
       });
       item.status = newStatus;
     } catch (err: any) {
-      alert('更新反馈状态失败: ' + err.message);
+      errorMsg = '更新反馈状态失败: ' + (err.message || '未知错误');
     }
   }
 
   async function deleteFeedback(id: number) {
-    if (!confirm(`确定要删除此条反馈 (ID: ${id}) 吗？`)) return;
     try {
       await adminFetch(`/api/v1/admin/feedbacks/${id}`, { method: 'DELETE' });
       feedbacks = feedbacks.filter(f => f.id !== id);
       totalCount = Math.max(0, totalCount - 1);
     } catch (err: any) {
-      alert('删除失败: ' + err.message);
+      errorMsg = '删除失败: ' + (err.message || '未知错误');
     }
   }
 

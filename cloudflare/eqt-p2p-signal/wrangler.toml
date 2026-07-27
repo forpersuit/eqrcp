@@ -10,6 +10,7 @@ database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
 [vars]
 CORS_ORIGIN = "*"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
 
 routes = [
   { pattern = "signal.eqt.net.im", custom_domain = true }

@@ -36,14 +36,11 @@
   }
 
   async function destroyRoom(roomId: string) {
-    if (!confirm(`确定要强制销毁 P2P 房间 [${roomId}] 吗？连接中的节点将被物理挂断。`)) {
-      return;
-    }
     try {
       await adminFetch(`/api/v1/p2p/admin/room?room_id=${roomId}`, { method: 'DELETE' });
       await loadConnections();
     } catch (err: any) {
-      alert('销毁房间失败: ' + err.message);
+      errorMsg = '销毁房间失败: ' + (err.message || '未知错误');
     }
   }
 

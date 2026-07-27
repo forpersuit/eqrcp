@@ -1,24 +1,29 @@
+import { requireAdminAuth } from "./utils/auth";
+
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_CHAT_ID: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+  CF_ACCESS_ALLOWED_EMAILS?: string;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Cf-Access-Jwt-Assertion",
+      "Access-Control-Max-Age": "86400",
+    };
+
     // 1. Handle CORS Preflight
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-          "Access-Control-Max-Age": "86400",
-        },
-      });
+      return new Response(null, { headers: corsHeaders });
     }
 
     // 2. Routing: GET /image/:key
@@ -33,13 +38,12 @@ export default {
         if (!object) {
           return new Response("Image not found", {
             status: 404,
-            headers: { "Access-Control-Allow-Origin": "*" }
+            headers: corsHeaders
           });
         }
 
-        const headers = new Headers();
+        const headers = new Headers(corsHeaders);
         object.writeHttpMetadata(headers);
-        headers.set("Access-Control-Allow-Origin", "*");
         headers.set("Content-Type", "image/webp");
         headers.set("Cache-Control", "public, max-age=31536000");
 
@@ -49,13 +53,16 @@ export default {
       } catch (err: any) {
         return new Response(`Error retrieving image: ${err.message}`, {
           status: 500,
-          headers: { "Access-Control-Allow-Origin": "*" }
+          headers: corsHeaders
         });
       }
     }
 
     // 2.5 Admin API Routing: GET /api/v1/admin/feedbacks
     if (request.method === "GET" && (url.pathname === "/api/v1/admin/feedbacks" || url.pathname === "/admin/feedbacks")) {
+      const authErr = await requireAdminAuth(request, env, corsHeaders);
+      if (authErr) return authErr;
+
       try {
         const category = url.searchParams.get("category");
         const limit = parseInt(url.searchParams.get("limit") || "50", 10);
@@ -93,27 +100,30 @@ export default {
         }), {
           status: 200,
           headers: {
-            "Access-Control-Allow-Origin": "*",
+            ...corsHeaders,
             "Content-Type": "application/json"
           }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
           status: 500,
-          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
     }
 
     // 2.6 Admin API Routing: DELETE /api/v1/admin/feedbacks/:id
     if (request.method === "DELETE" && (url.pathname.startsWith("/api/v1/admin/feedbacks/") || url.pathname.startsWith("/admin/feedbacks/"))) {
+      const authErr = await requireAdminAuth(request, env, corsHeaders);
+      if (authErr) return authErr;
+
       try {
         const parts = url.pathname.split("/");
         const id = parts[parts.length - 1];
         if (!id || isNaN(Number(id))) {
           return new Response(JSON.stringify({ error: "Invalid feedback ID" }), {
             status: 400,
-            headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
@@ -125,18 +135,21 @@ export default {
           message: "Feedback deleted successfully"
         }), {
           status: 200,
-          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
           status: 500,
-          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
     }
 
     // 2.7 Admin API Routing: PATCH /api/v1/admin/feedbacks/:id
     if (request.method === "PATCH" && (url.pathname.startsWith("/api/v1/admin/feedbacks/") || url.pathname.startsWith("/admin/feedbacks/"))) {
+      const authErr = await requireAdminAuth(request, env, corsHeaders);
+      if (authErr) return authErr;
+
       try {
         const parts = url.pathname.split("/");
         const id = parts[parts.length - 1];
@@ -146,7 +159,7 @@ export default {
         if (!id || isNaN(Number(id))) {
           return new Response(JSON.stringify({ error: "Invalid feedback ID" }), {
             status: 400,
-            headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
 
@@ -159,12 +172,12 @@ export default {
           status: newStatus
         }), {
           status: 200,
-          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
           status: 500,
-          headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
     }

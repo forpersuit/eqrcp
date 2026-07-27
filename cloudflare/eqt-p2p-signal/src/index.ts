@@ -74,7 +74,7 @@ function handleCORS(request: Request): Headers {
   const headers = new Headers();
   headers.set('Access-Control-Allow-Origin', '*');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, X-License-Code, X-Device-ID, X-Room-Token');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, X-License-Code, X-Device-ID, X-Room-Token, Cf-Access-Jwt-Assertion');
   return headers;
 }
 
@@ -154,6 +154,9 @@ export default {
 
       // 2. Admin 3D Globe API: GET /api/v1/p2p/admin/connections
       if (request.method === 'GET' && path === '/api/v1/p2p/admin/connections') {
+        const authErr = await requireAdminAuth(request, env, corsHeaders);
+        if (authErr) return authErr;
+
         const connections = [];
         for (const room of activeRooms.values()) {
           connections.push({
@@ -336,7 +339,13 @@ export default {
       if (request.method === 'DELETE' && (path === '/api/v1/p2p/room' || path === '/api/v1/p2p/admin/room')) {
         const roomToken = request.headers.get('X-Room-Token') || '';
         const roomId = url.searchParams.get('room_id') || '';
-        const isAdmin = path.includes('/admin/') || request.headers.get('Cf-Access-Jwt-Assertion') !== null;
+        let isAdmin = false;
+
+        if (path.includes('/admin/')) {
+          const authErr = await requireAdminAuth(request, env, corsHeaders);
+          if (authErr) return authErr;
+          isAdmin = true;
+        }
 
         if (roomId && activeRooms.has(roomId)) {
           const room = activeRooms.get(roomId)!;
