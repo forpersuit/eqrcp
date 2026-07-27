@@ -999,20 +999,14 @@ function updateShareTransferActiveUI(task) {
         }
     }
 
-    // 7. 更新二维码区域，避免局部刷新时丢失二维码
+    // 7. 更新二维码区域，使用统一的通道切换渲染函数
     const qrWrapper = document.getElementById('share-qr-wrapper');
     if (qrWrapper) {
-        const qrImage = qrImageURL(task.pageUrl);
         const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
         const shouldCollapse = isSharedOrReceived;
         const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
         
-        const newQrHtml = isQRExpanded && qrImage ? `
-            <div class="qr-hero">
-                <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-            </div>
-        ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
+        const newQrHtml = renderQRHeroHtml(task, isQRExpanded);
         
         if (qrWrapper.innerHTML.trim() !== newQrHtml.trim()) {
             qrWrapper.innerHTML = newQrHtml;
@@ -1684,6 +1678,20 @@ function updateReceiveTransferActiveUI(task) {
         quotaCountdown.remove();
     }
 
+    const qrWrapper = document.getElementById('receive-qr-wrapper');
+    if (qrWrapper) {
+        const files = task.savedFiles || [];
+        const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
+        const shouldCollapse = isSharedOrReceived;
+        const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+        
+        const newQrHtml = renderQRHeroHtml(task, isQRExpanded);
+        
+        if (qrWrapper.innerHTML.trim() !== newQrHtml.trim()) {
+            qrWrapper.innerHTML = newQrHtml;
+        }
+    }
+
     const filesWrapper = document.getElementById('receive-saved-files-wrapper');
     if (filesWrapper) {
         const files = task.savedFiles || [];
@@ -1827,13 +1835,7 @@ function renderChatPanel(task) {
                 </div>
                 ${state.chatQROpen ? `
                     <div class="chat-qr-content">
-                        <div class="chat-qr-card chat-qr-card-large">
-                            ${qrImage ? `<img src="${escapeAttr(qrImage)}" alt="Chat QR code">` : `<div class="empty-state">${t('waiting_qr')}</div>`}
-                        </div>
-                        <div class="chat-url-row">
-                            <span>${escapeHTML(chatUrl || t('waiting_network_url'))}</span>
-                            <button type="button" class="copy-chat-url-action" title="${t('copy_chat_url')}" aria-label="${t('copy_chat_url')}" ${chatUrl ? '' : 'disabled'}>${copyIcon()}</button>
-                        </div>
+                        ${renderQRHeroHtml(activeTask || { action: 'chat', pageUrl: chatUrl }, true)}
                     </div>
                 ` : `<p class="side-note">${t('chat_qr_expand_tips')}</p>`}
             </div>
@@ -3151,7 +3153,7 @@ function refreshHistoryListInDOM() {
                 return;
             }
             state.qrChannelMode = channel;
-            renderActiveTaskUI();
+            render();
             return;
         }
 
