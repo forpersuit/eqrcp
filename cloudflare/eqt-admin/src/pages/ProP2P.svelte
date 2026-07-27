@@ -194,14 +194,7 @@
           .arcStroke(1.4)
           .pointColor(() => '#38bdf8')
           .pointAltitude(0.03)
-          .pointRadius(0.6)
-          .labelsData(Object.values(COUNTRY_COORDS))
-          .labelLat((d: any) => d.lat)
-          .labelLng((d: any) => d.lng)
-          .labelText((d: any) => d.name)
-          .labelSize(0.6)
-          .labelDotRadius(0.3)
-          .labelColor(() => 'rgba(255, 255, 255, 0.7)');
+          .pointRadius(0.6);
 
         if (globeInstance.controls()) {
           globeInstance.controls().autoRotate = true;
