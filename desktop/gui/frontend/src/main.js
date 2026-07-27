@@ -2151,17 +2151,15 @@ function renderSettingsPanel() {
                         </div>
 
                         <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
-                            <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px;">${t('custom_log_dir')}</div>
-                            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; width: 100%;">
-                                <input type="text" id="dev-log-dir" value="${escapeHTML(state.settings?.logDir || '')}" placeholder="${t('default_log_dir_placeholder')}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; box-sizing: border-box;" readonly />
-                                <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap;">${t('btn_browse') || '选择...'}</button>
+                            <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>${t('custom_log_dir') || '主日志保存目录'}</span>
+                                <button type="button" class="ghost" id="dev-open-log" style="padding: 3px 8px; font-size: 11px; height: 24px; border-radius: 4px; font-weight: 600;">📄 ${t('btn_open_log_file') || '查看日志文件'}</button>
                             </div>
-                            <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4; margin-bottom: 6px;">
-                                ${t('dev_logs_path') || '当前实际路径：'} <strong style="word-break: break-all; color: var(--accent); font-family: var(--font-mono);">${escapeHTML(state.appInfo?.logPath || 'Temp directory')}</strong>
-                            </div>
-                            <div style="display: flex; gap: 8px; margin-top: 8px; width: 100%;">
-                                <button type="button" class="ghost" id="dev-open-log" style="flex: 1; padding: 6px 10px; font-size: 11.5px; border-radius: 6px; font-weight: 600;">📄 ${t('btn_open_log_file')}</button>
-                                <button type="button" class="ghost" id="dev-open-dir" style="flex: 1; padding: 6px 10px; font-size: 11.5px; border-radius: 6px; font-weight: 600;">📁 ${t('btn_open_log_dir')}</button>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                                <div id="dev-open-dir" title="${t('click_to_open_dir') || '点击在资源管理器中打开此目录'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
+                                    📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : 'Default directory'))}
+                                </div>
+                                <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || '选择目录...'}</button>
                             </div>
                             <div style="font-size: 10.5px; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1.2px solid rgba(239, 68, 68, 0.15); border-radius: 6px; padding: 6px 10px; margin-top: 8px; line-height: 1.4; text-align: left;">
                                 ⚠️ <strong>${t('privacy_warning_title')}</strong>：${t('privacy_warning_desc')}
