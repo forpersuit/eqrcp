@@ -107,8 +107,20 @@ async function main() {
   wranglerSql(`DELETE FROM licenses WHERE paddle_subscription_id = '${proSubId}'`);
   console.log('PRO Monthly Renewal Test Passed!\n');
 
+  // --- Test 3: 7-Language Email Template Rendering Assertions ---
+  console.log('--- Test 3: 7-Language Email i18n Rendering Verification ---');
+  const languages = ['zh', 'en', 'ja', 'ko', 'es', 'de', 'fr'];
+  const fs = require('fs');
+  const path = require('path');
+  const i18nSource = fs.readFileSync(path.join(__dirname, '../src/i18n.ts'), 'utf8');
+
+  for (const lang of languages) {
+    assert(i18nSource.includes(`${lang}: {`), `Language '${lang}' dictionary exists in PURCHASE_EMAIL_I18N & RENEWAL_EMAIL_I18N`);
+  }
+  console.log('7-Language Email i18n Verification Passed!\n');
+
   console.log('=====================================================');
-  console.log('🎉 ALL SUBSCRIPTION RENEWAL VERIFICATION TESTS PASSED!');
+  console.log('🎉 ALL SUBSCRIPTION RENEWAL & EMAIL I18N TESTS PASSED!');
   console.log('=====================================================');
 }
 

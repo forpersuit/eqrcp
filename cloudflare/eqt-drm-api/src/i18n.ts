@@ -244,6 +244,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Keine Paddle-Transaktion verknüpft; Rechnung nicht verfügbar",
     fr: "Aucune transaction Paddle ; facture indisponible"
   },
+  missing_transaction_id: {
+    zh: "缺少 transaction_id 参数",
+    en: "Missing transaction_id parameter",
+    ja: "transaction_id パラメータが不足しています",
+    ko: "transaction_id 파라미터가 누락되었습니다",
+    es: "Falta el parámetro transaction_id",
+    de: "Fehlender Parameter transaction_id",
+    fr: "Paramètre transaction_id manquant"
+  },
+  license_pending_fulfillment: {
+    zh: "激活码生成中，请等待支付确认完成",
+    en: "License not generated yet, pending payment confirmation",
+    ja: "ライセンスコード生成中。支払い確認の完了をお待ちください",
+    ko: "라이선스 코드가 생성 중입니다. 결제 확인 완결을 기다려 주세요",
+    es: "Licencia aún no generada, pendiente de confirmación de pago",
+    de: "Lizenz noch nicht generiert, Zahlung ausstehend",
+    fr: "Licence non générée, confirmation du paiement en attente"
+  },
   invoice_paddle_unavailable: {
     zh: "账单服务暂时不可用。请将交易单号发给 support@eqt.net.im 协助查询",
     en: "Billing service is temporarily unavailable. Email support@eqt.net.im with your transaction ID",

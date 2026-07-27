@@ -70,6 +70,23 @@ export async function handlePaddleRoutes(
       const eventType = event.event_type;
       const data = event.data || {};
 
+      // Extract buyer checkout page language from custom_data or passthrough or headers
+      const customData = (data as Record<string, unknown>).custom_data as Record<string, unknown> | undefined;
+      const passthroughStr = (data as Record<string, unknown>).passthrough as string | undefined;
+      let buyerLang = String(customData?.lang || customData?.buyer_lang || "");
+
+      if (!buyerLang && passthroughStr) {
+        try {
+          const parsed = JSON.parse(passthroughStr);
+          buyerLang = String(parsed.lang || parsed.buyer_lang || "");
+        } catch (_) {
+          // ignore non-json passthrough
+        }
+      }
+      if (!buyerLang) {
+        buyerLang = extractRequestLang(request);
+      }
+
       // 1. Event: transaction.completed -> Fullfill new license or extend subscription
       if (eventType === "transaction.completed") {
         const transactionId = data.id;
@@ -77,23 +94,6 @@ export async function handlePaddleRoutes(
         const customerId = data.customer_id || null;
 
         let buyerEmail = data.customer?.email || data.user?.email || "";
-
-        // Extract buyer checkout page language from custom_data or passthrough or headers
-        const customData = (data as Record<string, unknown>).custom_data as Record<string, unknown> | undefined;
-        const passthroughStr = (data as Record<string, unknown>).passthrough as string | undefined;
-        let buyerLang = String(customData?.lang || customData?.buyer_lang || "");
-
-        if (!buyerLang && passthroughStr) {
-          try {
-            const parsed = JSON.parse(passthroughStr);
-            buyerLang = String(parsed.lang || parsed.buyer_lang || "");
-          } catch (_) {
-            // ignore non-json passthrough
-          }
-        }
-        if (!buyerLang) {
-          buyerLang = extractRequestLang(request);
-        }
 
         // Fallback: If email missing, query Paddle API using API key
         if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
@@ -306,7 +306,7 @@ export async function handlePaddleRoutes(
 
         if (license && license.buyer_email) {
           const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-          const t = getLicenseRevokeEmailTemplate("zh", "refund");
+          const t = getLicenseRevokeEmailTemplate(buyerLang, "refund");
           const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
           ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
         }
@@ -336,7 +336,7 @@ export async function handlePaddleRoutes(
 
           if (license && license.buyer_email) {
             const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-            const t = getLicenseRevokeEmailTemplate("zh", reason);
+            const t = getLicenseRevokeEmailTemplate(buyerLang, reason);
             const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
             ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
           }
@@ -369,7 +369,7 @@ export async function handlePaddleRoutes(
 
           if (license && license.buyer_email) {
             const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
-            const t = getLicenseRevokeEmailTemplate("zh", "subscription");
+            const t = getLicenseRevokeEmailTemplate(buyerLang, "subscription");
             const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
             ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
           }
@@ -400,9 +400,12 @@ export async function handlePaddleRoutes(
 
   // 3.5.2 Client License Query (polling to fetch license code instantly after web payment completion)
   if (url.pathname === "/api/v1/paddle/license-query" && request.method === "GET") {
+    const reqLang = extractRequestLang(request);
     const transactionId = url.searchParams.get("transaction_id");
     if (!transactionId) {
-      return new Response(JSON.stringify({ error: "Missing transaction_id" }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("missing_transaction_id", reqLang) || "Missing transaction_id"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -413,7 +416,9 @@ export async function handlePaddleRoutes(
     ).bind(transactionId).first<LicenseQueryRow>();
 
     if (!license) {
-      return new Response(JSON.stringify({ error: "License not generated yet, pending payment confirmation" }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("license_pending_fulfillment", reqLang) || "License not generated yet, pending payment confirmation"
+      }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
