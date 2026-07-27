@@ -78,8 +78,9 @@ export interface SystemErrorLog {
   created_at: string;
 }
 
-export const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3";
+export const PRICE_LIFETIME_ID = "pri_01kyhmkv4ppj10r4cdgw3sv48p";
 export const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
+export const PRICE_PRO_MONTHLY_ID = "pri_01kyhmv79rkyncryce1wjg9582";
 
 // Business Logic Constants
 export const MAX_YEARLY_UNBINDS = 4;

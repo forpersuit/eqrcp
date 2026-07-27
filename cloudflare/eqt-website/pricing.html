@@ -775,8 +775,9 @@
         // ====== PADDLE BILLING INTEGRATION ======
         const PADDLE_ENV = "sandbox"; // Switch to 'production' for live environment
         const PADDLE_TOKEN = "test_1be1e080418b8141d02936c5ee1"; // Replace with your own client-side token
-        const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3"; // Replace with your Lifetime Price ID
-        const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc"; // Replace with your Yearly Price ID
+        const PRICE_LIFETIME_ID = "pri_01kyhmkv4ppj10r4cdgw3sv48p"; // Plus Lifetime Price ID
+        const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc"; // Plus Yearly Price ID
+        const PRICE_PRO_MONTHLY_ID = "pri_01kyhmv79rkyncryce1wjg9582"; // Pro Monthly Price ID
 
         let pendingPriceId = null;
         let verifiedEmail = null;
@@ -807,6 +808,7 @@
         function initCheckoutButtons() {
             const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
             const buyYearlyBtn = document.getElementById('buy-yearly-btn');
+            const buyProBtn = document.getElementById('buy-pro-btn');
 
             if (buyLifetimeBtn) {
                 buyLifetimeBtn.addEventListener('click', () => {
@@ -817,6 +819,12 @@
             if (buyYearlyBtn) {
                 buyYearlyBtn.addEventListener('click', () => {
                     openVerifyModal(PRICE_YEARLY_ID);
+                });
+            }
+
+            if (buyProBtn) {
+                buyProBtn.addEventListener('click', () => {
+                    openVerifyModal(PRICE_PRO_MONTHLY_ID);
                 });
             }
         }

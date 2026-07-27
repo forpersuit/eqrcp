@@ -1,4 +1,4 @@
-import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID } from '../types';
+import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID, PRICE_PRO_MONTHLY_ID } from '../types';
 import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
@@ -13,28 +13,37 @@ export async function handlePaddleRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
-  // 3.5.1 Paddle Webhook: fulfillment and cancellation/refund
+  // --- Route: /api/v1/paddle/webhook ---
   if (url.pathname === "/api/v1/paddle/webhook" && request.method === "POST") {
-    await ensureLicenseSourceColumns(env);
     const rawBody = await request.text();
-    const signature = request.headers.get("paddle-signature");
-    const webhookSecret = env.PADDLE_WEBHOOK_SECRET;
+    const signature = request.headers.get("Paddle-Signature");
 
+    const webhookSecret = env.PADDLE_WEBHOOK_SECRET;
     if (!webhookSecret) {
       ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'CRITICAL',
         new Error('PADDLE_WEBHOOK_SECRET is not configured'),
         { path: url.pathname }));
-      return new Response(JSON.stringify({ error: "Paddle Webhook secret is not configured" }), {
+      return new Response(JSON.stringify({ error: "PADDLE_WEBHOOK_SECRET is not configured" }), {
         status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!signature) {
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'WARN',
+        new Error('Missing Paddle-Signature header'),
+        { path: url.pathname }));
+      return new Response(JSON.stringify({ error: "Missing Paddle-Signature header" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     const isValid = await verifyPaddleSignature(rawBody, signature, webhookSecret);
     if (!isValid) {
-      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'WARN',
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR',
         new Error('Invalid Paddle webhook signature'),
-        { path: url.pathname, has_signature: Boolean(signature) }));
+        { path: url.pathname }));
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -44,26 +53,29 @@ export async function handlePaddleRoutes(
     let event: any;
     try {
       event = JSON.parse(rawBody);
-    } catch (parseErr) {
+    } catch (parseErr: any) {
       ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR', parseErr,
-        { path: url.pathname, reason: 'invalid_json' }));
+        { path: url.pathname, rawBody: rawBody.slice(0, 500) }));
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const eventType = event.event_type;
-    const data = event.data;
     console.log("PADDLE_WEBHOOK_EVENT:", JSON.stringify(event));
 
-    try {
+    const eventType = event.event_type;
+    const data = event.data || {};
+
+    // 1. Event: transaction.completed -> Fullfill new license or extend subscription
     if (eventType === "transaction.completed") {
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
-      let buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || data.custom_data?.buyer_email || data.custom_data?.buyerEmail || "";
+      const customerId = data.customer_id || null;
 
-      const customerId = data.customer_id || (typeof data.customer === 'string' ? data.customer : null);
+      let buyerEmail = data.customer?.email || data.user?.email || "";
+
+      // Fallback: If email missing, query Paddle API using API key
       if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
         try {
           const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
@@ -72,31 +84,34 @@ export async function handlePaddleRoutes(
             headers: { "Authorization": `Bearer ${env.PADDLE_API_KEY}` }
           });
           if (custRes.ok) {
-            const custData: any = await custRes.json();
-            buyerEmail = custData.data?.email || "";
+            const custJson: any = await custRes.json();
+            buyerEmail = custJson.data?.email || "";
           } else {
-            const errBody = await custRes.text().catch(() => '');
             ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'WARN',
-              new Error(`Paddle customers API HTTP ${custRes.status}`),
-              { customer_id: customerId, transaction_id: transactionId, body: errBody.slice(0, 500) }));
+              new Error(`Failed to fetch customer ${customerId}: ${custRes.status}`),
+              { transactionId, customerId }));
           }
-        } catch (cErr) {
-          console.error("Failed to fetch customer email from Paddle API:", cErr);
+        } catch (cErr: any) {
           ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'WARN', cErr,
-            { customer_id: customerId, transaction_id: transactionId, action: 'fetch_customer_email' }));
+            { transactionId, customerId }));
         }
       }
 
-      // Check if already processed
-      const existing = await env.DB.prepare(
-        "SELECT license_code FROM licenses WHERE paddle_transaction_id = ?"
-      ).bind(transactionId).first<any>();
+      // Check idempotency for non-subscription / initial transaction
+      if (transactionId) {
+        const existing = await env.DB.prepare(
+          "SELECT license_code FROM licenses WHERE paddle_transaction_id = ?"
+        ).bind(transactionId).first<any>();
 
-      if (existing) {
-        return new Response(JSON.stringify({ message: "Transaction already processed", license_code: existing.license_code }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        if (existing) {
+          return new Response(JSON.stringify({
+            message: "Transaction already fulfilled",
+            license_code: existing.license_code
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
 
       // Extract Price ID
@@ -104,7 +119,7 @@ export async function handlePaddleRoutes(
       let matchedPriceId = "";
       for (const item of items) {
         const priceId = item.price?.id || item.price_id;
-        if (priceId === PRICE_LIFETIME_ID || priceId === PRICE_YEARLY_ID) {
+        if (priceId === PRICE_LIFETIME_ID || priceId === PRICE_YEARLY_ID || priceId === PRICE_PRO_MONTHLY_ID) {
           matchedPriceId = priceId;
           break;
         }
@@ -118,14 +133,23 @@ export async function handlePaddleRoutes(
       }
 
       // Set Tier and expiration based on price ID
-      const tier = "PLUS";
+      let tier = "PLUS";
       let expiresAt = "LIFETIME";
       let durationDays: number | null = null;
       const YEARLY_MS = 365 * 86400 * 1000;
+      const MONTHLY_MS = 30 * 86400 * 1000;
 
       if (matchedPriceId === PRICE_YEARLY_ID) {
+        tier = "PLUS";
         durationDays = 365;
         expiresAt = new Date(Date.now() + YEARLY_MS).toISOString();
+      } else if (matchedPriceId === PRICE_PRO_MONTHLY_ID) {
+        tier = "PRO";
+        durationDays = 30;
+        expiresAt = new Date(Date.now() + MONTHLY_MS).toISOString();
+      } else if (matchedPriceId === PRICE_LIFETIME_ID) {
+        tier = "PLUS";
+        expiresAt = "LIFETIME";
       }
 
       // Hash email for buyer_email_hash
@@ -136,9 +160,9 @@ export async function handlePaddleRoutes(
         emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
       }
 
-      // --- Yearly renewal: same subscription keeps ONE license code (Paddle auto-bills) ---
+      // --- Subscription renewal: same subscription keeps ONE license code (Paddle auto-bills) ---
       // Product SSOT: do not mint a new code on each billing cycle; extend expires_at + keep status active.
-      if (matchedPriceId === PRICE_YEARLY_ID && subscriptionId) {
+      if ((matchedPriceId === PRICE_YEARLY_ID || matchedPriceId === PRICE_PRO_MONTHLY_ID) && subscriptionId) {
         const subLicense = await env.DB.prepare(
           `SELECT license_code, expires_at, status, buyer_email, paddle_transaction_id
            FROM licenses WHERE paddle_subscription_id = ?
@@ -147,10 +171,11 @@ export async function handlePaddleRoutes(
 
         if (subLicense?.license_code) {
           let newExpires = expiresAt;
+          const addMs = matchedPriceId === PRICE_PRO_MONTHLY_ID ? MONTHLY_MS : YEARLY_MS;
           if (subLicense.expires_at && subLicense.expires_at !== "LIFETIME") {
             const prev = new Date(subLicense.expires_at).getTime();
             const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
-            newExpires = new Date(base + YEARLY_MS).toISOString();
+            newExpires = new Date(base + addMs).toISOString();
           } else if (subLicense.expires_at === "LIFETIME") {
             newExpires = "LIFETIME";
           }
