@@ -31,8 +31,9 @@
           offset: String(offset)
         }
       });
-      logs = data.logs || [];
+      logs = Array.isArray(data.logs) ? [...data.logs] : [];
       total = data.total || logs.length;
+      errorMsg = '';
     } catch (err: any) {
       errorMsg = err.message || '加载日志失败';
     } finally {

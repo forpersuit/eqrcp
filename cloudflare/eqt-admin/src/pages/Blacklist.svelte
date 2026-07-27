@@ -34,8 +34,9 @@
         '/api/v1/admin/blacklist',
         { params }
       );
-      entries = data.entries || [];
+      entries = Array.isArray(data.entries) ? [...data.entries] : [];
       total = data.total || 0;
+      errorMsg = '';
     } catch (err: any) {
       errorMsg = err.message || '加载黑名单失败';
       entries = [];

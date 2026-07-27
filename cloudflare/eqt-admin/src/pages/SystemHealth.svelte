@@ -28,6 +28,7 @@
     errorMsg = '';
     try {
       health = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
+      errorMsg = '';
     } catch (err: any) {
       errorMsg = err.message || '诊断服务请求失败';
     } finally {

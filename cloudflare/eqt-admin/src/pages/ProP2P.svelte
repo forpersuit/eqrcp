@@ -26,7 +26,7 @@
       errorMsg = null;
       const res = await adminFetch<P2PConnectionsResponse>('/api/v1/p2p/admin/connections');
       if (res && Array.isArray(res.connections)) {
-        connections = res.connections;
+        connections = [...res.connections];
       }
     } catch (err: any) {
       errorMsg = err.message || '获取 P2P 会话失败';

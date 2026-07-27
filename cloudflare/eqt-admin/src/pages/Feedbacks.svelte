@@ -42,8 +42,9 @@
 
       const res = await adminFetch<FeedbacksResponse>('/api/v1/admin/feedbacks', { params });
       if (res && Array.isArray(res.feedbacks)) {
-        feedbacks = res.feedbacks;
+        feedbacks = [...res.feedbacks];
         totalCount = res.total || res.feedbacks.length;
+        errorMsg = '';
       }
     } catch (err: any) {
       errorMsg = err.message || '加载用户反馈列表失败';
