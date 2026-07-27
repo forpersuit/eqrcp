@@ -489,16 +489,21 @@ func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token st
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
 		return
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	joinURL := scheme + "://" + r.Host + h.basePath + "/" + token
-	if r.URL.RawQuery != "" {
-		joinURL += "?" + r.URL.RawQuery
+	targetURL := ""
+	if textParam := r.URL.Query().Get("text"); textParam != "" {
+		targetURL = textParam
+	} else {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		targetURL = scheme + "://" + r.Host + h.basePath + "/" + token
+		if r.URL.RawQuery != "" {
+			targetURL += "?" + r.URL.RawQuery
+		}
 	}
 
-	qrImg, err := qr.RenderImage(joinURL)
+	qrImg, err := qr.RenderImage(targetURL)
 	if err != nil {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, err.Error()), fields...)
 		return
@@ -510,7 +515,7 @@ func (h *Handler) handleQRImage(w http.ResponseWriter, r *http.Request, token st
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, err.Error()), fields...)
 		return
 	}
-	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "QR image rendered and sent", nil, append(fields, diag.F("url", joinURL))...)
+	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "QR image rendered and sent", nil, append(fields, diag.F("url", targetURL))...)
 }
 
 // HasRemoteClient reports whether any chat-v2 session has a non-desktop peer online.

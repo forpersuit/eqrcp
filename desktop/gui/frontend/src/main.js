@@ -10,7 +10,6 @@ import shareIllustrationURL from './assets/images/share.png';
 import receiveIllustrationURL from './assets/images/receive.png';
 import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
-import './vendor/qrcode.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 
@@ -5882,10 +5881,6 @@ function qrImageURL(pageUrl) {
     if (!pageUrl) {
         return '';
     }
-    if (typeof window !== 'undefined' && typeof window.generateQRSVGDataURL === 'function') {
-        const svgData = window.generateQRSVGDataURL(pageUrl);
-        if (svgData) return svgData;
-    }
     const currentTask = state.status?.current || state.status?.chat || activeChatTask();
     let localOrigin = '';
     if (currentTask && currentTask.pageUrl) {
@@ -5908,7 +5903,7 @@ function qrImageURL(pageUrl) {
         } else {
             url.pathname = '/qr/image';
         }
-        url.search = '';
+        url.search = `?text=${encodeURIComponent(pageUrl)}`;
         url.hash = '';
         return url.toString();
     } catch {
