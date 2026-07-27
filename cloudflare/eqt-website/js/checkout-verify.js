@@ -9,6 +9,86 @@
 
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    const LOCAL_I18N = {
+        zh: {
+            send_code_btn: '发送验证码',
+            sending_code: '发送中...',
+            code_sent_success: '验证码已发送至您的电子邮箱，请注意查收。',
+            send_code_failed: '验证码发送失败，请稍后重试。',
+            invalid_email_err: '请输入有效的电子邮箱地址',
+            invalid_code_err: '请输入 6 位数字验证码',
+            verifying_btn: '正在验证...',
+            verify_and_pay_btn: '验证并前往支付',
+            verify_failed: '验证失败，请检查您的验证码。'
+        },
+        en: {
+            send_code_btn: 'Send Code',
+            sending_code: 'Sending...',
+            code_sent_success: 'Verification code sent to your email! Please check your inbox.',
+            send_code_failed: 'Failed to send verification code. Please try again later.',
+            invalid_email_err: 'Please enter a valid email address',
+            invalid_code_err: 'Please enter 6-digit code',
+            verifying_btn: 'Verifying...',
+            verify_and_pay_btn: 'Verify & Proceed to Payment',
+            verify_failed: 'Verification failed. Please check your code.'
+        },
+        ja: {
+            send_code_btn: 'コード送信',
+            sending_code: '送信中...',
+            code_sent_success: '認証コードをメールに送信しました。受信トレイをご確認ください。',
+            send_code_failed: '認証コードの送信に失敗しました。',
+            invalid_email_err: '有効なメールアドレスを入力してください',
+            invalid_code_err: '6桁の認証コードを入力してください',
+            verifying_btn: '検証中...',
+            verify_and_pay_btn: '検証して決済へ進む',
+            verify_failed: '検証に失敗しました。コードをご確認ください。'
+        },
+        ko: {
+            send_code_btn: '코드 전송',
+            sending_code: '전송 중...',
+            code_sent_success: '이메일로 인증 코드가 전송되었습니다. 받은 편지함을 확인해 주세요.',
+            send_code_failed: '인증 코드 전송 실패. 나중에 다시 시도해 주세요.',
+            invalid_email_err: '유효한 이메일 주소를 입력해 주세요',
+            invalid_code_err: '6자리 인증 코드를 입력해 주세요',
+            verifying_btn: '인증 중...',
+            verify_and_pay_btn: '인증 후 결제 진행',
+            verify_failed: '인증 실패. 코드를 확인해 주세요.'
+        },
+        es: {
+            send_code_btn: 'Enviar código',
+            sending_code: 'Enviando...',
+            code_sent_success: '¡Código de verificación enviado a tu correo! Revisa tu bandeja de entrada.',
+            send_code_failed: 'Error al enviar el código de verificación.',
+            invalid_email_err: 'Por favor, ingresa un correo electrónico válido',
+            invalid_code_err: 'Por favor, ingresa el código de 6 dígitos',
+            verifying_btn: 'Verificando...',
+            verify_and_pay_btn: 'Verificar y proceder al pago',
+            verify_failed: 'Verificación fallida. Revisa tu código.'
+        },
+        de: {
+            send_code_btn: 'Code senden',
+            sending_code: 'Senden...',
+            code_sent_success: 'Bestätigungscode an Ihre E-Mail gesendet! Bitte prüfen Sie Ihr Postfach.',
+            send_code_failed: 'Bestätigungscode konnte nicht gesendet werden.',
+            invalid_email_err: 'Bitte geben Sie eine gültige E-Mail-Adresse ein',
+            invalid_code_err: 'Bitte geben Sie den 6-stelligen Code ein',
+            verifying_btn: 'Überprüfen...',
+            verify_and_pay_btn: 'Überprüfen & zur Zahlung weiterleiten',
+            verify_failed: 'Überprüfung fehlgeschlagen. Bitte prüfen Sie Ihren Code.'
+        },
+        fr: {
+            send_code_btn: 'Envoyer le code',
+            sending_code: 'Envoi en cours...',
+            code_sent_success: 'Code de vérification envoyé à votre e-mail ! Veuillez vérifier votre boîte de réception.',
+            send_code_failed: "Échec de l'envoi du code de vérification.",
+            invalid_email_err: 'Veuillez saisir une adresse e-mail valide',
+            invalid_code_err: 'Veuillez saisir le code à 6 chiffres',
+            verifying_btn: 'Vérification...',
+            verify_and_pay_btn: 'Vérifier et procéder au paiement',
+            verify_failed: 'Échec de la vérification. Veuillez vérifier votre code.'
+        }
+    };
+
     class CheckoutVerifyComponent {
         constructor() {
             this.cooldownTimer = null;
@@ -51,6 +131,9 @@
 
         getTranslation(key, defaultVal) {
             const lang = this.getLang();
+            if (LOCAL_I18N[lang] && LOCAL_I18N[lang][key]) {
+                return LOCAL_I18N[lang][key];
+            }
             if (window.translations && window.translations[lang] && window.translations[lang][key]) {
                 return window.translations[lang][key];
             }

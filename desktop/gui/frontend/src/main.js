@@ -2565,10 +2565,16 @@ function renderPlanComparisonPanel() {
                 </div>
             </div>
 
-            <!-- 说明与跳转部分 -->
-            <div style="background: var(--bg-hover); border-radius: 12px; padding: 14px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 8px;">
-                <div>💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
-                <div>🎁 <strong>${t('free_tier_rules') || '额度与刷新'}</strong>：${t('free_tier_rules_desc')}</div>
+            <!-- 说明与重要须知部分 -->
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 14px 18px; text-align: left; margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-weight: 800; color: var(--warning); font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️</span> <span>${t('important_license_rules_title') || '激活规则与使用注意事项'}</span>
+                </div>
+                <ul style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.6; margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px;">
+                    <li>${t('important_rule1') || '• 套餐不可叠加：单台设备同一时间仅能生效一个有效授权，无法直接叠加。若需更换套餐，需先在 Cloud Portal 解绑。'}</li>
+                    <li>${t('important_rule2') || '• 解绑额度限制：每张授权码在过去 365 天内最多允许解绑 4 次。'}</li>
+                    <li>${t('important_rule3') || '• 禁止多次激活后退款：请勿频繁购买激活后申请退款。多次激活退款的设备与邮箱将被风险封禁，后续设备将无法正常激活任何套餐。'}</li>
+                </ul>
             </div>
             
             <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">

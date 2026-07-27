@@ -141,8 +141,8 @@
     <script src="js/checkout-verify.js"></script>
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
-    <!-- Header -->
-    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-md">
+    <!-- Header Nav -->
+    <header class="w-full bg-background/80 backdrop-blur-xl border-b border-white/10 py-md sticky top-0 z-50 relative">
         <div class="max-w-5xl mx-auto px-6 flex justify-between items-center">
             <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
                 <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
@@ -151,7 +151,7 @@
             
             <div class="flex items-center gap-md">
                 <!-- Lang select dropdown -->
-                <div class="relative w-36" id="lang-dropdown-wrapper">
+                <div class="relative w-36 z-[100]" id="lang-dropdown-wrapper">
                     <button id="lang-btn" class="w-full flex items-center justify-between gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-lg transition-all duration-300 outline-none focus:outline-none focus:ring-0">
                         <div class="flex items-center gap-xs">
                             <span class="material-symbols-outlined text-base">language</span>
@@ -160,7 +160,7 @@
                         <span class="material-symbols-outlined text-xs opacity-50 transition-transform duration-300" id="lang-arrow">expand_more</span>
                     </button>
                     <!-- Custom Dropdown Panel -->
-                    <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-xs bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
+                    <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-xs bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-[1000] overflow-hidden">
                         <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
                         <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
                         <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
@@ -249,9 +249,23 @@
                         <li class="flex items-center gap-sm text-secondary text-sm font-semibold"><span class="material-symbols-outlined text-secondary text-sm">stars</span> <span data-i18n="price_pro_feat1">Includes ALL Plus features</span></li>
                         <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat2">Flexible monthly subscription (cancel anytime)</span></li>
                         <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat3">Pay-as-you-go with no long-term commitment</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_pro_feat4">Self-service Cloud Portal for license management</span></li>
                     </ul>
                     <button id="buy-pro-btn" class="w-full py-3 glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md font-medium" data-i18n="price_pro_btn">Subscribe Monthly</button>
                 </div>
+            </div>
+
+            <!-- Important Activation Rules Alert Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 my-8 text-left">
+                <h4 class="font-bold text-amber-400 text-base mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined">warning</span>
+                    <span data-i18n="important_license_rules_title">Activation &amp; Refund Rules Notice</span>
+                </h4>
+                <ul class="text-xs text-on-surface-variant space-y-1.5 leading-relaxed">
+                    <li data-i18n="important_rule1">• <strong>Licenses cannot be stacked</strong>: Only one license can be active on a device at a time. To switch plans, unbind the current device in Cloud Portal first.</li>
+                    <li data-i18n="important_rule2">• <strong>Unbind Limit</strong>: Each license key allows a <strong>maximum of 4 unbinds</strong> per rolling 365-day period.</li>
+                    <li data-i18n="important_rule3">• <strong>No repeated activate-then-refund</strong>: Repeatedly activating and refunding will risk-flag your device fingerprint and email, preventing subsequent device activations.</li>
+                </ul>
             </div>
         </section>
 
@@ -324,7 +338,12 @@
                 "price_pro_feat1": "Includes ALL Plus features",
                 "price_pro_feat2": "Flexible monthly subscription (cancel anytime)",
                 "price_pro_feat3": "Pay-as-you-go with no long-term commitment",
+                "price_pro_feat4": "Self-service Cloud Portal for license management",
                 "price_pro_btn": "Subscribe Monthly",
+                "important_license_rules_title": "Activation &amp; Refund Rules Notice",
+                "important_rule1": "• Licenses cannot be stacked: Only one license can be active on a device at a time. To switch plans, unbind the current device in Cloud Portal first.",
+                "important_rule2": "• Unbind Limit: Each license key allows a maximum of 4 unbinds per rolling 365-day period.",
+                "important_rule3": "• No repeated activate-then-refund: Repeatedly activating and refunding will risk-flag your device fingerprint and email, preventing subsequent device activations.",
                 "compliance_title": "Merchant Policy &amp; Compliance",
                 "comp_feat1_title": "Fulfillment &amp; Delivery",
                 "comp_feat1_desc": "Digital licenses are delivered instantly via email upon successful payment confirmation.",
@@ -392,7 +411,12 @@
                 "price_pro_feat1": "包含 Plus 授权的全部高级功能",
                 "price_pro_feat2": "灵活按月订阅，随时取消",
                 "price_pro_feat3": "随开随用，无长期买断或年付负担",
+                "price_pro_feat4": "云端 Portal 随时自主解绑与订阅管理",
                 "price_pro_btn": "按月订阅",
+                "important_license_rules_title": "激活规则与使用注意事项",
+                "important_rule1": "• 套餐不可叠加：单台设备同一时间仅可生效一个有效授权，无法直接叠加。若需更换套餐，需先在 Cloud Portal 中解绑当前设备。",
+                "important_rule2": "• 解绑额度限制：每张授权码在过去 365 天内最多允许解绑 4 次。",
+                "important_rule3": "• 禁止多次激活后退款：请勿频繁购买激活后申请退款。多次激活退款的设备指纹与邮箱将被风险封禁，后续设备将无法正常激活任何套餐。",
                 "compliance_title": "商家政策与合规性",
                 "comp_feat1_title": "交付服务",
                 "comp_feat1_desc": "付款成功确认后，数字许可证密钥将立即通过电子邮件发送给您。",
@@ -983,24 +1007,17 @@
             copyBtn.addEventListener('click', () => {
                 if (codeDisplay) {
                     navigator.clipboard.writeText(codeDisplay.textContent).then(() => {
-                        const copyTxt = document.getElementById('copy-text');
                         const copyIcon = document.getElementById('copy-icon');
-                        if (copyTxt) {
-                            const currentLang = localStorage.getItem('eqt-lang') || 'en';
-                            copyTxt.textContent = (currentLang === 'zh') ? '已复制！' : 'Copied!';
-                        }
                         if (copyIcon) {
-                            copyIcon.textContent = 'check';
+                            copyIcon.textContent = 'done';
+                            copyIcon.classList.add('text-emerald-400');
                         }
                         setTimeout(() => {
-                            if (copyTxt) {
-                                const currentLang = localStorage.getItem('eqt-lang') || 'en';
-                                copyTxt.textContent = (currentLang === 'zh') ? '复制' : 'Copy';
-                            }
                             if (copyIcon) {
                                 copyIcon.textContent = 'content_copy';
+                                copyIcon.classList.remove('text-emerald-400');
                             }
-                        }, 2000);
+                        }, 1500);
                     });
                 }
             });
@@ -1095,9 +1112,8 @@
                 
                 <div class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-4">
                     <code id="license-code-display" class="font-mono text-primary text-base font-bold select-all tracking-wider">EQT-PLUS-XXXXX</code>
-                    <button id="copy-code-btn" class="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs rounded transition-all">
-                        <span class="material-symbols-outlined text-sm" id="copy-icon">content_copy</span>
-                        <span id="copy-text" data-i18n="modal_copy">Copy</span>
+                    <button id="copy-code-btn" class="flex items-center justify-center p-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-lg transition-all" title="Copy License Key">
+                        <span class="material-symbols-outlined text-base" id="copy-icon">content_copy</span>
                     </button>
                 </div>
 
