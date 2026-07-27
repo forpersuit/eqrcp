@@ -163,16 +163,13 @@
 
       // @ts-ignore
       if (typeof window.Globe === 'function') {
-        // Suppress deprecated useLegacyLights warning from internal Globe.gl initialization
-        // @ts-ignore
-        if (window.THREE && window.THREE.WebGLRenderer) {
-          // @ts-ignore
-          Object.defineProperty(window.THREE.WebGLRenderer.prototype, 'useLegacyLights', {
-            get() { return false; },
-            set() {},
-            configurable: true
-          });
-        }
+        const origWarn = console.warn;
+        console.warn = function (...args: any[]) {
+          if (args[0] && typeof args[0] === 'string' && args[0].includes('useLegacyLights')) {
+            return;
+          }
+          origWarn.apply(console, args);
+        };
 
         const textureUrl = generateProceduralEarthTexture();
         // @ts-ignore

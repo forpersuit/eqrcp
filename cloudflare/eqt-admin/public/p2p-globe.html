@@ -162,6 +162,14 @@
     function initGlobe() {
       try {
         if (typeof Globe === 'function' && window.WebGLRenderingContext) {
+          const origWarn = console.warn;
+          console.warn = function (...args) {
+            if (args[0] && typeof args[0] === 'string' && args[0].includes('useLegacyLights')) {
+              return;
+            }
+            origWarn.apply(console, args);
+          };
+
           const textureUrl = generateProceduralEarthTexture();
 
           globeInstance = Globe()
