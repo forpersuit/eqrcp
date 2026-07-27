@@ -85,9 +85,9 @@
       const params: Record<string, string> = {};
       if (searchQuery.trim()) params.q = searchQuery.trim();
       const data = await adminFetch<{ licenses: License[] }>('/api/v1/admin/licenses', { params });
-      licenses = Array.isArray(data.licenses) ? [...data.licenses] : [];
+      const rawList = data && Array.isArray(data.licenses) ? data.licenses : [];
+      licenses = [...rawList];
       errorMsg = '';
-      // Keep unbind modal selection in sync when silent refresh brings new activations
       if (selectedLicense) {
         const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
         if (refreshed) selectedLicense = refreshed;

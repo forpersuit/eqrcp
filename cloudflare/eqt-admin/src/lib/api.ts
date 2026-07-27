@@ -47,7 +47,12 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     data?.code === 'ACCESS_JWT_INVALID'
   ) {
     clearAccessSession();
-    window.location.reload();
+    const loginUrl = accessLoginUrl();
+    if (loginUrl && !window.location.href.includes('login')) {
+      window.location.href = loginUrl;
+    } else {
+      window.location.reload();
+    }
     throw new Error('Cloudflare Access 会话无效或未登录');
   }
 
