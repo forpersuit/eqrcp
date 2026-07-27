@@ -16,14 +16,20 @@ export function isAuthenticated(): boolean {
   return sessionStorage.getItem(ACCESS_OK_KEY) === '1';
 }
 
-/** Access logout: send user to CF Access logout endpoint */
+/** Access logout: send user to CF Access logout URL */
 export function accessLogoutUrl(): string {
+  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'sageai.cloudflareaccess.com')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
   const returnTo = encodeURIComponent(window.location.origin + '/');
-  return `${window.location.origin}/cdn-cgi/access/logout?returnTo=${returnTo}`;
+  return `https://${team}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
 
-/** Access login: send user directly to app root so Cloudflare Access edge can handle login/session */
+/** Access login: send user directly to CF Access team portal */
 export function accessLoginUrl(): string {
-  return window.location.origin + '/';
+  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'sageai.cloudflareaccess.com')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+  return `https://${team}/`;
 }
 
