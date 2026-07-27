@@ -1186,10 +1186,10 @@
   let channelNotice = '';
   $: currentTheme = ($currentDevice && $currentDevice.theme) || 'theme-0';
   $: joinUrl = window.location.origin + "/chat-v2/" + token + "?join=" + joinToken + "&theme=" + currentTheme + "&lang=" + currentLang;
-  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}#chat_${token.slice(0, 10)}`;
+  $: wanUrl = `https://eqt.net.im/p/?token=${token}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}#chat:${token}`;
   $: activeUrl = (qrChannelMode === 'wan' && isPaid) ? wanUrl : joinUrl;
   $: activeQrImgSrc = (qrChannelMode === 'wan' && isPaid)
-    ? `${window.location.origin}/qr/image?text=${encodeURIComponent(wanUrl)}`
+    ? `/chat-v2/${token}/qr.png?text=${encodeURIComponent(wanUrl)}&join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`
     : `/chat-v2/${token}/qr.png?join=${joinToken}&theme=${currentTheme}&lang=${currentLang}`;
 
   function setChannelMode(mode: 'lan' | 'wan') {

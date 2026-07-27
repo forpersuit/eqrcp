@@ -1856,17 +1856,6 @@ function renderChatPanel(task) {
                 <div class="chat-count">${escapeHTML(t('chat_message_count', { count: messageCount }))}</div>
                 ${lastActivity ? `<p class="side-note">${t('last_activity')}: ${escapeHTML(lastActivity)}</p>` : ''}
             </div>
-            <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
-                <div class="panel-head">
-                    <h2>${t('scan_to_join')}</h2>
-                    <button type="button" class="side-icon-button chat-qr-toggle-action ${qrPulse ? 'qr-breathe' : ''}" title="${qrToggleLabel}" aria-label="${qrToggleLabel}">${qrIcon()}</button>
-                </div>
-                ${state.chatQROpen ? `
-                    <div class="chat-qr-content">
-                        ${renderQRHeroHtml(activeTask || { action: 'chat', pageUrl: chatUrl }, true)}
-                    </div>
-                ` : `<p class="side-note">${t('chat_qr_expand_tips')}</p>`}
-            </div>
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <h2>${t('devices')}</h2>
