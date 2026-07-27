@@ -2485,10 +2485,13 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <span>${t('plan_feature_cli_unlimit') || 'CLI 命令行模式传输无额度与速度限制'}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_chat_free') || 'Chat 模式：每日 10 分钟满速体验 (超额降级限速)'}</span>
+                            ${xRed} <span>${t('plan_feature_chat_free') || 'Chat 模式：每日 5 分钟满速体验 (超额降级限速)'}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_share_free') || 'Share/Receive 传输：每日免费前 5 次 (超额限制5文件/50MB)'}</span>
+                            ${xRed} <span>${t('plan_feature_share_free') || 'Share 发送限制：每日免费 5 次。超额后若超 5 文件或总大 50MB 手机下载时 PC 会报错并闪退中止；每日非首次传输单次仅限 2 台设备同时连接'}</span>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
+                            ${xRed} <span>${t('plan_feature_receive_free') || 'Receive 接收限制：每日免费 5 次。超额后待传输文件列表在网页端只读不可编辑，超过 5 文件或 50MB 则无法添加'}</span>
                         </li>
                     </ul>
                 </div>

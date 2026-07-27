@@ -222,7 +222,7 @@
 
             <div class="flex gap-3 pt-2">
                 <button id="unbind-cancel-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Cancel</button>
-                <button id="unbind-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-bold font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_unbind_btn">Confirm & Unbind</button>
+                <button id="unbind-ok-btn" class="flex-1 bg-gradient-to-r from-secondary to-primary hover:opacity-90 text-slate-950 font-extrabold py-3 rounded-xl transition-all duration-300 active:scale-95 shadow-lg shadow-primary/20" data-i18n="confirm_unbind_btn">Confirm & Unbind</button>
             </div>
         </div>
     </div>
@@ -907,7 +907,7 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
 
-                const successMsg = `✅ ${dict.toast_code_sent || 'Verification code sent to your email.'} (${email})`;
+                const successMsg = `✅ ${dict.toast_code_sent || 'Verification code sent to your email.'}`;
                 setSendCodeStatus(successMsg, 'success');
                 showToast(dict.toast_code_sent || 'Verification code sent to your email.');
                 
@@ -1593,6 +1593,13 @@
             // Confirm unbind modal
             document.getElementById('unbind-cancel-btn').addEventListener('click', hideUnbindModal);
             document.getElementById('unbind-ok-btn').addEventListener('click', handleConfirmUnbind);
+
+            document.getElementById('login-code')?.addEventListener('input', (e) => {
+                const val = e.target.value.trim();
+                if (/^\d{6}$/.test(val)) {
+                    handleLogin();
+                }
+            });
 
             // Delegate click events on licenses container for toggle-auto-renew
             document.getElementById('licenses-container').addEventListener('click', async (e) => {
