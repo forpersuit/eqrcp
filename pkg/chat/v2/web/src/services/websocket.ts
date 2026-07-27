@@ -18,6 +18,7 @@ export class ChatWebSocketClient {
   private heartbeatIntervalId: any = null;
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
+  private isSuspended = false;
   private clientToken = '';
   private pendingLogs: string[] = [];
 
@@ -103,7 +104,18 @@ export class ChatWebSocketClient {
     // Immediately reset reconnect attempts and reconnect on foreground visibility.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'hidden') {
+          // Desktop GUI host stays active when minimized or hidden; never close connection actively.
+          if (this.clientPeer === 'desktop') {
+            return;
+          }
+          this.isSuspended = true;
+          if (this.ws) {
+            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
+            this.ws.close(1000, "page_hidden");
+          }
+        } else if (document.visibilityState === 'visible') {
+          this.isSuspended = false;
           if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
@@ -179,7 +191,7 @@ export class ChatWebSocketClient {
       });
       isInitialConnect = false;
 
-      // Clean query 'join' parameter from address bar to distinguish future page refreshes from a fresh scan
+      // Clean query 'join' parameter from address bar and reset joinParam field to distinguish future reconnections from fresh scan actions
       if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         if (url.searchParams.has('join')) {
@@ -211,6 +223,10 @@ export class ChatWebSocketClient {
     this.ws.onclose = (event) => {
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
+      if (this.isSuspended) {
+        this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
+        return;
+      }
       // Another tab/window of the same browser took over this peer in the room.
       // Stop auto-reconnect to avoid fights; user can resume via explicit button.
       if (event.reason === 'replaced_by_peer') {
