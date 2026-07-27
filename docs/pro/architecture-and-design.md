@@ -1,0 +1,202 @@
+# EQT Pro v1 详细架构与设计方案 (Architecture & Detailed Design)
+
+---
+
+## 1. 系统总体架构与设计边界
+
+EQT Pro v1 旨在提供**跨公网（WAN）的 P2P 直连文件传输与消息通信**。为保持最精简的云端开销和极致的安全隐私，Pro v1 确定了以下技术边界：
+
+- **只做 P2P 直传，绝不做公网中转**：文件传输速率完全取决于用户双方的公网上下行宽带，服务商无中转服务器流量支出。
+- **独立 Serverless 信令引擎**：在 Cloudflare 创建独立的 Worker 服务 `eqt-p2p-signal`，专门负责会话房间分配、Pro 鉴权与 SDP/ICE 候选地址交换。
+- **端到端加密 (E2EE)**：传输层基于 WebRTC DataChannel (DTLS-1.2/1.3 + AES-GCM)，信令层仅转发加密握手参数。
+
+---
+
+## 2. 核心模块与交互时序 (Sequence Diagram)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant PC as PC 端 (Go 后端)
+    participant Sig as Cloudflare Worker (eqt-p2p-signal)
+    participant STUN as 公共 STUN (Cloudflare/Google)
+    participant MB as 远端设备 (浏览器 / Mobile)
+
+    Note over PC,MB: 阶段一：房间创建与身份鉴权
+    PC->>Sig: 1. POST /api/v1/p2p/room/create (Header: X-License-Code, DeviceID)
+    Sig->>Sig: 2. 校验 D1 数据库中 License 是否具备 Pro 权益
+    Sig-->>PC: 3. 返回 room_id (8位安全随机串), room_token, ttl (600s)
+    PC->>PC: 4. 渲染公网扫码 URL: https://eqt.net.im/p/#<room_id>
+
+    Note over PC,MB: 阶段二：STUN 探测与信令交换
+    MB->>Sig: 5. POST /api/v1/p2p/room/join (room_id)
+    Sig-->>MB: 6. 返回加入成功 & Token
+    PC->>STUN: 7. 获取 PC 端 Reflexive Candidate
+    MB->>STUN: 8. 获取 MB 端 Reflexive Candidate
+    PC->>PC: 9. 生成 WebRTC SDP Offer
+    PC->>Sig: 10. POST /api/v1/p2p/signal/push (role=host, offer_sdp, candidates)
+    MB->>Sig: 11. GET /api/v1/p2p/signal/poll (role=client)
+    Sig-->>MB: 12. 下发 Host 的 SDP Offer 与 Candidate
+    MB->>MB: 13. 生成 WebRTC SDP Answer
+    MB->>Sig: 14. POST /api/v1/p2p/signal/push (role=client, answer_sdp, candidates)
+    PC->>Sig: 15. GET /api/v1/p2p/signal/poll (role=host)
+    Sig-->>PC: 16. 下发 Client 的 SDP Answer 与 Candidate
+
+    Note over PC,MB: 阶段三：WebRTC 打洞与直连传输
+    PC<->>MB: 17. 发起 UDP ICE 打洞尝试 (STUN Binding)
+    alt 打洞成功 (ICE Connected)
+        PC<==>MB: 18. 建立 WebRTC DataChannel，双向全速传输数据
+        PC->>Sig: 19. DELETE /api/v1/p2p/room (主动销毁房间信令邮箱)
+    else 打洞失败 (ICE Failed - 如两端均为 Symmetric NAT)
+        PC-->>MB: 20. 界面显示“NAT 打洞失败，请连接同一局域网或升级 Pro v2”
+    end
+```
+
+---
+
+## 3. Cloudflare Worker 信令服务端 API 契约 (`eqt-p2p-signal`)
+
+服务部署域名统一为：`https://signal.eqt.net.im`
+
+### 3.1 `POST /api/v1/p2p/room/create` — 创建 P2P 会话房间
+- **请求头**：
+  - `X-License-Code`: 用户当前的授权激活码（如 `EQT-PRO-20260727-XXXXXX-YYYY`）
+  - `X-Device-ID`: 客户端物理设备指纹
+- **请求体**：
+  ```json
+  {
+    "client_version": "v1.15.0",
+    "mode": "share" // share | receive | chat
+  }
+  ```
+- **响应 (200 OK)**：
+  ```json
+  {
+    "code": 200,
+    "message": "success",
+    "data": {
+      "room_id": "r8k3m9p1",
+      "host_token": "tok_host_sec_xxxxxx",
+      "expires_at": 1785145800,
+      "stun_servers": [
+        "stun:stun.cloudflare.com:3478",
+        "stun:stun.l.google.com:19302"
+      ]
+    }
+  }
+  ```
+- **异常响应 (403 Forbidden)**：当授权码无效、不是 Pro 订阅或到期时返回：
+  ```json
+  {
+    "code": 403,
+    "error": "pro_tier_required",
+    "message": "P2P WAN transfer requires an active Pro subscription."
+  }
+  ```
+
+### 3.2 `POST /api/v1/p2p/room/join` — 加入会话房间
+- **请求体**：
+  ```json
+  {
+    "room_id": "r8k3m9p1"
+  }
+  ```
+- **响应 (200 OK)**：
+  ```json
+  {
+    "code": 200,
+    "data": {
+      "client_token": "tok_client_sec_yyyyyy",
+      "stun_servers": [
+        "stun:stun.cloudflare.com:3478",
+        "stun:stun.l.google.com:19302"
+      ]
+    }
+  }
+  ```
+
+### 3.3 `POST /api/v1/p2p/signal/push` — 推送 SDP / Candidate 信令
+- **请求头**：`X-Room-Token: tok_host_sec_xxxxxx`
+- **请求体**：
+  ```json
+  {
+    "room_id": "r8k3m9p1",
+    "type": "offer", // "offer" | "answer" | "candidate"
+    "payload": "{\"type\":\"offer\",\"sdp\":\"v=0\\r\\no=- ...\"}"
+  }
+  ```
+- **响应 (200 OK)**：`{ "code": 200, "message": "signal_buffered" }`
+
+### 3.4 `GET /api/v1/p2p/signal/poll` — 拉取对端信令
+- **请求头**：`X-Room-Token: tok_client_sec_yyyyyy`
+- **查询参数**：`room_id=r8k3m9p1&since=0`
+- **响应 (200 OK)**：
+  ```json
+  {
+    "code": 200,
+    "data": {
+      "signals": [
+        {
+          "id": 1,
+          "sender": "host",
+          "type": "offer",
+          "payload": "...",
+          "created_at": 1785145210
+        }
+      ]
+    }
+  }
+  ```
+
+---
+
+## 4. 客户端与 WebRTC 技术实现规范
+
+### 4.1 Go 后端 WebRTC 引擎选择
+- **核心依赖**：采用 Golang 工业级 WebRTC 实现 [pion/webrtc](https://github.com/pion/webrtc)（`v3` / `v4`）。
+- **与既有代码结合**：
+  在 `pkg/server` 下新增 `pkg/server/p2p` 子包：
+  - `p2p/engine.go`：封装 pion PeerConnection 管理。
+  - `p2p/signaling.go`：封装与 Cloudflare Worker (`signal.eqt.net.im`) 的信令交互。
+  - `p2p/datachannel.go`：实现将 DataChannel 字节流桥接到既有的 HTTP/WebSocket Handler 逻辑中。
+
+### 4.2 网页端 / 移动端 WebRTC 接入
+- 移动端通过扫码打开 Web 页面，直接使用浏览器原生 `window.RTCPeerConnection` API：
+  ```javascript
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:stun.l.google.com:19302' }
+    ]
+  });
+  ```
+
+---
+
+## 5. 打洞失败降级与异常处理策略 (Fallback Strategy)
+
+在真实公网环境下，不同 NAT 类型之间的打洞成功率如下表所示：
+
+| NAT 类型组合 | Full Cone (全锥型) | Restricted Cone (限制型) | Port Restricted (端口限制) | Symmetric NAT (对称型) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Full Cone** | **100% 成功** | **100% 成功** | **100% 成功** | **100% 成功** |
+| **Restricted Cone** | **100% 成功** | **100% 成功** | **100% 成功** | **100% 成功** |
+| **Port Restricted**| **100% 成功** | **100% 成功** | **100% 成功** | **失败** |
+| **Symmetric NAT** | **100% 成功** | **100% 成功** | **失败** | **失败 (必须中转)** |
+
+### 降级防护原则：
+1. **超时检测 (ICE Timeout)**：设置 15 秒打洞超时计时器。若 15 秒内 `iceConnectionState` 未能进入 `connected` 或 `completed` 状态，强行触发 `Failed` 处理。
+2. **非阻塞友好提示**：界面不崩溃、不无限卡死在加载中，弹窗/系统消息明确告知：
+   > ⚠️ **公网 P2P 打洞失败**
+   > 检测到双方当前处于双对称型防火墙（Symmetric NAT）环境。Pro v1 仅支持 P2P 直连，请尝试：
+   > 1. 将其中一台设备切换至同一 Wi-Fi（局域网直连模式）。
+   > 2. 开启手机热点供 PC 连接后再试。
+3. **资源自动清理**：打洞失败或完成时，立即调用 `POST /api/v1/p2p/room/destroy` 清除 Cloudflare Worker 内存/KV 中滞留的信令元数据。
+
+---
+
+## 6. 安全防范与反刷机制
+
+1. **信令房间短生命周期 (TTL)**：所有创建的 P2P 信令房间默认最长存活 10 分钟（600秒）。超时自动从数据库/内存中擦除。
+2. **频率限制 (Rate Limiting)**：同一个 Pro 激活码或 IP 1 分钟内最多允许创建 10 个信令房间，防范被恶意脚本扫描刷接口。
+3. **信令房间鉴权 Token**：信令操作需校验由 Worker 签发的 `host_token` 与 `client_token`，防止第三方恶意注入伪造的 SDP/Candidate 载荷。
