@@ -79,14 +79,24 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     init.duplex = "half";
   }
 
-  const upstream = await fetch(target, init);
-  // Clone response with CORS-friendly headers for same-origin SPA (same host → fine)
-  const outHeaders = new Headers(upstream.headers);
-  outHeaders.delete("content-encoding");
-  outHeaders.delete("transfer-encoding");
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: outHeaders,
-  });
+  try {
+    const upstream = await fetch(target, init);
+    // Clone response with CORS-friendly headers for same-origin SPA (same host → fine)
+    const outHeaders = new Headers(upstream.headers);
+    outHeaders.delete("content-encoding");
+    outHeaders.delete("transfer-encoding");
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: outHeaders,
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({
+      error: `Upstream service unavailable (${err?.message || "connection error"})`,
+      target
+    }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
 }

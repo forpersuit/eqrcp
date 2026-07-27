@@ -104,6 +104,30 @@ function cleanupExpiredRooms() {
   }
 }
 
+async function logAdminAudit(env: Env, action: string, targetType: string, targetId: string, details: any, operatorIp: string) {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      `INSERT INTO admin_audit_logs (action, target_type, target_id, details_json, operator_ip, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(action, targetType, targetId, JSON.stringify(details), operatorIp, new Date().toISOString()).run();
+  } catch (err) {
+    console.error('Failed to log admin audit:', err);
+  }
+}
+
+async function logSystemError(env: Env, category: string, message: string, context: any) {
+  try {
+    if (!env.DB) return;
+    await env.DB.prepare(
+      `INSERT INTO system_error_logs (level, category, error_message, context_json, created_at)
+       VALUES ('ERROR', ?, ?, ?, ?)`
+    ).bind(category, message, JSON.stringify(context), new Date().toISOString()).run();
+  } catch (err) {
+    console.error('Failed to log system error:', err);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const corsHeaders = handleCORS(request);
@@ -318,6 +342,14 @@ export default {
           const room = activeRooms.get(roomId)!;
           if (isAdmin || roomToken === room.hostToken || roomToken === room.clientToken) {
             activeRooms.delete(roomId);
+            if (isAdmin) {
+              const operatorIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+              ctx.waitUntil(logAdminAudit(env, 'TEARDOWN_P2P_ROOM', 'P2P_ROOM', roomId, {
+                host_ip: room.hostGeo.ip,
+                client_ip: room.clientGeo?.ip || null,
+                is_cross_border: room.clientGeo ? (room.hostGeo.country !== room.clientGeo.country) : false
+              }, operatorIp));
+            }
             return jsonResponse({ code: 200, message: 'room_destroyed' });
           }
         }
@@ -326,6 +358,10 @@ export default {
 
       return jsonResponse({ code: 404, error: 'not_found', message: 'Endpoint not found' }, 404);
     } catch (err: any) {
+      ctx.waitUntil(logSystemError(env, 'P2P_SIGNAL_ERROR', err?.message || 'Unknown error', {
+        url: request.url,
+        method: request.method
+      }));
       return jsonResponse({ code: 500, error: 'server_error', message: err?.message || 'Internal error' }, 500);
     }
   }
