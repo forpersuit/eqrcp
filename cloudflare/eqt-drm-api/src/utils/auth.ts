@@ -161,15 +161,63 @@ function tryLocalDevJwt(
 }
 
 /**
- * Admin route guard — Cloudflare Access JWT only (no ADMIN_SECRET).
+ * Admin route guard — Cloudflare Access JWT.
  * Header: Cf-Access-Jwt-Assertion
  */
 export async function requireAdminAuth(
   request: Request,
   env: Env,
-  corsHeaders: Record<string, string>
+  corsHeaders: Record<string, string> = {}
 ): Promise<Response | null> {
   await ensureDrmTables(env);
-  (request as any).__adminEmail = "admin@eqt.net.im";
-  return null;
+
+  if (!accessConfigured(env)) {
+    return new Response(
+      JSON.stringify({
+        error: 'Admin API not configured on DRM Worker (CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD missing)',
+        code: 'ACCESS_NOT_CONFIGURED'
+      }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const jwt =
+    request.headers.get('Cf-Access-Jwt-Assertion') ||
+    request.headers.get('cf-access-jwt-assertion');
+
+  if (!jwt) {
+    return new Response(
+      JSON.stringify({
+        error: 'Cloudflare Access JWT required for Admin DRM API',
+        code: 'ACCESS_JWT_REQUIRED'
+      }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const local = tryLocalDevJwt(jwt, env);
+  if (local.ok) {
+    (request as any).__adminEmail = local.email;
+    return null;
+  }
+
+  const result = await verifyCloudflareAccessJwt(
+    jwt,
+    env.CF_ACCESS_TEAM_DOMAIN!,
+    env.CF_ACCESS_AUD!,
+    parseAllowedEmails(env)
+  );
+  if (result.ok) {
+    (request as any).__adminEmail = result.email;
+    return null;
+  }
+
+  return new Response(
+    JSON.stringify({
+      error: result.error || 'Invalid Cloudflare Access JWT',
+      code: 'ACCESS_JWT_INVALID'
+    }),
+    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
 }
+
