@@ -30,18 +30,57 @@ import (
 var assets embed.FS
 
 type FileLogger struct {
-	mu      sync.RWMutex
-	file    *os.File
-	enabled bool
+	mu       sync.RWMutex
+	file     *os.File
+	filePath string
+	enabled  bool
 }
 
 func NewFileLogger(filePath string, enabled bool) *FileLogger {
 	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return &FileLogger{enabled: false}
+		return &FileLogger{filePath: filePath, enabled: false}
 	}
-	return &FileLogger{file: f, enabled: enabled}
+	return &FileLogger{file: f, filePath: filePath, enabled: enabled}
+}
+
+func (l *FileLogger) SetLogDir(logDir string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	var newPath string
+	if logDir != "" {
+		newPath = filepath.Join(logDir, "desktop.log")
+	} else {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			dir = os.TempDir()
+		}
+		newPath = filepath.Join(dir, "eqt", "desktop.log")
+	}
+
+	if l.filePath == newPath && l.file != nil {
+		return
+	}
+
+	if l.file != nil {
+		_ = l.file.Close()
+		l.file = nil
+	}
+
+	l.filePath = newPath
+	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
+	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		l.file = f
+	}
+}
+
+func (l *FileLogger) GetFilePath() string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.filePath
 }
 
 func (l *FileLogger) SetEnabled(enabled bool) {
@@ -57,15 +96,20 @@ func (l *FileLogger) Enabled() bool {
 }
 
 func (l *FileLogger) Write(p []byte) (n int, err error) {
-	if l.Enabled() && l.file != nil {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.enabled && l.file != nil {
 		return l.file.Write(p)
 	}
 	return len(p), nil
 }
 
 func (l *FileLogger) Close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.file != nil {
 		_ = l.file.Close()
+		l.file = nil
 	}
 }
 

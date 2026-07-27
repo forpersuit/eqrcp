@@ -897,7 +897,11 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 	}
 	a.setCloseBehavior(saved.CloseBehavior)
 	if a.logger != nil {
+		a.logger.SetLogDir(saved.LogDir)
 		a.logger.SetEnabled(saved.DebugLog || saved.DevMode)
+	}
+	if a.agent != nil {
+		a.agent.UpdateLogDir(saved.LogDir)
 	}
 	return saved, nil
 }
@@ -1049,6 +1053,13 @@ func (a *App) ValidateFreeTier(paths []string) string {
 }
 
 func (a *App) AppInfo() AppInfo {
+	logPath := ""
+	if a.logger != nil {
+		logPath = a.logger.GetFilePath()
+	}
+	if logPath == "" {
+		logPath = desktopLogFilePath()
+	}
 	info := AppInfo{
 		Product:     "EQT",
 		Name:        "Easy QR Transfer",
@@ -1057,7 +1068,7 @@ func (a *App) AppInfo() AppInfo {
 		AgentURL:    "",
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
-		LogPath:     desktopLogFilePath(),
+		LogPath:     logPath,
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
