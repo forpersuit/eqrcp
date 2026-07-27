@@ -34,10 +34,10 @@ interface SignalItem {
 const activeRooms = new Map<string, RoomState>();
 
 const DEFAULT_STUN_SERVERS = [
+  'stun:stun.cloudflare.com:3478',
+  'stun:stun.l.google.com:19302',
   'stun:stun.qq.com:3478',
   'stun:stun.miwifi.com:3478',
-  'stun:stun.cloudflare.com:3478',
-  'stun:stun.l.google.com:19302'
 ];
 
 // Fallback lat/lon dictionary for countries
