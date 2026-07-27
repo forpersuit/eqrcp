@@ -43,9 +43,9 @@ sequenceDiagram
     Sig-->>PC: 16. 下发 Client 的 SDP Answer 与 Candidate
 
     Note over PC,MB: 阶段三：WebRTC 打洞与直连传输
-    PC<->>MB: 17. 发起 UDP ICE 打洞尝试 (STUN Binding)
+    PC->>MB: 17. 发起 UDP ICE 打洞尝试 (STUN Binding)
     alt 打洞成功 (ICE Connected)
-        PC<==>MB: 18. 建立 WebRTC DataChannel，双向全速传输数据
+        PC->>MB: 18. 建立 WebRTC DataChannel (双向全速数据传输)
         PC->>Sig: 19. DELETE /api/v1/p2p/room (主动销毁房间信令邮箱)
     else 打洞失败 (ICE Failed - 如两端均为 Symmetric NAT)
         PC-->>MB: 20. 界面显示“NAT 打洞失败，请连接同一局域网或升级 Pro v2”
@@ -79,6 +79,8 @@ sequenceDiagram
       "host_token": "tok_host_sec_xxxxxx",
       "expires_at": 1785145800,
       "stun_servers": [
+        "stun:stun.qq.com:3478",
+        "stun:stun.miwifi.com:3478",
         "stun:stun.cloudflare.com:3478",
         "stun:stun.l.google.com:19302"
       ]
@@ -108,6 +110,8 @@ sequenceDiagram
     "data": {
       "client_token": "tok_client_sec_yyyyyy",
       "stun_servers": [
+        "stun:stun.qq.com:3478",
+        "stun:stun.miwifi.com:3478",
         "stun:stun.cloudflare.com:3478",
         "stun:stun.l.google.com:19302"
       ]
@@ -165,6 +169,8 @@ sequenceDiagram
   ```javascript
   const pc = new RTCPeerConnection({
     iceServers: [
+      { urls: 'stun:stun.qq.com:3478' },
+      { urls: 'stun:stun.miwifi.com:3478' },
       { urls: 'stun:stun.cloudflare.com:3478' },
       { urls: 'stun:stun.l.google.com:19302' }
     ]
