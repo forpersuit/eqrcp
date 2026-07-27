@@ -2171,7 +2171,7 @@ function renderSettingsPanel() {
                                         </button>
                                     </div>
                                 `).join('') : `
-                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">暂无日志文件</div>
+                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">${t('dev_no_log_files') || '暂无已生成的日志文件'}</div>
                                 `}
                             </div>
                         </div>
