@@ -9,7 +9,7 @@
   let filterMode = $state<'all' | 'cross_border'>('all');
   let autoRefresh = $state(true);
   let timer: any = null;
-  let iframeRef: HTMLIFrameElement | null = $state(null);
+  let globeContainerRef: HTMLDivElement | null = $state(null);
 
   let totalActive = $derived(connections.length);
   let crossBorderCount = $derived(connections.filter(c => c.is_cross_border).length);
@@ -21,18 +21,33 @@
       : connections
   );
 
-  function sendConnectionsToIframe(conns: P2PConnection[]) {
-    if (iframeRef && iframeRef.contentWindow) {
-      try {
-        iframeRef.contentWindow.postMessage({
-          type: 'P2P_CONNECTIONS',
-          connections: JSON.parse(JSON.stringify(conns))
-        }, '*');
-      } catch (e) {
-        console.warn('Failed to postMessage to globe iframe:', e);
-      }
-    }
-  }
+  // Country Lat/Lon lookup dictionary for Geo IP
+  const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
+    'CN': { lat: 35.8617, lng: 104.1954, name: '中国' },
+    'US': { lat: 37.0902, lng: -95.7129, name: '美国' },
+    'JP': { lat: 36.2048, lng: 138.2529, name: '日本' },
+    'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
+    'HK': { lat: 22.3193, lng: 114.1694, name: '香港' },
+    'DE': { lat: 51.1657, lng: 10.4515, name: '德国' },
+    'GB': { lat: 55.3781, lng: -3.4360, name: '英国' },
+    'FR': { lat: 46.2276, lng: 2.2137, name: '法国' },
+    'AU': { lat: -25.2744, lng: 133.7751, name: '澳大利亚' },
+    'CA': { lat: 56.1304, lng: -106.3468, name: '加拿大' },
+    'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' }
+  };
+
+  const AMBIENT_CONNECTIONS = [
+    { host: { country: 'CN', ip: '114.114.x.x' }, client: { country: 'US', ip: '8.8.x.x' }, is_cross_border: true },
+    { host: { country: 'CN', ip: '120.24.x.x' }, client: { country: 'JP', ip: '210.140.x.x' }, is_cross_border: true },
+    { host: { country: 'JP', ip: '210.140.x.x' }, client: { country: 'DE', ip: '82.165.x.x' }, is_cross_border: true },
+    { host: { country: 'HK', ip: '203.0.x.x' }, client: { country: 'SG', ip: '118.189.x.x' }, is_cross_border: true }
+  ];
+
+  let globeInstance: any = null;
+  let isFallback2D = $state(false);
+  let canvas2D: HTMLCanvasElement | null = null;
+  let animFrameId: number | null = null;
+  let resizeObserver: ResizeObserver | null = null;
 
   async function loadConnections() {
     try {
@@ -40,17 +55,13 @@
       const res = await adminFetch<P2PConnectionsResponse>('/api/v1/p2p/admin/connections');
       if (res && Array.isArray(res.connections)) {
         connections = [...res.connections];
-        sendConnectionsToIframe(connections);
+        renderGlobeData(connections);
       }
     } catch (err: any) {
       errorMsg = err.message || '获取 P2P 会话失败';
     } finally {
       loading = false;
     }
-  }
-
-  function handleIframeLoad() {
-    sendConnectionsToIframe(connections);
   }
 
   async function destroyRoom(roomId: string) {
@@ -82,15 +93,282 @@
     return `${m}分${s}秒`;
   }
 
+  function loadScript(src: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve();
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    });
+  }
+
+  function generateProceduralEarthTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, '#020617');
+    grad.addColorStop(0.5, '#091328');
+    grad.addColorStop(1, '#020617');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 32) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 32) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+    const drawContinentBlob = (cx: number, cy: number, rx: number, ry: number) => {
+      for (let x = cx - rx; x <= cx + rx; x += 12) {
+        for (let y = cy - ry; y <= cy + ry; y += 12) {
+          const dx = (x - cx) / rx;
+          const dy = (y - cy) / ry;
+          if (dx * dx + dy * dy <= 1 + (Math.random() * 0.3 - 0.15)) {
+            ctx.beginPath();
+            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+    };
+
+    drawContinentBlob(750, 180, 140, 90);
+    drawContinentBlob(260, 160, 120, 80);
+    drawContinentBlob(340, 340, 70, 100);
+    drawContinentBlob(540, 140, 60, 50);
+    drawContinentBlob(530, 270, 80, 100);
+    drawContinentBlob(820, 360, 70, 50);
+
+    return canvas.toDataURL();
+  }
+
+  async function initGlobeEngine() {
+    if (!globeContainerRef) return;
+    try {
+      const loadPromise = Promise.all([
+        loadScript('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js'),
+        loadScript('https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js')
+      ]);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('CDN timeout')), 3000));
+      await Promise.race([loadPromise, timeoutPromise]).catch(() => {});
+
+      // @ts-ignore
+      if (typeof window.Globe === 'function') {
+        const textureUrl = generateProceduralEarthTexture();
+        // @ts-ignore
+        globeInstance = window.Globe()
+          (globeContainerRef)
+          .globeImageUrl(textureUrl)
+          .backgroundColor('#020617')
+          .showAtmosphere(true)
+          .atmosphereColor('#38bdf8')
+          .atmosphereAltitude(0.18)
+          .arcColor((d: any) => d.is_cross_border ? ['#a855f7', '#ec4899'] : ['#38bdf8', '#22c55e'])
+          .arcDashLength(0.4)
+          .arcDashGap(0.2)
+          .arcDashAnimateTime(1600)
+          .arcStroke(1.4)
+          .pointColor(() => '#38bdf8')
+          .pointAltitude(0.03)
+          .pointRadius(0.6)
+          .labelsData(Object.values(COUNTRY_COORDS))
+          .labelLat((d: any) => d.lat)
+          .labelLng((d: any) => d.lng)
+          .labelText((d: any) => d.name)
+          .labelSize(0.6)
+          .labelDotRadius(0.3)
+          .labelColor(() => 'rgba(255, 255, 255, 0.7)');
+
+        if (globeInstance.controls()) {
+          globeInstance.controls().autoRotate = true;
+          globeInstance.controls().autoRotateSpeed = 0.8;
+        }
+
+        handleGlobeResize();
+        renderGlobeData(connections);
+      } else {
+        init2DFallback();
+      }
+    } catch (e) {
+      console.warn("Globe.gl WebGL fallback to 2D:", e);
+      init2DFallback();
+    }
+  }
+
+  function handleGlobeResize() {
+    if (globeInstance && globeContainerRef) {
+      const w = globeContainerRef.clientWidth || 800;
+      const h = globeContainerRef.clientHeight || 480;
+      globeInstance.width(w).height(h);
+    }
+  }
+
+  function renderGlobeData(conns: P2PConnection[]) {
+    const activeList = (conns && conns.length > 0) ? conns : AMBIENT_CONNECTIONS;
+
+    if (isFallback2D) {
+      return;
+    }
+
+    if (!globeInstance) return;
+
+    const arcs: any[] = [];
+    const points: any[] = [];
+
+    activeList.forEach((c: any) => {
+      const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 35.8, lng: 104.1, name: '中国' };
+      const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.0, lng: -95.7, name: '美国' }) : null;
+
+      points.push({ lat: hCoord.lat, lng: hCoord.lng, size: 0.8, color: '#38bdf8' });
+
+      if (cCoord) {
+        points.push({ lat: cCoord.lat, lng: cCoord.lng, size: 0.8, color: '#ec4899' });
+        arcs.push({
+          startLat: hCoord.lat,
+          startLng: hCoord.lng,
+          endLat: cCoord.lat,
+          endLng: cCoord.lng,
+          is_cross_border: !!c.is_cross_border
+        });
+      }
+    });
+
+    globeInstance.arcsData(arcs);
+    globeInstance.pointsData(points);
+  }
+
+  function init2DFallback() {
+    if (!globeContainerRef) return;
+    isFallback2D = true;
+    globeContainerRef.innerHTML = '';
+
+    canvas2D = document.createElement('canvas');
+    canvas2D.style.width = '100%';
+    canvas2D.style.height = '100%';
+    globeContainerRef.appendChild(canvas2D);
+    const ctx = canvas2D.getContext('2d');
+    if (!ctx) return;
+
+    let angle = 0;
+
+    function resize2D() {
+      if (!canvas2D || !globeContainerRef) return;
+      canvas2D.width = globeContainerRef.clientWidth || 800;
+      canvas2D.height = globeContainerRef.clientHeight || 480;
+    }
+    resize2D();
+
+    function animate() {
+      if (!ctx || !canvas2D) return;
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, canvas2D.width, canvas2D.height);
+
+      const cx = canvas2D.width / 2;
+      const cy = canvas2D.height / 2;
+      const radius = Math.min(cx, cy) * 0.65;
+
+      const glow = ctx.createRadialGradient(cx, cy, radius * 0.8, cx, cy, radius * 1.2);
+      glow.addColorStop(0, 'rgba(56, 189, 248, 0.08)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      angle += 0.006;
+      for (let i = 0; i < 12; i++) {
+        const lAngle = angle + (i * Math.PI / 6);
+        const rx = Math.cos(lAngle) * radius;
+        if (rx > 0) {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, Math.abs(rx), radius, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      const activeList = (connections && connections.length > 0) ? connections : AMBIENT_CONNECTIONS;
+      activeList.forEach((c: any) => {
+        const hCoord = COUNTRY_COORDS[c.host?.country] || { lat: 35.8, lng: 104.1, name: '中国' };
+        const cCoord = c.client ? (COUNTRY_COORDS[c.client.country] || { lat: 37.0, lng: -95.7, name: '美国' }) : null;
+
+        const hx = cx + Math.sin((hCoord.lng * Math.PI / 180) + angle) * radius * Math.cos(hCoord.lat * Math.PI / 180);
+        const hy = cy - Math.sin(hCoord.lat * Math.PI / 180) * radius;
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (cCoord) {
+          const cx2 = cx + Math.sin((cCoord.lng * Math.PI / 180) + angle) * radius * Math.cos(cCoord.lat * Math.PI / 180);
+          const cy2 = cy - Math.sin(cCoord.lat * Math.PI / 180) * radius;
+
+          ctx.fillStyle = '#ec4899';
+          ctx.beginPath();
+          ctx.arc(cx2, cy2, 5, 0, Math.PI * 2);
+          ctx.fill();
+
+          const midX = (hx + cx2) / 2;
+          const midY = Math.min(hy, cy2) - 40;
+          ctx.strokeStyle = c.is_cross_border ? '#a855f7' : '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.quadraticCurveTo(midX, midY, cx2, cy2);
+          ctx.stroke();
+        }
+      });
+
+      animFrameId = requestAnimationFrame(animate);
+    }
+    animate();
+  }
+
   onMount(() => {
     loadConnections();
     timer = setInterval(() => {
       if (autoRefresh) loadConnections();
     }, 5000);
+
+    initGlobeEngine();
+
+    if (window.ResizeObserver && globeContainerRef) {
+      resizeObserver = new ResizeObserver(() => handleGlobeResize());
+      resizeObserver.observe(globeContainerRef);
+    }
   });
 
   onDestroy(() => {
     if (timer) clearInterval(timer);
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    if (resizeObserver) resizeObserver.disconnect();
   });
 </script>
 
@@ -141,17 +419,9 @@
   <div class="card globe-card">
     <div class="card-header">
       <h3>🌐 3D 实时拓扑与全球节点流动大屏</h3>
-      <span class="badge badge-info">WebGL 硬件加速</span>
+      <span class="badge badge-info">{isFallback2D ? '2D 高性能回退' : 'WebGL 硬件加速'}</span>
     </div>
-    <div class="globe-wrapper">
-      <iframe
-        src="/p2p-globe.html"
-        title="3D P2P Connection Globe"
-        class="globe-iframe"
-        bind:this={iframeRef}
-        onload={handleIframeLoad}
-      ></iframe>
-    </div>
+    <div class="globe-wrapper" bind:this={globeContainerRef}></div>
   </div>
 
   <!-- Active Rooms Table -->
@@ -343,12 +613,8 @@
     width: 100%;
     height: 480px;
     background: #020617;
-  }
-
-  .globe-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
+    position: relative;
+    overflow: hidden;
   }
 
   .filter-group {

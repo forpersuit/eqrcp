@@ -39,53 +39,37 @@ npm --prefix cloudflare/eqt-admin run build
 
 Verify that `dist/index.html` and `dist/p2p-globe.html` are cleanly generated without build warnings or missing bundles.
 
-### Step 2: Cloudflare Pages Manual Deployment
-Deploy the compiled static bundle (`dist/`) and Workers Functions (`functions/`) directly to Cloudflare Pages.
+### Step 2: Cloudflare Pages Production Deployment
+Deploy the compiled static bundle (`dist/`) and Workers Functions (`functions/`) directly to Cloudflare Pages production branch (`master`):
 
 #### Method A: Run directly inside `cloudflare/eqt-admin` root directory (Recommended):
 ```sh
 cd cloudflare/eqt-admin
 npm run build
-npx wrangler pages deploy dist --project-name eqt-admin
+npx wrangler pages deploy dist --project-name eqt-admin --branch master
 ```
 
 #### Method B: Run from repository root:
 ```sh
 npm --prefix cloudflare/eqt-admin run build
-npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name eqt-admin
+npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name eqt-admin --branch master
 ```
 
-If Cloudflare Access environment parameters or API tokens are required:
-```sh
-VITE_ADMIN_AUTH_MODE=access \
-VITE_CF_ACCESS_TEAM_DOMAIN=persuit.cloudflareaccess.com \
-npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name eqt-admin
-```
-
-### Step 3: Git Cleanliness & Smart Push
-Ensure working directory is clean, stage modifications, commit with concise imperative messages, and push via WSL smart proxy script:
-
-```sh
-git add cloudflare/eqt-admin/
-git commit -m "Update admin feature X and fix Y"
-scripts/git-push-smart.sh
-```
+> **Note**: Standard `wrangler pages deploy` without `--branch master` publishes to preview branches (`*.pages.dev`). Always specify `--branch master` for production releases to update the official custom domain `https://admin.eqt.net.im/` instantly.
 
 ---
 
 ## 3. Chrome DevTools MCP E2E Verification Workflow
 
-After every non-trivial update or deployment to the Admin system, perform an automated E2E simulation using `chrome-devtools-mcp` tools.
+After every update and deployment to the Admin system, perform an automated E2E simulation using `chrome-devtools-mcp` tools strictly targeting the official production domain (`https://admin.eqt.net.im/`). Do NOT verify preview `.pages.dev` URLs.
 
 ### E2E Test Execution Steps:
 
 1. **Target Selection**:
-   - **Local Dev Simulation**: Ensure dev server is running (`npm --prefix cloudflare/eqt-admin run dev` on `http://localhost:3001`).
-   - **Production Simulation**: Target `https://admin.eqt.net.im`.
+   - **Official Production Domain**: Target `https://admin.eqt.net.im/` (do not test `.pages.dev` previews).
 
 2. **Navigate & Page Selection**:
-   - Use `chrome-devtools-mcp`'s `list_pages` or `new_page` / `navigate_page` to open the Admin target URL.
-   - Example: Navigate to `http://localhost:3001` or `https://admin.eqt.net.im`.
+   - Use `chrome-devtools-mcp`'s `navigate_page` to open `https://admin.eqt.net.im/`.
 
 3. **Verify Tab Navigation & Page Render**:
    - Click/evaluate navigation buttons (`.nav-item`) to verify each tab loads cleanly without unhandled JavaScript exceptions:
@@ -97,13 +81,13 @@ After every non-trivial update or deployment to the Admin system, perform an aut
      - 黑名单管理 (Blacklist)
      - 系统健康监控 (SystemHealth)
 
-4. **3D Globe Topology Screen Validation (`ProP2P`)**:
+4. **Native Inline 3D Globe Topology Validation (`ProP2P`)**:
    - Navigate to the **Pro P2P** tab.
-   - Verify that the embedded `<iframe src="/p2p-globe.html">` renders correctly.
+   - Verify that `.globe-wrapper` renders the native WebGL/2D Canvas element directly without iframe dependencies.
    - Execute script check via `evaluate_script` to ensure:
-     - WebGL / 2D Canvas is actively rendering (`#canvas-container canvas` exists).
-     - `#globe-status` text displays status (e.g. `3D 实时拓扑与全球节点流动大屏 (WebGL 加速)` or 2D fallback mode).
-     - `postMessage` data synchronization is receiving connection datasets.
+     - `canvasPresent` is `true` (`.globe-wrapper canvas` exists and is active).
+     - `#globe-status` or `.globe-card .badge` displays status (e.g. `WebGL 硬件加速` or 2D fallback mode).
+     - Reactive connection dataset updates are rendered dynamically.
 
 5. **Capture Verification Artifacts**:
    - Call `take_screenshot` via `chrome-devtools-mcp` to capture visual evidence of the rendered admin dashboard.
