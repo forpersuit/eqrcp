@@ -24,6 +24,10 @@
   - Cloudflare Worker 信令服务端 API 契约
   - 客户端 (Go/WebRTC/Wails/Web) 改造设计与打洞回退机制
   - 离线/在线 DRM 校验集成
+- [STUN 打洞与 P2P 连通性真实测试报告 (stun-p2p-verification.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/stun-p2p-verification.md)
+  - 真实 STUN 探针与 srflx 候选地址提取结果
+  - 双节点 DataChannel 纯直连传输验证
+  - 信令服务器多端点自动容灾设计
 - [开发进度与里程碑 (progress.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/progress.md)
   - 分阶段开发 Milestone（Worker 信令、Go P2P 引擎、前端 UI）
   - Definition of Done (DoD) 与测试交付标准

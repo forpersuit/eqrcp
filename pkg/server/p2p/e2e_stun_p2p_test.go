@@ -240,7 +240,7 @@ func TestRealP2PDirectDataChannelTransfer(t *testing.T) {
 // TestRealSignalingServerInteraction tests live HTTP interaction with signal.eqt.net.im
 func TestRealSignalingServerInteraction(t *testing.T) {
 	client := NewSignalingClient("https://signal.eqt.net.im")
-	
+
 	// Create Room in Test Mode
 	resp, err := client.CreateRoom("TEST-MOCK-LICENSE", "test-device-id-123")
 	if err != nil {

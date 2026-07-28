@@ -12,6 +12,7 @@ import (
 )
 
 const DefaultSignalingURL = "https://signal.eqt.net.im"
+
 var FallbackSignalingURLs = []string{
 	"https://signal.eqt.net.im",
 	"https://eqt-p2p-signal.forpersuit.workers.dev",
