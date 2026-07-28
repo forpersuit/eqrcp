@@ -12,11 +12,16 @@ import (
 )
 
 const DefaultSignalingURL = "https://signal.eqt.net.im"
+var FallbackSignalingURLs = []string{
+	"https://signal.eqt.net.im",
+	"https://eqt-p2p-signal.forpersuit.workers.dev",
+}
 
 // SignalingClient handles HTTP communication with the Cloudflare Worker signaling server.
 type SignalingClient struct {
-	BaseURL    string
-	HTTPClient *http.Client
+	BaseURL      string
+	FallbackURLs []string
+	HTTPClient   *http.Client
 }
 
 // NewSignalingClient creates a new client targeting the specified or default signaling server URL.
@@ -25,9 +30,10 @@ func NewSignalingClient(baseURL string) *SignalingClient {
 		baseURL = DefaultSignalingURL
 	}
 	return &SignalingClient{
-		BaseURL: baseURL,
+		BaseURL:      baseURL,
+		FallbackURLs: FallbackSignalingURLs,
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 5 * time.Second,
 		},
 	}
 }
@@ -72,26 +78,53 @@ type PollSignalsResponse struct {
 	} `json:"data"`
 }
 
-// CreateRoom requests a new P2P room with Pro tier verification.
-func (c *SignalingClient) CreateRoom(licenseCode, deviceID string) (*CreateRoomResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/p2p/room/create", c.BaseURL)
-	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBufferString(`{"mode":"share"}`))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if licenseCode != "" {
-		req.Header.Set("X-License-Code", licenseCode)
-	}
-	if deviceID != "" {
-		req.Header.Set("X-Device-ID", deviceID)
+func (c *SignalingClient) executeRequest(reqFactory func(baseURL string) (*http.Request, error)) (*http.Response, string, error) {
+	endpoints := []string{c.BaseURL}
+	for _, fb := range c.FallbackURLs {
+		if fb != "" && fb != c.BaseURL {
+			endpoints = append(endpoints, fb)
+		}
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	var lastErr error
+	for _, ep := range endpoints {
+		req, err := reqFactory(ep)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		resp, err := c.HTTPClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return resp, ep, nil
+	}
+	return nil, "", fmt.Errorf("all signaling endpoints failed: %w", lastErr)
+}
+
+// CreateRoom requests a new P2P room with Pro tier verification.
+func (c *SignalingClient) CreateRoom(licenseCode, deviceID string) (*CreateRoomResponse, error) {
+	resp, usedEP, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
+		reqURL := fmt.Sprintf("%s/api/v1/p2p/room/create", baseURL)
+		req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBufferString(`{"mode":"share"}`))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if licenseCode != "" {
+			req.Header.Set("X-License-Code", licenseCode)
+		}
+		if deviceID != "" {
+			req.Header.Set("X-Device-ID", deviceID)
+		}
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	_ = usedEP
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -112,17 +145,18 @@ func (c *SignalingClient) CreateRoom(licenseCode, deviceID string) (*CreateRoomR
 
 // JoinRoom registers a remote client into an existing room.
 func (c *SignalingClient) JoinRoom(roomID string) (*JoinRoomResponse, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/p2p/room/join", c.BaseURL)
-	payloadObj := map[string]string{"room_id": roomID}
-	payloadBytes, _ := json.Marshal(payloadObj)
+	resp, _, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
+		reqURL := fmt.Sprintf("%s/api/v1/p2p/room/join", baseURL)
+		payloadObj := map[string]string{"room_id": roomID}
+		payloadBytes, _ := json.Marshal(payloadObj)
 
-	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(req)
+		req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -147,22 +181,23 @@ func (c *SignalingClient) JoinRoom(roomID string) (*JoinRoomResponse, error) {
 
 // PushSignal sends an SDP Offer/Answer or ICE Candidate to the room.
 func (c *SignalingClient) PushSignal(roomID, token, signalType, payload string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/p2p/signal/push", c.BaseURL)
-	payloadObj := map[string]string{
-		"room_id": roomID,
-		"type":    signalType,
-		"payload": payload,
-	}
-	payloadBytes, _ := json.Marshal(payloadObj)
+	resp, _, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
+		reqURL := fmt.Sprintf("%s/api/v1/p2p/signal/push", baseURL)
+		payloadObj := map[string]string{
+			"room_id": roomID,
+			"type":    signalType,
+			"payload": payload,
+		}
+		payloadBytes, _ := json.Marshal(payloadObj)
 
-	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Room-Token", token)
-
-	resp, err := c.HTTPClient.Do(req)
+		req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Room-Token", token)
+		return req, nil
+	})
 	if err != nil {
 		return err
 	}
@@ -177,16 +212,17 @@ func (c *SignalingClient) PushSignal(roomID, token, signalType, payload string) 
 
 // PollSignals fetches pending signals from the remote peer.
 func (c *SignalingClient) PollSignals(roomID, token string, since int) ([]SignalItem, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/p2p/signal/poll?room_id=%s&since=%s",
-		c.BaseURL, url.QueryEscape(roomID), strconv.Itoa(since))
+	resp, _, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
+		reqURL := fmt.Sprintf("%s/api/v1/p2p/signal/poll?room_id=%s&since=%s",
+			baseURL, url.QueryEscape(roomID), strconv.Itoa(since))
 
-	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("X-Room-Token", token)
-
-	resp, err := c.HTTPClient.Do(req)
+		req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("X-Room-Token", token)
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -211,14 +247,15 @@ func (c *SignalingClient) PollSignals(roomID, token string, since int) ([]Signal
 
 // DestroyRoom deletes the room on the signaling server.
 func (c *SignalingClient) DestroyRoom(roomID, token string) error {
-	reqURL := fmt.Sprintf("%s/api/v1/p2p/room?room_id=%s", c.BaseURL, url.QueryEscape(roomID))
-	req, err := http.NewRequest(http.MethodDelete, reqURL, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("X-Room-Token", token)
-
-	resp, err := c.HTTPClient.Do(req)
+	resp, _, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
+		reqURL := fmt.Sprintf("%s/api/v1/p2p/room?room_id=%s", baseURL, url.QueryEscape(roomID))
+		req, err := http.NewRequest(http.MethodDelete, reqURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("X-Room-Token", token)
+		return req, nil
+	})
 	if err != nil {
 		return err
 	}
