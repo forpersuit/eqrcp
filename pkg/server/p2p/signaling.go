@@ -163,12 +163,8 @@ func (c *SignalingClient) CreateRoomWithMode(licenseCode, deviceID, mode string)
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if licenseCode != "" {
-			req.Header.Set("X-License-Code", licenseCode)
-		}
-		if deviceID != "" {
-			req.Header.Set("X-Device-ID", deviceID)
-		}
+		req.Header.Set("X-License-Code", licenseCode)
+		req.Header.Set("X-Device-ID", deviceID)
 		return req, nil
 	})
 	if err != nil {
