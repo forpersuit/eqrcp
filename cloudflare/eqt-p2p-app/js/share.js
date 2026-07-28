@@ -1,13 +1,95 @@
-// Share Mode Controller (Unified LAN/WAN UI Adapter)
+// Share Mode Controller (Modular UI & Transport Adapter)
+
+function renderShareView(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="brand-header">
+            <span class="brand-title">EQT</span>
+            <span class="license-badge" style="position: static;">PRO WAN</span>
+        </div>
+
+        <div class="status-card">
+            <div id="status-icon-pending" class="status-badge ready">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <div id="status-icon-success" class="status-badge success" style="display: none;">✓</div>
+
+            <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
+            <p id="summary-text" class="summary" data-i18n="wait_tips">📡 正在打通公网信令与加密 P2P 通道...</p>
+
+            <!-- Download Progress Bar Section -->
+            <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">
+                    <span id="download-progress-status">Downloading...</span>
+                    <span id="download-progress-percent">0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; position: relative;">
+                    <div id="download-progress-fill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.2s ease;"></div>
+                </div>
+                <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
+            </div>
+
+            <div class="wifi-warning-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span data-i18n="wan_tips">已启用端到端加密公网传输通道，无需处于同一个局域网。</span>
+            </div>
+
+            <!-- 接收包名卡片 -->
+            <div class="package-name-card" style="margin: 14px 0 16px 0; padding: 10px 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; word-break: break-all;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <span id="package-name-text" class="package-name-text" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">准备接收文件</span>
+            </div>
+
+            <!-- 待接收文件标题与统计信息横向排列 -->
+            <div class="section-title-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+                <span class="section-title" style="margin-bottom: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-i18n="saved_file">File to Receive</span>
+                <span id="transfer-stats-meta" class="transfer-stats-meta" style="font-size: 13px; color: var(--text-secondary); font-weight: 600; flex-shrink: 0; white-space: nowrap; text-align: right;" data-count="1" data-size="0 KB">
+                    1 · -- KB
+                </span>
+            </div>
+            
+            <div id="files-list-container" style="text-align: left; margin-bottom: 20px;">
+                <div class="file-fallback">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-icon"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span id="file-name-text" class="file-name">正在等待电脑端发送元数据...</span>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                        <span id="file-size-text" style="font-size: 12px; color: var(--text-secondary);">-- KB</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" class="btn" id="btn-action-download" disabled data-i18n="btn_download">⏳ 等待 P2P 物理连接...</button>
+            </div>
+        </div>
+
+        <p class="hint" data-i18n="close_hint">Once successfully completed, you can close this page.</p>
+
+        <div class="lang-switch-container">
+            <select id="page-lang-select" aria-label="Switch Language">
+                <option value="zh">简体中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+            </select>
+        </div>
+    `;
+}
+
 window.initShareModule = function(token) {
     if (!token) return;
+
+    const mainEl = document.querySelector('main');
+    if (mainEl) renderShareView(mainEl);
 
     // Element References (Identical to LAN download.tmpl.html)
     const headerText = document.getElementById('header-text');
     const summaryText = document.getElementById('summary-text');
     const packageNameText = document.getElementById('package-name-text');
     const transferStatsMeta = document.getElementById('transfer-stats-meta');
-    const filesListContainer = document.getElementById('files-list-container');
     const fileNameText = document.getElementById('file-name-text');
     const fileSizeText = document.getElementById('file-size-text');
     const mainBtn = document.getElementById('btn-action-download');
@@ -156,4 +238,5 @@ window.initShareModule = function(token) {
 
     transport.initReceiver();
 };
+
 
