@@ -13,12 +13,12 @@
             --text-primary: #111827;
             --text-secondary: #4b5563;
             --text-muted: #9ca3af;
-            --accent: #156f5a;
-            --accent-strong: #0d4e42;
-            --accent-rgb: 21,111,90;
-            --accent-light: rgba(21,111,90, 0.06);
-            --accent-border: rgba(21,111,90, 0.16);
-            --accent-icon: #156f5a;
+            --accent: #0f766e;
+            --accent-strong: #0d5e58;
+            --accent-rgb: 15,118,110;
+            --accent-light: rgba(15,118,110, 0.06);
+            --accent-border: rgba(15,118,110, 0.16);
+            --accent-icon: #0f766e;
             --line: #e5e7eb;
             --danger: #b42318;
             --danger-light: #fef3f2;
@@ -350,7 +350,9 @@
                 {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
             </span>
             
-            <div id="status-icon-pending" class="status-badge ready">📥</div>
+            <div id="status-icon-pending" class="status-badge ready" style="color: var(--accent);">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
             <div id="status-icon-success" class="status-badge success" style="display: none;">✓</div>
 
             <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
@@ -379,14 +381,14 @@
 
             {{if not .IsPaid}}
             <div class="wifi-warning-box">
-                <span>⚠️</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: #d97706;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                 <span data-i18n="wifi_tips">If download fails, please make sure both devices are on the same Wi-Fi / LAN.</span>
             </div>
             {{end}}
 
             <!-- 接收包名卡片（文件准备就绪下方，待接收文件字面上方） -->
             <div class="package-name-card" style="margin: 14px 0 16px 0; padding: 10px 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; word-break: break-all;">
-                <span style="font-size: 16px; flex-shrink: 0; color: var(--accent);">📦</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                 <span class="package-name-text" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">{{.File}}</span>
             </div>
 
@@ -404,7 +406,7 @@
                         {{range $index, $element := .Files}}
                             <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line);">
                                 <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
-                                    <span style="font-size: 16px; flex-shrink: 0; color: var(--text-secondary);">📄</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                                     <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
@@ -416,7 +418,7 @@
                     </div>
                 {{else}}
                     <div class="file-fallback">
-                        <span class="file-icon">📄</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-icon"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                         <span id="file-name-text" class="file-name">{{.File}}</span>
                         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
                             <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
@@ -940,6 +942,8 @@
             }
             
             document.title = dict.title;
+            
+            applyRandomTheme();
             
             var langSelect = document.getElementById('page-lang-select');
             if (langSelect) {
