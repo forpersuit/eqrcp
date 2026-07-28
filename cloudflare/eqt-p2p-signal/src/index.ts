@@ -152,18 +152,7 @@ export default {
         });
       }
 
-      // 1.1 Non-API SPA App Routes (p.eqt.net.im/share, /receive, /chat, /js/*)
-      if (!path.startsWith('/api/')) {
-        const targetUrl = new URL(path + url.search, 'https://main.eqt-p2p-app.pages.dev');
-        const pageResp = await fetch(targetUrl.toString(), {
-          headers: request.headers,
-          method: request.method
-        });
-        return new Response(pageResp.body, {
-          status: pageResp.status,
-          headers: pageResp.headers
-        });
-      }
+
 
       // 2. Admin 3D Globe API: GET /api/v1/p2p/admin/connections
       if (request.method === 'GET' && path === '/api/v1/p2p/admin/connections') {
