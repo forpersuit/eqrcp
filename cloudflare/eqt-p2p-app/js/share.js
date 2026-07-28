@@ -1,67 +1,159 @@
-// Share Mode Controller (Modular UI & Transport)
+// Share Mode Controller (Unified LAN/WAN UI Adapter)
 window.initShareModule = function(token) {
-    const mainEl = document.querySelector('main');
-    if (!mainEl) return;
+    if (!token) return;
 
-    mainEl.innerHTML = `
-        <div class="brand-header">
-            <span class="brand-title">EQT</span>
-            <span class="pro-badge">PRO WAN</span>
-        </div>
-        <div class="status-card">
-            <div id="share-file-icon" class="file-icon-wrapper">🖼️</div>
-            <div id="share-file-name" class="file-title">准备接收文件</div>
-            <div id="share-file-meta" class="file-meta">模式: 公网 Share 直管传送</div>
-            <div class="status-pill">
-                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
-                <span id="p2p-status-text">📡 正在连接公网信令...</span>
-            </div>
-            <button id="p2p-main-btn" class="btn-primary" disabled>
-                ⏳ 等待电脑端 P2P 物理连接...
-            </button>
-        </div>
-        <div class="footer-note">与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer</div>
-    `;
+    // Element References (Identical to LAN download.tmpl.html)
+    const headerText = document.getElementById('header-text');
+    const summaryText = document.getElementById('summary-text');
+    const packageNameText = document.getElementById('package-name-text');
+    const transferStatsMeta = document.getElementById('transfer-stats-meta');
+    const filesListContainer = document.getElementById('files-list-container');
+    const fileNameText = document.getElementById('file-name-text');
+    const fileSizeText = document.getElementById('file-size-text');
+    const mainBtn = document.getElementById('btn-action-download');
+    const langSelect = document.getElementById('page-lang-select');
+    const statusIconPending = document.getElementById('status-icon-pending');
+    const statusIconSuccess = document.getElementById('status-icon-success');
+
+    // Progress Bar References
+    const progressContainer = document.getElementById('download-progress-container');
+    const progressPercent = document.getElementById('download-progress-percent');
+    const progressFill = document.getElementById('download-progress-fill');
+    const progressBytes = document.getElementById('download-progress-bytes');
+    const progressStatus = document.getElementById('download-progress-status');
+
+    function formatBytes(bytes) {
+        if (bytes === 0 || !bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    // Language i18n Dictionary (Shared with LAN download.tmpl.html)
+    const translations = {
+        zh: {
+            header: '文件已准备就绪',
+            connecting: '📡 正在打通公网信令与加密 P2P 通道...',
+            waiting_pc: '⏳ 等待 P2P 物理连接...',
+            meta_received: '⚡ 公网 P2P 通道打通，文件已就绪！',
+            btn_download: '开始下载',
+            btn_resave: '🎉 重新保存',
+            success_header: '✅ 传输成功',
+            success_summary: '文件已成功接收并保存至您的设备！',
+            saved_file: '待接收文件',
+            wan_tips: '已启用端到端加密公网传输通道，无需处于同一个局域网。'
+        },
+        en: {
+            header: 'File Ready for Download',
+            connecting: '📡 Establishing WAN Signaling & Encrypted P2P Channel...',
+            waiting_pc: '⏳ Waiting for P2P Connection...',
+            meta_received: '⚡ P2P Channel Ready! File is ready to download.',
+            btn_download: 'Start Download',
+            btn_resave: '🎉 Save Again',
+            success_header: '✅ Transfer Completed',
+            success_summary: 'File received and saved successfully!',
+            saved_file: 'File to Receive',
+            wan_tips: 'End-to-End Encrypted WAN Transport. No LAN required.'
+        }
+    };
+
+    let currentLang = 'zh';
+    if (langSelect) {
+        langSelect.addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            applyTranslations();
+        });
+    }
+
+    function applyTranslations() {
+        const dict = translations[currentLang] || translations.zh;
+        if (headerText && !headerText.dataset.custom) headerText.innerText = dict.header;
+        if (summaryText && !summaryText.dataset.custom) summaryText.innerText = dict.connecting;
+    }
 
     const transport = new window.EQTTransport(token);
-    const statusText = document.getElementById('p2p-status-text');
-    const fileNameEl = document.getElementById('share-file-name');
-    const fileMetaEl = document.getElementById('share-file-meta');
-    const mainBtn = document.getElementById('p2p-main-btn');
+    let downloadedBlob = null;
+    let currentFileName = 'downloaded_file';
 
     transport.onStatus = (msg, color) => {
-        if (statusText) {
-            statusText.innerText = msg;
-            statusText.parentElement.style.color = color;
+        if (summaryText) {
+            summaryText.innerText = msg;
+            summaryText.dataset.custom = "true";
+            if (color) summaryText.style.color = color;
         }
     };
 
     transport.onMeta = (name, size) => {
-        if (fileNameEl) fileNameEl.innerText = name;
-        if (fileMetaEl) fileMetaEl.innerText = `文件大小: ${Math.round(size / 1024)} KB`;
+        currentFileName = name || currentFileName;
+        const formattedSize = formatBytes(size);
+
+        if (packageNameText) packageNameText.innerText = currentFileName;
+        if (fileNameText) fileNameText.innerText = currentFileName;
+        if (fileSizeText) fileSizeText.innerText = formattedSize;
+        if (transferStatsMeta) {
+            transferStatsMeta.innerText = `1 · ${formattedSize}`;
+            transferStatsMeta.setAttribute('data-size', formattedSize);
+        }
+
+        if (summaryText) {
+            const dict = translations[currentLang] || translations.zh;
+            summaryText.innerText = dict.meta_received;
+            summaryText.style.color = 'var(--text-secondary)';
+        }
+
+        if (mainBtn) {
+            const dict = translations[currentLang] || translations.zh;
+            mainBtn.disabled = false;
+            mainBtn.innerText = dict.btn_download;
+            mainBtn.onclick = () => {
+                mainBtn.disabled = true;
+                mainBtn.innerText = '⏳ 正在传输...';
+                if (progressContainer) progressContainer.style.display = 'block';
+                transport.requestDownload();
+            };
+        }
     };
 
     transport.onProgress = (done, total) => {
-        if (statusText) {
-            statusText.innerText = `📥 已接收: ${Math.round(done / 1024)} KB / ${Math.round(total / 1024)} KB`;
-        }
+        if (progressContainer) progressContainer.style.display = 'block';
+        const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        if (progressPercent) progressPercent.innerText = `${percent}%`;
+        if (progressFill) progressFill.style.width = `${percent}%`;
+        if (progressBytes) progressBytes.innerText = `${formatBytes(done)} / ${formatBytes(total)}`;
+        if (progressStatus) progressStatus.innerText = `⚡ 正在接收 ${percent}%...`;
     };
 
     transport.onComplete = (blob, name) => {
-        if (statusText) {
-            statusText.innerText = '✅ 接收完成！';
-            statusText.parentElement.style.color = '#059669';
+        downloadedBlob = blob;
+        currentFileName = name || currentFileName;
+
+        if (statusIconPending) statusIconPending.style.display = 'none';
+        if (statusIconSuccess) statusIconSuccess.style.display = 'inline-flex';
+
+        const dict = translations[currentLang] || translations.zh;
+        if (headerText) {
+            headerText.innerText = dict.success_header;
+            headerText.dataset.custom = "true";
         }
+        if (summaryText) {
+            summaryText.innerText = dict.success_summary;
+            summaryText.dataset.custom = "true";
+            summaryText.style.color = 'var(--accent-strong)';
+        }
+
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = name;
+        a.download = currentFileName;
         a.click();
 
         if (mainBtn) {
-            mainBtn.innerText = '🎉 重新保存';
+            mainBtn.disabled = false;
+            mainBtn.innerText = dict.btn_resave;
             mainBtn.onclick = () => a.click();
         }
     };
 
     transport.initReceiver();
 };
+
