@@ -269,4 +269,33 @@ EQT Pro v1 架构**原生完全支持全球跨国 P2P 通信**（例如中国 PC
 
 前端大屏通过 `cloudflare/eqt-website/p2p-globe.html` 渲染一个基于 Canvas 的 **3D 旋转星空物理地球**，在地球表面实时绘制跨国 P2P 连接双方之间动态高亮的 **流光抛物线弧线 (P2P Glowing Arcs)**，并在侧边栏展示当前全网所有的跨国会话列表。
 
+---
+
+## 9. 独立 App 域名物理解耦与按需模块化前端架构 (`p.eqt.net.im`)
+
+### 9.1 官网与传输 App 的彻底解耦 (Separation of Concerns)
+为避免在产品 Landing 官网 (`www.eqt.net.im` / Pages 项目 `eqt`) 巨型页面中硬塞传输 Shell 导致的资源冗余、域名重定向干涉以及代码臃肿问题，Pro v1 实施了彻底的**域名与物理项目解耦**：
+
+- **商业产品官网 (`www.eqt.net.im` / Pages 项目 `eqt`)**：专一负责产品宣传、功能介绍、价格方案与合规文档展示，零传输代码污染。
+- **Pro 传输 Web App (`p.eqt.net.im` / Pages 项目 `eqt-p2p-app`)**：专门负责公网移动端/扫码设备的传输 App Shell，部署在独立域名 `https://p.eqt.net.im/` 下，文件包极简（< 15KB）。
+
+### 9.2 按需动态模块化前端设计 (Modular Dynamic Loading Architecture)
+`cloudflare/eqt-p2p-app` 采用高内聚、低耦合的前端模块化拆分体系：
+
+```text
+cloudflare/eqt-p2p-app/
+├── index.html            <-- 30 行以内的极简纯净入口 Shell (仅含容器与动态加载器)
+└── js/
+    ├── transport.js      <-- 统一网络传输适配器 (WebRTC / Signal 封装)
+    ├── share.js          <-- 【Share 模块】文件传送与下载卡片控制器
+    ├── receive.js        <-- 【Receive 模块】文件拖拽与上传队列控制器
+    └── chat.js           <-- 【Chat 模块】双向加密 P2P 气泡消息控制器
+```
+
+- **按需动态加载 (Dynamic Dynamic Loading)**：
+  扫 `share` 码时仅动态加载 `js/share.js` 和 `js/transport.js`；扫 `receive` 码时仅动态加载 `js/receive.js`。传输体积减少 60%+，扫码打开速度达到“闪电秒开”。
+- **界面体验物理绝对对齐 (Single Source UI Consistency)**：
+  `share.js`、`receive.js` 与 `chat.js` 的 UI CSS 变量 (`--bg`, `--surface`, `--accent`)、Markup 结构与按钮卡片**100% 对齐局域网成熟模板 (`pkg/pages/download.tmpl.html` & `upload.tmpl.html`)**，保证用户在局域网与公网扫码访问时看到的移动端界面完全相同，体验绝无割裂。
+
+
 

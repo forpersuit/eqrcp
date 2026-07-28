@@ -22,6 +22,7 @@
 - [架构与详细设计方案 (architecture-and-design.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/architecture-and-design.md)
   - 模块交互序列图与 WebRTC 建立流程
   - Cloudflare Worker 信令服务端 API 契约
+  - 独立 App 域名解耦 (`p.eqt.net.im`) 与按需动态模块化前端设计
   - 客户端 (Go/WebRTC/Wails/Web) 改造设计与打洞回退机制
   - 离线/在线 DRM 校验集成
 - [STUN 打洞与 P2P 连通性真实测试报告 (stun-p2p-verification.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/stun-p2p-verification.md)
