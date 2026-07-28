@@ -25,6 +25,11 @@
   - 独立 App 域名解耦 (`p.eqt.net.im`) 与按需动态模块化前端设计
   - 客户端 (Go/WebRTC/Wails/Web) 改造设计与打洞回退机制
   - 离线/在线 DRM 校验集成
+- [STUN / TURN P2P 打洞与 Coturn 部署指南 (turn-stun-guide.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/turn-stun-guide.md)
+  - NAT 分类 (Full Cone / Restricted Cone / Symmetric NAT) 穿透白皮书
+  - Pion WebRTC (Go) & 前端 JS 的 TURN Credentials 规范
+  - 开源 `coturn` 生产级配置文件与 Systemd 运维指南
+  - 免费/低成本 TURN 服务方案对比
 - [STUN 打洞与 P2P 连通性真实测试报告 (stun-p2p-verification.md)](file:///home/yelon/develop/me/eqrcp/docs/pro/stun-p2p-verification.md)
   - 真实 STUN 探针与 srflx 候选地址提取结果
   - 双节点 DataChannel 纯直连传输验证
