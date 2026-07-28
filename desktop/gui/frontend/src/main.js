@@ -731,16 +731,7 @@ function sanitizeWanP2PUrl(targetUrl, action, task) {
     params.set('token', rawToken);
     if (join) params.set('join', join);
     
-    let origin = 'https://main.eqt-p2p-app.pages.dev';
-    if (targetUrl) {
-        try {
-            const parsed = new URL(targetUrl);
-            if (parsed.origin && parsed.origin !== 'null') {
-                origin = parsed.origin;
-            }
-        } catch (e) {}
-    }
-    return `${origin}/${act}?${params.toString()}`;
+    return `https://p.eqt.net.im/${act}?${params.toString()}`;
 }
 
 function getWanP2PUrl(task) {

@@ -1131,7 +1131,7 @@ func getWanAppBaseURL() string {
 	if u := os.Getenv("EQT_WAN_APP_URL"); u != "" {
 		return strings.TrimSuffix(u, "/")
 	}
-	return "https://main.eqt-p2p-app.pages.dev"
+	return "https://p.eqt.net.im"
 }
 
 func (agent *desktopAgent) setTaskWanURL(action string, wanURL string, wanToken string, wanErr string) {

@@ -13,5 +13,6 @@ CORS_ORIGIN = "*"
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
 
 routes = [
-  { pattern = "signal.eqt.net.im", custom_domain = true }
+  { pattern = "signal.eqt.net.im", custom_domain = true },
+  { pattern = "p.eqt.net.im", custom_domain = true }
 ]
