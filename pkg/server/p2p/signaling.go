@@ -2,13 +2,17 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,6 +22,58 @@ const DefaultSignalingURL = "https://signal.eqt.net.im"
 type SignalingClient struct {
 	BaseURL    string
 	HTTPClient *http.Client
+}
+
+func createResilientHTTPClient() *http.Client {
+	dialer := &net.Dialer{
+		Timeout:   4 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	publicResolvers := []string{"223.5.5.5:53", "1.1.1.1:53", "114.114.114.114:53"}
+
+	dialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		// 1. Try standard system DNS first
+		conn, err := dialer.DialContext(ctx, network, addr)
+		if err == nil {
+			return conn, nil
+		}
+
+		// 2. If system DNS fails with 'no such host', fallback to public DNS resolvers
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) || strings.Contains(err.Error(), "no such host") {
+			host, port, splitErr := net.SplitHostPort(addr)
+			if splitErr == nil {
+				for _, dnsServer := range publicResolvers {
+					r := &net.Resolver{
+						PreferGo: true,
+						Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+							d := net.Dialer{Timeout: 2 * time.Second}
+							return d.DialContext(ctx, "udp", dnsServer)
+						},
+					}
+					ips, lookupErr := r.LookupHost(ctx, host)
+					if lookupErr == nil && len(ips) > 0 {
+						targetAddr := net.JoinHostPort(ips[0], port)
+						if c, dialErr := dialer.DialContext(ctx, network, targetAddr); dialErr == nil {
+							return c, nil
+						}
+					}
+				}
+			}
+		}
+		return nil, err
+	}
+
+	transport := &http.Transport{
+		DialContext:         dialContext,
+		TLSHandshakeTimeout: 4 * time.Second,
+	}
+
+	return &http.Client{
+		Timeout:   6 * time.Second,
+		Transport: transport,
+	}
 }
 
 // NewSignalingClient creates a new client targeting the specified or default signaling server URL.
@@ -30,10 +86,8 @@ func NewSignalingClient(baseURL string) *SignalingClient {
 		}
 	}
 	return &SignalingClient{
-		BaseURL: baseURL,
-		HTTPClient: &http.Client{
-			Timeout: 5 * time.Second,
-		},
+		BaseURL:    baseURL,
+		HTTPClient: createResilientHTTPClient(),
 	}
 }
 
