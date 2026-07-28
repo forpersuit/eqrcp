@@ -26,12 +26,12 @@ import (
 
 	"eqt/pkg/body"
 	"eqt/pkg/chat/v2/diag"
-	"eqt/pkg/qr"
-	"eqt/pkg/server/p2p"
 	chatv2http "eqt/pkg/chat/v2/http"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
 	"eqt/pkg/pages"
+	"eqt/pkg/qr"
+	"eqt/pkg/server/p2p"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
 
@@ -339,7 +339,7 @@ func (s *Server) ReceiveTo(dir string) error {
 		status.Target = output
 		status.Message = "Scan to upload files to this folder."
 		status.PageUrl = s.ReceiveURL
-		status.WanUrl = "https://eqt.net.im/p/receive?token=" + strings.Trim(strings.TrimPrefix(s.ReceiveURL, s.BaseURL), "/")
+		status.WanUrl = "https://p.eqt.net.im/receive?token=" + strings.Trim(strings.TrimPrefix(s.ReceiveURL, s.BaseURL), "/")
 	})
 
 	// Initialize Tus fields
@@ -2199,7 +2199,7 @@ func New(cfg *config.Config) (*Server, error) {
 		status.Mode = "share"
 		status.Title = "Share files"
 		status.PageUrl = app.SendURL
-		status.WanUrl = "https://eqt.net.im/p/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
+		status.WanUrl = "https://p.eqt.net.im/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
 	})
 	go app.startWanP2PListener(path)
 	// Create cookie used to verify request is coming from first client to connect

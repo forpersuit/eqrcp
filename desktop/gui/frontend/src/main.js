@@ -702,7 +702,7 @@ state.qrChannelMode = state.qrChannelMode || 'lan';
 
 function sanitizeWanP2PUrl(targetUrl, action) {
     const act = action || 'share';
-    if (!targetUrl) return `https://eqt.net.im/p/${act}`;
+    if (!targetUrl) return `https://p.eqt.net.im/${act}`;
     try {
         const parsed = new URL(targetUrl);
         const params = new URLSearchParams();
@@ -716,9 +716,9 @@ function sanitizeWanP2PUrl(targetUrl, action) {
         if (join) params.set('join', join);
         
         const searchStr = params.toString() ? `?${params.toString()}` : '';
-        return `https://eqt.net.im/p/${act}${searchStr}`;
+        return `https://p.eqt.net.im/${act}${searchStr}`;
     } catch (e) {
-        return `https://eqt.net.im/p/${act}`;
+        return `https://p.eqt.net.im/${act}`;
     }
 }
 
