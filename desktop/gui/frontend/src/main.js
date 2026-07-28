@@ -6020,11 +6020,17 @@ function qrImageURL(pageUrl) {
     }
     const baseServerUrl = localOrigin || window.location.origin;
 
-    if (pageUrl.startsWith('https://eqt.net.im/')) {
+    if (pageUrl.startsWith('https://') || pageUrl.includes('eqt.net.im')) {
         return `${baseServerUrl}/qr/image?text=${encodeURIComponent(pageUrl)}`;
     }
     try {
         const url = new URL(pageUrl);
+        let baseHost = '';
+        try { baseHost = new URL(baseServerUrl).host; } catch(e){}
+        if (baseHost && url.host !== baseHost) {
+            return `${baseServerUrl}/qr/image?text=${encodeURIComponent(pageUrl)}`;
+        }
+
         const cleanPath = url.pathname.replace(/\/$/, '');
         if (cleanPath.endsWith('/qr')) {
             url.pathname = `${cleanPath}/image`;
@@ -6037,7 +6043,7 @@ function qrImageURL(pageUrl) {
         url.hash = '';
         return url.toString();
     } catch {
-        return '';
+        return `${baseServerUrl}/qr/image?text=${encodeURIComponent(pageUrl)}`;
     }
 }
 
