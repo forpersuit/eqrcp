@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <title>EQT Pro - P2P WAN Transfer</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f7f6;
+            --surface: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+            --accent: #0f766e;
+            --accent-strong: #0d5e58;
+            --accent-rgb: 15,118,110;
+            --accent-light: rgba(15,118,110, 0.06);
+            --accent-border: rgba(15,118,110, 0.16);
+            --line: #e5e7eb;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --bg: #0f172a;
+                --surface: #1e293b;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --text-muted: #64748b;
+                --accent: #38bdf8;
+                --accent-strong: #0284c7;
+                --accent-rgb: 56,189,248;
+                --accent-light: rgba(56,189,248, 0.1);
+                --accent-border: rgba(56,189,248, 0.2);
+                --line: #334155;
+            }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text-primary); display: flex; align-items: center; justify-content: center; }
+        main { width: min(100%, 460px); padding: 32px 20px; text-align: center; }
+        .brand-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 24px; }
+        .brand-title { font-size: 24px; font-weight: 800; color: var(--accent); }
+        .pro-badge { background: var(--accent-strong); color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+        .status-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .file-icon-wrapper { width: 72px; height: 72px; background: var(--accent-light); border: 1px solid var(--accent-border); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--accent); font-size: 32px; }
+        .file-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+        .file-meta { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+        .status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: var(--accent-light); border: 1px solid var(--accent-border); border-radius: 20px; font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 20px; }
+        .btn-primary { width: 100%; background: var(--accent-strong); color: white; border: none; padding: 14px 20px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; }
+        .footer-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <main></main>
+    <script src="js/transport.js"></script>
+    <script>
+        (function() {
+            const path = window.location.pathname;
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token') || '';
+            const join = params.get('join') || '';
+
+            const loadScript = (src, callback) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = callback;
+                document.head.appendChild(s);
+            };
+
+            if (path.includes('/receive')) {
+                loadScript('js/receive.js', () => window.initReceiveModule(token));
+            } else if (path.includes('/chat')) {
+                loadScript('js/chat.js', () => window.initChatModule(token, join));
+            } else {
+                loadScript('js/share.js', () => window.initShareModule(token));
+            }
+        })();
+    </script>
+</body>
+</html>
