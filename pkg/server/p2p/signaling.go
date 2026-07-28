@@ -106,9 +106,19 @@ func (c *SignalingClient) executeRequest(reqFactory func(baseURL string) (*http.
 
 // CreateRoom requests a new P2P room with Pro tier verification.
 func (c *SignalingClient) CreateRoom(licenseCode, deviceID string) (*CreateRoomResponse, error) {
+	return c.CreateRoomWithMode(licenseCode, deviceID, "share")
+}
+
+// CreateRoomWithMode requests a new P2P room with specified mode and Pro tier verification.
+func (c *SignalingClient) CreateRoomWithMode(licenseCode, deviceID, mode string) (*CreateRoomResponse, error) {
+	if mode == "" {
+		mode = "share"
+	}
 	resp, usedEP, err := c.executeRequest(func(baseURL string) (*http.Request, error) {
 		reqURL := fmt.Sprintf("%s/api/v1/p2p/room/create", baseURL)
-		req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBufferString(`{"mode":"share"}`))
+		payloadObj := map[string]string{"mode": mode}
+		payloadBytes, _ := json.Marshal(payloadObj)
+		req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewBuffer(payloadBytes))
 		if err != nil {
 			return nil, err
 		}
@@ -122,23 +132,30 @@ func (c *SignalingClient) CreateRoom(licenseCode, deviceID string) (*CreateRoomR
 		return req, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signaling request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	_ = usedEP
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read signaling response from %s: %w", usedEP, err)
 	}
 
 	var result CreateRoomResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse signaling response: %w, body: %s", err, string(body))
+		return nil, fmt.Errorf("failed to parse signaling response from %s: %w, body: %s", usedEP, err, string(body))
 	}
 
 	if resp.StatusCode != http.StatusOK || result.Code != 200 {
-		return &result, fmt.Errorf("signaling error (%d): %s - %s", resp.StatusCode, result.Error, result.Message)
+		errStr := result.Error
+		if errStr == "" {
+			errStr = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		}
+		msgStr := result.Message
+		if msgStr == "" {
+			msgStr = string(body)
+		}
+		return &result, fmt.Errorf("signaling server (%s) returned error (%d): %s - %s", usedEP, resp.StatusCode, errStr, msgStr)
 	}
 
 	return &result, nil

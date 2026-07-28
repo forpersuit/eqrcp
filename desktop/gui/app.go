@@ -81,6 +81,9 @@ type TaskRecord struct {
 	ChatDeviceCount         int                                        `json:"chatDeviceCount,omitempty"`
 	ChatLastActivity        string                                     `json:"chatLastActivity,omitempty"`
 	PageURL                 string                                     `json:"pageUrl,omitempty"`
+	WanPageURL              string                                     `json:"wanUrl,omitempty"`
+	WanRoomToken            string                                     `json:"wanToken,omitempty"`
+	WanError                string                                     `json:"wanError,omitempty"`
 	Error                   string                                     `json:"error,omitempty"`
 	StartedAt               time.Time                                  `json:"startedAt"`
 	FinishedAt              *time.Time                                 `json:"finishedAt,omitempty"`

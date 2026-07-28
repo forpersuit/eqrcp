@@ -18,6 +18,7 @@ import (
 	"eqt/pkg/config"
 	"eqt/pkg/logger"
 	"eqt/pkg/server"
+	"eqt/pkg/server/p2p"
 	"eqt/pkg/version"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -971,6 +972,44 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		}
 		srv.Send(payload)
 		agent.setTaskPageURL(task.Action, srv.SendURL)
+		agent.log.Infof("[WAN P2P Share] LAN SendURL initialized: %s", srv.SendURL)
+
+		// 异步为 Share 模式注册公网 P2P 信令房间
+		go func() {
+			var licCode string
+			if cert, ok := server.GetLocalLicenseInfo(); ok {
+				licCode = cert.LicenseCode
+			}
+			devID := server.GetDeviceStableID()
+			agent.log.Infof("[WAN P2P Share] Initiating P2P room registration for share task %d (LicenseCode: %q, DeviceID: %q)...", taskID, licCode, devID)
+			signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
+
+			resp, err := signalClient.CreateRoomWithMode(licCode, devID, "share")
+			if err != nil {
+				errMsg := fmt.Sprintf("CreateRoom failed: %v", err)
+				agent.log.Errorf("[WAN P2P Share Error] Failed to create P2P room for share task %d: %s", taskID, errMsg)
+				agent.setTaskWanURL(task.Action, "", "", errMsg)
+				return
+			}
+
+			if resp == nil || resp.Data.RoomID == "" {
+				errMsg := "Signaling server returned empty RoomID"
+				agent.log.Errorf("[WAN P2P Share Error] Failed to create P2P room for share task %d: %s", taskID, errMsg)
+				agent.setTaskWanURL(task.Action, "", "", errMsg)
+				return
+			}
+
+			roomID := resp.Data.RoomID
+			hostToken := resp.Data.HostToken
+			wanURL := fmt.Sprintf("https://p.eqt.net.im/share?token=%s", roomID)
+
+			agent.log.Infof("[WAN P2P Share Success] P2P room registered successfully for share task %d! RoomID: %s, HostToken: %s, WanURL: %s", taskID, roomID, hostToken, wanURL)
+			agent.setTaskWanURL(task.Action, wanURL, roomID, "")
+
+			// 启动后端 WebRTC P2P 信令监听
+			srv.StartWanP2PListener(roomID, hostToken)
+		}()
+
 		if err := serveDesktopTaskQR(srv, srv.SendURL, agentApp.Flags.Browser); err != nil {
 			agent.log.Errorf("runTask (share): failed to serve QR: %v", err)
 			srv.Shutdown()
@@ -983,6 +1022,42 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			return err
 		}
 		agent.setTaskPageURL(task.Action, srv.ReceiveURL)
+
+		// 异步为 Receive 模式注册公网 P2P 信令房间
+		go func() {
+			var licCode string
+			if cert, ok := server.GetLocalLicenseInfo(); ok {
+				licCode = cert.LicenseCode
+			}
+			devID := server.GetDeviceStableID()
+			agent.log.Infof("[WAN P2P Receive] Initiating P2P room registration for receive task %d (LicenseCode: %q, DeviceID: %q)...", taskID, licCode, devID)
+			signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
+
+			resp, err := signalClient.CreateRoomWithMode(licCode, devID, "receive")
+			if err != nil {
+				errMsg := fmt.Sprintf("CreateRoom failed: %v", err)
+				agent.log.Errorf("[WAN P2P Receive Error] Failed to create P2P room for receive task %d: %s", taskID, errMsg)
+				agent.setTaskWanURL(task.Action, "", "", errMsg)
+				return
+			}
+
+			if resp == nil || resp.Data.RoomID == "" {
+				errMsg := "Signaling server returned empty RoomID"
+				agent.log.Errorf("[WAN P2P Receive Error] Failed to create P2P room for receive task %d: %s", taskID, errMsg)
+				agent.setTaskWanURL(task.Action, "", "", errMsg)
+				return
+			}
+
+			roomID := resp.Data.RoomID
+			hostToken := resp.Data.HostToken
+			wanURL := fmt.Sprintf("https://p.eqt.net.im/receive?token=%s", roomID)
+
+			agent.log.Infof("[WAN P2P Receive Success] P2P room registered successfully for receive task %d! RoomID: %s, HostToken: %s, WanURL: %s", taskID, roomID, hostToken, wanURL)
+			agent.setTaskWanURL(task.Action, wanURL, roomID, "")
+
+			// 启动后端 WebRTC P2P 信令监听
+			srv.StartWanP2PListener(roomID, hostToken)
+		}()
 		if err := serveDesktopTaskQR(srv, srv.ReceiveURL, agentApp.Flags.Browser); err != nil {
 			agent.log.Errorf("runTask (receive): failed to serve QR: %v", err)
 			srv.Shutdown()
@@ -1055,6 +1130,26 @@ func (agent *desktopAgent) setTaskPageURL(action string, pageURL string) {
 		if agent.current != nil {
 			agent.current.PageURL = pageURL
 		}
+	}
+	agent.touchLocked()
+}
+
+func (agent *desktopAgent) setTaskWanURL(action string, wanURL string, wanToken string, wanErr string) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	target := agent.current
+	if action == "chat" {
+		target = agent.chat
+	}
+	if target != nil {
+		target.WanPageURL = wanURL
+		target.WanRoomToken = wanToken
+		target.WanError = wanErr
+	}
+	if wanErr != "" {
+		agent.log.Errorf("[WAN P2P Error] setTaskWanURL action=%s, error=%s", action, wanErr)
+	} else {
+		agent.log.Infof("[WAN P2P Success] setTaskWanURL action=%s, wanURL=%s, wanToken=%s", action, wanURL, wanToken)
 	}
 	agent.touchLocked()
 }

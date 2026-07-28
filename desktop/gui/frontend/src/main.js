@@ -711,16 +711,19 @@ function sanitizeWanP2PUrl(targetUrl, action, task) {
             const parsed = new URL(targetUrl);
             const token = parsed.searchParams.get('token');
             join = join || parsed.searchParams.get('join') || '';
-            const pathSegments = parsed.pathname.split('/').filter(Boolean);
-            const lastSegment = pathSegments[pathSegments.length - 1] || '';
-            rawToken = token || (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat' ? lastSegment : '');
+            if (token) {
+                rawToken = token;
+            } else if (parsed.hostname.includes('eqt.net.im')) {
+                const pathSegments = parsed.pathname.split('/').filter(Boolean);
+                const lastSegment = pathSegments[pathSegments.length - 1] || '';
+                rawToken = (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat' ? lastSegment : '');
+            }
         } catch (e) {
             console.warn('[Antigravity] Failed to parse targetUrl for WAN token:', e);
         }
     }
 
     if (!rawToken) {
-        console.warn('[Antigravity Warning] WAN mode requires an active P2P room token. Refusing to generate invalid tokenless WAN URL.');
         return '';
     }
 
@@ -734,7 +737,8 @@ function sanitizeWanP2PUrl(targetUrl, action, task) {
 function getWanP2PUrl(task) {
     if (!task) return '';
     const baseAction = task.action || 'share';
-    return sanitizeWanP2PUrl(task.wanUrl || task.pageUrl, baseAction, task);
+    if (!task.wanUrl && !task.wanToken) return '';
+    return sanitizeWanP2PUrl(task.wanUrl, baseAction, task);
 }
 
 function renderActiveTaskQR() {
@@ -780,6 +784,11 @@ function renderQRHeroHtml(task, isExpanded) {
     const activeUrl = isWanActive ? wanUrl : lanUrl;
 
     if (isWanActive && !activeUrl) {
+        const errDetail = task.wanError ? `: ${task.wanError}` : ' (未获取到信令 Token)';
+        if (typeof LogError === 'function') {
+            LogError('[WAN 二维码生成异常] Failed to generate WAN QR code' + errDetail);
+        }
+        console.warn('[WAN P2P Error] Failed to generate WAN QR code' + errDetail);
         return `
             <div class="qr-hero" data-active-mode="${activeMode}">
                 <div class="qr-channel-tabs">
@@ -791,7 +800,7 @@ function renderQRHeroHtml(task, isExpanded) {
                     </button>
                 </div>
                 <div class="empty-state transfer-empty" style="margin: 16px 0; color: var(--danger); background: var(--danger-light); padding: 12px; border-radius: 8px; font-size: 13px;">
-                    ⚠️ 暂未获取到公网 P2P 信令 Token，无法生成公网二维码。请使用局域网模式或重试。
+                    ⚠️ 公网 P2P 准备失败${escapeHTML(errDetail)}。请重试或使用局域网模式。
                 </div>
             </div>
         `;
@@ -3202,10 +3211,35 @@ function refreshHistoryListInDOM() {
             const channel = channelBtn.dataset.channel;
             const isPaidPro = !!(state.status?.isPaid && state.status?.licenseTier === 'PRO');
             if (channel === 'wan' && !isPaidPro) {
-                showToast(t('qr_channel_pro_tip') || 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅');
+                const tip = t('qr_channel_pro_tip') || 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅';
+                showToast(tip);
+                if (typeof LogError === 'function') {
+                    LogError('[WAN 二维码切换异常] ' + tip);
+                }
                 return;
             }
             state.qrChannelMode = channel;
+            if (channel === 'wan') {
+                const task = state.status?.current || activeChatTask();
+                const wanUrl = getWanP2PUrl(task);
+                if (!wanUrl) {
+                    const errDetail = task?.wanError ? `: ${task.wanError}` : ' (未获取到信令 Token)';
+                    if (typeof LogError === 'function') {
+                        LogError('[WAN 二维码切换异常] 已切换至 WAN 模式，但公网二维码生成失败' + errDetail);
+                    }
+                    if (typeof LogInfo === 'function') {
+                        LogInfo('[WAN 调试信息] TaskID=' + (task?.id || 0) + ', Action=' + (task?.action || 'unknown') + ', WanPageURL=' + (task?.wanUrl || '') + ', WanError=' + (task?.wanError || 'none'));
+                    }
+                } else {
+                    if (typeof LogInfo === 'function') {
+                        LogInfo('[WAN 二维码切换成功] 已切换至 WAN 公网 P2P 模式, URL: ' + wanUrl);
+                    }
+                }
+            } else {
+                if (typeof LogInfo === 'function') {
+                    LogInfo('[QR 模式切换] 已切换至局域网 LAN 模式');
+                }
+            }
             renderActiveTaskQR();
             return;
         }

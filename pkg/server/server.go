@@ -2201,7 +2201,7 @@ func New(cfg *config.Config) (*Server, error) {
 		status.PageUrl = app.SendURL
 		status.WanUrl = "https://p.eqt.net.im/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
 	})
-	go app.startWanP2PListener(path)
+	go app.StartWanP2PListener(path, "")
 	// Create cookie used to verify request is coming from first client to connect
 	cookie := http.Cookie{Name: "eqt", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed
@@ -3351,10 +3351,10 @@ func (s *Server) NotifyQuickDownload(id string) {
 	}
 }
 
-// startWanP2PListener registers room and listens for incoming WebRTC P2P mobile connections over WAN.
-func (s *Server) startWanP2PListener(roomToken string) {
+// StartWanP2PListener listens for incoming WebRTC P2P mobile connections over WAN for roomID.
+func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 	signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
-	_, _ = signalClient.CreateRoom("", "")
+	log.Printf("[WAN P2P Listener] Starting signal polling loop for RoomID=%s, HostToken=%s", roomID, hostToken)
 
 	ticker := time.NewTicker(800 * time.Millisecond)
 	defer ticker.Stop()
@@ -3363,10 +3363,16 @@ func (s *Server) startWanP2PListener(roomToken string) {
 	for {
 		select {
 		case <-s.stopChannel:
+			log.Printf("[WAN P2P Listener] Server stop signal received, terminating polling loop for RoomID=%s", roomID)
+			_ = signalClient.DestroyRoom(roomID, hostToken)
 			return
 		case <-ticker.C:
-			signals, err := signalClient.PollSignals(roomToken, "host", lastID)
-			if err != nil || len(signals) == 0 {
+			signals, err := signalClient.PollSignals(roomID, hostToken, lastID)
+			if err != nil {
+				log.Printf("[WAN P2P Listener Warning] PollSignals error for RoomID=%s: %v", roomID, err)
+				continue
+			}
+			if len(signals) == 0 {
 				continue
 			}
 
@@ -3375,14 +3381,24 @@ func (s *Server) startWanP2PListener(roomToken string) {
 					lastID = sigMsg.ID
 				}
 				if sigMsg.Type == "offer" {
+					log.Printf("[WAN P2P Listener] Received WebRTC offer signal from client (ID=%d). Creating answer...", sigMsg.ID)
 					engine, err := p2p.NewEngine(nil)
 					if err != nil {
+						log.Printf("[WAN P2P Listener Error] Failed to create WebRTC pion engine: %v", err)
 						continue
 					}
 
 					answerSDP, err := engine.CreateAnswer(sigMsg.Payload)
-					if err == nil && answerSDP != "" {
-						_ = signalClient.PushSignal(roomToken, "host", "host", answerSDP)
+					if err != nil || answerSDP == "" {
+						log.Printf("[WAN P2P Listener Error] Failed to generate SDP answer: %v", err)
+						continue
+					}
+
+					pushErr := signalClient.PushSignal(roomID, hostToken, "host", answerSDP)
+					if pushErr != nil {
+						log.Printf("[WAN P2P Listener Error] Failed to push SDP answer to signaling server: %v", pushErr)
+					} else {
+						log.Printf("[WAN P2P Listener Success] SDP Answer pushed to signaling server for RoomID=%s", roomID)
 					}
 				}
 			}
