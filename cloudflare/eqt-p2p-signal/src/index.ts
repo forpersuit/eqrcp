@@ -95,37 +95,156 @@ function generateRandomString(length: number): string {
   return result;
 }
 
-function cleanupExpiredRooms() {
-  const now = Date.now();
-  for (const [id, room] of activeRooms.entries()) {
-    if (now > room.expiresAt) {
-      activeRooms.delete(id);
+let d1Initialized = false;
+
+async function ensureD1Tables(env: Env) {
+  if (!env.DB || d1Initialized) return;
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS p2p_rooms (
+        id TEXT PRIMARY KEY,
+        license_code TEXT,
+        host_token TEXT,
+        client_token TEXT,
+        created_at INTEGER,
+        expires_at INTEGER,
+        host_geo_json TEXT,
+        client_geo_json TEXT
+      )
+    `).run();
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS p2p_signals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id TEXT,
+        sender TEXT,
+        type TEXT,
+        payload TEXT,
+        created_at INTEGER
+      )
+    `).run();
+    d1Initialized = true;
+  } catch (err) {
+    console.error('ensureD1Tables error:', err);
+  }
+}
+
+async function getRoomState(env: Env, roomId: string): Promise<RoomState | null> {
+  if (activeRooms.has(roomId)) {
+    const room = activeRooms.get(roomId)!;
+    if (Date.now() <= room.expiresAt) return room;
+  }
+  if (!env.DB) return null;
+  try {
+    await ensureD1Tables(env);
+    const row: any = await env.DB.prepare('SELECT * FROM p2p_rooms WHERE id = ?').bind(roomId).first();
+    if (!row) return null;
+    const now = Date.now();
+    if (now > row.expires_at) return null;
+
+    const room: RoomState = {
+      id: row.id,
+      licenseCode: row.license_code || '',
+      hostToken: row.host_token,
+      clientToken: row.client_token,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      hostGeo: JSON.parse(row.host_geo_json || '{}'),
+      clientGeo: row.client_geo_json ? JSON.parse(row.client_geo_json) : undefined,
+      signals: []
+    };
+    activeRooms.set(roomId, room);
+    return room;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function saveRoomState(env: Env, room: RoomState) {
+  activeRooms.set(room.id, room);
+  if (!env.DB) return;
+  try {
+    await ensureD1Tables(env);
+    await env.DB.prepare(`
+      INSERT INTO p2p_rooms (id, license_code, host_token, client_token, created_at, expires_at, host_geo_json, client_geo_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        client_geo_json = excluded.client_geo_json
+    `).bind(
+      room.id,
+      room.licenseCode,
+      room.hostToken,
+      room.clientToken,
+      room.createdAt,
+      room.expiresAt,
+      JSON.stringify(room.hostGeo),
+      room.clientGeo ? JSON.stringify(room.clientGeo) : null
+    ).run();
+  } catch (err) {
+    console.error('saveRoomState error:', err);
+  }
+}
+
+async function pushSignalToRoom(env: Env, roomId: string, sender: 'host' | 'client', type: string, payload: string): Promise<number> {
+  const signalId = Date.now();
+  const room = activeRooms.get(roomId);
+  if (room) {
+    room.signals.push({ id: signalId, sender, type, payload, createdAt: Date.now() });
+  }
+
+  if (env.DB) {
+    try {
+      await ensureD1Tables(env);
+      const res = await env.DB.prepare(`
+        INSERT INTO p2p_signals (room_id, sender, type, payload, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(roomId, sender, type, payload, Date.now()).run();
+      if (res.meta && res.meta.last_row_id) {
+        return res.meta.last_row_id;
+      }
+    } catch (err) {
+      console.error('pushSignalToRoom error:', err);
     }
   }
+  return signalId;
 }
 
-async function logAdminAudit(env: Env, action: string, targetType: string, targetId: string, details: any, operatorIp: string) {
-  try {
-    if (!env.DB) return;
-    await env.DB.prepare(
-      `INSERT INTO admin_audit_logs (action, target_type, target_id, details_json, operator_ip, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(action, targetType, targetId, JSON.stringify(details), operatorIp, new Date().toISOString()).run();
-  } catch (err) {
-    console.error('Failed to log admin audit:', err);
+async function pollSignalsFromRoom(env: Env, roomId: string, myRole: 'host' | 'client', since: number): Promise<any[]> {
+  const targetSender = myRole === 'host' ? 'client' : 'host';
+  if (env.DB) {
+    try {
+      await ensureD1Tables(env);
+      const rows: any = await env.DB.prepare(`
+        SELECT id, sender, type, payload, created_at FROM p2p_signals
+        WHERE room_id = ? AND sender = ? AND id > ?
+        ORDER BY id ASC
+      `).bind(roomId, targetSender, since).all();
+      if (rows && rows.results && rows.results.length > 0) {
+        return rows.results.map((r: any) => ({
+          id: r.id,
+          sender: r.sender,
+          type: r.type,
+          payload: r.payload,
+          createdAt: r.created_at
+        }));
+      }
+    } catch (err) {
+      console.error('pollSignalsFromRoom error:', err);
+    }
   }
+  const room = activeRooms.get(roomId);
+  if (room) {
+    return room.signals.filter(s => s.sender === targetSender && s.id > since);
+  }
+  return [];
 }
 
-async function logSystemError(env: Env, category: string, message: string, context: any) {
-  try {
-    if (!env.DB) return;
-    await env.DB.prepare(
-      `INSERT INTO system_error_logs (level, category, error_message, context_json, created_at)
-       VALUES ('ERROR', ?, ?, ?, ?)`
-    ).bind(category, message, JSON.stringify(context), new Date().toISOString()).run();
-  } catch (err) {
-    console.error('Failed to log system error:', err);
+async function requireAdminAuth(request: Request, env: Env, corsHeaders: Headers): Promise<Response | null> {
+  const authHeader = request.headers.get('Authorization') || '';
+  const jwtHeader = request.headers.get('Cf-Access-Jwt-Assertion') || '';
+  if (!authHeader && !jwtHeader) {
+    return jsonResponse({ code: 401, error: 'unauthorized', message: 'Admin authentication required' }, 401, corsHeaders);
   }
+  return null;
 }
 
 export default {
@@ -138,8 +257,6 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    cleanupExpiredRooms();
-
     try {
       // 1. Health Probe
       if (path === '/health' || path === '/api/v1/p2p/health') {
@@ -151,8 +268,6 @@ export default {
           timestamp: new Date().toISOString()
         });
       }
-
-
 
       // 2. Admin 3D Globe API: GET /api/v1/p2p/admin/connections
       if (request.method === 'GET' && path === '/api/v1/p2p/admin/connections') {
@@ -229,7 +344,7 @@ export default {
           signals: []
         };
 
-        activeRooms.set(roomId, room);
+        await saveRoomState(env, room);
 
         return jsonResponse({
           code: 200,
@@ -250,12 +365,13 @@ export default {
         const body: any = await request.json().catch(() => ({}));
         const roomId = body.room_id || '';
 
-        if (!roomId || !activeRooms.has(roomId)) {
+        const room = await getRoomState(env, roomId);
+        if (!room) {
           return jsonResponse({ code: 404, error: 'room_not_found', message: 'Signaling room not found or expired' }, 404);
         }
 
-        const room = activeRooms.get(roomId)!;
         room.clientGeo = getGeoFromRequest(request);
+        await saveRoomState(env, room);
 
         return jsonResponse({
           code: 200,
@@ -276,11 +392,11 @@ export default {
         const body: any = await request.json().catch(() => ({}));
         const { room_id, type, payload } = body;
 
-        if (!room_id || !activeRooms.has(room_id)) {
+        const room = await getRoomState(env, room_id);
+        if (!room) {
           return jsonResponse({ code: 404, error: 'room_not_found', message: 'Signaling room not found' }, 404);
         }
 
-        const room = activeRooms.get(room_id)!;
         let sender: 'host' | 'client';
 
         if (roomToken === room.hostToken) {
@@ -291,14 +407,8 @@ export default {
           return jsonResponse({ code: 401, error: 'unauthorized_token', message: 'Invalid X-Room-Token' }, 401);
         }
 
-        const signalId = room.signals.length + 1;
-        room.signals.push({
-          id: signalId,
-          sender,
-          type: type || 'sdp',
-          payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
-          createdAt: Date.now()
-        });
+        const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        const signalId = await pushSignalToRoom(env, room.id, sender, type || 'sdp', payloadStr);
 
         return jsonResponse({ code: 200, message: 'signal_buffered', signal_id: signalId });
       }
@@ -309,11 +419,11 @@ export default {
         const roomId = url.searchParams.get('room_id') || '';
         const since = parseInt(url.searchParams.get('since') || '0', 10);
 
-        if (!roomId || !activeRooms.has(roomId)) {
+        const room = await getRoomState(env, roomId);
+        if (!room) {
           return jsonResponse({ code: 404, error: 'room_not_found', message: 'Signaling room not found' }, 404);
         }
 
-        const room = activeRooms.get(roomId)!;
         let myRole: 'host' | 'client';
 
         if (roomToken === room.hostToken) {
@@ -324,8 +434,7 @@ export default {
           return jsonResponse({ code: 401, error: 'unauthorized_token', message: 'Invalid X-Room-Token' }, 401);
         }
 
-        const targetSender = myRole === 'host' ? 'client' : 'host';
-        const pendingSignals = room.signals.filter(s => s.sender === targetSender && s.id > since);
+        const pendingSignals = await pollSignalsFromRoom(env, room.id, myRole, since);
 
         return jsonResponse({
           code: 200,
@@ -349,10 +458,16 @@ export default {
           isAdmin = true;
         }
 
-        if (roomId && activeRooms.has(roomId)) {
-          const room = activeRooms.get(roomId)!;
+        const room = await getRoomState(env, roomId);
+        if (room) {
           if (isAdmin || roomToken === room.hostToken || roomToken === room.clientToken) {
             activeRooms.delete(roomId);
+            if (env.DB) {
+              try {
+                await env.DB.prepare('DELETE FROM p2p_rooms WHERE id = ?').bind(roomId).run();
+                await env.DB.prepare('DELETE FROM p2p_signals WHERE room_id = ?').bind(roomId).run();
+              } catch (e) {}
+            }
             if (isAdmin) {
               const operatorIp = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
               ctx.waitUntil(logAdminAudit(env, 'TEARDOWN_P2P_ROOM', 'P2P_ROOM', roomId, {
