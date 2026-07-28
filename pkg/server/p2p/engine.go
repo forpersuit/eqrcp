@@ -30,6 +30,7 @@ type Engine struct {
 	stunServers    []string
 	onStateChange  func(ConnectionState)
 	onDataChannel  func(*webrtc.DataChannel)
+	onICECandidate func(*webrtc.ICECandidate)
 	timeoutTimer   *time.Timer
 	isClosed       bool
 }
@@ -99,7 +100,21 @@ func NewEngine(stunServers []string) (*Engine, error) {
 		}
 	})
 
+	// Handle ICE Candidates generated locally
+	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			return
+		}
+		engine.mu.Lock()
+		cb := engine.onICECandidate
+		engine.mu.Unlock()
+		if cb != nil {
+			cb(c)
+		}
+	})
+
 	// Handle remote incoming DataChannel
+
 	pc.OnDataChannel(func(dc *webrtc.DataChannel) {
 		engine.mu.Lock()
 		engine.DataChannel = dc
@@ -281,6 +296,16 @@ func (e *Engine) SetOnDataChannel(cb func(*webrtc.DataChannel)) {
 	defer e.mu.Unlock()
 	e.onDataChannel = cb
 }
+
+// SetOnICECandidate registers callback for locally generated ICE Candidates.
+func (e *Engine) SetOnICECandidate(cb func(*webrtc.ICECandidate)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onICECandidate = cb
+}
+
+
+
 
 // State returns current connection state.
 func (e *Engine) State() ConnectionState {

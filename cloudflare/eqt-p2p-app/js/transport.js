@@ -57,10 +57,13 @@ window.EQTTransport = class EQTTransport {
             self.channel = self.pc.createDataChannel('eqt-p2p-data');
             self.channel.binaryType = 'arraybuffer';
             
-            self.channel.onopen = () => {
+            const triggerOpen = () => {
                 if (self.onPhase) self.onPhase(5, 5, '通道打通，正在同步元数据...');
                 if (self.onStatus) self.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
             };
+
+            self.channel.onopen = triggerOpen;
+            if (self.channel.readyState === 'open') triggerOpen();
 
             self.channel.onmessage = (e) => {
                 if (typeof e.data === 'string') {
@@ -84,10 +87,18 @@ window.EQTTransport = class EQTTransport {
                 }
             };
 
+            self.pc.oniceconnectionstatechange = () => {
+                const state = self.pc ? self.pc.iceConnectionState : '';
+                if (state === 'connected' || state === 'completed') {
+                    triggerOpen();
+                }
+            };
+
             self.pc.ondatachannel = (event) => {
                 const remoteChannel = event.channel;
                 remoteChannel.onmessage = self.channel.onmessage;
-                remoteChannel.onopen = self.channel.onopen;
+                remoteChannel.onopen = triggerOpen;
+                if (remoteChannel.readyState === 'open') triggerOpen();
             };
 
             // 3. Create WebRTC Offer with explicit options to force m=application & ICE generation
@@ -172,17 +183,37 @@ window.EQTTransport = class EQTTransport {
     async handleRemoteSignal(item) {
         if (!this.pc) return;
         try {
-            const raw = typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload;
-            if (item.type === 'sdp' || raw.type === 'answer' || raw.type === 'offer') {
-                if (this.pc.signalingState !== 'stable') {
-                    await this.pc.setRemoteDescription(new RTCSessionDescription(raw));
-                }
-            } else if (item.type === 'candidate' || raw.candidate) {
-                const cand = raw.candidate || raw;
-                await this.pc.addIceCandidate(new RTCIceCandidate(cand));
+            let raw = item.payload;
+            if (typeof raw === 'string') {
+                try { raw = JSON.parse(raw); } catch(e) {}
             }
-        } catch (err) {}
+            let sdpText = typeof raw === 'string' ? raw : (raw && raw.sdp ? raw.sdp : '');
+
+            if (sdpText && (item.type === 'answer' || item.type === 'host' || item.type === 'sdp' || (raw && raw.type === 'answer'))) {
+                if (this.pc.signalingState === 'have-local-offer') {
+                    console.log('[P2P Client] Setting remote answer SDP...');
+                    await this.pc.setRemoteDescription(new RTCSessionDescription({
+                        type: 'answer',
+                        sdp: sdpText
+                    }));
+                    if (this.onPhase) this.onPhase(4, 5, '正在与电脑端建立打洞连通...');
+                }
+            } else if (item.type === 'candidate' || (raw && raw.candidate)) {
+                const cand = (raw && raw.candidate) ? raw.candidate : raw;
+                await this.pc.addIceCandidate(new RTCIceCandidate(cand));
+            } else if (item.type === 'meta' || (raw && raw.type === 'meta')) {
+                const meta = (raw && raw.type === 'meta') ? raw : (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload);
+                const metaName = meta.name || 'downloaded_file';
+                const metaSize = meta.size || 0;
+                if (this.onPhase) this.onPhase(5, 5, '物理通道贯通，元数据同步成功！');
+                if (this.onStatus) this.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
+                if (this.onMeta) this.onMeta(metaName, metaSize);
+            }
+        } catch (err) {
+            console.error('[P2P Client] Error handling remote signal:', err);
+        }
     }
+
 
     requestDownload() {
         if (this.channel && this.channel.readyState === 'open') {

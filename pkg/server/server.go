@@ -35,6 +35,7 @@ import (
 	"eqt/pkg/util"
 	"eqt/pkg/version"
 
+	"github.com/pion/webrtc/v3"
 	"github.com/tus/tusd/v2/pkg/filestore"
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 )
@@ -3363,6 +3364,7 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 	defer ticker.Stop()
 
 	var lastID int
+	var activeEngine *p2p.Engine
 	for {
 		select {
 		case <-s.stopChannel:
@@ -3391,18 +3393,88 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 						continue
 					}
 
+					engine.SetOnICECandidate(func(c *webrtc.ICECandidate) {
+						if c == nil {
+							return
+						}
+						candJSON, _ := json.Marshal(c.ToJSON())
+						_ = signalClient.PushSignal(roomID, hostToken, "candidate", string(candJSON))
+					})
+
+					engine.SetOnDataChannel(func(dc *webrtc.DataChannel) {
+						dc.OnOpen(func() {
+							log.Printf("[WAN P2P DataChannel] DataChannel connected! Syncing metadata...")
+							payloadName := s.body.Filename
+							if payloadName == "" {
+								payloadName = "downloaded_file"
+							}
+							var payloadSize int64 = 0
+							if s.body.Path != "" {
+								if fi, err := os.Stat(s.body.Path); err == nil {
+									payloadSize = fi.Size()
+								}
+							}
+							metaObj := map[string]interface{}{
+								"type": "meta",
+								"name": payloadName,
+								"size": payloadSize,
+							}
+							metaBytes, _ := json.Marshal(metaObj)
+							_ = dc.SendText(string(metaBytes))
+
+							if s.body.Path != "" {
+								file, err := os.Open(s.body.Path)
+								if err == nil {
+									buf := make([]byte, 64*1024)
+									for {
+										n, err := file.Read(buf)
+										if n > 0 {
+											_ = dc.Send(buf[:n])
+										}
+										if err != nil {
+											break
+										}
+									}
+									file.Close()
+									log.Printf("[WAN P2P DataChannel] Payload data sent successfully (%d bytes)!", payloadSize)
+								}
+							}
+						})
+					})
+
 					answerSDP, err := engine.CreateAnswer(sigMsg.Payload)
 					if err != nil || answerSDP == "" {
 						log.Printf("[WAN P2P Listener Error] Failed to generate SDP answer: %v", err)
 						continue
 					}
+					activeEngine = engine
 
-					pushErr := signalClient.PushSignal(roomID, hostToken, "host", answerSDP)
+					pushErr := signalClient.PushSignal(roomID, hostToken, "answer", answerSDP)
 					if pushErr != nil {
 						log.Printf("[WAN P2P Listener Error] Failed to push SDP answer to signaling server: %v", pushErr)
 					} else {
 						log.Printf("[WAN P2P Listener Success] SDP Answer pushed to signaling server for RoomID=%s", roomID)
+						
+						payloadName := s.body.Filename
+						if payloadName == "" {
+							payloadName = "downloaded_file"
+						}
+						var payloadSize int64 = 0
+						if s.body.Path != "" {
+							if fi, err := os.Stat(s.body.Path); err == nil {
+								payloadSize = fi.Size()
+							}
+						}
+						metaObj := map[string]interface{}{
+							"type": "meta",
+							"name": payloadName,
+							"size": payloadSize,
+						}
+						metaBytes, _ := json.Marshal(metaObj)
+						_ = signalClient.PushSignal(roomID, hostToken, "meta", string(metaBytes))
 					}
+				} else if sigMsg.Type == "candidate" && activeEngine != nil {
+					_ = activeEngine.AddICECandidate(sigMsg.Payload)
 				}
 			}
 		}

@@ -162,6 +162,9 @@ func (c *SignalingClient) CreateRoomWithMode(licenseCode, deviceID, mode string)
 		if err != nil {
 			return nil, err
 		}
+		if licenseCode == "" {
+			licenseCode = "FREE"
+		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-License-Code", licenseCode)
 		req.Header.Set("X-Device-ID", deviceID)

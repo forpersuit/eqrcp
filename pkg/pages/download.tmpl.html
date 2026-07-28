@@ -379,12 +379,10 @@
             </div>
 
 
-            {{if not .IsPaid}}
-            <div class="wifi-warning-box">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: #d97706;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                <span data-i18n="wifi_tips">If download fails, please make sure both devices are on the same Wi-Fi / LAN.</span>
+            <div class="wifi-warning-box" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; margin-bottom: 20px;">
+                <span data-i18n="wifi_tips" style="font-weight: 700; font-size: 14px;">局域网</span>
+                <span class="license-badge" style="position: static; font-size: 11px; padding: 2px 8px;">{{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}</span>
             </div>
-            {{end}}
 
             <!-- 接收包名卡片（文件准备就绪下方，待接收文件字面上方） -->
             <div class="package-name-card" style="margin: 14px 0 16px 0; padding: 10px 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; word-break: break-all;">
@@ -531,25 +529,25 @@
                 limit_header: '接続デバイス上限超過',
                 limit_tips: '無料版の制限ルールにより、1日あたり2回目以降の転送では最大2台のデバイスまで接続可能です。他のデバイスが切断されると、このページは自動的にダウンロード権限を回復します。',
                 btn_upgrade: 'ライセンスをアップグレード',
-                failed_status: '転送が停止しました。ボタンをクリックして再起動できます。',
                 notification_tips: '転送を一時停止または停止するには、スマートフォンの通知バーまたはブラウザのダウンロードマネージャーを使用してください。',
-                waiting_status: '接続が中断されました。再接続を待機しています...'
+                waiting_status: '接続が中断されました。再接続を待機しています...',
+                failed_status: '転送が停止しました。ボタンをクリックして再起動できます。'
             },
             ko: {
-                title: '파일 받기 - EQT',
+                title: '파일 수신 - EQT',
                 header: '다운로드 준비 완료',
-                wait_tips: '아래 버튼이나 파일 항목을 클릭하여 다운로드를 시작하십시오.',
-                wifi_tips: '두 기기가 모두 동일한 Wi-Fi / LAN에 연결되어 있는지 확인하십시오.',
+                wait_tips: '아래 버튼을 클릭하여 다운로드를 시작하세요.',
+                wifi_tips: 'LAN',
                 success_header: '다운로드 시작됨',
-                success_tips: '전송이 성공적으로 시작되었습니다! 브라우저 다운로드 진행 상황을 확인하세요.',
+                success_tips: '전송이 시작되었습니다! 브라우저 다운로드 진행 상황을 확인하세요.',
                 btn_download: '다운로드 시작',
-                btn_download_all: '전체 다운로드',
+                btn_download_all: '전체 다운로드 (체험)',
                 btn_download_all_zip: '전체 다운로드 (ZIP)',
-                btn_manual: '수동 다운로드 / 재다운로드',
+                btn_manual: '수동 다운로드 / 다시 다운로드',
                 btn_stop: '공유 중지',
                 stopped_header: '서비스 중지됨',
                 stopped_tips: '전송 서비스가 수동으로 중지되었습니다. 이 페이지를 닫으셔도 됩니다.',
-                saved_file: '받을 파일',
+                saved_file: '수신할 파일',
                 stats_meta_single: '{count}개 파일 · {size}',
                 stats_meta_multiple: '{count}개 파일 · {size}',
                 close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.',
