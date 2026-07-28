@@ -7,32 +7,30 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
 
 const DefaultSignalingURL = "https://signal.eqt.net.im"
 
-var FallbackSignalingURLs = []string{
-	"https://signal.eqt.net.im",
-	"https://eqt-p2p-signal.forpersuit.workers.dev",
-}
-
 // SignalingClient handles HTTP communication with the Cloudflare Worker signaling server.
 type SignalingClient struct {
-	BaseURL      string
-	FallbackURLs []string
-	HTTPClient   *http.Client
+	BaseURL    string
+	HTTPClient *http.Client
 }
 
 // NewSignalingClient creates a new client targeting the specified or default signaling server URL.
 func NewSignalingClient(baseURL string) *SignalingClient {
 	if baseURL == "" {
-		baseURL = DefaultSignalingURL
+		if envURL := os.Getenv("EQT_SIGNAL_SERVER"); envURL != "" {
+			baseURL = envURL
+		} else {
+			baseURL = DefaultSignalingURL
+		}
 	}
 	return &SignalingClient{
-		BaseURL:      baseURL,
-		FallbackURLs: FallbackSignalingURLs,
+		BaseURL: baseURL,
 		HTTPClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -80,28 +78,16 @@ type PollSignalsResponse struct {
 }
 
 func (c *SignalingClient) executeRequest(reqFactory func(baseURL string) (*http.Request, error)) (*http.Response, string, error) {
-	endpoints := []string{c.BaseURL}
-	for _, fb := range c.FallbackURLs {
-		if fb != "" && fb != c.BaseURL {
-			endpoints = append(endpoints, fb)
-		}
+	ep := c.BaseURL
+	req, err := reqFactory(ep)
+	if err != nil {
+		return nil, ep, fmt.Errorf("failed to create request for %s: %w", ep, err)
 	}
-
-	var lastErr error
-	for _, ep := range endpoints {
-		req, err := reqFactory(ep)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		resp, err := c.HTTPClient.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		return resp, ep, nil
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, ep, fmt.Errorf("signaling request to %s failed: %w", ep, err)
 	}
-	return nil, "", fmt.Errorf("all signaling endpoints failed: %w", lastErr)
+	return resp, ep, nil
 }
 
 // CreateRoom requests a new P2P room with Pro tier verification.
