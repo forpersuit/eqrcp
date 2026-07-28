@@ -15,7 +15,15 @@ function renderShareView(container) {
             <div id="status-icon-success" class="status-badge success" style="display: none;">✓</div>
 
             <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
-            <p id="summary-text" class="summary" data-i18n="wait_tips">📡 正在打通公网信令与加密 P2P 通道...</p>
+            
+            <!-- 单行极简连接阶段进度指示控件 -->
+            <div id="phase-timeline-bar" class="phase-timeline" style="margin-bottom: 16px; padding: 6px 12px; background: var(--accent-light); border: 1px solid var(--accent-border); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--accent-strong);">
+                <span id="phase-badge" style="background: var(--accent); color: white; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; flex-shrink: 0;">1/5</span>
+                <span id="phase-text" style="flex: 1; text-align: left; margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">正在加入公网信令房间...</span>
+                <span id="phase-spinner" style="display: inline-block; width: 12px; height: 12px; border: 2px solid var(--accent); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;"></span>
+            </div>
+
+            <p id="summary-text" class="summary" data-i18n="wait_tips" style="display: none;">📡 正在打通公网信令与加密 P2P 通道...</p>
 
             <!-- Download Progress Bar Section -->
             <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line);">
@@ -97,6 +105,12 @@ window.initShareModule = function(token) {
     const statusIconPending = document.getElementById('status-icon-pending');
     const statusIconSuccess = document.getElementById('status-icon-success');
 
+    // Phase Timeline Control References
+    const phaseTimelineBar = document.getElementById('phase-timeline-bar');
+    const phaseBadge = document.getElementById('phase-badge');
+    const phaseText = document.getElementById('phase-text');
+    const phaseSpinner = document.getElementById('phase-spinner');
+
     // Progress Bar References
     const progressContainer = document.getElementById('download-progress-container');
     const progressPercent = document.getElementById('download-progress-percent');
@@ -158,6 +172,23 @@ window.initShareModule = function(token) {
     let downloadedBlob = null;
     let currentFileName = 'downloaded_file';
 
+    transport.onPhase = (step, total, msg, isError) => {
+        if (phaseBadge) phaseBadge.innerText = `${step}/${total}`;
+        if (phaseText) phaseText.innerText = msg;
+        if (isError) {
+            if (phaseBadge) {
+                phaseBadge.innerText = '错误';
+                phaseBadge.style.background = 'var(--danger)';
+            }
+            if (phaseTimelineBar) {
+                phaseTimelineBar.style.background = 'var(--danger-light)';
+                phaseTimelineBar.style.borderColor = 'var(--danger-border)';
+                phaseTimelineBar.style.color = 'var(--danger)';
+            }
+            if (phaseSpinner) phaseSpinner.style.display = 'none';
+        }
+    };
+
     transport.onStatus = (msg, color) => {
         if (summaryText) {
             summaryText.innerText = msg;
@@ -178,11 +209,18 @@ window.initShareModule = function(token) {
             transferStatsMeta.setAttribute('data-size', formattedSize);
         }
 
-        if (summaryText) {
-            const dict = translations[currentLang] || translations.zh;
-            summaryText.innerText = dict.meta_received;
-            summaryText.style.color = 'var(--text-secondary)';
+        // Complete 5/5 Phase UI Updates
+        if (phaseBadge) {
+            phaseBadge.innerText = '5/5';
+            phaseBadge.style.background = 'var(--accent)';
         }
+        if (phaseText) phaseText.innerText = '✅ 链路打通，文件准备就绪！';
+        if (phaseTimelineBar) {
+            phaseTimelineBar.style.background = 'var(--accent-light)';
+            phaseTimelineBar.style.borderColor = 'var(--accent-border)';
+            phaseTimelineBar.style.color = 'var(--accent-strong)';
+        }
+        if (phaseSpinner) phaseSpinner.style.display = 'none';
 
         if (mainBtn) {
             const dict = translations[currentLang] || translations.zh;
@@ -238,5 +276,6 @@ window.initShareModule = function(token) {
 
     transport.initReceiver();
 };
+
 
 

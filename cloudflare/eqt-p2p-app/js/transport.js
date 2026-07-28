@@ -9,6 +9,7 @@ window.EQTTransport = class EQTTransport {
         this.lastSignalId = 0;
         this.pollInterval = null;
         this.onStatus = null;
+        this.onPhase = null; // New: 5-step phase lifecycle callback (step, total, msg, isError)
         this.onMeta = null;
         this.onProgress = null;
         this.onComplete = null;
@@ -18,6 +19,7 @@ window.EQTTransport = class EQTTransport {
         if (!this.roomId || !window.RTCPeerConnection) return;
         const self = this;
 
+        if (self.onPhase) self.onPhase(1, 5, '正在加入公网信令房间...');
         if (self.onStatus) self.onStatus('📡 正在加入公网 P2P 房间...', '#d97706');
 
         try {
@@ -37,6 +39,7 @@ window.EQTTransport = class EQTTransport {
             const iceServers = joinResult.data.ice_servers || [{ urls: 'stun:stun.l.google.com:19302' }];
 
             // 2. Initialize PeerConnection
+            if (self.onPhase) self.onPhase(2, 5, '正在生成加密 P2P 握手协议...');
             self.pc = new RTCPeerConnection({ iceServers });
 
             self.pc.onicecandidate = (event) => {
@@ -53,6 +56,7 @@ window.EQTTransport = class EQTTransport {
             self.pc.ondatachannel = (event) => {
                 self.channel = event.channel;
                 self.channel.onopen = () => {
+                    if (self.onPhase) self.onPhase(5, 5, '通道打通，正在同步元数据...');
                     if (self.onStatus) self.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
                 };
 
@@ -82,16 +86,21 @@ window.EQTTransport = class EQTTransport {
             // 3. Create WebRTC Offer and push signal
             const offer = await self.pc.createOffer();
             await self.pc.setLocalDescription(offer);
+            
+            if (self.onPhase) self.onPhase(3, 5, '已发送握手请求，等待电脑端响应...');
             await self.pushSignal('sdp', JSON.stringify(self.pc.localDescription));
 
+            if (self.onPhase) self.onPhase(4, 5, '正在与电脑端建立打洞连通...');
             if (self.onStatus) self.onStatus('📡 等待电脑端响应...', '#d97706');
 
             // 4. Start polling for remote Answer & ICE Candidates
             self.startPolling();
         } catch (err) {
+            if (self.onPhase) self.onPhase(1, 5, '通道异常: ' + err.message, true);
             if (self.onStatus) self.onStatus('❌ 通道异常: ' + err.message, '#dc2626');
         }
     }
+
 
     async pushSignal(type, payload) {
         if (!this.clientToken) return;

@@ -42,6 +42,20 @@
 
 * { box-sizing: border-box; }
 
+.lang-switch-container select:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.phase-timeline {
+    transition: all 0.3s ease;
+}
+
 body {
     margin: 0;
     min-height: 100vh;
