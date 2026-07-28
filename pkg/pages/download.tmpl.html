@@ -1417,6 +1417,91 @@
 
         // Auto start status polling on page load to register client activity immediately
         startStatusPolling();
+
+        // Dual-Transport Adapter (Auto-switch between LAN HTTP & WAN WebRTC P2P)
+        (function() {
+            var isWanMode = window.location.hostname === 'p.eqt.net.im' || window.location.pathname.startsWith('/share') || window.location.pathname.startsWith('/p/share');
+            if (isWanMode && window.RTCPeerConnection) {
+                var params = new URLSearchParams(window.location.search);
+                var token = params.get('token') || '';
+                if (!token) return;
+
+                var signalHost = 'https://signal.eqt.net.im';
+                var pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+
+                pc.onicecandidate = function(event) {
+                    if (event.candidate) {
+                        fetch(signalHost + '/signal/push', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ room: token, sender: 'mobile', signal: { type: 'candidate', candidate: event.candidate } })
+                        }).catch(function() {});
+                    }
+                };
+
+                let receivedChunks = [];
+                let expectedSize = 0;
+                let receivedSize = 0;
+                let fileName = 'downloaded_file';
+
+                pc.ondatachannel = function(event) {
+                    var channel = event.channel;
+                    channel.onopen = function() {
+                        var summaryEl = document.getElementById('summary-text');
+                        if (summaryEl) summaryEl.innerText = '⚡ 公网 P2P 直连打通，点击下方按钮开始下载';
+                        var mainBtn = document.querySelector('.btn-download-action') || document.querySelector('button');
+                        if (mainBtn) {
+                            mainBtn.disabled = false;
+                            mainBtn.onclick = function(e) {
+                                e.preventDefault();
+                                channel.send(JSON.stringify({ action: 'request_download' }));
+                                mainBtn.innerText = '⏳ 正在接收...';
+                            };
+                        }
+                    };
+
+                    channel.onmessage = function(e) {
+                        if (typeof e.data === 'string') {
+                            try {
+                                var meta = JSON.parse(e.data);
+                                if (meta.type === 'meta') {
+                                    fileName = meta.name || fileName;
+                                    expectedSize = meta.size || 0;
+                                    var titleEl = document.querySelector('.file-name') || document.querySelector('.file-fallback span');
+                                    if (titleEl) titleEl.innerText = fileName;
+                                }
+                            } catch(err) {}
+                        } else if (e.data instanceof ArrayBuffer) {
+                            receivedChunks.push(e.data);
+                            receivedSize += e.data.byteLength;
+                            var summaryEl = document.getElementById('summary-text');
+                            if (summaryEl) summaryEl.innerText = '📥 已物理接收: ' + Math.round(receivedSize / 1024) + ' KB';
+
+                            if (receivedSize >= expectedSize && expectedSize > 0) {
+                                if (summaryEl) summaryEl.innerText = '✅ 接收完毕！';
+                                downloadTriggered = true;
+                                restoreNormalUI();
+                                var blob = new Blob(receivedChunks);
+                                var a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = fileName;
+                                a.click();
+                            }
+                        }
+                    };
+                };
+
+                pc.createOffer().then(function(offer) { return pc.setLocalDescription(offer); }).then(function() {
+                    return fetch(signalHost + '/signal/push', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ room: token, sender: 'mobile', signal: pc.localDescription })
+                    });
+                }).catch(function() {});
+            }
+        })();
     </script>
 </body>
 </html>

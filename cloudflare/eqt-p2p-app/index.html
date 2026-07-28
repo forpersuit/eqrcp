@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="assets/favicon.png">
-    <title>Receive File - EQT Pro</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Receive File - EQT</title>
     <style>
         :root {
             color-scheme: light;
@@ -26,25 +26,9 @@
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                color-scheme: dark;
-                --bg: #0f172a;
-                --surface: #1e293b;
-                --text-primary: #f8fafc;
-                --text-secondary: #94a3b8;
-                --text-muted: #64748b;
-                --accent: #38bdf8;
-                --accent-strong: #0284c7;
-                --accent-rgb: 56,189,248;
-                --accent-light: rgba(56,189,248, 0.1);
-                --accent-border: rgba(56,189,248, 0.2);
-                --accent-icon: #38bdf8;
-                --line: #334155;
-            }
+        * {
+            box-sizing: border-box;
         }
-
-        * { box-sizing: border-box; }
 
         body {
             margin: 0;
@@ -52,309 +36,1472 @@
             background: var(--bg);
             color: var(--text-primary);
             position: relative;
-            padding-bottom: 40px;
+            padding-bottom: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         main {
-            width: min(100%, 460px);
-            padding: 32px 20px;
+            width: min(100%, 480px);
+            padding: 40px 20px;
             text-align: center;
         }
 
-        .brand-header {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 24px;
-        }
-
-        .brand-title {
-            font-size: 24px;
-            font-weight: 800;
-            color: var(--accent);
-            letter-spacing: -0.5px;
-        }
-
-        .pro-badge {
-            background: var(--accent-strong);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 700;
+        .brand-logo {
+            display: block;
+            height: auto;
+            max-width: 140px;
+            margin: 0 auto 32px;
         }
 
         .status-card {
             background: var(--surface);
             border: 1px solid var(--line);
-            border-radius: 20px;
-            padding: 28px 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
+            border-radius: 16px;
+            padding: 32px 24px;
+            box-shadow: 0 10px 30px rgba(17, 24, 39, 0.04);
+            margin-bottom: 24px;
+            position: relative;
         }
 
-        .file-icon-wrapper {
-            width: 72px;
-            height: 72px;
-            background: var(--accent-light);
-            border: 1px solid var(--accent-border);
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 16px;
-            color: var(--accent);
-            font-size: 32px;
+        .license-badge {
+            background: var(--accent);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 4px;
+            line-height: 1.2;
+            letter-spacing: 0.05em;
+            position: absolute;
+            top: 16px;
+            right: 16px;
         }
 
-        .file-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 6px;
-            word-break: break-all;
+        .license-badge.clock-error {
+            background: rgba(220, 38, 38, 0.08) !important;
+            color: #dc2626 !important;
+            border: 1.2px solid #dc2626 !important;
+            box-sizing: border-box;
         }
 
-        .file-meta {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 20px;
-        }
-
-        .status-pill {
+        .status-badge {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            background: var(--accent-light);
-            border: 1px solid var(--accent-border);
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .status-badge.ready {
+            background: #f3f4f6;
+            border: 2px solid var(--text-muted);
             color: var(--accent);
-            margin-bottom: 20px;
         }
 
-        .btn-primary {
-            width: 100%;
-            background: var(--accent-strong);
-            color: white;
-            border: none;
-            padding: 14px 20px;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 15px;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        .status-badge.success {
+            background: var(--accent-light);
+            border: 2px solid var(--accent-border);
+            color: var(--accent-icon);
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);
         }
 
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        h1 {
+            margin: 0 0 8px;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-primary);
         }
 
-        .footer-note {
-            font-size: 12px;
-            color: var(--text-muted);
+        .summary {
+            margin: 0 0 24px;
+            color: var(--text-secondary);
+            font-size: 14px;
             line-height: 1.5;
+        }
+
+        .wifi-warning-box {
+            background: var(--danger-light);
+            border: 1px solid var(--danger-border);
+            color: var(--danger);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 13px;
+            line-height: 1.4;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: left;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .section-title {
+            margin: 0 0 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: left;
+        }
+
+        .file-fallback {
+            text-align: left;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            padding: 12px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.4;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            transition: background 0.15s ease;
+        }
+
+        .file-fallback:hover {
+            background: #f9fafb;
+        }
+
+        .file-item-row {
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .file-item-row:hover {
+            background: #f9fafb;
+        }
+        .file-item-row:last-child {
+            border-bottom: none !important;
+        }
+        .file-item-row.transferred {
+            background-color: rgba(var(--accent-rgb, 21,111,90), 0.08) !important;
+            color: var(--accent-strong) !important;
+        }
+        .file-item-row.transferred span {
+            color: var(--accent-strong) !important;
+        }
+        .file-item-row.transferred .status-marker {
+            color: var(--accent) !important;
+        }
+        .file-fallback.transferred {
+            background-color: rgba(var(--accent-rgb, 21,111,90), 0.08) !important;
+            color: var(--accent-strong) !important;
+        }
+        .file-fallback.transferred span {
+            color: var(--accent-strong) !important;
+        }
+        .file-fallback.transferred .status-marker {
+            color: var(--accent) !important;
+        }
+
+        .file-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+            color: var(--text-secondary);
+        }
+
+        .file-name {
+            flex: 1;
+        }
+
+        .btn {
+            display: inline-block;
+            width: 100%;
+            background: var(--accent);
+            color: #ffffff;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.15s ease;
+            box-shadow: 0 2px 4px rgba(15, 118, 110, 0.08);
+            margin-top: 8px;
+        }
+
+        .btn:hover {
+            background: #0d5e58;
+        }
+
+        .btn.btn-danger {
+            background: var(--danger);
+            box-shadow: 0 2px 4px rgba(180, 35, 24, 0.08);
+        }
+
+        .btn.btn-danger:hover {
+            background: #911b13;
+        }
+
+        .btn.btn-secondary {
+            background: #e2f1ed;
+            color: var(--accent);
+            box-shadow: 0 2px 4px rgba(15, 118, 110, 0.04);
+            border: 1px solid var(--accent-border);
+        }
+
+        .btn.btn-secondary:hover {
+            background: #cbece3;
+        }
+
+        /* 待传输文件列表视窗（最多显示6条高度，滚动查看且无滚动条） */
+        .files-scroll-viewport {
+            max-height: 270px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .files-scroll-viewport::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+        .files-scroll-viewport .file-item-row:last-child {
+            border-bottom: none !important;
+        }
+
+        .hint {
+            position: absolute;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+            width: 100%;
+            padding: 0 16px;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 480px) {
+            main {
+                padding: 24px 16px;
+            }
+            .status-card {
+                padding: 24px 16px;
+            }
+        }
+        .lang-switch-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+        .lang-switch-container select {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 10px;
+            outline: none;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+            transition: all 0.2s ease;
+        }
+        .lang-switch-container select:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+        @keyframes pulse-success {
+            0% {
+                box-shadow: 0 0 0 0 rgba(21, 111, 90, 0.4);
+                background: var(--bg-hover);
+                border-color: var(--accent);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(21, 111, 90, 0.05);
+                background: rgba(21, 111, 90, 0.15);
+                border-color: var(--accent);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(21, 111, 90, 0);
+                background: var(--bg-hover);
+                border-color: var(--line);
+            }
+        }
+        .blink-completed {
+            animation: pulse-success 0.8s ease-in-out 3;
         }
     </style>
 </head>
 <body>
     <main>
-        <div class="brand-header">
-            <span class="brand-title">EQT</span>
-            <span class="pro-badge">PRO WAN</span>
-        </div>
-
+        <img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo">
+        
         <div class="status-card">
-            <div id="mode-icon-box" class="file-icon-wrapper">🖼️</div>
-            <div id="mode-file-title" class="file-title">等待接入文件...</div>
-            <div id="mode-file-meta" class="file-meta">公网 P2P 直连通道建立中</div>
+            <span class="license-badge{{if .ClockTampered}} clock-error{{end}}">
+                {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
+            </span>
+            
+            <div id="status-icon-pending" class="status-badge ready" style="color: var(--accent);">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <div id="status-icon-success" class="status-badge success" style="display: none;">✓</div>
 
-            <div id="p2p-status-pill" class="status-pill">
-                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
-                <span id="p2p-status-text">📡 正在连接公网信令服务器...</span>
+            <h1 id="header-text" data-i18n="header">File Ready for Download</h1>
+            <p id="summary-text" class="summary" data-i18n="wait_tips">Please click the button below to start downloading.</p>
+
+            <!-- Download Progress Bar Section -->
+            <div id="download-progress-container" style="display: none; width: 100%; margin: 15px 0 10px 0; box-sizing: border-box; background: var(--bg-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--line); transition: all 0.3s ease;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">
+                    <span id="download-progress-status">Downloading...</span>
+                    <span id="download-progress-percent">0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; position: relative;">
+                    <div id="download-progress-fill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.2s ease;"></div>
+                </div>
+                <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
+                <div id="download-notification-tips" style="font-size: 11.5px; color: var(--accent-strong); margin-top: 8px; text-align: center; border-top: 1px dashed var(--line); padding-top: 8px; display: none; line-height: 1.4; font-weight: 600;" data-i18n="notification_tips">
+                    To pause or stop the transfer, please use your phone's notification bar or browser download manager.
+                </div>
+                <!-- 成功时显示的已下载文件面板 -->
+                <div id="downloaded-files-panel" style="display: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; text-align: left;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;" data-i18n="downloaded_files_title">Downloaded Files:</div>
+                    <div id="downloaded-files-list" class="files-scroll-viewport" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                </div>
             </div>
 
-            <button id="p2p-main-btn" class="btn-primary" disabled>
-                ⏳ 等待电脑端 P2P 物理连接...
-            </button>
+
+            {{if not .IsPaid}}
+            <div class="wifi-warning-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: #d97706;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span data-i18n="wifi_tips">If download fails, please make sure both devices are on the same Wi-Fi / LAN.</span>
+            </div>
+            {{end}}
+
+            <!-- 接收包名卡片（文件准备就绪下方，待接收文件字面上方） -->
+            <div class="package-name-card" style="margin: 14px 0 16px 0; padding: 10px 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; word-break: break-all;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                <span class="package-name-text" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">{{.File}}</span>
+            </div>
+
+            <!-- 待接收文件标题与统计信息横向排列 -->
+            <div class="section-title-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+                <span class="section-title" style="margin-bottom: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" data-i18n="saved_file">File to Receive</span>
+                <span id="transfer-stats-meta" class="transfer-stats-meta" style="font-size: 13px; color: var(--text-secondary); font-weight: 600; flex-shrink: 0; white-space: nowrap; text-align: right;" data-count="{{.Count}}" data-size="{{.FileSize}}">
+                    {{.Count}} · {{.FileSize}}
+                </span>
+            </div>
+            
+            <div id="files-list-container" style="text-align: left; margin-bottom: 20px;">
+                {{if gt .Count 1}}
+                    <div class="files-scroll-viewport" style="border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                        {{range $index, $element := .Files}}
+                            <div class="file-item-row" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1.2px solid var(--line);">
+                                <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                                    <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
+                                    <span style="font-size: 12px; color: var(--text-secondary); min-width: 60px; text-align: right;">{{index $.Sizes $index}}</span>
+                                </div>
+                            </div>
+                        {{end}}
+                    </div>
+                {{else}}
+                    <div class="file-fallback">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-icon"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span id="file-name-text" class="file-name">{{.File}}</span>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
+                            <span style="font-size: 12px; color: var(--text-secondary);">{{.FileSize}}</span>
+                        </div>
+                    </div>
+                {{end}}
+            </div>
+
+            <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
+                {{if gt .Count 1}}
+                    <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()"></button>
+                {{else}}
+                    <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
+                {{end}}
+                <button type="button" class="btn btn-danger" id="btn-action-stop" onclick="stopSharing()"></button>
+            </div>
         </div>
 
-        <div class="footer-note">
-            与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer
+        <p class="hint" data-i18n="close_hint">Once successfully completed, you can close this page.</p>
+
+        <div class="lang-switch-container">
+            <select id="page-lang-select" aria-label="Switch Language">
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="zh">简体中文</option>
+            </select>
         </div>
     </main>
 
     <script>
-        (function() {
-            const path = window.location.pathname;
-            const params = new URLSearchParams(window.location.search);
-            const token = params.get('token') || '';
-            const join = params.get('join') || '';
+        var filesList = [
+            {{range $index, $element := .Files}}
+            { name: "{{$element}}", index: {{$index}} },
+            {{end}}
+        ];
 
-            const iconBox = document.getElementById('mode-icon-box');
-            const fileTitle = document.getElementById('mode-file-title');
-            const fileMeta = document.getElementById('mode-file-meta');
-            const statusText = document.getElementById('p2p-status-text');
-            const mainBtn = document.getElementById('p2p-main-btn');
+        function canOpenDirectly(filename) {
+            var ext = filename.split('.').pop().toLowerCase();
+            var openableExts = ['pdf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mp3', 'html', 'htm', 'xml', 'json', 'md'];
+            return openableExts.indexOf(ext) !== -1;
+        }
 
-            let isShare = path.includes('/share');
-            let isReceive = path.includes('/receive');
-            let isChat = path.includes('/chat');
+        var pageTranslations = {
+            zh: {
+                title: '接收文件 - EQT',
+                header: '文件已准备就绪',
+                wait_tips: '请点击下方按钮或文件项开始下载文件。',
+                wifi_tips: '请确保手机与电脑连接至同一个 Wi-Fi / 局域网。',
+                success_header: '已触发文件下载',
+                success_tips: '传输已成功启动！请检查您的浏览器下载进度。',
+                btn_download: '开始下载',
+                btn_download_all: '全部下载 (体验)',
+                btn_download_all_zip: '全部下载 (ZIP)',
+                btn_manual: '手动下载 / 重新下载',
+                btn_stop: '停止共享',
+                stopped_header: '服务已停止',
+                stopped_tips: '传输服务已手动关闭。您可以关闭此页面了。',
+                saved_file: '待接收文件',
+                stats_meta_single: '{count} 个文件 · {size}',
+                stats_meta_multiple: '{count} 个文件 · {size}',
+                close_hint: '下载成功后，您现在可以关闭此页面了。',
+                success_summary_single: '1 个文件已成功下载。',
+                success_summary_multiple: '{count} 个文件已成功下载。',
+                success_tips_all: '传输已成功完成。您现在可以关闭此页面了。',
+                limit_header: '设备连接数已超限',
+                limit_tips: '根据免费版使用规则，每日非首次传输最多允许连接 2 台设备。当前任务已达上限，当其他设备退出时，本设备将自动恢复下载权限。',
+                btn_upgrade: '升级许可证解锁限制',
+                notification_tips: '若要中止或暂停传输，请直接在您的手机下拉通知栏或浏览器下载任务中进行操作。',
+                waiting_status: '连接已中断，等待重新连接...',
+                failed_status: '传输已停止。可点击按钮重新下载。'
+            },
+            en: {
+                title: 'Receive File - EQT',
+                header: 'File Ready for Download',
+                wait_tips: 'Please click the button or file items below to start downloading.',
+                wifi_tips: 'Please make sure both devices are on the same Wi-Fi / LAN.',
+                success_header: 'Download Started',
+                success_tips: 'Transfer triggered successfully! Please check your browser\'s download progress.',
+                btn_download: 'Start Download',
+                btn_download_all: 'Download All (Beta)',
+                btn_download_all_zip: 'Download All (ZIP)',
+                btn_manual: 'Manual Download / Redownload',
+                btn_stop: 'Stop Sharing',
+                stopped_header: 'Service Stopped',
+                stopped_tips: 'The transfer service has been stopped manually. You can close this page now.',
+                saved_file: 'File to Receive',
+                stats_meta_single: '{count} file · {size}',
+                stats_meta_multiple: '{count} files · {size}',
+                close_hint: 'Once successfully completed, you can close this page.',
+                success_summary_single: '1 file has been downloaded successfully.',
+                success_summary_multiple: '{count} files have been downloaded successfully.',
+                success_tips_all: 'The transfer has completed successfully. You can close this page now.',
+                limit_header: 'Device Limit Exceeded',
+                limit_tips: 'According to the free tier rules, daily non-first transfers allow up to 2 devices. This transfer has reached the limit. Once other devices disconnect, this page will automatically restore download access.',
+                btn_upgrade: 'Upgrade License to Unlock',
+                notification_tips: 'To pause or stop the transfer, please use your phone\'s notification bar or browser download manager.',
+                waiting_status: 'Connection interrupted, waiting to reconnect...',
+                               saved_file: '受信するファイル',
+                stats_meta_single: '{count} 件のファイル · {size}',
+                stats_meta_multiple: '{count} 件のファイル · {size}',
+                close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。',
+                success_summary_single: '1 個のファイルが正常にダウンロードされました。',
+                success_summary_multiple: '{count} 個のファイルが正常にダウンロードされました。',
+                success_tips_all: '転送が正常に完了しました。このページを閉じても大丈夫です。',
+                limit_header: '接続デバイス上限超過',
+                limit_tips: '無料版の制限ルールにより、1日あたり2回目以降の転送では最大2台のデバイスまで接続可能です。他のデバイスが切断されると、このページは自動的にダウンロード権限を回復します。',
+                btn_upgrade: 'ライセンスをアップグレード',
+                failed_status: '転送が停止しました。ボタンをクリックして再起動できます。',
+                notification_tips: '転送を一時停止または停止するには、スマートフォンの通知バーまたはブラウザのダウンロードマネージャーを使用してください。',
+                waiting_status: '接続が中断されました。再接続を待機しています...'
+            },
+            ko: {
+                title: '파일 받기 - EQT',
+                header: '다운로드 준비 완료',
+                wait_tips: '아래 버튼이나 파일 항목을 클릭하여 다운로드를 시작하십시오.',
+                wifi_tips: '두 기기가 모두 동일한 Wi-Fi / LAN에 연결되어 있는지 확인하십시오.',
+                success_header: '다운로드 시작됨',
+                success_tips: '전송이 성공적으로 시작되었습니다! 브라우저 다운로드 진행 상황을 확인하세요.',
+                btn_download: '다운로드 시작',
+                btn_download_all: '전체 다운로드',
+                btn_download_all_zip: '전체 다운로드 (ZIP)',
+                btn_manual: '수동 다운로드 / 재다운로드',
+                btn_stop: '공유 중지',
+                stopped_header: '서비스 중지됨',
+                stopped_tips: '전송 서비스가 수동으로 중지되었습니다. 이 페이지를 닫으셔도 됩니다.',
+                saved_file: '받을 파일',
+                stats_meta_single: '{count}개 파일 · {size}',
+                stats_meta_multiple: '{count}개 파일 · {size}',
+                close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.',
+                success_summary_single: '1개의 파일이 성공적으로 다운로드되었습니다.',
+                success_summary_multiple: '{count}개의 파일이 성공적으로 다운로드되었습니다.',
+                success_tips_all: '전송이 성공적으로 완료되었습니다. 이 페이지를 닫으셔도 됩니다.',
+                limit_header: '연결 기기 수 초과됨',
+                limit_tips: '무료 버전 정책에 따라, 일일 첫 번째가 아닌 전송은 최대 2대의 기기까지만 연결할 수 있습니다. 다른 기기의 연결이 해제되면 이 페이지의 다운로드 권한이 자동으로 복구됩니다.',
+                btn_upgrade: '라이선스 업그레이드',
+                failed_status: '전송이 중지되었습니다. 버튼을 클릭하여 다시 시작할 수 있습니다.',
+                notification_tips: '전송을 일시 중지하거나 중지하려면 휴대전화의 알림창이나 브라우저 다운로드 관리자를 사용하세요.',
+                waiting_status: '연결이 중단되었습니다. 다시 연결하는 중...'
+            },
+            es: {
+                title: 'Recibir Archivo - EQT',
+                header: 'Archivo listo para descargar',
+                wait_tips: 'Haga clic en el botón o en los elementos de archivo de abajo para descargar.',
+                wifi_tips: 'Asegúrese de que ambos dispositivos estén conectados a la misma red Wi-Fi / LAN.',
+                success_header: 'Descarga Iniciada',
+                success_tips: '¡Transferencia iniciada correctamente! Compruebe el progreso de descarga de su navegador.',
+                btn_download: 'Iniciar descarga',
+                btn_download_all: 'Descargar todo',
+                btn_download_all_zip: 'Descargar todo (ZIP)',
+                btn_manual: 'Descarga Manual / Volver a descargar',
+                btn_stop: 'Detener Compartido',
+                stopped_header: 'Servicio Detenido',
+                stopped_tips: 'El servicio de transferencia se ha detenido manualmente. Puede cerrar esta página ahora.',
+                saved_file: 'Archivo a Recibir',
+                stats_meta_single: '{count} archivo · {size}',
+                stats_meta_multiple: '{count} archivos · {size}',
+                close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.',
+                success_summary_single: '1 archivo se ha descargado correctamente.',
+                success_summary_multiple: '{count} archivos se han descargado correctamente.',
+                success_tips_all: 'La transferencia se ha completado con éxito. Ya puede cerrar esta página.',
+                limit_header: 'Límite de Dispositivos Superado',
+                limit_tips: 'De acuerdo con las reglas de la versión gratuita, las transferencias diarias no iniciales permiten hasta 2 dispositivos. Una vez que otros se desconecten, esta página recuperará el acceso.',
+                btn_upgrade: 'Actualizar Licencia',
+                failed_status: 'Transferencia detenida. Puede hacer clic en el botón para reiniciar.',
+                notification_tips: 'Para pausar o detener la transferencia, use la barra de notificaciones de su teléfono o el administrador de descargas del navegador.',
+                waiting_status: 'Conexión interrumpida, esperando para reconectar...'
+            },
+            de: {
+                title: 'Datei bereit zum Herunterladen',
+                header: 'Datei bereit zum Herunterladen',
+                wait_tips: 'Klicken Sie auf die Schaltfläche oder die Dateielemente unten, um den Download zu starten.',
+                wifi_tips: 'Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi / LAN verbunden sind.',
+                success_header: 'Download gestartet',
+                success_tips: 'Übertragung erfolgreich gestartet! Bitte überprüfen Sie den Download-Verlauf Ihres Browsers.',
+                btn_download: 'Herunterladen starten',
+                btn_download_all: 'Alle herunterladen',
+                btn_download_all_zip: 'Alle herunterladen (ZIP)',
+                btn_manual: 'Manuell herunterladen / Erneut versuchen',
+                btn_stop: 'Freigabe beenden',
+                stopped_header: 'Dienst beendet',
+                stopped_tips: 'Der Übertragungsdienst wurde manuell beendet. Sie können diese Seite jetzt schließen.',
+                saved_file: 'Zu empfangende Datei',
+                stats_meta_single: '{count} Datei · {size}',
+                stats_meta_multiple: '{count} Dateien · {size}',
+                close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.',
+                success_summary_single: '1 Datei wurde erfolgreich heruntergeladen.',
+                success_summary_multiple: '{count} Dateien wurden erfolgreich heruntergeladen.',
+                success_tips_all: 'Die Übertragung wurde erfolgreich abgeschlossen. Sie können diese Seite jetzt schließen.',
+                limit_header: 'Gerätelimit überschritten',
+                limit_tips: 'Gemäß den Regeln der kostenlosen Version sind bei täglichen Folgeübertragungen maximal 2 Geräte zulässig. Sobald andere Geräte die Verbindung trennen, wird dieser Download automatisch freigegeben.',
+                btn_upgrade: 'Lizenz upgraden',
+                failed_status: 'Übertragung gestoppt. Sie können auf die Schaltfläche klicken, um neu zu starten.',
+                notification_tips: 'Um die Übertragung anzuhalten oder zu stoppen, verwenden Sie bitte die Benachrichtigungsleiste Ihres Telefons oder den Download-Manager des Browsers.',
+                waiting_status: 'Verbindung unterbrochen, Verbindung wird wiederhergestellt...'
+            },
+            fr: {
+                title: 'Recevoir le Fichier - EQT',
+                header: 'Fichier prêt pour le téléchargement',
+                wait_tips: 'Veuillez cliquer sur le bouton ou sur les fichiers ci-dessous pour télécharger.',
+                wifi_tips: 'Veuillez vous assurer que les deux appareils sont connectés au même réseau Wi-Fi / LAN.',
+                success_header: 'Téléchargement Lancé',
+                success_tips: 'Transfert lancé avec succès ! Veuillez vérifier la progression du téléchargement de votre navigateur.',
+                btn_download: 'Lancer le téléchargement',
+                btn_download_all: 'Tout télécharger',
+                btn_download_all_zip: 'Tout télécharger (ZIP)',
+                btn_manual: 'Téléchargement manuel / Relancer',
+                btn_stop: 'Arrêter le Partage',
+                stopped_header: 'Service Arrêté',
+                stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
+                saved_file: 'Fichier à recevoir',
+                stats_meta_single: '{count} fichier · {size}',
+                stats_meta_multiple: '{count} fichiers · {size}',
+                close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
+                success_summary_single: '1 fichier a été téléchargé avec succès.',
+                success_summary_multiple: '{count} fichiers ont été téléchargés avec succès.',
+                success_tips_all: 'Le transfert s\'est terminé avec succès. Vous pouvez fermer cette page maintenant.',
+                limit_header: 'Limite d\'appareils dépassée',
+                limit_tips: 'Selon les règles de la version gratuite, les transferts quotidiens suivants autorisent jusqu\'à 2 appareils. Une fois d\'autres déconnectés, cette page restaurera l\'accès au téléchargement.',
+                btn_upgrade: 'Mettre à niveau',
+                failed_status: 'Transfert arrêté. Vous pouvez cliquer sur le bouton pour redémarrer.',
+                notification_tips: 'Pour suspendre ou arrêter le transfert, veuillez utiliser la barre de notification de votre téléphone ou le gestionnaire de téléchargement du navigateur.',
+                waiting_status: 'Connexion interrompue, en attente de reconnexion...'
+            },
+            fr: {
+                title: 'Recevoir le Fichier - EQT',
+                header: 'Fichier prêt pour le téléchargement',
+                wait_tips: 'Veuillez cliquer sur le bouton ou sur les fichiers ci-dessous pour télécharger.',
+                wifi_tips: 'Veuillez vous assurer que les deux appareils sont connectés au même réseau Wi-Fi / LAN.',
+                success_header: 'Téléchargement Lancé',
+                success_tips: 'Transfert lancé avec succès ! Veuillez vérifier la progression du téléchargement de votre navigateur.',
+                btn_download: 'Lancer le téléchargement',
+                btn_download_all: 'Tout télécharger',
+                btn_download_all_zip: 'Tout télécharger (ZIP)',
+                btn_manual: 'Téléchargement manuel / Relancer',
+                btn_stop: 'Arrêter le Partage',
+                stopped_header: 'Service Arrêté',
+                stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
+                saved_file: 'Fichier à recevoir',
+                close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
+                success_summary_single: '1 fichier a été téléchargé avec succès.',
+                success_summary_multiple: '{count} fichiers ont été téléchargés avec succès.',
+                success_tips_all: 'Le transfert s\'est terminé avec succès. Vous pouvez fermer cette page maintenant.',
+                limit_header: 'Limite d\'appareils dépassée',
+                limit_tips: 'Selon les règles de la version gratuite, les transferts quotidiens suivants autorisent jusqu\'à 2 appareils. Une fois d\'autres déconnectés, cette page restaurera l\'accès au téléchargement.',
+                btn_upgrade: 'Mettre à niveau',
+                failed_status: 'Transfert arrêté. Vous pouvez cliquer sur le bouton pour redémarrer.',
+                notification_tips: 'Pour suspendre ou arrêter le transfert, veuillez utiliser la barre de notification de votre téléphone ou le gestionnaire de téléchargement du navigateur.',
+                waiting_status: 'Connexion interrompue, en attente de reconnexion...'
+            }
+        };
 
-            if (isReceive) {
-                document.title = 'Upload File - EQT Pro';
-                document.body.innerHTML = `
-                    <main>
-                        <div class="brand-header">
-                            <span class="brand-title">EQT</span>
-                            <span class="pro-badge">PRO WAN</span>
-                        </div>
-                        <div class="status-card">
-                            <div class="file-icon-wrapper">📤</div>
-                            <div class="file-title">选择或拖拽文件上传</div>
-                            <div class="file-meta">发送文件到电脑端保存目录</div>
-                            <div class="status-pill" style="margin-bottom: 16px;">
-                                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
-                                <span id="p2p-status-text">📡 正在连接公网信令...</span>
-                            </div>
-                            <input type="file" id="recv-file-input" style="display: none;">
-                            <button id="p2p-main-btn" class="btn-primary" onclick="document.getElementById('recv-file-input').click()">
-                                📂 选择物理文件上传
-                            </button>
-                        </div>
-                        <div class="footer-note">与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer</div>
-                    </main>
-                `;
-            } else if (isChat) {
-                document.title = 'P2P Chat - EQT Pro';
-                document.body.innerHTML = `
-                    <main style="width: min(100%, 480px); height: 85vh; display: flex; flex-direction: column;">
-                        <div class="brand-header" style="margin-bottom: 12px;">
-                            <span class="brand-title">EQT Chat</span>
-                            <span class="pro-badge">PRO WAN</span>
-                        </div>
-                        <div class="status-card" style="flex: 1; display: flex; flex-direction: column; padding: 16px; margin-bottom: 12px; overflow: hidden;">
-                            <div id="chat-status-bar" class="status-pill" style="align-self: center; margin-bottom: 12px;">
-                                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
-                                <span id="p2p-status-text">💬 建立加密双向 P2P 聊天...</span>
-                            </div>
-                            <div id="chat-messages" style="flex: 1; overflow-y: auto; text-align: left; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 8px; background: var(--bg); border-radius: 12px;">
-                                <div style="align-self: flex-start; background: var(--surface); border: 1px solid var(--line); padding: 8px 12px; border-radius: 10px; font-size: 13px;">
-                                    系统: 欢迎进入 EQT 双向公网 P2P 加密聊天室！
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="chat-input" placeholder="输入消息..." style="flex: 1; background: var(--bg); border: 1px solid var(--line); color: var(--text-primary); padding: 10px; border-radius: 8px; font-size: 14px;">
-                                <button class="btn-primary" style="width: auto; padding: 10px 16px;">发送</button>
-                            </div>
-                        </div>
-                        <div class="footer-note">与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer</div>
-                    </main>
-                `;
-            } else {
-                document.title = 'Receive File - EQT Pro';
-                iconBox.innerText = '🖼️';
-                fileTitle.innerText = '准备接收文件';
-                fileMeta.innerText = '模式: 公网 Share 直管传送';
+        // 补充多语言翻译条目
+        if (pageTranslations.zh) {
+            pageTranslations.zh.downloaded_files_title = '已下载文件：';
+            pageTranslations.zh.can_open = '可以点击打开';
+            pageTranslations.zh.cannot_open = '此格式无法直接打开，请在文件管理器中查看';
+            pageTranslations.zh.btn_save_zip = '保存 ZIP 压缩包';
+            pageTranslations.zh.zip_contents = '压缩包内包含的文件：';
+        }
+        if (pageTranslations.en) {
+            pageTranslations.en.downloaded_files_title = 'Downloaded Files:';
+            pageTranslations.en.can_open = 'Click to open/preview';
+            pageTranslations.en.cannot_open = 'Cannot open directly. Please find it in file manager';
+            pageTranslations.en.btn_save_zip = 'Save ZIP Archive';
+            pageTranslations.en.zip_contents = 'Files included in the ZIP:';
+        }
+        if (pageTranslations.ja) {
+            pageTranslations.ja.downloaded_files_title = 'ダウンロードしたファイル：';
+            pageTranslations.ja.can_open = 'クリックして開く/プレビュー';
+            pageTranslations.ja.cannot_open = '直接開くことはできません。ファイル管理アプリ等で確認してください';
+            pageTranslations.ja.btn_save_zip = 'ZIPアーカイブを保存';
+            pageTranslations.ja.zip_contents = '圧縮ファイルに含まれるファイル：';
+        }
+        if (pageTranslations.ko) {
+            pageTranslations.ko.downloaded_files_title = '다운로드된 파일:';
+            pageTranslations.ko.can_open = '클릭하여 열기/미리보기';
+            pageTranslations.ko.cannot_open = '직접 열 수 없습니다. 파일 관리자에서 확인하세요';
+            pageTranslations.ko.btn_save_zip = 'ZIP 아카이브 저장';
+            pageTranslations.ko.zip_contents = '압축 파일에 포함된 파일:';
+        }
+        if (pageTranslations.es) {
+            pageTranslations.es.downloaded_files_title = 'Archivos descargados:';
+            pageTranslations.es.can_open = 'Haga clic para abrir';
+            pageTranslations.es.cannot_open = 'No se puede abrir directamente. Búsquelo en el administrador de archivos';
+            pageTranslations.es.btn_save_zip = 'Guardar archivo ZIP';
+            pageTranslations.es.zip_contents = 'Archivos incluidos en el ZIP:';
+        }
+        if (pageTranslations.de) {
+            pageTranslations.de.downloaded_files_title = 'Heruntergeladene Dateien:';
+            pageTranslations.de.can_open = 'Klicken zum Öffnen';
+            pageTranslations.de.cannot_open = 'Kann nicht direkt geöffnet werden. Bitte im Dateimanager suchen';
+            pageTranslations.de.btn_save_zip = 'ZIP-Archiv speichern';
+            pageTranslations.de.zip_contents = 'Im ZIP enthaltene Dateien:';
+        }
+        if (pageTranslations.fr) {
+            pageTranslations.fr.downloaded_files_title = 'Fichiers téléchargés:';
+            pageTranslations.fr.can_open = 'Cliquer pour ouvrir';
+            pageTranslations.fr.cannot_open = 'Impossible d\'ouvrir directement. Veuillez le retrouver dans le gestionnaire de fichiers';
+            pageTranslations.fr.btn_save_zip = 'Enregistrer l\'archive ZIP';
+            pageTranslations.fr.zip_contents = 'Fichiers inclus dans le ZIP :';
+        }
+
+        function getOrGenerateClientId() {
+            var id = window.localStorage.getItem('eqt_client_id');
+            if (!id) {
+                id = 'cli_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+                window.localStorage.setItem('eqt_client_id', id);
+            }
+            return id;
+        }
+
+        function getCookie(name) {
+            var value = "; " + document.cookie;
+            var parts = value.split("; " + name + "=");
+            if (parts.length === 2) return decodeURIComponent(parts.pop().split(";").shift());
+            return null;
+        }
+
+        function setCookie(name, val) {
+            var d = new Date();
+            d.setTime(d.getTime() + (365*24*60*60*1000));
+            var expires = "expires="+ d.toUTCString();
+            document.cookie = name + "=" + encodeURIComponent(val) + ";" + expires + ";path=/";
+        }
+
+        function hslToHex(h, s, l) {
+            s /= 100;
+            l /= 100;
+            var c = (1 - Math.abs(2 * l - 1)) * s;
+            var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            var m = l - c / 2;
+            var r = 0, g = 0, b = 0;
+            if (0 <= h && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (60 <= h && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (120 <= h && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (180 <= h && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (240 <= h && h < 300) {
+                r = x; g = 0; b = c;
+            } else if (300 <= h && h < 360) {
+                r = c; g = 0; b = x;
+            }
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+            return '#' + [r, g, b].map(function(val) {
+                var hex = val.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+        }
+        function seededUnit(seed, salt) {
+            var x = Math.sin(seed * 12.9898 + salt * 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        }
+        function generateSenderColor(themeIndex) {
+            if (themeIndex === 0) {
+                return {
+                    bg: '#edf7f1',
+                    border: '#2f9e73',
+                    text: '#14533f'
+                };
+            }
+            var hue = seededUnit(themeIndex, 1) * 360;
+            var saturation = 50 + seededUnit(themeIndex, 2) * 18;
+            var bg = hslToHex(hue, 22, 93);
+            var border = hslToHex(hue, saturation, 48);
+            var text = hslToHex(hue, saturation + 10, 25);
+            return { bg: bg, border: border, text: text };
+        }
+        function hexToRgb(hex) {
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? 
+                parseInt(result[1], 16) + ',' + 
+                parseInt(result[2], 16) + ',' + 
+                parseInt(result[3], 16) : null;
+        }
+        function applyRandomTheme() {
+            var pathParts = window.location.pathname.split('/');
+            var lastPart = pathParts[pathParts.length - 1] || 'default';
+            var clientId = getOrGenerateClientId();
+            var mixStr = lastPart + '_' + clientId;
+            var hash = 0;
+            for (var i = 0; i < mixStr.length; i++) {
+                hash = ((hash << 5) - hash + mixStr.charCodeAt(i)) | 0;
+            }
+            var seed = (Math.abs(hash) % 1000) + 1;
+            var t = generateSenderColor(seed);
+            
+            var badges = document.querySelectorAll('.license-badge');
+            badges.forEach(function(badge) {
+                if (!badge.classList.contains('clock-error')) {
+                    badge.style.backgroundColor = t.border;
+                    badge.style.color = '#ffffff';
+                }
+            });
+        }
+
+        var currentLang = 'en';
+        var savedLang = window.localStorage.getItem('eqt_lang') || window.localStorage.getItem('eqt-page-lang');
+        if (savedLang) {
+            savedLang = savedLang.toLowerCase().split('-')[0];
+        }
+        var cfCookie = getCookie('eqt-lang');
+        if (cfCookie) {
+            cfCookie = cfCookie.toLowerCase().split('-')[0];
+        }
+        var userLang = (navigator.language || navigator.userLanguage || 'en').toLowerCase().split('-')[0];
+        var supportedLangs = ['zh', 'en', 'ja', 'ko', 'es', 'de', 'fr'];
+        
+        if (savedLang && supportedLangs.indexOf(savedLang) !== -1) {
+            currentLang = savedLang;
+        } else if (cfCookie && supportedLangs.indexOf(cfCookie) !== -1) {
+            currentLang = cfCookie;
+        } else if (supportedLangs.indexOf(userLang) !== -1) {
+            currentLang = userLang;
+        }
+
+        var downloadTriggered = false;
+
+        function applyLanguage() {
+            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+            
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) {
+                if (isCompleted) {
+                    headerEl.textContent = dict.success_header || 'Transfer Complete';
+                } else {
+                    var key = headerEl.getAttribute('data-i18n') || 'header';
+                    headerEl.textContent = dict[key] || dict.header;
+                }
+            }
+            
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) {
+                if (isCompleted) {
+                    var count = {{.Count}};
+                    if (count === 1) {
+                        summaryEl.textContent = dict.success_summary_single || '1 file has been downloaded successfully.';
+                    } else {
+                        var tmpl = dict.success_summary_multiple || '{count} files have been downloaded successfully.';
+                        summaryEl.textContent = tmpl.replace('{count}', count);
+                    }
+                } else {
+                    var key = summaryEl.getAttribute('data-i18n') || 'wait_tips';
+                    summaryEl.textContent = dict[key] || dict.wait_tips;
+                }
+            }
+            
+            var wifiTipsEl = document.querySelector('[data-i18n="wifi_tips"]');
+            if (wifiTipsEl) wifiTipsEl.textContent = dict.wifi_tips;
+
+            var savedFileTitle = document.querySelector('[data-i18n="saved_file"]');
+            if (savedFileTitle) {
+                if (isCompleted && totalCount > 1) {
+                    savedFileTitle.textContent = dict.zip_contents || 'Files included in the ZIP:';
+                    savedFileTitle.style.display = 'block';
+                } else if (isCompleted && totalCount <= 1) {
+                    savedFileTitle.style.display = 'none';
+                } else {
+                    savedFileTitle.textContent = dict.saved_file;
+                }
             }
 
-            const updateStatus = (msg, color = 'var(--accent)') => {
-                if (statusText) {
-                    statusText.innerText = msg;
-                    statusText.parentElement.style.color = color;
+            var statsEl = document.getElementById('transfer-stats-meta');
+            if (statsEl) {
+                var count = parseInt(statsEl.getAttribute('data-count') || '1', 10);
+                var sizeStr = statsEl.getAttribute('data-size') || '';
+                statsEl.textContent = count + ' · ' + sizeStr;
+            }
+            
+            var count = {{.Count}};
+            if (count > 1) {
+                var btnDownloadZipEl = document.getElementById('btn-action-download-zip');
+                if (btnDownloadZipEl) {
+                    btnDownloadZipEl.textContent = dict.btn_download_all_zip || 'Download All (ZIP)';
                 }
-            };
+            } else {
+                var btnActionEl = document.getElementById('btn-action-download');
+                if (btnActionEl) {
+                    if (!downloadTriggered) {
+                        btnActionEl.textContent = dict.btn_download || 'Start Download';
+                    } else {
+                        btnActionEl.textContent = dict.btn_manual || 'Manual Download / Redownload';
+                    }
+                }
+            }
 
-            if (token && window.RTCPeerConnection) {
-                const signalHost = 'https://signal.eqt.net.im';
-                const pc = new RTCPeerConnection({
+            var hintEl = document.querySelector('[data-i18n="close_hint"]');
+            if (hintEl) {
+                if (isCompleted) {
+                    hintEl.textContent = dict.success_tips_all || 'The transfer has completed successfully. You can close this page now.';
+                } else {
+                    hintEl.textContent = dict.close_hint;
+                }
+            }
+
+            var notifEl = document.getElementById('download-notification-tips');
+            if (notifEl) notifEl.textContent = dict.notification_tips || pageTranslations.zh.notification_tips;
+
+            var btnStopEl = document.getElementById('btn-action-stop');
+            if (btnStopEl) {
+                btnStopEl.textContent = dict.btn_stop || 'Stop Sharing';
+            }
+            
+            var progressStatusEl = document.getElementById('download-progress-status');
+            if (progressStatusEl && isCompleted) {
+                progressStatusEl.textContent = dict.success_header || 'Transfer Complete';
+            }
+            
+            var downloadedFilesTitle = document.querySelector('[data-i18n="downloaded_files_title"]');
+            if (downloadedFilesTitle) {
+                downloadedFilesTitle.textContent = dict.downloaded_files_title || 'Downloaded Files:';
+            }
+            
+            document.title = dict.title;
+            
+            applyRandomTheme();
+            
+            var langSelect = document.getElementById('page-lang-select');
+            if (langSelect) {
+                langSelect.value = currentLang;
+            }
+        }
+
+        applyLanguage();
+        applyRandomTheme();
+
+        var langSelect = document.getElementById('page-lang-select');
+        if (langSelect) {
+            langSelect.addEventListener('change', function(e) {
+                var newLang = e.target.value;
+                if (supportedLangs.indexOf(newLang) !== -1) {
+                    currentLang = newLang;
+                    window.localStorage.setItem('eqt_lang', currentLang);
+                    window.localStorage.setItem('eqt-page-lang', currentLang);
+                    setCookie('eqt-lang', currentLang);
+                    applyLanguage();
+                }
+            });
+        }
+
+        var downloadTriggered = false;
+        var totalCount = {{.Count}};
+
+        function triggerDownload() {
+            startStatusPolling();
+            if (downloadTriggered) {
+                window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
+                return;
+            }
+            downloadTriggered = true;
+            
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
+            document.body.appendChild(iframe);
+            setTimeout(function() {
+                document.body.removeChild(iframe);
+            }, 3000);
+            
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+        }
+  
+        function triggerDownloadItem(index) {
+            startStatusPolling();
+            
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = window.location.pathname + '?download=1&item=' + index + '&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
+            document.body.appendChild(iframe);
+            setTimeout(function() {
+                document.body.removeChild(iframe);
+            }, 3000);
+
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            var k = 1024;
+            var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        var intervalId = null;
+        var pollingStarted = false;
+        var isCompleted = false;
+        var isLimitUIActive = false;
+        function startStatusPolling() {
+            if (pollingStarted) return;
+            pollingStarted = true;
+            
+            var initId = getOrGenerateClientId();
+            if (initId) {
+                var badgeEl = document.getElementById('device-id-badge');
+                var valEl = document.getElementById('device-id-value');
+                if (badgeEl && valEl) {
+                    badgeEl.style.display = 'inline-flex';
+                    var shortId = initId.length > 4 ? initId.substring(initId.length - 4) : initId;
+                    valEl.innerText = 'Device (' + shortId + ')';
+                }
+            }
+
+            var consecutiveErrors = 0;
+            intervalId = setInterval(function() {
+                if (isCompleted) {
+                    clearInterval(intervalId);
+                    return;
+                }
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', window.location.pathname + '/status?client_id=' + getOrGenerateClientId(), true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            consecutiveErrors = 0;
+                            try {
+                                var status = JSON.parse(xhr.responseText);
+                                
+                                if (status.clientID) {
+                                    var badgeEl = document.getElementById('device-id-badge');
+                                    var valEl = document.getElementById('device-id-value');
+                                    if (badgeEl && valEl) {
+                                        badgeEl.style.display = 'inline-flex';
+                                        var shortId = status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : status.clientID;
+                                        var devName = status.deviceName || 'Device';
+                                        valEl.innerText = devName + ' (' + shortId + ')';
+                                    }
+                                }
+                                
+                                var progressContainer = document.getElementById('download-progress-container');
+                                if (progressContainer) {
+                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
+                                     if (showProgress && status.bytesTotal > 0) {
+                                        progressContainer.style.display = 'block';
+                                         
+                                        var percent = status.percent || 0;
+                                        document.getElementById('download-progress-fill').style.width = percent + '%';
+                                        document.getElementById('download-progress-percent').innerText = percent + '%';
+                                         
+                                        var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
+                                        document.getElementById('download-progress-bytes').innerText = bytesText;
+                                         
+                                        var statusText = 'Downloading...';
+                                        if (status.state === 'completed') {
+                                            var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
+                                            statusText = 'ID: ' + shortId;
+                                        } else if (status.state === 'waiting') {
+                                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                                            statusText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
+                                        } else if (status.state === 'failed') {
+                                            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+                                            statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
+                                        }
+                                        document.getElementById('download-progress-status').innerText = statusText;
+                                    } else {
+                                        progressContainer.style.display = 'none';
+                                    }
+                                }
+
+                                var actionBtnRow = document.getElementById('action-btn-row');
+                                var notifTips = document.getElementById('download-notification-tips');
+                                if (status.state === 'transferring') {
+                                     if (actionBtnRow) actionBtnRow.style.display = 'none';
+                                     if (notifTips) notifTips.style.display = 'block';
+                                } else if (status.state === 'waiting' || status.state === 'failed') {
+                                     if (actionBtnRow) actionBtnRow.style.display = 'flex';
+                                     if (notifTips) notifTips.style.display = 'none';
+                                     applyLanguage(); // update button text for redownload
+                                }
+
+                                if (status.state === 'limit_exceeded') {
+                                    if (!isLimitUIActive) {
+                                        isLimitUIActive = true;
+                                        showLimitExceededUI();
+                                    }
+                                    return;
+                                } else {
+                                    if (isLimitUIActive) {
+                                        isLimitUIActive = false;
+                                        restoreNormalUI();
+                                    }
+                                }
+
+                                if (status.downloadedItems && status.downloadedItems.length > 0) {
+                                    var fileRows = document.querySelectorAll('.file-item-row');
+                                    status.downloadedItems.forEach(function(idx) {
+                                        if (fileRows && fileRows[idx]) {
+                                            fileRows[idx].classList.add('transferred');
+                                        }
+                                    });
+                                    var fallback = document.querySelector('.file-fallback');
+                                    if (fallback && status.downloadedItems.indexOf(0) !== -1) {
+                                        fallback.classList.add('transferred');
+                                    }
+
+                                    if (status.downloadedItems.length >= totalCount) {
+                                        if (!isCompleted) {
+                                            isCompleted = true;
+                                            showCompletedUI();
+                                        }
+                                    }
+                                }
+
+                                if (status.state === 'completed') {
+                                    if (!isCompleted) {
+                                        isCompleted = true;
+                                        showCompletedUI();
+                                    }
+                                }
+                            } catch(e) {}
+                        } else if (xhr.status === 410) {
+                            clearInterval(intervalId);
+                            showCompletedUI();
+                        } else {
+                            consecutiveErrors++;
+                            if (consecutiveErrors >= 5) {
+                                clearInterval(intervalId);
+                                showCompletedUI();
+                            }
+                        }
+                    }
+                };
+                xhr.onerror = function() {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 5) {
+                        clearInterval(intervalId);
+                        showCompletedUI();
+                    }
+                };
+                xhr.send();
+            }, 1200);
+        }
+
+        function showCompletedUI() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            var progressContainer = document.getElementById('download-progress-container');
+            if (isCompleted) {
+                if (progressContainer) {
+                    progressContainer.style.display = 'block';
+                    
+                    progressContainer.classList.remove('blink-completed');
+                    void progressContainer.offsetWidth;
+                    progressContainer.classList.add('blink-completed');
+                    
+                    var fillEl = document.getElementById('download-progress-fill');
+                    if (fillEl) fillEl.style.width = '100%';
+                    var percentEl = document.getElementById('download-progress-percent');
+                    if (percentEl) percentEl.innerText = '100%';
+                    
+                    var panel = document.getElementById('downloaded-files-panel');
+                    var listContainer = document.getElementById('downloaded-files-list');
+                    if (panel && listContainer) {
+                        listContainer.innerHTML = '';
+                        
+                        var filename = "{{.File}}";
+                        var isZip = totalCount > 1;
+                        
+                        var itemDiv = document.createElement('div');
+                        itemDiv.style.fontSize = '13px';
+                        itemDiv.style.display = 'flex';
+                        itemDiv.style.alignItems = 'center';
+                        itemDiv.style.gap = '6px';
+                        itemDiv.style.background = '#fff';
+                        itemDiv.style.padding = '10px 12px';
+                        itemDiv.style.borderRadius = '6px';
+                        itemDiv.style.border = '1px solid var(--line)';
+                        itemDiv.style.marginTop = '6px';
+                        itemDiv.style.color = 'var(--text-primary)';
+                        itemDiv.style.fontWeight = '600';
+                        itemDiv.style.wordBreak = 'break-all';
+                        
+                        var icon = isZip ? '📦' : '📄';
+                        itemDiv.innerHTML = '<span>' + icon + '</span><span>' + filename + '</span>';
+                        listContainer.appendChild(itemDiv);
+                        panel.style.display = 'block';
+                    }
+                }
+            } else {
+                setTimeout(function() {
+                    if (progressContainer) {
+                        progressContainer.style.display = 'none';
+                    }
+                }, 2000);
+            }
+
+            document.getElementById('status-icon-pending').style.display = 'none';
+            var successIcon = document.getElementById('status-icon-success');
+            if (successIcon) {
+                successIcon.className = 'status-badge success';
+                successIcon.style.display = 'inline-flex';
+                successIcon.textContent = '✓';
+            }
+            
+            var stoppedIcon = document.getElementById('status-icon-stopped');
+            if (stoppedIcon) stoppedIcon.style.display = 'none';
+
+            var fileItems = document.querySelectorAll('.file-item-row');
+            fileItems.forEach(function(item) {
+                item.classList.add('transferred');
+                item.removeAttribute('onclick');
+                item.style.cursor = 'default';
+            });
+            
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                singleFile.classList.add('transferred');
+                singleFile.removeAttribute('onclick');
+                singleFile.style.cursor = 'default';
+            }
+
+            var warningBox = document.querySelector('.wifi-warning-box');
+            if (warningBox) warningBox.style.display = 'none';
+
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) btnRow.style.display = 'none';
+
+            var filesListContainer = document.getElementById('files-list-container');
+            if (totalCount > 1) {
+                if (filesListContainer) {
+                    filesListContainer.style.display = 'block';
+                }
+            } else {
+                if (filesListContainer) filesListContainer.style.display = 'none';
+            }
+
+            applyLanguage();
+        }
+
+        function stopSharing() {
+            // 1. Stop status polling to release backend active device count
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+
+            // Send stop request to backend
+            var stopXhr = new XMLHttpRequest();
+            stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(getOrGenerateClientId()));
+            stopXhr.send();
+
+            // 2. Change the interface to stopped final view, hiding action buttons
+            document.getElementById('status-icon-pending').style.display = 'none';
+            document.getElementById('status-icon-success').style.display = 'none';
+            
+            var badge = document.getElementById('status-icon-stopped');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'status-icon-stopped';
+                badge.className = 'status-badge ready';
+                badge.style.borderColor = 'var(--danger-border)';
+                badge.style.color = 'var(--danger)';
+                badge.textContent = '✕';
+                var parent = document.getElementById('status-icon-pending').parentNode;
+                parent.insertBefore(badge, document.getElementById('status-icon-pending'));
+            } else {
+                badge.style.display = 'inline-flex';
+            }
+
+            document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
+            document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
+            
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) btnRow.style.display = 'none';
+            
+            applyLanguage();
+        }
+
+        function showLimitExceededUI() {
+            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+            
+            document.getElementById('status-icon-pending').style.display = 'none';
+            document.getElementById('status-icon-success').style.display = 'none';
+            
+            var stoppedIcon = document.getElementById('status-icon-stopped');
+            if (stoppedIcon) stoppedIcon.style.display = 'none';
+
+            var limitIcon = document.getElementById('status-icon-limit');
+            if (!limitIcon) {
+                limitIcon = document.createElement('div');
+                limitIcon.id = 'status-icon-limit';
+                limitIcon.className = 'status-badge ready';
+                limitIcon.style.borderColor = 'var(--accent-border)';
+                limitIcon.style.color = 'var(--accent)';
+                limitIcon.textContent = '⚠️';
+                var parent = document.getElementById('status-icon-pending').parentNode;
+                parent.insertBefore(limitIcon, document.getElementById('status-icon-pending'));
+            } else {
+                limitIcon.style.display = 'inline-flex';
+            }
+
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) {
+                headerEl.removeAttribute('data-i18n');
+                headerEl.textContent = dict.limit_header || 'Device Limit Exceeded';
+            }
+
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) {
+                summaryEl.removeAttribute('data-i18n');
+                summaryEl.textContent = dict.limit_tips || 'According to the free tier rules, daily non-first transfers allow up to 2 devices.';
+            }
+
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) {
+                for (var i = 0; i < btnRow.children.length; i++) {
+                    btnRow.children[i].style.display = 'none';
+                }
+                
+                var upgradeBtn = document.getElementById('btn-action-upgrade-limit');
+                if (!upgradeBtn) {
+                    upgradeBtn = document.createElement('a');
+                    upgradeBtn.id = 'btn-action-upgrade-limit';
+                    upgradeBtn.className = 'btn';
+                    upgradeBtn.href = 'https://eqt.net.im';
+                    upgradeBtn.target = '_blank';
+                    upgradeBtn.style.textDecoration = 'none';
+                    upgradeBtn.textContent = dict.btn_upgrade || 'Upgrade License';
+                    btnRow.appendChild(upgradeBtn);
+                } else {
+                    upgradeBtn.style.display = 'inline-block';
+                }
+            }
+
+            var fileItems = document.querySelectorAll('.file-item-row');
+            fileItems.forEach(function(item) {
+                item.style.pointerEvents = 'none';
+                item.style.opacity = '0.5';
+            });
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                singleFile.style.pointerEvents = 'none';
+                singleFile.style.opacity = '0.5';
+            }
+        }
+
+        function restoreNormalUI() {
+            var dict = pageTranslations[currentLang] || pageTranslations['en'];
+
+            var limitIcon = document.getElementById('status-icon-limit');
+            if (limitIcon) limitIcon.style.display = 'none';
+
+            if (!downloadTriggered) {
+                document.getElementById('status-icon-pending').style.display = 'inline-flex';
+                document.getElementById('status-icon-success').style.display = 'none';
+            } else {
+                document.getElementById('status-icon-pending').style.display = 'none';
+                document.getElementById('status-icon-success').style.display = 'inline-flex';
+            }
+
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) {
+                headerEl.setAttribute('data-i18n', !downloadTriggered ? 'header' : 'success_header');
+            }
+
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) {
+                summaryEl.setAttribute('data-i18n', !downloadTriggered ? 'wait_tips' : 'success_tips');
+            }
+
+            var btnRow = document.getElementById('action-btn-row');
+            if (btnRow) {
+                for (var i = 0; i < btnRow.children.length; i++) {
+                    if (btnRow.children[i].id === 'btn-action-upgrade-limit') {
+                        btnRow.children[i].style.display = 'none';
+                    } else {
+                        btnRow.children[i].style.display = '';
+                    }
+                }
+            }
+
+            var fileItems = document.querySelectorAll('.file-item-row');
+            fileItems.forEach(function(item) {
+                item.style.pointerEvents = '';
+                item.style.opacity = '';
+            });
+            var singleFile = document.querySelector('.file-fallback');
+            if (singleFile) {
+                singleFile.style.pointerEvents = '';
+                singleFile.style.opacity = '';
+            }
+
+            applyLanguage();
+        }
+
+        // Auto start status polling on page load to register client activity immediately
+        startStatusPolling();
+
+        // Dual-Transport Adapter (Auto-switch between LAN HTTP & WAN WebRTC P2P)
+        (function() {
+            var isWanMode = window.location.hostname === 'p.eqt.net.im' || window.location.pathname.startsWith('/share') || window.location.pathname.startsWith('/p/share');
+            if (isWanMode && window.RTCPeerConnection) {
+                var params = new URLSearchParams(window.location.search);
+                var token = params.get('token') || '';
+                if (!token) return;
+
+                var signalHost = 'https://signal.eqt.net.im';
+                var pc = new RTCPeerConnection({
                     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
                 });
 
-                pc.onicecandidate = (event) => {
+                pc.onicecandidate = function(event) {
                     if (event.candidate) {
-                        fetch(`${signalHost}/signal/push`, {
+                        fetch(signalHost + '/signal/push', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ room: token, sender: 'mobile', signal: { type: 'candidate', candidate: event.candidate } })
-                        }).catch(() => {});
+                        }).catch(function() {});
                     }
                 };
 
                 let receivedChunks = [];
                 let expectedSize = 0;
                 let receivedSize = 0;
-                let fileName = 'received_file';
+                let fileName = 'downloaded_file';
 
-                pc.ondatachannel = (event) => {
-                    const channel = event.channel;
-                    channel.onopen = () => {
-                        updateStatus('⚡ P2P 通道建立成功！', '#059669');
+                pc.ondatachannel = function(event) {
+                    var channel = event.channel;
+                    channel.onopen = function() {
+                        var summaryEl = document.getElementById('summary-text');
+                        if (summaryEl) summaryEl.innerText = '⚡ 公网 P2P 直连打通，点击下方按钮开始下载';
+                        var mainBtn = document.querySelector('.btn-download-action') || document.querySelector('button');
                         if (mainBtn) {
                             mainBtn.disabled = false;
-                            mainBtn.innerText = '⬇️ 下载文件';
-                            mainBtn.onclick = () => {
+                            mainBtn.onclick = function(e) {
+                                e.preventDefault();
                                 channel.send(JSON.stringify({ action: 'request_download' }));
                                 mainBtn.innerText = '⏳ 正在接收...';
                             };
                         }
                     };
 
-                    channel.onmessage = (e) => {
+                    channel.onmessage = function(e) {
                         if (typeof e.data === 'string') {
                             try {
-                                const meta = JSON.parse(e.data);
+                                var meta = JSON.parse(e.data);
                                 if (meta.type === 'meta') {
                                     fileName = meta.name || fileName;
                                     expectedSize = meta.size || 0;
-                                    fileTitle.innerText = fileName;
-                                    fileMeta.innerText = `文件大小: ${Math.round(expectedSize / 1024)} KB`;
+                                    var titleEl = document.querySelector('.file-name') || document.querySelector('.file-fallback span');
+                                    if (titleEl) titleEl.innerText = fileName;
                                 }
                             } catch(err) {}
                         } else if (e.data instanceof ArrayBuffer) {
                             receivedChunks.push(e.data);
                             receivedSize += e.data.byteLength;
-                            updateStatus(`📥 已接收: ${Math.round(receivedSize / 1024)} KB`, 'var(--accent)');
-                            
+                            var summaryEl = document.getElementById('summary-text');
+                            if (summaryEl) summaryEl.innerText = '📥 已物理接收: ' + Math.round(receivedSize / 1024) + ' KB';
+
                             if (receivedSize >= expectedSize && expectedSize > 0) {
-                                updateStatus('✅ 接收完毕！', '#059669');
-                                const blob = new Blob(receivedChunks);
-                                const a = document.createElement('a');
+                                if (summaryEl) summaryEl.innerText = '✅ 接收完毕！';
+                                downloadTriggered = true;
+                                restoreNormalUI();
+                                var blob = new Blob(receivedChunks);
+                                var a = document.createElement('a');
                                 a.href = URL.createObjectURL(blob);
                                 a.download = fileName;
                                 a.click();
-                                
-                                if (mainBtn) {
-                                    mainBtn.innerText = '🎉 重新保存';
-                                    mainBtn.onclick = () => a.click();
-                                }
                             }
                         }
                     };
                 };
 
-                pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
-                    return fetch(`${signalHost}/signal/push`, {
+                pc.createOffer().then(function(offer) { return pc.setLocalDescription(offer); }).then(function() {
+                    return fetch(signalHost + '/signal/push', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ room: token, sender: 'mobile', signal: pc.localDescription })
                     });
-                }).then(() => {
-                    updateStatus('📡 等待电脑端响应...', '#d97706');
-                }).catch(err => {
-                    updateStatus('❌ 通道异常: ' + err.message, '#dc2626');
-                });
+                }).catch(function() {});
             }
         })();
     </script>
 </body>
 </html>
-
