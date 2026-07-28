@@ -185,11 +185,9 @@ async function saveRoomState(env: Env, room: RoomState) {
 }
 
 async function pushSignalToRoom(env: Env, roomId: string, sender: 'host' | 'client', type: string, payload: string): Promise<number> {
-  const signalId = Date.now();
   const room = activeRooms.get(roomId);
-  if (room) {
-    room.signals.push({ id: signalId, sender, type, payload, createdAt: Date.now() });
-  }
+  const now = Date.now();
+  let signalId = now;
 
   if (env.DB) {
     try {
@@ -197,14 +195,23 @@ async function pushSignalToRoom(env: Env, roomId: string, sender: 'host' | 'clie
       const res = await env.DB.prepare(`
         INSERT INTO p2p_signals (room_id, sender, type, payload, created_at)
         VALUES (?, ?, ?, ?, ?)
-      `).bind(roomId, sender, type, payload, Date.now()).run();
+      `).bind(roomId, sender, type, payload, now).run();
       if (res.meta && res.meta.last_row_id) {
-        return res.meta.last_row_id;
+        signalId = res.meta.last_row_id;
       }
     } catch (err) {
       console.error('pushSignalToRoom error:', err);
     }
   }
+
+  if (room) {
+    if (signalId === now) {
+      room.signalCounter = (room.signalCounter || 0) + 1;
+      signalId = room.signalCounter;
+    }
+    room.signals.push({ id: signalId, sender, type, payload, createdAt: now });
+  }
+
   return signalId;
 }
 

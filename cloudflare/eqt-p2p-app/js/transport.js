@@ -140,6 +140,14 @@ window.EQTTransport = class EQTTransport {
         }
     }
 
+    requestDownload() {
+        const reqMsg = JSON.stringify({ type: 'request_download' });
+        if (this.channel && this.channel.readyState === 'open') {
+            try { this.channel.send(reqMsg); } catch(e) {}
+        }
+        this.pushSignal('request_download', reqMsg);
+    }
+
 
     async pushSignal(type, payload) {
         if (!this.clientToken) return;
@@ -205,9 +213,28 @@ window.EQTTransport = class EQTTransport {
                 const meta = (raw && raw.type === 'meta') ? raw : (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload);
                 const metaName = meta.name || 'downloaded_file';
                 const metaSize = meta.size || 0;
+                fileName = metaName;
+                expectedSize = metaSize;
                 if (this.onPhase) this.onPhase(5, 5, '物理通道贯通，元数据同步成功！');
                 if (this.onStatus) this.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
                 if (this.onMeta) this.onMeta(metaName, metaSize);
+            } else if (item.type === 'payload_chunk' || (raw && raw.type === 'payload_chunk')) {
+                const chunkData = (raw && raw.chunk) ? raw.chunk : (typeof item.payload === 'string' ? JSON.parse(item.payload).chunk : item.payload);
+                if (chunkData) {
+                    const binaryStr = atob(chunkData);
+                    const len = binaryStr.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+                    receivedChunks.push(bytes.buffer);
+                    receivedSize += bytes.byteLength;
+                    if (this.onProgress) this.onProgress(receivedSize, expectedSize);
+                    if (receivedSize >= expectedSize && expectedSize > 0) {
+                        const blob = new Blob(receivedChunks);
+                        if (this.onComplete) this.onComplete(blob, fileName);
+                    }
+                }
             }
         } catch (err) {
             console.error('[P2P Client] Error handling remote signal:', err);

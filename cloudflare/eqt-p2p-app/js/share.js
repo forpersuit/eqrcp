@@ -94,8 +94,8 @@ window.initShareModule = function(token) {
         return;
     }
 
-    const mainEl = document.querySelector('main');
-    if (mainEl) renderShareView(mainEl);
+    const container = document.getElementById('app') || document.querySelector('main') || document.body;
+    if (container) renderShareView(container);
 
     // Element References (Identical to LAN download.tmpl.html)
     const headerText = document.getElementById('header-text');
@@ -395,6 +395,7 @@ window.initShareModule = function(token) {
         } catch(e) {}
     };
 
+    window.eqtReceiver = transport;
     transport.initReceiver();
 };
 

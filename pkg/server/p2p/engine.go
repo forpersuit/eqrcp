@@ -304,9 +304,6 @@ func (e *Engine) SetOnICECandidate(cb func(*webrtc.ICECandidate)) {
 	e.onICECandidate = cb
 }
 
-
-
-
 // State returns current connection state.
 func (e *Engine) State() ConnectionState {
 	e.mu.RLock()

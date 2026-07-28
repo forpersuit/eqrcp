@@ -3385,7 +3385,8 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 				if sigMsg.ID > lastID {
 					lastID = sigMsg.ID
 				}
-				if sigMsg.Type == "offer" || sigMsg.Type == "sdp" {
+				log.Printf("[WAN P2P Listener Trace] Received client signal: type=%s, ID=%d", sigMsg.Type, sigMsg.ID)
+				if (sigMsg.Type == "offer" || sigMsg.Type == "sdp") && activeEngine == nil {
 					log.Printf("[WAN P2P Listener] Received WebRTC offer signal from client (ID=%d). Creating answer...", sigMsg.ID)
 					engine, err := p2p.NewEngine(nil)
 					if err != nil {
@@ -3402,6 +3403,34 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 					})
 
 					engine.SetOnDataChannel(func(dc *webrtc.DataChannel) {
+						sendPayload := func() {
+							if s.body.Path == "" {
+								return
+							}
+							file, err := os.Open(s.body.Path)
+							if err != nil {
+								return
+							}
+							defer file.Close()
+
+							buf := make([]byte, 64*1024)
+							totalSent := 0
+							for {
+								n, err := file.Read(buf)
+								if n > 0 {
+									if sendErr := dc.Send(buf[:n]); sendErr != nil {
+										log.Printf("[WAN P2P DataChannel Error] Send chunk failed: %v", sendErr)
+										break
+									}
+									totalSent += n
+								}
+								if err != nil {
+									break
+								}
+							}
+							log.Printf("[WAN P2P DataChannel] Physical payload data sent successfully (%d bytes)!", totalSent)
+						}
+
 						dc.OnOpen(func() {
 							log.Printf("[WAN P2P DataChannel] DataChannel connected! Syncing metadata...")
 							payloadName := s.body.Filename
@@ -3422,23 +3451,13 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 							metaBytes, _ := json.Marshal(metaObj)
 							_ = dc.SendText(string(metaBytes))
 
-							if s.body.Path != "" {
-								file, err := os.Open(s.body.Path)
-								if err == nil {
-									buf := make([]byte, 64*1024)
-									for {
-										n, err := file.Read(buf)
-										if n > 0 {
-											_ = dc.Send(buf[:n])
-										}
-										if err != nil {
-											break
-										}
-									}
-									file.Close()
-									log.Printf("[WAN P2P DataChannel] Payload data sent successfully (%d bytes)!", payloadSize)
-								}
-							}
+							// Send payload immediately on open
+							sendPayload()
+						})
+
+						dc.OnMessage(func(msg webrtc.DataChannelMessage) {
+							log.Printf("[WAN P2P DataChannel] Received request from client: %s", string(msg.Data))
+							sendPayload()
 						})
 					})
 
@@ -3454,7 +3473,7 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 						log.Printf("[WAN P2P Listener Error] Failed to push SDP answer to signaling server: %v", pushErr)
 					} else {
 						log.Printf("[WAN P2P Listener Success] SDP Answer pushed to signaling server for RoomID=%s", roomID)
-						
+
 						payloadName := s.body.Filename
 						if payloadName == "" {
 							payloadName = "downloaded_file"
@@ -3475,6 +3494,21 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 					}
 				} else if sigMsg.Type == "candidate" && activeEngine != nil {
 					_ = activeEngine.AddICECandidate(sigMsg.Payload)
+				} else if sigMsg.Type == "request_download" {
+					log.Printf("[WAN P2P Listener] Received download request via signaling fallback for RoomID=%s", roomID)
+					if s.body.Path != "" {
+						fileData, err := os.ReadFile(s.body.Path)
+						if err == nil {
+							b64Data := base64.StdEncoding.EncodeToString(fileData)
+							chunkObj := map[string]interface{}{
+								"type":  "payload_chunk",
+								"chunk": b64Data,
+							}
+							chunkBytes, _ := json.Marshal(chunkObj)
+							_ = signalClient.PushSignal(roomID, hostToken, "payload_chunk", string(chunkBytes))
+							log.Printf("[WAN P2P Listener Success] Pushed physical payload chunk via signaling fallback (%d bytes)", len(fileData))
+						}
+					}
 				}
 			}
 		}
