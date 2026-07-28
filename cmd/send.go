@@ -10,6 +10,7 @@ import (
 	"github.com/eiannone/keyboard"
 
 	"eqt/pkg/server"
+	"eqt/pkg/server/p2p"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,21 @@ func sendCmdFunc(command *cobra.Command, args []string) error {
 	}
 	// Sets the body
 	srv.Send(body)
+
+	// 自动建立 Cloudflare WAN P2P 信令房间
+	signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
+	devID := server.GetDeviceStableID()
+	resp, err := signalClient.CreateRoomWithMode("", devID, "share")
+	if err == nil && resp != nil && resp.Data.RoomID != "" {
+		roomID := resp.Data.RoomID
+		hostToken := resp.Data.HostToken
+		wanURL := fmt.Sprintf("https://p.eqt.net.im/share?token=%s", roomID)
+		log.Print("\n[WAN P2P] 公网直连访问链接 (已开通):")
+		log.Print(wanURL)
+		log.Print("")
+		srv.StartWanP2PListener(roomID, hostToken)
+	}
+
 	log.Print(`Scan the following URL with a QR reader to start the file transfer, press CTRL+C or "q" to exit:`)
 	log.Print(srv.SendURL)
 	if err := qr.RenderString(srv.SendURL, cfg.Reversed); err != nil {

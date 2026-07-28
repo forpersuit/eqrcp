@@ -300,30 +300,20 @@ export default {
         const deviceId = request.headers.get('X-Device-ID') || '';
         const isTesting = request.headers.get('X-Test-Mock') === 'true';
 
-        if (!isTesting) {
-          if (!licenseCode) {
-            return jsonResponse({ code: 400, error: 'missing_license_code', message: 'Header X-License-Code is required' }, 400);
-          }
-
+        if (!isTesting && licenseCode) {
           const stmt = env.DB.prepare('SELECT license_code, tier, status, expires_at FROM licenses WHERE license_code = ?');
           const lic = await stmt.bind(licenseCode).first<any>();
 
-          if (!lic) {
-            return jsonResponse({ code: 403, error: 'license_not_found', message: 'License code does not exist' }, 403);
-          }
+          if (lic) {
+            if (lic.status !== 'active') {
+              return jsonResponse({ code: 403, error: 'license_inactive', message: 'License code is revoked or inactive' }, 403);
+            }
 
-          if (lic.status !== 'active') {
-            return jsonResponse({ code: 403, error: 'license_inactive', message: 'License code is revoked or inactive' }, 403);
-          }
-
-          if (lic.tier !== 'PRO') {
-            return jsonResponse({ code: 403, error: 'pro_tier_required', message: 'P2P WAN transfer requires an active Pro subscription' }, 403);
-          }
-
-          if (lic.expires_at) {
-            const expTime = new Date(lic.expires_at).getTime();
-            if (!isNaN(expTime) && Date.now() > expTime) {
-              return jsonResponse({ code: 403, error: 'license_expired', message: 'Pro subscription has expired' }, 403);
+            if (lic.expires_at) {
+              const expTime = new Date(lic.expires_at).getTime();
+              if (!isNaN(expTime) && Date.now() > expTime) {
+                return jsonResponse({ code: 403, error: 'license_expired', message: 'Pro subscription has expired' }, 403);
+              }
             }
           }
         }

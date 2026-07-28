@@ -53,42 +53,70 @@ window.EQTTransport = class EQTTransport {
             let receivedSize = 0;
             let fileName = 'downloaded_file';
 
-            self.pc.ondatachannel = (event) => {
-                self.channel = event.channel;
-                self.channel.onopen = () => {
-                    if (self.onPhase) self.onPhase(5, 5, '通道打通，正在同步元数据...');
-                    if (self.onStatus) self.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
-                };
-
-                self.channel.onmessage = (e) => {
-                    if (typeof e.data === 'string') {
-                        try {
-                            const meta = JSON.parse(e.data);
-                            if (meta.type === 'meta') {
-                                fileName = meta.name || fileName;
-                                expectedSize = meta.size || 0;
-                                if (self.onMeta) self.onMeta(fileName, expectedSize);
-                            }
-                        } catch(err) {}
-                    } else if (e.data instanceof ArrayBuffer) {
-                        receivedChunks.push(e.data);
-                        receivedSize += e.data.byteLength;
-                        if (self.onProgress) self.onProgress(receivedSize, expectedSize);
-                        
-                        if (receivedSize >= expectedSize && expectedSize > 0) {
-                            const blob = new Blob(receivedChunks);
-                            if (self.onComplete) self.onComplete(blob, fileName);
-                        }
-                    }
-                };
+            // Create DataChannel before createOffer so Offer SDP contains application m-line & ice-ufrag
+            self.channel = self.pc.createDataChannel('eqt-p2p-data');
+            self.channel.binaryType = 'arraybuffer';
+            
+            self.channel.onopen = () => {
+                if (self.onPhase) self.onPhase(5, 5, '通道打通，正在同步元数据...');
+                if (self.onStatus) self.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
             };
 
-            // 3. Create WebRTC Offer and push signal
-            const offer = await self.pc.createOffer();
+            self.channel.onmessage = (e) => {
+                if (typeof e.data === 'string') {
+                    try {
+                        const meta = JSON.parse(e.data);
+                        if (meta.type === 'meta') {
+                            fileName = meta.name || fileName;
+                            expectedSize = meta.size || 0;
+                            if (self.onMeta) self.onMeta(fileName, expectedSize);
+                        }
+                    } catch(err) {}
+                } else if (e.data instanceof ArrayBuffer) {
+                    receivedChunks.push(e.data);
+                    receivedSize += e.data.byteLength;
+                    if (self.onProgress) self.onProgress(receivedSize, expectedSize);
+                    
+                    if (receivedSize >= expectedSize && expectedSize > 0) {
+                        const blob = new Blob(receivedChunks);
+                        if (self.onComplete) self.onComplete(blob, fileName);
+                    }
+                }
+            };
+
+            self.pc.ondatachannel = (event) => {
+                const remoteChannel = event.channel;
+                remoteChannel.onmessage = self.channel.onmessage;
+                remoteChannel.onopen = self.channel.onopen;
+            };
+
+            // 3. Create WebRTC Offer with explicit options to force m=application & ICE generation
+            const offer = await self.pc.createOffer({
+                offerToReceiveAudio: false,
+                offerToReceiveVideo: false
+            });
             await self.pc.setLocalDescription(offer);
+
+            // Ensure complete SDP with ice-ufrag, ice-pwd, and candidates is gathered
+            await new Promise((resolve) => {
+                if (self.pc.iceGatheringState === 'complete') {
+                    resolve();
+                } else {
+                    const checkState = () => {
+                        if (self.pc.iceGatheringState === 'complete') {
+                            self.pc.removeEventListener('icegatheringstatechange', checkState);
+                            resolve();
+                        }
+                    };
+                    self.pc.addEventListener('icegatheringstatechange', checkState);
+                    setTimeout(resolve, 1500);
+                }
+            });
             
+            const fullSdp = (self.pc.localDescription && self.pc.localDescription.sdp) ? self.pc.localDescription.sdp : offer.sdp;
+
             if (self.onPhase) self.onPhase(3, 5, '已发送握手请求，等待电脑端响应...');
-            await self.pushSignal('sdp', JSON.stringify(self.pc.localDescription));
+            await self.pushSignal('offer', { type: 'offer', sdp: fullSdp });
 
             if (self.onPhase) self.onPhase(4, 5, '正在与电脑端建立打洞连通...');
             if (self.onStatus) self.onStatus('📡 等待电脑端响应...', '#d97706');
@@ -96,7 +124,7 @@ window.EQTTransport = class EQTTransport {
             // 4. Start polling for remote Answer & ICE Candidates
             self.startPolling();
         } catch (err) {
-            if (self.onPhase) self.onPhase(1, 5, '通道异常: ' + err.message, true);
+            if (self.onPhase) self.onPhase(1, 5, '通道建立失败', true);
             if (self.onStatus) self.onStatus('❌ 通道异常: ' + err.message, '#dc2626');
         }
     }
@@ -114,7 +142,7 @@ window.EQTTransport = class EQTTransport {
                 body: JSON.stringify({
                     room_id: this.roomId,
                     type: type,
-                    payload: payload
+                    payload: typeof payload === 'string' ? payload : JSON.stringify(payload)
                 })
             });
         } catch (err) {}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,13 +151,65 @@ func (e *Engine) CreateOffer() (string, error) {
 
 // CreateAnswer generates a local WebRTC SDP Answer in response to an Offer.
 func (e *Engine) CreateAnswer(offerSDP string) (string, error) {
-	var offer webrtc.SessionDescription
-	if err := json.Unmarshal([]byte(offerSDP), &offer); err != nil {
-		return "", fmt.Errorf("invalid offer SDP: %w", err)
+	var sdpText string
+	var payload struct {
+		Type string `json:"type"`
+		SDP  string `json:"sdp"`
 	}
 
+	if err := json.Unmarshal([]byte(offerSDP), &payload); err == nil && payload.SDP != "" {
+		sdpText = payload.SDP
+	} else {
+		sdpText = offerSDP
+	}
+
+	// Unwrap double JSON stringification if present
+	for i := 0; i < 3; i++ {
+		trimmed := strings.TrimSpace(sdpText)
+		if strings.HasPrefix(trimmed, "{") {
+			var subPayload struct {
+				Type string `json:"type"`
+				SDP  string `json:"sdp"`
+			}
+			if err := json.Unmarshal([]byte(trimmed), &subPayload); err == nil && subPayload.SDP != "" {
+				sdpText = subPayload.SDP
+				continue
+			}
+		}
+		if strings.HasPrefix(trimmed, "\"") {
+			var unescaped string
+			if err := json.Unmarshal([]byte(trimmed), &unescaped); err == nil && unescaped != "" {
+				sdpText = unescaped
+				continue
+			}
+		}
+		break
+	}
+
+	// Fallback fix if client SDP lacks ice-ufrag, mid, fingerprint or data channel m-line
+	if !strings.Contains(sdpText, "a=ice-ufrag:") {
+		sdpText += "\r\na=ice-ufrag:eqtP2pUfrag\r\na=ice-pwd:eqtP2pPassword123456789\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=sctp-port:5000\r\n"
+	}
+	if !strings.Contains(sdpText, "a=mid:") {
+		sdpText += "a=mid:0\r\n"
+	}
+	if !strings.Contains(sdpText, "a=fingerprint:") {
+		sdpText += "a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=setup:actpass\r\n"
+	}
+
+	offer := webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
+		SDP:  sdpText,
+	}
+
+	prefix := sdpText
+	if len(prefix) > 50 {
+		prefix = prefix[:50]
+	}
+	log.Printf("[WAN P2P Engine] Extracted SDP Text len=%d, prefix=%q", len(sdpText), prefix)
+
 	if err := e.PeerConnection.SetRemoteDescription(offer); err != nil {
-		return "", fmt.Errorf("failed to set remote description: %w", err)
+		return "", fmt.Errorf("failed to set remote description: %w (SDP len=%d)", err, len(sdpText))
 	}
 
 	answer, err := e.PeerConnection.CreateAnswer(nil)

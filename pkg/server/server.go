@@ -2201,7 +2201,6 @@ func New(cfg *config.Config) (*Server, error) {
 		status.PageUrl = app.SendURL
 		status.WanUrl = "https://p.eqt.net.im/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
 	})
-	go app.StartWanP2PListener(path, "")
 	// Create cookie used to verify request is coming from first client to connect
 	cookie := http.Cookie{Name: "eqt", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed
@@ -3353,6 +3352,10 @@ func (s *Server) NotifyQuickDownload(id string) {
 
 // StartWanP2PListener listens for incoming WebRTC P2P mobile connections over WAN for roomID.
 func (s *Server) StartWanP2PListener(roomID, hostToken string) {
+	if roomID == "" || hostToken == "" {
+		log.Printf("[WAN P2P Listener] Skipped: empty roomID or hostToken")
+		return
+	}
 	signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
 	log.Printf("[WAN P2P Listener] Starting signal polling loop for RoomID=%s, HostToken=%s", roomID, hostToken)
 
@@ -3380,7 +3383,7 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 				if sigMsg.ID > lastID {
 					lastID = sigMsg.ID
 				}
-				if sigMsg.Type == "offer" {
+				if sigMsg.Type == "offer" || sigMsg.Type == "sdp" {
 					log.Printf("[WAN P2P Listener] Received WebRTC offer signal from client (ID=%d). Creating answer...", sigMsg.ID)
 					engine, err := p2p.NewEngine(nil)
 					if err != nil {
