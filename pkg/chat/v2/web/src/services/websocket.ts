@@ -116,7 +116,14 @@ export class ChatWebSocketClient {
           }
         } else if (document.visibilityState === 'visible') {
           this.isSuspended = false;
-          if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            // Reset heartbeat timer watermark to prevent false timeout when unminimizing
+            this.lastHeartbeatAck = Date.now();
+            this.sendCommand({
+              type: 'heartbeat',
+              commandId: `hb-probe-${Date.now()}`
+            });
+          } else if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
             this.connect();
