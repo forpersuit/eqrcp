@@ -992,16 +992,9 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 				return
 			}
 
-			if resp == nil || resp.Data.RoomID == "" {
-				errMsg := "Signaling server returned empty RoomID"
-				agent.log.Errorf("[WAN P2P Share Error] Failed to create P2P room for share task %d: %s", taskID, errMsg)
-				agent.setTaskWanURL(task.Action, "", "", errMsg)
-				return
-			}
-
 			roomID := resp.Data.RoomID
 			hostToken := resp.Data.HostToken
-			wanURL := fmt.Sprintf("https://p.eqt.net.im/share?token=%s", roomID)
+			wanURL := fmt.Sprintf("%s/share?token=%s", getWanAppBaseURL(), roomID)
 
 			agent.log.Infof("[WAN P2P Share Success] P2P room registered successfully for share task %d! RoomID: %s, HostToken: %s, WanURL: %s", taskID, roomID, hostToken, wanURL)
 			agent.setTaskWanURL(task.Action, wanURL, roomID, "")
@@ -1050,7 +1043,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 
 			roomID := resp.Data.RoomID
 			hostToken := resp.Data.HostToken
-			wanURL := fmt.Sprintf("https://p.eqt.net.im/receive?token=%s", roomID)
+			wanURL := fmt.Sprintf("%s/receive?token=%s", getWanAppBaseURL(), roomID)
 
 			agent.log.Infof("[WAN P2P Receive Success] P2P room registered successfully for receive task %d! RoomID: %s, HostToken: %s, WanURL: %s", taskID, roomID, hostToken, wanURL)
 			agent.setTaskWanURL(task.Action, wanURL, roomID, "")
@@ -1132,6 +1125,13 @@ func (agent *desktopAgent) setTaskPageURL(action string, pageURL string) {
 		}
 	}
 	agent.touchLocked()
+}
+
+func getWanAppBaseURL() string {
+	if u := os.Getenv("EQT_WAN_APP_URL"); u != "" {
+		return strings.TrimSuffix(u, "/")
+	}
+	return "https://main.eqt-p2p-app.pages.dev"
 }
 
 func (agent *desktopAgent) setTaskWanURL(action string, wanURL string, wanToken string, wanErr string) {
