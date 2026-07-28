@@ -963,7 +963,6 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	})
 	switch task.Action {
 	case "share":
-		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
 		if err != nil {
 			agent.log.Errorf("runTask (share): failed to create payload from args: %v", err)
@@ -971,18 +970,19 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			return err
 		}
 		srv.Send(payload)
+		agent.setTaskPageURL(task.Action, srv.SendURL)
 		if err := serveDesktopTaskQR(srv, srv.SendURL, agentApp.Flags.Browser); err != nil {
 			agent.log.Errorf("runTask (share): failed to serve QR: %v", err)
 			srv.Shutdown()
 			return err
 		}
 	case "receive":
-		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		if err := srv.ReceiveTo(cfg.Output); err != nil {
 			agent.log.Errorf("runTask (receive): failed to prepare receive path: %v", err)
 			srv.Shutdown()
 			return err
 		}
+		agent.setTaskPageURL(task.Action, srv.ReceiveURL)
 		if err := serveDesktopTaskQR(srv, srv.ReceiveURL, agentApp.Flags.Browser); err != nil {
 			agent.log.Errorf("runTask (receive): failed to serve QR: %v", err)
 			srv.Shutdown()
