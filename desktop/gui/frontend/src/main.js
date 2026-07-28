@@ -769,13 +769,38 @@ function renderActiveTaskQR() {
     }
 }
 
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            const success = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            if (success) resolve();
+            else reject(new Error('copy_failed'));
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
+
 function renderQRHeroHtml(task, isExpanded) {
     if (!isExpanded) return '';
     if (!task || !task.pageUrl) {
         return `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>`;
     }
 
-    const isPaidPro = !!(state.status?.isPaid && state.status?.licenseTier === 'PRO');
+    const isPaidPro = !!(
+        (state.status?.isPaid || (state.license && state.license.code) || (state.status?.licenseTier === 'PRO')) &&
+        ((state.status?.licenseTier || (state.license && state.license.tier) || '').toUpperCase() === 'PRO')
+    );
     const activeMode = state.qrChannelMode || 'lan';
 
     const lanUrl = task.pageUrl;
@@ -3227,7 +3252,10 @@ function refreshHistoryListInDOM() {
         const channelBtn = e.target.closest('.set-qr-channel-action');
         if (channelBtn) {
             const channel = channelBtn.dataset.channel;
-            const isPaidPro = !!(state.status?.isPaid && state.status?.licenseTier === 'PRO');
+            const isPaidPro = !!(
+                (state.status?.isPaid || (state.license && state.license.code) || (state.status?.licenseTier === 'PRO')) &&
+                ((state.status?.licenseTier || (state.license && state.license.tier) || '').toUpperCase() === 'PRO')
+            );
             if (channel === 'wan' && !isPaidPro) {
                 const tip = t('qr_channel_pro_tip') || 'Pro 专属功能：使用公网 P2P 直连请先激活 Pro 订阅';
                 showToast(tip);

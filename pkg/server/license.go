@@ -476,10 +476,7 @@ func ResetLicense() {
 func GetLocalLicenseInfo() (LicenseCertificate, bool) {
 	licenseCacheMu.Lock()
 	defer licenseCacheMu.Unlock()
-	if hasCachedLicense {
-		if cachedLicense == nil {
-			return LicenseCertificate{}, false
-		}
+	if hasCachedLicense && cachedLicense != nil {
 		return *cachedLicense, true
 	}
 
