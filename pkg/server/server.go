@@ -24,10 +24,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"eqt/pkg/qr"
-
 	"eqt/pkg/body"
 	"eqt/pkg/chat/v2/diag"
+	"eqt/pkg/qr"
+	"eqt/pkg/server/p2p"
 	chatv2http "eqt/pkg/chat/v2/http"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
@@ -2201,6 +2201,7 @@ func New(cfg *config.Config) (*Server, error) {
 		status.PageUrl = app.SendURL
 		status.WanUrl = "https://eqt.net.im/p/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
 	})
+	go app.startWanP2PListener(path)
 	// Create cookie used to verify request is coming from first client to connect
 	cookie := http.Cookie{Name: "eqt", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed
@@ -3347,5 +3348,44 @@ func (s *Server) GetChatAttachmentPath(id string) (string, bool) {
 func (s *Server) NotifyQuickDownload(id string) {
 	if s.chatV2Handler != nil {
 		s.chatV2Handler.NotifyQuickDownload(id)
+	}
+}
+
+// startWanP2PListener registers room and listens for incoming WebRTC P2P mobile connections over WAN.
+func (s *Server) startWanP2PListener(roomToken string) {
+	signalClient := p2p.NewSignalingClient("https://signal.eqt.net.im")
+	_, _ = signalClient.CreateRoom("", "")
+
+	ticker := time.NewTicker(800 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastID int
+	for {
+		select {
+		case <-s.stopChannel:
+			return
+		case <-ticker.C:
+			signals, err := signalClient.PollSignals(roomToken, "host", lastID)
+			if err != nil || len(signals) == 0 {
+				continue
+			}
+
+			for _, sigMsg := range signals {
+				if sigMsg.ID > lastID {
+					lastID = sigMsg.ID
+				}
+				if sigMsg.Type == "offer" {
+					engine, err := p2p.NewEngine(nil)
+					if err != nil {
+						continue
+					}
+
+					answerSDP, err := engine.CreateAnswer(sigMsg.Payload)
+					if err == nil && answerSDP != "" {
+						_ = signalClient.PushSignal(roomToken, "host", "host", answerSDP)
+					}
+				}
+			}
+		}
 	}
 }
