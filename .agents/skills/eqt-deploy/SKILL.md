@@ -15,9 +15,9 @@ This skill contains the authoritative Cloudflare project names, build directives
 
 | Component Name | Source Directory | Target Cloudflare Service | Exact Project Name | Custom Production Domain | Recommended Command |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **EQT Main Website** | `cloudflare/eqt-website` | Cloudflare Pages | **`eqt`** | `https://www.eqt.net.im/` | `npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --branch=main` |
-| **EQT Pro P2P App** | `cloudflare/eqt-p2p-app` | Cloudflare Pages | **`eqt-p2p-app`** | `https://p.eqt.net.im/` | `npx wrangler pages deploy cloudflare/eqt-p2p-app --project-name=eqt-p2p-app --branch=main` |
-| **EQT Admin Console**| `cloudflare/eqt-admin` | Cloudflare Pages | **`eqt-admin`** | `https://admin.eqt.net.im/` | `cd cloudflare/eqt-admin && npm run build && npx wrangler pages deploy dist --project-name=eqt-admin --branch=main` |
+| **EQT Main Website** | `cloudflare/eqt-website` | Cloudflare Pages | **`eqt`** | `https://www.eqt.net.im/` | `npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --commit-dirty=true` |
+| **EQT Pro P2P App** | `cloudflare/eqt-p2p-app` | Cloudflare Pages | **`eqt-p2p-app`** | `https://p.eqt.net.im/` | `npx wrangler pages deploy cloudflare/eqt-p2p-app --project-name=eqt-p2p-app --commit-dirty=true` |
+| **EQT Admin Console**| `cloudflare/eqt-admin` | Cloudflare Pages | **`eqt-admin`** | `https://admin.eqt.net.im/` | `cd cloudflare/eqt-admin && npm run build && npx wrangler pages deploy dist --project-name=eqt-admin --commit-dirty=true` |
 | **P2P Signal Worker**| `cloudflare/eqt-p2p-signal` | Cloudflare Worker | **`eqt-p2p-signal`** | `https://signal.eqt.net.im/` | `cd cloudflare/eqt-p2p-signal && npx wrangler deploy` |
 | **DRM Auth Worker** | `cloudflare/eqt-drm-api` | Cloudflare Worker | **`eqt-drm-api`** | `https://lic.eqt.net.im/` | `cd cloudflare/eqt-drm-api && npx wrangler deploy` |
 
@@ -29,14 +29,14 @@ This skill contains the authoritative Cloudflare project names, build directives
 - **Cloudflare Project Name**: `eqt`
 - **Deploy Command**:
   ```sh
-  npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --branch=main
+  npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt --commit-dirty=true
   ```
 
 ### B. EQT Pro P2P App (`cloudflare/eqt-p2p-app`)
 - **Cloudflare Project Name**: `eqt-p2p-app`
 - **Deploy Command**:
   ```sh
-  npx wrangler pages deploy cloudflare/eqt-p2p-app --project-name=eqt-p2p-app --branch=main
+  npx wrangler pages deploy cloudflare/eqt-p2p-app --project-name=eqt-p2p-app --commit-dirty=true
   ```
 
 ### C. EQT Admin (`cloudflare/eqt-admin`)
@@ -44,7 +44,7 @@ This skill contains the authoritative Cloudflare project names, build directives
 - **Deploy Command**:
   ```sh
   npm --prefix cloudflare/eqt-admin run build
-  npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name=eqt-admin --branch=main
+  npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name=eqt-admin --commit-dirty=true
   ```
 
 ### D. EQT P2P Signal Worker (`cloudflare/eqt-p2p-signal`)

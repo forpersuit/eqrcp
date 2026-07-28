@@ -258,14 +258,16 @@ export default {
     const path = url.pathname;
 
     try {
-      // 1. Health Probe
-      if (path === '/health' || path === '/api/v1/p2p/health') {
-        return jsonResponse({
-          status: 'ok',
-          service: 'eqt-p2p-signal',
-          active_rooms: activeRooms.size,
-          global_regions_supported: true,
-          timestamp: new Date().toISOString()
+      // 1.1 Non-API SPA Route Proxy (p.eqt.net.im/share, /receive, /chat, etc.)
+      if (!path.startsWith('/api/')) {
+        const targetUrl = new URL(path + url.search, 'https://main.eqt-p2p-app.pages.dev');
+        const pageResp = await fetch(targetUrl.toString(), {
+          headers: request.headers,
+          method: request.method
+        });
+        return new Response(pageResp.body, {
+          status: pageResp.status,
+          headers: pageResp.headers
         });
       }
 
