@@ -16,6 +16,7 @@ export class ChatWebSocketClient {
   private maxReconnectAttempts = 10;
   private reconnectDelay = 1000; // start with 1s
   private heartbeatIntervalId: any = null;
+  private heartbeatWorker: Worker | null = null;
   private lastHeartbeatAck = Date.now();
   private isManualClosed = false;
   private isSuspended = false;
@@ -469,8 +470,10 @@ export class ChatWebSocketClient {
   }
 
   private startHeartbeat(): void {
+    this.stopHeartbeat();
     this.lastHeartbeatAck = Date.now();
-    this.heartbeatIntervalId = setInterval(() => {
+
+    const heartbeatTick = () => {
       if (Date.now() - this.lastHeartbeatAck > 30000) {
         chatActions.addDebugNotice('Heartbeat timeout (30s). Re-establishing connection.');
         this.ws?.close();
@@ -481,10 +484,51 @@ export class ChatWebSocketClient {
         type: 'heartbeat',
         commandId: `hb-${Date.now()}`
       });
-    }, 15000); // Send heartbeat every 15s
+    };
+
+    // Use HTML5 Web Worker to bypass OS/Browser background timer throttling when window is minimized
+    if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined') {
+      try {
+        const workerCode = `
+          let timer = null;
+          onmessage = function(e) {
+            if (e.data === 'start') {
+              if (timer) clearInterval(timer);
+              timer = setInterval(function() { postMessage('tick'); }, 15000);
+            } else if (e.data === 'stop') {
+              if (timer) clearInterval(timer);
+              timer = null;
+            }
+          };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        this.heartbeatWorker = new Worker(workerUrl);
+        this.heartbeatWorker.onmessage = (e) => {
+          if (e.data === 'tick') {
+            heartbeatTick();
+          }
+        };
+        this.heartbeatWorker.postMessage('start');
+        return;
+      } catch (e) {
+        // Fallback to standard setInterval if Worker creation fails
+      }
+    }
+
+    this.heartbeatIntervalId = setInterval(heartbeatTick, 15000);
   }
 
   private stopHeartbeat(): void {
+    if (this.heartbeatWorker) {
+      try {
+        this.heartbeatWorker.postMessage('stop');
+        this.heartbeatWorker.terminate();
+      } catch (e) {
+        // Ignored
+      }
+      this.heartbeatWorker = null;
+    }
     if (this.heartbeatIntervalId) {
       clearInterval(this.heartbeatIntervalId);
       this.heartbeatIntervalId = null;
