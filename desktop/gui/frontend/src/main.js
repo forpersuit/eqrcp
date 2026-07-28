@@ -700,32 +700,41 @@ function renderShare() {
 
 state.qrChannelMode = state.qrChannelMode || 'lan';
 
-function sanitizeWanP2PUrl(targetUrl, action) {
+function sanitizeWanP2PUrl(targetUrl, action, task) {
     const act = action || 'share';
-    if (!targetUrl) return `https://p.eqt.net.im/${act}`;
-    try {
-        const parsed = new URL(targetUrl);
-        const params = new URLSearchParams();
-        const token = parsed.searchParams.get('token');
-        const join = parsed.searchParams.get('join');
-        const pathSegments = parsed.pathname.split('/').filter(Boolean);
-        const lastSegment = pathSegments[pathSegments.length - 1] || '';
-        const rawToken = (token || (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat' ? lastSegment : ''));
+    // 优先读取显式传入的 wanToken / wanUrl
+    let rawToken = task?.wanToken || '';
+    let join = task?.wanJoin || '';
 
-        if (rawToken) params.set('token', rawToken);
-        if (join) params.set('join', join);
-        
-        const searchStr = params.toString() ? `?${params.toString()}` : '';
-        return `https://p.eqt.net.im/${act}${searchStr}`;
-    } catch (e) {
-        return `https://p.eqt.net.im/${act}`;
+    if (!rawToken && targetUrl) {
+        try {
+            const parsed = new URL(targetUrl);
+            const token = parsed.searchParams.get('token');
+            join = join || parsed.searchParams.get('join') || '';
+            const pathSegments = parsed.pathname.split('/').filter(Boolean);
+            const lastSegment = pathSegments[pathSegments.length - 1] || '';
+            rawToken = token || (lastSegment && lastSegment !== 'share' && lastSegment !== 'receive' && lastSegment !== 'chat' ? lastSegment : '');
+        } catch (e) {
+            console.warn('[Antigravity] Failed to parse targetUrl for WAN token:', e);
+        }
     }
+
+    if (!rawToken) {
+        console.warn('[Antigravity Warning] WAN mode requires an active P2P room token. Refusing to generate invalid tokenless WAN URL.');
+        return '';
+    }
+
+    const params = new URLSearchParams();
+    params.set('token', rawToken);
+    if (join) params.set('join', join);
+    
+    return `https://p.eqt.net.im/${act}?${params.toString()}`;
 }
 
 function getWanP2PUrl(task) {
-    if (!task || !task.pageUrl) return 'https://eqt.net.im/p/';
+    if (!task) return '';
     const baseAction = task.action || 'share';
-    return sanitizeWanP2PUrl(task.pageUrl, baseAction);
+    return sanitizeWanP2PUrl(task.wanUrl || task.pageUrl, baseAction, task);
 }
 
 function renderActiveTaskQR() {
@@ -767,10 +776,28 @@ function renderQRHeroHtml(task, isExpanded) {
 
     const lanUrl = task.pageUrl;
     const wanUrl = getWanP2PUrl(task);
-    const activeUrl = (activeMode === 'wan' && isPaidPro) ? wanUrl : lanUrl;
-    const qrImg = qrImageURL(activeUrl);
-
     const isWanActive = activeMode === 'wan' && isPaidPro;
+    const activeUrl = isWanActive ? wanUrl : lanUrl;
+
+    if (isWanActive && !activeUrl) {
+        return `
+            <div class="qr-hero" data-active-mode="${activeMode}">
+                <div class="qr-channel-tabs">
+                    <button class="qr-channel-tab ${activeMode === 'lan' ? 'active' : ''} set-qr-channel-action" data-channel="lan" title="${escapeAttr(t('qr_channel_lan_desc'))}">
+                        🌐 ${t('qr_channel_lan')}
+                    </button>
+                    <button class="qr-channel-tab wan-tab active set-qr-channel-action" data-channel="wan" title="${escapeAttr(t('qr_channel_wan_desc'))}">
+                        ⚡ ${t('qr_channel_wan')} <span class="pro-badge-mini">PRO</span>
+                    </button>
+                </div>
+                <div class="empty-state transfer-empty" style="margin: 16px 0; color: var(--danger); background: var(--danger-light); padding: 12px; border-radius: 8px; font-size: 13px;">
+                    ⚠️ 暂未获取到公网 P2P 信令 Token，无法生成公网二维码。请使用局域网模式或重试。
+                </div>
+            </div>
+        `;
+    }
+
+    const qrImg = qrImageURL(activeUrl);
 
     return `
         <div class="qr-hero" data-active-mode="${activeMode}">
