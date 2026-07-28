@@ -37,9 +37,9 @@ function renderShareView(container) {
                 <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
             </div>
 
-            <div class="wifi-warning-box">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span data-i18n="wan_tips">已启用端到端加密公网传输通道，无需处于同一个局域网。</span>
+            <div class="wifi-warning-box" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; margin-bottom: 20px;">
+                <span id="wan-tips-text" data-i18n="wan_tips" style="font-weight: 700; font-size: 14px;">公网</span>
+                <span class="license-badge" style="position: static; font-size: 11px; padding: 2px 8px;">PRO WAN</span>
             </div>
 
             <!-- 接收包名卡片 -->
@@ -89,6 +89,10 @@ function renderShareView(container) {
 
 window.initShareModule = function(token) {
     if (!token) return;
+    if (typeof window.EQTTransport !== 'function') {
+        setTimeout(() => window.initShareModule(token), 50);
+        return;
+    }
 
     const mainEl = document.querySelector('main');
     if (mainEl) renderShareView(mainEl);
@@ -138,7 +142,7 @@ window.initShareModule = function(token) {
             success_header: '✅ 传输成功',
             success_summary: '文件已成功接收并保存至您的设备！',
             saved_file: '待接收文件',
-            wan_tips: '已启用端到端加密公网传输通道，无需处于同一个局域网。'
+            wan_tips: '公网'
         },
         en: {
             header: 'File Ready for Download',
@@ -150,9 +154,70 @@ window.initShareModule = function(token) {
             success_header: '✅ Transfer Completed',
             success_summary: 'File received and saved successfully!',
             saved_file: 'File to Receive',
-            wan_tips: 'End-to-End Encrypted WAN Transport. No LAN required.'
+            wan_tips: 'WAN'
+        },
+        ja: {
+            header: 'ダウンロードの受取準備完了',
+            connecting: '📡 接続確立中...',
+            waiting_pc: '⏳ 接続待機中...',
+            meta_received: '⚡ 共有完了！ダウンロード可能です。',
+            btn_download: 'ダウンロード開始',
+            btn_resave: '🎉 再保存',
+            success_header: '✅ 転送完了',
+            success_summary: '正常に保存されました。',
+            saved_file: '受信ファイル',
+            wan_tips: '公衆網 (WAN)'
+        },
+        ko: {
+            header: '다운로드 준비 완료',
+            connecting: '📡 연결 중...',
+            waiting_pc: '⏳ 대기 중...',
+            meta_received: '⚡ 공유 완료! 다운로드 가능합니다.',
+            btn_download: '다운로드 시작',
+            btn_resave: '🎉 다시 저장',
+            success_header: '✅ 전송 완료',
+            success_summary: '성공적으로 저장되었습니다.',
+            saved_file: '수신 파일',
+            wan_tips: '공용망 (WAN)'
+        },
+        es: {
+            header: 'Archivo listo para descargar',
+            connecting: '📡 Conectando...',
+            waiting_pc: '⏳ Esperando...',
+            meta_received: '⚡ ¡Listo para descargar!',
+            btn_download: 'Descargar',
+            btn_resave: '🎉 Guardar de nuevo',
+            success_header: '✅ Transferencia completada',
+            success_summary: 'Guardado con éxito.',
+            saved_file: 'Archivo a recibir',
+            wan_tips: 'WAN'
+        },
+        de: {
+            header: 'Datei bereit zum Download',
+            connecting: '📡 Verbindung wird aufgebaut...',
+            waiting_pc: '⏳ Warten...',
+            meta_received: '⚡ Bereit zum Download!',
+            btn_download: 'Herunterladen',
+            btn_resave: '🎉 Erneut speichern',
+            success_header: '✅ Übertragung abgeschlossen',
+            success_summary: 'Erfolgreich gespeichert.',
+            saved_file: 'Zu empfangende Datei',
+            wan_tips: 'WAN'
+        },
+        fr: {
+            header: 'Fichier prêt à télécharger',
+            connecting: '📡 Connexion en cours...',
+            waiting_pc: '⏳ En attente...',
+            meta_received: '⚡ Prêt à télécharger !',
+            btn_download: 'Télécharger',
+            btn_resave: '🎉 Enregistrer à nouveau',
+            success_header: '✅ Transfert terminé',
+            success_summary: 'Enregistré avec succès.',
+            saved_file: 'Fichier à recevoir',
+            wan_tips: 'WAN'
         }
     };
+
 
     let currentLang = 'zh';
     if (langSelect) {
@@ -169,12 +234,15 @@ window.initShareModule = function(token) {
     }
 
     const transport = new window.EQTTransport(token);
+    window.transport = transport;
     let downloadedBlob = null;
     let currentFileName = 'downloaded_file';
 
     transport.onPhase = (step, total, msg, isError) => {
         if (phaseBadge) phaseBadge.innerText = `${step}/${total}`;
         if (phaseText) phaseText.innerText = msg;
+        const p2pStatusText = document.getElementById('p2p-status-text');
+        if (p2pStatusText) p2pStatusText.innerText = `[${step}/${total}] ${msg}`;
         if (isError) {
             if (phaseBadge) {
                 phaseBadge.innerText = '错误';
@@ -195,14 +263,24 @@ window.initShareModule = function(token) {
             summaryText.dataset.custom = "true";
             if (color) summaryText.style.color = color;
         }
+        const p2pStatusText = document.getElementById('p2p-status-text');
+        if (p2pStatusText) {
+            p2pStatusText.innerText = msg;
+            if (color && p2pStatusText.parentElement) p2pStatusText.parentElement.style.color = color;
+        }
     };
 
     transport.onMeta = (name, size) => {
         currentFileName = name || currentFileName;
         const formattedSize = formatBytes(size);
 
+        const shareFileName = document.getElementById('share-file-name');
+        if (shareFileName) shareFileName.innerText = currentFileName;
         if (packageNameText) packageNameText.innerText = currentFileName;
         if (fileNameText) fileNameText.innerText = currentFileName;
+
+        const shareFileMeta = document.getElementById('share-file-meta');
+        if (shareFileMeta) shareFileMeta.innerText = `大小: ${formattedSize} · 物理传输准备就绪`;
         if (fileSizeText) fileSizeText.innerText = formattedSize;
         if (transferStatsMeta) {
             transferStatsMeta.innerText = `1 · ${formattedSize}`;
@@ -214,7 +292,7 @@ window.initShareModule = function(token) {
             phaseBadge.innerText = '5/5';
             phaseBadge.style.background = 'var(--accent)';
         }
-        if (phaseText) phaseText.innerText = '✅ 链路打通，文件准备就绪！';
+        if (phaseText) phaseText.innerText = '✅ 物理打通，文件准备就绪！';
         if (phaseTimelineBar) {
             phaseTimelineBar.style.background = 'var(--accent-light)';
             phaseTimelineBar.style.borderColor = 'var(--accent-border)';
@@ -222,18 +300,37 @@ window.initShareModule = function(token) {
         }
         if (phaseSpinner) phaseSpinner.style.display = 'none';
 
+        const p2pStatusText = document.getElementById('p2p-status-text');
+        if (p2pStatusText) {
+            p2pStatusText.innerText = '⚡ P2P 物理直连成功，点击开始下载！';
+            if (p2pStatusText.parentElement) p2pStatusText.parentElement.style.color = '#059669';
+        }
+
+        const p2pMainBtn = document.getElementById('p2p-main-btn');
+        if (p2pMainBtn) {
+            p2pMainBtn.disabled = false;
+            p2pMainBtn.className = 'btn-primary ready';
+            p2pMainBtn.innerHTML = '⚡ 点击开始极速下载 (' + formattedSize + ')';
+            p2pMainBtn.onclick = () => {
+                p2pMainBtn.disabled = true;
+                p2pMainBtn.innerHTML = '⏳ 正在物理传输中...';
+                transport.requestDownload();
+            };
+        }
+
         if (mainBtn) {
-            const dict = translations[currentLang] || translations.zh;
             mainBtn.disabled = false;
-            mainBtn.innerText = dict.btn_download;
+            mainBtn.className = 'btn ready';
+            mainBtn.innerHTML = '⚡ 点击开始极速下载 (' + formattedSize + ')';
             mainBtn.onclick = () => {
                 mainBtn.disabled = true;
-                mainBtn.innerText = '⏳ 正在传输...';
+                mainBtn.innerHTML = '⏳ 正在物理传输中...';
                 if (progressContainer) progressContainer.style.display = 'block';
                 transport.requestDownload();
             };
         }
     };
+
 
     transport.onProgress = (done, total) => {
         if (progressContainer) progressContainer.style.display = 'block';
@@ -241,41 +338,74 @@ window.initShareModule = function(token) {
         if (progressPercent) progressPercent.innerText = `${percent}%`;
         if (progressFill) progressFill.style.width = `${percent}%`;
         if (progressBytes) progressBytes.innerText = `${formatBytes(done)} / ${formatBytes(total)}`;
-        if (progressStatus) progressStatus.innerText = `⚡ 正在接收 ${percent}%...`;
+        if (progressStatus) progressStatus.innerText = `⚡ 正在物理传输 ${percent}%...`;
+
+        const p2pStatusText = document.getElementById('p2p-status-text');
+        if (p2pStatusText) {
+            p2pStatusText.innerText = `⚡ 正在物理传输 ${percent}% (${formatBytes(done)} / ${formatBytes(total)})`;
+        }
     };
 
     transport.onComplete = (blob, name) => {
         downloadedBlob = blob;
         currentFileName = name || currentFileName;
 
-        if (statusIconPending) statusIconPending.style.display = 'none';
-        if (statusIconSuccess) statusIconSuccess.style.display = 'inline-flex';
-
-        const dict = translations[currentLang] || translations.zh;
-        if (headerText) {
-            headerText.innerText = dict.success_header;
-            headerText.dataset.custom = "true";
+        if (phaseBadge) {
+            phaseBadge.innerText = '完成';
+            phaseBadge.style.background = 'var(--accent)';
         }
-        if (summaryText) {
-            summaryText.innerText = dict.success_summary;
-            summaryText.dataset.custom = "true";
-            summaryText.style.color = 'var(--accent-strong)';
+        if (phaseText) phaseText.innerText = '🎉 物理传输已完成！';
+
+        const p2pStatusText = document.getElementById('p2p-status-text');
+        if (p2pStatusText) {
+            p2pStatusText.innerText = '🎉 物理传输完成！';
+            if (p2pStatusText.parentElement) p2pStatusText.parentElement.style.color = '#059669';
         }
 
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = currentFileName;
-        a.click();
+        const p2pMainBtn = document.getElementById('p2p-main-btn');
+        if (p2pMainBtn) {
+            p2pMainBtn.disabled = false;
+            p2pMainBtn.className = 'btn-primary success';
+            p2pMainBtn.innerHTML = '🎉 重新保存文件';
+            p2pMainBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(downloadedBlob);
+                a.download = currentFileName;
+                a.click();
+            };
+        }
 
         if (mainBtn) {
             mainBtn.disabled = false;
-            mainBtn.innerText = dict.btn_resave;
-            mainBtn.onclick = () => a.click();
+            mainBtn.className = 'btn success';
+            mainBtn.innerHTML = '🎉 重新保存文件';
+            mainBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(downloadedBlob);
+                a.download = currentFileName;
+                a.click();
+            };
         }
+
+        try {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(downloadedBlob);
+            a.download = currentFileName;
+            a.click();
+        } catch(e) {}
     };
 
     transport.initReceiver();
 };
 
-
+// Auto-initialize share module if token parameter is present in URL
+(function() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token') || '';
+        if (token && typeof window.initShareModule === 'function') {
+            window.initShareModule(token);
+        }
+    } catch(e) {}
+})();
 
