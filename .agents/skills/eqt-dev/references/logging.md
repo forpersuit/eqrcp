@@ -6,11 +6,15 @@
 
 ## 1. 临时落盘与位置机制
 为了避免无谓的磁盘占用，同时保证崩溃后可追溯：
-- **日志文件机制**：桌面端日志（`desktop.log`）路径由 `desktopLogFilePath()` 指明，标准日志和调试信息直接落盘在用户缓存目录下，消除由于进程跨界带来的重定向混乱。
+- **日志文件机制**：桌面端日志（`desktop.log`）路径由 `desktopLogFilePath()` 指明，若配置了 `LogDir`，优先写入 `LogDir` 目录下；否则直接落盘在用户缓存目录下。
 - **文件命名与路径**：
-  - **Windows**：主桌面端日志落盘在 `%LOCALAPPDATA%/eqt/desktop.log` 中，各会话的代理运行日志落盘在 `%LOCALAPPDATA%/eqt/agent-*.log` 下。
-  - **Linux / WSL**：主运行日志落盘在 `~/.cache/eqt/desktop.log` 中，各会话代理运行日志落盘在 `~/.cache/eqt/agent-*.log` 下。
-- **动态清理与快速检索**：主进程日志会追加记录在 `desktop.log` 中。开发调试时，在终端运行 `tail -f ~/.cache/eqt/desktop.log`（WSL/Linux）或在 Windows 下监控对应文件，可获得第一手 Wails/Go 与 WebView 内的 runtime 异常交互。
+  - **自定义 / 验收日志根路径 (`LogDir`)**：
+    - **Windows**: `E:\developer\results\logs\desktop.log` (或 `LogDir\desktop.log`)
+    - **Linux / WSL**: `/mnt/e/developer/results/logs/desktop.log`
+  - **默认系统缓存路径**：
+    - **Windows**：`%LOCALAPPDATA%/eqt/desktop.log`，会话日志位于 `%LOCALAPPDATA%/eqt/agent-*.log` 下。
+    - **Linux / WSL**：`~/.cache/eqt/desktop.log`，会话日志位于 `~/.cache/eqt/agent-*.log` 下。
+- **动态清理与快速检索**：主进程日志会追加记录在 `desktop.log` 中。开发调试时，在终端运行 `tail -n 100 /mnt/e/developer/results/logs/desktop.log`（WSL/Linux）或在 Windows 下监控对应文件，可获得第一手 Wails/Go 与 WebView 内的 runtime 异常交互。
 
 ## 2. 日志记录特征
 在 `DevMode` 或 `DebugLog` 激活时，日志具备以下追溯特点：

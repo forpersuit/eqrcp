@@ -9,7 +9,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 1. 开发者模式 (Developer Mode & DebugLog)
+## 1. 开发者模式与日志快速定位 (Developer Mode & Log Location)
 
 ### 1.1 配置文件路径与开启方式 (Config Path SSOT & Trigger)
 - **唯一配置与数据存储根目录 (SSOT)**：所有平台的配置文件、离线数字证书（`.lic`）及历史记录均**严格且统一存放在用户家目录的 `.local/eqt/` 下**（去除了任何 `AppData/Roaming` 旧兼容路径）：
@@ -21,7 +21,25 @@ description: Guides EQT developer mode configurations, log system structures, lo
   ```yaml
   dev: liyuelong
   ```
-  只有 `dev` 值为 `"liyuelong"` 时才会激活 `DevMode`。开启后在 GUI【设置】底部解锁绿框【开发者选项】（包含在线对账 `☁️` 等工具）。
+  只有 `dev` 值为 `"liyuelong"` 时才会激活 `DevMode`。开启后在 GUI【设置】底部解锁绿框【开发者选项】（包含自定义日志保存路径 `LogDir`、在线对账 `☁️` 等工具）。
+
+### 1.2 日志文件快速查找与定位 (Quick Log Directory & Tracing)
+在开发者模式/验收环境下，日志按以下优先顺序定位：
+1. **自定义/验收日志根路径 (LogDir & Acceptance Directory)**：
+   - **Windows 绝对路径**：`E:\developer\results\logs\` （例如 `E:\developer\results\logs\desktop.log`）
+   - **WSL / Linux 挂载路径**：`/mnt/e/developer/results/logs/`
+2. **系统默认缓存日志路径 (系统未配置 LogDir 时)**：
+   - **Windows**: `%LOCALAPPDATA%\eqt\desktop.log`
+   - **WSL / Linux**: `~/.cache/eqt/desktop.log`
+3. **快速查看与检索命令**：
+   - 查看最新 100 行运行日志：
+     ```bash
+     tail -n 100 /mnt/e/developer/results/logs/desktop.log 2>/dev/null || tail -n 100 ~/.cache/eqt/desktop.log
+     ```
+   - 检索 WAN / P2P / 信令 / 错误日志：
+     ```bash
+     rg "ERROR|WAN|P2P|Signaling|CreateRoom" /mnt/e/developer/results/logs/ 2>/dev/null || rg "ERROR|WAN|P2P|Signaling" ~/.cache/eqt/
+     ```
 
 ---
 

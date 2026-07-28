@@ -24,6 +24,9 @@ export namespace main {
 	    chatDeviceCount?: number;
 	    chatLastActivity?: string;
 	    pageUrl?: string;
+	    wanUrl?: string;
+	    wanToken?: string;
+	    wanError?: string;
 	    error?: string;
 	    // Go type: time
 	    startedAt: any;
@@ -59,6 +62,9 @@ export namespace main {
 	        this.chatDeviceCount = source["chatDeviceCount"];
 	        this.chatLastActivity = source["chatLastActivity"];
 	        this.pageUrl = source["pageUrl"];
+	        this.wanUrl = source["wanUrl"];
+	        this.wanToken = source["wanToken"];
+	        this.wanError = source["wanError"];
 	        this.error = source["error"];
 	        this.startedAt = this.convertValues(source["startedAt"], null);
 	        this.finishedAt = this.convertValues(source["finishedAt"], null);
