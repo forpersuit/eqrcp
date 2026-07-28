@@ -2,3 +2,10 @@
 # Redirect bare domain to www (301 Permanent)
 https://eqt.net.im/* https://www.eqt.net.im/:splat 301
 http://eqt.net.im/*  https://www.eqt.net.im/:splat 301
+
+# Public WAN P2P Routes (SPA 重写的 200 拦截)
+/p/share   /index.html 200
+/p/receive /index.html 200
+/p/chat    /index.html 200
+/p/*       /index.html 200
+
