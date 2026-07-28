@@ -561,7 +561,21 @@ function render() {
         app.innerHTML = newHTML;
         bindEvents();
     } else {
-        morphdom(app.firstElementChild, newHTML);
+        morphdom(app.firstElementChild, newHTML, {
+            onBeforeElUpdated: function(fromEl, toEl) {
+                if (fromEl.id === 'chat-iframe') {
+                    const fromSrc = fromEl.getAttribute('src') || '';
+                    const toSrc = toEl.getAttribute('src') || '';
+                    const getBasePath = (urlStr) => {
+                        try { return new URL(urlStr).pathname; } catch (e) { return urlStr; }
+                    };
+                    if (fromSrc && toSrc && getBasePath(fromSrc) === getBasePath(toSrc)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        });
         bindEvents();
     }
 
