@@ -992,14 +992,22 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 				return
 			}
 
+			if resp == nil || resp.Data.RoomID == "" {
+				errMsg := "Signaling server returned empty RoomID"
+				agent.log.Errorf("[WAN P2P Share Error] Failed to create P2P room for share task %d: %s", taskID, errMsg)
+				agent.setTaskWanURL(task.Action, "", "", errMsg)
+				return
+			}
+
 			roomID := resp.Data.RoomID
 			hostToken := resp.Data.HostToken
 			wanURL := fmt.Sprintf("%s/share?token=%s", getWanAppBaseURL(), roomID)
 
-			agent.log.Infof("[WAN P2P Share Success] P2P room registered successfully for share task %d! RoomID: %s, HostToken: %s, WanURL: %s", taskID, roomID, hostToken, wanURL)
+			agent.log.Infof("[WAN P2P Share Success] P2P room registered successfully for share task %d! RoomID: %s, HostToken: %s, WanURL: %s, ExpiresAt: %d", taskID, roomID, hostToken, wanURL, resp.Data.ExpiresAt)
 			agent.setTaskWanURL(task.Action, wanURL, roomID, "")
 
 			// 启动后端 WebRTC P2P 信令监听
+			agent.log.Infof("[WAN P2P Share] Starting WanP2PListener for share task %d (RoomID: %s)...", taskID, roomID)
 			srv.StartWanP2PListener(roomID, hostToken)
 		}()
 

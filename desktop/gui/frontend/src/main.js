@@ -808,8 +808,17 @@ function renderQRHeroHtml(task, isExpanded) {
     const isWanActive = activeMode === 'wan' && isPaidPro;
     const activeUrl = isWanActive ? wanUrl : lanUrl;
 
+    if (activeMode === 'wan' && !isPaidPro) {
+        if (typeof LogWarn === 'function') {
+            LogWarn('[WAN 二维码] 当前设为 WAN 模式但无 PRO 激活授权，已回退局域网二维码 (TaskID=' + (task.id || 0) + ')');
+        }
+    }
+
     if (isWanActive && !activeUrl) {
         if (!task.wanError) {
+            if (typeof LogInfo === 'function') {
+                LogInfo('[WAN 二维码生成中] WAN P2P URL 尚在创建/等待中 (TaskID=' + (task.id || 0) + ', Action=' + (task.action || 'share') + ')');
+            }
             return `
                 <div class="qr-hero" data-active-mode="${activeMode}">
                     <div class="qr-channel-tabs">
@@ -847,6 +856,12 @@ function renderQRHeroHtml(task, isExpanded) {
                 </div>
             </div>
         `;
+    }
+
+    if (isWanActive && activeUrl) {
+        if (typeof LogInfo === 'function') {
+            LogInfo('[WAN 二维码渲染成功] 正在展示 WAN 模式二维码, URL: ' + activeUrl);
+        }
     }
 
     const qrImg = qrImageURL(activeUrl);
