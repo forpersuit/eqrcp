@@ -247,6 +247,8 @@ type transferStatus struct {
 	Version             string                              `json:"version,omitempty"`
 	TransferDeviceCount int                                 `json:"transferDeviceCount,omitempty"`
 	AutoStop            bool                                `json:"autoStop,omitempty"`
+	PageUrl             string                              `json:"pageUrl,omitempty"`
+	WanUrl              string                              `json:"wanUrl,omitempty"`
 	ClientStates        map[string]*ClientTransferStateInfo `json:"clientStates,omitempty"`
 }
 
@@ -336,6 +338,8 @@ func (s *Server) ReceiveTo(dir string) error {
 		status.Title = "Receive files"
 		status.Target = output
 		status.Message = "Scan to upload files to this folder."
+		status.PageUrl = s.ReceiveURL
+		status.WanUrl = "https://eqt.net.im/p/receive?token=" + strings.Trim(strings.TrimPrefix(s.ReceiveURL, s.BaseURL), "/")
 	})
 
 	// Initialize Tus fields
@@ -2191,6 +2195,12 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create channel to send message to stop server
 	app.stopChannel = make(chan bool, 1)
 	app.setStatus("waiting", "Waiting for a device to connect.")
+	app.updateStatus(func(status *transferStatus) {
+		status.Mode = "share"
+		status.Title = "Share files"
+		status.PageUrl = app.SendURL
+		status.WanUrl = "https://eqt.net.im/p/share?token=" + strings.Trim(strings.TrimPrefix(app.SendURL, app.BaseURL), "/")
+	})
 	// Create cookie used to verify request is coming from first client to connect
 	cookie := http.Cookie{Name: "eqt", Value: ""}
 	// Gracefully shutdown when an OS signal is received or when "q" is pressed

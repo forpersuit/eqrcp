@@ -785,12 +785,7 @@ function renderQRHeroHtml(task, isExpanded) {
 
             <img src="${escapeAttr(qrImg)}" alt="Transfer QR code" style="transition: opacity 0.2s ease;" />
 
-            <div class="qr-channel-diag-bar ${isWanActive ? 'wan-mode' : ''}">
-                <span class="qr-channel-diag-dot ${isWanActive ? 'wan' : ''}"></span>
-                <span>${isWanActive ? t('qr_channel_wan_desc') : t('qr_channel_lan_desc')}</span>
-            </div>
-
-            <div style="display: flex; gap: 8px; width: 100%; max-width: 320px;">
+            <div style="display: flex; gap: 8px; width: 100%; max-width: 320px; margin-top: 12px;">
                 <button class="ghost open-qr" style="flex: 1;" data-open-url="${escapeAttr(activeUrl)}">${t('open_in_browser')}</button>
                 <button class="ghost copy-qr-url-action" style="padding: 6px 12px;" data-copy-url="${escapeAttr(activeUrl)}" title="${escapeAttr(isWanActive ? t('qr_channel_copy_wan') : t('qr_channel_copy_lan'))}">📋</button>
             </div>
@@ -3185,6 +3180,19 @@ function refreshHistoryListInDOM() {
             }
             state.qrChannelMode = channel;
             renderActiveTaskQR();
+            return;
+        }
+
+        const openBtn = e.target.closest('.open-qr');
+        if (openBtn) {
+            const openUrl = openBtn.dataset.openUrl;
+            if (openUrl) {
+                if (window.runtime && window.runtime.BrowserOpenURL) {
+                    window.runtime.BrowserOpenURL(openUrl);
+                } else {
+                    window.open(openUrl, '_blank');
+                }
+            }
             return;
         }
 
