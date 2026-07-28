@@ -1,131 +1,196 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>EQT Pro - P2P Transfer Shell</title>
-    <link rel="icon" href="assets/favicon.png" type="image/png"/>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <title>Receive File - EQT Pro</title>
     <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f7f6;
+            --surface: #ffffff;
+            --text-primary: #111827;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+            --accent: #0f766e;
+            --accent-strong: #0d5e58;
+            --accent-rgb: 15,118,110;
+            --accent-light: rgba(15,118,110, 0.06);
+            --accent-border: rgba(15,118,110, 0.16);
+            --accent-icon: #0f766e;
+            --line: #e5e7eb;
+            --danger: #b42318;
+            --danger-light: #fef3f2;
+            --danger-border: #fee4e2;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "Aptos", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --bg: #0f172a;
+                --surface: #1e293b;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --text-muted: #64748b;
+                --accent: #38bdf8;
+                --accent-strong: #0284c7;
+                --accent-rgb: 56,189,248;
+                --accent-light: rgba(56,189,248, 0.1);
+                --accent-border: rgba(56,189,248, 0.2);
+                --accent-icon: #38bdf8;
+                --line: #334155;
+            }
+        }
+
         * { box-sizing: border-box; }
+
         body {
-            background: #0f172a;
-            color: #f8fafc;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            padding: 0;
             margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             min-height: 100vh;
-        }
-        .app-card {
-            background: #1e293b;
-            padding: 28px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            text-align: center;
-            border: 1px solid #334155;
-        }
-        .brand-badge {
-            display: inline-flex;
+            background: var(--bg);
+            color: var(--text-primary);
+            position: relative;
+            padding-bottom: 40px;
+            display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
+            justify-content: center;
         }
+
+        main {
+            width: min(100%, 460px);
+            padding: 32px 20px;
+            text-align: center;
+        }
+
+        .brand-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
         .brand-title {
+            font-size: 24px;
             font-weight: 800;
-            font-size: 22px;
-            color: #38bdf8;
+            color: var(--accent);
             letter-spacing: -0.5px;
         }
-        .pro-tag {
-            background: #0284c7;
+
+        .pro-badge {
+            background: var(--accent-strong);
             color: white;
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 11px;
             font-weight: 700;
         }
-        .mode-icon {
-            font-size: 44px;
-            margin-bottom: 8px;
-        }
-        .mode-title {
-            font-weight: 700;
-            font-size: 18px;
-            color: #f1f5f9;
-            margin-bottom: 16px;
-        }
-        .status-box {
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 14px;
-            font-size: 13px;
-            color: #94a3b8;
-            font-family: monospace;
-            word-break: break-all;
+
+        .status-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 28px 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
             margin-bottom: 20px;
         }
-        .status-text {
-            color: #38bdf8;
-            font-weight: 600;
-            margin-bottom: 6px;
+
+        .file-icon-wrapper {
+            width: 72px;
+            height: 72px;
+            background: var(--accent-light);
+            border: 1px solid var(--accent-border);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            color: var(--accent);
+            font-size: 32px;
         }
-        .action-btn {
+
+        .file-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .file-meta {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--accent-light);
+            border: 1px solid var(--accent-border);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
             width: 100%;
-            background: #0284c7;
+            background: var(--accent-strong);
             color: white;
             border: none;
-            padding: 14px;
-            border-radius: 10px;
-            font-weight: 600;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-weight: 700;
             font-size: 15px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        .action-btn:disabled {
-            background: #334155;
-            color: #64748b;
+
+        .btn-primary:disabled {
+            opacity: 0.5;
             cursor: not-allowed;
         }
-        .action-btn:hover:not(:disabled) {
-            background: #0369a1;
-        }
-        .footer-info {
-            margin-top: 16px;
-            font-size: 11px;
-            color: #64748b;
+
+        .footer-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
         }
     </style>
 </head>
 <body>
-    <div class="app-card">
-        <div class="brand-badge">
-            <span class="brand-title">EQT Pro</span>
-            <span class="pro-tag">p.eqt.net.im</span>
+    <main>
+        <div class="brand-header">
+            <span class="brand-title">EQT</span>
+            <span class="pro-badge">PRO WAN</span>
         </div>
 
-        <div id="mode-icon" class="mode-icon">⚡</div>
-        <div id="mode-title" class="mode-title">P2P WAN Transfer</div>
+        <div class="status-card">
+            <div id="mode-icon-box" class="file-icon-wrapper">🖼️</div>
+            <div id="mode-file-title" class="file-title">等待接入文件...</div>
+            <div id="mode-file-meta" class="file-meta">公网 P2P 直连通道建立中</div>
 
-        <div class="status-box">
-            <div id="p2p-conn-status" class="status-text">📡 正在连接公网信令服务器...</div>
-            <div id="room-token-info" style="font-size: 11px; color: #64748b;">Room: N/A</div>
-        </div>
+            <div id="p2p-status-pill" class="status-pill">
+                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
+                <span id="p2p-status-text">📡 正在连接公网信令服务器...</span>
+            </div>
 
-        <div id="action-area">
-            <button id="p2p-main-btn" class="action-btn" disabled>
+            <button id="p2p-main-btn" class="btn-primary" disabled>
                 ⏳ 等待电脑端 P2P 物理连接...
             </button>
         </div>
 
-        <div class="footer-info">
-            独立微型打洞服务 • 无污染零阻断
+        <div class="footer-note">
+            与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer
         </div>
-    </div>
+    </main>
 
     <script>
         (function() {
@@ -134,36 +199,37 @@
             const token = params.get('token') || '';
             const join = params.get('join') || '';
 
-            const modeIconEl = document.getElementById('mode-icon');
-            const modeTitleEl = document.getElementById('mode-title');
-            const tokenInfoEl = document.getElementById('room-token-info');
-            const statusEl = document.getElementById('p2p-conn-status');
+            const iconBox = document.getElementById('mode-icon-box');
+            const fileTitle = document.getElementById('mode-file-title');
+            const fileMeta = document.getElementById('mode-file-meta');
+            const statusText = document.getElementById('p2p-status-text');
             const mainBtn = document.getElementById('p2p-main-btn');
-
-            tokenInfoEl.innerText = `Token: ${token || 'N/A'}${join ? ' | Join: ' + join : ''}`;
 
             let isShare = path.includes('/share');
             let isReceive = path.includes('/receive');
             let isChat = path.includes('/chat');
 
             if (isShare) {
-                document.title = 'EQT Pro - 文件下载';
-                modeIconEl.innerText = '🖼️';
-                modeTitleEl.innerText = '文件下载 (Share 模式)';
+                document.title = 'Receive File - EQT Pro';
+                iconBox.innerText = '🖼️';
+                fileTitle.innerText = '准备接收文件';
+                fileMeta.innerText = '模式: 公网 Share 直管传送';
             } else if (isReceive) {
-                document.title = 'EQT Pro - 文件上传';
-                modeIconEl.innerText = '📤';
-                modeTitleEl.innerText = '文件上传 (Receive 模式)';
+                document.title = 'Upload File - EQT Pro';
+                iconBox.innerText = '📤';
+                fileTitle.innerText = '选择文件上传';
+                fileMeta.innerText = '模式: 公网 Receive 接收保存';
             } else if (isChat) {
-                document.title = 'EQT Pro - 加密聊天';
-                modeIconEl.innerText = '💬';
-                modeTitleEl.innerText = '双向 P2P 聊天 (Chat 模式)';
+                document.title = 'P2P Chat - EQT Pro';
+                iconBox.innerText = '💬';
+                fileTitle.innerText = '安全加密聊天室';
+                fileMeta.innerText = '模式: 公网 Chat 双向通道';
             }
 
-            const updateStatus = (msg, color = '#38bdf8') => {
-                if (statusEl) {
-                    statusEl.innerText = msg;
-                    statusEl.style.color = color;
+            const updateStatus = (msg, color = 'var(--accent)') => {
+                if (statusText) {
+                    statusText.innerText = msg;
+                    statusText.parentElement.style.color = color;
                 }
             };
 
@@ -191,13 +257,13 @@
                 pc.ondatachannel = (event) => {
                     const channel = event.channel;
                     channel.onopen = () => {
-                        updateStatus('⚡ 公网 P2P 直连通道已打通！', '#4ade80');
+                        updateStatus('⚡ P2P 通道建立成功！', '#059669');
                         if (mainBtn) {
                             mainBtn.disabled = false;
-                            mainBtn.innerText = '⬇️ 开始传输文件';
+                            mainBtn.innerText = '⬇️ 下载文件';
                             mainBtn.onclick = () => {
                                 channel.send(JSON.stringify({ action: 'request_download' }));
-                                mainBtn.innerText = '⏳ 正在接收二进制流...';
+                                mainBtn.innerText = '⏳ 正在接收...';
                             };
                         }
                     };
@@ -209,15 +275,17 @@
                                 if (meta.type === 'meta') {
                                     fileName = meta.name || fileName;
                                     expectedSize = meta.size || 0;
+                                    fileTitle.innerText = fileName;
+                                    fileMeta.innerText = `文件大小: ${Math.round(expectedSize / 1024)} KB`;
                                 }
                             } catch(err) {}
                         } else if (e.data instanceof ArrayBuffer) {
                             receivedChunks.push(e.data);
                             receivedSize += e.data.byteLength;
-                            updateStatus(`📥 已物理接收: ${Math.round(receivedSize / 1024)} KB`, '#38bdf8');
+                            updateStatus(`📥 已接收: ${Math.round(receivedSize / 1024)} KB`, 'var(--accent)');
                             
                             if (receivedSize >= expectedSize && expectedSize > 0) {
-                                updateStatus('✅ 文件物理接收完整！', '#4ade80');
+                                updateStatus('✅ 接收完毕！', '#059669');
                                 const blob = new Blob(receivedChunks);
                                 const a = document.createElement('a');
                                 a.href = URL.createObjectURL(blob);
@@ -225,7 +293,7 @@
                                 a.click();
                                 
                                 if (mainBtn) {
-                                    mainBtn.innerText = '🎉 接收完成，点击重新保存';
+                                    mainBtn.innerText = '🎉 重新保存';
                                     mainBtn.onclick = () => a.click();
                                 }
                             }
@@ -240,12 +308,13 @@
                         body: JSON.stringify({ room: token, sender: 'mobile', signal: pc.localDescription })
                     });
                 }).then(() => {
-                    updateStatus('📡 已向信令池发送 Offer，等待电脑响应...', '#fbbf24');
+                    updateStatus('📡 等待电脑端响应...', '#d97706');
                 }).catch(err => {
-                    updateStatus('❌ 信令打洞异常: ' + err.message, '#f87171');
+                    updateStatus('❌ 通道异常: ' + err.message, '#dc2626');
                 });
             }
         })();
     </script>
 </body>
 </html>
+
