@@ -209,21 +209,61 @@
             let isReceive = path.includes('/receive');
             let isChat = path.includes('/chat');
 
-            if (isShare) {
+            if (isReceive) {
+                document.title = 'Upload File - EQT Pro';
+                document.body.innerHTML = `
+                    <main>
+                        <div class="brand-header">
+                            <span class="brand-title">EQT</span>
+                            <span class="pro-badge">PRO WAN</span>
+                        </div>
+                        <div class="status-card">
+                            <div class="file-icon-wrapper">📤</div>
+                            <div class="file-title">选择或拖拽文件上传</div>
+                            <div class="file-meta">发送文件到电脑端保存目录</div>
+                            <div class="status-pill" style="margin-bottom: 16px;">
+                                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
+                                <span id="p2p-status-text">📡 正在连接公网信令...</span>
+                            </div>
+                            <input type="file" id="recv-file-input" style="display: none;">
+                            <button id="p2p-main-btn" class="btn-primary" onclick="document.getElementById('recv-file-input').click()">
+                                📂 选择物理文件上传
+                            </button>
+                        </div>
+                        <div class="footer-note">与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer</div>
+                    </main>
+                `;
+            } else if (isChat) {
+                document.title = 'P2P Chat - EQT Pro';
+                document.body.innerHTML = `
+                    <main style="width: min(100%, 480px); height: 85vh; display: flex; flex-direction: column;">
+                        <div class="brand-header" style="margin-bottom: 12px;">
+                            <span class="brand-title">EQT Chat</span>
+                            <span class="pro-badge">PRO WAN</span>
+                        </div>
+                        <div class="status-card" style="flex: 1; display: flex; flex-direction: column; padding: 16px; margin-bottom: 12px; overflow: hidden;">
+                            <div id="chat-status-bar" class="status-pill" style="align-self: center; margin-bottom: 12px;">
+                                <span style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></span>
+                                <span id="p2p-status-text">💬 建立加密双向 P2P 聊天...</span>
+                            </div>
+                            <div id="chat-messages" style="flex: 1; overflow-y: auto; text-align: left; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 8px; background: var(--bg); border-radius: 12px;">
+                                <div style="align-self: flex-start; background: var(--surface); border: 1px solid var(--line); padding: 8px 12px; border-radius: 10px; font-size: 13px;">
+                                    系统: 欢迎进入 EQT 双向公网 P2P 加密聊天室！
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="chat-input" placeholder="输入消息..." style="flex: 1; background: var(--bg); border: 1px solid var(--line); color: var(--text-primary); padding: 10px; border-radius: 8px; font-size: 14px;">
+                                <button class="btn-primary" style="width: auto; padding: 10px 16px;">发送</button>
+                            </div>
+                        </div>
+                        <div class="footer-note">与局域网物理界面 100% 保持一致<br>Powered by EQT Easy QR Transfer</div>
+                    </main>
+                `;
+            } else {
                 document.title = 'Receive File - EQT Pro';
                 iconBox.innerText = '🖼️';
                 fileTitle.innerText = '准备接收文件';
                 fileMeta.innerText = '模式: 公网 Share 直管传送';
-            } else if (isReceive) {
-                document.title = 'Upload File - EQT Pro';
-                iconBox.innerText = '📤';
-                fileTitle.innerText = '选择文件上传';
-                fileMeta.innerText = '模式: 公网 Receive 接收保存';
-            } else if (isChat) {
-                document.title = 'P2P Chat - EQT Pro';
-                iconBox.innerText = '💬';
-                fileTitle.innerText = '安全加密聊天室';
-                fileMeta.innerText = '模式: 公网 Chat 双向通道';
             }
 
             const updateStatus = (msg, color = 'var(--accent)') => {
