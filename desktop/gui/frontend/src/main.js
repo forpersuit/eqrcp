@@ -784,7 +784,25 @@ function renderQRHeroHtml(task, isExpanded) {
     const activeUrl = isWanActive ? wanUrl : lanUrl;
 
     if (isWanActive && !activeUrl) {
-        const errDetail = task.wanError ? `: ${task.wanError}` : ' (未获取到信令 Token)';
+        if (!task.wanError) {
+            return `
+                <div class="qr-hero" data-active-mode="${activeMode}">
+                    <div class="qr-channel-tabs">
+                        <button class="qr-channel-tab ${activeMode === 'lan' ? 'active' : ''} set-qr-channel-action" data-channel="lan" title="${escapeAttr(t('qr_channel_lan_desc'))}">
+                            🌐 ${t('qr_channel_lan')}
+                        </button>
+                        <button class="qr-channel-tab wan-tab active set-qr-channel-action" data-channel="wan" title="${escapeAttr(t('qr_channel_wan_desc'))}">
+                            ⚡ ${t('qr_channel_wan')} <span class="pro-badge-mini">PRO</span>
+                        </button>
+                    </div>
+                    <div class="empty-state transfer-empty" style="margin: 16px 0; padding: 20px 12px; font-size: 13px; color: var(--accent);">
+                        ⏳ 正在生成公网 P2P 二维码...
+                    </div>
+                </div>
+            `;
+        }
+
+        const errDetail = `: ${task.wanError}`;
         if (typeof LogError === 'function') {
             LogError('[WAN 二维码生成异常] Failed to generate WAN QR code' + errDetail);
         }
