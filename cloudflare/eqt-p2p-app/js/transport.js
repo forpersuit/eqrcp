@@ -8,6 +8,10 @@ window.EQTTransport = class EQTTransport {
         this.channel = null;
         this.lastSignalId = 0;
         this.candidateBuffer = [];
+        this.receivedChunks = [];
+        this.expectedSize = 0;
+        this.receivedSize = 0;
+        this.fileName = 'downloaded_file';
         this.pollInterval = null;
         this.onStatus = null;
         this.onPhase = null; // New: 5-step phase lifecycle callback (step, total, msg, isError)
@@ -66,24 +70,33 @@ window.EQTTransport = class EQTTransport {
             self.channel.onopen = triggerOpen;
             if (self.channel.readyState === 'open') triggerOpen();
 
-            self.channel.onmessage = (e) => {
+            self.channel.onmessage = async (e) => {
                 if (typeof e.data === 'string') {
                     try {
                         const meta = JSON.parse(e.data);
                         if (meta.type === 'meta') {
-                            fileName = meta.name || fileName;
-                            expectedSize = meta.size || 0;
-                            if (self.onMeta) self.onMeta(fileName, expectedSize);
+                            self.fileName = meta.name || self.fileName;
+                            self.expectedSize = meta.size || 0;
+                            if (self.onMeta) self.onMeta(self.fileName, self.expectedSize);
                         }
                     } catch(err) {}
-                } else if (e.data instanceof ArrayBuffer) {
-                    receivedChunks.push(e.data);
-                    receivedSize += e.data.byteLength;
-                    if (self.onProgress) self.onProgress(receivedSize, expectedSize);
-                    
-                    if (receivedSize >= expectedSize && expectedSize > 0) {
-                        const blob = new Blob(receivedChunks);
-                        if (self.onComplete) self.onComplete(blob, fileName);
+                } else {
+                    let chunkBuffer = null;
+                    if (e.data instanceof ArrayBuffer) {
+                        chunkBuffer = e.data;
+                    } else if (e.data instanceof Blob) {
+                        chunkBuffer = await e.data.arrayBuffer();
+                    }
+
+                    if (chunkBuffer) {
+                        self.receivedChunks.push(chunkBuffer);
+                        self.receivedSize += chunkBuffer.byteLength;
+                        if (self.onProgress) self.onProgress(self.receivedSize, self.expectedSize);
+                        
+                        if (self.receivedSize >= self.expectedSize && self.expectedSize > 0) {
+                            const blob = new Blob(self.receivedChunks);
+                            if (self.onComplete) self.onComplete(blob, self.fileName);
+                        }
                     }
                 }
             };
@@ -197,7 +210,9 @@ window.EQTTransport = class EQTTransport {
                 try { raw = JSON.parse(raw); } catch(e) {}
             }
             let sdpText = typeof raw === 'string' ? raw : (raw && raw.sdp ? raw.sdp : '');
-
+            if (sdpText && (item.type === 'answer' || item.type === 'host' || item.type === 'sdp' || (raw && raw.type === 'answer'))) {
+                if (this.pc.signalingState === 'have-local-offer') {
+                    console.log('[P2P Client] Setting remote answer SDP...');
                     await this.pc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
                         sdp: sdpText
@@ -235,13 +250,11 @@ window.EQTTransport = class EQTTransport {
                 }
             } else if (item.type === 'meta' || (raw && raw.type === 'meta')) {
                 const meta = (raw && raw.type === 'meta') ? raw : (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload);
-                const metaName = meta.name || 'downloaded_file';
-                const metaSize = meta.size || 0;
-                fileName = metaName;
-                expectedSize = metaSize;
+                this.fileName = meta.name || this.fileName;
+                this.expectedSize = meta.size || 0;
                 if (this.onPhase) this.onPhase(5, 5, '物理通道贯通，元数据同步成功！');
                 if (this.onStatus) this.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
-                if (this.onMeta) this.onMeta(metaName, metaSize);
+                if (this.onMeta) this.onMeta(this.fileName, this.expectedSize);
             } else if (item.type === 'payload_chunk' || (raw && raw.type === 'payload_chunk')) {
                 const chunkData = (raw && raw.chunk) ? raw.chunk : (typeof item.payload === 'string' ? JSON.parse(item.payload).chunk : item.payload);
                 if (chunkData) {
@@ -251,12 +264,12 @@ window.EQTTransport = class EQTTransport {
                     for (let i = 0; i < len; i++) {
                         bytes[i] = binaryStr.charCodeAt(i);
                     }
-                    receivedChunks.push(bytes.buffer);
-                    receivedSize += bytes.byteLength;
-                    if (this.onProgress) this.onProgress(receivedSize, expectedSize);
-                    if (receivedSize >= expectedSize && expectedSize > 0) {
-                        const blob = new Blob(receivedChunks);
-                        if (this.onComplete) this.onComplete(blob, fileName);
+                    this.receivedChunks.push(bytes.buffer);
+                    this.receivedSize += bytes.byteLength;
+                    if (this.onProgress) this.onProgress(this.receivedSize, this.expectedSize);
+                    if (this.receivedSize >= this.expectedSize && this.expectedSize > 0) {
+                        const blob = new Blob(this.receivedChunks);
+                        if (this.onComplete) this.onComplete(blob, this.fileName);
                     }
                 }
             }
