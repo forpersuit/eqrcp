@@ -3419,17 +3419,18 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 								fileSize = fi.Size()
 							}
 
+							// Standard WebRTC DataChannel max message size is 65536 bytes (64KB)
 							buf := make([]byte, 64*1024)
 							totalSent := int64(0)
 							lastLogMB := int64(0)
 							startTime := time.Now()
 
-							log.Printf("[WAN P2P DataChannel] Starting streaming file payload: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
+							log.Printf("[WAN P2P DataChannel] Starting high-speed streaming file payload: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
 
 							for {
-								// SCTP Flow control: limit buffered amount to prevent Memory OOM & buffer overflow
-								for dc.BufferedAmount() > 1024*1024 {
-									time.Sleep(5 * time.Millisecond)
+								// Non-blocking SCTP Flow control up to 4MB without long sleep penalties
+								for dc.BufferedAmount() > 4*1024*1024 {
+									time.Sleep(100 * time.Microsecond)
 								}
 
 								n, err := file.Read(buf)

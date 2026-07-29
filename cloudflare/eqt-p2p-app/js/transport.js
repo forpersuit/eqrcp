@@ -110,6 +110,7 @@ window.EQTTransport = class EQTTransport {
 
             self.pc.ondatachannel = (event) => {
                 const remoteChannel = event.channel;
+                remoteChannel.binaryType = 'arraybuffer';
                 remoteChannel.onmessage = self.channel.onmessage;
                 remoteChannel.onopen = triggerOpen;
                 if (remoteChannel.readyState === 'open') triggerOpen();

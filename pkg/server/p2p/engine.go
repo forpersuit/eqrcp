@@ -58,7 +58,10 @@ func NewEngine(stunServers []string) (*Engine, error) {
 		ICEServers: iceServers,
 	}
 
-	api := webrtc.NewAPI()
+	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetSCTPMaxReceiveBufferSize(16 * 1024 * 1024)
+
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
 	pc, err := api.NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PeerConnection: %w", err)

@@ -293,6 +293,11 @@ window.initShareModule = function(token) {
             phaseBadge.style.background = 'var(--accent)';
         }
         if (phaseText) phaseText.innerText = '✅ 物理打通，文件准备就绪！';
+        if (summaryText) {
+            summaryText.style.display = 'block';
+            summaryText.innerText = '⚡ 物理通道: UDP P2P 直连 (STUN srflx 洞已贯通) | 极限速率: 无上限 (满速跑满本地带宽)';
+            summaryText.style.color = 'var(--accent-strong)';
+        }
         if (phaseTimelineBar) {
             phaseTimelineBar.style.background = 'var(--accent-light)';
             phaseTimelineBar.style.borderColor = 'var(--accent-border)';
