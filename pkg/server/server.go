@@ -3435,8 +3435,8 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 							// Optimal 32KB WebRTC DataChannel chunk size for smooth SACK acknowledgments
 							buf := make([]byte, 32*1024)
 							totalSent := int64(0)
-							lastLogMB := int64(0)
 							startTime := time.Now()
+							lastLogTime := time.Now()
 
 							log.Printf("[WAN P2P DataChannel] Starting Backpressure-controlled payload stream: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
 
@@ -3456,20 +3456,21 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 										break
 									}
 									totalSent += int64(n)
-									currMB := totalSent / (5 * 1024 * 1024)
-									if currMB > lastLogMB || totalSent == fileSize {
-										lastLogMB = currMB
+
+									now := time.Now()
+									if now.Sub(lastLogTime) >= 500*time.Millisecond || totalSent == fileSize {
+										lastLogTime = now
 										pct := float64(0)
 										if fileSize > 0 {
 											pct = float64(totalSent) / float64(fileSize) * 100
 										}
-										elapsed := time.Since(startTime).Seconds()
+										elapsed := now.Sub(startTime).Seconds()
 										speedMBs := float64(0)
 										if elapsed > 0 {
 											speedMBs = (float64(totalSent) / (1024 * 1024)) / elapsed
 										}
-										log.Printf("[WAN P2P DataChannel Progress] Sent %.2f MB / %.2f MB (%.1f%%) | Speed: %.2f MB/s",
-											float64(totalSent)/(1024*1024), float64(fileSize)/(1024*1024), pct, speedMBs)
+										log.Printf("[WAN P2P DataChannel Progress] Sent %.2f MB / %.2f MB (%.1f%%) | Instant Speed: %.2f MB/s | Buffer: %d KB",
+											float64(totalSent)/(1024*1024), float64(fileSize)/(1024*1024), pct, speedMBs, dc.BufferedAmount()/1024)
 									}
 								}
 								if err != nil {

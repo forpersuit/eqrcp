@@ -134,7 +134,12 @@ export class EQTTransport {
         }
     }
 
+    public activeChannelType: string = 'Unknown';
+    private lastLogTime: number = 0;
+    private lastLogBytes: number = 0;
+
     private handleDataChunk(e: MessageEvent): void {
+        this.activeChannelType = 'DataChannel-Direct-UDP';
         if (typeof e.data === 'string') {
             try {
                 const meta = JSON.parse(e.data);
@@ -164,9 +169,25 @@ export class EQTTransport {
         if (!buf) return;
         this.receivedChunks.push(buf);
         this.receivedSize += buf.byteLength;
+
+        const now = Date.now();
+        if (now - this.lastLogTime >= 500) {
+            const timeDiff = (now - this.lastLogTime) / 1000;
+            const bytesDiff = this.receivedSize - this.lastLogBytes;
+            const speedMBs = timeDiff > 0 ? ((bytesDiff / (1024 * 1024)) / timeDiff).toFixed(2) : '0.00';
+            const doneMB = (this.receivedSize / (1024 * 1024)).toFixed(2);
+            const totalMB = (this.expectedSize / (1024 * 1024)).toFixed(2);
+            const percent = this.expectedSize > 0 ? Math.round((this.receivedSize / this.expectedSize) * 100) : 0;
+
+            console.log(`[P2P Receiver SpeedTrace] ${doneMB} MB / ${totalMB} MB (${percent}%) | Mode: ${this.activeChannelType} | Speed: ${speedMBs} MB/s`);
+            this.lastLogTime = now;
+            this.lastLogBytes = this.receivedSize;
+        }
+
         if (this.onProgress) this.onProgress(this.receivedSize, this.expectedSize);
         if (this.receivedSize >= this.expectedSize && this.expectedSize > 0) {
             const blob = new Blob(this.receivedChunks);
+            console.log(`[P2P Receiver SpeedTrace] Transfer completed successfully! Total size: ${this.receivedSize} bytes.`);
             if (this.onComplete) this.onComplete(blob, this.fileName);
         }
     }
@@ -281,6 +302,7 @@ export class EQTTransport {
                 if (this.onStatus) this.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
                 if (this.onMeta) this.onMeta(this.fileName, this.expectedSize);
             } else if (item.type === 'payload_chunk' || (raw && raw.type === 'payload_chunk')) {
+                this.activeChannelType = 'Signaling-Fallback';
                 const chunkData = (raw && raw.chunk) ? raw.chunk : (typeof item.payload === 'string' ? JSON.parse(item.payload).chunk : item.payload);
                 if (chunkData) {
                     const binaryStr = atob(chunkData);
