@@ -342,6 +342,7 @@ window.initShareModule = function(token) {
         const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
         if (progressPercent) progressPercent.innerText = `${percent}%`;
         if (progressFill) progressFill.style.width = `${percent}%`;
+        if (progressBytes) progressBytes.innerText = `${formatBytes(done)} / ${formatBytes(total)}`;
         if (!window._lastProgressTime) {
             window._lastProgressTime = Date.now();
             window._lastProgressBytes = done;

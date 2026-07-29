@@ -70,7 +70,7 @@ window.EQTTransport = class EQTTransport {
             self.channel.onopen = triggerOpen;
             if (self.channel.readyState === 'open') triggerOpen();
 
-            self.channel.onmessage = async (e) => {
+            self.handleMessage = (e) => {
                 if (typeof e.data === 'string') {
                     try {
                         const meta = JSON.parse(e.data);
@@ -81,25 +81,29 @@ window.EQTTransport = class EQTTransport {
                         }
                     } catch(err) {}
                 } else {
-                    let chunkBuffer = null;
                     if (e.data instanceof ArrayBuffer) {
-                        chunkBuffer = e.data;
-                    } else if (e.data instanceof Blob) {
-                        chunkBuffer = await e.data.arrayBuffer();
-                    }
-
-                    if (chunkBuffer) {
-                        self.receivedChunks.push(chunkBuffer);
-                        self.receivedSize += chunkBuffer.byteLength;
+                        self.receivedChunks.push(e.data);
+                        self.receivedSize += e.data.byteLength;
                         if (self.onProgress) self.onProgress(self.receivedSize, self.expectedSize);
-                        
                         if (self.receivedSize >= self.expectedSize && self.expectedSize > 0) {
                             const blob = new Blob(self.receivedChunks);
                             if (self.onComplete) self.onComplete(blob, self.fileName);
                         }
+                    } else if (e.data instanceof Blob) {
+                        e.data.arrayBuffer().then(buf => {
+                            self.receivedChunks.push(buf);
+                            self.receivedSize += buf.byteLength;
+                            if (self.onProgress) self.onProgress(self.receivedSize, self.expectedSize);
+                            if (self.receivedSize >= self.expectedSize && self.expectedSize > 0) {
+                                const blob = new Blob(self.receivedChunks);
+                                if (self.onComplete) self.onComplete(blob, self.fileName);
+                            }
+                        });
                     }
                 }
             };
+
+            self.channel.onmessage = (e) => self.handleMessage(e);
 
             self.pc.oniceconnectionstatechange = () => {
                 const state = self.pc ? self.pc.iceConnectionState : '';
@@ -111,7 +115,7 @@ window.EQTTransport = class EQTTransport {
             self.pc.ondatachannel = (event) => {
                 const remoteChannel = event.channel;
                 remoteChannel.binaryType = 'arraybuffer';
-                remoteChannel.onmessage = self.channel.onmessage;
+                remoteChannel.onmessage = (e) => self.handleMessage(e);
                 remoteChannel.onopen = triggerOpen;
                 if (remoteChannel.readyState === 'open') triggerOpen();
             };
@@ -240,6 +244,12 @@ window.EQTTransport = class EQTTransport {
                 }
                 if (typeof candObj === 'string') {
                     candObj = { candidate: candObj, sdpMid: '0', sdpMLineIndex: 0 };
+                } else if (candObj && typeof candObj === 'object') {
+                    candObj = {
+                        candidate: candObj.candidate || '',
+                        sdpMid: candObj.sdpMid !== undefined ? String(candObj.sdpMid) : '0',
+                        sdpMLineIndex: candObj.sdpMLineIndex !== undefined ? Number(candObj.sdpMLineIndex) : 0
+                    };
                 }
 
                 if (!this.pc.remoteDescription) {
@@ -247,7 +257,11 @@ window.EQTTransport = class EQTTransport {
                     if (!this.candidateBuffer) this.candidateBuffer = [];
                     this.candidateBuffer.push(candObj);
                 } else {
-                    await this.pc.addIceCandidate(new RTCIceCandidate(candObj));
+                    try {
+                        await this.pc.addIceCandidate(new RTCIceCandidate(candObj));
+                    } catch(e) {
+                        console.warn('[P2P Client] Error adding ICE candidate:', e);
+                    }
                 }
             } else if (item.type === 'meta' || (raw && raw.type === 'meta')) {
                 const meta = (raw && raw.type === 'meta') ? raw : (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload);
@@ -281,8 +295,12 @@ window.EQTTransport = class EQTTransport {
 
 
     requestDownload() {
+        this.receivedChunks = [];
+        this.receivedSize = 0;
+        const reqMsg = JSON.stringify({ type: 'request_download', action: 'request_download' });
         if (this.channel && this.channel.readyState === 'open') {
-            this.channel.send(JSON.stringify({ action: 'request_download' }));
+            try { this.channel.send(reqMsg); } catch(e) {}
         }
+        this.pushSignal('request_download', reqMsg);
     }
 };
