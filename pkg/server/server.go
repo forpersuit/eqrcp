@@ -3420,8 +3420,8 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 							}
 
 							// Pion High-Performance Backpressure Flow Control
-							lowThreshold := uint64(256 * 1024)   // 256KB low watermark
-							maxBuffered := uint64(1024 * 1024)   // 1MB max queue limit
+							lowThreshold := uint64(256 * 1024) // 256KB low watermark
+							maxBuffered := uint64(1024 * 1024) // 1MB max queue limit
 							dc.SetBufferedAmountLowThreshold(lowThreshold)
 
 							lowChan := make(chan struct{}, 1)
