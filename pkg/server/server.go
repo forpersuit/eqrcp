@@ -3403,12 +3403,21 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 					})
 
 					engine.SetOnDataChannel(func(dc *webrtc.DataChannel) {
+						var isSending atomic.Bool
+
 						sendPayload := func() {
+							if !isSending.CompareAndSwap(false, true) {
+								log.Printf("[WAN P2P DataChannel] Stream transfer already in progress, skipping duplicate trigger.")
+								return
+							}
+							defer isSending.Store(false)
+
 							if s.body.Path == "" {
 								return
 							}
 							file, err := os.Open(s.body.Path)
 							if err != nil {
+								log.Printf("[WAN P2P DataChannel Error] Failed to open payload file: %v", err)
 								return
 							}
 							defer file.Close()
@@ -3547,17 +3556,55 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 				} else if sigMsg.Type == "request_download" {
 					log.Printf("[WAN P2P Listener] Received download request via signaling fallback for RoomID=%s", roomID)
 					if s.body.Path != "" {
-						fileData, err := os.ReadFile(s.body.Path)
-						if err == nil {
-							b64Data := base64.StdEncoding.EncodeToString(fileData)
-							chunkObj := map[string]interface{}{
-								"type":  "payload_chunk",
-								"chunk": b64Data,
+						go func() {
+							file, err := os.Open(s.body.Path)
+							if err != nil {
+								log.Printf("[WAN P2P Listener Error] Failed to open fallback file: %v", err)
+								return
 							}
-							chunkBytes, _ := json.Marshal(chunkObj)
-							_ = signalClient.PushSignal(roomID, hostToken, "payload_chunk", string(chunkBytes))
-							log.Printf("[WAN P2P Listener Success] Pushed physical payload chunk via signaling fallback (%d bytes)", len(fileData))
-						}
+							defer file.Close()
+
+							fi, _ := file.Stat()
+							var fileSize int64 = 0
+							if fi != nil {
+								fileSize = fi.Size()
+							}
+
+							buf := make([]byte, 512*1024) // 512KB smooth fallback chunks
+							totalSent := int64(0)
+							startTime := time.Now()
+
+							for {
+								n, readErr := file.Read(buf)
+								if n > 0 {
+									b64Chunk := base64.StdEncoding.EncodeToString(buf[:n])
+									chunkObj := map[string]interface{}{
+										"type":  "payload_chunk",
+										"chunk": b64Chunk,
+									}
+									chunkBytes, _ := json.Marshal(chunkObj)
+									_ = signalClient.PushSignal(roomID, hostToken, "payload_chunk", string(chunkBytes))
+									totalSent += int64(n)
+
+									pct := float64(0)
+									if fileSize > 0 {
+										pct = float64(totalSent) / float64(fileSize) * 100
+									}
+									elapsed := time.Since(startTime).Seconds()
+									speedMBs := float64(0)
+									if elapsed > 0 {
+										speedMBs = (float64(totalSent) / (1024 * 1024)) / elapsed
+									}
+									log.Printf("[WAN P2P Fallback Progress] Pushed %.2f MB / %.2f MB (%.1f%%) | Speed: %.2f MB/s",
+										float64(totalSent)/(1024*1024), float64(fileSize)/(1024*1024), pct, speedMBs)
+								}
+								if readErr != nil {
+									break
+								}
+								time.Sleep(50 * time.Millisecond) // Smooth interval to prevent rate limit
+							}
+							log.Printf("[WAN P2P Fallback Complete] Finished pushing fallback chunks for RoomID=%s", roomID)
+						}()
 					}
 				}
 			}

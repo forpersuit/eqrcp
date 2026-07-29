@@ -317,13 +317,15 @@ export class EQTTransport {
                 }
                 const chunkData = (raw && raw.chunk) ? raw.chunk : (typeof item.payload === 'string' ? JSON.parse(item.payload).chunk : item.payload);
                 if (chunkData) {
-                    const binaryStr = atob(chunkData);
-                    const len = binaryStr.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binaryStr.charCodeAt(i);
-                    }
-                    this.processBuffer(bytes.buffer);
+                    try {
+                        const binaryStr = atob(chunkData);
+                        const len = binaryStr.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) {
+                            bytes[i] = binaryStr.charCodeAt(i);
+                        }
+                        this.processBuffer(bytes.buffer);
+                    } catch(e) {}
                 }
             }
         } catch (err) {}

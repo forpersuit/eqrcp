@@ -32,14 +32,27 @@
     let lastProgressTime: number = 0;
     let lastProgressBytes: number = 0;
 
+    let debugLogs: string[] = [];
+
     $: dict = translations[currentLang] || translations.zh;
     $: btnDisabled = step < 5 && !isCompleted;
+
+    function addLog(msg: string): void {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        debugLogs = [...debugLogs, `[${time}] ${msg}`];
+        if (debugLogs.length > 60) {
+            debugLogs = debugLogs.slice(debugLogs.length - 60);
+        }
+    }
 
     onMount(() => {
         const params = new URLSearchParams(window.location.search);
         token = params.get('token') || '';
         if (token) {
+            addLog(`🚀 客户端初始化，RoomID: ${token}`);
             initTransport(token);
+        } else {
+            addLog(`⚠️ 链接缺失 token 参数`);
         }
     });
 
@@ -50,6 +63,7 @@
         transport.onModeDetect = (m, label) => {
             modeType = m;
             wanTipsLabel = label;
+            addLog(`⚡ [Mode Detected] 物理传输模式确定: ${label}`);
         };
 
         transport.onPhase = (s: number, t: number, msg: string, err: boolean = false) => {
@@ -57,11 +71,13 @@
             totalSteps = t;
             phaseMsg = msg;
             isError = err;
+            addLog(`[Phase ${s}/${t}] ${msg}${err ? ' (错误)' : ''}`);
         };
 
         transport.onStatus = (msg: string, color?: string) => {
             statusMsg = msg;
             if (color) statusColor = color;
+            addLog(`[Status] ${msg}`);
         };
 
         transport.onMeta = (name: string, size: number) => {
@@ -69,6 +85,7 @@
             expectedSize = size || 0;
             phaseMsg = '✅ 物理打通，文件准备就绪！';
             statusMsg = '⚡ P2P 直连通道建立成功，点击开始下载！';
+            addLog(`📄 元数据同步成功: ${fileName} (${formatBytes(expectedSize)})`);
         };
 
         transport.onProgress = (done: number, total: number) => {
@@ -87,6 +104,7 @@
                     speedMBs = ((bytesDiff / (1024 * 1024)) / timeDiff).toFixed(2);
                     lastProgressTime = now;
                     lastProgressBytes = done;
+                    addLog(`📊 解包进度: ${formatBytes(done)} / ${formatBytes(expectedSize)} | 速率: ${speedMBs} MB/s`);
                 }
             }
         };
@@ -101,6 +119,7 @@
             step = 5;
             phaseMsg = '🎉 物理传输已完成！';
             statusMsg = '🎉 文件已成功接收并保存至您的设备！';
+            addLog(`🎉 传输物理完成，Blob 尺寸: ${blob.size} 字节，触发落盘保存`);
 
             triggerBlobSave();
         };
@@ -112,6 +131,7 @@
         if (!transport) return;
         isDownloading = true;
         statusMsg = '⏳ 正在物理传输数据流...';
+        addLog(`⚡ 用户触发“开始极速下载”按钮，向 DataChannel 发送 request_download 指令`);
         transport.requestDownload();
     }
 
@@ -166,6 +186,36 @@
         {/if}
     </div>
 
+    <div class="mode-diagnostic-card" class:direct-card={modeType === 'UDP-DIRECT'} class:fallback-card={modeType === 'SIGNAL-FALLBACK'}>
+        <div class="card-label">物理传输模式诊断:</div>
+        <div class="card-val">
+            {#if modeType === 'UDP-DIRECT'}
+                ⚡ WebRTC DataChannel (原生 UDP 点对点直连 - 无中转)
+            {:else if modeType === 'SIGNAL-FALLBACK'}
+                🐌 Signaling Fallback (HTTP 信令轮询中转兜底)
+            {:else}
+                ⏳ 物理握手协商中...
+            {/if}
+        </div>
+    </div>
+
+    <!-- 实时 Debug Live Terminal 调试终端 -->
+    <div class="debug-terminal">
+        <div class="terminal-header">
+            <span>💻 实时调试终端 Logs ({debugLogs.length})</span>
+            <button class="clear-btn" on:click={() => debugLogs = []}>清空</button>
+        </div>
+        <div class="terminal-body">
+            {#if debugLogs.length === 0}
+                <div class="log-line empty-log">等待传输日志...</div>
+            {:else}
+                {#each debugLogs as log}
+                    <div class="log-line">{log}</div>
+                {/each}
+            {/if}
+        </div>
+    </div>
+
     <div class="lang-switch">
         <select bind:value={currentLang} aria-label="Switch Language">
             <option value="zh">简体中文</option>
@@ -189,9 +239,95 @@
     }
     .app-container {
         width: 100%;
-        max-width: 480px;
+        max-width: 520px;
         padding: 20px 16px;
         box-sizing: border-box;
+    }
+    .mode-diagnostic-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        text-align: left;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: all 0.3s ease;
+    }
+    .mode-diagnostic-card.direct-card {
+        background: #ecfdf5;
+        border-color: #a7f3d0;
+    }
+    .mode-diagnostic-card.fallback-card {
+        background: #fffbe6;
+        border-color: #ffe58f;
+    }
+    .card-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    .card-val {
+        font-size: 13px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .direct-card .card-val {
+        color: #047857;
+    }
+    .fallback-card .card-val {
+        color: #d97706;
+    }
+
+    /* 调试终端样式 */
+    .debug-terminal {
+        background: #0f172a;
+        color: #38bdf8;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 20px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        text-align: left;
+    }
+    .terminal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+        font-weight: 700;
+        color: #94a3b8;
+    }
+    .clear-btn {
+        background: #1e293b;
+        border: none;
+        color: #94a3b8;
+        padding: 2px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+    }
+    .clear-btn:hover {
+        color: white;
+        background: #334155;
+    }
+    .terminal-body {
+        max-height: 180px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .log-line {
+        line-height: 1.4;
+        word-break: break-all;
+    }
+    .empty-log {
+        color: #475569;
+        font-style: italic;
     }
     .action-bar {
         margin-bottom: 24px;
