@@ -3413,22 +3413,54 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 							}
 							defer file.Close()
 
+							fi, statErr := file.Stat()
+							var fileSize int64 = 0
+							if statErr == nil {
+								fileSize = fi.Size()
+							}
+
 							buf := make([]byte, 64*1024)
-							totalSent := 0
+							totalSent := int64(0)
+							lastLogMB := int64(0)
+							startTime := time.Now()
+
+							log.Printf("[WAN P2P DataChannel] Starting streaming file payload: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
+
 							for {
+								// SCTP Flow control: limit buffered amount to prevent Memory OOM & buffer overflow
+								for dc.BufferedAmount() > 1024*1024 {
+									time.Sleep(5 * time.Millisecond)
+								}
+
 								n, err := file.Read(buf)
 								if n > 0 {
 									if sendErr := dc.Send(buf[:n]); sendErr != nil {
-										log.Printf("[WAN P2P DataChannel Error] Send chunk failed: %v", sendErr)
+										log.Printf("[WAN P2P DataChannel Error] Send chunk failed at %d bytes: %v", totalSent, sendErr)
 										break
 									}
-									totalSent += n
+									totalSent += int64(n)
+									currMB := totalSent / (5 * 1024 * 1024)
+									if currMB > lastLogMB || totalSent == fileSize {
+										lastLogMB = currMB
+										pct := float64(0)
+										if fileSize > 0 {
+											pct = float64(totalSent) / float64(fileSize) * 100
+										}
+										elapsed := time.Since(startTime).Seconds()
+										speedMBs := float64(0)
+										if elapsed > 0 {
+											speedMBs = (float64(totalSent) / (1024 * 1024)) / elapsed
+										}
+										log.Printf("[WAN P2P DataChannel Progress] Sent %.2f MB / %.2f MB (%.1f%%) | Speed: %.2f MB/s",
+											float64(totalSent)/(1024*1024), float64(fileSize)/(1024*1024), pct, speedMBs)
+									}
 								}
 								if err != nil {
 									break
 								}
 							}
-							log.Printf("[WAN P2P DataChannel] Physical payload data sent successfully (%d bytes)!", totalSent)
+							log.Printf("[WAN P2P DataChannel] Physical payload file streaming completed! Total sent: %d bytes (%.2f MB) in %.2fs",
+								totalSent, float64(totalSent)/(1024*1024), time.Since(startTime).Seconds())
 						}
 
 						dc.OnOpen(func() {
