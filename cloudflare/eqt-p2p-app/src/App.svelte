@@ -109,6 +109,7 @@
             }
         };
 
+        let hasSaved = false;
         transport.onComplete = (blob: Blob, name: string) => {
             downloadedBlob = blob;
             fileName = name || fileName;
@@ -119,9 +120,12 @@
             step = 5;
             phaseMsg = '🎉 物理传输已完成！';
             statusMsg = '🎉 文件已成功接收并保存至您的设备！';
-            addLog(`🎉 传输物理完成，Blob 尺寸: ${blob.size} 字节，触发落盘保存`);
+            addLog(`🎉 传输物理完成，Blob 尺寸: ${blob.size} 字节`);
 
-            triggerBlobSave();
+            if (!hasSaved) {
+                hasSaved = true;
+                triggerBlobSave();
+            }
         };
 
         transport.initReceiver();
