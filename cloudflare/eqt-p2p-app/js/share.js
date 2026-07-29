@@ -295,7 +295,7 @@ window.initShareModule = function(token) {
         if (phaseText) phaseText.innerText = '✅ 物理打通，文件准备就绪！';
         if (summaryText) {
             summaryText.style.display = 'block';
-            summaryText.innerText = '⚡ 物理通道: UDP P2P 直连 (STUN srflx 洞已贯通) | 极限速率: 无上限 (满速跑满本地带宽)';
+            summaryText.innerText = '⚡ 物理通道: UDP P2P 反射直连已打通 (STUN Hole-Punch Complete)';
             summaryText.style.color = 'var(--accent-strong)';
         }
         if (phaseTimelineBar) {
@@ -342,12 +342,21 @@ window.initShareModule = function(token) {
         const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
         if (progressPercent) progressPercent.innerText = `${percent}%`;
         if (progressFill) progressFill.style.width = `${percent}%`;
-        if (progressBytes) progressBytes.innerText = `${formatBytes(done)} / ${formatBytes(total)}`;
-        if (progressStatus) progressStatus.innerText = `⚡ 正在物理传输 ${percent}%...`;
-
-        const p2pStatusText = document.getElementById('p2p-status-text');
-        if (p2pStatusText) {
-            p2pStatusText.innerText = `⚡ 正在物理传输 ${percent}% (${formatBytes(done)} / ${formatBytes(total)})`;
+        if (!window._lastProgressTime) {
+            window._lastProgressTime = Date.now();
+            window._lastProgressBytes = done;
+        } else {
+            const now = Date.now();
+            const timeDiff = (now - window._lastProgressTime) / 1000;
+            if (timeDiff >= 0.5) {
+                const bytesDiff = done - window._lastProgressBytes;
+                const speedMBs = ((bytesDiff / (1024 * 1024)) / timeDiff).toFixed(2);
+                window._lastProgressTime = now;
+                window._lastProgressBytes = done;
+                if (summaryText) {
+                    summaryText.innerText = `⚡ 物理直连实时速率: ${speedMBs} MB/s | 已接收 ${formatBytes(done)} / ${formatBytes(total)}`;
+                }
+            }
         }
     };
 

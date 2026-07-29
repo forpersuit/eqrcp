@@ -3419,18 +3419,21 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 								fileSize = fi.Size()
 							}
 
+							// Zero-latency Pion SCTP Flow control using runtime.Gosched for maximum burst speed
+							maxBuffered := uint64(2 * 1024 * 1024)
+
 							// Standard WebRTC DataChannel max message size is 65536 bytes (64KB)
 							buf := make([]byte, 64*1024)
 							totalSent := int64(0)
 							lastLogMB := int64(0)
 							startTime := time.Now()
 
-							log.Printf("[WAN P2P DataChannel] Starting high-speed streaming file payload: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
+							log.Printf("[WAN P2P DataChannel] Starting maximum-speed runtime.Gosched payload stream: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
 
 							for {
-								// Non-blocking SCTP Flow control up to 4MB without long sleep penalties
-								for dc.BufferedAmount() > 4*1024*1024 {
-									time.Sleep(100 * time.Microsecond)
+								// Non-blocking zero-sleep flow control: yield thread to Pion SCTP loop when buffer fills
+								for dc.BufferedAmount() > maxBuffered {
+									runtime.Gosched()
 								}
 
 								n, err := file.Read(buf)
