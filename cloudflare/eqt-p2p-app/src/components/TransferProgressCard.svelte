@@ -49,11 +49,11 @@
                 <span class="total-bytes">{formattedExpected}</span>
             </div>
 
-            {#if isDownloading && Number(speedMBs) > 0}
-                <div class="speed-pill">
-                    <span class="bolt">⚡</span>
-                    <span class="speed-value">{speedMBs}</span>
-                    <span class="speed-unit">MB/s</span>
+            {#if isDownloading || isCompleted}
+                <div class="speed-pill" class:completed-pill={isCompleted}>
+                    <span class="bolt">{isCompleted ? '✓' : '⚡'}</span>
+                    <span class="speed-value">{isCompleted ? '传输完成' : speedMBs}</span>
+                    <span class="speed-unit">{isCompleted ? '' : 'MB/s'}</span>
                 </div>
             {/if}
         </div>

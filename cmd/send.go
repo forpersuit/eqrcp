@@ -43,6 +43,8 @@ func sendCmdFunc(command *cobra.Command, args []string) error {
 		log.Print(wanURL)
 		log.Print("")
 		srv.StartWanP2PListener(roomID, hostToken)
+	} else if err != nil {
+		log.Print(fmt.Sprintf("\n[WAN P2P Warning] 创建公网信令房间失败: %v\n", err))
 	}
 
 	log.Print(`Scan the following URL with a QR reader to start the file transfer, press CTRL+C or "q" to exit:`)
