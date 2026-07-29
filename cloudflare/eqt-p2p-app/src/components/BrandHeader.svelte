@@ -1,5 +1,6 @@
 <script lang="ts">
     export let wanTips: string = '公网 WAN P2P 直连';
+    export let modeType: 'UDP-DIRECT' | 'SIGNAL-FALLBACK' | 'UNKNOWN' = 'UNKNOWN';
 </script>
 
 <div class="brand-header">
@@ -8,7 +9,9 @@
         <span class="license-badge">PRO WAN</span>
     </div>
     <div class="brand-right">
-        <span class="connection-mode">{wanTips}</span>
+        <span class="connection-mode" class:mode-direct={modeType === 'UDP-DIRECT'} class:mode-fallback={modeType === 'SIGNAL-FALLBACK'}>
+            {wanTips}
+        </span>
     </div>
 </div>
 
@@ -51,7 +54,20 @@
     }
     .connection-mode {
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 700;
         color: #475569;
+        padding: 3px 8px;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+    .connection-mode.mode-direct {
+        background: #ecfdf5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+    .connection-mode.mode-fallback {
+        background: #fffbe6;
+        color: #d97706;
+        border: 1px solid #ffe58f;
     }
 </style>

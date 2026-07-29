@@ -3501,13 +3501,13 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 							metaBytes, _ := json.Marshal(metaObj)
 							_ = dc.SendText(string(metaBytes))
 
-							// Send payload immediately on open
-							sendPayload()
+							// Send payload async on open to avoid blocking WebRTC looper
+							go sendPayload()
 						})
 
 						dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 							log.Printf("[WAN P2P DataChannel] Received request from client: %s", string(msg.Data))
-							sendPayload()
+							go sendPayload()
 						})
 					})
 

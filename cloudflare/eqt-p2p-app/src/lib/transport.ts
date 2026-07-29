@@ -1,4 +1,4 @@
-import type { JoinRoomResponse, SignalMessage } from './types';
+import type { JoinRoomResponse, SignalMessage, ModeType, ModeDetectCallback } from './types';
 
 export type PhaseCallback = (step: number, total: number, msg: string, isError?: boolean) => void;
 export type StatusCallback = (msg: string, color?: string) => void;
@@ -20,6 +20,9 @@ export class EQTTransport {
     private receivedSize: number = 0;
     private expectedSize: number = 0;
     private fileName: string = 'downloaded_file';
+
+    public activeMode: ModeType = 'UNKNOWN';
+    public onModeDetect: ModeDetectCallback | null = null;
 
     public onPhase: PhaseCallback | null = null;
     public onStatus: StatusCallback | null = null;
@@ -52,8 +55,9 @@ export class EQTTransport {
             const iceServers: RTCIceServer[] = (joinResult.data.ice_servers && joinResult.data.ice_servers.length > 0)
                 ? joinResult.data.ice_servers
                 : [
+                    { urls: 'stun:stun.miwifi.com:3478' },
+                    { urls: 'stun:stun.qq.com:3478' },
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:global.stun.twilio.com:3478' }
                 ];
 
@@ -139,7 +143,11 @@ export class EQTTransport {
     private lastLogBytes: number = 0;
 
     private handleDataChunk(e: MessageEvent): void {
-        this.activeChannelType = 'DataChannel-Direct-UDP';
+        if (this.activeMode !== 'UDP-DIRECT') {
+            this.activeMode = 'UDP-DIRECT';
+            console.log('[P2P Mode Detection] 确凿检测到 WebRTC DataChannel 原生 UDP 直连通道！');
+            if (this.onModeDetect) this.onModeDetect('UDP-DIRECT', '⚡ P2P 原生 UDP 直连 (物理开通)');
+        }
         if (typeof e.data === 'string') {
             try {
                 const meta = JSON.parse(e.data);
@@ -302,7 +310,11 @@ export class EQTTransport {
                 if (this.onStatus) this.onStatus('⚡ P2P 直连通道建立成功！', '#059669');
                 if (this.onMeta) this.onMeta(this.fileName, this.expectedSize);
             } else if (item.type === 'payload_chunk' || (raw && raw.type === 'payload_chunk')) {
-                this.activeChannelType = 'Signaling-Fallback';
+                if (this.activeMode !== 'SIGNAL-FALLBACK') {
+                    this.activeMode = 'SIGNAL-FALLBACK';
+                    console.log('[P2P Mode Detection] 确凿检测到信令管道轮询兜底中转！');
+                    if (this.onModeDetect) this.onModeDetect('SIGNAL-FALLBACK', '🐌 信令中转兜底 (HTTP轮询)');
+                }
                 const chunkData = (raw && raw.chunk) ? raw.chunk : (typeof item.payload === 'string' ? JSON.parse(item.payload).chunk : item.payload);
                 if (chunkData) {
                     const binaryStr = atob(chunkData);

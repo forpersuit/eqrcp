@@ -1,5 +1,8 @@
 export type LanguageCode = 'zh' | 'en' | 'ja' | 'ko';
 
+export type ModeType = 'UDP-DIRECT' | 'SIGNAL-FALLBACK' | 'UNKNOWN';
+export type ModeDetectCallback = (mode: ModeType, label: string) => void;
+
 export interface PhaseInfo {
     step: number;
     total: number;

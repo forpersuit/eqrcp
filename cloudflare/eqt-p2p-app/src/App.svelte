@@ -25,6 +25,8 @@
     let speedMBs: string = '0.00';
     let isDownloading: boolean = false;
     let isCompleted: boolean = false;
+    let modeType: 'UDP-DIRECT' | 'SIGNAL-FALLBACK' | 'UNKNOWN' = 'UNKNOWN';
+    let wanTipsLabel: string = '公网 WAN P2P';
 
     let downloadedBlob: Blob | null = null;
     let lastProgressTime: number = 0;
@@ -44,6 +46,11 @@
     function initTransport(tok: string): void {
         transport = new EQTTransport(tok);
         (window as any).transport = transport;
+
+        transport.onModeDetect = (m, label) => {
+            modeType = m;
+            wanTipsLabel = label;
+        };
 
         transport.onPhase = (s: number, t: number, msg: string, err: boolean = false) => {
             step = s;
@@ -120,7 +127,7 @@
 </script>
 
 <main class="app-container">
-    <BrandHeader wanTips={dict.wan_tips} />
+    <BrandHeader wanTips={wanTipsLabel} modeType={modeType} />
 
     <PhaseTimeline 
         step={step} 
