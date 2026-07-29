@@ -209,7 +209,7 @@ func (e *Engine) CreateAnswer(offerSDP string) (string, error) {
 		sdpText += "a=mid:0\r\n"
 	}
 	if !strings.Contains(sdpText, "a=fingerprint:") {
-		sdpText += "a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=setup:actpass\r\n"
+		sdpText += "a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\n"
 	}
 
 	offer := webrtc.SessionDescription{

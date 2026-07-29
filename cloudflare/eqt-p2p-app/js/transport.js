@@ -7,6 +7,7 @@ window.EQTTransport = class EQTTransport {
         this.pc = null;
         this.channel = null;
         this.lastSignalId = 0;
+        this.candidateBuffer = [];
         this.pollInterval = null;
         this.onStatus = null;
         this.onPhase = null; // New: 5-step phase lifecycle callback (step, total, msg, isError)
@@ -197,18 +198,41 @@ window.EQTTransport = class EQTTransport {
             }
             let sdpText = typeof raw === 'string' ? raw : (raw && raw.sdp ? raw.sdp : '');
 
-            if (sdpText && (item.type === 'answer' || item.type === 'host' || item.type === 'sdp' || (raw && raw.type === 'answer'))) {
-                if (this.pc.signalingState === 'have-local-offer') {
-                    console.log('[P2P Client] Setting remote answer SDP...');
                     await this.pc.setRemoteDescription(new RTCSessionDescription({
                         type: 'answer',
                         sdp: sdpText
                     }));
                     if (this.onPhase) this.onPhase(4, 5, '正在与电脑端建立打洞连通...');
+
+                    // Flush buffered remote ICE candidates collected before Answer
+                    if (this.candidateBuffer && this.candidateBuffer.length > 0) {
+                        console.log(`[P2P Client] Flushing ${this.candidateBuffer.length} buffered ICE candidates...`);
+                        for (const candItem of this.candidateBuffer) {
+                            try {
+                                await this.pc.addIceCandidate(new RTCIceCandidate(candItem));
+                            } catch(e) {
+                                console.warn('[P2P Client] Error adding buffered candidate:', e);
+                            }
+                        }
+                        this.candidateBuffer = [];
+                    }
                 }
             } else if (item.type === 'candidate' || (raw && raw.candidate)) {
-                const cand = (raw && raw.candidate) ? raw.candidate : raw;
-                await this.pc.addIceCandidate(new RTCIceCandidate(cand));
+                let candObj = (raw && raw.candidate) ? raw.candidate : raw;
+                if (typeof candObj === 'string') {
+                    try { candObj = JSON.parse(candObj); } catch(e) {}
+                }
+                if (typeof candObj === 'string') {
+                    candObj = { candidate: candObj, sdpMid: '0', sdpMLineIndex: 0 };
+                }
+
+                if (!this.pc.remoteDescription) {
+                    console.log('[P2P Client] Buffering candidate received before Answer...');
+                    if (!this.candidateBuffer) this.candidateBuffer = [];
+                    this.candidateBuffer.push(candObj);
+                } else {
+                    await this.pc.addIceCandidate(new RTCIceCandidate(candObj));
+                }
             } else if (item.type === 'meta' || (raw && raw.type === 'meta')) {
                 const meta = (raw && raw.type === 'meta') ? raw : (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload);
                 const metaName = meta.name || 'downloaded_file';
