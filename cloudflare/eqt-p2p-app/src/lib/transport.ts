@@ -52,14 +52,14 @@ export class EQTTransport {
             }
 
             this.clientToken = joinResult.data.client_token;
-            const iceServers: RTCIceServer[] = (joinResult.data.ice_servers && joinResult.data.ice_servers.length > 0)
-                ? joinResult.data.ice_servers
-                : [
-                    { urls: 'stun:stun.miwifi.com:3478' },
-                    { urls: 'stun:stun.qq.com:3478' },
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
-                ];
+            const iceServers: RTCIceServer[] = [
+                { urls: 'stun:stun.miwifi.com:3478' },
+                { urls: 'stun:stun.qq.com:3478' },
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+            ];
 
             this.pc = new RTCPeerConnection({ iceServers });
 

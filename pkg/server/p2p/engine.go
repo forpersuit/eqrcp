@@ -49,10 +49,18 @@ func NewEngine(stunServers []string) (*Engine, error) {
 		stunServers = DefaultSTUNServers
 	}
 
-	iceServers := make([]webrtc.ICEServer, len(stunServers))
-	for i, s := range stunServers {
-		iceServers[i] = webrtc.ICEServer{URLs: []string{s}}
+	iceServers := make([]webrtc.ICEServer, 0, len(stunServers)+2)
+	for _, s := range stunServers {
+		iceServers = append(iceServers, webrtc.ICEServer{URLs: []string{s}})
 	}
+	iceServers = append(iceServers,
+		webrtc.ICEServer{
+			URLs:           []string{"turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443"},
+			Username:       "openrelayproject",
+			Credential:     "openrelayproject",
+			CredentialType: webrtc.ICECredentialTypePassword,
+		},
+	)
 
 	config := webrtc.Configuration{
 		ICEServers: iceServers,

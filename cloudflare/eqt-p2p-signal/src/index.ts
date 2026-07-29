@@ -79,7 +79,10 @@ function handleCORS(request: Request): Headers {
 }
 
 function jsonResponse(data: any, status = 200, extraHeaders?: Headers): Response {
-  const headers = extraHeaders || handleCORS(new Request('http://localhost'));
+  const headers = handleCORS(new Request('http://localhost'));
+  if (extraHeaders) {
+    extraHeaders.forEach((v, k) => headers.set(k, v));
+  }
   headers.set('Content-Type', 'application/json');
   return new Response(JSON.stringify(data), { status, headers });
 }
