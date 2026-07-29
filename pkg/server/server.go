@@ -3419,21 +3419,34 @@ func (s *Server) StartWanP2PListener(roomID, hostToken string) {
 								fileSize = fi.Size()
 							}
 
-							// Zero-latency Pion SCTP Flow control using runtime.Gosched for maximum burst speed
-							maxBuffered := uint64(2 * 1024 * 1024)
+							// Pion High-Performance Backpressure Flow Control
+							lowThreshold := uint64(256 * 1024)   // 256KB low watermark
+							maxBuffered := uint64(1024 * 1024)   // 1MB max queue limit
+							dc.SetBufferedAmountLowThreshold(lowThreshold)
 
-							// Standard WebRTC DataChannel max message size is 65536 bytes (64KB)
-							buf := make([]byte, 64*1024)
+							lowChan := make(chan struct{}, 1)
+							dc.OnBufferedAmountLow(func() {
+								select {
+								case lowChan <- struct{}{}:
+								default:
+								}
+							})
+
+							// Optimal 32KB WebRTC DataChannel chunk size for smooth SACK acknowledgments
+							buf := make([]byte, 32*1024)
 							totalSent := int64(0)
 							lastLogMB := int64(0)
 							startTime := time.Now()
 
-							log.Printf("[WAN P2P DataChannel] Starting maximum-speed runtime.Gosched payload stream: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
+							log.Printf("[WAN P2P DataChannel] Starting Backpressure-controlled payload stream: %s (%.2f MB)", s.body.Path, float64(fileSize)/(1024*1024))
 
 							for {
-								// Non-blocking zero-sleep flow control: yield thread to Pion SCTP loop when buffer fills
-								for dc.BufferedAmount() > maxBuffered {
-									runtime.Gosched()
+								// Strict Backpressure: pause sending if buffer is above maxBuffered until OnBufferedAmountLow fires
+								if dc.BufferedAmount() > maxBuffered {
+									select {
+									case <-lowChan:
+									case <-time.After(5 * time.Millisecond):
+									}
 								}
 
 								n, err := file.Read(buf)
