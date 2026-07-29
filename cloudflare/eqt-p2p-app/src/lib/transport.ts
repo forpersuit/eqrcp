@@ -56,8 +56,9 @@ export class EQTTransport {
                 { urls: 'stun:stun.miwifi.com:3478' },
                 { urls: 'stun:stun.qq.com:3478' },
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'turn:103.232.92.220:3478', username: 'eqtuser', credential: 'eqtpass123456' },
-                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+                { urls: 'turn:turn.eqt.net.im:3478?transport=udp', username: 'eqtuser', credential: 'eqtpass123456' },
+                { urls: 'turn:turn.eqt.net.im:3478?transport=tcp', username: 'eqtuser', credential: 'eqtpass123456' },
+                { urls: 'turns:turn.eqt.net.im:5349?transport=tcp', username: 'eqtuser', credential: 'eqtpass123456' }
             ];
 
             this.pc = new RTCPeerConnection({ iceServers });

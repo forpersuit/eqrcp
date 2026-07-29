@@ -55,15 +55,9 @@ func NewEngine(stunServers []string) (*Engine, error) {
 	}
 	iceServers = append(iceServers,
 		webrtc.ICEServer{
-			URLs:           []string{"turn:103.232.92.220:3478"},
+			URLs:           []string{"turn:turn.eqt.net.im:3478?transport=udp", "turn:turn.eqt.net.im:3478?transport=tcp", "turns:turn.eqt.net.im:5349?transport=tcp"},
 			Username:       "eqtuser",
 			Credential:     "eqtpass123456",
-			CredentialType: webrtc.ICECredentialTypePassword,
-		},
-		webrtc.ICEServer{
-			URLs:           []string{"turn:openrelay.metered.ca:80"},
-			Username:       "openrelayproject",
-			Credential:     "openrelayproject",
 			CredentialType: webrtc.ICECredentialTypePassword,
 		},
 	)
