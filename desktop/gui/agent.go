@@ -843,6 +843,16 @@ func (agent *desktopAgent) SetAutoStop(enabled bool) {
 	}
 }
 
+func (agent *desktopAgent) StopClientTransfer(clientID string) bool {
+	agent.mu.Lock()
+	srv := agent.activeServer
+	agent.mu.Unlock()
+	if srv != nil {
+		return srv.StopClientTransfer(clientID)
+	}
+	return false
+}
+
 func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatusSnapshot) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()

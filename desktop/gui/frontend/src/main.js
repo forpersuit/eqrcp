@@ -48,6 +48,7 @@ import {
     StopChat,
     StopCurrent,
     SetAutoStop,
+    StopClientTransfer,
     SubmitFeedback,
     DevSetUsedSeconds,
     DevForceOnlineLicenseSync,
@@ -818,6 +819,11 @@ function renderDeviceProgressHtml(task) {
                 stateBadgeHtml = `<span style="color: var(--accent-strong); font-size: 11px; font-weight: 800;">${percent}%</span>`;
             }
 
+            const speedBadgeHtml = client.speedFormatted ? `<span style="color: var(--accent-strong); font-size: 10px; font-weight: 700; margin-left: 6px;">⚡ ${escapeHTML(client.speedFormatted)}</span>` : '';
+            const stopClientBtnHtml = (client.state === 'transferring' || client.state === 'waiting') ? `
+                <button class="btn-stop-client" data-action="stop-client" data-client-id="${escapeAttr(clientID)}" style="background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer; margin-left: 4px;" title="${escapeAttr(t('stop_client') || 'Stop Device')}">${escapeHTML(t('stop') || 'Stop')}</button>
+            ` : '';
+
             return `
                 <li style="display: flex; flex-direction: column; padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; overflow: hidden; border: 1.2px solid var(--line); list-style: none; gap: 6px;">
                     <!-- 第一行: 设备名 与 传输文件名同一行 -->
@@ -825,6 +831,7 @@ function renderDeviceProgressHtml(task) {
                         <span style="color: var(--text-primary); font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; flex: 1; min-width: 0;" title="${escapeHTML(devName)}${clientID ? ' (ID: ' + escapeHTML(clientID) + ')' : ''}">
                             ${escapeHTML(displayName)}${client.current ? ` <span style="color: var(--text-secondary); font-weight: 500; font-size: 11px; margin-left: 4px;">- ${escapeHTML(client.current)}</span>` : ''}
                         </span>
+                        ${speedBadgeHtml}
                     </div>
                     <!-- 第二行: 进度条, 大小和状态 -->
                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
@@ -832,6 +839,7 @@ function renderDeviceProgressHtml(task) {
                         <div style="display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;">
                             ${showProgress ? `<span style="font-size: 9px; color: var(--text-secondary); font-weight: 500;">${escapeHTML(sizeProgressText)}</span>` : ''}
                             ${stateBadgeHtml}
+                            ${stopClientBtnHtml}
                         </div>
                     </div>
                 </li>

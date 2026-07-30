@@ -65,6 +65,8 @@ type ClientTransferStateInfo struct {
 	SavedFiles        []string                  `json:"savedFiles,omitempty"`
 	Files             []ClientFileTransferState `json:"files,omitempty"`
 	ActiveConnections int                       `json:"-"`
+	Speed             int64                     `json:"speed,omitempty"`
+	SpeedFormatted    string                    `json:"speedFormatted,omitempty"`
 }
 
 // Server is the server
@@ -131,6 +133,14 @@ type Server struct {
 	tusUploadsTotal        map[string]int64
 	tusUploadClients       map[string]string
 	tusMu                  sync.Mutex
+	clientSpeedTrackers    map[string]*clientSpeedTracker
+	clientSpeedTrackersMu  sync.Mutex
+}
+
+type clientSpeedTracker struct {
+	lastTime  time.Time
+	lastBytes int64
+	speed     int64
 }
 
 // SetAutoStop enables or disables automatic server shutdown when all devices finish downloading.
@@ -471,6 +481,9 @@ func (s *Server) ReceiveTo(dir string) error {
 					cs.BytesDone = clientDone
 					cs.BytesTotal = clientTotal
 					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+					sp, spStr := s.calcClientSpeed(clientID, clientDone)
+					cs.Speed = sp
+					cs.SpeedFormatted = spStr
 				}
 			})
 			s.updateStatus(func(status *transferStatus) {
@@ -518,9 +531,17 @@ func (s *Server) ReceiveTo(dir string) error {
 					continue
 				}
 				_ = os.Remove(tmpPath)
+				_ = os.Remove(tmpPath + ".info")
 			} else {
-				// Clean up info.Storage file after rename
+				// Clean up info.Storage file and paired .info metadata file after rename
 				_ = os.Remove(tmpPath)
+				_ = os.Remove(tmpPath + ".info")
+			}
+
+			// Clean up .tus-tmp directory if it has become empty
+			tusTmpParent := filepath.Dir(tmpPath)
+			if entries, err := os.ReadDir(tusTmpParent); err == nil && len(entries) == 0 {
+				_ = os.Remove(tusTmpParent)
 			}
 
 			// Refresh last seen
@@ -1746,16 +1767,18 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 				files = append([]ClientFileTransferState(nil), v.Files...)
 			}
 			m[k] = &ClientTransferStateInfo{
-				ClientID:   v.ClientID,
-				State:      v.State,
-				BytesDone:  v.BytesDone,
-				BytesTotal: v.BytesTotal,
-				Percent:    v.Percent,
-				Current:    v.Current,
-				Message:    v.Message,
-				DeviceName: v.DeviceName,
-				SavedFiles: savedFiles,
-				Files:      files,
+				ClientID:       v.ClientID,
+				State:          v.State,
+				BytesDone:      v.BytesDone,
+				BytesTotal:     v.BytesTotal,
+				Percent:        v.Percent,
+				Current:        v.Current,
+				Message:        v.Message,
+				DeviceName:     v.DeviceName,
+				SavedFiles:     savedFiles,
+				Files:          files,
+				Speed:          v.Speed,
+				SpeedFormatted: v.SpeedFormatted,
 			}
 		}
 	}
@@ -2053,7 +2076,91 @@ func (s *Server) Wait() error {
 func (s *Server) Shutdown() {
 	s.stopChatSession("stopped")
 	_ = chatv2session.CleanupUploads()
+	if s.outputDir != "" {
+		tusTmpDir := filepath.Join(s.outputDir, ".tus-tmp")
+		_ = os.RemoveAll(tusTmpDir)
+	}
 	s.signalStop()
+}
+
+func (s *Server) calcClientSpeed(clientID string, bytesDone int64) (int64, string) {
+	if clientID == "" {
+		return 0, ""
+	}
+	s.clientSpeedTrackersMu.Lock()
+	defer s.clientSpeedTrackersMu.Unlock()
+	if s.clientSpeedTrackers == nil {
+		s.clientSpeedTrackers = make(map[string]*clientSpeedTracker)
+	}
+	now := time.Now()
+	tracker, ok := s.clientSpeedTrackers[clientID]
+	if !ok || tracker == nil {
+		s.clientSpeedTrackers[clientID] = &clientSpeedTracker{
+			lastTime:  now,
+			lastBytes: bytesDone,
+			speed:     0,
+		}
+		return 0, ""
+	}
+
+	elapsed := now.Sub(tracker.lastTime).Seconds()
+	if elapsed >= 0.3 {
+		deltaBytes := bytesDone - tracker.lastBytes
+		if deltaBytes < 0 {
+			deltaBytes = 0
+		}
+		speed := int64(float64(deltaBytes) / elapsed)
+		tracker.lastTime = now
+		tracker.lastBytes = bytesDone
+		tracker.speed = speed
+	}
+
+	speed := tracker.speed
+	if speed <= 0 {
+		return 0, ""
+	}
+	return speed, formatBytesSpeed(speed)
+}
+
+func formatBytesSpeed(b int64) string {
+	if b <= 0 {
+		return ""
+	}
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B/s", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB/s", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// StopClientTransfer manually stops/kicks a specific client transfer session by clientID.
+func (s *Server) StopClientTransfer(clientID string) bool {
+	if clientID == "" {
+		return false
+	}
+	s.clientStatesMu.Lock()
+	cs, ok := s.clientStates[clientID]
+	if ok && cs != nil {
+		cs.State = "stopped"
+		cs.Message = "Transfer stopped by host."
+		cs.Speed = 0
+		cs.SpeedFormatted = ""
+	}
+	s.clientStatesMu.Unlock()
+
+	s.clientSpeedTrackersMu.Lock()
+	if s.clientSpeedTrackers != nil {
+		delete(s.clientSpeedTrackers, clientID)
+	}
+	s.clientSpeedTrackersMu.Unlock()
+
+	s.triggerStatusHookThrottled()
+	return ok
 }
 
 // ShutdownChat stops the server and records a chat-specific terminal state.

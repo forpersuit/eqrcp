@@ -134,6 +134,10 @@ export function SetAutoStop(arg1) {
   return window['go']['main']['App']['SetAutoStop'](arg1);
 }
 
+export function StopClientTransfer(arg1) {
+  return window['go']['main']['App']['StopClientTransfer'](arg1);
+}
+
 export function SetPaidStatus(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SetPaidStatus'](arg1, arg2, arg3, arg4);
 }

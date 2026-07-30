@@ -106,6 +106,9 @@ func GetInterfaceAddress(ifaceString string) (string, error) {
 	if ifaceString == "any" {
 		return "0.0.0.0", nil
 	}
+	if ifaceString == "loopback" {
+		return "127.0.0.1", nil
+	}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", err

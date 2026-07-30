@@ -68,6 +68,8 @@ export function SelectShareDirectory():Promise<string>;
 
 export function SetAutoStop(arg1:boolean):Promise<main.AgentStatus>;
 
+export function StopClientTransfer(arg1:string):Promise<boolean>;
+
 export function SetPaidStatus(arg1:boolean,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;

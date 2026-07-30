@@ -645,6 +645,13 @@ func (a *App) SetAutoStop(enabled bool) (AgentStatus, error) {
 	return a.AgentStatus()
 }
 
+func (a *App) StopClientTransfer(clientID string) (bool, error) {
+	if a.agent == nil {
+		return false, fmt.Errorf("agent not initialized")
+	}
+	return a.agent.StopClientTransfer(clientID), nil
+}
+
 func (a *App) StopChat() error {
 	if a.agent == nil {
 		return fmt.Errorf("agent not initialized")

@@ -1156,7 +1156,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	_ = os.WriteFile(file2, []byte("hello two"), 0644)
 
 	cfg := &config.Config{
-		Interface: "any",
+		Interface: "loopback",
 		Port:      0,
 		KeepAlive: false,
 	}
@@ -1174,13 +1174,15 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 	}
 	server.Send(payload)
 
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+
 	// First GET to render download page
 	request, err := http.NewRequest(http.MethodGet, server.SendURL+"?client_id=testClient", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("User-Agent", "Mozilla test")
-	response, err := http.DefaultClient.Do(request)
+	response, err := httpClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1195,7 +1197,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 		t.Fatal(err)
 	}
 	item0Request.Header.Set("User-Agent", "Mozilla test")
-	item0Response, err := http.DefaultClient.Do(item0Request)
+	item0Response, err := httpClient.Do(item0Request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1217,7 +1219,7 @@ func TestSendMultiFileDownloadSuccessive(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkRequest.Header.Set("User-Agent", "Mozilla test")
-	checkResponse, err := http.DefaultClient.Do(checkRequest)
+	checkResponse, err := httpClient.Do(checkRequest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1274,7 +1276,7 @@ func TestSendMultiDeviceDownloadIsolation(t *testing.T) {
 	_ = os.WriteFile(file2, []byte("hello two"), 0644)
 
 	cfg := &config.Config{
-		Interface: "any",
+		Interface: "loopback",
 		Port:      0,
 		KeepAlive: false,
 	}

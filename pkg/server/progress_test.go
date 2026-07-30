@@ -211,7 +211,7 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 	// ==========================================
 	t.Run("SingleFileDownload", func(t *testing.T) {
 		cfg := &config.Config{
-			Interface: "any",
+			Interface: "loopback",
 			Port:      0,
 			KeepAlive: true,
 		}
@@ -239,10 +239,12 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 				clientID, lastState.BytesDone, lastState.State, wantBytes, wantState)
 		}
 
+		httpClient := &http.Client{Timeout: 3 * time.Second}
+
 		// 模拟设备 A (client_id=device_A) 发起断点下载：下载前 200KB 字节后主动关闭连接
 		reqDownA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_A", nil)
 		reqDownA.Header.Set("Range", "bytes=0-204799") // 只请求前 200KB 字节
-		respDownA, err := http.DefaultClient.Do(reqDownA)
+		respDownA, err := httpClient.Do(reqDownA)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -252,7 +254,7 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 
 		// 模拟设备 B (client_id=device_B) 发起全量下载
 		reqDownB, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_B", nil)
-		respDownB, err := http.DefaultClient.Do(reqDownB)
+		respDownB, err := httpClient.Do(reqDownB)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,7 +271,7 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 		// 模拟设备 A 网络恢复，继续下载剩余的 800KB
 		reqResumeA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&client_id=device_A", nil)
 		reqResumeA.Header.Set("Range", "bytes=204800-")
-		respResumeA, err := http.DefaultClient.Do(reqResumeA)
+		respResumeA, err := httpClient.Do(reqResumeA)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -285,8 +287,9 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 	// 场景二：多文件打包下载模式下的多设备进度隔离与断点续传
 	// ==========================================
 	t.Run("MultiFileZipDownload", func(t *testing.T) {
+		httpClient := &http.Client{Timeout: 3 * time.Second}
 		cfg := &config.Config{
-			Interface: "any",
+			Interface: "loopback",
 			Port:      0,
 			KeepAlive: true,
 		}
@@ -303,7 +306,7 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 
 		// 模拟设备 A (client_id=device_A_zip) 下载第一个分片
 		reqDownA, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&item=0&client_id=device_A_zip", nil)
-		respDownA, err := http.DefaultClient.Do(reqDownA)
+		respDownA, err := httpClient.Do(reqDownA)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -312,7 +315,7 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 
 		// 模拟设备 B (client_id=device_B_zip) 下载第二个分片
 		reqDownB, _ := http.NewRequest(http.MethodGet, app.SendURL+"?download=1&item=1&client_id=device_B_zip", nil)
-		respDownB, err := http.DefaultClient.Do(reqDownB)
+		respDownB, err := httpClient.Do(reqDownB)
 		if err != nil {
 			t.Fatal(err)
 		}

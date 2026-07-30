@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"sync"
-	"testing"
 	"time"
 )
 
@@ -24,15 +23,35 @@ func (w *noReaderFromResponseWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func TestRealDataShareTransferSpeedComparison(t *testing.T) {
+type progressResponseWriter struct {
+	http.ResponseWriter
+	onWrite func(int64)
+}
+
+func (w *progressResponseWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	if n > 0 && w.onWrite != nil {
+		w.onWrite(int64(n))
+	}
+	return n, err
+}
+
+func main() {
 	testFile := "/mnt/e/developer/results/data/1.zip"
-	fi, err := os.Stat(testFile)
-	if err != nil {
-		t.Skipf("Test file %s not found, skipping benchmark test: %v", testFile, err)
-		return
+	if len(os.Args) > 1 {
+		testFile = os.Args[1]
 	}
 
-	t.Run("Original (Without ReadFrom 32KB buffer)", func(t *testing.T) {
+	fi, err := os.Stat(testFile)
+	if err != nil {
+		fmt.Printf("Error: Test file %s not found: %v\n", testFile, err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Starting transfer speed benchmark for file: %s (%.2f MB)\n\n", testFile, float64(fi.Size())/(1024*1024))
+
+	// 1. Original (Without ReadFrom 32KB buffer)
+	{
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			f, err := os.Open(testFile)
 			if err != nil {
@@ -54,23 +73,26 @@ func TestRealDataShareTransferSpeedComparison(t *testing.T) {
 		start := time.Now()
 		res, err := ts.Client().Get(ts.URL)
 		if err != nil {
-			t.Fatalf("HTTP GET failed: %v", err)
+			fmt.Printf("HTTP GET failed: %v\n", err)
+			os.Exit(1)
 		}
-		defer res.Body.Close()
 
 		buf := make([]byte, 32*1024)
 		n, err := io.CopyBuffer(io.Discard, res.Body, buf)
+		res.Body.Close()
 		if err != nil {
-			t.Fatalf("io.CopyBuffer failed: %v", err)
+			fmt.Printf("io.CopyBuffer failed: %v\n", err)
+			os.Exit(1)
 		}
 
 		elapsed := time.Since(start)
 		mb := float64(n) / (1024 * 1024)
 		speedMBs := mb / elapsed.Seconds()
-		fmt.Printf("\n--- BENCHMARK 1: Original Mode (No ReadFrom, 32KB Buffer) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
-	})
+		fmt.Printf("--- BENCHMARK 1: Original Mode (No ReadFrom, 32KB Buffer) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
+	}
 
-	t.Run("Optimized Zero-Copy (With ReadFrom & 256KB Buffer)", func(t *testing.T) {
+	// 2. Optimized Zero-Copy (With ReadFrom & 256KB Buffer)
+	{
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			f, err := os.Open(testFile)
 			if err != nil {
@@ -92,23 +114,26 @@ func TestRealDataShareTransferSpeedComparison(t *testing.T) {
 		start := time.Now()
 		res, err := ts.Client().Get(ts.URL)
 		if err != nil {
-			t.Fatalf("HTTP GET failed: %v", err)
+			fmt.Printf("HTTP GET failed: %v\n", err)
+			os.Exit(1)
 		}
-		defer res.Body.Close()
 
 		buf := make([]byte, 256*1024)
 		n, err := io.CopyBuffer(io.Discard, res.Body, buf)
+		res.Body.Close()
 		if err != nil {
-			t.Fatalf("io.CopyBuffer failed: %v", err)
+			fmt.Printf("io.CopyBuffer failed: %v\n", err)
+			os.Exit(1)
 		}
 
 		elapsed := time.Since(start)
 		mb := float64(n) / (1024 * 1024)
 		speedMBs := mb / elapsed.Seconds()
-		fmt.Printf("\n--- BENCHMARK 2: Optimized Mode (With ReadFrom Zero-Copy & 256KB Buffer) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
-	})
+		fmt.Printf("--- BENCHMARK 2: Optimized Mode (With ReadFrom Zero-Copy & 256KB Buffer) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
+	}
 
-	t.Run("Optimized Multi-Thread Concurrent Range (4-Workers)", func(t *testing.T) {
+	// 3. Multi-Thread Concurrent Range (4-Workers)
+	{
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			f, err := os.Open(testFile)
 			if err != nil {
@@ -165,6 +190,6 @@ func TestRealDataShareTransferSpeedComparison(t *testing.T) {
 		elapsed := time.Since(start)
 		mb := float64(fileSize) / (1024 * 1024)
 		speedMBs := mb / elapsed.Seconds()
-		fmt.Printf("\n--- BENCHMARK 3: Multi-Thread Concurrent Range Mode (4 Workers) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
-	})
+		fmt.Printf("--- BENCHMARK 3: Multi-Thread Concurrent Range Mode (4 Workers) ---\nTransferred: %.2f MB | Time: %v | Speed: %.2f MB/s\n\n", mb, elapsed, speedMBs)
+	}
 }
