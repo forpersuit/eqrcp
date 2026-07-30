@@ -413,11 +413,11 @@
 
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
                 {{if gt .Count 1}}
-                    <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()"></button>
+                    <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()">Download All (ZIP)</button>
                 {{else}}
-                    <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()"></button>
+                    <button type="button" class="btn" id="btn-action-download" onclick="triggerDownload()">Start Download</button>
                 {{end}}
-                <button type="button" class="btn btn-danger" id="btn-action-stop" onclick="stopSharing()"></button>
+                <button type="button" class="btn btn-danger" id="btn-action-stop" onclick="stopSharing()">Stop Sharing</button>
             </div>
         </div>
 
@@ -504,7 +504,23 @@
                 btn_upgrade: 'Upgrade License to Unlock',
                 notification_tips: 'To pause or stop the transfer, please use your phone\'s notification bar or browser download manager.',
                 waiting_status: 'Connection interrupted, waiting to reconnect...',
-                               saved_file: '受信するファイル',
+                failed_status: 'Transfer stopped. You can click the button to restart.'
+            },
+            ja: {
+                title: 'ファイル受信 - EQT',
+                header: 'ダウンロードの準備ができました',
+                wait_tips: '下のボタンまたはファイル項目をクリックしてダウンロードを開始してください。',
+                wifi_tips: '両方のデバイスが同じ Wi-Fi / LAN に接続されていることを確認してください。',
+                success_header: 'ダウンロードを開始しました',
+                success_tips: '転送が正常に開始されました。ブラウザのダウンロード進行状況を確認してください。',
+                btn_download: 'ダウンロード開始',
+                btn_download_all: 'すべてダウンロード',
+                btn_download_all_zip: 'すべてダウンロード (ZIP)',
+                btn_manual: '手動ダウンロード / 再試行',
+                btn_stop: '共有を停止',
+                stopped_header: 'サービス停止',
+                stopped_tips: '転送サービスは手動で停止されました。このページを閉じても大丈夫です。',
+                saved_file: '受信するファイル',
                 stats_meta_single: '{count} 件のファイル · {size}',
                 stats_meta_multiple: '{count} 件のファイル · {size}',
                 close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。',
@@ -575,7 +591,7 @@
                 waiting_status: 'Conexión interrumpida, esperando para reconectar...'
             },
             de: {
-                title: 'Datei bereit zum Herunterladen',
+                title: 'Datei bereit zum Herunterladen - EQT',
                 header: 'Datei bereit zum Herunterladen',
                 wait_tips: 'Klicken Sie auf die Schaltfläche oder die Dateielemente unten, um den Download zu starten.',
                 wifi_tips: 'Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi / LAN verbunden sind.',
@@ -619,32 +635,6 @@
                 saved_file: 'Fichier à recevoir',
                 stats_meta_single: '{count} fichier · {size}',
                 stats_meta_multiple: '{count} fichiers · {size}',
-                close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
-                success_summary_single: '1 fichier a été téléchargé avec succès.',
-                success_summary_multiple: '{count} fichiers ont été téléchargés avec succès.',
-                success_tips_all: 'Le transfert s\'est terminé avec succès. Vous pouvez fermer cette page maintenant.',
-                limit_header: 'Limite d\'appareils dépassée',
-                limit_tips: 'Selon les règles de la version gratuite, les transferts quotidiens suivants autorisent jusqu\'à 2 appareils. Une fois d\'autres déconnectés, cette page restaurera l\'accès au téléchargement.',
-                btn_upgrade: 'Mettre à niveau',
-                failed_status: 'Transfert arrêté. Vous pouvez cliquer sur le bouton pour redémarrer.',
-                notification_tips: 'Pour suspendre ou arrêter le transfert, veuillez utiliser la barre de notification de votre téléphone ou le gestionnaire de téléchargement du navigateur.',
-                waiting_status: 'Connexion interrompue, en attente de reconnexion...'
-            },
-            fr: {
-                title: 'Recevoir le Fichier - EQT',
-                header: 'Fichier prêt pour le téléchargement',
-                wait_tips: 'Veuillez cliquer sur le bouton ou sur les fichiers ci-dessous pour télécharger.',
-                wifi_tips: 'Veuillez vous assurer que les deux appareils sont connectés au même réseau Wi-Fi / LAN.',
-                success_header: 'Téléchargement Lancé',
-                success_tips: 'Transfert lancé avec succès ! Veuillez vérifier la progression du téléchargement de votre navigateur.',
-                btn_download: 'Lancer le téléchargement',
-                btn_download_all: 'Tout télécharger',
-                btn_download_all_zip: 'Tout télécharger (ZIP)',
-                btn_manual: 'Téléchargement manuel / Relancer',
-                btn_stop: 'Arrêter le Partage',
-                stopped_header: 'Service Arrêté',
-                stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
-                saved_file: 'Fichier à recevoir',
                 close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
                 success_summary_single: '1 fichier a été téléchargé avec succès.',
                 success_summary_multiple: '{count} fichiers ont été téléchargés avec succès.',
