@@ -759,6 +759,74 @@ func TestProgressResponseWriterStoresWriteError(t *testing.T) {
 	}
 }
 
+func TestProgressResponseWriterReadFrom(t *testing.T) {
+	t.Run("with ReaderFrom support", func(t *testing.T) {
+		var written int64
+		rec := newMockReaderFromResponseWriter()
+		writer := &progressResponseWriter{
+			ResponseWriter: rec,
+			onWrite: func(n int64) {
+				written += n
+			},
+		}
+		r := strings.NewReader("hello world from readfrom")
+		n, err := writer.ReadFrom(r)
+		if err != nil {
+			t.Fatalf("ReadFrom unexpected error: %v", err)
+		}
+		if n != 25 {
+			t.Fatalf("ReadFrom returned %d, want 25", n)
+		}
+		if written != 25 {
+			t.Fatalf("onWrite called with %d, want 25", written)
+		}
+	})
+
+	t.Run("fallback without ReaderFrom", func(t *testing.T) {
+		var written int64
+		rec := httptest.NewRecorder()
+		writer := &progressResponseWriter{
+			ResponseWriter: rec,
+			onWrite: func(n int64) {
+				written += n
+			},
+		}
+		r := strings.NewReader("fallback test data")
+		n, err := writer.ReadFrom(r)
+		if err != nil {
+			t.Fatalf("ReadFrom fallback error: %v", err)
+		}
+		if n != 18 {
+			t.Fatalf("ReadFrom returned %d, want 18", n)
+		}
+		if written != 18 {
+			t.Fatalf("onWrite called with %d, want 18", written)
+		}
+		if rec.Body.String() != "fallback test data" {
+			t.Fatalf("recorder got %q, want %q", rec.Body.String(), "fallback test data")
+		}
+	})
+}
+
+type mockReaderFromResponseWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func newMockReaderFromResponseWriter() *mockReaderFromResponseWriter {
+	return &mockReaderFromResponseWriter{
+		ResponseRecorder: httptest.NewRecorder(),
+	}
+}
+
+func (m *mockReaderFromResponseWriter) ReadFrom(r io.Reader) (int64, error) {
+	buf, err := io.ReadAll(r)
+	if err != nil {
+		return 0, err
+	}
+	m.Body.Write(buf)
+	return int64(len(buf)), nil
+}
+
 type failingResponseWriter struct {
 	err error
 }

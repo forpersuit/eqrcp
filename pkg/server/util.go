@@ -137,3 +137,41 @@ func (w *progressResponseWriter) Write(data []byte) (int, error) {
 	}
 	return n, err
 }
+
+func (w *progressResponseWriter) ReadFrom(r io.Reader) (n int64, err error) {
+	if rf, ok := w.ResponseWriter.(io.ReaderFrom); ok {
+		n, err = rf.ReadFrom(r)
+		if n > 0 && w.onWrite != nil {
+			w.onWrite(n)
+		}
+		if err != nil {
+			w.err = err
+		}
+		return n, err
+	}
+	buf := make([]byte, 256*1024)
+	for {
+		nr, er := r.Read(buf)
+		if nr > 0 {
+			nw, ew := w.Write(buf[0:nr])
+			if nw > 0 {
+				n += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return n, err
+}
