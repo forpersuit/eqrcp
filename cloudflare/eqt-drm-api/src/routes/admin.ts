@@ -289,6 +289,50 @@ export async function handleAdminRoutes(
     `;
     const locRes = await env.DB.prepare(locationsSql).all<{ country: string; active_count: number; latest_activated_at: string }>();
 
+    // Query active activations to build cross-region arcs for SAME license key
+    const rawActivationsSql = `
+      SELECT 
+        a.license_code,
+        a.ip_country
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE l.status = 'active' AND a.ip_country IS NOT NULL AND a.ip_country != ''
+    `;
+    const rawRes = await env.DB.prepare(rawActivationsSql).all<{ license_code: string; ip_country: string }>();
+    const rawList = rawRes.results || [];
+
+    const keyCountriesMap = new Map<string, Set<string>>();
+    for (const item of rawList) {
+      const code = item.license_code;
+      const c = item.ip_country.toUpperCase();
+      if (!keyCountriesMap.has(code)) {
+        keyCountriesMap.set(code, new Set());
+      }
+      keyCountriesMap.get(code)!.add(c);
+    }
+
+    const crossRegionArcs: { license_code: string; from_country: string; to_country: string }[] = [];
+    const seenPairs = new Set<string>();
+
+    for (const [code, countriesSet] of keyCountriesMap.entries()) {
+      if (countriesSet.size > 1) {
+        const countries = Array.from(countriesSet);
+        for (let i = 0; i < countries.length; i++) {
+          for (let j = i + 1; j < countries.length; j++) {
+            const pairKey = `${code}:${countries[i]}->${countries[j]}`;
+            if (!seenPairs.has(pairKey)) {
+              seenPairs.add(pairKey);
+              crossRegionArcs.push({
+                license_code: code,
+                from_country: countries[i],
+                to_country: countries[j]
+              });
+            }
+          }
+        }
+      }
+    }
+
     const totalActiveDevicesSql = `
       SELECT COUNT(a.id) as total
       FROM activations a
@@ -300,7 +344,8 @@ export async function handleAdminRoutes(
     return new Response(JSON.stringify({
       success: true,
       locations: locRes.results || [],
-      total_active_devices: totalRes?.total || 0
+      total_active_devices: totalRes?.total || 0,
+      cross_region_arcs: crossRegionArcs
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

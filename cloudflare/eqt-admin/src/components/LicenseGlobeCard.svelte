@@ -8,10 +8,17 @@
     latest_activated_at?: string;
   }
 
+  interface CrossRegionArc {
+    license_code: string;
+    from_country: string;
+    to_country: string;
+  }
+
   interface LocationsResponse {
     success: boolean;
     locations: LocationItem[];
     total_active_devices: number;
+    cross_region_arcs?: CrossRegionArc[];
   }
 
   const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
@@ -37,6 +44,7 @@
 
   let globeContainerRef: HTMLDivElement | null = $state(null);
   let locations = $state<LocationItem[]>([]);
+  let crossRegionArcs = $state<CrossRegionArc[]>([]);
   let totalActiveDevices = $state(0);
   let loading = $state(true);
   let errorMsg = $state<string | null>(null);
@@ -54,7 +62,8 @@
       if (res && Array.isArray(res.locations)) {
         locations = res.locations;
         totalActiveDevices = res.total_active_devices || 0;
-        renderGlobePoints(locations);
+        crossRegionArcs = res.cross_region_arcs || [];
+        renderGlobeData(locations, crossRegionArcs);
       }
     } catch (err: any) {
       errorMsg = err.message || '获取授权激活分布失败';
@@ -103,7 +112,7 @@
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
           .atmosphereAltitude(0.18)
-          // ONLY Points/Rings for locations — NO ARCS
+          // Points/Rings for locations
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.04)
           .pointRadius((d: any) => d.radius || 0.6)
@@ -111,7 +120,13 @@
           .ringColor(() => (t: number) => `rgba(56,189,248,${1 - t})`)
           .ringMaxRadius(3)
           .ringPropagationSpeed(2)
-          .ringRepeatPeriod(1200);
+          .ringRepeatPeriod(1200)
+          // Arcs ONLY for same-key cross-region activations
+          .arcColor(() => ['#a855f7', '#ec4899'])
+          .arcDashLength(0.4)
+          .arcDashGap(0.2)
+          .arcDashAnimateTime(1600)
+          .arcStroke(1.5);
 
         if (globeInstance.controls()) {
           globeInstance.controls().autoRotate = true;
@@ -119,7 +134,7 @@
         }
 
         handleGlobeResize();
-        renderGlobePoints(locations);
+        renderGlobeData(locations, crossRegionArcs);
       } else {
         init2DFallback();
       }
@@ -137,7 +152,7 @@
     }
   }
 
-  function renderGlobePoints(locList: LocationItem[]) {
+  function renderGlobeData(locList: LocationItem[], arcsList: CrossRegionArc[]) {
     if (isFallback2D) {
       return;
     }
@@ -145,6 +160,7 @@
 
     const points: any[] = [];
     const rings: any[] = [];
+    const arcs: any[] = [];
 
     locList.forEach((item) => {
       const countryCode = (item.country || '').toUpperCase();
@@ -174,9 +190,24 @@
       });
     });
 
+    arcsList.forEach((arc) => {
+      const fromCoord = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
+      const toCoord = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
+      arcs.push({
+        startLat: fromCoord.lat,
+        startLng: fromCoord.lng,
+        endLat: toCoord.lat,
+        endLng: toCoord.lng,
+        licenseCode: arc.license_code
+      });
+    });
+
     globeInstance.pointsData(points);
     if (globeInstance.ringsData) {
       globeInstance.ringsData(rings);
+    }
+    if (globeInstance.arcsData) {
+      globeInstance.arcsData(arcs);
     }
   }
 
@@ -238,13 +269,18 @@
       }
 
       // Draw location points on 2D sphere
+      const pointMap = new Map<string, { x: number; y: number; visible: boolean }>();
+
       locations.forEach((item) => {
         const countryCode = (item.country || '').toUpperCase();
         const coord = COUNTRY_COORDS[countryCode] || { lat: 35.86, lng: 104.19, name: countryCode };
         const px = cx + Math.sin((coord.lng * Math.PI / 180) + angle) * radius * Math.cos(coord.lat * Math.PI / 180);
         const py = cy - Math.sin(coord.lat * Math.PI / 180) * radius;
+        const visible = Math.cos((coord.lng * Math.PI / 180) + angle) > -0.2;
 
-        if (Math.cos((coord.lng * Math.PI / 180) + angle) > -0.2) {
+        pointMap.set(countryCode, { x: px, y: py, visible });
+
+        if (visible) {
           ctx.fillStyle = item.active_count > 5 ? '#a855f7' : (item.active_count > 2 ? '#22c55e' : '#38bdf8');
           ctx.beginPath();
           ctx.arc(px, py, Math.min(3 + item.active_count, 8), 0, Math.PI * 2);
@@ -253,6 +289,22 @@
           ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
           ctx.font = '11px sans-serif';
           ctx.fillText(`${coord.name} (${item.active_count})`, px + 10, py + 4);
+        }
+      });
+
+      // Draw 2D arcs for same-key cross-region
+      crossRegionArcs.forEach((arc) => {
+        const p1 = pointMap.get(arc.from_country.toUpperCase());
+        const p2 = pointMap.get(arc.to_country.toUpperCase());
+        if (p1 && p2 && p1.visible && p2.visible) {
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2 - 30;
+          ctx.quadraticCurveTo(midX, midY, p2.x, p2.y);
+          ctx.stroke();
         }
       });
 
@@ -286,10 +338,15 @@
       <span class="icon">🌍</span>
       <div>
         <h3>全球授权激活分布视界</h3>
-        <p class="subtitle">实时亮起未撤销（Active）激活码所在地理点位，撤销/解绑即时熄灭</p>
+        <p class="subtitle">打点显示有效（Active）激活分布；同 Key 跨区域激活自动绘制紫粉抛物线弧线，撤销/解绑即时熄灭</p>
       </div>
     </div>
     <div class="header-right">
+      {#if crossRegionArcs.length > 0}
+        <span class="badge badge-purple" title="存在同一 Key 在不同国家/地区被激活">
+          ⚡ 跨区流光链路: {crossRegionArcs.length} 条
+        </span>
+      {/if}
       <span class="badge badge-info">在用活跃设备总数: {totalActiveDevices}</span>
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>
         🔄 刷新点位
@@ -427,6 +484,12 @@
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 600;
+  }
+
+  .badge-purple {
+    background: rgba(168, 85, 247, 0.2);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
   }
 
   .badge-info {
