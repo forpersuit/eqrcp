@@ -19,18 +19,29 @@ function activationClientMeta(request: Request): {
   const ip = clientIpFromRequest(request);
   const client_ip = ip && ip !== "unknown" ? ip : null;
   const cf = (request as any).cf;
+
   const countryRaw = (request.headers.get("cf-ipcountry") || cf?.country || "").trim().toUpperCase();
   const ip_country = countryRaw && countryRaw !== "XX" && countryRaw !== "T1"
     ? countryRaw.slice(0, 8)
     : (countryRaw || null);
+
   const ua = (request.headers.get("user-agent") || "").trim();
   const user_agent = ua ? ua.slice(0, 256) : null;
-  const city = cf?.city ? String(cf.city).trim().slice(0, 64) : null;
-  const region = cf?.regionCode || cf?.region ? String(cf.regionCode || cf.region).trim().slice(0, 64) : null;
-  const latNum = parseFloat(cf?.latitude);
-  const lngNum = parseFloat(cf?.longitude);
+
+  // Double-channel extraction: HTTP headers OR request.cf object
+  const cityRaw = request.headers.get("cf-ipcity") || request.headers.get("cf-city") || cf?.city || "";
+  const city = cityRaw ? String(cityRaw).trim().slice(0, 64) : null;
+
+  const regionRaw = request.headers.get("cf-region-code") || request.headers.get("cf-region") || cf?.regionCode || cf?.region || "";
+  const region = regionRaw ? String(regionRaw).trim().slice(0, 64) : null;
+
+  const latHeader = request.headers.get("cf-iplatitude") || request.headers.get("cf-latitude");
+  const lngHeader = request.headers.get("cf-iplongitude") || request.headers.get("cf-longitude");
+  const latNum = parseFloat(latHeader || cf?.latitude);
+  const lngNum = parseFloat(lngHeader || cf?.longitude);
   const latitude = !isNaN(latNum) ? latNum : null;
   const longitude = !isNaN(lngNum) ? lngNum : null;
+
   return { client_ip, ip_country, user_agent, city, region, latitude, longitude };
 }
 
