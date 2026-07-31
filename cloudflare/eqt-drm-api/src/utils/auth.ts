@@ -136,8 +136,8 @@ function accessConfigured(env: Env): boolean {
 }
 
 function parseAllowedEmails(env: Env): string[] {
-  const raw = (env.CF_ACCESS_ALLOWED_EMAILS || "admin@eqt.net.im").trim();
-  if (!raw) return [];
+  const raw = (env.CF_ACCESS_ALLOWED_EMAILS || "").trim();
+  if (!raw || raw === "*") return [];
   return raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 }
 
