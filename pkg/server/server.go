@@ -2341,13 +2341,22 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		if r.Method == http.MethodGet && r.URL.Query().Get("download") == "" {
 			var sizes []string
-			var fileSize string
+			var totalBytes int64
 			for _, p := range app.body.Paths {
 				var sizeStr string
 				if fi, err := os.Stat(p); err == nil {
 					if fi.IsDir() {
-						sizeStr = "Directory"
+						var dirSize int64
+						_ = filepath.Walk(p, func(_ string, info os.FileInfo, err error) error {
+							if err == nil && !info.IsDir() {
+								dirSize += info.Size()
+							}
+							return nil
+						})
+						totalBytes += dirSize
+						sizeStr = formatByteSize(dirSize)
 					} else {
+						totalBytes += fi.Size()
 						sizeStr = formatByteSize(fi.Size())
 					}
 				} else {
@@ -2355,9 +2364,7 @@ func New(cfg *config.Config) (*Server, error) {
 				}
 				sizes = append(sizes, sizeStr)
 			}
-			if len(app.body.Paths) == 1 {
-				fileSize = sizes[0]
-			}
+			fileSize := formatByteSize(totalBytes)
 
 			htmlVariables := struct {
 				Route         string

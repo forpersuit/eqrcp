@@ -479,7 +479,7 @@
                     btn_stop: '停止共享',
                     stopped_header: '服务已停止',
                     stopped_tips: '传输服务已手动关闭。您可以关闭此页面了。',
-                    saved_file: '待接收文件',
+                    saved_file: '文件列表',
                     stats_meta_single: '{count} 个文件 · {size}',
                     stats_meta_multiple: '{count} 个文件 · {size}',
                     close_hint: '下载成功后，您现在可以关闭此页面了。',
@@ -512,7 +512,7 @@
                     btn_stop: 'Stop Sharing',
                     stopped_header: 'Service Stopped',
                     stopped_tips: 'The transfer service has been stopped manually. You can close this page now.',
-                    saved_file: 'File to Receive',
+                    saved_file: 'File List',
                     stats_meta_single: '{count} file · {size}',
                     stats_meta_multiple: '{count} files · {size}',
                     close_hint: 'Once successfully completed, you can close this page.',
@@ -545,7 +545,7 @@
                     btn_stop: '共有を停止',
                     stopped_header: 'サービス停止',
                     stopped_tips: '転送サービスは手動で停止されました。このページを閉じても大丈夫です。',
-                    saved_file: '受信するファイル',
+                    saved_file: 'ファイル一覧',
                     stats_meta_single: '{count} 件のファイル · {size}',
                     stats_meta_multiple: '{count} 件のファイル · {size}',
                     close_hint: 'ダウンロード完了後、このページを閉じても大丈夫です。',
@@ -573,7 +573,7 @@
                     btn_stop: '공유 중지',
                     stopped_header: '서비스 중지됨',
                     stopped_tips: '전송 서비스가 수동으로 중지되었습니다. 이 페이지를 닫으셔도 됩니다.',
-                    saved_file: '받을 파일',
+                    saved_file: '파일 목록',
                     stats_meta_single: '{count}개 파일 · {size}',
                     stats_meta_multiple: '{count}개 파일 · {size}',
                     close_hint: '전송이 완료되면 이 페이지를 닫으셔도 됩니다.',
@@ -601,7 +601,7 @@
                     btn_stop: 'Detener Compartido',
                     stopped_header: 'Servicio Detenido',
                     stopped_tips: 'El servicio de transferencia se ha detenido manualmente. Puede cerrar esta página ahora.',
-                    saved_file: 'Archivo a Recibir',
+                    saved_file: 'Lista de Archivos',
                     stats_meta_single: '{count} archivo · {size}',
                     stats_meta_multiple: '{count} archivos · {size}',
                     close_hint: 'Una vez completado con éxito, ya puede cerrar esta página.',
@@ -629,7 +629,7 @@
                     btn_stop: 'Freigabe beenden',
                     stopped_header: 'Dienst beendet',
                     stopped_tips: 'Der Übertragungsdienst wurde manuell beendet. Sie können diese Seite jetzt schließen.',
-                    saved_file: 'Zu empfangende Datei',
+                    saved_file: 'Dateiliste',
                     stats_meta_single: '{count} Datei · {size}',
                     stats_meta_multiple: '{count} Dateien · {size}',
                     close_hint: 'Nach erfolgreichem Abschluss können Sie diese Seite schließen.',
@@ -657,7 +657,7 @@
                     btn_stop: 'Arrêter le Partage',
                     stopped_header: 'Service Arrêté',
                     stopped_tips: 'Le service de transfert a été arrêté manuellement. Vous pouvez fermer cette page maintenant.',
-                    saved_file: 'Fichier à recevoir',
+                    saved_file: 'Liste des fichiers',
                     stats_meta_single: '{count} fichier · {size}',
                     stats_meta_multiple: '{count} fichiers ont été téléchargés avec succès.',
                     close_hint: 'Une fois terminé avec succès, vous pouvez fermer cette page.',
@@ -759,6 +759,16 @@
                         } else {
                             var key = summaryEl.getAttribute('data-i18n') || 'wait_tips';
                             summaryEl.textContent = dict[key] || dict.wait_tips;
+                        }
+                    }
+
+                    var statsMetaEl = document.getElementById('transfer-stats-meta');
+                    if (statsMetaEl) {
+                        var countVal = statsMetaEl.getAttribute('data-count') || '1';
+                        var sizeVal = statsMetaEl.getAttribute('data-size') || '';
+                        var template = (countVal === '1' || countVal === 1) ? dict.stats_meta_single : dict.stats_meta_multiple;
+                        if (template) {
+                            statsMetaEl.textContent = template.replace('{count}', countVal).replace('{size}', sizeVal);
                         }
                     }
 

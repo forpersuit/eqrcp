@@ -390,6 +390,8 @@ export namespace server {
 	    deviceName?: string;
 	    savedFiles?: string[];
 	    files?: ClientFileTransferState[];
+	    speed?: number;
+	    speedFormatted?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ClientTransferStateInfo(source);
@@ -407,6 +409,8 @@ export namespace server {
 	        this.deviceName = source["deviceName"];
 	        this.savedFiles = source["savedFiles"];
 	        this.files = this.convertValues(source["files"], ClientFileTransferState);
+	        this.speed = source["speed"];
+	        this.speedFormatted = source["speedFormatted"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
