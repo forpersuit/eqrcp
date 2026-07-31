@@ -135,6 +135,8 @@ type Server struct {
 	tusMu                  sync.Mutex
 	clientSpeedTrackers    map[string]*clientSpeedTracker
 	clientSpeedTrackersMu  sync.Mutex
+	clientSubDirs          map[string]string
+	clientSubDirsMu        sync.Mutex
 }
 
 type clientSpeedTracker struct {
@@ -325,6 +327,10 @@ func (s *Server) ReceiveTo(dir string) error {
 	s.clientStates = make(map[string]*ClientTransferStateInfo)
 	s.clientStatesMu.Unlock()
 
+	s.clientSubDirsMu.Lock()
+	s.clientSubDirs = make(map[string]string)
+	s.clientSubDirsMu.Unlock()
+
 	s.clientMutex.Lock()
 	s.receiveQuotaCounted = false
 	s.clientLastSeen = make(map[string]time.Time)
@@ -510,10 +516,9 @@ func (s *Server) ReceiveTo(dir string) error {
 				clientID = "unknown"
 			}
 
-			deviceSubDir := sanitizeDeviceID(clientID)
-			deviceOutputDir := filepath.Join(output, deviceSubDir)
-			if err := os.MkdirAll(deviceOutputDir, 0755); err != nil {
-				log.Printf("Tus complete: mkdir device output dir error: %v\n", err)
+			deviceOutputDir, err := s.getDeviceOutputDir(clientID)
+			if err != nil {
+				log.Printf("Tus complete: get device output dir error: %v\n", err)
 				continue
 			}
 
@@ -1698,6 +1703,28 @@ func sanitizeDeviceID(id string) string {
 		return "unknown"
 	}
 	return res
+}
+
+func (s *Server) getDeviceOutputDir(clientID string) (string, error) {
+	cleanID := sanitizeDeviceID(clientID)
+
+	s.clientSubDirsMu.Lock()
+	if s.clientSubDirs == nil {
+		s.clientSubDirs = make(map[string]string)
+	}
+	subDir, ok := s.clientSubDirs[cleanID]
+	if !ok {
+		timestamp := time.Now().Format("20060102_150405")
+		subDir = fmt.Sprintf("eqt_receive_%s_%s", cleanID, timestamp)
+		s.clientSubDirs[cleanID] = subDir
+	}
+	s.clientSubDirsMu.Unlock()
+
+	dirPath := filepath.Join(s.outputDir, subDir)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return "", err
+	}
+	return dirPath, nil
 }
 
 func parseDeviceName(ua string) string {
@@ -3078,9 +3105,8 @@ func New(cfg *config.Config) (*Server, error) {
 				cs.Files = nil
 			})
 			app.triggerStatusHookThrottled()
-			deviceSubDir := sanitizeDeviceID(clientID)
-			deviceOutputDir := filepath.Join(app.outputDir, deviceSubDir)
-			if err := os.MkdirAll(deviceOutputDir, 0755); err != nil {
+			deviceOutputDir, err := app.getDeviceOutputDir(clientID)
+			if err != nil {
 				http.Error(w, "Unable to create device output directory", http.StatusInternalServerError)
 				return
 			}

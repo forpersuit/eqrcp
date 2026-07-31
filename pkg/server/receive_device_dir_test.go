@@ -79,20 +79,37 @@ func TestReceiveMultipleDevicesSubdirectories(t *testing.T) {
 	uploadFileForDevice("dev_phone_a", "photo.png", "phone_a_data")
 	uploadFileForDevice("dev_phone_b", "document.pdf", "phone_b_data")
 
-	fileAPath := filepath.Join(tempDir, "dev_phone_a", "photo.png")
-	dataA, err := os.ReadFile(fileAPath)
-	if err != nil {
-		t.Fatalf("Failed to read device A file: %v", err)
+	findDeviceFile := func(clientID, filename string) (string, []byte) {
+		prefix := "eqt_receive_" + sanitizeDeviceID(clientID) + "_"
+		var matchedPath string
+		err := filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() && info.Name() == filename && filepath.Base(filepath.Dir(path)) != "" {
+				parentDir := filepath.Base(filepath.Dir(path))
+				if len(parentDir) >= len(prefix) && parentDir[:len(prefix)] == prefix {
+					matchedPath = path
+				}
+			}
+			return nil
+		})
+		if err != nil || matchedPath == "" {
+			t.Fatalf("Could not find file %s for clientID %s with directory prefix %s", filename, clientID, prefix)
+		}
+		data, err := os.ReadFile(matchedPath)
+		if err != nil {
+			t.Fatalf("Failed to read file at %s: %v", matchedPath, err)
+		}
+		return matchedPath, data
 	}
+
+	_, dataA := findDeviceFile("dev_phone_a", "photo.png")
 	if string(dataA) != "phone_a_data" {
 		t.Fatalf("Device A file content = %q; want %q", string(dataA), "phone_a_data")
 	}
 
-	fileBPath := filepath.Join(tempDir, "dev_phone_b", "document.pdf")
-	dataB, err := os.ReadFile(fileBPath)
-	if err != nil {
-		t.Fatalf("Failed to read device B file: %v", err)
-	}
+	_, dataB := findDeviceFile("dev_phone_b", "document.pdf")
 	if string(dataB) != "phone_b_data" {
 		t.Fatalf("Device B file content = %q; want %q", string(dataB), "phone_b_data")
 	}
