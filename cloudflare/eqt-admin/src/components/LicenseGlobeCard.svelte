@@ -131,16 +131,17 @@
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
           .atmosphereAltitude(0.18)
-          // City-level Points & Rings
+          // 3D City Vertical Column / Bar Altitude (柱子高度随设备数拔高)
           .pointColor((d: any) => d.color || '#38bdf8')
-          .pointAltitude((d: any) => d.altitude || 0.04)
+          .pointAltitude((d: any) => d.altitude || 0.05)
           .pointRadius((d: any) => d.radius || 0.6)
+          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: <span style="color:#38bdf8;font-weight:bold;">${d.count}</span> 台设备</div>`)
           .ringsData([])
           .ringColor(() => (t: number) => `rgba(56,189,248,${1 - t})`)
-          .ringMaxRadius(3)
+          .ringMaxRadius(3.5)
           .ringPropagationSpeed(2)
           .ringRepeatPeriod(1200)
-          // City-level Cross-Location Arcs
+          // Cross-City Glowing Arcs
           .arcColor(() => ['#a855f7', '#ec4899'])
           .arcDashLength(0.4)
           .arcDashGap(0.2)
@@ -184,8 +185,11 @@
     locList.forEach((item) => {
       const coord = getCoordForItem(item);
       const count = item.active_count || 1;
-      const radius = Math.min(0.5 + count * 0.2, 1.8);
-      const altitude = Math.min(0.03 + count * 0.015, 0.12);
+      
+      // 3D 柱体高度 (Column Height): 随该城市的激活设备数动态延伸 (0.05 -> 0.38)
+      const altitude = Math.min(0.05 + count * 0.03, 0.38);
+      // 3D 柱体半径 (Column Radius)
+      const radius = Math.min(0.5 + count * 0.12, 1.6);
       const color = count > 5 ? '#a855f7' : (count > 2 ? '#22c55e' : '#38bdf8');
 
       points.push({
@@ -201,7 +205,7 @@
       rings.push({
         lat: coord.lat,
         lng: coord.lng,
-        maxR: Math.min(2 + count * 0.5, 6),
+        maxR: Math.min(2.5 + count * 0.5, 6.5),
         propagationSpeed: 1.5,
         repeatPeriod: 1500
       });
@@ -299,7 +303,7 @@
         }
       }
 
-      // Draw location points on 2D sphere
+      // Draw location points & 2D vertical columns on sphere
       const pointMap = new Map<string, { x: number; y: number; visible: boolean }>();
 
       locations.forEach((item, idx) => {
@@ -312,15 +316,32 @@
         pointMap.set(key, { x: px, y: py, visible });
 
         if (visible) {
-          ctx.fillStyle = item.active_count > 5 ? '#a855f7' : (item.active_count > 2 ? '#22c55e' : '#38bdf8');
+          const colColor = item.active_count > 5 ? '#a855f7' : (item.active_count > 2 ? '#22c55e' : '#38bdf8');
+          const colHeight = Math.min(12 + item.active_count * 3.5, 45);
+
+          // Draw 2D vertical bar column
+          ctx.strokeStyle = colColor;
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
-          ctx.arc(px, py, Math.min(3 + item.active_count, 8), 0, Math.PI * 2);
+          ctx.moveTo(px, py);
+          ctx.lineTo(px, py - colHeight);
+          ctx.stroke();
+
+          // Column top dot
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(px, py - colHeight, 3, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+          // Column base dot
+          ctx.fillStyle = colColor;
+          ctx.beginPath();
+          ctx.arc(px, py, Math.min(3 + item.active_count * 0.5, 7), 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
           ctx.font = '11px sans-serif';
-          const label = item.city ? `${coord.name}` : `${coord.name}`;
-          ctx.fillText(`${label} (${item.active_count})`, px + 10, py + 4);
+          ctx.fillText(`${coord.name} (${item.active_count}台)`, px + 8, py - colHeight + 4);
         }
       });
 
@@ -331,7 +352,7 @@
         const p1 = pointMap.get(k1);
         const p2 = pointMap.get(k2);
         if (p1 && p2 && p1.visible && p2.visible) {
-          ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.65)';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
@@ -372,7 +393,7 @@
       <span class="icon">🌍</span>
       <div>
         <h3>全球城市级授权激活分布视界</h3>
-        <p class="subtitle">城市级节点精准打点；同 Key 跨城市/跨国激活自动绘制紫粉抛物线弧线，撤销/解绑即时熄灭</p>
+        <p class="subtitle">城市打点与 3D 柱体高度表征设备激活量；同 Key 跨城/跨国激活绘制紫粉流光弧线，撤销/解绑即时熄灭</p>
       </div>
     </div>
     <div class="header-right">
