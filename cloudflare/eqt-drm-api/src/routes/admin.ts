@@ -341,6 +341,12 @@ export async function handleAdminRoutes(
     `;
     const totalRes = await env.DB.prepare(totalActiveDevicesSql).first<{ total: number }>();
 
+    ctx.waitUntil(logAdminAudit(env, 'QUERY_ACTIVATION_LOCATIONS', 'LICENSE', null, {
+      total_active_devices: totalRes?.total || 0,
+      active_country_count: (locRes.results || []).length,
+      cross_region_arcs_count: crossRegionArcs.length
+    }, clientIp));
+
     return new Response(JSON.stringify({
       success: true,
       locations: locRes.results || [],
