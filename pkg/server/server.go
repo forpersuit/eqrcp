@@ -510,13 +510,20 @@ func (s *Server) ReceiveTo(dir string) error {
 				clientID = "unknown"
 			}
 
-			filenames, err := util.ReadFilenames(output)
+			deviceSubDir := sanitizeDeviceID(clientID)
+			deviceOutputDir := filepath.Join(output, deviceSubDir)
+			if err := os.MkdirAll(deviceOutputDir, 0755); err != nil {
+				log.Printf("Tus complete: mkdir device output dir error: %v\n", err)
+				continue
+			}
+
+			filenames, err := util.ReadFilenames(deviceOutputDir)
 			if err != nil {
 				log.Printf("Tus complete: read filenames error: %v\n", err)
 				continue
 			}
 
-			out, fileName, err := createUniqueFile(output, filepath.Base(origName), filenames)
+			out, fileName, err := createUniqueFile(deviceOutputDir, filepath.Base(origName), filenames)
 			if err != nil {
 				log.Printf("Tus complete: createUniqueFile error: %v\n", err)
 				continue
@@ -1671,6 +1678,26 @@ func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
 		MaxAge:   3600,
 	})
 	return newID
+}
+
+func sanitizeDeviceID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "unknown"
+	}
+	var sb strings.Builder
+	for _, r := range id {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	res := strings.Trim(sb.String(), "._ ")
+	if res == "" || res == "." || res == ".." {
+		return "unknown"
+	}
+	return res
 }
 
 func parseDeviceName(ua string) string {
@@ -3051,7 +3078,13 @@ func New(cfg *config.Config) (*Server, error) {
 				cs.Files = nil
 			})
 			app.triggerStatusHookThrottled()
-			filenames, err := util.ReadFilenames(app.outputDir)
+			deviceSubDir := sanitizeDeviceID(clientID)
+			deviceOutputDir := filepath.Join(app.outputDir, deviceSubDir)
+			if err := os.MkdirAll(deviceOutputDir, 0755); err != nil {
+				http.Error(w, "Unable to create device output directory", http.StatusInternalServerError)
+				return
+			}
+			filenames, err := util.ReadFilenames(deviceOutputDir)
 			if err != nil {
 				http.Error(w, "Unable to read output directory", http.StatusInternalServerError)
 				return
@@ -3100,7 +3133,7 @@ func New(cfg *config.Config) (*Server, error) {
 					app.setStatus("failed", "File count exceeds 5 files limit.")
 					return
 				}
-				out, fileName, err := createUniqueFile(app.outputDir, filepath.Base(part.FileName()), filenames)
+				out, fileName, err := createUniqueFile(deviceOutputDir, filepath.Base(part.FileName()), filenames)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -3124,24 +3157,26 @@ func New(cfg *config.Config) (*Server, error) {
 					}
 
 					n, err := part.Read(buf)
+					if n > 0 {
+						if _, werr := out.Write(buf[:n]); werr != nil {
+							out.Close()
+							http.Error(w, werr.Error(), http.StatusInternalServerError)
+							return
+						}
+						currentFileWritten += int64(n)
+						if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
+							out.Close()
+							http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
+							app.setStatus("failed", "File size exceeds 50MB limit.")
+							return
+						}
+					}
 					if err == io.EOF {
 						break
 					}
 					if err != nil {
 						out.Close()
 						http.Error(w, err.Error(), http.StatusInternalServerError)
-						return
-					}
-					if _, err := out.Write(buf[:n]); err != nil {
-						out.Close()
-						http.Error(w, err.Error(), http.StatusInternalServerError)
-						return
-					}
-					currentFileWritten += int64(n)
-					if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
-						out.Close()
-						http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
-						app.setStatus("failed", "File size exceeds 50MB limit.")
 						return
 					}
 				}

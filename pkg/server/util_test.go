@@ -1133,15 +1133,18 @@ func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
 		t.Fatalf("expected status code %d (OK) since started under limit, got %d; body = %q", http.StatusOK, w.Code, w.Body.String())
 	}
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	var txtCount int
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), "file") && strings.HasSuffix(entry.Name(), ".txt") {
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasPrefix(info.Name(), "file") && strings.HasSuffix(info.Name(), ".txt") {
 			txtCount++
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if txtCount != 6 {
 		t.Fatalf("expected 6 files to be written successfully, got %d", txtCount)
