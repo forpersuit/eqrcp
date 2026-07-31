@@ -179,9 +179,19 @@ export async function requireAdminAuth(
     );
   }
 
-  const jwt =
+  let jwt =
     request.headers.get("Cf-Access-Jwt-Assertion") ||
     request.headers.get("cf-access-jwt-assertion");
+
+  if (!jwt) {
+    const cookieHeader = request.headers.get("cookie") || request.headers.get("Cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+      if (match) {
+        jwt = match[1].trim();
+      }
+    }
+  }
 
   if (!jwt) {
     return new Response(

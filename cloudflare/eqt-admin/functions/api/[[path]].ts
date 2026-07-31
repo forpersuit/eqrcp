@@ -38,6 +38,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     "accept",
     "cf-access-jwt-assertion",
     "authorization",
+    "cookie",
   ];
   for (const [k, v] of context.request.headers) {
     if (allow.includes(k.toLowerCase())) {
@@ -45,10 +46,19 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     }
   }
 
-  // Cloudflare may expose identity on Access-protected host
-  const jwt =
+  // Cloudflare may expose identity on Access-protected host via header or cookie
+  let jwt =
     context.request.headers.get("Cf-Access-Jwt-Assertion") ||
     context.request.headers.get("cf-access-jwt-assertion");
+  if (!jwt) {
+    const cookieHeader = context.request.headers.get("cookie") || context.request.headers.get("Cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+      if (match) {
+        jwt = match[1].trim();
+      }
+    }
+  }
   if (jwt) {
     headers.set("Cf-Access-Jwt-Assertion", jwt);
   }
