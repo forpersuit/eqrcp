@@ -4,6 +4,10 @@
 
   interface LocationItem {
     country: string;
+    region?: string;
+    city?: string;
+    latitude?: number;
+    longitude?: number;
     active_count: number;
     latest_activated_at?: string;
   }
@@ -11,7 +15,13 @@
   interface CrossRegionArc {
     license_code: string;
     from_country: string;
+    from_city?: string;
+    from_lat?: number;
+    from_lng?: number;
     to_country: string;
+    to_city?: string;
+    to_lat?: number;
+    to_lng?: number;
   }
 
   interface LocationsResponse {
@@ -86,6 +96,15 @@
     });
   }
 
+  function getCoordForItem(item: LocationItem): { lat: number; lng: number; name: string } {
+    if (typeof item.latitude === 'number' && typeof item.longitude === 'number') {
+      const label = item.city ? `${item.city}` : (COUNTRY_COORDS[item.country?.toUpperCase()]?.name || item.country);
+      return { lat: item.latitude, lng: item.longitude, name: label };
+    }
+    const countryCode = (item.country || '').toUpperCase();
+    return COUNTRY_COORDS[countryCode] || { lat: 35.86, lng: 104.19, name: item.city || countryCode || '其他' };
+  }
+
   async function initGlobeEngine() {
     if (!globeContainerRef) return;
     try {
@@ -112,7 +131,7 @@
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
           .atmosphereAltitude(0.18)
-          // Points/Rings for locations
+          // City-level Points & Rings
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.04)
           .pointRadius((d: any) => d.radius || 0.6)
@@ -121,7 +140,7 @@
           .ringMaxRadius(3)
           .ringPropagationSpeed(2)
           .ringRepeatPeriod(1200)
-          // Arcs ONLY for same-key cross-region activations
+          // City-level Cross-Location Arcs
           .arcColor(() => ['#a855f7', '#ec4899'])
           .arcDashLength(0.4)
           .arcDashGap(0.2)
@@ -163,9 +182,7 @@
     const arcs: any[] = [];
 
     locList.forEach((item) => {
-      const countryCode = (item.country || '').toUpperCase();
-      const coord = COUNTRY_COORDS[countryCode] || { lat: 35.86, lng: 104.19, name: countryCode || '其他' };
-      
+      const coord = getCoordForItem(item);
       const count = item.active_count || 1;
       const radius = Math.min(0.5 + count * 0.2, 1.8);
       const altitude = Math.min(0.03 + count * 0.015, 0.12);
@@ -177,7 +194,7 @@
         radius,
         altitude,
         color,
-        countryName: coord.name,
+        cityName: coord.name,
         count
       });
 
@@ -191,13 +208,27 @@
     });
 
     arcsList.forEach((arc) => {
-      const fromCoord = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
-      const toCoord = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
+      let startLat = arc.from_lat;
+      let startLng = arc.from_lng;
+      if (typeof startLat !== 'number' || typeof startLng !== 'number') {
+        const c1 = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
+        startLat = c1.lat;
+        startLng = c1.lng;
+      }
+
+      let endLat = arc.to_lat;
+      let endLng = arc.to_lng;
+      if (typeof endLat !== 'number' || typeof endLng !== 'number') {
+        const c2 = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
+        endLat = c2.lat;
+        endLng = c2.lng;
+      }
+
       arcs.push({
-        startLat: fromCoord.lat,
-        startLng: fromCoord.lng,
-        endLat: toCoord.lat,
-        endLng: toCoord.lng,
+        startLat,
+        startLng,
+        endLat,
+        endLng,
         licenseCode: arc.license_code
       });
     });
@@ -271,14 +302,14 @@
       // Draw location points on 2D sphere
       const pointMap = new Map<string, { x: number; y: number; visible: boolean }>();
 
-      locations.forEach((item) => {
-        const countryCode = (item.country || '').toUpperCase();
-        const coord = COUNTRY_COORDS[countryCode] || { lat: 35.86, lng: 104.19, name: countryCode };
+      locations.forEach((item, idx) => {
+        const coord = getCoordForItem(item);
         const px = cx + Math.sin((coord.lng * Math.PI / 180) + angle) * radius * Math.cos(coord.lat * Math.PI / 180);
         const py = cy - Math.sin(coord.lat * Math.PI / 180) * radius;
         const visible = Math.cos((coord.lng * Math.PI / 180) + angle) > -0.2;
 
-        pointMap.set(countryCode, { x: px, y: py, visible });
+        const key = `${item.country}:${item.city || idx}`;
+        pointMap.set(key, { x: px, y: py, visible });
 
         if (visible) {
           ctx.fillStyle = item.active_count > 5 ? '#a855f7' : (item.active_count > 2 ? '#22c55e' : '#38bdf8');
@@ -288,14 +319,17 @@
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
           ctx.font = '11px sans-serif';
-          ctx.fillText(`${coord.name} (${item.active_count})`, px + 10, py + 4);
+          const label = item.city ? `${coord.name}` : `${coord.name}`;
+          ctx.fillText(`${label} (${item.active_count})`, px + 10, py + 4);
         }
       });
 
-      // Draw 2D arcs for same-key cross-region
+      // Draw 2D arcs for same-key cross-location
       crossRegionArcs.forEach((arc) => {
-        const p1 = pointMap.get(arc.from_country.toUpperCase());
-        const p2 = pointMap.get(arc.to_country.toUpperCase());
+        const k1 = `${arc.from_country}:${arc.from_city || ''}`;
+        const k2 = `${arc.to_country}:${arc.to_city || ''}`;
+        const p1 = pointMap.get(k1);
+        const p2 = pointMap.get(k2);
         if (p1 && p2 && p1.visible && p2.visible) {
           ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
           ctx.lineWidth = 1.5;
@@ -337,14 +371,14 @@
     <div class="header-title">
       <span class="icon">🌍</span>
       <div>
-        <h3>全球授权激活分布视界</h3>
-        <p class="subtitle">打点显示有效（Active）激活分布；同 Key 跨区域激活自动绘制紫粉抛物线弧线，撤销/解绑即时熄灭</p>
+        <h3>全球城市级授权激活分布视界</h3>
+        <p class="subtitle">城市级节点精准打点；同 Key 跨城市/跨国激活自动绘制紫粉抛物线弧线，撤销/解绑即时熄灭</p>
       </div>
     </div>
     <div class="header-right">
       {#if crossRegionArcs.length > 0}
-        <span class="badge badge-purple" title="存在同一 Key 在不同国家/地区被激活">
-          ⚡ 跨区流光链路: {crossRegionArcs.length} 条
+        <span class="badge badge-purple" title="存在同一 Key 在不同城市/国家被激活">
+          ⚡ 跨城流光链路: {crossRegionArcs.length} 条
         </span>
       {/if}
       <span class="badge badge-info">在用活跃设备总数: {totalActiveDevices}</span>
@@ -366,7 +400,7 @@
         {@const countryName = COUNTRY_COORDS[loc.country?.toUpperCase()]?.name || loc.country}
         <div class="loc-chip">
           <span class="flag">{loc.country}</span>
-          <span class="name">{countryName}</span>
+          <span class="name">{loc.city ? `${countryName} · ${loc.city}` : countryName}</span>
           <span class="count-badge">{loc.active_count} 台</span>
         </div>
       {/each}

@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS activations (
     client_ip TEXT DEFAULT NULL,     -- CF-Connecting-IP at activate time
     ip_country TEXT DEFAULT NULL,    -- CF-IPCountry (ISO-3166-1 alpha-2) or XX
     user_agent TEXT DEFAULT NULL,    -- truncated UA for device-class hints
+    city TEXT DEFAULT NULL,          -- CF-IPCity (e.g. Shenzhen, San Jose)
+    region TEXT DEFAULT NULL,        -- CF-IPRegion/RegionCode (e.g. GD, CA)
+    latitude REAL DEFAULT NULL,      -- CF-Latitude
+    longitude REAL DEFAULT NULL,     -- CF-Longitude
     FOREIGN KEY (license_code) REFERENCES licenses(license_code)
 );
 

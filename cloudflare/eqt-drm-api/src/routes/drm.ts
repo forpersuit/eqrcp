@@ -11,16 +11,27 @@ function activationClientMeta(request: Request): {
   client_ip: string | null;
   ip_country: string | null;
   user_agent: string | null;
+  city: string | null;
+  region: string | null;
+  latitude: number | null;
+  longitude: number | null;
 } {
   const ip = clientIpFromRequest(request);
   const client_ip = ip && ip !== "unknown" ? ip : null;
-  const countryRaw = (request.headers.get("cf-ipcountry") || "").trim().toUpperCase();
+  const cf = (request as any).cf;
+  const countryRaw = (request.headers.get("cf-ipcountry") || cf?.country || "").trim().toUpperCase();
   const ip_country = countryRaw && countryRaw !== "XX" && countryRaw !== "T1"
     ? countryRaw.slice(0, 8)
     : (countryRaw || null);
   const ua = (request.headers.get("user-agent") || "").trim();
   const user_agent = ua ? ua.slice(0, 256) : null;
-  return { client_ip, ip_country, user_agent };
+  const city = cf?.city ? String(cf.city).trim().slice(0, 64) : null;
+  const region = cf?.regionCode || cf?.region ? String(cf.regionCode || cf.region).trim().slice(0, 64) : null;
+  const latNum = parseFloat(cf?.latitude);
+  const lngNum = parseFloat(cf?.longitude);
+  const latitude = !isNaN(latNum) ? latNum : null;
+  const longitude = !isNaN(lngNum) ? lngNum : null;
+  return { client_ip, ip_country, user_agent, city, region, latitude, longitude };
 }
 
 /**
@@ -276,7 +287,7 @@ export async function handleDrmRoutes(
       // Insert new activation record (capture network meta for admin visibility / future geo)
       const net = activationClientMeta(request);
       await env.DB.prepare(
-        "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent, city, region, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
         license_code,
         uuid_hash || "",
@@ -286,7 +297,11 @@ export async function handleDrmRoutes(
         new Date().toISOString(),
         net.client_ip,
         net.ip_country,
-        net.user_agent
+        net.user_agent,
+        net.city,
+        net.region,
+        net.latitude,
+        net.longitude
       ).run();
 
       // Send activation notification email to the buyer asynchronously

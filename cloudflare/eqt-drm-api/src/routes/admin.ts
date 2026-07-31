@@ -280,53 +280,103 @@ export async function handleAdminRoutes(
     const locationsSql = `
       SELECT 
         a.ip_country as country, 
+        a.region as region,
+        a.city as city,
+        a.latitude as latitude,
+        a.longitude as longitude,
         COUNT(a.id) as active_count,
         MAX(a.activated_at) as latest_activated_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE l.status = 'active' AND a.ip_country IS NOT NULL AND a.ip_country != ''
-      GROUP BY a.ip_country
+      GROUP BY a.ip_country, a.region, a.city, a.latitude, a.longitude
     `;
-    const locRes = await env.DB.prepare(locationsSql).all<{ country: string; active_count: number; latest_activated_at: string }>();
+    const locRes = await env.DB.prepare(locationsSql).all<{
+      country: string;
+      region?: string | null;
+      city?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      active_count: number;
+      latest_activated_at: string;
+    }>();
 
-    // Query active activations to build cross-region arcs for SAME license key
+    // Build city-level cross-location arcs for SAME license key
     const rawActivationsSql = `
       SELECT 
         a.license_code,
-        a.ip_country
+        a.ip_country as country,
+        a.region as region,
+        a.city as city,
+        a.latitude as latitude,
+        a.longitude as longitude
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE l.status = 'active' AND a.ip_country IS NOT NULL AND a.ip_country != ''
     `;
-    const rawRes = await env.DB.prepare(rawActivationsSql).all<{ license_code: string; ip_country: string }>();
+    const rawRes = await env.DB.prepare(rawActivationsSql).all<{
+      license_code: string;
+      country: string;
+      region?: string | null;
+      city?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }>();
     const rawList = rawRes.results || [];
 
-    const keyCountriesMap = new Map<string, Set<string>>();
+    const keyNodesMap = new Map<string, Array<{ country: string; region?: string; city?: string; latitude?: number; longitude?: number }>>();
     for (const item of rawList) {
       const code = item.license_code;
-      const c = item.ip_country.toUpperCase();
-      if (!keyCountriesMap.has(code)) {
-        keyCountriesMap.set(code, new Set());
+      if (!keyNodesMap.has(code)) {
+        keyNodesMap.set(code, []);
       }
-      keyCountriesMap.get(code)!.add(c);
+      keyNodesMap.get(code)!.push({
+        country: item.country.toUpperCase(),
+        region: item.region || undefined,
+        city: item.city || undefined,
+        latitude: item.latitude || undefined,
+        longitude: item.longitude || undefined
+      });
     }
 
-    const crossRegionArcs: { license_code: string; from_country: string; to_country: string }[] = [];
+    const crossRegionArcs: {
+      license_code: string;
+      from_country: string;
+      from_city?: string;
+      from_lat?: number;
+      from_lng?: number;
+      to_country: string;
+      to_city?: string;
+      to_lat?: number;
+      to_lng?: number;
+    }[] = [];
     const seenPairs = new Set<string>();
 
-    for (const [code, countriesSet] of keyCountriesMap.entries()) {
-      if (countriesSet.size > 1) {
-        const countries = Array.from(countriesSet);
-        for (let i = 0; i < countries.length; i++) {
-          for (let j = i + 1; j < countries.length; j++) {
-            const pairKey = `${code}:${countries[i]}->${countries[j]}`;
-            if (!seenPairs.has(pairKey)) {
-              seenPairs.add(pairKey);
-              crossRegionArcs.push({
-                license_code: code,
-                from_country: countries[i],
-                to_country: countries[j]
-              });
+    for (const [code, nodes] of keyNodesMap.entries()) {
+      if (nodes.length > 1) {
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const n1 = nodes[i];
+            const n2 = nodes[j];
+            const locKey1 = `${n1.country}:${n1.region || ''}:${n1.city || ''}`;
+            const locKey2 = `${n2.country}:${n2.region || ''}:${n2.city || ''}`;
+
+            if (locKey1 !== locKey2) {
+              const pairKey = `${code}:${locKey1}->${locKey2}`;
+              if (!seenPairs.has(pairKey)) {
+                seenPairs.add(pairKey);
+                crossRegionArcs.push({
+                  license_code: code,
+                  from_country: n1.country,
+                  from_city: n1.city,
+                  from_lat: n1.latitude,
+                  from_lng: n1.longitude,
+                  to_country: n2.country,
+                  to_city: n2.city,
+                  to_lat: n2.latitude,
+                  to_lng: n2.longitude
+                });
+              }
             }
           }
         }

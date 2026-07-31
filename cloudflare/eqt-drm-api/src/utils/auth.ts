@@ -42,6 +42,10 @@ export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
     "ALTER TABLE activations ADD COLUMN client_ip TEXT DEFAULT NULL",
     "ALTER TABLE activations ADD COLUMN ip_country TEXT DEFAULT NULL",
     "ALTER TABLE activations ADD COLUMN user_agent TEXT DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN city TEXT DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN region TEXT DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN latitude REAL DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN longitude REAL DEFAULT NULL",
   ];
   for (const sql of alters) {
     try {
