@@ -1392,10 +1392,6 @@
                   <span>{formatQuotaClock(dailySeconds)}</span>
                 </div>
                 <div class="license-info-row">
-                  <strong>{t.freeQuotaUsed}</strong>
-                  <span>{formatQuotaClock(usedSeconds)}</span>
-                </div>
-                <div class="license-info-row">
                   <strong>{freeDegraded ? t.freeQuotaDegraded : getTranslation('freeQuotaRemaining', currentLang).replace('{time}', '').trim()}</strong>
                   <span>{freeDegraded ? t.freeQuotaAttachmentPolicy : formatQuotaClock(remainingSeconds)}</span>
                 </div>

@@ -2487,39 +2487,33 @@ function renderPlanComparisonPanel() {
                 <!-- 体验卡片 -->
                 <div class="plan-card plan-card-premium" style="border: 1.2px solid var(--line); border-radius: 16px; padding: 24px; background: var(--bg-hover); display: flex; flex-direction: column; text-align: left; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
                     <div style="margin-bottom: 16px; border-bottom: 1.2px solid var(--line); padding-bottom: 14px;">
-                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">Free Tier</span>
+                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">${t('free_tier_tag') || 'Free Tier'}</span>
                         <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('free_quota') || '体验版'}</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('free_tier_desc') || '局域网极速协作与传输体验版。'}</p>
-                        <div style="font-size: 26px; font-weight: 900; color: var(--text-primary); margin-top: 14px;">¥0 <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">${t('lifetime') || '永久'}</span></div>
+                        <div style="font-size: 26px; font-weight: 900; color: var(--text-primary); margin-top: 14px;">${t('free_price') || '¥0'} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">${t('lifetime') || '永久'}</span></div>
                     </div>
                     <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_lan_transfer') || '局域网极速文件传输 (无网/离线可用)'}</span>
+                            ${checkGreen} <span>${t('plan_feature_lan_transfer')}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_drag_and_drop') || '支持拖拽发送、历史保存、文件夹选择'}</span>
+                            ${checkGreen} <span>${t('plan_feature_drag_and_drop')}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_chat_free') || 'Chat 模式限制：每日限额满速。超额后强力限速及限额'}</span>
+                            ${xRed} <span>${t('plan_feature_chat_free')}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_share_free') || 'Share 电脑发送限制：每日免费 5 次。超额后限制大小'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_receive_free') || 'Receive 移动端上传限制：每日免费 5 次。超额后限额阻断'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
-                            ${xRed} <span>${t('plan_feature_future_upgrade') || '主板授权生命周期迁移支持'}</span>
+                            ${xRed} <span>${t('plan_feature_share_receive_free')}</span>
                         </li>
                     </ul>
                 </div>
 
                 <!-- PLUS / PLUS U 付费卡片 -->
                 <div class="plan-card plan-card-premium featured" style="border: 2px solid var(--accent); border-radius: 16px; padding: 24px; background: var(--bg); display: flex; flex-direction: column; text-align: left; position: relative; box-shadow: 0 10px 30px rgba(47, 158, 115, 0.08), 0 2px 8px rgba(47, 158, 115, 0.03); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
-                    <div style="position: absolute; top: -9px; right: 20px; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; font-size: 9.5px; font-weight: 900; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.2);">Recommended</div>
+                    <div style="position: absolute; top: -9px; right: 20px; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; font-size: 9.5px; font-weight: 900; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.2);">${t('recommended_tag') || 'Recommended'}</div>
                     <div style="margin-bottom: 16px;">
-                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">Plus Upgrade</span>
-                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">PLUS / PLUS U</h3>
+                        <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">${t('plus_upgrade_tag') || 'Plus Upgrade'}</span>
+                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('plus_card_title') || 'PLUS / PLUS U'}</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_plus_desc_short') || '解除局域网 Chat 及文件传输的全部大小与频率限制。'}</p>
                         
                         <!-- 价格区分小卡片 -->
@@ -2536,22 +2530,16 @@ function renderPlanComparisonPanel() {
                     </div>
                     <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <strong>${t('plan_feature_chat_unlimit') || '无限量 Chat 时间（绝不限额）'}</strong>
+                            ${checkGreen} <strong>${t('plan_feature_unlimit_devices')}</strong>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <strong>${t('plan_feature_unlimit_transfer') || '高并发无限度极速发送与接收文件'}</strong>
+                            ${checkGreen} <strong>${t('plan_feature_chat_unlimit')}</strong>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_device_bind') || '绑定当前主板与系统指纹，稳定可靠'}</span>
+                            ${checkGreen} <strong>${t('plan_feature_unlimit_transfer')}</strong>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_clock_check') || '本地密码学独立验签，支持离线脱机校验'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_future_upgrade') || '终身免费主板授权升级与迁移支持'}</span>
-                        </li>
-                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
-                            ${checkGreen} <span>${t('plan_feature_support') || '尊享专属技术支持通道'}</span>
+                            ${checkGreen} <span>${t('plan_feature_offline_lease')}</span>
                         </li>
                     </ul>
                     ${!hasPaidLicense() ? `
@@ -2563,9 +2551,12 @@ function renderPlanComparisonPanel() {
             </div>
 
             <!-- 说明与跳转部分 -->
-            <div style="background: var(--bg-hover); border-radius: 12px; padding: 14px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 8px;">
-                <div>💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
-                <div>🎁 <strong>${t('free_tier_rules') || '额度与刷新'}</strong>：${t('free_tier_rules_desc')}</div>
+            <div style="background: var(--bg-hover); border-radius: 12px; padding: 16px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.65; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 10px;">
+                <div style="font-weight: 800; font-size: 13px; color: var(--text-primary); margin-bottom: 2px;">📌 ${t('plan_note_disclaimer_title') || '套餐注意事项与重要说明'}</div>
+                <div>1. ${t('plan_note_free_online')}</div>
+                <div>2. ${t('plan_note_plus_offline')}</div>
+                <div>3. ${t('plan_note_device_edit')}</div>
+                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line);">💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
             </div>
             
             <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
