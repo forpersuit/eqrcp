@@ -272,6 +272,41 @@ export async function handleAdminRoutes(
     });
   }
 
+  // 3.8 Admin Endpoint: Active License Locations Aggregation (No arcs, points only for active activations)
+  if (url.pathname === "/api/v1/admin/activation-locations" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const locationsSql = `
+      SELECT 
+        a.ip_country as country, 
+        COUNT(a.id) as active_count,
+        MAX(a.activated_at) as latest_activated_at
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE l.status = 'active' AND a.ip_country IS NOT NULL AND a.ip_country != ''
+      GROUP BY a.ip_country
+    `;
+    const locRes = await env.DB.prepare(locationsSql).all<{ country: string; active_count: number; latest_activated_at: string }>();
+
+    const totalActiveDevicesSql = `
+      SELECT COUNT(a.id) as total
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE l.status = 'active'
+    `;
+    const totalRes = await env.DB.prepare(totalActiveDevicesSql).first<{ total: number }>();
+
+    return new Response(JSON.stringify({
+      success: true,
+      locations: locRes.results || [],
+      total_active_devices: totalRes?.total || 0
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // 4. Admin Endpoint: Search all licenses (sort by created_at; real activations columns)
   if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);

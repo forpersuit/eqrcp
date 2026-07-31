@@ -343,15 +343,6 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Maximale Anzahl an Geräten für diese Lizenz erreicht",
     fr: "Nombre maximal d'appareils atteint pour cette licence"
   },
-  lifetime_stacking_blocked: {
-    zh: "该设备已激活同级别的终身买断授权，无需重复叠加激活",
-    en: "This device already has a lifetime license of the same tier; stacking is not allowed.",
-    ja: "この端末には既に同ランクの永久ライセンスが有効化されています",
-    ko: "이 기기에는 이미 동일한 등급의 영구 라이선스가 활성화되어 있습니다",
-    es: "Este dispositivo ya tiene una licencia de por vida del mismo nivel",
-    de: "Dieses Gerät verfügt bereits über eine lebenslange Lizenz desselben Tarifs",
-    fr: "Cet appareil dispose déjà d'une licence à vie du même niveau"
-  },
   auto_renew_off_success: {
     zh: "自动续费已关闭。您的 Plus 权益可继续正常使用至到期日，届时将不会自动扣费。",
     en: "Auto-renewal disabled. Your Plus status remains active until expiration date, and you will not be billed again.",
