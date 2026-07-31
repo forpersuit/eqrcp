@@ -18,7 +18,7 @@ export function isAuthenticated(): boolean {
 
 /** Access logout: send user to CF Access logout URL if team domain configured. */
 export function accessLogoutUrl(): string | null {
-  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'persuit.cloudflareaccess.com')
+  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || 'huiai.cloudflareaccess.com')
     .replace(/^https?:\/\//, '')
     .replace(/\/$/, '');
   if (!team) return null;
