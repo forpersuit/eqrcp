@@ -101,6 +101,12 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 在 `GET /api/v1/admin/health` 中提供运营指标：`total_licenses`, `active_licenses`, `today_activations`, `total_error_logs`, `errors_24h`。
   - 在 `schema.sql` 中为 `buyer_email_hash`, `created_at`, `admin_audit_logs(created_at)` 显式创建 B-Tree 索引。
 
+### 3.7 Admin 后台与 Cloudflare Access SPA 同源反代坑点
+- **生产 API Base 配置规则**：`cloudflare/eqt-admin/.env` 中的 `VITE_API_BASE` 在生产部署时**必须留空** (`VITE_API_BASE=`)。生产环境中 SPA 必须发起同源 `/api/v1/admin/*` 请求，由 Pages 同源 Function (`functions/api/[[path]].ts`) 代理并注入 `Cf-Access-Jwt-Assertion` 标头到后端 `lic.eqt.net.im` Worker。
+- **禁止硬编码后端跨域域名**：若误设为 `VITE_API_BASE=https://lic.eqt.net.im`，打包出的静态 JavaScript 会跨域绕过 Pages 反代，导致无法携带 `admin.eqt.net.im` 的 Access Cookie 或 Header，触发 401 `ACCESS_JWT_REQUIRED` 甚至陷入前端刷新死循环。
+- **401 防刷新死循环**：`adminFetch` 捕获 401 严禁强行 `window.location.reload()` 或变更 `location.href`；必须在 UI 暴露出具体 error payload 便于定位诊断。
+
+
 ---
 
 ## 4. 兑换码生成与管理工具 (License Code Generation)
