@@ -264,7 +264,7 @@
     <!-- Footer -->
     <footer class="w-full py-8 bg-surface-container-lowest border-t border-outline-variant text-center text-xs text-on-surface-variant">
         <div class="max-w-5xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+            <p data-i18n="footer_copy">© {year} EQT (Easy QR Transfer). All rights reserved.</p>
             <div class="flex gap-md">
                 <a class="text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.net.im" data-i18n="footer_support">Support: support@eqt.net.im</a>
                 <span>|</span>
@@ -313,7 +313,7 @@
                 "comp_privacy": "Privacy Policy",
                 "comp_terms": "Terms of Service",
                 "comp_refund": "Refund Policy",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "Support: support@eqt.net.im",
                 "paddle_disclosure_title": "Payment Reseller &amp; MoR",
                 "paddle_disclosure": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns.",
@@ -377,7 +377,7 @@
                 "comp_privacy": "隐私政策",
                 "comp_terms": "服务条款",
                 "comp_refund": "退款政策",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). 保留所有权利。",
                 "footer_support": "支持邮箱: support@eqt.net.im",
                 "paddle_disclosure_title": "官方授权支付代理",
                 "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。",
@@ -441,7 +441,7 @@
                 "comp_privacy": "プライバシーポリシー",
                 "comp_terms": "利用規約",
                 "comp_refund": "返金ポリシー",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "サポート: support@eqt.net.im",
                 "paddle_disclosure_title": "決済リセラーとMoR",
                 "paddle_disclosure": "注文プロセスは、当社のオンラインリセラーであるPaddle.comによって行われます。Paddle.comは、すべての注文のMerchant of Record（MoR）です。Paddleは、カスタマーサポートや返品対応を提供します。",
@@ -489,7 +489,7 @@
                 "comp_privacy": "개인정보 처리방침",
                 "comp_terms": "서비스 이용약관",
                 "comp_refund": "환불 규정",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "고객지원: support@eqt.net.im",
                 "paddle_disclosure_title": "공식 결제 대행사 (MoR)",
                 "paddle_disclosure": "주문 및 결제 절차는 당사의 공식 리셀러인 Paddle.com에 의해 처리됩니다. Paddle.com은 모든 주문의 가맹점(Merchant of Record)으로, 결제 관련 고객 지원 및 환불을 직접 담당합니다.",
@@ -537,7 +537,7 @@
                 "comp_privacy": "Política de Privacidad",
                 "comp_terms": "Condiciones de Servicio",
                 "comp_refund": "Política de Reembolso",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "Soporte: support@eqt.net.im",
                 "paddle_disclosure_title": "Distribuidor y MoR oficial",
                 "paddle_disclosure": "El proceso de pedido es gestionado por nuestro distribuidor oficial Paddle.com, que actúa como el Merchant of Record de todas nuestras transacciones. Paddle se encarga del servicio de atención al cliente y devoluciones.",
@@ -585,7 +585,7 @@
                 "comp_privacy": "Datenschutzerklärung",
                 "comp_terms": "Nutzungsbedingungen",
                 "comp_refund": "Erstattungsrichtlinie",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "Support: support@eqt.net.im",
                 "paddle_disclosure_title": "Zahlungs-Reseller &amp; MoR",
                 "paddle_disclosure": "Unser Bestellprozess wird durch unseren Online-Reseller Paddle.com durchgeführt. Paddle.com is der Merchant of Record (MoR) für all unsere Bestellungen. Paddle bietet Kundensupport und Rückabwicklung an.",
@@ -637,7 +637,7 @@
                 "comp_feat1_desc": "Les licences numériques sont livrées instantanément par e-mail après confirmation réussie du paiement.",
                 "comp_feat2_title": "Remboursement et Annulation",
                 "comp_feat2_desc": "Garantie de remboursement de 14 jours pour les licences inutilisées. Les abonnements peuvent être annulés à tout moment.",
-                "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
                 "footer_support": "Support: support@eqt.net.im",
                 "paddle_disclosure_title": "Distributeur &amp; MoR officiel",
                 "paddle_disclosure": "Notre processus de commande est géré par notre distributeur en ligne Paddle.com. Paddle.com est le Merchant of Record (MoR) pour toutes nos commandes. Paddle gère le service client et les retours.",
@@ -687,6 +687,7 @@
                     text = fallback[key];
                 }
                 if (text !== undefined) {
+                    text = text.replace('{year}', new Date().getFullYear());
                     el.innerHTML = text;
                 }
             });

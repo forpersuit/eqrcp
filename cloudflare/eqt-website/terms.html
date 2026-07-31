@@ -105,7 +105,8 @@
 
     <!-- Footer -->
     <footer class="w-full py-6 bg-background border-t border-white/10 text-center text-xs text-on-surface-variant">
-        <p>© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+        <p>© <span id="copyright-year">2026</span> EQT (Easy QR Transfer). All rights reserved.</p>
     </footer>
+    <script>document.getElementById('copyright-year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

@@ -397,7 +397,7 @@
 <div class="max-w-container-max mx-auto px-lg flex flex-col md:flex-row justify-between items-start gap-lg">
 <div class="space-y-sm">
 <div class="font-headline-md text-headline-md text-on-surface">EQT</div>
-<p class="font-body-md text-body-md text-primary font-medium" data-i18n="footer_copy">© 2026 EQT (Easy QR Transfer). All rights reserved.</p>
+<p class="font-body-md text-body-md text-primary font-medium" data-i18n="footer_copy">© {year} EQT (Easy QR Transfer). All rights reserved.</p>
 </div>
 <div class="flex flex-col md:flex-row gap-lg md:gap-xl">
 <a class="font-body-md text-body-md text-primary font-semibold hover:underline transition-colors" href="portal.html" data-i18n="nav_portal">License Portal</a>
@@ -475,7 +475,7 @@
         "comp_privacy": "Privacy Policy",
         "comp_terms": "Terms of Service",
         "comp_refund": "Refund Policy",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "Support: support@eqt.net.im",
         "meta_title": "EQT - Easy QR Transfer | LAN File Transfer &amp; Secure Chat via QR Code",
         "meta_desc": "EQT transfers files between PC and mobile at full LAN speed (10–100 MB/s) via QR code. No cloud, no app install. Encrypted local P2P chat. Windows, macOS, Linux.",
@@ -561,7 +561,7 @@
         "comp_privacy": "隐私政策",
         "comp_terms": "服务条款",
         "comp_refund": "退款政策",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). 保留所有权利。",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). 保留所有权利。",
         "footer_support": "支持邮箱: support@eqt.net.im",
         "meta_title": "EQT - 极速扫码文件传输 | 局域网传输与二维码安全聊天工具",
         "meta_desc": "EQT 是一款电脑与手机之间的局域网 P2P 文件传输工具，通过二维码扫码，以 10-100 MB/s 的局域网满速进行传输。无需云端，免安装 App。支持局域网加密 P2P 聊天。支持 Windows、macOS 和 Linux。",
@@ -658,7 +658,7 @@
         "comp_feat1_desc": "デジタルライセンスキーは, 支払いの確認が成功すると, 電子メールですぐに納品されます。",
         "comp_feat2_title": "払い戻しとキャンセル",
         "comp_feat2_desc": "未使用のライセンスについては14日間の返金保証があります。サブスクリプションはいつでもキャンセルできます。",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "サポート: support@eqt.net.im"
     },
     "ko": {
@@ -737,7 +737,7 @@
         "comp_feat1_desc": "디지털 라이센스 키는 결제 확인이 완료되는 즉시 이메일로 발송됩니다.",
         "comp_feat2_title": "환불 및 취소 규정",
         "comp_feat2_desc": "사용하지 않은 라이센스에 한해 14일 이내 환불을 보장합니다. 구독은 언제든지 취소할 수 있습니다.",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "고객지원: support@eqt.net.im"
     },
     "es": {
@@ -813,7 +813,7 @@
         "comp_feat1_desc": "Las licencias digitales se entregan instantáneamente por correo electrónico tras la confirmación exitosa del pago.",
         "comp_feat2_title": "Reembolso y Cancelación",
         "comp_feat2_desc": "Garantía de devolución de dinero de 14 días para licencias no utilizadas. Las suscripciones se pueden cancelar en cualquier momento.",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "Soporte: support@eqt.net.im"
     },
     "de": {
@@ -889,7 +889,7 @@
         "comp_feat1_desc": "Digitale Lizenzen werden nach erfolgreicher Zahlungsbestätigung sofort per E-Mail zugestellt.",
         "comp_feat2_title": "Rückerstattung &amp; Stornierung",
         "comp_feat2_desc": "14-tägige Geld-zurück-Garantie für ungenutzte Lizenzen. Abonnements können jederzeit gekündigt werden.",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "Support: support@eqt.net.im"
     },
     "fr": {
@@ -965,7 +965,7 @@
         "comp_feat1_desc": "Les licences numériques sont livrées instantanément par e-mail après confirmation réussie du paiement.",
         "comp_feat2_title": "Remboursement et Annulation",
         "comp_feat2_desc": "Garantie de remboursement de 14 jours pour les licences inutilisées. Les abonnements peuvent être annulés à tout moment.",
-        "footer_copy": "© 2026 EQT (Easy QR Transfer). All rights reserved.",
+        "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
         "footer_support": "Support: support@eqt.net.im"
     }
 };;;
@@ -1001,6 +1001,7 @@
                 text = fallback[key];
             }
             if (text !== undefined) {
+                text = text.replace('{year}', new Date().getFullYear());
                 el.innerHTML = text;
             }
         });
