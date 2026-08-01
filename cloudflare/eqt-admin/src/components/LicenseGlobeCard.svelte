@@ -439,6 +439,9 @@
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
     border-radius: var(--radius-md, 8px);
     margin-bottom: 1.25rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .card-header {

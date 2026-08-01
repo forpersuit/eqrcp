@@ -104,16 +104,16 @@
 </div>
 
 <style>
-  .page-container { display: flex; flex-direction: column; gap: 1.5rem; width: 100%; }
+  .page-container { display: flex; flex-direction: column; gap: 1.5rem; width: 100%; max-width: 100%; box-sizing: border-box; }
   .header-row { display: flex; justify-content: space-between; align-items: center; }
   h2 { font-size: 1.5rem; font-weight: 700; }
   .subtitle { font-size: 0.875rem; color: var(--text-muted); }
 
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; width: 100%; }
-  .stat-card { display: flex; align-items: center; gap: 1.25rem; padding: 1.5rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; width: 100%; box-sizing: border-box; }
+  .stat-card { display: flex; align-items: center; gap: 1.25rem; padding: 1.5rem; box-sizing: border-box; }
   .stat-icon { font-size: 2.25rem; background: rgba(99, 102, 241, 0.1); padding: 0.75rem; border-radius: var(--radius-md); }
   .stat-num { font-size: 1.75rem; font-weight: 800; color: var(--text-primary); }
   .stat-label { font-size: 0.85rem; color: var(--text-muted); }
 
-  .globe-section { width: 100%; }
+  .globe-section { width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; }
 </style>

@@ -115,6 +115,10 @@
   .admin-layout {
     display: flex;
     min-height: 100vh;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   .sidebar {
@@ -199,8 +203,10 @@
 
   .main-content {
     flex: 1;
+    min-width: 0;
     margin-left: 260px;
     padding: 2rem 2.5rem;
     max-width: 1400px;
+    box-sizing: border-box;
   }
 </style>
