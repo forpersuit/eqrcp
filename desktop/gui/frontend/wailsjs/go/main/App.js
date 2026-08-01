@@ -114,6 +114,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SaveSharePosterImage(arg1) {
+  return window['go']['main']['App']['SaveSharePosterImage'](arg1);
+}
+
 export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
 }

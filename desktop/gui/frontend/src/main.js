@@ -3290,24 +3290,26 @@ function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-share-panel')?.addEventListener('click', (e) => {
         if (e) e.stopPropagation();
-        console.log('[EQT Share] Open Share panel clicked. Locking activePanel to about.');
+        console.log('[EQT Share] Open Share panel clicked. Instant 0ms response.');
         state.activePanel = 'about';
         state.showShareOverlay = true;
         syncPanelSurface();
-        prepareMergedQRCode();
+        setTimeout(prepareMergedQRCode, 50);
     });
     document.querySelector('#close-share-overlay')?.addEventListener('click', (e) => {
         if (e) e.stopPropagation();
-        console.log('[EQT Share] Close Share overlay clicked. Keeping activePanel as about.');
+        console.log('[EQT Share] Close Share overlay clicked (bindPanelEvents).');
         state.activePanel = 'about';
         state.showShareOverlay = false;
+        document.querySelector('.share-overlay-backdrop')?.remove();
         syncPanelSurface();
     });
     document.querySelector('.share-overlay-backdrop')?.addEventListener('click', (event) => {
         if (event.target.classList.contains('share-overlay-backdrop')) {
-            console.log('[EQT Share] Share backdrop clicked, closing overlay and keeping activePanel as about.');
+            console.log('[EQT Share] Share backdrop clicked (bindPanelEvents).');
             state.activePanel = 'about';
             state.showShareOverlay = false;
+            document.querySelector('.share-overlay-backdrop')?.remove();
             syncPanelSurface();
         }
     });
@@ -6504,6 +6506,31 @@ function compressImageToWebP(file, quality = 0.75, maxWidth = 1200, maxHeight = 
 window.renderReceiveDeviceProgressHtml = renderReceiveDeviceProgressHtml;
 window.render = render;
 window.state = state;
+
+// 全局捕获阶段 (useCapture = true) 的 Share Sub-Modal 0ms 物理拦截触发器
+document.addEventListener('click', (event) => {
+    const closeBtn = event.target && event.target.closest ? event.target.closest('#close-share-overlay, .share-overlay-close') : null;
+    if (closeBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('[EQT Share] Global Capture: Close share button 0ms instant trigger');
+        state.showShareOverlay = false;
+        state.activePanel = 'about';
+        document.querySelector('.share-overlay-backdrop')?.remove();
+        syncPanelSurface();
+        return;
+    }
+    if (event.target && event.target.classList && event.target.classList.contains('share-overlay-backdrop')) {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('[EQT Share] Global Capture: Share backdrop 0ms instant trigger');
+        state.showShareOverlay = false;
+        state.activePanel = 'about';
+        document.querySelector('.share-overlay-backdrop')?.remove();
+        syncPanelSurface();
+        return;
+    }
+}, true);
 
 // 全局 input/textarea 的右键菜单支持 (Context menu for text elements)
 document.addEventListener('contextmenu', (e) => {

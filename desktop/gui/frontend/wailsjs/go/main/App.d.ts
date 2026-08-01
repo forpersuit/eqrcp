@@ -58,6 +58,8 @@ export function SaveChatAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
 export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSettings>;
 
+export function SaveSharePosterImage(arg1:string):Promise<string>;
+
 export function SelectFiles():Promise<Array<string>>;
 
 export function SelectLogDirectory():Promise<string>;
