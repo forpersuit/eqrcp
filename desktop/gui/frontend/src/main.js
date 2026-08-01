@@ -1846,21 +1846,17 @@ function renderPanel() {
         settings: t('settings'),
         redeem: t('redeem_title'),
         about: t('about_title'),
-        share: t('share_app_title') || '分享 EQT (Easy QR Transfer)',
         feedback: t('feedback'),
         'confirm-switch': t('confirm_switch_title'),
         'plan-comparison': t('plan_desc_title'),
     }[state.activePanel] || '';
     const isConfirm = state.activePanel === 'confirm-switch';
     const isPlanComp = state.activePanel === 'plan-comparison';
-    const isShare = state.activePanel === 'share';
     let modalStyle = '';
     if (isConfirm) {
         modalStyle = 'style="max-width: 420px; width: min(420px, 100%);"';
     } else if (isPlanComp) {
         modalStyle = 'style="max-width: 780px; width: min(780px, 100%);"';
-    } else if (isShare) {
-        modalStyle = 'style="max-width: 460px; width: min(460px, 100%);"';
     }
     return `
         <div class="overlay" role="presentation">
@@ -1876,7 +1872,6 @@ function renderPanel() {
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
-                ${state.activePanel === 'share' ? renderSharePanel() : ''}
                 ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
@@ -5865,9 +5860,31 @@ async function downloadSharePosterImage() {
     }
 }
 
+let cachedMergedQRDataURL = '';
+
+async function prepareMergedQRCode() {
+    if (cachedMergedQRDataURL) return cachedMergedQRDataURL;
+    try {
+        cachedMergedQRDataURL = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        const imgEl = document.querySelector('#share-qr-img-element');
+        if (imgEl && cachedMergedQRDataURL) {
+            imgEl.src = cachedMergedQRDataURL;
+        }
+    } catch (e) {
+        console.error('Failed to prepare merged QR code:', e);
+    }
+    return cachedMergedQRDataURL;
+}
+
 function renderSharePanel() {
     const shareUrl = 'https://eqt.net.im';
     const scatteredHtml = generateRandomScatteredIcons();
+    const qrSrc = cachedMergedQRDataURL || 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=H&data=https%3A%2F%2Feqt.net.im';
+
+    // 若尚未异步缓存好，立即触发后台异步合成并更新DOM
+    if (!cachedMergedQRDataURL) {
+        setTimeout(prepareMergedQRCode, 0);
+    }
 
     return `
         <div class="share-panel" style="padding: 2px 2px 8px 2px;">
@@ -5878,14 +5895,9 @@ function renderSharePanel() {
                 </div>
 
                 <div class="share-poster-content" style="gap: 16px;">
-                    <!-- 上方: 官方网站高容错 (ecc=H) 纯净二维码 (正中间带有品牌 Logo Badge) -->
+                    <!-- 上方: 真正的物理带Logo单张二维码图片 (没有任何DOM叠加Overlay) -->
                     <div class="share-qr-wrapper">
-                        <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
-                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=H&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
-                            <div class="share-qr-logo-badge">
-                                <img src="${faviconURL}" alt="EQT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 5px;" />
-                            </div>
-                        </div>
+                        <img class="share-qr-img" id="share-qr-img-element" src="${qrSrc}" alt="EQT Website QR Code" />
                     </div>
 
                     <!-- 下方: About 界面的品牌横版插图（收窄对齐 175px 二维码宽度） -->
