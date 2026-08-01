@@ -47,5 +47,6 @@ export const state = {
     isEditingChatSender: false,
     confirmResetPending: false,
     showEmojiPicker: false,
+    showShareOverlay: false,
     updateBackoffCount: 0,
 };

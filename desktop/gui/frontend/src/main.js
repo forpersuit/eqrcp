@@ -1882,6 +1882,14 @@ function renderPanel() {
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
             </section>
         </div>
+        ${state.showShareOverlay ? `
+            <div class="share-overlay-backdrop" role="presentation">
+                <div class="share-overlay-modal">
+                    <button type="button" class="share-overlay-close" id="close-share-overlay" title="${escapeAttr(t('close'))}" aria-label="${escapeAttr(t('close'))}">x</button>
+                    ${renderSharePanel()}
+                </div>
+            </div>
+        ` : ''}
     `;
 }
 
@@ -3278,7 +3286,20 @@ function refreshHistoryListInDOM() {
 
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#open-share-panel')?.addEventListener('click', () => openPanel('share'));
+    document.querySelector('#open-share-panel')?.addEventListener('click', () => {
+        state.showShareOverlay = true;
+        render();
+    });
+    document.querySelector('#close-share-overlay')?.addEventListener('click', () => {
+        state.showShareOverlay = false;
+        render();
+    });
+    document.querySelector('.share-overlay-backdrop')?.addEventListener('click', (event) => {
+        if (event.target.classList.contains('share-overlay-backdrop')) {
+            state.showShareOverlay = false;
+            render();
+        }
+    });
     document.querySelector('#download-share-poster-btn')?.addEventListener('click', downloadSharePosterImage);
     document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
         const url = 'https://eqt.net.im';
@@ -5715,37 +5736,80 @@ function downloadIcon() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
 }
 
+async function getMergedQRCodeDataURL(text, logoSrc) {
+    const canvas = document.createElement('canvas');
+    const size = 360;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // 1. 载入高容错 (ecc=H) 二维码
+    const qrImg = new Image();
+    qrImg.crossOrigin = 'anonymous';
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text)}`;
+    await new Promise((res) => { qrImg.onload = res; qrImg.onerror = res; });
+    ctx.drawImage(qrImg, 0, 0, size, size);
+
+    // 2. 在二维码正中间物理绘制品牌 Logo 徽章
+    if (logoSrc) {
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        logoImg.src = logoSrc;
+        await new Promise((res) => { logoImg.onload = res; logoImg.onerror = res; });
+
+        const logoSize = Math.floor(size * 0.22);
+        const x = (size - logoSize) / 2;
+        const y = (size - logoSize) / 2;
+        const pad = 6;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(x - pad, y - pad, logoSize + pad * 2, logoSize + pad * 2, 12);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.drawImage(logoImg, x, y, logoSize, logoSize);
+    }
+
+    return canvas.toDataURL('image/png');
+}
+
 async function downloadSharePosterImage() {
     try {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const width = 800;
-        const height = 1040;
-        canvas.width = width;
-        canvas.height = height;
+        const scale = window.devicePixelRatio || 2;
+        const width = 320;
+        const height = 370;
+        
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        ctx.scale(scale, scale);
 
-        // 1. 绘制纯白底色与浅边框
+        // 1. 绘制纯白底色与浅色圆角边框
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.roundRect(0, 0, width, height, 32);
+        ctx.roundRect(0, 0, width, height, 22);
         ctx.fill();
 
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 1;
         ctx.stroke();
 
         // 2. 绘制散落文件图标 (8个随机分布)
         const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '📁', '💬', '🚀'];
         const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
         const coords = [
-            { x: 70, y: 80, size: 44, rot: -0.3 },
-            { x: 710, y: 90, size: 52, rot: 0.25 },
-            { x: 50, y: 380, size: 40, rot: 0.4 },
-            { x: 730, y: 400, size: 48, rot: -0.2 },
-            { x: 80, y: 680, size: 46, rot: -0.35 },
-            { x: 720, y: 700, size: 42, rot: 0.3 },
-            { x: 120, y: 940, size: 38, rot: -0.15 },
-            { x: 680, y: 950, size: 40, rot: 0.2 }
+            { x: 28, y: 30, size: 20, rot: -0.3 },
+            { x: 292, y: 35, size: 24, rot: 0.25 },
+            { x: 22, y: 150, size: 18, rot: 0.4 },
+            { x: 298, y: 160, size: 22, rot: -0.2 },
+            { x: 30, y: 260, size: 20, rot: -0.35 },
+            { x: 290, y: 270, size: 19, rot: 0.3 },
+            { x: 45, y: 340, size: 18, rot: -0.15 },
+            { x: 275, y: 345, size: 18, rot: 0.2 }
         ];
 
         ctx.fillStyle = 'rgba(5, 150, 105, 0.25)';
@@ -5761,56 +5825,31 @@ async function downloadSharePosterImage() {
             ctx.restore();
         });
 
-        // 3. 绘制二维码 (带居中 Logo)
-        const qrImage = new Image();
-        qrImage.crossOrigin = 'anonymous';
-        qrImage.src = 'https://api.qrserver.com/v1/create-qr-code/?size=380x380&data=https%3A%2F%2Feqt.net.im';
-        await new Promise((res) => {
-            qrImage.onload = res;
-            qrImage.onerror = res;
-        });
+        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度)
+        const qrSize = 175;
+        const qrX = (width - qrSize) / 2;
+        const qrY = 32;
 
-        ctx.drawImage(qrImage, (width - 340) / 2, 80, 340, 340);
+        const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        const qrMergedImg = new Image();
+        qrMergedImg.src = qrDataUrl;
+        await new Promise((res) => { qrMergedImg.onload = res; qrMergedImg.onerror = res; });
 
-        // 二维码正中心品牌 Logo
-        const logoImage = new Image();
-        logoImage.crossOrigin = 'anonymous';
-        logoImage.src = faviconURL;
-        await new Promise((res) => {
-            logoImage.onload = res;
-            logoImage.onerror = res;
-        });
+        ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
 
-        const logoSize = 72;
-        const logoX = (width - logoSize) / 2;
-        const logoY = 80 + (340 - logoSize) / 2;
-
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.roundRect(logoX - 6, logoY - 6, logoSize + 12, logoSize + 12, 16);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
-
-        // 4. 绘制下方品牌横版插图
+        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度)
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
         featImage.src = horizontalLogoURL;
-        await new Promise((res) => {
-            featImage.onload = res;
-            featImage.onerror = res;
-        });
+        await new Promise((res) => { featImage.onload = res; featImage.onerror = res; });
 
         const imgRatio = featImage.width / (featImage.height || 1);
-        const featWidth = 460;
+        const featWidth = 175;
         const featHeight = featWidth / imgRatio;
 
-        ctx.drawImage(featImage, (width - featWidth) / 2, 540, featWidth, Math.min(featHeight, 200));
+        ctx.drawImage(featImage, (width - featWidth) / 2, 235, featWidth, Math.min(featHeight, 60));
 
-        // 5. 触发下载保存
+        // 5. 触发与用户屏幕显示 1:1 镜像一致的图片下载保存
         const dataUrl = canvas.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = 'EQT-Share-Poster.png';
@@ -5849,7 +5888,7 @@ function renderSharePanel() {
                         </div>
                     </div>
 
-                    <!-- 下方: About 界面的品牌横版插图（浅色混合融为一体） -->
+                    <!-- 下方: About 界面的品牌横版插图（收窄对齐 175px 二维码宽度） -->
                     <div class="share-illustration-box">
                         <img src="${horizontalLogoURL}" alt="EQT Logo Illustration" />
                     </div>
