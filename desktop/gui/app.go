@@ -456,6 +456,79 @@ func (a *App) SaveChatAttachmentAs(rawURL string, filename string) (string, erro
 	return target, nil
 }
 
+// ChatAttachmentSaveResult reports the outcome of one file from a batch download.
+// Error is set when that file failed; Path is set on success.
+type ChatAttachmentSaveResult struct {
+	MessageID string `json:"messageId"`
+	Name      string `json:"name"`
+	Path      string `json:"path,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// SaveChatAttachments downloads multiple chat attachment URLs into a single user-chosen directory.
+// urls/names/messageIds are parallel slices. One directory dialog is shown once; each file is then
+// saved silently into that directory (reusing downloadChatAttachmentTo, which also emits per-file
+// progress events). Returns one result per file (success carries Path, failure carries Error), or
+// (nil, nil) when the user cancels the directory dialog.
+func (a *App) SaveChatAttachments(urls []string, names []string, messageIds []string) ([]ChatAttachmentSaveResult, error) {
+	a.logInfo(fmt.Sprintf("[GUI] SaveChatAttachments: %d files", len(urls)))
+	if len(urls) == 0 {
+		return nil, nil
+	}
+	dir, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Choose folder to save chat attachments",
+	})
+	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: directory dialog failed: %v", err))
+		return nil, err
+	}
+	if dir == "" {
+		a.logInfo("[GUI] SaveChatAttachments: user cancelled directory selection")
+		return nil, nil
+	}
+
+	results := make([]ChatAttachmentSaveResult, 0, len(urls))
+	for i, rawURL := range urls {
+		filename := ""
+		if i < len(names) {
+			filename = names[i]
+		}
+		messageID := ""
+		if i < len(messageIds) {
+			messageID = messageIds[i]
+		}
+		res := ChatAttachmentSaveResult{MessageID: messageID, Name: filename}
+		parsed, perr := chatAttachmentDownloadURL(rawURL)
+		if perr != nil {
+			res.Error = perr.Error()
+			a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: URL parse failed for %q: %v", filename, perr))
+			results = append(results, res)
+			continue
+		}
+		if filename == "" {
+			filename = filepath.Base(parsed.Path)
+			res.Name = filename
+		}
+		target, uerr := uniquePath(dir, safeFilename(filename))
+		if uerr != nil {
+			res.Error = uerr.Error()
+			a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: uniquePath failed for %q: %v", filename, uerr))
+			results = append(results, res)
+			continue
+		}
+		if derr := a.downloadChatAttachmentTo(parsed.String(), target); derr != nil {
+			res.Error = derr.Error()
+			a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: download failed for %q: %v", filename, derr))
+			results = append(results, res)
+			continue
+		}
+		res.Path = target
+		results = append(results, res)
+		a.logInfo(fmt.Sprintf("[GUI] SaveChatAttachments: saved %q -> %q", filename, target))
+	}
+	return results, nil
+}
+
 // SaveSharePosterImage prompts the user with a native file dialog to save the generated poster Base64 PNG image.
 func (a *App) SaveSharePosterImage(base64Data string) (string, error) {
 	if base64Data == "" {

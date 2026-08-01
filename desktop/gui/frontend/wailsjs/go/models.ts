@@ -179,6 +179,24 @@ export namespace main {
 	        this.uploadDirFreeSpace = source["uploadDirFreeSpace"];
 	    }
 	}
+	export class ChatAttachmentSaveResult {
+	    messageId: string;
+	    name: string;
+	    path?: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatAttachmentSaveResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.messageId = source["messageId"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.error = source["error"];
+	    }
+	}
 	export class DesktopIntegrationStatus {
 	    supported: boolean;
 	    enabled: boolean;

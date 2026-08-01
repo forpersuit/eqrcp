@@ -29,6 +29,7 @@ import {
     Receive,
     RepeatTask,
     SaveChatAttachmentAs,
+    SaveChatAttachments,
     SaveSettings,
     SelectFiles,
     GetFileInfos,
@@ -333,6 +334,45 @@ window.addEventListener('message', (e) => {
                     messageId: messageId,
                     error: String(err?.message || err || 'download failed')
                 }, targetOrigin);
+            });
+    } else if (e.data.type === 'download-batch') {
+        const files = Array.isArray(e.data.files) ? e.data.files : [];
+        if (files.length === 0) return;
+        const urls = [];
+        const names = [];
+        const messageIds = [];
+        for (const f of files) {
+            const url = String((f && f.url) || '');
+            if (!url) continue;
+            if (!isTrustedChatURL(url, activeChatFrameOrigin())) {
+                console.warn('[Antigravity Debug] download-batch: URL trust check failed:', url);
+                continue;
+            }
+            urls.push(url);
+            names.push(String((f && f.name) || 'attachment'));
+            messageIds.push(String((f && f.messageId) || ''));
+        }
+        if (urls.length === 0) return;
+        console.log('[Antigravity Debug] download-batch bridge invoked. files:', urls.length);
+        SaveChatAttachments(urls, names, messageIds)
+            .then((results) => {
+                const saved = Array.isArray(results) ? results : [];
+                if (saved.length === 0) {
+                    e.source?.postMessage({ type: 'download-batch-cancelled', messageIds: messageIds }, targetOrigin);
+                    return;
+                }
+                for (const item of saved) {
+                    if (!item) continue;
+                    if (item.path) {
+                        e.source?.postMessage({ type: 'download-success', messageId: item.messageId, path: item.path }, targetOrigin);
+                    } else if (item.error) {
+                        e.source?.postMessage({ type: 'download-failed', messageId: item.messageId, error: String(item.error) }, targetOrigin);
+                    }
+                }
+            })
+            .catch((err) => {
+                console.error('[Antigravity Debug] SaveChatAttachments backend error:', err);
+                e.source?.postMessage({ type: 'download-batch-cancelled', messageIds: messageIds, error: String(err?.message || err || 'batch download failed') }, targetOrigin);
             });
     } else if (e.data.type === 'cancel-download') {
         const messageId = String(e.data.messageId || '');

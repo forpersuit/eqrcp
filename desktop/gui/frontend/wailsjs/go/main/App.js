@@ -110,6 +110,10 @@ export function SaveChatAttachmentAs(arg1, arg2) {
   return window['go']['main']['App']['SaveChatAttachmentAs'](arg1, arg2);
 }
 
+export function SaveChatAttachments(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveChatAttachments'](arg1, arg2, arg3);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }

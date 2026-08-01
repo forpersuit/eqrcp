@@ -318,6 +318,25 @@
       if (client) {
         client.cancelTransfer(transferId);
       }
+    } else if (event.data.type === 'download-batch-cancelled') {
+      // Desktop user cancelled the batch save-folder dialog: clear seeded running transfers.
+      const ids: string[] = event.data.messageIds || [];
+      const peer = client ? client['clientPeer'] : 'desktop';
+      ids.forEach(messageId => {
+        chatActions.updateTransfer({
+          id: 'dl-' + messageId + '-' + peer,
+          state: 'cancelled',
+          progress: -1,
+          speed: 0,
+          error: ''
+        });
+        if (client) {
+          client.cancelTransfer('dl-' + messageId + '-' + peer);
+        }
+      });
+      chatActions.addSystemMessage(
+        currentLang === 'en' ? 'Batch download cancelled.' : '已取消批量下载。'
+      );
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
@@ -1097,6 +1116,50 @@
     }
   }
 
+  function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
+    if ($chatSessionStatus !== 'active') return;
+    const files = (e.detail?.messages || []).filter((m: any) => m && m.type === 'file' && !m.uploading);
+    if (files.length === 0) return;
+    if (!client) return;
+
+    const peer = client['clientPeer'] || 'desktop';
+
+    const batchItems = files.map(msg => {
+      const messageId = msg.id;
+      const filename = msg.fileName || 'attachment';
+      const transferId = 'dl-' + messageId + '-' + peer;
+      // M4: seed running state so UI does not look idle before server events.
+      chatActions.updateTransfer({
+        id: transferId,
+        messageId,
+        clientId: peer,
+        fileName: filename,
+        bytesDone: 0,
+        bytesTotal: msg.size || 0,
+        percent: 0,
+        state: 'running'
+      } as any);
+      client.startTransfer(transferId);
+      client.sendLog(`[ACTION] Initiated batch download for file: ${filename} (Size: ${msg.size || 0} bytes, Message ID: ${messageId})`);
+      const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${peer}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
+      return { messageId, name: filename, url: window.location.origin + downloadURL };
+    });
+
+    if (isEmbedded) {
+      window.parent.postMessage({ type: 'download-batch', files: batchItems }, '*');
+    } else {
+      // Browser sandbox cannot save to a folder: trigger per-file downloads.
+      batchItems.forEach(item => {
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.download = item.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    }
+  }
+
   function handleCancelDownload(e: CustomEvent<string>) {
     const txId = e.detail;
     const activeXhr = activeUploads.get(txId);
@@ -1453,6 +1516,7 @@
           return false;
         }}
         on:startDownload={handleStartDownload}
+        on:batchDownload={handleBatchDownload}
         on:cancelDownload={handleCancelDownload}
         on:recallMessage={handleRecallMessage}
         on:systemNotice={handleSystemNotice}

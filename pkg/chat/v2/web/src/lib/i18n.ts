@@ -598,6 +598,42 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Herunterladen',
     fr: 'Télécharger'
   },
+  multiSelect: {
+    zh: '多选',
+    en: 'Multi-select',
+    ja: '複数選択',
+    ko: '다중 선택',
+    es: 'Selección múltiple',
+    de: 'Mehrfachauswahl',
+    fr: 'Sélection multiple'
+  },
+  batchDownload: {
+    zh: '批量下载',
+    en: 'Batch Download',
+    ja: '一括ダウンロード',
+    ko: '일괄 다운로드',
+    es: 'Descarga masiva',
+    de: 'Stapel-Download',
+    fr: 'Téléchargement groupé'
+  },
+  batchDownloadCancel: {
+    zh: '取消',
+    en: 'Cancel',
+    ja: 'キャンセル',
+    ko: '취소',
+    es: 'Cancelar',
+    de: 'Abbrechen',
+    fr: 'Annuler'
+  },
+  selectedCount: {
+    zh: '已选 {count} 个文件',
+    en: '{count} selected',
+    ja: '{count} 件選択中',
+    ko: '{count}개 선택됨',
+    es: '{count} seleccionados',
+    de: '{count} ausgewählt',
+    fr: '{count} sélectionnés'
+  },
   recallMessage: {
     zh: '撤回消息',
     en: 'Recall',

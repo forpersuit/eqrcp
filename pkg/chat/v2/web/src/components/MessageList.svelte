@@ -41,6 +41,42 @@
   // Dynamic spacer to push scrollable area for context menu if near bottom
   let menuSpacerHeight = 0;
 
+  // Multi-select batch download
+  let selectionMode = false;
+  let selectedIds = new Set<string>();
+
+  function canMultiSelect(msg: Message): boolean {
+    return msg.type === 'file' && !isMine(msg) && !msg.uploading && !msg.recalled && !!msg.fileName;
+  }
+  function isSelected(msg: Message): boolean {
+    return selectedIds.has(msg.id);
+  }
+  function enterSelectionMode(msg?: Message) {
+    selectionMode = true;
+    selectedIds = new Set(msg ? [msg.id] : []);
+  }
+  function exitSelectionMode() {
+    selectionMode = false;
+    selectedIds.clear();
+  }
+  function toggleSelect(msg: Message) {
+    if (!canMultiSelect(msg)) return;
+    const next = new Set(selectedIds);
+    if (next.has(msg.id)) {
+      next.delete(msg.id);
+    } else {
+      next.add(msg.id);
+    }
+    selectedIds = next;
+  }
+  function triggerBatchDownload() {
+    if (selectedIds.size === 0) return;
+    const selected = messages.filter(m => selectedIds.has(m.id) && canMultiSelect(m));
+    if (selected.length === 0) return;
+    dispatch('batchDownload', { messages: selected });
+    exitSelectionMode();
+  }
+
   beforeUpdate(() => {
     if (!messagesEl || messages.length === 0) return;
     const firstId = messages[0]?.id || '';
@@ -371,6 +407,7 @@
 
   async function openMessageMenu(msg: Message, bubbleEl: HTMLElement) {
     if (msg.recalled) return; // 撤回消息不支持右键菜单/滑动
+    if (selectionMode) return; // 选择模式下不弹右键菜单
     activeMenuMessage = msg;
     activeBubbleEl = bubbleEl;
     confirmingIndex = null;
@@ -419,6 +456,15 @@
           });
         }
       } else {
+        if (canMultiSelect(msg)) {
+          options.push({
+            label: getTranslation('multiSelect', currentLang),
+            action: () => {
+              enterSelectionMode(msg);
+              closeMenu();
+            }
+          });
+        }
         if (msg.uploading) {
           options.push({
             label: getTranslation('peerUploading', currentLang),
@@ -804,6 +850,8 @@
   }
 </script>
 
+<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && selectionMode) exitSelectionMode(); }} />
+
 <div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
   <div bind:this={messagesEl} class="messages" on:scroll={handleScroll}>
     {#if $historyHasMore || $historyLoading}
@@ -972,12 +1020,26 @@
 
           <div class="message-main">
             <div class="sender">{identity.sender}</div>
-            <div 
-              class="bubble" 
+            <div
+              class="bubble"
+              class:selecting={selectionMode && canMultiSelect(msg)}
+              class:selected={selectionMode && canMultiSelect(msg) && isSelected(msg)}
               use:swipeable={msg}
               on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget)}
+              on:click={(e) => {
+                if (selectionMode && canMultiSelect(msg)) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleSelect(msg);
+                }
+              }}
               style="position: relative; overflow: hidden; transform: translateX(0px); transition: transform 0.25s ease;"
             >
+              {#if selectionMode && canMultiSelect(msg)}
+                <div class="multi-select-badge" class:checked={isSelected(msg)} aria-hidden="true">
+                  {#if isSelected(msg)}<span>✓</span>{/if}
+                </div>
+              {/if}
               {#if msg.type === 'file' && (mine || isEmbedded) && !isCancelledFile && !msg.recalled && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
                   position: absolute;
@@ -1143,6 +1205,27 @@
       </span>
     {/if}
   </button>
+
+  {#if selectionMode}
+    <div class="multi-select-bar">
+      <span class="multi-select-count">
+        {getTranslation('selectedCount', currentLang).replace('{count}', String(selectedIds.size))}
+      </span>
+      <div class="multi-select-actions">
+        <button class="multi-select-cancel" type="button" on:click={exitSelectionMode}>
+          {getTranslation('batchDownloadCancel', currentLang)}
+        </button>
+        <button
+          class="multi-select-download"
+          type="button"
+          disabled={selectedIds.size === 0}
+          on:click={triggerBatchDownload}
+        >
+          {getTranslation('batchDownload', currentLang)}
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 {#if showMenu}
@@ -1196,6 +1279,96 @@
   }
   :global(.icon-uploading-spin) {
     animation: spin 1.5s linear infinite;
+  }
+
+  .bubble.selecting {
+    cursor: pointer;
+  }
+
+  .bubble.selected {
+    outline: 2px solid var(--accent-strong, #156f5a);
+    outline-offset: -2px;
+  }
+
+  .multi-select-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 5;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-strong, #156f5a);
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffffff;
+    transition: background 0.15s ease;
+  }
+
+  .multi-select-badge.checked {
+    background: var(--accent-strong, #156f5a);
+    border-color: var(--accent-strong, #156f5a);
+  }
+
+  .multi-select-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line, rgba(21, 111, 90, 0.1));
+    background: var(--accent-wash, rgba(21, 111, 90, 0.06));
+    flex-shrink: 0;
+  }
+
+  .multi-select-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-strong, #156f5a);
+  }
+
+  .multi-select-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .multi-select-cancel,
+  .multi-select-download {
+    border: none;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 7px 16px;
+    transition: opacity 0.15s ease;
+  }
+
+  .multi-select-cancel {
+    background: transparent;
+    color: var(--muted, #64748b);
+  }
+
+  .multi-select-cancel:hover {
+    color: var(--accent-strong, #156f5a);
+  }
+
+  .multi-select-download {
+    background: var(--accent-strong, #156f5a);
+    color: #ffffff;
+  }
+
+  .multi-select-download:hover {
+    opacity: 0.9;
+  }
+
+  .multi-select-download:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .bubble-context-menu {
