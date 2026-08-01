@@ -5795,20 +5795,20 @@ async function downloadSharePosterImage() {
 
         ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
 
-        // 4. 绘制下方特征宣传插图
+        // 4. 绘制下方品牌横版插图
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
-        featImage.src = chatIllustrationURL;
+        featImage.src = horizontalLogoURL;
         await new Promise((res) => {
             featImage.onload = res;
             featImage.onerror = res;
         });
 
         const imgRatio = featImage.width / (featImage.height || 1);
-        const featWidth = 620;
+        const featWidth = 460;
         const featHeight = featWidth / imgRatio;
 
-        ctx.drawImage(featImage, (width - featWidth) / 2, 490, featWidth, Math.min(featHeight, 460));
+        ctx.drawImage(featImage, (width - featWidth) / 2, 540, featWidth, Math.min(featHeight, 200));
 
         // 5. 触发下载保存
         const dataUrl = canvas.toDataURL('image/png');
@@ -5833,34 +5833,25 @@ function renderSharePanel() {
     return `
         <div class="share-panel" style="padding: 2px 2px 8px 2px;">
             <div class="share-poster-card">
-                <!-- 趣味通行票据 Header (带有闪烁绿灯与极速通行字标) -->
-                <div class="share-ticket-header">
-                    <div class="share-ticket-badge">
-                        <span class="share-ticket-pulse"></span>
-                        <span>EQT INSTANT PASS</span>
-                    </div>
-                    <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.06em;">NO APP NEEDED</span>
-                </div>
-
                 <!-- 每次点击随机动态分发位置的散落传输文件类型图标 (带浮动微动画) -->
                 <div class="share-scattered-bg">
                     ${scatteredHtml}
                 </div>
 
-                <div class="share-poster-content" style="gap: 10px;">
-                    <!-- 上方: 官方网站纯净二维码 (正中间带有品牌 Logo Badge) -->
+                <div class="share-poster-content" style="gap: 16px;">
+                    <!-- 上方: 官方网站高容错 (ecc=H) 纯净二维码 (正中间带有品牌 Logo Badge) -->
                     <div class="share-qr-wrapper">
                         <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
-                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
+                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=H&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
                             <div class="share-qr-logo-badge">
                                 <img src="${faviconURL}" alt="EQT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 5px;" />
                             </div>
                         </div>
                     </div>
 
-                    <!-- 下方: Chat 模式 Start 界面插图（浅色混合融为一体） -->
+                    <!-- 下方: About 界面的品牌横版插图（浅色混合融为一体） -->
                     <div class="share-illustration-box">
-                        <img src="${chatIllustrationURL}" alt="EQT Feature Illustration" />
+                        <img src="${horizontalLogoURL}" alt="EQT Logo Illustration" />
                     </div>
                 </div>
             </div>
