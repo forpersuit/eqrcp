@@ -179,7 +179,7 @@ const licenseTiers = {
 function getLicenseDisplayName(license) {
     if (!license || !license.tier) return t('no_paid_plan_active');
     if (license.tier === 'PLUS' && license.codeDate === 'LIFETIME') {
-        return 'EQT Plus U';
+        return t('plus_lifetime_plan') || 'PLUS Lifetime';
     }
     return licenseTiers[license.tier] || license.tier;
 }
@@ -527,7 +527,7 @@ function render() {
                         const isPaid = hasPaidLicense();
                         const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
                         const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
-                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? 'PLUS Lifetime' : (tier === 'FREE' ? t('free_quota') : tier);
+                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? (t('plus_lifetime_plan') || 'PLUS Lifetime') : (tier === 'FREE' ? t('free_quota') : tier);
                         return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
                     })()}
                     <div class="topbar-menu">
@@ -1081,12 +1081,14 @@ function renderReceiveTransfer(task) {
                 </div>
             </div>
             
-            ${isQRExpanded && qrImage ? `
-                <div class="qr-hero">
-                    <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                </div>
-            ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            <div id="receive-qr-wrapper">
+                ${isQRExpanded && qrImage ? `
+                    <div class="qr-hero">
+                        <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                        <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                    </div>
+                ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
+            </div>
             
             <div id="receive-devices-progress-wrapper">${renderReceiveDeviceProgressHtml(task)}</div>
 
