@@ -737,7 +737,7 @@ function renderShareTransfer(task) {
 
     const countdownHtml = (!isPaid && remaining > 0) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
-            free ulimited: ${remaining}
+            ${escapeHTML(t('free_full_feature_countdown', { count: remaining }))}
         </div>
     ` : '';
 
@@ -751,7 +751,7 @@ function renderShareTransfer(task) {
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
-                    <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
+                    <button class="side-icon-button toggle-qr-expand-action ${isQRExpanded ? 'active' : ''}" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}" aria-expanded="${isQRExpanded}">
                         ${qrIcon()}
                     </button>
                 </div>
@@ -1046,7 +1046,7 @@ function renderReceiveTransfer(task) {
 
     const countdownHtml = (!isPaid && remaining > 0) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
-            free ulimited: ${remaining}
+            ${escapeHTML(t('free_full_feature_countdown', { count: remaining }))}
         </div>
     ` : '';
 
@@ -1060,7 +1060,7 @@ function renderReceiveTransfer(task) {
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="danger inline stop-current-action">${t('stop')}</button>
-                    <button class="side-icon-button toggle-qr-expand-action" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}">
+                    <button class="side-icon-button toggle-qr-expand-action ${isQRExpanded ? 'active' : ''}" title="${escapeAttr(collapseText)}" aria-label="${escapeAttr(collapseText)}" aria-expanded="${isQRExpanded}">
                         ${qrIcon()}
                     </button>
                 </div>
@@ -2605,9 +2605,10 @@ function renderPlanComparisonPanel() {
             <!-- 说明与跳转部分 -->
             <div style="background: var(--bg-hover); border-radius: 12px; padding: 16px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.65; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 10px;">
                 <div style="font-weight: 800; font-size: 13px; color: var(--text-primary); margin-bottom: 2px;">📌 ${t('plan_note_disclaimer_title') || '套餐注意事项与重要说明'}</div>
-                <div>1. ${t('plan_note_free_online')}</div>
-                <div>2. ${t('plan_note_plus_offline')}</div>
-                <div>3. ${t('plan_note_device_edit')}</div>
+                <div>1. <strong>${t('free_tier_rules') || '免费版说明'}</strong>：${t('free_tier_rules_desc')}</div>
+                <div>2. ${t('plan_note_free_online')}</div>
+                <div>3. ${t('plan_note_plus_offline')}</div>
+                <div>4. ${t('plan_note_device_edit')}</div>
                 <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line);">💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
             </div>
             
