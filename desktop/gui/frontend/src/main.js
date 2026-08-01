@@ -555,6 +555,7 @@ function render() {
                 ${renderSide()}
             </section>
             ${renderPanel()}
+            ${renderShareOverlay()}
         </main>
     `.trim();
 
@@ -1877,14 +1878,20 @@ function renderPanel() {
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
             </section>
         </div>
-        ${state.showShareOverlay ? `
-            <div class="share-overlay-backdrop" role="presentation">
-                <div class="share-overlay-modal">
-                    <button type="button" class="share-overlay-close" id="close-share-overlay" title="${escapeAttr(t('close'))}" aria-label="${escapeAttr(t('close'))}">x</button>
-                    ${renderSharePanel()}
-                </div>
+    `;
+}
+
+function renderShareOverlay() {
+    if (!state.showShareOverlay) {
+        return '';
+    }
+    return `
+        <div class="share-overlay-backdrop" role="presentation">
+            <div class="share-overlay-modal">
+                <button type="button" class="share-overlay-close" id="close-share-overlay" title="${escapeAttr(t('close'))}" aria-label="${escapeAttr(t('close'))}">x</button>
+                ${renderSharePanel()}
             </div>
-        ` : ''}
+        </div>
     `;
 }
 
@@ -3283,22 +3290,25 @@ function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-share-panel')?.addEventListener('click', (e) => {
         if (e) e.stopPropagation();
-        console.log('[EQT Share] Open Share panel clicked. Current activePanel:', state.activePanel);
+        console.log('[EQT Share] Open Share panel clicked. Locking activePanel to about.');
+        state.activePanel = 'about';
         state.showShareOverlay = true;
-        render();
+        syncPanelSurface();
         prepareMergedQRCode();
     });
     document.querySelector('#close-share-overlay')?.addEventListener('click', (e) => {
         if (e) e.stopPropagation();
-        console.log('[EQT Share] Close Share overlay clicked.');
+        console.log('[EQT Share] Close Share overlay clicked. Keeping activePanel as about.');
+        state.activePanel = 'about';
         state.showShareOverlay = false;
-        render();
+        syncPanelSurface();
     });
     document.querySelector('.share-overlay-backdrop')?.addEventListener('click', (event) => {
         if (event.target.classList.contains('share-overlay-backdrop')) {
-            console.log('[EQT Share] Share backdrop clicked, closing overlay.');
+            console.log('[EQT Share] Share backdrop clicked, closing overlay and keeping activePanel as about.');
+            state.activePanel = 'about';
             state.showShareOverlay = false;
-            render();
+            syncPanelSurface();
         }
     });
     document.querySelector('#download-share-poster-btn')?.addEventListener('click', downloadSharePosterImage);
@@ -3506,8 +3516,12 @@ function syncAndSaveSettingsInBackground() {
 }
 
 function openPanel(panel) {
+    if (state.activePanel === panel && !state.showShareOverlay) {
+        return;
+    }
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
+    state.showShareOverlay = false;
     if (panel === 'settings') {
         if (typeof GetLogFiles === 'function') {
             GetLogFiles().then((files) => {
