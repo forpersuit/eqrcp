@@ -21,6 +21,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **`morphdom` 增量 DOM Diff 与事件防重复绑定**：
   - 使用零依赖 DOM Diff 库 `morphdom` 替代 `innerHTML` 的直接覆写，避免 DOM 闪烁（如 Tooltip 闪烁、二维码重载）和输入框失焦。
   - 前端重写 `EventTarget.prototype.addEventListener` 与 `removeEventListener` 的拦截包装器。检测到同一类型绑定相同语义的回调函数（比较 `listener.toString()`）时，先移除旧回调，确保同一元素只挂载单一监听器，并安全捕获最新状态闭包。
+- **局部渲染 vs 全量渲染 (Partial vs Full Rerender)**：
+  - `openPanel()`/`closePanel()` 只通过 `syncPanelSurface()` 就地 patch `.overlay` 面板区域，**不会**重渲染顶栏等外层 DOM。
+  - 因此通过顶层事件委托（如顶栏 `...` 下拉菜单）打开面板时，须在委托处理器内显式调用 `render()` 全量重渲染，否则依赖 `state` 的下拉菜单/按钮角标等外层 UI 无法随 `state` 恢复关闭。
 - **高频重绘点击丢包与节流 (Throttle & Pointer events)**：
   - 后台高频推送状态导致 DOM 频繁重建时，由于 `mousedown` 与 `mouseup` 落在不同周期的 DOM 节点上，浏览器无法触发 `click` 事件。
   - **避坑规范**：易频繁刷新的交互面板上，使用 `pointerdown` 替代 `click` 监听；前台接收后台状态更新（如 `agent-status`）的分发处实施 250ms 渲染节流限制。
