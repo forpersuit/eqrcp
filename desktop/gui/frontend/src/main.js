@@ -527,7 +527,7 @@ function render() {
                         const isPaid = hasPaidLicense();
                         const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
                         const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
-                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? 'PLUS U' : tier;
+                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? 'PLUS Lifetime' : (tier === 'FREE' ? t('free_quota') : tier);
                         return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
                     })()}
                     <div class="topbar-menu">
@@ -723,12 +723,18 @@ function renderShare() {
 
 
 
+function isTaskQRExpanded(task) {
+    if (!task) return true;
+    const files = task.savedFiles || [];
+    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
+    const shouldCollapse = isSharedOrReceived;
+    return qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+}
+
 function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
 
-    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
-    const shouldCollapse = isSharedOrReceived;
-    const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+    const isQRExpanded = isTaskQRExpanded(task);
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
     const isPaid = state.status?.isPaid;
@@ -1033,11 +1039,8 @@ function renderReceive() {
 
 function renderReceiveTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
-    const files = task.savedFiles || [];
 
-    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
-    const shouldCollapse = isSharedOrReceived;
-    const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+    const isQRExpanded = isTaskQRExpanded(task);
     const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
 
     const isPaid = state.status?.isPaid;
@@ -2334,7 +2337,7 @@ function computeLicensePlanState() {
     let plan = '';
     if (isPaid && currentTier) {
         if (currentTier === 'PLUS' && expiresAt === 'LIFETIME') {
-            plan = 'PLUS U';
+            plan = 'PLUS Lifetime';
         } else {
             plan = currentTier.toUpperCase();
         }
@@ -2565,7 +2568,7 @@ function renderPlanComparisonPanel() {
                     <div style="position: absolute; top: -9px; right: 20px; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; font-size: 9.5px; font-weight: 900; padding: 3px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.2);">${t('recommended_tag') || 'Recommended'}</div>
                     <div style="margin-bottom: 16px;">
                         <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">${t('plus_upgrade_tag') || 'Plus Upgrade'}</span>
-                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('plus_card_title') || 'PLUS / PLUS U'}</h3>
+                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('plus_card_title') || 'PLUS / PLUS Lifetime'}</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_plus_desc_short') || '解除局域网 Chat 及文件传输的全部大小与频率限制。'}</p>
                         
                         <!-- 价格区分小卡片 -->
@@ -2575,7 +2578,7 @@ function renderPlanComparisonPanel() {
                                 <div style="font-size: 18px; font-weight: 900; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('year_unit') || '年'}</span></div>
                             </div>
                             <div style="flex: 1; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_lifetime_label') || 'PLUS U (永久版)'}</div>
+                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_lifetime_label') || 'PLUS Lifetime (买断版)'}</div>
                                 <div style="font-size: 18px; font-weight: 900; color: var(--text-primary);">$29.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('buyout_unit') || '买断'}</span></div>
                             </div>
                         </div>
@@ -2899,7 +2902,9 @@ function bindEvents() {
         _staticDelegationBound = true;
         document.addEventListener('click', (e) => {
             if (e.target.closest('.toggle-qr-expand-action')) {
-                qrExpandedManual = !qrExpandedManual;
+                const task = state.workspaceMode === 'share' ? activeShareTask() : (state.workspaceMode === 'receive' ? activeReceiveTask() : null);
+                const currentExpanded = isTaskQRExpanded(task);
+                qrExpandedManual = !currentExpanded;
                 render();
                 return;
             }
