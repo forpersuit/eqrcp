@@ -5844,10 +5844,10 @@ async function downloadSharePosterImage() {
             ctx.restore();
         });
 
-        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度, 28px 顶边距)
+        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度, 24px 顶边距)
         const qrSize = 175;
         const qrX = (width - qrSize) / 2;
-        const qrY = 28;
+        const qrY = 24;
 
         const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
         const qrMergedImg = new Image();
@@ -5856,7 +5856,7 @@ async function downloadSharePosterImage() {
 
         ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
 
-        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 黄金 26px 间距: y = 28 + 175 + 26 = 229)
+        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 紧密凝聚 16px 间距: y = 24 + 175 + 16 = 215)
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
         featImage.src = horizontalLogoURL;
@@ -5864,8 +5864,8 @@ async function downloadSharePosterImage() {
 
         const imgRatio = featImage.width / (featImage.height || 1);
         const featWidth = 175;
-        const featHeight = Math.min(featWidth / imgRatio, 46);
-        const featY = 229;
+        const featHeight = Math.min(featWidth / imgRatio, 44);
+        const featY = 215;
 
         ctx.drawImage(featImage, (width - featWidth) / 2, featY, featWidth, featHeight);
 
@@ -5963,7 +5963,7 @@ function renderSharePanel() {
                     ${scatteredHtml}
                 </div>
 
-                <div class="share-poster-content" style="gap: 26px;">
+                <div class="share-poster-content" style="gap: 16px;">
                     <!-- 上方: 真正的物理带Logo单张二维码图片 (没有任何DOM叠加Overlay) -->
                     <div class="share-qr-wrapper">
                         <img class="share-qr-img" id="share-qr-img-element" src="${qrSrc}" alt="EQT Website QR Code" />
