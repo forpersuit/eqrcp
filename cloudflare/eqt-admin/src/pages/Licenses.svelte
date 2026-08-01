@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
-  import LicenseGlobeCard from '../components/LicenseGlobeCard.svelte';
   import type {
     Activation,
     GenerateLicenseResponse,
@@ -11,7 +10,6 @@
 
   const AUTO_REFRESH_MS = 20_000;
 
-  let globeRef = $state<any>(null);
   let licenses = $state<License[]>([]);
   let loading = $state(true);
   let refreshing = $state(false);
@@ -193,7 +191,6 @@
       showRevokeConfirm = false;
       selectedLicense = null;
       await loadLicenses();
-      globeRef?.refreshData();
     } catch (err: any) {
       errorMsg = '吊销授权失败: ' + (err.message || String(err));
     } finally {
@@ -222,7 +219,6 @@
           : `已清空 ${selectedLicense.license_code} 下全部设备`;
       // refresh selected license devices without closing modal if single unbind
       await loadLicenses();
-      globeRef?.refreshData();
       const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
       if (refreshed) {
         selectedLicense = refreshed;
@@ -274,8 +270,6 @@
       </button>
     </div>
   </div>
-
-  <LicenseGlobeCard bind:this={globeRef} />
 
   <div class="filter-bar card">
     <div class="search-group">

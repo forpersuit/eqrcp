@@ -167,7 +167,7 @@
   function handleGlobeResize() {
     if (globeInstance && globeContainerRef) {
       const w = globeContainerRef.clientWidth || 800;
-      const h = globeContainerRef.clientHeight || 320;
+      const h = globeContainerRef.clientHeight || 420;
       globeInstance.width(w).height(h);
     }
   }
@@ -481,7 +481,7 @@
 
   .globe-wrapper {
     width: 100%;
-    height: 320px !important;
+    height: 420px !important;
     background: #020617;
     position: relative;
     overflow: hidden;
