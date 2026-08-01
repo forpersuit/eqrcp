@@ -5722,23 +5722,18 @@ function renderSharePanel() {
                     ${scatteredHtml}
                 </div>
 
-                <div class="share-poster-content">
-                    <!-- 上方: 官方网站二维码 (正中间带有品牌 Logo Badge) -->
+                <div class="share-poster-content" style="gap: 12px;">
+                    <!-- 上方: 官方网站纯净二维码 (正中间带有品牌 Logo Badge) -->
                     <div class="share-qr-wrapper">
                         <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
-                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
+                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
                             <div class="share-qr-logo-badge">
                                 <img src="${faviconURL}" alt="EQT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 5px;" />
                             </div>
                         </div>
-                        <span style="font-size: 11px; font-weight: 700; color: #0f172a; letter-spacing: 0.05em; margin-top: 4px;">eqt.net.im</span>
-                    </div>
-                    
-                    <div style="font-size: 12px; font-weight: 700; color: var(--accent-strong, #059669); line-height: 1.4;">
-                        ${escapeHTML(t('scan_to_download') || '扫码或浏览器访问 eqt.net.im 即可直达下载')}
                     </div>
 
-                    <!-- 下方: Chat 模式 Start 界面插图（浅色混合融为一体） -->
+                    <!-- 下方: Chat 模式 Start 界面插图（明显放大，浅色融为一体） -->
                     <div class="share-illustration-box">
                         <img src="${chatIllustrationURL}" alt="EQT Feature Illustration" />
                     </div>
