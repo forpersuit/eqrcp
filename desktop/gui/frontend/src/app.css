@@ -353,7 +353,7 @@ h2 {
 .share-illustration-box {
     width: 175px;
     max-width: 175px;
-    margin-top: 6px;
+    margin-top: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -363,7 +363,7 @@ h2 {
     width: 175px;
     max-width: 175px;
     height: auto;
-    max-height: 52px;
+    max-height: 48px;
     object-fit: contain;
     mix-blend-mode: multiply;
     opacity: 0.96;
@@ -388,8 +388,8 @@ h2 {
 
 .share-overlay-modal {
     position: relative;
-    max-width: 360px;
-    width: min(360px, 100%);
+    max-width: 340px;
+    width: min(340px, 100%);
     animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -417,6 +417,13 @@ h2 {
 .share-overlay-close:hover {
     transform: scale(1.1);
     background: #f1f5f9;
+}
+
+.share-action-btn.success-saved {
+    background: #10b981 !important;
+    color: #ffffff !important;
+    border-color: #059669 !important;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
 .share-actions-group {

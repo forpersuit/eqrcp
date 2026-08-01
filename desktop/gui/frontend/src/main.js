@@ -5843,7 +5843,7 @@ async function downloadSharePosterImage() {
         // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度)
         const qrSize = 175;
         const qrX = (width - qrSize) / 2;
-        const qrY = 32;
+        const qrY = 24;
 
         const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
         const qrMergedImg = new Image();
@@ -5852,7 +5852,7 @@ async function downloadSharePosterImage() {
 
         ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
 
-        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度)
+        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 垂直黄金对称间距)
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
         featImage.src = horizontalLogoURL;
@@ -5860,18 +5860,50 @@ async function downloadSharePosterImage() {
 
         const imgRatio = featImage.width / (featImage.height || 1);
         const featWidth = 175;
-        const featHeight = featWidth / imgRatio;
+        const featHeight = Math.min(featWidth / imgRatio, 44);
+        const featY = 236;
 
-        ctx.drawImage(featImage, (width - featWidth) / 2, 235, featWidth, Math.min(featHeight, 60));
+        ctx.drawImage(featImage, (width - featWidth) / 2, featY, featWidth, featHeight);
 
-        // 5. 触发与用户屏幕显示 1:1 镜像一致的图片下载保存
+        // 5. 触发物理文件选择保存 (桌面端优先调用 Wails 原生对话框)
         const dataUrl = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = 'EQT-Share-Poster.png';
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        let savedPath = '';
+
+        if (window.go?.main?.App?.SaveSharePosterImage) {
+            savedPath = await window.go.main.App.SaveSharePosterImage(dataUrl);
+            if (!savedPath) {
+                console.log('[EQT Share] User cancelled native save file dialog.');
+                return; // 用户取消选择，不做误报
+            }
+        } else {
+            // Web / H5 兜底模式
+            const link = document.createElement('a');
+            link.download = 'EQT-Share-Poster.png';
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            savedPath = 'EQT-Share-Poster.png';
+        }
+
+        // 6. 给按钮即时输出成功打勾响应状态
+        const downloadBtn = document.querySelector('#download-share-poster-btn');
+        if (downloadBtn) {
+            downloadBtn.classList.add('success-saved');
+            downloadBtn.innerHTML = `
+                <span style="display: flex; align-items: center; justify-content: center;">✓</span>
+                <span>${escapeHTML(t('poster_saved_success') || '已成功保存')}</span>
+            `;
+            setTimeout(() => {
+                if (downloadBtn) {
+                    downloadBtn.classList.remove('success-saved');
+                    downloadBtn.innerHTML = `
+                        <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>
+                        <span>${escapeHTML(t('download_share_poster') || '保存推广海报')}</span>
+                    `;
+                }
+            }, 3000);
+        }
 
         state.notice = t('poster_downloaded') || '推广海报图片已成功保存！';
         render();

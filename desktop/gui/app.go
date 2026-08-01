@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
 	"eqt/pkg/application"
@@ -452,6 +453,46 @@ func (a *App) SaveChatAttachmentAs(rawURL string, filename string) (string, erro
 	if err := a.downloadChatAttachmentTo(parsed.String(), target); err != nil {
 		return "", err
 	}
+	return target, nil
+}
+
+// SaveSharePosterImage prompts the user with a native file dialog to save the generated poster Base64 PNG image.
+func (a *App) SaveSharePosterImage(base64Data string) (string, error) {
+	if base64Data == "" {
+		return "", fmt.Errorf("empty image data")
+	}
+
+	idx := strings.Index(base64Data, ",")
+	if idx != -1 {
+		base64Data = base64Data[idx+1:]
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", fmt.Errorf("decode base64 failed: %w", err)
+	}
+
+	target, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "保存推广海报",
+		DefaultFilename: "EQT-Share-Poster.png",
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "PNG Image (*.png)",
+				Pattern:     "*.png",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if target == "" {
+		return "", nil
+	}
+
+	if err := os.WriteFile(target, data, 0644); err != nil {
+		return "", fmt.Errorf("write poster file failed: %w", err)
+	}
+
 	return target, nil
 }
 
