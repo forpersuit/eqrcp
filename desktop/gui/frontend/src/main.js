@@ -185,7 +185,6 @@ function getLicenseDisplayName(license) {
 }
 let agentEvents = null;
 let confirmSwitchResolve = null;
-let qrExpandedManual = null;
 let _staticDelegationBound = false;
 
 function showConfirmSwitchDialog() {
@@ -736,6 +735,35 @@ function isTaskQRExpanded(task) {
     return !shouldCollapse;
 }
 
+function updateQRDOMAndButtonUI(task, wrapperId) {
+    if (!task) return;
+    const isQRExpanded = isTaskQRExpanded(task);
+
+    const toggleBtn = document.querySelector('.transfer-stage .toggle-qr-expand-action');
+    if (toggleBtn) {
+        const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+        toggleBtn.classList.toggle('active', isQRExpanded);
+        toggleBtn.setAttribute('title', collapseText);
+        toggleBtn.setAttribute('aria-label', collapseText);
+        toggleBtn.setAttribute('aria-expanded', isQRExpanded ? 'true' : 'false');
+    }
+
+    const qrWrapper = document.getElementById(wrapperId);
+    if (qrWrapper) {
+        const qrImage = qrImageURL(task.pageUrl);
+        const newQrHtml = isQRExpanded && qrImage ? `
+            <div class="qr-hero">
+                <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
+                <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+            </div>
+        ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
+
+        if (qrWrapper.innerHTML.trim() !== newQrHtml.trim()) {
+            qrWrapper.innerHTML = newQrHtml;
+        }
+    }
+}
+
 function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
 
@@ -989,25 +1017,8 @@ function updateShareTransferActiveUI(task) {
         }
     }
 
-    // 7. 更新二维码区域，避免局部刷新时丢失二维码
-    const qrWrapper = document.getElementById('share-qr-wrapper');
-    if (qrWrapper) {
-        const qrImage = qrImageURL(task.pageUrl);
-        const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0);
-        const shouldCollapse = isSharedOrReceived;
-        const isQRExpanded = qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
-        
-        const newQrHtml = isQRExpanded && qrImage ? `
-            <div class="qr-hero">
-                <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-            </div>
-        ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
-        
-        if (qrWrapper.innerHTML.trim() !== newQrHtml.trim()) {
-            qrWrapper.innerHTML = newQrHtml;
-        }
-    }
+    // 7. 更新二维码区域与切换按钮状态
+    updateQRDOMAndButtonUI(task, 'share-qr-wrapper');
 }
 
 function activeReceiveTask() {
@@ -1698,6 +1709,9 @@ function updateReceiveTransferActiveUI(task) {
             filesWrapper.innerHTML = '';
         }
     }
+
+    // 更新 Receive 模式下的二维码区域与切换按钮状态
+    updateQRDOMAndButtonUI(task, 'receive-qr-wrapper');
 }
 
 function renderChat() {
@@ -2905,7 +2919,13 @@ function bindEvents() {
                     const taskId = task.id || 'current';
                     const currentExpanded = isTaskQRExpanded(task);
                     state.qrExpandedTasks[taskId] = !currentExpanded;
-                    render();
+                    if (state.workspaceMode === 'share') {
+                        updateShareTransferActiveUI(task);
+                    } else if (state.workspaceMode === 'receive') {
+                        updateReceiveTransferActiveUI(task);
+                    } else {
+                        render();
+                    }
                 }
                 return;
             }
@@ -5026,7 +5046,7 @@ function applyStatusData(nextStatus) {
 
     state.status = nextStatus;
     if (!nextStatus?.current && !nextStatus?.chat) {
-        qrExpandedManual = null;
+        state.qrExpandedTasks = {};
     }
     reconcileChatQRState(state.status);
 
