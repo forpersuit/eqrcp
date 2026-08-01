@@ -530,19 +530,35 @@ function render() {
                         const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? 'PLUS U' : tier;
                         return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
                     })()}
-                    <button class="menu-button" id="open-settings" title="${t('settings')}" aria-label="${t('settings')}" style="position: relative;">
-                        <span class="menu-icon">${settingsIcon()}</span>
-                        ${state.settings?.autoUpdateMode !== 'off' && (
-                            (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
-                            ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
-                        ) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
-                    </button>
-                    <button class="menu-button" id="open-about" title="${t('about')}" aria-label="${t('about')}">
-                        <span class="menu-icon">${aboutIcon()}</span>
-                    </button>
-                    <button class="menu-button" id="open-feedback" title="${t('feedback')}" aria-label="${t('feedback')}">
-                        <span class="menu-icon">${feedbackIcon()}</span>
-                    </button>
+                    <div class="topbar-menu">
+                        <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
+                            <span class="menu-icon">${ellipsisIcon()}</span>
+                            ${state.settings?.autoUpdateMode !== 'off' && (
+                                (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
+                                ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
+                            ) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                        </button>
+                        ${state.topMenuOpen ? `
+                            <div class="topbar-dropdown" role="menu">
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="settings">
+                                    <span class="menu-icon">${settingsIcon()}</span><span>${t('settings')}</span>
+                                </button>
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
+                                    <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
+                                </button>
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback">
+                                    <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
+                                </button>
+                                <div class="topbar-menu-sep"></div>
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="license">
+                                    <span class="menu-icon">${diamondIcon()}</span><span>${t('plan_license_menu')}</span>
+                                </button>
+                                <button role="menuitem" class="topbar-menu-item" data-open-share="1">
+                                    <span class="menu-icon">${shareIcon()}</span><span>${t('promo')}</span>
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             </header>
 
@@ -1848,6 +1864,7 @@ function renderPanel() {
         redeem: t('redeem_title'),
         about: t('about_title'),
         feedback: t('feedback'),
+        license: t('plan_license_menu'),
         'confirm-switch': t('confirm_switch_title'),
         'plan-comparison': t('plan_desc_title'),
     }[state.activePanel] || '';
@@ -1866,13 +1883,13 @@ function renderPanel() {
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
                         ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">${giftIcon()}</button>` : ''}
-                        ${state.activePanel === 'about' ? `<button class="tool-button" id="open-share-panel" title="${t('share_app') || '分享软件'}" aria-label="${t('share_app') || '分享软件'}">${shareIcon()}</button>` : ''}
                         <button class="tool-button" id="close-panel" title="${t('close')}" aria-label="${t('close')}">x</button>
                     </div>
                 </div>
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
+                ${state.activePanel === 'license' ? renderLicensePanel() : ''}
                 ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
@@ -2309,8 +2326,7 @@ function resolveLicenseExpiresAt(status, license) {
     return '';
 }
 
-function renderAboutPanel() {
-    const info = state.appInfo || {};
+function computeLicensePlanState() {
     const isPaid = hasPaidLicense();
     const license = state.license || loadLicense();
     const currentTier = isPaid ? (state.status?.licenseTier || license?.tier || 'PLUS') : '';
@@ -2373,7 +2389,7 @@ function renderAboutPanel() {
         // Free tier: show Chat remaining time + Share/Receive full-feature quotas.
         freeQuotaPills = freeTierQuotaTexts();
     }
-    
+
     let warningBox = '';
     if (state.status) {
         if (state.status.clockTampered) {
@@ -2400,57 +2416,77 @@ function renderAboutPanel() {
             `;
         }
     }
-    
-    return `
-        <div class="about-panel">
-            ${warningBox}
-            <div class="about-hero">
-                <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer;">
-                <div class="about-plan">
-                    <div class="about-plan-header">
-                        <div class="about-plan-tag">
-                            <span>${t('plan_label')}</span>
-                            <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || '立即同步并刷新授权状态与付费权益')}">
-                                <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="about-plan-body">
-                        <div class="about-plan-title">${escapeHTML(plan)}</div>
-                        <div class="about-plan-meta">
-                            ${freeQuotaPills.map((text) => `<span class="about-plan-pill">${escapeHTML(text)}</span>`).join('')}
-                            ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
-                            ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
-                            ${(hasPaidLicense() && state.status?.buyerEmail) ? `
-                                <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
-                                    <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
-                                    <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
-                                        ✓ ${escapeHTML(t('copied') || '已复制')}
-                                    </span>
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
 
-                    <div class="about-plan-footer">
-                        <div class="about-plan-actions">
-                            ${license ? `
-                                <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
-                                    ${licenseManagerIcon()}
-                                </a>
-                            ` : `
-                                <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
-                                    ${cartUpgradeIcon()}
-                                </a>
-                            `}
-                            <button class="about-plan-icon-btn" id="toggle-plan-info" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}" aria-label="${escapeAttr(t('plan_desc_title'))}">
-                                ${diamondIcon()}
-                            </button>
-                        </div>
-                    </div>
+    return { isPaid, license, plan, expiryText, redeemDetail, expiryDetail, freeQuotaPills, warningBox };
+}
+
+function renderLicensePlanBlock() {
+    const { license, plan, redeemDetail, expiryDetail, freeQuotaPills } = computeLicensePlanState();
+    return `
+        <div class="about-plan">
+            <div class="about-plan-header">
+                <div class="about-plan-tag">
+                    <span>${t('plan_label')}</span>
+                    <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || '立即同步并刷新授权状态与付费权益')}">
+                        <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
+                    </button>
                 </div>
             </div>
+
+            <div class="about-plan-body">
+                <div class="about-plan-title">${escapeHTML(plan)}</div>
+                <div class="about-plan-meta">
+                    ${freeQuotaPills.map((text) => `<span class="about-plan-pill">${escapeHTML(text)}</span>`).join('')}
+                    ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
+                    ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
+                    ${(hasPaidLicense() && state.status?.buyerEmail) ? `
+                        <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
+                            <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
+                            <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                ✓ ${escapeHTML(t('copied') || '已复制')}
+                            </span>
+                        </span>
+                    ` : ''}
+                </div>
+            </div>
+
+            <div class="about-plan-footer">
+                <div class="about-plan-actions">
+                    ${license ? `
+                        <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
+                            ${licenseManagerIcon()}
+                        </a>
+                    ` : `
+                        <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
+                            ${cartUpgradeIcon()}
+                        </a>
+                    `}
+                    <button class="about-plan-icon-btn" id="toggle-plan-info" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}" aria-label="${escapeAttr(t('plan_desc_title'))}">
+                        ${diamondIcon()}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderLicensePanel() {
+    const { warningBox } = computeLicensePlanState();
+    return `
+        <div class="license-panel">
+            ${warningBox}
+            <div style="max-width: 480px; width: 100%; margin: 0 auto;">
+                ${renderLicensePlanBlock()}
+            </div>
+        </div>
+    `;
+}
+
+function renderAboutPanel() {
+    const info = state.appInfo || {};
+    return `
+        <div class="about-panel">
+            <img class="about-logo" src="${horizontalLogoURL}" alt="EQT Easy QR Transfer" style="cursor: pointer; display: block; margin: 0 auto;">
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('product') || 'Product'}</span>
@@ -2576,7 +2612,7 @@ function renderPlanComparisonPanel() {
             </div>
             
             <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                <button class="ghost" id="plan-back-to-about" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_about') || '返回关于'}</button>
+                <button class="ghost" id="plan-back-to-license" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_license') || '返回授权'}</button>
                 <button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>
             </div>
         </div>
@@ -2879,8 +2915,43 @@ function bindEvents() {
                 }
                 return;
             }
+            const topMenuBtn = e.target.closest('#open-top-menu');
+            if (topMenuBtn) {
+                state.topMenuOpen = !state.topMenuOpen;
+                render();
+                return;
+            }
+            const menuItem = e.target.closest('.topbar-menu-item');
+            if (menuItem) {
+                if (menuItem.dataset.openPanel) {
+                    state.topMenuOpen = false;
+                    openPanel(menuItem.dataset.openPanel);
+                    render(); // 重渲染顶栏，关闭下拉菜单
+                } else if (menuItem.dataset.openShare) {
+                    state.topMenuOpen = false;
+                    state.showShareOverlay = true;
+                    render();
+                    setTimeout(prepareMergedQRCode, 50);
+                } else {
+                    state.topMenuOpen = false;
+                    render();
+                }
+                return;
+            }
+            if (state.topMenuOpen && !e.target.closest('.topbar-menu')) {
+                state.topMenuOpen = false;
+                render();
+                return;
+            }
         });
-        
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && state.topMenuOpen) {
+                state.topMenuOpen = false;
+                render();
+            }
+        });
+
 function shrinkSearchBoxInDOM() {
     const title = document.querySelector('.panel-title');
     const refreshBtn = document.querySelector('#refresh');
@@ -3052,11 +3123,7 @@ function refreshHistoryListInDOM() {
     document.querySelectorAll('.refresh-action').forEach((button) => {
         button.addEventListener('click', refreshStatus);
     });
-    document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
     document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
-    document.querySelector('#open-share-panel')?.addEventListener('click', () => openPanel('share'));
-    document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
     document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
         const url = 'https://eqt.net.im';
         try {
@@ -3288,18 +3355,9 @@ function refreshHistoryListInDOM() {
 
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#open-share-panel')?.addEventListener('click', (e) => {
-        if (e) e.stopPropagation();
-        console.log('[EQT Share] Open Share panel clicked. Instant 0ms response.');
-        state.activePanel = 'about';
-        state.showShareOverlay = true;
-        syncPanelSurface();
-        setTimeout(prepareMergedQRCode, 50);
-    });
     document.querySelector('#close-share-overlay')?.addEventListener('click', (e) => {
         if (e) e.stopPropagation();
         console.log('[EQT Share] Close Share overlay clicked (bindPanelEvents).');
-        state.activePanel = 'about';
         state.showShareOverlay = false;
         document.querySelector('.share-overlay-backdrop')?.remove();
         syncPanelSurface();
@@ -3307,7 +3365,6 @@ function bindPanelEvents() {
     document.querySelector('.share-overlay-backdrop')?.addEventListener('click', (event) => {
         if (event.target.classList.contains('share-overlay-backdrop')) {
             console.log('[EQT Share] Share backdrop clicked (bindPanelEvents).');
-            state.activePanel = 'about';
             state.showShareOverlay = false;
             document.querySelector('.share-overlay-backdrop')?.remove();
             syncPanelSurface();
@@ -3476,8 +3533,8 @@ function bindPanelEvents() {
         window.runtime.BrowserOpenURL('https://www.eqt.net.im/');
     });
 
-    document.querySelector('#plan-back-to-about')?.addEventListener('click', () => {
-        state.activePanel = 'about';
+    document.querySelector('#plan-back-to-license')?.addEventListener('click', () => {
+        state.activePanel = 'license';
         render();
     });
     document.querySelector('#plan-go-redeem')?.addEventListener('click', () => {
@@ -3572,7 +3629,7 @@ function closePanel() {
         state.feedbackSendResult = '';
     }
     if (state.activePanel === 'plan-comparison') {
-        state.activePanel = 'about';
+        state.activePanel = 'license';
     } else {
         state.activePanel = '';
     }
@@ -3599,7 +3656,7 @@ function shouldProtectActiveInput() {
 }
 
 function updateSettingsBadgeUI() {
-    const btn = document.querySelector('#open-settings');
+    const btn = document.querySelector('#open-top-menu');
     if (!btn) return;
     let badge = btn.querySelector('.badge-dot');
     const shouldShow = state.settings?.autoUpdateMode !== 'off' && (
@@ -5718,6 +5775,10 @@ function shareIcon() {
     return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
 }
 
+function ellipsisIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>';
+}
+
 function generateRandomScatteredIcons() {
     const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
     const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
@@ -6517,7 +6578,6 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         console.log('[EQT Share] Global Capture: Close share button 0ms instant trigger');
         state.showShareOverlay = false;
-        state.activePanel = 'about';
         document.querySelector('.share-overlay-backdrop')?.remove();
         syncPanelSurface();
         return;
@@ -6527,7 +6587,6 @@ document.addEventListener('click', (event) => {
         event.stopPropagation();
         console.log('[EQT Share] Global Capture: Share backdrop 0ms instant trigger');
         state.showShareOverlay = false;
-        state.activePanel = 'about';
         document.querySelector('.share-overlay-backdrop')?.remove();
         syncPanelSurface();
         return;

@@ -48,5 +48,6 @@ export const state = {
     confirmResetPending: false,
     showEmojiPicker: false,
     showShareOverlay: false,
+    topMenuOpen: false,
     updateBackoffCount: 0,
 };

@@ -2,6 +2,10 @@ import { state } from './state.js';
 
 const translations = {
     zh: {
+        menu_label: '菜单',
+        plan_license_menu: '套餐/授权',
+        promo: '推广',
+        btn_back_license: '返回授权',
         about: '关于 EQT',
         about_title: '关于 EQT',
         share_app: '分享软件',
@@ -374,6 +378,10 @@ const translations = {
         year: '年',
     },
     en: {
+        menu_label: 'Menu',
+        plan_license_menu: 'Plan & License',
+        promo: 'Promote',
+        btn_back_license: 'Back to License',
         about: 'About EQT',
         about_title: 'About EQT',
         share_app: 'Share App',
@@ -746,6 +754,10 @@ const translations = {
         year: 'year',
     },
     ja: {
+        menu_label: 'メニュー',
+        plan_license_menu: 'プラン・ライセンス',
+        promo: '宣伝',
+        btn_back_license: 'ライセンスに戻る',
         about: 'EQTについて',
         about_title: 'EQTについて',
         active: 'アクティブ',
@@ -1103,6 +1115,10 @@ const translations = {
         year: '年',
     },
     ko: {
+        menu_label: '메뉴',
+        plan_license_menu: '요금제·라이선스',
+        promo: '홍보',
+        btn_back_license: '라이선스로 돌아가기',
         about: 'EQT 정보',
         about_title: 'EQT 정보',
         active: '활성',
@@ -1460,6 +1476,10 @@ const translations = {
         year: 'year',
     },
     es: {
+        menu_label: 'Menú',
+        plan_license_menu: 'Plan y licencia',
+        promo: 'Promocionar',
+        btn_back_license: 'Volver a licencia',
         about: 'Acerca de EQT',
         about_title: 'Acerca de EQT',
         active: 'Activo',
@@ -1817,6 +1837,10 @@ const translations = {
         year: 'year',
     },
     de: {
+        menu_label: 'Menü',
+        plan_license_menu: 'Plan & Lizenz',
+        promo: 'Bewerben',
+        btn_back_license: 'Zurück zur Lizenz',
         about: 'Über EQT',
         about_title: 'Über EQT',
         active: 'Aktiv',
@@ -2174,6 +2198,10 @@ const translations = {
         year: 'year',
     },
     fr: {
+        menu_label: 'Menu',
+        plan_license_menu: 'Forfait & licence',
+        promo: 'Promouvoir',
+        btn_back_license: 'Retour à la licence',
         about: 'À propos de EQT',
         about_title: 'À propos de EQT',
         active: 'Actif',
