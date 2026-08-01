@@ -725,10 +725,15 @@ function renderShare() {
 
 function isTaskQRExpanded(task) {
     if (!task) return true;
+    state.qrExpandedTasks = state.qrExpandedTasks || {};
+    const taskId = task.id || 'current';
+    if (typeof state.qrExpandedTasks[taskId] === 'boolean') {
+        return state.qrExpandedTasks[taskId];
+    }
     const files = task.savedFiles || [];
     const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
     const shouldCollapse = isSharedOrReceived;
-    return qrExpandedManual !== null ? qrExpandedManual : !shouldCollapse;
+    return !shouldCollapse;
 }
 
 function renderShareTransfer(task) {
@@ -1116,12 +1121,7 @@ function renderReceiveDeviceProgressHtml(task) {
 
         const listItems = clients.map(client => {
             const devName = client.deviceName || t('device') || 'Device';
-            const clientID = client.clientID || '';
-            let displayName = devName;
-            if (!displayName.includes('(') && clientID) {
-                const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
-                displayName = `${displayName} (${shortId})`;
-            }
+            const displayName = devName;
             const stateText = getTranslatedState(client.state || 'waiting');
             const percent = client.percent || 0;
             const currentFile = client.current || '';
@@ -1413,13 +1413,8 @@ function updateReceiveTransferActiveUI(task) {
             }
         } else {
             clients.forEach(client => {
-                const clientID = client.clientID;
-                const devName = client.deviceName || 'Device';
-                let displayName = devName;
-                if (!displayName.includes('(') && clientID) {
-                    const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
-                    displayName = `${displayName} (${shortId})`;
-                }
+                const devName = client.deviceName || t('device') || 'Device';
+                const displayName = devName;
                 const stateText = getTranslatedState(client.state || 'waiting');
                 const percent = client.percent || 0;
                 const currentFile = client.current || '';
@@ -2905,9 +2900,13 @@ function bindEvents() {
         document.addEventListener('click', (e) => {
             if (e.target.closest('.toggle-qr-expand-action')) {
                 const task = state.workspaceMode === 'share' ? activeShareTask() : (state.workspaceMode === 'receive' ? activeReceiveTask() : null);
-                const currentExpanded = isTaskQRExpanded(task);
-                qrExpandedManual = !currentExpanded;
-                render();
+                if (task) {
+                    state.qrExpandedTasks = state.qrExpandedTasks || {};
+                    const taskId = task.id || 'current';
+                    const currentExpanded = isTaskQRExpanded(task);
+                    state.qrExpandedTasks[taskId] = !currentExpanded;
+                    render();
+                }
                 return;
             }
             if (e.target.closest('.toggle-devices-expand')) {

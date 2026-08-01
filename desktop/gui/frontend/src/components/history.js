@@ -167,8 +167,8 @@ export function renderHistoryFiles(task) {
         let html = `<div class="history-device-groups" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">`;
 
         clients.forEach(client => {
-            const rawName = client.deviceName || client.clientID || t('unknown_device') || 'Unknown Device';
-            const clientName = rawName.replace(/\s*\([a-f0-9]{4}\)/i, '');
+            const rawName = client.deviceName || t('unknown_device') || 'Unknown Device';
+            const clientName = rawName.replace(/\s*\([^)]*\)/g, '').trim() || (t('unknown_device') || 'Unknown Device');
             const clientFiles = client.savedFiles || [];
 
             if (clientFiles.length > 0) {
@@ -259,9 +259,9 @@ export function getMatchResults(history, query) {
         // 2. 匹配设备名称
         if (task.clientStates) {
             Object.values(task.clientStates).forEach(client => {
-                const rawName = client.deviceName || client.clientID || '';
-                const clientName = rawName.replace(/\s*\([a-f0-9]{4}\)/i, '');
-                if (clientName.toLowerCase().includes(q)) {
+                const rawName = client.deviceName || t('unknown_device') || 'Unknown Device';
+                const clientName = rawName.replace(/\s*\([^)]*\)/g, '').trim();
+                if (clientName && clientName.toLowerCase().includes(q)) {
                     results.push({
                         type: 'device',
                         text: clientName,
