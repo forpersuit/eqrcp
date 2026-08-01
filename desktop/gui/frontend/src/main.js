@@ -3281,16 +3281,22 @@ function refreshHistoryListInDOM() {
 
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#open-share-panel')?.addEventListener('click', () => {
+    document.querySelector('#open-share-panel')?.addEventListener('click', (e) => {
+        if (e) e.stopPropagation();
+        console.log('[EQT Share] Open Share panel clicked. Current activePanel:', state.activePanel);
         state.showShareOverlay = true;
         render();
+        prepareMergedQRCode();
     });
-    document.querySelector('#close-share-overlay')?.addEventListener('click', () => {
+    document.querySelector('#close-share-overlay')?.addEventListener('click', (e) => {
+        if (e) e.stopPropagation();
+        console.log('[EQT Share] Close Share overlay clicked.');
         state.showShareOverlay = false;
         render();
     });
     document.querySelector('.share-overlay-backdrop')?.addEventListener('click', (event) => {
         if (event.target.classList.contains('share-overlay-backdrop')) {
+            console.log('[EQT Share] Share backdrop clicked, closing overlay.');
             state.showShareOverlay = false;
             render();
         }
@@ -5861,17 +5867,30 @@ async function downloadSharePosterImage() {
 }
 
 let cachedMergedQRDataURL = '';
+let isPreparingQR = false;
 
 async function prepareMergedQRCode() {
-    if (cachedMergedQRDataURL) return cachedMergedQRDataURL;
+    if (cachedMergedQRDataURL) {
+        console.log('[EQT Share] Merged QR code already cached in memory.');
+        return cachedMergedQRDataURL;
+    }
+    if (isPreparingQR) {
+        console.log('[EQT Share] QR code preparation already in progress, skipping concurrent call.');
+        return '';
+    }
+    isPreparingQR = true;
+    console.log('[EQT Share] Starting async QR code pixel merge with center logo...');
     try {
         cachedMergedQRDataURL = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        console.log('[EQT Share] QR code merged successfully, length:', cachedMergedQRDataURL.length);
         const imgEl = document.querySelector('#share-qr-img-element');
         if (imgEl && cachedMergedQRDataURL) {
             imgEl.src = cachedMergedQRDataURL;
         }
     } catch (e) {
-        console.error('Failed to prepare merged QR code:', e);
+        console.error('[EQT Share] Failed to prepare merged QR code:', e);
+    } finally {
+        isPreparingQR = false;
     }
     return cachedMergedQRDataURL;
 }
