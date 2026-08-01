@@ -335,11 +335,6 @@ h2 {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    transition: transform 0.25s ease;
-}
-
-.share-qr-wrapper:hover {
-    transform: scale(1.03);
 }
 
 .share-qr-img {
@@ -386,34 +381,54 @@ h2 {
     user-select: none;
 }
 
-.share-external-copy-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--accent-strong, #10b981);
-    color: #ffffff;
-    border: none;
-    display: inline-flex;
+.share-actions-group {
+    width: 100%;
+    display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.share-action-btn {
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     cursor: pointer;
-    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
-.share-external-copy-btn:hover {
-    transform: scale(1.08);
+.share-action-btn:hover {
+    background: var(--accent-subtle, rgba(16, 185, 129, 0.08));
+    border-color: var(--accent-strong, #10b981);
+    color: var(--accent-strong, #10b981);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.share-action-btn.primary {
+    background: var(--accent-strong, #10b981);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+}
+
+.share-action-btn.primary:hover {
     background: #059669;
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4);
 }
 
-.share-external-copy-btn:active {
-    transform: scale(0.95);
-}
-
-.share-external-copy-btn svg {
-    width: 20px;
-    height: 20px;
+.share-action-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 .tool-button,

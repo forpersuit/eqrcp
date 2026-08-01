@@ -3279,6 +3279,7 @@ function refreshHistoryListInDOM() {
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-share-panel')?.addEventListener('click', () => openPanel('share'));
+    document.querySelector('#download-share-poster-btn')?.addEventListener('click', downloadSharePosterImage);
     document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
         const url = 'https://eqt.net.im';
         try {
@@ -5710,6 +5711,121 @@ function generateRandomScatteredIcons() {
     }).join('');
 }
 
+function downloadIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+}
+
+async function downloadSharePosterImage() {
+    try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const width = 800;
+        const height = 1040;
+        canvas.width = width;
+        canvas.height = height;
+
+        // 1. 绘制纯白底色与浅边框
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, width, height, 32);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // 2. 绘制散落文件图标 (8个随机分布)
+        const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '📁', '💬', '🚀'];
+        const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
+        const coords = [
+            { x: 70, y: 80, size: 44, rot: -0.3 },
+            { x: 710, y: 90, size: 52, rot: 0.25 },
+            { x: 50, y: 380, size: 40, rot: 0.4 },
+            { x: 730, y: 400, size: 48, rot: -0.2 },
+            { x: 80, y: 680, size: 46, rot: -0.35 },
+            { x: 720, y: 700, size: 42, rot: 0.3 },
+            { x: 120, y: 940, size: 38, rot: -0.15 },
+            { x: 680, y: 950, size: 40, rot: 0.2 }
+        ];
+
+        ctx.fillStyle = 'rgba(5, 150, 105, 0.25)';
+        shuffled.forEach((icon, i) => {
+            const c = coords[i];
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(c.rot);
+            ctx.font = `${c.size}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(icon, 0, 0);
+            ctx.restore();
+        });
+
+        // 3. 绘制二维码 (带居中 Logo)
+        const qrImage = new Image();
+        qrImage.crossOrigin = 'anonymous';
+        qrImage.src = 'https://api.qrserver.com/v1/create-qr-code/?size=380x380&data=https%3A%2F%2Feqt.net.im';
+        await new Promise((res) => {
+            qrImage.onload = res;
+            qrImage.onerror = res;
+        });
+
+        ctx.drawImage(qrImage, (width - 340) / 2, 80, 340, 340);
+
+        // 二维码正中心品牌 Logo
+        const logoImage = new Image();
+        logoImage.crossOrigin = 'anonymous';
+        logoImage.src = faviconURL;
+        await new Promise((res) => {
+            logoImage.onload = res;
+            logoImage.onerror = res;
+        });
+
+        const logoSize = 72;
+        const logoX = (width - logoSize) / 2;
+        const logoY = 80 + (340 - logoSize) / 2;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(logoX - 6, logoY - 6, logoSize + 12, logoSize + 12, 16);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
+
+        // 4. 绘制下方特征宣传插图
+        const featImage = new Image();
+        featImage.crossOrigin = 'anonymous';
+        featImage.src = chatIllustrationURL;
+        await new Promise((res) => {
+            featImage.onload = res;
+            featImage.onerror = res;
+        });
+
+        const imgRatio = featImage.width / (featImage.height || 1);
+        const featWidth = 620;
+        const featHeight = featWidth / imgRatio;
+
+        ctx.drawImage(featImage, (width - featWidth) / 2, 490, featWidth, Math.min(featHeight, 460));
+
+        // 5. 触发下载保存
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = 'EQT-Share-Poster.png';
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        state.notice = t('poster_downloaded') || '推广海报图片已成功保存！';
+        render();
+    } catch (e) {
+        console.error('Failed to download share poster image:', e);
+    }
+}
+
 function renderSharePanel() {
     const shareUrl = 'https://eqt.net.im';
     const scatteredHtml = generateRandomScatteredIcons();
@@ -5740,10 +5856,15 @@ function renderSharePanel() {
                 </div>
             </div>
 
-            <!-- 移到分享海报卡片外部正中间的纯图标复制按钮 -->
-            <div style="width: 100%; display: flex; justify-content: center; margin-top: 18px;">
-                <button type="button" class="share-external-copy-btn" id="copy-share-url-btn" title="${escapeAttr(t('copy_share_url') || '复制官网链接')}" aria-label="${escapeAttr(t('copy_share_url') || '复制官网链接')}">
+            <!-- 移到分享海报卡片外部的统一风格操作按钮组 (下载海报图片 & 复制官网链接) -->
+            <div class="share-actions-group">
+                <button type="button" class="share-action-btn primary" id="download-share-poster-btn" title="${escapeAttr(t('download_share_poster') || '保存推广海报')}">
+                    <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>
+                    <span>${escapeHTML(t('download_share_poster') || '保存推广海报')}</span>
+                </button>
+                <button type="button" class="share-action-btn" id="copy-share-url-btn" title="${escapeAttr(t('copy_share_url') || '复制官网链接')}">
                     <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
+                    <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
                 </button>
             </div>
         </div>
