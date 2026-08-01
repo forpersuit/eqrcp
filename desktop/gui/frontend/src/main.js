@@ -177,7 +177,7 @@ const licenseTiers = {
     PRO: 'EQT Pro',
 };
 function getLicenseDisplayName(license) {
-    if (!license || !license.tier) return 'No paid plan active';
+    if (!license || !license.tier) return t('no_paid_plan_active');
     if (license.tier === 'PLUS' && license.codeDate === 'LIFETIME') {
         return 'EQT Plus U';
     }
@@ -2208,7 +2208,7 @@ function renderSettingsPanel() {
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%; margin-bottom: 12px;">
                                 <div id="dev-open-dir" title="${t('click_to_open_dir') || '点击在资源管理器中打开此目录'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
-                                    📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : 'Default directory'))}
+                                    📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : t('choose_folder')))}
                                 </div>
                                 <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || '选择目录...'}</button>
                             </div>
@@ -2266,7 +2266,7 @@ function renderSettingsPanel() {
 
 function renderSwitch(id, checked, disabled = false) {
     return `
-        <label class="switch" title="${disabled ? 'Not available on this platform' : ''}">
+        <label class="switch" title="${disabled ? escapeAttr(t('switch_not_available')) : ''}">
             <input id="${id}" type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
             <span></span>
         </label>
@@ -2288,16 +2288,16 @@ function renderStatusBadge(status) {
 
 function integrationStatusText(status, fallback) {
     if (!status) {
-        return 'Checking status...';
+        return t('setting_status_checking');
     }
     if (status.supported === false) {
-        return 'Not available on this platform yet.';
+        return t('setting_status_unsupported');
     }
     if (status.needsRepair) {
-        return 'Needs repair. Turn this off and on again to reinstall it.';
+        return t('setting_status_repair');
     }
     if (status.enabled) {
-        return 'Enabled.';
+        return t('setting_status_enabled');
     }
     return fallback;
 }
@@ -2494,23 +2494,23 @@ function renderAboutPanel() {
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('version') || 'Version'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.version || 'Unknown')}</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.version || t('unknown'))}</span>
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('platform') || 'Platform'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr([info.os, info.arch].filter(Boolean).join(' / ')) || 'Unknown'}">${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || 'Unknown')}</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr([info.os, info.arch].filter(Boolean).join(' / ')) || t('unknown')}">${escapeHTML([info.os, info.arch].filter(Boolean).join(' / ') || t('unknown'))}</span>
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('temp_space_available') || 'Temp Space'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.uploadDirFreeSpace || 'Unknown')}</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.uploadDirFreeSpace || t('unknown'))}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Device ID</span>
+                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('device_id')}</span>
                     <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text;">${escapeHTML(state.status?.deviceID || '------')}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
-                    <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">MIT license. Forked from qrcp.</span>
+                    <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">${t('legal_notice')}</span>
                 </div>
             </div>
         </div>
@@ -4492,19 +4492,19 @@ function bindSettingsControls() {
         state.devInjectMsg = '';
         if (!code) {
             state.devInjectError = true;
-            state.devInjectMsg = t('dev_inject_empty') || '请输入激活码';
+            state.devInjectMsg = t('dev_inject_empty');
             render();
             openPanel('settings');
             return;
         }
         try {
-            state.devInjectMsg = t('dev_inject_working') || '正在注入…';
+            state.devInjectMsg = t('dev_inject_working');
             render();
             openPanel('settings');
             await ActivateLicense(code);
             await loadStatusData();
             state.devInjectError = false;
-            state.devInjectMsg = (t('dev_inject_ok') || '注入成功') + ': ' + code;
+            state.devInjectMsg = t('dev_inject_ok') + ': ' + code;
             state.notice = state.devInjectMsg;
             render();
             openPanel('settings');

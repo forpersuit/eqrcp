@@ -60,6 +60,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 
 - **桌面 UI (Wails)**：
   - 使用 `t(key)` 词条替换。保存语言偏好时调用 `applyLanguageChange(newLang)` 刷新 DOM，并向 `#chat-iframe` 发送 `postMessage` 消息。
+  - **i18n 完整性与多语种Key对齐校验**：新增或修改界面词条时，必须保证所有 7 种支持语言（`zh`, `en`, `ja`, `ko`, `es`, `de`, `fr`）的 `i18n.js` 字典键 100% 对齐（0 缺失 key），避免硬编码英/中文字符串作为模板中的 fallback。可以使用 `node` 脚本对比 `Object.keys(global.translations[lang])` 对齐度。
 - **移动端页面 (`upload.tmpl.html` & `chat.tmpl.html`)**：
   - 默认根据 `navigator.language` 渲染语种。
   - 语种偏好统一读写 LocalStorage 的 `eqt_lang` 与 `eqt-page-lang` 双键。
