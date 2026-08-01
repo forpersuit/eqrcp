@@ -1846,17 +1846,21 @@ function renderPanel() {
         settings: t('settings'),
         redeem: t('redeem_title'),
         about: t('about_title'),
+        share: t('share_app_title') || '分享 EQT (Easy QR Transfer)',
         feedback: t('feedback'),
         'confirm-switch': t('confirm_switch_title'),
         'plan-comparison': t('plan_desc_title'),
     }[state.activePanel] || '';
     const isConfirm = state.activePanel === 'confirm-switch';
     const isPlanComp = state.activePanel === 'plan-comparison';
+    const isShare = state.activePanel === 'share';
     let modalStyle = '';
     if (isConfirm) {
         modalStyle = 'style="max-width: 420px; width: min(420px, 100%);"';
     } else if (isPlanComp) {
         modalStyle = 'style="max-width: 780px; width: min(780px, 100%);"';
+    } else if (isShare) {
+        modalStyle = 'style="max-width: 460px; width: min(460px, 100%);"';
     }
     return `
         <div class="overlay" role="presentation">
@@ -1865,12 +1869,14 @@ function renderPanel() {
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
                         ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">${giftIcon()}</button>` : ''}
+                        ${state.activePanel === 'about' ? `<button class="tool-button" id="open-share-panel" title="${t('share_app') || '分享软件'}" aria-label="${t('share_app') || '分享软件'}">${shareIcon()}</button>` : ''}
                         <button class="tool-button" id="close-panel" title="${t('close')}" aria-label="${t('close')}">x</button>
                     </div>
                 </div>
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
+                ${state.activePanel === 'share' ? renderSharePanel() : ''}
                 ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
@@ -3039,7 +3045,21 @@ function refreshHistoryListInDOM() {
     document.querySelector('#open-settings')?.addEventListener('click', () => openPanel('settings'));
     document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
     document.querySelector('#open-about')?.addEventListener('click', () => openPanel('about'));
+    document.querySelector('#open-share-panel')?.addEventListener('click', () => openPanel('share'));
     document.querySelector('#open-feedback')?.addEventListener('click', () => openPanel('feedback'));
+    document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
+        const url = 'https://eqt.net.im';
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+            }
+            state.notice = t('share_url_copied') || '官网链接已成功复制到剪贴板！';
+            render();
+        } catch (_) {
+            state.notice = url;
+            render();
+        }
+    });
     document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);
     document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
     document.querySelector('#clear-share')?.addEventListener('click', () => {
@@ -5639,6 +5659,58 @@ function feedbackIcon() {
 
 function giftIcon() {
     return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 6H5a3 3 0 0 0-3 3v2a2 2 0 0 1 0 4v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a2 2 0 0 1 0-4V9a3 3 0 0 0-3-3z"></path><path d="M9 6v12" stroke-dasharray="3 3"></path><path d="M15 9l1 1.5 1.5.5-1.5.5-1 1.5-1-1.5-1.5-.5 1.5-.5z"></path></svg>';
+}
+
+function shareIcon() {
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
+}
+
+function renderSharePanel() {
+    const shareUrl = 'https://eqt.net.im';
+    // 高清官网 QR Code
+    const qrImg = 'https://lic.eqt.net.im/assets/favicon.png';
+
+    return `
+        <div class="share-panel" style="padding: 6px 2px 12px 2px;">
+            <div class="share-poster-card">
+                <!-- 散落各种传输文件类型图标 (图片/视频/音频/文件/代码/闪电/设备) -->
+                <div class="share-scattered-bg">
+                    <span class="scattered-icon" style="top: 14px; left: 16px; font-size: 24px; transform: rotate(-18deg); opacity: 0.25;">📷</span>
+                    <span class="scattered-icon" style="top: 20px; right: 20px; font-size: 30px; transform: rotate(15deg); opacity: 0.28;">🎥</span>
+                    <span class="scattered-icon" style="top: 120px; left: 10px; font-size: 22px; transform: rotate(25deg); opacity: 0.22;">🎵</span>
+                    <span class="scattered-icon" style="top: 130px; right: 14px; font-size: 26px; transform: rotate(-12deg); opacity: 0.26;">📄</span>
+                    <span class="scattered-icon" style="bottom: 70px; left: 20px; font-size: 28px; transform: rotate(-20deg); opacity: 0.25;">💻</span>
+                    <span class="scattered-icon" style="bottom: 75px; right: 24px; font-size: 24px; transform: rotate(18deg); opacity: 0.24;">⚡</span>
+                    <span class="scattered-icon" style="bottom: 18px; left: 46%; font-size: 20px; transform: rotate(-8deg); opacity: 0.20;">📱</span>
+                </div>
+
+                <div class="share-poster-content">
+                    <!-- 上方: 官方网站二维码 -->
+                    <div class="share-qr-wrapper">
+                        <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
+                        <span style="font-size: 11px; font-weight: 700; color: #0f172a; letter-spacing: 0.05em;">eqt.net.im</span>
+                    </div>
+                    
+                    <div style="font-size: 12px; font-weight: 600; color: var(--accent-strong, #39e5b6); line-height: 1.4;">
+                        ${escapeHTML(t('scan_to_download') || '扫码或浏览器访问 eqt.net.im 即可直达下载')}
+                    </div>
+
+                    <!-- 下方: Chat 模式 Start 界面插图 -->
+                    <div class="share-illustration-box">
+                        <img src="${chatIllustrationURL}" alt="EQT Feature Illustration" />
+                    </div>
+
+                    <!-- 一键复制官网链接按钮 -->
+                    <div style="width: 100%; display: flex; justify-content: center; margin-top: 4px;">
+                        <button type="button" class="btn-mini primary" id="copy-share-url-btn" style="padding: 9px 20px; font-size: 12px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(57,229,182,0.3);">
+                            <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
+                            <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function diamondIcon() {

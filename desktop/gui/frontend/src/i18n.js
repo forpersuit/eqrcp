@@ -4,6 +4,11 @@ const translations = {
     zh: {
         about: '关于 EQT',
         about_title: '关于 EQT',
+        share_app: '分享软件',
+        share_app_title: '分享 EQT (Easy QR Transfer)',
+        copy_share_url: '复制官网链接',
+        share_url_copied: '官网链接已成功复制到剪贴板！',
+        scan_to_download: '扫码或浏览器访问 eqt.net.im 即可直达下载',
         active: '活跃',
         adv_settings: '高级设置',
         agent_idle: '服务处于空闲状态。',
@@ -369,6 +374,11 @@ const translations = {
     en: {
         about: 'About EQT',
         about_title: 'About EQT',
+        share_app: 'Share App',
+        share_app_title: 'Share EQT (Easy QR Transfer)',
+        copy_share_url: 'Copy Website Link',
+        share_url_copied: 'Website link copied to clipboard!',
+        scan_to_download: 'Scan QR code or visit eqt.net.im to download',
         active: 'Active',
         adv_settings: 'Advanced Settings',
         agent_idle: 'Agent is idle.',
