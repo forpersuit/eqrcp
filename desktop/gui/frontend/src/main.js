@@ -5679,49 +5679,77 @@ function shareIcon() {
     return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
 }
 
+function generateRandomScatteredIcons() {
+    const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
+    const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
+    
+    const zones = [
+        { top: 10 + Math.floor(Math.random() * 12), left: 10 + Math.floor(Math.random() * 18) },
+        { top: 12 + Math.floor(Math.random() * 12), right: 10 + Math.floor(Math.random() * 18) },
+        { top: 90 + Math.floor(Math.random() * 25), left: 8 + Math.floor(Math.random() * 12) },
+        { top: 95 + Math.floor(Math.random() * 25), right: 8 + Math.floor(Math.random() * 12) },
+        { top: 175 + Math.floor(Math.random() * 20), left: 12 + Math.floor(Math.random() * 15) },
+        { top: 180 + Math.floor(Math.random() * 20), right: 12 + Math.floor(Math.random() * 15) },
+        { bottom: 20 + Math.floor(Math.random() * 15), left: 10 + Math.floor(Math.random() * 20) },
+        { bottom: 18 + Math.floor(Math.random() * 15), right: 10 + Math.floor(Math.random() * 20) }
+    ];
+
+    return shuffled.map((icon, idx) => {
+        const zone = zones[idx];
+        const size = 18 + Math.floor(Math.random() * 14);
+        const rotate = -30 + Math.floor(Math.random() * 60);
+        const opacity = (0.22 + Math.random() * 0.15).toFixed(2);
+        
+        let posStyle = '';
+        if (zone.top !== undefined) posStyle += `top: ${zone.top}px; `;
+        if (zone.bottom !== undefined) posStyle += `bottom: ${zone.bottom}px; `;
+        if (zone.left !== undefined) posStyle += `left: ${zone.left}px; `;
+        if (zone.right !== undefined) posStyle += `right: ${zone.right}px; `;
+
+        return `<span class="scattered-icon" style="${posStyle} font-size: ${size}px; transform: rotate(${rotate}deg); opacity: ${opacity};">${icon}</span>`;
+    }).join('');
+}
+
 function renderSharePanel() {
     const shareUrl = 'https://eqt.net.im';
-    // 高清官网 QR Code
-    const qrImg = 'https://lic.eqt.net.im/assets/favicon.png';
+    const scatteredHtml = generateRandomScatteredIcons();
 
     return `
-        <div class="share-panel" style="padding: 6px 2px 12px 2px;">
+        <div class="share-panel" style="padding: 2px 2px 8px 2px;">
             <div class="share-poster-card">
-                <!-- 散落各种传输文件类型图标 (图片/视频/音频/文件/代码/闪电/设备) -->
+                <!-- 每次点击随机动态分发位置的散落传输文件类型图标 -->
                 <div class="share-scattered-bg">
-                    <span class="scattered-icon" style="top: 14px; left: 16px; font-size: 24px; transform: rotate(-18deg); opacity: 0.25;">📷</span>
-                    <span class="scattered-icon" style="top: 20px; right: 20px; font-size: 30px; transform: rotate(15deg); opacity: 0.28;">🎥</span>
-                    <span class="scattered-icon" style="top: 120px; left: 10px; font-size: 22px; transform: rotate(25deg); opacity: 0.22;">🎵</span>
-                    <span class="scattered-icon" style="top: 130px; right: 14px; font-size: 26px; transform: rotate(-12deg); opacity: 0.26;">📄</span>
-                    <span class="scattered-icon" style="bottom: 70px; left: 20px; font-size: 28px; transform: rotate(-20deg); opacity: 0.25;">💻</span>
-                    <span class="scattered-icon" style="bottom: 75px; right: 24px; font-size: 24px; transform: rotate(18deg); opacity: 0.24;">⚡</span>
-                    <span class="scattered-icon" style="bottom: 18px; left: 46%; font-size: 20px; transform: rotate(-8deg); opacity: 0.20;">📱</span>
+                    ${scatteredHtml}
                 </div>
 
                 <div class="share-poster-content">
-                    <!-- 上方: 官方网站二维码 -->
+                    <!-- 上方: 官方网站二维码 (正中间带有品牌 Logo Badge) -->
                     <div class="share-qr-wrapper">
-                        <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
-                        <span style="font-size: 11px; font-weight: 700; color: #0f172a; letter-spacing: 0.05em;">eqt.net.im</span>
+                        <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
+                            <img class="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https%3A%2F%2Feqt.net.im" alt="EQT Website QR Code" />
+                            <div class="share-qr-logo-badge">
+                                <img src="${faviconURL}" alt="EQT Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 5px;" />
+                            </div>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 700; color: #0f172a; letter-spacing: 0.05em; margin-top: 4px;">eqt.net.im</span>
                     </div>
                     
-                    <div style="font-size: 12px; font-weight: 600; color: var(--accent-strong, #39e5b6); line-height: 1.4;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--accent-strong, #059669); line-height: 1.4;">
                         ${escapeHTML(t('scan_to_download') || '扫码或浏览器访问 eqt.net.im 即可直达下载')}
                     </div>
 
-                    <!-- 下方: Chat 模式 Start 界面插图 -->
+                    <!-- 下方: Chat 模式 Start 界面插图（浅色混合融为一体） -->
                     <div class="share-illustration-box">
                         <img src="${chatIllustrationURL}" alt="EQT Feature Illustration" />
                     </div>
-
-                    <!-- 一键复制官网链接按钮 -->
-                    <div style="width: 100%; display: flex; justify-content: center; margin-top: 4px;">
-                        <button type="button" class="btn-mini primary" id="copy-share-url-btn" style="padding: 9px 20px; font-size: 12px; font-weight: 700; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(57,229,182,0.3);">
-                            <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
-                            <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
-                        </button>
-                    </div>
                 </div>
+            </div>
+
+            <!-- 移到分享海报卡片外部正中间的纯图标复制按钮 -->
+            <div style="width: 100%; display: flex; justify-content: center; margin-top: 18px;">
+                <button type="button" class="share-external-copy-btn" id="copy-share-url-btn" title="${escapeAttr(t('copy_share_url') || '复制官网链接')}" aria-label="${escapeAttr(t('copy_share_url') || '复制官网链接')}">
+                    <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
+                </button>
             </div>
         </div>
     `;

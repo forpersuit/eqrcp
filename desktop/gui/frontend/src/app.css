@@ -277,23 +277,27 @@ h2 {
     cursor: default;
 }
 
-/* ── Share Poster Modal Card Styles ── */
+/* ── Share Poster Modal Card Styles (Light Mode & Random Floating Design) ── */
 .share-poster-card {
     position: relative;
     overflow: hidden;
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 24px 20px;
-    background: linear-gradient(145deg, rgba(23, 35, 31, 0.95), rgba(15, 23, 42, 0.98));
-    border: 2px solid transparent;
-    background-image: linear-gradient(rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.96)), linear-gradient(135deg, #39e5b6, #6366f1, #ec4899, #10b981);
-    background-origin: border-box;
-    background-clip: padding-box, border-box;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(57, 229, 182, 0.15);
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 0 30px rgba(57, 229, 182, 0.15);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 16px;
+    color: #1e293b;
+}
+
+:global(.dark) .share-poster-card {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: rgba(0, 0, 0, 0.1);
 }
 
 .share-scattered-bg {
@@ -306,10 +310,11 @@ h2 {
 
 .scattered-icon {
     position: absolute;
-    color: var(--accent-strong, #39e5b6);
-    opacity: 0.22;
-    transition: transform 0.3s ease;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    color: var(--accent-strong, #059669);
+    opacity: 0.25;
+    transition: all 0.3s ease;
+    user-select: none;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
 }
 
 .share-poster-content {
@@ -324,13 +329,13 @@ h2 {
 
 .share-qr-wrapper {
     background: #ffffff;
-    padding: 12px;
+    padding: 10px;
     border-radius: 16px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     transition: transform 0.25s ease;
 }
 
@@ -339,10 +344,27 @@ h2 {
 }
 
 .share-qr-img {
-    width: 150px;
-    height: 150px;
+    width: 160px;
+    height: 160px;
     object-fit: contain;
     border-radius: 8px;
+}
+
+.share-qr-logo-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 36px;
+    height: 36px;
+    background: #ffffff;
+    border-radius: 9px;
+    padding: 3px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .share-illustration-box {
@@ -357,11 +379,42 @@ h2 {
 .share-illustration-box img {
     max-width: 100%;
     height: auto;
-    max-height: 120px;
+    max-height: 125px;
     object-fit: contain;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+    mix-blend-mode: multiply;
+    opacity: 0.95;
     pointer-events: none;
     user-select: none;
+}
+
+.share-external-copy-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent-strong, #10b981);
+    color: #ffffff;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.share-external-copy-btn:hover {
+    transform: scale(1.08);
+    background: #059669;
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+}
+
+.share-external-copy-btn:active {
+    transform: scale(0.95);
+}
+
+.share-external-copy-btn svg {
+    width: 20px;
+    height: 20px;
 }
 
 .tool-button,
