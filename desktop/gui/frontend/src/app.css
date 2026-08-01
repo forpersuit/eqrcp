@@ -277,20 +277,20 @@ h2 {
     cursor: default;
 }
 
-/* ── Share Poster Modal Card Styles (Light Mode & Random Floating Design) ── */
+/* ── Share Poster Modal Card Styles (Air-Ticket Playful Light Design) ── */
 .share-poster-card {
     position: relative;
     overflow: hidden;
-    border-radius: 20px;
-    padding: 24px 20px;
+    border-radius: 22px;
+    padding: 22px 20px 20px 20px;
     background: #ffffff;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 0 30px rgba(57, 229, 182, 0.15);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06), 0 0 35px rgba(16, 185, 129, 0.12);
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 16px;
+    gap: 14px;
     color: #1e293b;
 }
 
@@ -298,6 +298,45 @@ h2 {
     background: #ffffff;
     color: #0f172a;
     border-color: rgba(0, 0, 0, 0.1);
+}
+
+.share-ticket-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1.5px dashed rgba(0, 0, 0, 0.09);
+    position: relative;
+    z-index: 2;
+}
+
+.share-ticket-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(16, 185, 129, 0.09);
+    color: #059669;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.share-ticket-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    animation: ticketPulse 2s infinite;
+}
+
+@keyframes ticketPulse {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.8; }
 }
 
 .share-scattered-bg {
@@ -314,7 +353,13 @@ h2 {
     opacity: 0.25;
     transition: all 0.3s ease;
     user-select: none;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1));
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.08));
+    animation: gentleFloat 4s ease-in-out infinite alternate;
+}
+
+@keyframes gentleFloat {
+    0% { transform: translateY(0px) rotate(-10deg); }
+    100% { transform: translateY(-6px) rotate(10deg); }
 }
 
 .share-poster-content {
@@ -324,7 +369,7 @@ h2 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 
 .share-qr-wrapper {

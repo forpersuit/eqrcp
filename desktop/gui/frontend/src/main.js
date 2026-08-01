@@ -5833,12 +5833,21 @@ function renderSharePanel() {
     return `
         <div class="share-panel" style="padding: 2px 2px 8px 2px;">
             <div class="share-poster-card">
-                <!-- 每次点击随机动态分发位置的散落传输文件类型图标 -->
+                <!-- 趣味通行票据 Header (带有闪烁绿灯与极速通行字标) -->
+                <div class="share-ticket-header">
+                    <div class="share-ticket-badge">
+                        <span class="share-ticket-pulse"></span>
+                        <span>EQT INSTANT PASS</span>
+                    </div>
+                    <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.06em;">NO APP NEEDED</span>
+                </div>
+
+                <!-- 每次点击随机动态分发位置的散落传输文件类型图标 (带浮动微动画) -->
                 <div class="share-scattered-bg">
                     ${scatteredHtml}
                 </div>
 
-                <div class="share-poster-content" style="gap: 12px;">
+                <div class="share-poster-content" style="gap: 10px;">
                     <!-- 上方: 官方网站纯净二维码 (正中间带有品牌 Logo Badge) -->
                     <div class="share-qr-wrapper">
                         <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
@@ -5849,7 +5858,7 @@ function renderSharePanel() {
                         </div>
                     </div>
 
-                    <!-- 下方: Chat 模式 Start 界面插图（明显放大，浅色融为一体） -->
+                    <!-- 下方: Chat 模式 Start 界面插图（浅色混合融为一体） -->
                     <div class="share-illustration-box">
                         <img src="${chatIllustrationURL}" alt="EQT Feature Illustration" />
                     </div>
