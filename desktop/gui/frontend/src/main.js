@@ -5878,8 +5878,8 @@ async function downloadSharePosterImage() {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 2. 绘制散落文件图标 (8个按真实比率居中分布)
-        const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '📁', '💬', '🚀'];
+        // 2. 绘制散落文件图标 (8个按真实比率居中分布, 图标池与 DOM generateRandomScatteredIcons 保持一致)
+        const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
         const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
         const coords = [
             { x: Math.round(width * 0.09), y: Math.round(height * 0.08), size: 20, rot: -0.3 },
@@ -5905,32 +5905,47 @@ async function downloadSharePosterImage() {
             ctx.restore();
         });
 
-        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度, 34px 顶边距)
+        // 3. 计算居中布局: 二维码 + 20px 间距 + 等比横版 logo 组成内容块, 垂直居中于卡片
         const qrSize = 175;
-        const qrX = (width - qrSize) / 2;
-        const qrY = 34;
+        const gap = 20;
+        const logoBoxW = 175;
+        const logoBoxH = 48; // 与 .share-illustration-box img max-height 保持一致
 
-        const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
-        const qrMergedImg = new Image();
-        qrMergedImg.src = qrDataUrl;
-        await new Promise((res) => { qrMergedImg.onload = res; qrMergedImg.onerror = res; });
-
-        ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
-
-        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 黄金 20px 间距: y = 34 + 175 + 20 = 229)
+        // 先载入横版 logo, 按 object-fit: contain 等比算出实际绘制尺寸
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
         featImage.src = horizontalLogoURL;
         await new Promise((res) => { featImage.onload = res; featImage.onerror = res; });
 
         const imgRatio = featImage.width / (featImage.height || 1);
-        const featWidth = 175;
-        const featHeight = Math.min(featWidth / imgRatio, 44);
-        const featY = 229;
+        let featWidth = logoBoxW;
+        let featHeight = featWidth / imgRatio;
+        if (featHeight > logoBoxH) {
+            featHeight = logoBoxH;
+            featWidth = featHeight * imgRatio;
+        }
+        const contentH = qrSize + gap + featHeight;
+        const qrX = (width - qrSize) / 2;
+        const qrY = Math.max(Math.round((height - contentH) / 2), 8);
+        const featY = qrY + qrSize + gap;
 
+        // 4. 绘制物理内嵌 Logo 的二维码 (8px 圆角与 DOM .share-qr-img 展示一致)
+        const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        const qrMergedImg = new Image();
+        qrMergedImg.src = qrDataUrl;
+        await new Promise((res) => { qrMergedImg.onload = res; qrMergedImg.onerror = res; });
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(qrX, qrY, qrSize, qrSize, 8);
+        ctx.clip();
+        ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
+        ctx.restore();
+
+        // 5. 绘制下方 About 横版品牌插图 (等比 contain, 与 DOM object-fit: contain 一致)
         ctx.drawImage(featImage, (width - featWidth) / 2, featY, featWidth, featHeight);
 
-        // 5. 触发物理文件选择保存 (桌面端优先调用 Wails 原生对话框)
+        // 6. 触发物理文件选择保存 (桌面端优先调用 Wails 原生对话框)
         const dataUrl = canvas.toDataURL('image/png');
         let savedPath = '';
 
@@ -5951,7 +5966,7 @@ async function downloadSharePosterImage() {
             savedPath = 'EQT-Share-Poster.png';
         }
 
-        // 6. 给按钮即时输出成功打勾响应状态
+        // 7. 给按钮即时输出成功打勾响应状态
         const downloadBtn = document.querySelector('#download-share-poster-btn');
         if (downloadBtn) {
             downloadBtn.classList.add('success-saved');
