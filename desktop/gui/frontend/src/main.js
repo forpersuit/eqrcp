@@ -3278,6 +3278,20 @@ function refreshHistoryListInDOM() {
 
 function bindPanelEvents() {
     document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
+    document.querySelector('#open-share-panel')?.addEventListener('click', () => openPanel('share'));
+    document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
+        const url = 'https://eqt.net.im';
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+            }
+            state.notice = t('share_url_copied') || '官网链接已成功复制到剪贴板！';
+            render();
+        } catch (_) {
+            state.notice = url;
+            render();
+        }
+    });
     document.querySelector('#close-panel')?.addEventListener('click', closePanel);
     document.querySelector('.overlay')?.addEventListener('click', (event) => {
         if (event.target.classList.contains('overlay')) {
