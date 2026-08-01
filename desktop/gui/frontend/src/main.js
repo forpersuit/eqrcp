@@ -738,6 +738,7 @@ function isTaskQRExpanded(task) {
 function updateQRDOMAndButtonUI(task, wrapperId) {
     if (!task) return;
     const isQRExpanded = isTaskQRExpanded(task);
+    console.log(`[QR Toggle] updateQRDOMAndButtonUI for wrapperId: ${wrapperId}, isQRExpanded: ${isQRExpanded}`);
 
     const toggleBtn = document.querySelector('.transfer-stage .toggle-qr-expand-action');
     if (toggleBtn) {
@@ -1132,7 +1133,7 @@ function renderReceiveDeviceProgressHtml(task) {
 
         const listItems = clients.map(client => {
             const devName = client.deviceName || t('device') || 'Device';
-            const displayName = devName;
+            let displayName = devName;
             const stateText = getTranslatedState(client.state || 'waiting');
             const percent = client.percent || 0;
             const currentFile = client.current || '';
@@ -1425,7 +1426,7 @@ function updateReceiveTransferActiveUI(task) {
         } else {
             clients.forEach(client => {
                 const devName = client.deviceName || t('device') || 'Device';
-                const displayName = devName;
+                let displayName = devName;
                 const stateText = getTranslatedState(client.state || 'waiting');
                 const percent = client.percent || 0;
                 const currentFile = client.current || '';
@@ -2913,19 +2914,23 @@ function bindEvents() {
         _staticDelegationBound = true;
         document.addEventListener('click', (e) => {
             if (e.target.closest('.toggle-qr-expand-action')) {
-                const task = state.workspaceMode === 'share' ? activeShareTask() : (state.workspaceMode === 'receive' ? activeReceiveTask() : null);
+                const task = state.mode === 'share' ? activeShareTask() : (state.mode === 'receive' ? activeReceiveTask() : null);
+                console.log('[QR Toggle] Clicked toggle-qr-expand-action. Current mode:', state.mode, 'Active Task:', task);
                 if (task) {
                     state.qrExpandedTasks = state.qrExpandedTasks || {};
                     const taskId = task.id || 'current';
                     const currentExpanded = isTaskQRExpanded(task);
                     state.qrExpandedTasks[taskId] = !currentExpanded;
-                    if (state.workspaceMode === 'share') {
+                    console.log(`[QR Toggle] Set qrExpandedTasks[${taskId}] = ${!currentExpanded}`);
+                    if (state.mode === 'share') {
                         updateShareTransferActiveUI(task);
-                    } else if (state.workspaceMode === 'receive') {
+                    } else if (state.mode === 'receive') {
                         updateReceiveTransferActiveUI(task);
                     } else {
                         render();
                     }
+                } else {
+                    console.warn('[QR Toggle] Clicked toggle button but no active task found in mode:', state.mode);
                 }
                 return;
             }
