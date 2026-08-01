@@ -5795,12 +5795,14 @@ async function getMergedQRCodeDataURL(text, logoSrc) {
 
 async function downloadSharePosterImage() {
     try {
+        const posterEl = document.querySelector('.share-poster-card');
+        const rect = posterEl ? posterEl.getBoundingClientRect() : { width: 300, height: 350 };
+        const width = Math.round(rect.width) || 300;
+        const height = Math.round(rect.height) || 350;
+        const scale = window.devicePixelRatio || 2;
+        
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const scale = window.devicePixelRatio || 2;
-        const width = 320;
-        const height = 370;
-        
         canvas.width = width * scale;
         canvas.height = height * scale;
         ctx.scale(scale, scale);
@@ -5815,18 +5817,18 @@ async function downloadSharePosterImage() {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 2. 绘制散落文件图标 (8个随机分布)
+        // 2. 绘制散落文件图标 (8个按真实比率居中分布)
         const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '📁', '💬', '🚀'];
         const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
         const coords = [
-            { x: 28, y: 30, size: 20, rot: -0.3 },
-            { x: 292, y: 35, size: 24, rot: 0.25 },
-            { x: 22, y: 150, size: 18, rot: 0.4 },
-            { x: 298, y: 160, size: 22, rot: -0.2 },
-            { x: 30, y: 260, size: 20, rot: -0.35 },
-            { x: 290, y: 270, size: 19, rot: 0.3 },
-            { x: 45, y: 340, size: 18, rot: -0.15 },
-            { x: 275, y: 345, size: 18, rot: 0.2 }
+            { x: Math.round(width * 0.09), y: Math.round(height * 0.08), size: 20, rot: -0.3 },
+            { x: Math.round(width * 0.91), y: Math.round(height * 0.09), size: 24, rot: 0.25 },
+            { x: Math.round(width * 0.07), y: Math.round(height * 0.42), size: 18, rot: 0.4 },
+            { x: Math.round(width * 0.93), y: Math.round(height * 0.45), size: 22, rot: -0.2 },
+            { x: Math.round(width * 0.10), y: Math.round(height * 0.75), size: 20, rot: -0.35 },
+            { x: Math.round(width * 0.90), y: Math.round(height * 0.77), size: 19, rot: 0.3 },
+            { x: Math.round(width * 0.15), y: Math.round(height * 0.93), size: 18, rot: -0.15 },
+            { x: Math.round(width * 0.85), y: Math.round(height * 0.94), size: 18, rot: 0.2 }
         ];
 
         ctx.fillStyle = 'rgba(5, 150, 105, 0.25)';
@@ -5842,10 +5844,10 @@ async function downloadSharePosterImage() {
             ctx.restore();
         });
 
-        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度)
+        // 3. 绘制物理内嵌 Logo 的二维码 (对齐 175px 宽度, 28px 顶边距)
         const qrSize = 175;
         const qrX = (width - qrSize) / 2;
-        const qrY = 24;
+        const qrY = 28;
 
         const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
         const qrMergedImg = new Image();
@@ -5854,7 +5856,7 @@ async function downloadSharePosterImage() {
 
         ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
 
-        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 垂直黄金对称间距)
+        // 4. 绘制下方 About 横版品牌插图 (对齐 175px 宽度, 黄金 26px 间距: y = 28 + 175 + 26 = 229)
         const featImage = new Image();
         featImage.crossOrigin = 'anonymous';
         featImage.src = horizontalLogoURL;
@@ -5862,8 +5864,8 @@ async function downloadSharePosterImage() {
 
         const imgRatio = featImage.width / (featImage.height || 1);
         const featWidth = 175;
-        const featHeight = Math.min(featWidth / imgRatio, 44);
-        const featY = 236;
+        const featHeight = Math.min(featWidth / imgRatio, 46);
+        const featY = 229;
 
         ctx.drawImage(featImage, (width - featWidth) / 2, featY, featWidth, featHeight);
 
@@ -5961,7 +5963,7 @@ function renderSharePanel() {
                     ${scatteredHtml}
                 </div>
 
-                <div class="share-poster-content" style="gap: 16px;">
+                <div class="share-poster-content" style="gap: 26px;">
                     <!-- 上方: 真正的物理带Logo单张二维码图片 (没有任何DOM叠加Overlay) -->
                     <div class="share-qr-wrapper">
                         <img class="share-qr-img" id="share-qr-img-element" src="${qrSrc}" alt="EQT Website QR Code" />
