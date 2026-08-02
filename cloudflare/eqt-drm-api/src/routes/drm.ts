@@ -400,7 +400,7 @@ export async function handleDrmRoutes(
     const { license_code, uuid_hash, cpu_hash, disk_hash } = body;
 
     if (!license_code) {
-      return new Response(JSON.stringify({ error: "Missing license_code" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_license_code", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -411,14 +411,14 @@ export async function handleDrmRoutes(
     ).bind(license_code).first<any>();
 
     if (!license) {
-      return new Response(JSON.stringify({ error: "Invalid license code" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     if (license.status !== "active") {
-      return new Response(JSON.stringify({ error: "License is suspended or revoked" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -460,7 +460,7 @@ export async function handleDrmRoutes(
     }
 
     if (!isActivatedDevice) {
-      return new Response(JSON.stringify({ error: "This device is not activated under the provided license" }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("device_not_activated", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

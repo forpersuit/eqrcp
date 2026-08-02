@@ -44,6 +44,35 @@ const (
 	DesktopCloseBehaviorQuit = "quit"
 )
 
+// NormalizeLangCode converts locale strings like "zh-CN", "zh_CN.UTF-8", "en_US" into standard two-letter ISO language codes (e.g. "zh", "en").
+func NormalizeLangCode(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" || raw == "c" || raw == "posix" {
+		return "zh"
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.'
+	})
+	if len(parts) > 0 && len(parts[0]) == 2 {
+		return parts[0]
+	}
+	return "zh"
+}
+
+// GetConfiguredLang reads the configured language from viper config, defaulting to "zh" if unset or on error.
+func GetConfiguredLang() string {
+	v := getViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("lang") {
+			l := NormalizeLangCode(v.GetString("lang"))
+			if l != "" {
+				return l
+			}
+		}
+	}
+	return "zh"
+}
+
 type DesktopInterfaceOption struct {
 	Name          string `json:"name"`
 	IP            string `json:"ip"`

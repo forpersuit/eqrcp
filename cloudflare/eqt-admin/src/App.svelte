@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
+  import { t } from './lib/i18n';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
@@ -33,7 +34,7 @@
   <div class="admin-layout">
     <aside class="sidebar card">
       <div class="brand">
-        <span class="brand-logo">EQT</span> Admin
+        <span class="brand-logo">EQT</span> {$t('nav.title')}
       </div>
 
       <nav class="nav-menu">
@@ -42,7 +43,7 @@
           class:active={currentTab === 'overview'}
           onclick={() => (currentTab = 'overview')}
         >
-          <span class="nav-icon">📊</span> 全局概览
+          <span class="nav-icon">📊</span> {$t('nav.overview')}
         </button>
 
         <button
@@ -50,7 +51,7 @@
           class:active={currentTab === 'audit'}
           onclick={() => (currentTab = 'audit')}
         >
-          <span class="nav-icon">🚨</span> 错误审计中心
+          <span class="nav-icon">🚨</span> {$t('nav.errorAudit')}
         </button>
 
         <button
@@ -58,7 +59,7 @@
           class:active={currentTab === 'ops'}
           onclick={() => (currentTab = 'ops')}
         >
-          <span class="nav-icon">📋</span> 操作审计轨迹
+          <span class="nav-icon">📋</span> {$t('nav.opsAudit')}
         </button>
 
         <button
@@ -66,7 +67,7 @@
           class:active={currentTab === 'licenses'}
           onclick={() => (currentTab = 'licenses')}
         >
-          <span class="nav-icon">🎫</span> 授权与订单管控
+          <span class="nav-icon">🎫</span> {$t('nav.licenses')}
         </button>
 
         <button
@@ -74,7 +75,7 @@
           class:active={currentTab === 'blacklist'}
           onclick={() => (currentTab = 'blacklist')}
         >
-          <span class="nav-icon">🚫</span> 黑名单管理
+          <span class="nav-icon">🚫</span> {$t('nav.blacklist')}
         </button>
 
         <button
@@ -82,13 +83,13 @@
           class:active={currentTab === 'health'}
           onclick={() => (currentTab = 'health')}
         >
-          <span class="nav-icon">🌐</span> 系统健康监控
+          <span class="nav-icon">🏥</span> {$t('nav.health')}
         </button>
       </nav>
 
       <div class="sidebar-footer">
-        <button class="btn btn-secondary logout-btn" onclick={handleLogout}>
-          退出 (Access Logout)
+        <button class="btn btn-secondary btn-block logout-btn" onclick={handleLogout}>
+          {$t('nav.logout')}
         </button>
       </div>
     </aside>

@@ -5589,13 +5589,13 @@ function confirmRedeem() {
             redeemedAt: redeemedAt,
             codeDate: 'LIFETIME',
         });
-        state.redeemMessage = `${licenseTiers[result.tier]} activated successfully.`;
+        state.redeemMessage = t('activation_success', { tier: licenseTiers[result.tier] || result.tier }) || `${licenseTiers[result.tier]} activated successfully.`;
         state.tempRedeemCode = ''; // Clear on success
         stopChatUsage();
         await loadStatusData();
     }).catch(function(e) {
         state.redeemMessage = '';
-        state.redeemError = e || 'Activation failed. Please check network and code validity.';
+        state.redeemError = e || t('activation_failed') || 'Activation failed. Please check network and code validity.';
     }).finally(function() {
         state.isActivating = false;
         render();
@@ -5608,7 +5608,7 @@ function resetLicense() {
     ResetLicense().then(async function() {
         window.localStorage.removeItem(licenseStorageKey);
         state.license = null;
-        state.redeemMessage = 'Activation reset on this device.';
+        state.redeemMessage = t('activation_reset_success') || 'Activation reset on this device.';
         state.redeemError = '';
         if (state.mode === 'chat') {
             startChatUsage();
@@ -5616,7 +5616,7 @@ function resetLicense() {
         await loadStatusData();
         render();
     }).catch(function(e) {
-        state.redeemError = e || 'Failed to reset activation.';
+        state.redeemError = e || t('activation_reset_failed') || 'Failed to reset activation.';
         render();
     }).finally(function() {
         if (button) button.disabled = false;
@@ -5645,7 +5645,7 @@ function triggerManualRefresh() {
         showToast(t('refresh_success') || 'License status refreshed successfully.');
     }).catch(function(e) {
         lastRefreshTime = Date.now();
-        showToast(e || 'Failed to refresh status.');
+        showToast(e || t('refresh_failed') || 'Failed to refresh status.');
     }).finally(function() {
         state.isRefreshingLicense = false;
         render();
@@ -5656,11 +5656,11 @@ function triggerManualRefresh() {
 function validateRedeemCode(code) {
     const parts = code.split('-');
     if (parts.length < 3 || parts[0] !== 'EQT') {
-        return {ok: false, error: 'Invalid code format.'};
+        return {ok: false, error: t('invalid_code_format') || 'Invalid code format.'};
     }
     const tier = parts[1];
     if (tier !== 'PLUS' && tier !== 'PRO') {
-        return {ok: false, error: 'Unknown paid tier.'};
+        return {ok: false, error: t('unknown_paid_tier') || 'Unknown paid tier.'};
     }
     const date = parts[2];
     return {ok: true, tier: tier, codeDate: date};

@@ -550,3 +550,52 @@ func TestPrecomputeFingerprintsNonBlocking(t *testing.T) {
 		t.Errorf("expected cached hashes, got: %s, %s, %s", uuid3, cpu3, disk3)
 	}
 }
+
+func TestActivateLicenseOnlineWithLang(t *testing.T) {
+	var receivedLang string
+	var receivedAcceptLang string
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		receivedLang = req["lang"]
+		receivedAcceptLang = r.Header.Get("Accept-Language")
+
+		cert := LicenseCertificate{
+			LicenseCode: "TEST-LANG-CODE",
+			Tier:        "PLUS",
+			UUIDHash:    req["uuid_hash"],
+			CPUHash:     req["cpu_hash"],
+			DiskHash:    req["disk_hash"],
+			ExpiresAt:   "LIFETIME",
+			MaxDevices:  2,
+		}
+		cert.LastOnlineSyncTime = time.Now().UTC().Format(time.RFC3339)
+		cert.Signature = signTestPayload(cert)
+		cert.VerifySignature = signTestVerifyPayload(cert)
+		_ = json.NewEncoder(w).Encode(cert)
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+	ResetLicense()
+	defer ResetLicense()
+
+	// 1. Test explicit language passing
+	if err := ActivateLicenseOnlineWithLang("TEST-LANG-CODE", "ja"); err != nil {
+		t.Fatalf("ActivateLicenseOnlineWithLang failed: %v", err)
+	}
+	if receivedLang != "ja" || receivedAcceptLang != "ja" {
+		t.Errorf("expected lang='ja', got lang='%s', Accept-Language='%s'", receivedLang, receivedAcceptLang)
+	}
+
+	// 2. Test empty language passing (should fallback to default config language 'zh')
+	ResetLicense()
+	if err := ActivateLicenseOnline("TEST-LANG-CODE"); err != nil {
+		t.Fatalf("ActivateLicenseOnline failed: %v", err)
+	}
+	if receivedLang != "zh" || receivedAcceptLang != "zh" {
+		t.Errorf("expected default fallback lang='zh', got lang='%s', Accept-Language='%s'", receivedLang, receivedAcceptLang)
+	}
+}

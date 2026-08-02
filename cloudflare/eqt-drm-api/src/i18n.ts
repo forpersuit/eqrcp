@@ -360,6 +360,24 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Renovación automática activada. Su suscripción se renovará automáticamente en la fecha de expiración.",
     de: "Automatische Verlängerung aktiviert. Ihr Abonnement wird am Ablaufdatum automatisch verlängert.",
     fr: "Renouvellement automatique activé. Votre abonnement se renouveltera automatiquement à la date d'expiration."
+  },
+  toast_code_sent: {
+    zh: "验证码已发送至您的邮箱，请注意查收。",
+    en: "Verification code sent to your email.",
+    ja: "認証コードをメールに送信しました。",
+    ko: "이메일로 인증 코드가 전송되었습니다.",
+    es: "Código enviado a tu correo.",
+    de: "Bestätigungscode an Ihre E-Mail gesendet.",
+    fr: "Code de vérification envoyé à votre e-mail."
+  },
+  device_not_activated: {
+    zh: "此设备未在给定的授权码下激活",
+    en: "This device is not activated under the provided license",
+    ja: "このデバイスは指定されたライセンスでアクティベートされていません",
+    ko: "이 기기는 해당 라이선스로 활성화되지 않았습니다",
+    es: "Este dispositivo no está activado bajo la licencia proporcionada",
+    de: "Dieses Gerät ist nicht unter der angegebenen Lizenz aktiviert",
+    fr: "Cet appareil n'est pas activé sous la licence fournie"
   }
 };
 

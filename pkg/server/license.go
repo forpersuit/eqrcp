@@ -238,6 +238,10 @@ func ActivateLicenseOnline(licenseCode string) error {
 
 // ActivateLicenseOnlineWithLang calls the CF Workers API with language metadata
 func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
+	if lang == "" {
+		lang = config.GetConfiguredLang()
+	}
+
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
 
 	reqMap := map[string]string{
