@@ -497,6 +497,137 @@ export const CHECKOUT_EMAIL_I18N: Record<string, { subject: string; title: strin
   }
 };
 
+export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: string; body: (planName: string, code: string, expiresStr: string) => string }> = {
+  en: {
+    subject: "[EQT] Your License Code & Order Details",
+    title: "Thank you for purchasing EQT!",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">Thank you for choosing EQT Easy QR Transfer! Your paid license details:</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Tier</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Expires</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Max Devices</td><td style="padding: 10px; border: 1px solid #ddd;">2 Devices</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">Open EQT app &rarr; Settings &rarr; Redeem Code, and paste your code to activate.</p>`
+  },
+  zh: {
+    subject: "【EQT】您的购买激活码与服务明细",
+    title: "感谢您购买 EQT！",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">感谢您选择 EQT Easy QR Transfer！以下是您的付费授权明细：</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有效期限 (Expires)</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大激活设备数</td><td style="padding: 10px; border: 1px solid #ddd;">2 台设备</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">打开 EQT 客户端 &rarr; 设置/关于面板 &rarr; 兑换激活码，输入上述激活码即可激活。</p>`
+  },
+  ja: {
+    subject: "【EQT】ご購入用ライセンスコードのお知らせ",
+    title: "EQT をご購入いただきありがとうございます！",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">EQT Easy QR Transfer をお選びいただきありがとうございます。ライセンス詳細：</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">プラン (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">ライセンスコード</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有効期限</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大台数</td><td style="padding: 10px; border: 1px solid #ddd;">2 台</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">EQT アプリを開き、「設定」からコードを入力して有効化してください。</p>`
+  },
+  ko: {
+    subject: "【EQT】구매 라이선스 코드 및 주문 상세",
+    title: "EQT를 구매해 주셔서 감사합니다!",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">EQT Easy QR Transfer를 선택해 주셔서 감사합니다. 라이선스 상세 정보:</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">플랜 (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">라이선스 코드</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">만료일</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">최대 기기 수</td><td style="padding: 10px; border: 1px solid #ddd;">2 대</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">EQT 앱을 열고 설정 메뉴에서 라이선스 코드를 입력하여 활성화하세요.</p>`
+  },
+  es: {
+    subject: "[EQT] Su código de licencia y detalles del pedido",
+    title: "¡Gracias por comprar EQT!",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">¡Gracias por elegir EQT Easy QR Transfer! Detalles de su licencia:</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Plan</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Código de Licencia</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Vencimiento</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Dispositivos máximos</td><td style="padding: 10px; border: 1px solid #ddd;">2 Dispositivos</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">Abra la app EQT, vaya a Ajustes y pegue el código para activar.</p>`
+  },
+  de: {
+    subject: "[EQT] Ihr Lizenzschlüssel & Bestelldetails",
+    title: "Vielen Dank für Ihren Kauf von EQT!",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">Vielen Dank, dass Sie sich für EQT entschieden haben. Ihre Lizenzdetails:</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Tarif</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Lizenzschlüssel</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Ablaufdatum</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Max. Geräte</td><td style="padding: 10px; border: 1px solid #ddd;">2 Geräte</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">Öffnen Sie EQT &rarr; Einstellungen &rarr; Code einlösen, um Ihre Lizenz zu aktivieren.</p>`
+  },
+  fr: {
+    subject: "[EQT] Votre code de licence et détails de la commande",
+    title: "Merci d'avoir acheté EQT !",
+    body: (planName, code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">Merci d'avoir choisi EQT Easy QR Transfer ! Détails de votre licence :</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Forfait</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Clé de licence</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Expiration</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Appareils max</td><td style="padding: 10px; border: 1px solid #ddd;">2 Appareils</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">Ouvrez l'application EQT &rarr; Paramètres &rarr; Activer le code pour déverrouiller vos fonctionnalités.</p>`
+  }
+};
+
+export const RENEWAL_EMAIL_I18N: Record<string, { subject: string; title: string; body: (code: string, expiresStr: string) => string }> = {
+  en: {
+    subject: "[EQT] Subscription Renewal Successful · License Preserved",
+    title: "Subscription Renewed Successfully",
+    body: (code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">Paddle has completed the recurring payment. Your <strong>license code remains unchanged</strong> and your privileges have been extended:</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">New Expiration</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Status</td><td style="padding: 10px; border: 1px solid #ddd;">Active</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">Activated devices will automatically refresh their certificates. No re-entry required.</p>`
+  },
+  zh: {
+    subject: "【EQT】年付订阅已续费成功 · 激活码不变",
+    title: "年付订阅已续费成功",
+    body: (code, expiresStr) => `
+      <p style="color: #475569; font-size: 14px;">Paddle 已完成本周期扣费。您的<strong>激活码不变</strong>，权益已延长：</p>
+      <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">新有效期至</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">状态</td><td style="padding: 10px; border: 1px solid #ddd;">Active (活跃)</td></tr>
+      </table>
+      <p style="font-size: 13px; color: #64748b;">已激活设备下次联网时会自动刷新证书，无需重新输入激活码。</p>`
+  }
+};
+
+export function getPurchaseEmailTemplate(lang: string) {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  return PURCHASE_EMAIL_I18N[norm] || PURCHASE_EMAIL_I18N['en'];
+}
+
+export function getRenewalEmailTemplate(lang: string) {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  return RENEWAL_EMAIL_I18N[norm] || RENEWAL_EMAIL_I18N['en'];
+}
+
 export const DEVICE_NOTIFICATION_I18N: Record<string, {
   boundSubject: string;
   boundTitle: string;
