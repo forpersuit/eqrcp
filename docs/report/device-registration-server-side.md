@@ -104,7 +104,7 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 
 ## 4. 目标方案设计
 
-### 4.1 启动注册（能联网就注册，不联网不强求）
+### 4.1 启动注册与模式遥测（能联网就注册，不联网不强求）
 
 新增端点 `POST /api/v1/device/register`，请求体：
 
@@ -114,16 +114,20 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
   "cpu_hash": "...",
   "disk_hash": "...",
   "app_version": "x.y.z",
-  "lang": "zh"
+  "lang": "zh",
+  "mode": "send" | "receive" | "chat"
 }
 ```
 
 服务端逻辑：
 
 1. **IP 必须取自 Cloudflare 请求头（CF-Connecting-IP）**，禁止信任 body 传入的 IP；
-2. 按指纹匹配已有设备记录 → 命中则**复用原 device_id**，更新 `last_seen_at/last_ip/经纬度`（**显式刷新，不能沿用 activate 仅新激活写库的时机**，见 4.4 前提）；
+2. 按指纹匹配已有设备记录 → 命中则**复用原 device_id**，更新 `last_seen_at/last_ip/经纬度/last_mode`（**显式刷新，不能沿用 activate 仅新激活写库的时机**，见 4.4 前提）；
 3. 未命中 → 服务端生成**纯随机 device_id（≥16 hex，用 randomUUID，不掺指纹派生）**，写入设备注册表；
 4. 返回 `{ device_id, tier: "free"|"paid" }`。
+
+> **无感遥测与 Fail-open 原则**：
+> CLI/桌面端在启动任意模式（`send` / `receive` / `chat`）时可异步发起上报。无网或请求失败时直接静默丢弃（Fail-open），绝不上报 alert 弹窗或阻断用户任何正常的传输与聊天流程。
 
 > **指纹匹配规则（共享分量一致即同一台）**：能比的分量都比了，全相等就是同一台；缺失项不参与比较，既不判等也不判不等。
 >
@@ -141,7 +145,7 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 分级策略：
 
 - **Free 用户**：不强制。启动时有网 → 匿名注册（不绑定授权码）；无网 → 跳过，不阻断任何功能，本地可显示"未注册"。
-- **付费用户**：兑换激活码时走 `/api/v1/activate`，云端强制注册/复用 device_id，写入 `activations`，把 device_id 放入签名载荷后签发 `.lic` 下发，客户端持久化。
+- **付费用户**：兑换激活码时走 `/api/v1/activate`，端点**内联完成"注册/复用 device_id → 写 activations → 签发 `.lic` 下发"三步，一次请求原子做完**（付费无需先调 `register`，见附录 C-2），客户端持久化。
 - 启动时的静默对账沿用现有 `ForceOnlineLicenseSync()`；**注意其 `force=true` 完全绕过节流，即启动路径每次注册不节流**，12 小时节流只作用于后台 sync（`license.go:352-359`）。注册动作可并入其中，避免新增请求次数。
 
 ### 4.2 数据模型变更
@@ -165,13 +169,21 @@ CREATE TABLE IF NOT EXISTS device_registry (
   region        TEXT,
   latitude      REAL,
   longitude     REAL,
-  app_version   TEXT
+  app_version   TEXT,
+  last_mode     TEXT                                -- send | receive | chat
 );
 ```
 
 > 说明：早先考虑过"免费/付费分表"，已否决。统一表 + `tier_label` 过滤即可避免免费流量污染授权口径（聚合查询按 tier 过滤），分表反而让"同一台设备先免费后付费"的升级路径（需更新 device_id 关联）变得复杂。
 >
 > device_id 仅是主键标签，不承载授权判定；同一指纹集合并为一行（克隆机共享一行）。
+
+#### 性能与存储防护策略：
+
+1. **Workers 端 5 分钟写防抖 (Write Debouncing)**：
+   CLI 工具在脚本循环中可能发生高频脉冲并发。为防止频繁 SQL `UPDATE` 触发 SQLite/D1 锁死与配额激增，Workers 在校验 `now() - last_seen_at < 5 minutes` 时直接返回内存响应，跳过 D1 写事务落盘。
+2. **Free 设备 30 天 TTL 自动清扫**：
+   为防止匿名 Free 注册积累死数据，D1 配置 Cron Trigger，定时**自动删除 `tier_label = 'free'` 且 `last_seen_at` 超过 30 天未更新的僵尸设备**；`paid` 设备记录永久保留。
 
 `activations` 增加 `last_seen_at`、`last_ip` 列（幂等 ALTER，沿用 `ensureActivationNetworkColumns` / `ensureDeviceIdColumn` 模式，见 `cloudflare/eqt-drm-api/src/utils/auth.ts:29-57`）。
 
@@ -254,6 +266,13 @@ CREATE TABLE IF NOT EXISTS device_registry (
 3. **二次确认转黑名单**：可疑标记叠加（多 IP + 高频）或管理员确认后，写入现有 `manual_blacklist`（`kind='device'`，已有 admin 管理界面可直接复用）；
 4. 黑名单命中在 `register/activate/verify` 三处统一拦截。
 
+**落地实现（register 路由限频，随 M1 一起做，不拖到 M4）**：
+
+- **计数存储**：Workers 无内置速率限制，计数需放 KV 或 D1——KV 最终一致性足够（限频计数略滞后可接受），D1 高频写有写放大/计费问题，建议 KV；
+- **限频 key**：用 `IP + 指纹哈希` 组合（纯 IP 会误伤 NAT/共享出口，纯指纹可被伪造）；
+- **副作用安全**：免费注册失败不阻断任何功能（无网也跳过），故对 register 限频是低风险动作；
+- **边界**：仅缓解 C-1 免费侧口径失真，不能根治——伪造者可换 IP + 换指纹重刷；免费侧定位仍为"抽样展示"，勿将免费数据质量当安全目标。
+
 ### 5.5 其他低成本方案清单
 
 - 服务端生成更长 ID（≥16 hex）消除碰撞；
@@ -312,7 +331,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 
 | 里程碑 | 内容 |
 | --- | --- |
-| M1 | D1 新增 `device_registry` 表（含 `email` 列）+ `register` 端点 + 客户端启动注册（免费匿名、付费复用，绑定邮箱）；共享分量匹配规则 + 0 分量付费拒绝；遥测开关与隐私说明就绪；开发期清库重置 `activations` |
+| M1 | D1 新增 `device_registry` 表（含 `email` 列）+ `register` 端点（IP+指纹组合限频，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动注册（免费匿名、付费复用，绑定邮箱）；共享分量匹配规则 + 0 分量付费拒绝；遥测开关与隐私说明就绪；开发期清库重置 `activations` |
 | M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**） |
 | M3 | `last_seen_at/last_ip` 列 + `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关 |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
@@ -363,7 +382,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 
 ### C. 遗留风险（不属于上述决策，需在实施时再评估）
 
-- **C-1 免费侧口径失真**：免费注册无成本、无授权码绑定，伪造者可无限注册污染免费计数；有遥测开关则免费侧数据质量进一步下降。免费侧定位为"抽样展示"，免费设备注册需配合限频。
-- **C-2 Paddle 衔接**：`device_id` 进签名载荷的改动落在 `drm.ts` activate/verify，与 `paddle.ts` 铸造流程强耦合；webhook 铸造的激活码在首次 activate 前没有指纹，6.2 需保证 register 先于 activate 或原子合并。
+- **C-1 免费侧口径失真**：免费注册无成本、无授权码绑定，伪造者可无限注册污染免费计数；有遥测开关则免费侧数据质量进一步下降。免费侧定位为"抽样展示"，免费设备注册需配合限频（register 路由 IP+指纹组合限频，落地见 5.4；**仅缓解、不能根治**）。
+- **C-2 Paddle 衔接**：`device_id` 进签名载荷的改动落在 `drm.ts` activate/verify，与 `paddle.ts` 铸造流程强耦合；webhook 铸造的激活码在首次 activate 前没有指纹。**解法：activate 端点内联注册**（注册/复用 device_id → 写 activations → 签名下发三步原子完成，见 4.1），不依赖"register 先于 activate"的先后约束。两个实现约束：① **并发超卖**——同一激活码被两台设备同时 activate 时，须用 D1 事务或条件更新（`WHERE 已绑数量 < max_devices`）保证不超卖；② **幂等**——客户端重发 activate 须按 `(license_code, 指纹)` 幂等，防重试多扣名额。
 - **C-3 多 IP 告警误伤**：移动办公/VPN 用户会被"同 ID 多 IP"标记；因克隆已免疫、检测降级为可选告警（见 5.4），仅作运营参考，不做自动黑名单。
 - **C-4 隐私合规**：IP/经纬度登记需纳入隐私说明，遥测开关（见 5.5）应作为 M1 就绪项而非后续项。
