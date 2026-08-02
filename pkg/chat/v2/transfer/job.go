@@ -102,3 +102,18 @@ func (j *Job) UpdateProgress(bytesDone int64) bool {
 
 	return false
 }
+
+// SetBytesTotal safely updates the total byte size of a job.
+func (j *Job) SetBytesTotal(bytesTotal int64) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	j.BytesTotal = bytesTotal
+}
+
+// GetState safely retrieves the current transfer state of a job.
+func (j *Job) GetState() protocol.TransferState {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.State
+}

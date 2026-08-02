@@ -57,7 +57,7 @@ func (m *Manager) GetJob(id string) (*Job, error) {
 	return job, nil
 }
 
-// StartJob changes the job state to running.
+// StartJob changes the job state to running (skips duplicate broadcast if already running).
 func (m *Manager) StartJob(id string) error {
 	m.mu.RLock()
 	job, exists := m.jobs[id]
@@ -68,9 +68,35 @@ func (m *Manager) StartJob(id string) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
+	job.mu.RLock()
+	alreadyRunning := (job.State == protocol.TransferRunning)
+	job.mu.RUnlock()
+
+	if alreadyRunning {
+		return nil
+	}
+
 	job.UpdateState(protocol.TransferRunning, "")
 	if cb != nil {
 		cb(job.Token, protocol.EventTransferStarted, job.ToEvent())
+	}
+	return nil
+}
+
+// SetJobBytesTotal safely updates the BytesTotal for a job and triggers progress broadcast.
+func (m *Manager) SetJobBytesTotal(id string, bytesTotal int64) error {
+	m.mu.RLock()
+	job, exists := m.jobs[id]
+	cb := m.onStateChange
+	m.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("job %s not found", id)
+	}
+
+	job.SetBytesTotal(bytesTotal)
+	if cb != nil {
+		cb(job.Token, protocol.EventTransferProgress, job.ToEvent())
 	}
 	return nil
 }
@@ -123,7 +149,7 @@ func (m *Manager) FailJob(id string, err error) error {
 	}
 
 	// If job is already cancelled, don't overwrite it with failed status
-	if job.State == protocol.TransferCancelled {
+	if job.GetState() == protocol.TransferCancelled {
 		return nil
 	}
 

@@ -267,7 +267,7 @@ type progressWriter struct {
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
 	if job, err := pw.transfer.GetJob(pw.jobID); err == nil {
-		if job.State == protocol.TransferCancelled {
+		if job.GetState() == protocol.TransferCancelled {
 			return 0, fmt.Errorf("transfer cancelled by user")
 		}
 	}
@@ -404,11 +404,7 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
 			_ = h.transfer.CreateJob(token, jobID, fileID, clientID, cleanFilename, fileSize)
 		} else if fileSize > 0 && job.BytesTotal == 0 {
-			job.UpdateProgress(job.BytesDone) // Touch job
-			// Update total bytes on existing job
-			if existingJob, getErr := h.transfer.GetJob(jobID); getErr == nil {
-				existingJob.BytesTotal = fileSize
-			}
+			_ = h.transfer.SetJobBytesTotal(jobID, fileSize)
 		}
 		_ = h.transfer.StartJob(jobID)
 
@@ -439,7 +435,7 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 				mockSize = s
 			}
 			if existingJob, getErr := h.transfer.GetJob(jobID); getErr == nil && existingJob.BytesTotal == 0 {
-				existingJob.BytesTotal = mockSize
+				_ = h.transfer.SetJobBytesTotal(jobID, mockSize)
 			}
 
 			chunkSize := int64(32 * 1024)

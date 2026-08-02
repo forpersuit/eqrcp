@@ -1073,8 +1073,8 @@ func TestHandlerDownloadCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job.State != protocol.TransferCancelled {
-		t.Fatalf("expected job state to remain TransferCancelled, got = %s (Error: %s)", job.State, job.Error)
+	if job.GetState() != protocol.TransferCancelled {
+		t.Fatalf("expected job state to remain TransferCancelled, got = %s (Error: %s)", job.GetState(), job.Error)
 	}
 }
 
