@@ -19,7 +19,7 @@
    - 记录 `lic.eqt.net.im` API 域名与 Cloudflare Worker / Custom Domain 解析与支付网关配置。
 
 5. **[许可授权机制架构 (Licensing Architecture)](licensing-architecture.md)**
-   - EQT 离线密码学激活码生成算法、硬件指纹提取与云端授权绑定设计。
+   - 许可授权总览与重定向指引；核心密码学规范详见 [`docs/crypto/drm-crypto-spec.md`](../crypto/drm-crypto-spec.md)，现行运行流程见 [`drm-flow.md`](drm-flow.md)。
 
 6. **[DRM 流程与机制 (Current DRM Flow)](drm-flow.md)**
    - 当前生产实现的激活、离线证书、在线对账、tier 同步、吊销、GUI 状态与测试运维说明。
