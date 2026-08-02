@@ -372,7 +372,8 @@ window.addEventListener('message', (e) => {
             })
             .catch((err) => {
                 console.error('[Antigravity Debug] SaveChatAttachments backend error:', err);
-                e.source?.postMessage({ type: 'download-batch-cancelled', messageIds: messageIds, error: String(err?.message || err || 'batch download failed') }, targetOrigin);
+                const errMsg = String(err?.message || err || 'batch download failed');
+                e.source?.postMessage({ type: 'download-batch-failed', messageIds: messageIds, error: errMsg }, targetOrigin);
             });
     } else if (e.data.type === 'cancel-download') {
         const messageId = String(e.data.messageId || '');

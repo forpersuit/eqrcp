@@ -933,7 +933,7 @@
         </span>
       </div>
     {/if}
-    {#each messages.filter(m => !(m.type === 'file' && !isMine(m) && !isEmbedded && (m.uploading || !m.downloaded))) as msg (msg.id)}
+    {#each messages as msg (msg.id)}
       {#if msg.type === 'system'}
         {@const colors = msg.theme ? getThemeColors(msg.theme) : null}
         {@const localPeer = $currentDevice?.peer || 'desktop'}

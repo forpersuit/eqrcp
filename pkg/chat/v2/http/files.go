@@ -289,7 +289,7 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 
 	query := r.URL.Query()
 	clientID := query.Get("clientId")
-	
+
 	// Collect message/file IDs from query parameters (supports both comma-separated and multiple `ids` params)
 	var rawIDs []string
 	for _, val := range query["ids"] {

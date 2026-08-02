@@ -337,6 +337,24 @@
       chatActions.addSystemMessage(
         currentLang === 'en' ? 'Batch download cancelled.' : '已取消批量下载。'
       );
+    } else if (event.data.type === 'download-batch-failed') {
+      const ids: string[] = event.data.messageIds || [];
+      const peer = client ? client['clientPeer'] : 'desktop';
+      ids.forEach(messageId => {
+        chatActions.updateTransfer({
+          id: 'dl-' + messageId + '-' + peer,
+          state: 'failed',
+          progress: -1,
+          speed: 0,
+          error: event.data.error || 'batch download failed'
+        });
+        if (client) {
+          client.cancelTransfer('dl-' + messageId + '-' + peer);
+        }
+      });
+      chatActions.addSystemMessage(
+        currentLang === 'en' ? `Batch download failed: ${event.data.error || ''}` : `批量下载失败：${event.data.error || ''}`
+      );
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
