@@ -178,6 +178,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	diag.Emit(r.Context(), h.logger, diag.LevelDebug, "request received", nil, fields...)
 
+	if suffix == "/files/zip" {
+		h.handleZipDownload(w, r, token, fields...)
+		return
+	}
+
 	if strings.HasPrefix(suffix, "/files/") {
 		fileID := strings.TrimPrefix(suffix, "/files/")
 		h.handleDownload(w, r, token, fileID, fields...)

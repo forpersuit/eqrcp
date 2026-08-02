@@ -1148,15 +1148,15 @@
     if (isEmbedded) {
       window.parent.postMessage({ type: 'download-batch', files: batchItems }, '*');
     } else {
-      // Browser sandbox cannot save to a folder: trigger per-file downloads.
-      batchItems.forEach(item => {
-        const link = document.createElement('a');
-        link.href = item.url;
-        link.download = item.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      });
+      // Mobile & Web browser: Trigger a single zip download to bypass multi-download restrictions
+      const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
+      const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}`;
+      const link = document.createElement('a');
+      link.href = zipURL;
+      link.download = 'chat-attachments.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   }
 

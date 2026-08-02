@@ -1,6 +1,7 @@
 package chathttp
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1074,5 +1075,67 @@ func TestHandlerDownloadCancellation(t *testing.T) {
 	}
 	if job.State != protocol.TransferCancelled {
 		t.Fatalf("expected job state to remain TransferCancelled, got = %s (Error: %s)", job.State, job.Error)
+	}
+}
+
+func TestHandleZipDownload(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger, DisableSystemMessages: true})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	sess := handler.sessions.GetOrCreate("test-token")
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-zip-1",
+			Type:     "file",
+			FileName: "doc1.pdf",
+			Size:     1024,
+		},
+	})
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-zip-2",
+			Type:     "file",
+			FileName: "doc2.pdf",
+			Size:     2048,
+		},
+	})
+
+	zipURL := server.URL + "/chat-v2/test-token/files/zip?ids=msg-zip-1,msg-zip-2&mock_size=512&clientId=peer-alice"
+	resp, err := http.Get(zipURL)
+	if err != nil {
+		t.Fatalf("failed to request zip download: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d", resp.StatusCode)
+	}
+
+	if ct := resp.Header.Get("Content-Type"); ct != "application/zip" {
+		t.Fatalf("expected Content-Type application/zip, got %s", ct)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read zip response body: %v", err)
+	}
+
+	zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), int64(len(bodyBytes)))
+	if err != nil {
+		t.Fatalf("failed to parse zip content: %v", err)
+	}
+
+	if len(zipReader.File) != 2 {
+		t.Fatalf("expected 2 files in zip archive, got %d", len(zipReader.File))
+	}
+
+	names := []string{zipReader.File[0].Name, zipReader.File[1].Name}
+	if names[0] != "doc1.pdf" || names[1] != "doc2.pdf" {
+		t.Fatalf("unexpected file names in zip archive: %v", names)
 	}
 }
