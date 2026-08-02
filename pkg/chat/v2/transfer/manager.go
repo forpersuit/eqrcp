@@ -68,16 +68,7 @@ func (m *Manager) StartJob(id string) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
-	job.mu.RLock()
-	alreadyRunning := (job.State == protocol.TransferRunning)
-	job.mu.RUnlock()
-
-	if alreadyRunning {
-		return nil
-	}
-
-	job.UpdateState(protocol.TransferRunning, "")
-	if cb != nil {
+	if changed := job.UpdateState(protocol.TransferRunning, ""); changed && cb != nil {
 		cb(job.Token, protocol.EventTransferStarted, job.ToEvent())
 	}
 	return nil
@@ -130,8 +121,7 @@ func (m *Manager) CompleteJob(id string) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
-	job.UpdateState(protocol.TransferCompleted, "")
-	if cb != nil {
+	if changed := job.UpdateState(protocol.TransferCompleted, ""); changed && cb != nil {
 		cb(job.Token, protocol.EventTransferCompleted, job.ToEvent())
 	}
 	return nil
@@ -158,8 +148,7 @@ func (m *Manager) FailJob(id string, err error) error {
 		errStr = err.Error()
 	}
 
-	job.UpdateState(protocol.TransferFailed, errStr)
-	if cb != nil {
+	if changed := job.UpdateState(protocol.TransferFailed, errStr); changed && cb != nil {
 		cb(job.Token, protocol.EventTransferFailed, job.ToEvent())
 	}
 	return nil
@@ -176,8 +165,7 @@ func (m *Manager) CancelJob(id string) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
-	job.UpdateState(protocol.TransferCancelled, "cancelled by user")
-	if cb != nil {
+	if changed := job.UpdateState(protocol.TransferCancelled, "cancelled by user"); changed && cb != nil {
 		cb(job.Token, protocol.EventTransferCancelled, job.ToEvent())
 	}
 	return nil

@@ -66,13 +66,19 @@ func (j *Job) ToEvent() protocol.TransferEvent {
 }
 
 // UpdateState safely changes the transfer job lifecycle state.
-func (j *Job) UpdateState(state protocol.TransferState, errStr string) {
+// Returns true if the state or error string was actually modified.
+func (j *Job) UpdateState(state protocol.TransferState, errStr string) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+
+	if j.State == state && j.Error == errStr {
+		return false
+	}
 
 	j.State = state
 	j.Error = errStr
 	j.UpdatedAt = time.Now()
+	return true
 }
 
 // UpdateProgress safely updates processed bytes.
