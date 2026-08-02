@@ -367,6 +367,21 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 			origName = "file-" + fileID + ".bin"
 		}
 
+		jobID := "dl-" + fileID
+		if clientID != "" {
+			jobID = "dl-" + fileID + "-" + clientID
+		}
+
+		_, msgExists := sess.MessageStore.Find(fileID)
+		isMissing := fileReader == nil && (mockSizeStr == "" || (!msgExists && filePath == ""))
+
+		if isMissing {
+			_ = h.transfer.CreateJob(token, jobID, fileID, clientID, origName, fileSize)
+			_ = h.transfer.FailJob(jobID, fmt.Errorf("attachment file not found on server: %s", fileID))
+			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "zip download skipped missing file", fmt.Errorf("file missing"), append(fields, diag.F("fileID", fileID))...)
+			continue
+		}
+
 		cleanFilename := getUniqueFilename(origName)
 		header := &zip.FileHeader{
 			Name:     cleanFilename,
@@ -376,19 +391,18 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 
 		fw, err := zipWriter.CreateHeader(header)
 		if err != nil {
+			if fileReader != nil {
+				_ = fileReader.Close()
+			}
 			continue
 		}
 
-		jobID := "dl-" + fileID
-		if clientID != "" {
-			jobID = "dl-" + fileID + "-" + clientID
-		}
 		_ = h.transfer.CreateJob(token, jobID, fileID, clientID, cleanFilename, fileSize)
 		_ = h.transfer.StartJob(jobID)
 
 		if fileReader != nil {
 			_, copyErr := io.Copy(fw, fileReader)
-			fileReader.Close()
+			_ = fileReader.Close()
 			if copyErr == nil {
 				_ = h.transfer.CompleteJob(jobID)
 				if updatedMsg := sess.MessageStore.MarkDownloaded(fileID); updatedMsg != nil {

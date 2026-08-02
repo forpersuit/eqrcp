@@ -1138,4 +1138,53 @@ func TestHandleZipDownload(t *testing.T) {
 	if names[0] != "doc1.pdf" || names[1] != "doc2.pdf" {
 		t.Fatalf("unexpected file names in zip archive: %v", names)
 	}
+
+	// Verify uncompressed bytes content match mock size
+	for _, f := range zipReader.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("failed to open zip file entry %s: %v", f.Name, err)
+		}
+		data, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			t.Fatalf("failed to read zip file entry %s: %v", f.Name, err)
+		}
+		if len(data) != 512 {
+			t.Fatalf("expected file entry %s content length 512, got %d", f.Name, len(data))
+		}
+	}
+
+	// Test missing file scenario: requested missing ID should be skipped in zip and marked failed in transfer manager
+	zipMissingURL := server.URL + "/chat-v2/test-token/files/zip?ids=msg-zip-1,msg-nonexistent&mock_size=512&clientId=peer-alice"
+	respMissing, err := http.Get(zipMissingURL)
+	if err != nil {
+		t.Fatalf("failed to request zip download with missing file: %v", err)
+	}
+	defer respMissing.Body.Close()
+
+	missingBodyBytes, err := io.ReadAll(respMissing.Body)
+	if err != nil {
+		t.Fatalf("failed to read missing zip response body: %v", err)
+	}
+
+	missingZipReader, err := zip.NewReader(bytes.NewReader(missingBodyBytes), int64(len(missingBodyBytes)))
+	if err != nil {
+		t.Fatalf("failed to parse missing zip content: %v", err)
+	}
+
+	if len(missingZipReader.File) != 1 {
+		t.Fatalf("expected 1 file in missing zip archive (skipping nonexistent), got %d", len(missingZipReader.File))
+	}
+	if missingZipReader.File[0].Name != "doc1.pdf" {
+		t.Fatalf("expected doc1.pdf in missing zip archive, got %s", missingZipReader.File[0].Name)
+	}
+
+	failedJob, err := handler.transfer.GetJob("dl-msg-nonexistent-peer-alice")
+	if err != nil {
+		t.Fatalf("expected transfer job for missing file to exist, got error: %v", err)
+	}
+	if failedJob.State != protocol.TransferFailed {
+		t.Fatalf("expected job state for missing file to be TransferFailed, got %s", failedJob.State)
+	}
 }
