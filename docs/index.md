@@ -56,6 +56,7 @@ Environment variables use the `EQT_` prefix.
 - [Test analysis](test-analysis.md)
 - [Desktop integration plan](desktop-integration-plan.md)
 - **[Chat 模式文档目录](chat/README.md)** — V2 现状、Free 额度、交互修复、历史归档
+- **[密码学与加密文档目录](crypto/README.md)** — Chat 会话内容加密现状核查、合理性评估、E2EE 设计审查
 - [EQT product roadmap](product-roadmap.md)
 - [Desktop platform notes](desktop-platform-notes.md)
 - [Windows validation checklist](windows-validation-checklist.md)
