@@ -376,7 +376,10 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		isMissing := fileReader == nil && (mockSizeStr == "" || (!msgExists && filePath == ""))
 
 		if isMissing {
-			_ = h.transfer.CreateJob(token, jobID, fileID, clientID, origName, fileSize)
+			job, err := h.transfer.GetJob(jobID)
+			if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
+				_ = h.transfer.CreateJob(token, jobID, fileID, clientID, origName, fileSize)
+			}
 			_ = h.transfer.FailJob(jobID, fmt.Errorf("attachment file not found on server: %s", fileID))
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "zip download skipped missing file", fmt.Errorf("file missing"), append(fields, diag.F("fileID", fileID))...)
 			continue
@@ -397,11 +400,26 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 			continue
 		}
 
-		_ = h.transfer.CreateJob(token, jobID, fileID, clientID, cleanFilename, fileSize)
+		job, err := h.transfer.GetJob(jobID)
+		if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
+			_ = h.transfer.CreateJob(token, jobID, fileID, clientID, cleanFilename, fileSize)
+		} else if fileSize > 0 && job.BytesTotal == 0 {
+			job.UpdateProgress(job.BytesDone) // Touch job
+			// Update total bytes on existing job
+			if existingJob, getErr := h.transfer.GetJob(jobID); getErr == nil {
+				existingJob.BytesTotal = fileSize
+			}
+		}
 		_ = h.transfer.StartJob(jobID)
 
 		if fileReader != nil {
-			_, copyErr := io.Copy(fw, fileReader)
+			var readWritten int64
+			pr := transfer.NewProgressReader(fileReader, func(n int) {
+				readWritten += int64(n)
+				_ = h.transfer.UpdateProgress(jobID, readWritten)
+			})
+
+			_, copyErr := io.Copy(fw, pr)
 			_ = fileReader.Close()
 			if copyErr == nil {
 				_ = h.transfer.CompleteJob(jobID)
@@ -420,14 +438,40 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 			if s, err := strconv.ParseInt(mockSizeStr, 10, 64); err == nil && s > 0 {
 				mockSize = s
 			}
-			buf := make([]byte, mockSize)
-			_, _ = fw.Write(buf)
-			_ = h.transfer.CompleteJob(jobID)
-			if updatedMsg := sess.MessageStore.MarkDownloaded(fileID); updatedMsg != nil {
-				sess.Broadcast(protocol.EventEnvelope{
-					Type:    protocol.EventMessageUpdated,
-					Message: updatedMsg,
-				})
+			if existingJob, getErr := h.transfer.GetJob(jobID); getErr == nil && existingJob.BytesTotal == 0 {
+				existingJob.BytesTotal = mockSize
+			}
+
+			chunkSize := int64(32 * 1024)
+			var totalWritten int64
+			var writeErr error
+			for totalWritten < mockSize {
+				currChunk := chunkSize
+				if mockSize-totalWritten < currChunk {
+					currChunk = mockSize - totalWritten
+				}
+				buf := make([]byte, currChunk)
+				n, err := fw.Write(buf)
+				if n > 0 {
+					totalWritten += int64(n)
+					_ = h.transfer.UpdateProgress(jobID, totalWritten)
+				}
+				if err != nil {
+					writeErr = err
+					break
+				}
+			}
+
+			if writeErr == nil {
+				_ = h.transfer.CompleteJob(jobID)
+				if updatedMsg := sess.MessageStore.MarkDownloaded(fileID); updatedMsg != nil {
+					sess.Broadcast(protocol.EventEnvelope{
+						Type:    protocol.EventMessageUpdated,
+						Message: updatedMsg,
+					})
+				}
+			} else {
+				_ = h.transfer.FailJob(jobID, writeErr)
 			}
 		}
 	}

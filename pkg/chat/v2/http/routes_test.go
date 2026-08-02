@@ -1187,4 +1187,50 @@ func TestHandleZipDownload(t *testing.T) {
 	if failedJob.State != protocol.TransferFailed {
 		t.Fatalf("expected job state for missing file to be TransferFailed, got %s", failedJob.State)
 	}
+
+	// Verify job progress was tracked for valid zip entries
+	job1, err := handler.transfer.GetJob("dl-msg-zip-1-peer-alice")
+	if err != nil {
+		t.Fatalf("expected transfer job dl-msg-zip-1-peer-alice to exist: %v", err)
+	}
+	if job1.State != protocol.TransferCompleted {
+		t.Fatalf("expected job1 state to be TransferCompleted, got %s", job1.State)
+	}
+	if job1.BytesDone != 512 || job1.BytesTotal != 1024 {
+		t.Fatalf("expected job1 progress BytesDone=512, BytesTotal=1024, got BytesDone=%d, BytesTotal=%d", job1.BytesDone, job1.BytesTotal)
+	}
+
+	// Test pre-created running job guard: Ensure handleZipDownload does not override running job to queued
+	existingJob := handler.transfer.CreateJob("test-token", "dl-msg-precreated-peer-alice", "msg-precreated", "peer-alice", "doc-pre.pdf", 512)
+	_ = handler.transfer.StartJob("dl-msg-precreated-peer-alice")
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-precreated",
+			Type:     "file",
+			FileName: "doc-pre.pdf",
+			Size:     512,
+		},
+	})
+
+	var queuedEventCount int
+	handler.transfer.RegisterCallback(func(token string, eventType protocol.EventType, event protocol.TransferEvent) {
+		if event.ID == "dl-msg-precreated-peer-alice" && eventType == protocol.EventTransferQueued {
+			queuedEventCount++
+		}
+	})
+
+	zipPreURL := server.URL + "/chat-v2/test-token/files/zip?ids=msg-precreated&mock_size=512&clientId=peer-alice"
+	respPre, err := http.Get(zipPreURL)
+	if err != nil {
+		t.Fatalf("failed to request zip download with precreated job: %v", err)
+	}
+	_ = respPre.Body.Close()
+
+	if queuedEventCount > 0 {
+		t.Fatalf("expected 0 EventTransferQueued for precreated running job, got %d", queuedEventCount)
+	}
+	if existingJob.State != protocol.TransferCompleted {
+		t.Fatalf("expected precreated job state to be TransferCompleted, got %s", existingJob.State)
+	}
 }
