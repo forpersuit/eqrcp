@@ -113,3 +113,52 @@ export function clientIpFromRequest(request: Request): string {
     "unknown"
   );
 }
+
+// --- Device Registration Rate Limiter (§5.4 IP + Fingerprint Key) ---
+const DEV_REG_WINDOW_MS = 60 * 1000; // 1 minute window
+const DEV_REG_MAX_REQUESTS = 10;     // max 10 requests per minute
+
+interface DevRegBucket {
+  count: number;
+  windowStart: number;
+}
+
+const devRegBuckets = new Map<string, DevRegBucket>();
+
+function pruneDevReg(now: number): void {
+  if (devRegBuckets.size < 2000) return;
+  for (const [k, b] of devRegBuckets) {
+    if (now - b.windowStart > DEV_REG_WINDOW_MS) devRegBuckets.delete(k);
+  }
+}
+
+function buildDevRegKey(ip: string, uuidHash: string, cpuHash: string, diskHash: string): string {
+  const cleanIp = (ip || "unknown").trim();
+  const fp = [uuidHash.trim(), cpuHash.trim(), diskHash.trim()].filter(Boolean).join("|") || "anon";
+  return `reg:${cleanIp}:${fp}`;
+}
+
+export function isDeviceRegisterRateLimited(ip: string, uuidHash: string, cpuHash: string, diskHash: string): boolean {
+  const now = Date.now();
+  const key = buildDevRegKey(ip, uuidHash, cpuHash, diskHash);
+  const b = devRegBuckets.get(key);
+  if (!b) return false;
+  if (now - b.windowStart > DEV_REG_WINDOW_MS) {
+    devRegBuckets.delete(key);
+    return false;
+  }
+  return b.count >= DEV_REG_MAX_REQUESTS;
+}
+
+export function recordDeviceRegisterRequest(ip: string, uuidHash: string, cpuHash: string, diskHash: string): void {
+  const now = Date.now();
+  pruneDevReg(now);
+  const key = buildDevRegKey(ip, uuidHash, cpuHash, diskHash);
+  const b = devRegBuckets.get(key);
+  if (!b || now - b.windowStart > DEV_REG_WINDOW_MS) {
+    devRegBuckets.set(key, { count: 1, windowStart: now });
+    return;
+  }
+  b.count += 1;
+}
+

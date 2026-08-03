@@ -4,7 +4,7 @@ import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
-import { clientIpFromRequest } from '../utils/rate-limit';
+import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
 
@@ -161,6 +161,22 @@ export async function handleDrmRoutes(
     const cHash = (cpu_hash || "").trim();
     const dHash = (disk_hash || "").trim();
     const net = activationClientMeta(request);
+
+    // Rate-limiting check (§5.4 IP + Fingerprint Key)
+    const clientIp = clientIpFromRequest(request);
+    if (isDeviceRegisterRateLimited(clientIp, uHash, cHash, dHash)) {
+      return new Response(
+        JSON.stringify({
+          error: getApiTranslation("too_many_requests", reqLang) || "Too many registration attempts. Please try again later.",
+          reason_key: "rate_limited"
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
+    recordDeviceRegisterRequest(clientIp, uHash, cHash, dHash);
 
     // Blacklist check for provided hardware fingerprints
     if (uHash || cHash || dHash) {

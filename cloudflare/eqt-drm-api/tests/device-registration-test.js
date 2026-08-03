@@ -166,11 +166,38 @@ async function runZeroComponentActivationTest() {
   console.log(`✓ 0-component activation rejection OK! Error: "${res.data.error}"`);
 }
 
+async function runRateLimitTest() {
+  console.log('===> [4/4] Running IP+Fingerprint Device Register Rate Limit Test...');
+  const randomHash = () => crypto.createHash('sha256').update(Math.random().toString()).digest('hex');
+  const u = randomHash();
+  const c = randomHash();
+  const d = randomHash();
+
+  let blocked = false;
+  for (let i = 0; i < 12; i++) {
+    const res = await makeRequest('/api/v1/device/register', {}, {
+      uuid_hash: u,
+      cpu_hash: c,
+      disk_hash: d
+    });
+    if (res.status === 429 && res.data?.reason_key === 'rate_limited') {
+      blocked = true;
+      break;
+    }
+  }
+
+  if (!blocked) {
+    throw new Error('Rate limiter failed to block excessive registration requests!');
+  }
+  console.log('✓ IP+Fingerprint rate limit successfully triggered 429 Too Many Requests!');
+}
+
 async function main() {
   try {
     runLocalFingerprintTests();
     await runOnlineEndpointTests();
     await runZeroComponentActivationTest();
+    await runRateLimitTest();
     console.log('\n========================================');
     console.log('🎉 ALL M1 DEVICE REGISTRATION TESTS PASSED!');
     console.log('========================================');
