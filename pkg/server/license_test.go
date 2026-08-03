@@ -776,4 +776,3 @@ func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 		t.Errorf("expected updated certificate DeviceID '%s', got '%s'", mockServerDeviceID, updatedCert.DeviceID)
 	}
 }
-

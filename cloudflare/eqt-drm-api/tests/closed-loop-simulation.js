@@ -17,7 +17,7 @@ function wrangler(sql) {
   const oneLine = String(sql).replace(/\s+/g, ' ').trim();
   const out = execSync(
     `CLOUDFLARE_API_TOKEN="" npx wrangler d1 execute eqt-drm-db --remote --command ${JSON.stringify(oneLine)}`,
-    { encoding: 'utf8', maxBuffer: 12 * 1024 * 1024 }
+    { encoding: 'utf8', maxBuffer: 12 * 1024 * 1024, env: { ...process.env, CLOUDFLARE_API_TOKEN: '' } }
   );
   return out;
 }
@@ -26,7 +26,7 @@ function wranglerJson(sql) {
   const oneLine = String(sql).replace(/\s+/g, ' ').trim();
   const out = execSync(
     `CLOUDFLARE_API_TOKEN="" npx wrangler d1 execute eqt-drm-db --remote --command ${JSON.stringify(oneLine)} --json`,
-    { encoding: 'utf8', maxBuffer: 12 * 1024 * 1024 }
+    { encoding: 'utf8', maxBuffer: 12 * 1024 * 1024, env: { ...process.env, CLOUDFLARE_API_TOKEN: '' } }
   );
   const i = out.indexOf('[');
   if (i < 0) throw new Error('no json: ' + out.slice(0, 400));

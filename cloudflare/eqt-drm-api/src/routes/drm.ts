@@ -223,6 +223,16 @@ export async function handleDrmRoutes(
       });
     }
 
+    const uHash = (uuid_hash || "").trim();
+    const cHash = (cpu_hash || "").trim();
+    const dHash = (disk_hash || "").trim();
+    if (!uHash && !cHash && !dHash) {
+      return new Response(JSON.stringify({ error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (cannot read hardware fingerprints)" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // Query the license
     const license = await env.DB.prepare(
       "SELECT * FROM licenses WHERE license_code = ?"
@@ -231,16 +241,6 @@ export async function handleDrmRoutes(
     if (!license) {
       return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    const uHash = (uuid_hash || "").trim();
-    const cHash = (cpu_hash || "").trim();
-    const dHash = (disk_hash || "").trim();
-    if (!uHash && !cHash && !dHash) {
-      return new Response(JSON.stringify({ error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (cannot read hardware fingerprints)" }), {
-        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }

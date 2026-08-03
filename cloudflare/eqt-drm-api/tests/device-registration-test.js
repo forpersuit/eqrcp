@@ -4,8 +4,9 @@ const crypto = require('crypto');
 function makeRequest(path, headers = {}, body = null, method = 'POST') {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : '';
+    const hostname = process.env.TARGET_HOST || 'lic.eqt.net.im';
     const req = https.request({
-      hostname: 'lic.eqt.net.im',
+      hostname: hostname,
       port: 443,
       path: path,
       method: method,
@@ -103,8 +104,10 @@ async function runOnlineEndpointTests() {
     lang: 'zh'
   });
 
-  if (reg1.status !== 200 || !reg1.data.device_id || reg1.data.tier !== 'free') {
-    throw new Error(`Device register failed: status=${reg1.status}, data=${JSON.stringify(reg1.data)}`);
+  console.log(`[DEBUG] Endpoint Response: status=${reg1.status}, data=`, reg1.data || reg1.raw);
+
+  if (reg1.status !== 200 || !reg1.data || !reg1.data.device_id || reg1.data.tier !== 'free') {
+    throw new Error(`Device register failed: status=${reg1.status}, data=${JSON.stringify(reg1.data || reg1.raw)}`);
   }
   const assignedDeviceId = reg1.data.device_id;
   console.log(`✓ First-time register OK! Assigned device_id: ${assignedDeviceId}`);
