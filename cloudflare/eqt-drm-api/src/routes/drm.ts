@@ -472,8 +472,8 @@ export async function handleDrmRoutes(
       finalExpiresAt = finalDate.toISOString();
     }
 
-    // Generate license signature
-    const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${finalExpiresAt}|${license.max_devices}`;
+    // Generate license signature (V2 payload including device_id)
+    const payloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${authoritativeDeviceId}|${finalExpiresAt}|${license.max_devices}`;
     const encoder = new TextEncoder();
     const payloadData = encoder.encode(payloadStr);
 
@@ -633,12 +633,6 @@ export async function handleDrmRoutes(
     const verifySignatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
     const verifySignatureHex = bufToHex(verifySignatureBuf);
 
-    // Also produce updated certificate signature for local cache renewal
-    const certificatePayloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${baseExpiresAt}|${license.max_devices}`;
-    const certificatePayloadData = encoder.encode(certificatePayloadStr);
-    const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, certificatePayloadData);
-    const certificateSignatureHex = bufToHex(certificateSignatureBuf);
-
     const net = activationClientMeta(request);
     const regResult = await registerOrRefreshDevice(env, {
       uuidHash: uuid_hash || "",
@@ -649,6 +643,13 @@ export async function handleDrmRoutes(
       email: license.buyer_email || null,
       appVersion: body.app_version || null
     }, net);
+
+    // Also produce updated certificate signature for local cache renewal (V2 payload format)
+    const activeDeviceId = regResult.device_id || (device_id || "");
+    const certificatePayloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${activeDeviceId}|${baseExpiresAt}|${license.max_devices}`;
+    const certificatePayloadData = encoder.encode(certificatePayloadStr);
+    const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, certificatePayloadData);
+    const certificateSignatureHex = bufToHex(certificateSignatureBuf);
 
     return new Response(JSON.stringify({
       status: "OK",

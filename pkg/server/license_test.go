@@ -21,15 +21,31 @@ func signTestPayload(cert LicenseCertificate) string {
 	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
 	privKey := ed25519.NewKeyFromSeed(seedBytes)
 
-	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
-		cert.LicenseCode,
-		cert.Tier,
-		cert.UUIDHash,
-		cert.CPUHash,
-		cert.DiskHash,
-		cert.ExpiresAt,
-		cert.MaxDevices,
-	)
+	var payloadStr string
+	if cert.DeviceID != "" {
+		// V2 format with DeviceID
+		payloadStr = fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%d",
+			cert.LicenseCode,
+			cert.Tier,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.DeviceID,
+			cert.ExpiresAt,
+			cert.MaxDevices,
+		)
+	} else {
+		// Legacy V1 format
+		payloadStr = fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+			cert.LicenseCode,
+			cert.Tier,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.ExpiresAt,
+			cert.MaxDevices,
+		)
+	}
 	payloadData := []byte(payloadStr)
 	sigBytes := ed25519.Sign(privKey, payloadData)
 	return hex.EncodeToString(sigBytes)
@@ -62,10 +78,18 @@ func TestVerifyLicenseSignature(t *testing.T) {
 		MaxDevices:  2,
 	}
 
-	// 1. Valid Signature Test
+	// 1. Valid V1 Legacy Signature Test
 	cert.Signature = signTestPayload(cert)
 	if !VerifyLicenseSignature(cert) {
-		t.Error("expected signature validation to pass for valid cert signature")
+		t.Error("expected signature validation to pass for valid V1 cert signature")
+	}
+
+	// 2. Valid V2 Signature Test (with DeviceID)
+	certV2 := cert
+	certV2.DeviceID = "dev_32hex_random_device_id_9999"
+	certV2.Signature = signTestPayload(certV2)
+	if !VerifyLicenseSignature(certV2) {
+		t.Error("expected signature validation to pass for valid V2 cert signature with DeviceID")
 	}
 
 	// 2. Tampered Payload Test

@@ -62,8 +62,30 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 	}
 	pubKey := ed25519.PublicKey(pubBytes)
 
-	// Format matching worker signature payload: license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices
-	payloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
+	sigBytes, err := hex.DecodeString(cert.Signature)
+	if err != nil {
+		return false
+	}
+
+	// 1. Try V2 Payload format (with device_id):
+	// license_code|tier|uuid_hash|cpu_hash|disk_hash|device_id|expires_at|max_devices
+	v2PayloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s|%d",
+		cert.LicenseCode,
+		cert.Tier,
+		cert.UUIDHash,
+		cert.CPUHash,
+		cert.DiskHash,
+		cert.DeviceID,
+		cert.ExpiresAt,
+		cert.MaxDevices,
+	)
+	if ed25519.Verify(pubKey, []byte(v2PayloadStr), sigBytes) {
+		return true
+	}
+
+	// 2. Fallback to Legacy V1 Payload format (without device_id):
+	// license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices
+	v1PayloadStr := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d",
 		cert.LicenseCode,
 		cert.Tier,
 		cert.UUIDHash,
@@ -72,14 +94,7 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 		cert.ExpiresAt,
 		cert.MaxDevices,
 	)
-	payloadData := []byte(payloadStr)
-
-	sigBytes, err := hex.DecodeString(cert.Signature)
-	if err != nil {
-		return false
-	}
-
-	return ed25519.Verify(pubKey, payloadData, sigBytes)
+	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
 }
 
 // VerifySyncSignature checks the cryptographic signature of the online sync response
