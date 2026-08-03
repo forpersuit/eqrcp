@@ -187,8 +187,10 @@ export async function handlePaddleRoutes(
         // Strictly check ownership, active status, tier match, and reject if already LIFETIME
         if (targetLic && isOwner && targetLic.tier === tier && targetLic.status === "active" && targetLic.expires_at !== "LIFETIME") {
           let newExpires = expiresAt;
+          let durationDaysUpdate: number | null = targetLic.duration_days;
           if (matchedPriceId === PRICE_LIFETIME_ID) {
             newExpires = "LIFETIME";
+            durationDaysUpdate = null; // Clear duration_days so verify won't override LIFETIME
           } else if (matchedPriceId === PRICE_YEARLY_ID) {
             if (targetLic.expires_at) {
               const prev = new Date(targetLic.expires_at).getTime();
@@ -201,6 +203,7 @@ export async function handlePaddleRoutes(
             UPDATE licenses SET
               status = 'active',
               expires_at = ?,
+              duration_days = ?,
               paddle_transaction_id = ?,
               revoked_at = NULL,
               revoke_reason = NULL,
@@ -209,6 +212,7 @@ export async function handlePaddleRoutes(
             WHERE license_code = ?
           `).bind(
             newExpires,
+            durationDaysUpdate,
             transactionId,
             buyerEmail || null,
             emailHash || null,

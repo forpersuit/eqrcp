@@ -117,6 +117,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Lifetime-Lizenzen können nicht verlängert werden",
     fr: "Les licences à vie ne peuvent pas être renouvelées"
   },
+  lifetime_already_owned: {
+    zh: "您已拥有该级别的终身授权，无需重复购买",
+    en: "You already own a lifetime license for this tier",
+    ja: "このティアの永久ライセンスを既に所有しています",
+    ko: "이미 이 등급의 영구 라이선스를 소유하고 있습니다",
+    es: "Ya posee una licencia de por vida para este nivel",
+    de: "Sie besitzen bereits eine Lifetime-Lizenz für diese Stufe",
+    fr: "Vous possédez déjà une licence à vie pour ce niveau"
+  },
   no_paddle_transaction: {
     zh: "该授权无关联的 Paddle 交易，无法自助退款",
     en: "No associated Paddle transaction found for this license",
