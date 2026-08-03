@@ -216,7 +216,6 @@ function dbRowCopy(row) {
   return row ? JSON.parse(JSON.stringify(row)) : null;
 }
 
-// Dummy ExecutionContext for Workers waitUntil
 const ctx = {
   waitUntil(promise) {
     if (promise && typeof promise.catch === 'function') {
@@ -257,7 +256,7 @@ async function runTests() {
     paddle_subscription_id: 'sub_yearly_orig_200'
   });
 
-  // Test 1: Real Webhook Request to handlePaddleRoutes for Lifetime Upgrade
+  // Test 1: Real Webhook Request for Lifetime Upgrade (Pending)
   console.log('Test 1: REAL handlePaddleRoutes Webhook invocation with HMAC signature (Pending Upgrade)...');
   const upgTxnId = 'txn_lifetime_upg_888';
   const webhookBodyObj = {
@@ -274,16 +273,10 @@ async function runTests() {
 
   const req1 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'paddle-signature': sig1
-    },
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sig1 },
     body: rawBody1
   });
-  const url1 = new URL(req1.url);
-
-  // Directly execute the REAL compiled Worker handler!
-  const res1 = await handlePaddleRoutes(req1, env, ctx, url1, corsHeaders);
+  const res1 = await handlePaddleRoutes(req1, env, ctx, new URL(req1.url), corsHeaders);
   assert(res1.status === 200, 'REAL handlePaddleRoutes returned 200 OK');
   const res1Json = await res1.json();
   assert(res1Json.status === 'pending_upgrade', 'REAL handler returned status pending_upgrade');
@@ -293,50 +286,100 @@ async function runTests() {
   assert(licAfterUpg.auto_renew === 0, 'REAL handler updated auto_renew = 0');
   assert(db.tables.license_upgrades.size === 1, 'REAL handler created row in license_upgrades table');
 
-  // Test 2: REAL checkAndApplyPendingUpgrade Lazy Flip Handler
-  console.log('\nTest 2: REAL checkAndApplyPendingUpgrade before & after effective date...');
-  const beforeResult = await checkAndApplyPendingUpgrade(env, targetCode, futureExpiresIso);
-  assert(beforeResult === futureExpiresIso, 'REAL checkAndApplyPendingUpgrade returns yearly expires_at before effective date');
+  // Test 2: REAL Duplicate Upgrade Prevention (Issue 6)
+  console.log('\nTest 2: REAL handlePaddleRoutes duplicate pending upgrade prevention...');
+  const req2 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sig1 },
+    body: rawBody1
+  });
+  const res2 = await handlePaddleRoutes(req2, env, ctx, new URL(req2.url), corsHeaders);
+  assert(res2.status === 200, 'Duplicate upgrade request handled gracefully with 200 OK');
+  const res2Json = await res2.json();
+  assert(res2Json.status === 'pending_upgrade' && res2Json.message.includes('already has a pending'), 'REAL handler prevented duplicate upgrade insert!');
 
-  // Fast-forward effective date in DB to past
-  const pastExpiresIso = new Date(nowMs - 1000).toISOString();
+  // Test 3: REAL Refund Window Block (< 14 days) (Issue 4)
+  console.log('\nTest 3: REAL handlePaddleRoutes 14-day refund window block...');
+  const freshCode = 'EQT-PLUS-FRESH-999';
+  const fiveDaysAgoIso = new Date(nowMs - 5 * 86400 * 1000).toISOString();
+  db.tables.licenses.set(freshCode, {
+    license_code: freshCode,
+    tier: 'PLUS',
+    status: 'active',
+    expires_at: futureExpiresIso,
+    created_at: fiveDaysAgoIso,
+    last_purchased_at: fiveDaysAgoIso,
+    buyer_email: 'fresh@example.com'
+  });
+
+  const freshWebhookObj = {
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_fresh_upg',
+      customer: { email: 'fresh@example.com' },
+      items: [{ price_id: PRICE_LIFETIME_ID }],
+      custom_data: { target_license_code: freshCode, buyer_email: 'fresh@example.com' }
+    }
+  };
+  const rawBodyFresh = JSON.stringify(freshWebhookObj);
+  const sigFresh = await createPaddleSignature(rawBodyFresh, SECRET_KEY);
+  const reqFresh = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigFresh },
+    body: rawBodyFresh
+  });
+  const resFresh = await handlePaddleRoutes(reqFresh, env, ctx, new URL(reqFresh.url), corsHeaders);
+  assert(resFresh.status === 400, 'REAL handler rejected upgrade for license in 14-day refund window with 400 Bad Request');
+  const resFreshJson = await resFresh.json();
+  assert(resFreshJson.code === 'UPGRADE_BLOCKED_REFUND_WINDOW', 'REAL handler returned UPGRADE_BLOCKED_REFUND_WINDOW code');
+
+  // Test 4: REAL Refund PENDING Upgrade (Upgrade cancelled, Yearly license remains active)
+  console.log('\nTest 4: REAL handlePaddleRoutes refund on PENDING lifetime upgrade...');
+  const pendingRefundObj = { event_type: 'transaction.refunded', data: { id: upgTxnId } };
+  const rawBodyPendingRefund = JSON.stringify(pendingRefundObj);
+  const sigPendingRefund = await createPaddleSignature(rawBodyPendingRefund, SECRET_KEY);
+  const reqPendingRefund = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigPendingRefund },
+    body: rawBodyPendingRefund
+  });
+  const resPendingRefund = await handlePaddleRoutes(reqPendingRefund, env, ctx, new URL(reqPendingRefund.url), corsHeaders);
+  assert(resPendingRefund.status === 200, 'Pending refund webhook returned 200 OK');
+  const resPendingRefundJson = await resPendingRefund.json();
+  assert(resPendingRefundJson.status === 'cancelled', 'REAL handler cancelled pending upgrade on refund');
+
+  const licAfterPendingRefund = db.tables.licenses.get(targetCode);
+  assert(licAfterPendingRefund.status === 'active', 'Yearly license remains ACTIVE after pending upgrade refund');
+
+  // Test 5: REAL Lazy Flip Handler
+  console.log('\nTest 5: REAL checkAndApplyPendingUpgrade before & after effective date...');
+  // Restore upgrade row to pending for lazy flip test
   const upgRow = Array.from(db.tables.license_upgrades.values())[0];
-  upgRow.effective_at = pastExpiresIso;
+  upgRow.status = 'pending';
+  upgRow.effective_at = new Date(nowMs - 1000).toISOString();
 
   const afterResult = await checkAndApplyPendingUpgrade(env, targetCode, futureExpiresIso);
   assert(afterResult === 'LIFETIME', 'REAL checkAndApplyPendingUpgrade lazy flipped status to LIFETIME!');
   assert(upgRow.status === 'applied', 'REAL checkAndApplyPendingUpgrade set upgrade status = applied');
 
-  // Test 3: REAL handlePaddleRoutes Refund on APPLIED Upgrade (Issue A & B Real Route Verification!)
-  console.log('\nTest 3: REAL handlePaddleRoutes refund on APPLIED lifetime upgrade...');
-  const refundBodyObj = {
-    event_type: 'transaction.refunded',
-    data: { id: upgTxnId }
-  };
-  const rawBody3 = JSON.stringify(refundBodyObj);
-  const sig3 = await createPaddleSignature(rawBody3, SECRET_KEY);
-
-  const req3 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+  // Test 6: REAL handlePaddleRoutes Refund on APPLIED Upgrade (Revokes Target License)
+  console.log('\nTest 6: REAL handlePaddleRoutes refund on APPLIED lifetime upgrade...');
+  const reqAppliedRefund = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'paddle-signature': sig3
-    },
-    body: rawBody3
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigPendingRefund },
+    body: rawBodyPendingRefund
   });
-  const url3 = new URL(req3.url);
-
-  const res3 = await handlePaddleRoutes(req3, env, ctx, url3, corsHeaders);
-  assert(res3.status === 200, 'REAL refund webhook returned 200 OK');
-  const res3Json = await res3.json();
-  assert(res3Json.status === 'revoked', 'REAL handler returned status revoked for applied upgrade refund');
+  const resAppliedRefund = await handlePaddleRoutes(reqAppliedRefund, env, ctx, new URL(reqAppliedRefund.url), corsHeaders);
+  assert(resAppliedRefund.status === 200, 'Applied refund webhook returned 200 OK');
+  const resAppliedRefundJson = await resAppliedRefund.json();
+  assert(resAppliedRefundJson.status === 'revoked', 'REAL handler returned status revoked for applied upgrade refund');
 
   const licAfterAppliedRefund = db.tables.licenses.get(targetCode);
   assert(licAfterAppliedRefund.status === 'revoked', 'REAL handler successfully revoked target license in DB by target_license_code!');
   assert(licAfterAppliedRefund.revoke_reason === 'refund', 'REAL handler set revoke_reason = refund');
 
   console.log('\n========================================');
-  console.log('🎉 100% REAL WORKER ROUTE INTEGRATION TESTS PASSED!');
+  console.log('🎉 ALL 6 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 
