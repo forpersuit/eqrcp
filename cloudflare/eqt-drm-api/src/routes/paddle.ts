@@ -152,6 +152,74 @@ export async function handlePaddleRoutes(
         emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
       }
 
+      // --- Manual/Subscription Renewal via passthrough target_license_code (§6.6) ---
+      let targetCode = "";
+      try {
+        const rawCustom = data.custom_data || data.passthrough;
+        if (typeof rawCustom === "object" && rawCustom?.target_license_code) {
+          targetCode = String(rawCustom.target_license_code).trim();
+        } else if (typeof rawCustom === "string" && rawCustom.startsWith("{")) {
+          const parsed = JSON.parse(rawCustom);
+          if (parsed?.target_license_code) {
+            targetCode = String(parsed.target_license_code).trim();
+          }
+        }
+      } catch {
+        targetCode = "";
+      }
+
+      if (targetCode) {
+        const targetLic = await env.DB.prepare(
+          `SELECT license_code, expires_at, status, tier, buyer_email
+           FROM licenses WHERE license_code = ?`
+        ).bind(targetCode).first<any>();
+
+        // Only renew if active/expired, same tier, and not LIFETIME (§6.6 constraint)
+        if (targetLic && targetLic.tier === tier && targetLic.expires_at !== "LIFETIME" && targetLic.status !== "revoked") {
+          let newExpires = expiresAt;
+          if (targetLic.expires_at) {
+            const prev = new Date(targetLic.expires_at).getTime();
+            const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
+            newExpires = new Date(base + YEARLY_MS).toISOString();
+          }
+
+          await env.DB.prepare(`
+            UPDATE licenses SET
+              status = 'active',
+              expires_at = ?,
+              paddle_transaction_id = ?,
+              revoked_at = NULL,
+              revoke_reason = NULL,
+              buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+              buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+            WHERE license_code = ?
+          `).bind(
+            newExpires,
+            transactionId,
+            buyerEmail || null,
+            emailHash || null,
+            targetLic.license_code
+          ).run();
+
+          if (buyerEmail) {
+            const buyerLang = detectBuyerLang(data);
+            const expiresStr = new Date(newExpires).toLocaleDateString();
+            const tmpl = getRenewalEmailTemplate(buyerLang);
+            const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, expiresStr));
+            ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));
+          }
+
+          return new Response(JSON.stringify({
+            message: "Target license renewed via payment",
+            license_code: targetLic.license_code,
+            expires_at: newExpires
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
       // --- Yearly renewal: same subscription keeps ONE license code (Paddle auto-bills) ---
       // Product SSOT: do not mint a new code on each billing cycle; extend expires_at + keep status active.
       if (matchedPriceId === PRICE_YEARLY_ID && subscriptionId) {

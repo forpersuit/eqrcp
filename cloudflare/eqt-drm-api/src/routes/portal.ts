@@ -853,8 +853,8 @@ export async function handlePortalRoutes(
     }
   }
 
-  // 0.55 Manual license renewal (§6.6 User Portal renewal)
-  if (url.pathname === "/api/v1/user/license/renew" && request.method === "POST") {
+  // 0.55 Payment-driven renewal checkout parameters (§6.6 User Portal renewal)
+  if (url.pathname === "/api/v1/user/renew-checkout" && request.method === "POST") {
     await ensureLicenseSourceColumns(env);
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
@@ -880,7 +880,6 @@ export async function handlePortalRoutes(
     }
 
     const license_code = (body.license_code || "").trim();
-    const addDays = Math.max(1, Math.min(3650, Number(body.add_days || 30)));
 
     if (!license_code) {
       return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
@@ -908,6 +907,14 @@ export async function handlePortalRoutes(
       });
     }
 
+    // Reject lifetime renewal (§6.6 Requirement: LIFETIME licenses cannot be renewed)
+    if (license.expires_at === "LIFETIME") {
+      return new Response(JSON.stringify({ error: getApiTranslation("lifetime_cannot_renew", reqLang) || "Lifetime licenses cannot be renewed" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     if (license.status !== "active") {
       return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
         status: 403,
@@ -915,26 +922,21 @@ export async function handlePortalRoutes(
       });
     }
 
-    // Calculate new expiration
-    let currentExpMs = Date.now();
-    if (license.expires_at && license.expires_at !== "LIFETIME") {
-      const parsed = new Date(license.expires_at).getTime();
-      if (!Number.isNaN(parsed) && parsed > currentExpMs) {
-        currentExpMs = parsed;
-      }
-    }
-    const newExpiresAt = new Date(currentExpMs + addDays * 86400 * 1000).toISOString();
-
-    await env.DB.prepare(
-      "UPDATE licenses SET expires_at = ?, duration_days = COALESCE(duration_days, 0) + ? WHERE license_code = ?"
-    ).bind(newExpiresAt, addDays, license_code).run();
+    // Construct payment checkout passthrough payload for Paddle webhook handler
+    const passthroughObj = {
+      target_license_code: license_code,
+      buyer_email: session.email,
+      tier: license.tier,
+      action: "renewal"
+    };
 
     return new Response(JSON.stringify({
       success: true,
       license_code: license_code,
       tier: license.tier,
-      expires_at: newExpiresAt,
-      renewed_days: addDays
+      current_expires_at: license.expires_at,
+      passthrough: JSON.stringify(passthroughObj),
+      checkout_custom_data: passthroughObj
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
