@@ -126,6 +126,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Sie besitzen bereits eine Lifetime-Lizenz für diese Stufe",
     fr: "Vous possédez déjà une licence à vie pour ce niveau"
   },
+  entitlement_term_yearly: {
+    zh: "年度订阅",
+    en: "Yearly Subscription",
+    ja: "年間サブスクリプション",
+    ko: "연간 구독",
+    es: "Suscripción anual",
+    de: "Jahresabonnement",
+    fr: "Abonnement annuel"
+  },
   no_paddle_transaction: {
     zh: "该授权无关联的 Paddle 交易，无法自助退款",
     en: "No associated Paddle transaction found for this license",

@@ -422,7 +422,17 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 5. **与设备注册的关系**：续期只改 `expires_at`，不动 device_id/device_registry，不影响本报告主体；但 **M2 签名载荷改动后，续期后的目标码需在下一次 verify 重新签发**（客户端下次启动 verify 自然拿到新 `expires_at` 的新签名 .lic，无需额外动作）；
 6. **不纳入**：多码 entitlement 合并（"多码→单权益"时间轴合并，`docs/payment/license-source-and-refund-policy.md:270` 标为 P2 待办）不在本报告范围，手动续期只做"单码加时长"。
 
+**订阅吊销语义与自动续费策略（用户确认，2026-08-03）**：
+
+1. **`subscription.canceled`（退款窗口外）≠ 吊销**：仅"取消自动续费"（置 `auto_renew=0`），已付年付期继续有效、激活码**不失效**；吊销只由退款/拒付驱动（`transaction.refunded` / `adjustment`，已有）。**现状 paddle.ts:440 把 `subscription.canceled`/`past_due`/`paused` 一律吊销属过度吊销**——既误伤"仅停续费"的退订用户，也是升级后停 auto-renew 会被误吊销的根因。修正：`subscription.canceled` → 不吊销、置 `auto_renew=0`；`past_due`/`paused` → 欠费即停，保留吊销。
+2. **欠费即停（用户确认）**：`past_due`/`paused`（续费失败）→ 立即停授权（revoke），费用低、**不做重试/恢复逻辑**（Paddle 自动重试窗口内不恢复）。
+3. **自动续费默认关闭（真关闭，用户确认）**：`auto_renew` 默认 `0`；**铸造订阅时调 Paddle 设 `scheduled_change=cancel`（或 `effective_from: period_end`）**——当前期有效、期末不续费，杜绝"仅标记关但 Paddle 仍自动扣款"的假关闭。自动续费成为**用户手动开启**的开关（Portal 已有 toggle）。
+4. **主动终止订阅（保留吊销，用户确认）**：Portal `cancel-subscription` 保留"立即取消 + 立即吊销"（2026-07-25 决策）；按钮文案改为**"终止订阅"**，点击弹**网站风格二次确认 alert**，明确告知操作后果（订阅终止 + 授权立即失效）。
+5. **Portal 年度订阅 badge 国际化**：`entitlement_term` 现有 en/zh（portal.html:261/336），缺 ja/ko/es/de/fr 五种翻译，补齐避免 fallback 中文。
+
 ### 6.7 年付 → 终身升级（用户确认，2026-08-03）
+
+> **⚠️ 实现状态（2026-08-03 审查）**：本节为**目标设计**。当前代码仅具备**立即生效**的升级分支（webhook `PRICE_LIFETIME_ID` + `targetCode` → 目标码立即 `expires_at='LIFETIME'` + `duration_days=NULL`，paddle.ts:190-193），**待生效机制尚未实现**。已决定按"开放升级"推进：**在下方实现顺序全部完成前，不开放升级前端入口**——否则升级会立即吞掉剩余年付、退款期内年付被吞、且 auto-renew 未停导致双重扣款，与本节承诺不符。`lifetime_already_owned` 两处检查已按 D-13 移除（commit ffa01f9）。
 
 **业务模型（已确认）**：一邮箱可持多个激活码（无数量上限）；可续年付、可购新码（年付/终身皆可）；"可重复购买终身"成立（铸造路径不拦，见 D-11）。在该模型下新增"年付→终身升级"：
 
@@ -437,6 +447,16 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 9. **Portal 展示**：待生效期间显示"终身权益已购买，将于 YYYY-MM-DD 生效"，避免"付了终身还是年付"的困惑。
 10. **`lifetime_already_owned` 处置**：既有两处检查与新模型矛盾（portal 预检过宽、webhook 半吊子），处置见 D-13；铸造路径不查正确保留。
 
+**实现顺序（待办，开放升级入口的前置条件）**：
+
+1. 新增 `license_upgrades` 表 + schema 迁移（`user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status`）；
+2. webhook 升级分支改"待生效"：`PRICE_LIFETIME_ID` + `targetCode` → 不再直接改 `expires_at`，改写入 `license_upgrades`（`effective_at` = 当前年付 `expires_at` 快照，见第 5 条），`paddle_transaction_id` 关联升级交易；无 `targetCode` 的终身铸造保持立即生效；
+3. verify/activate 惰性翻转：`effective_at <= now && expires_at != 'LIFETIME'` → 条件更新 `expires_at='LIFETIME', duration_days=NULL`（`WHERE expires_at != 'LIFETIME'` 幂等），返回 LIFETIME 签名；
+4. 升级完成时停 auto-renew：调 Paddle 期末取消（`effective_from: period_end`）+ 置 `auto_renew=0`。**`subscription.canceled` 已修正为不吊销（见 6.6）**，无需解关联 `paddle_subscription_id`；若 auto_renew 默认关闭（见 6.6），仅需确认目标码未手动开启续费；
+5. 退款期判定：renew-checkout 与 webhook 双侧校验目标码**最近一期交易**是否在退款窗口内（窗口天数常量与 Paddle 产品设置对齐）；退款期内拒绝升级（前端提示"先退款、再购终身"）；
+6. refund webhook 撤回：终身升级交易被退 → 按 `lifetime_txn_id` 取消 `license_upgrades` 待生效记录；
+7. Portal 待生效展示 + 升级入口（LIFETIME 价 + `targetCode`）。
+
 ---
 
 ## 7. 建议实施顺序（里程碑）
@@ -444,7 +464,7 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 | 里程碑 | 内容 |
 | --- | --- |
 | M1 | D1 新增 `device_registry` 表（单一 `last_seen_at`，含 `email`/`license_code` 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动序列改造（付费 verify 顺带活跃登记与 device_id 回写、免费 register，见 4.1.1）+ **verify 响应契约修正（回显三指纹 + 新增 device_id，见附录 D-8）**；0 分量付费拒绝；遥测开关与隐私说明就绪；**开发期清库重置 `activations`/`device_registry`（用户已确认现有数据可弃，见 6.2）** |
-| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** + **年付→终身升级（全额支付、待生效、退款期隔离，见 6.7）** |
+| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** + **年付→终身升级（全额支付、退款期隔离，见 6.7；⚠️ 待生效机制未实现，开放入口前须先完成 6.7 实现顺序）** |
 | M3 | `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关（活跃数据单源 `device_registry.last_seen_at`，**activations 不加活跃列**） |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
 
@@ -532,3 +552,7 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
     - 铸造路径不查 → **正确保留**（D-11）。
 
 14. **年付→终身升级方案（用户确认，见 6.7）**：全额终身价、不吞剩余年付（状态隔离）、退款期内仅"退款+重购"、到期自动生效（惰性翻转、非 cron）、升级后停 auto-renew 防双重扣款、待生效存储 `license_upgrades`、终身退款撤回升级。
+
+15. **§6.7 升级实现状态审查（2026-08-03）**：代码仅具备**立即生效**升级分支（paddle.ts:190-193），待生效机制（`license_upgrades`、惰性翻转、退款期判定、停 auto-renew、退款撤回）**均未实现**；D-13 两处 `lifetime_already_owned` 检查已移除（commit ffa01f9），该 i18n key 暂成死 key（保留待用/后续清理）。**用户决定按"开放升级"推进**：开放前端升级入口前，须先完成 §6.7 实现顺序全部步骤；此期间后端"立即升级"能力保持闲置，不开放入口。
+
+16. **订阅吊销语义与自动续费策略（用户确认，2026-08-03，见 §6.6 补充）**：`subscription.canceled`（退款窗口外）仅停自动续费、不吊销（吊销只由退款驱动），修正 paddle.ts:440 过度吊销；`past_due`/`paused` 欠费即停（revoke，不做重试恢复）；auto_renew **真默认关闭**（铸造时 Paddle `scheduled_change=cancel` 期末不续）；主动"终止订阅"保留立即吊销 + 网站风格二次确认；Portal `entitlement_term` 补 ja/ko/es/de/fr 五种翻译。

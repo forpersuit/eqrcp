@@ -416,19 +416,32 @@ export async function handlePaddleRoutes(
       }
     }
 
-    // Revoke license on subscription cancel / suspend
+    // Process subscription status updates (Section 6.6: cancel != revoke)
     if (eventType === "subscription.canceled" || eventType === "subscription.updated") {
       const subscriptionId = data.id;
       const status = data.status;
 
-      if (eventType === "subscription.canceled" || status === "canceled" || status === "past_due" || status === "paused") {
+      // 1. Just turning off auto-renewal: DO NOT revoke active period, set auto_renew = 0
+      if (eventType === "subscription.canceled" || status === "canceled") {
+        await env.DB.prepare(
+          "UPDATE licenses SET auto_renew = 0 WHERE paddle_subscription_id = ?"
+        ).bind(subscriptionId).run();
+
+        return new Response(JSON.stringify({ message: "Subscription auto-renewal canceled, license remains active until expires_at" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // 2. Non-payment / Past due / Paused: Revoke license immediately
+      if (status === "past_due" || status === "paused") {
         const license = await env.DB.prepare(
           "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
         ).bind(subscriptionId).first<any>();
 
         await env.DB.prepare(revokeByPaddleSubSql()).bind(
           new Date().toISOString(),
-          "subscription",
+          status,
           subscriptionId
         ).run();
 
@@ -440,7 +453,7 @@ export async function handlePaddleRoutes(
           ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
         }
 
-        return new Response(JSON.stringify({ message: "License revoked due to subscription cancellation or non-payment" }), {
+        return new Response(JSON.stringify({ message: "License revoked due to subscription non-payment/paused" }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
