@@ -6,6 +6,8 @@ import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklis
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
+import { registerOrRefreshDevice } from '../utils/device-registry';
+
 
 function activationClientMeta(request: Request): {
   client_ip: string | null;
@@ -149,6 +151,62 @@ export async function handleDrmRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
+  // 0.5 Device registration (Free anonymous device check-in & ID generation)
+  if (url.pathname === "/api/v1/device/register" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+    const { uuid_hash, cpu_hash, disk_hash, app_version, license_code } = body;
+
+    const uHash = (uuid_hash || "").trim();
+    const cHash = (cpu_hash || "").trim();
+    const dHash = (disk_hash || "").trim();
+    const net = activationClientMeta(request);
+
+    // Blacklist check for provided hardware fingerprints
+    if (uHash || cHash || dHash) {
+      const blacklistCheck = await checkAbusiveRefundBlacklist(
+        env,
+        null,
+        uHash,
+        cHash,
+        dHash
+      );
+      if (blacklistCheck.isAbusive) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("blacklist_device", reqLang) || blacklistCheck.reason
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    let tierLabel: 'free' | 'paid' = 'free';
+    if (license_code) {
+      const lic = await env.DB.prepare("SELECT status FROM licenses WHERE license_code = ?").bind(license_code).first<any>();
+      if (lic && lic.status === 'active') {
+        tierLabel = 'paid';
+      }
+    }
+
+    const reg = await registerOrRefreshDevice(env, {
+      uuidHash: uHash,
+      cpuHash: cHash,
+      diskHash: dHash,
+      appVersion: app_version || null,
+      tierLabel: tierLabel,
+      licenseCode: license_code || null
+    }, net);
+
+    return new Response(JSON.stringify({
+      device_id: reg.device_id,
+      tier: reg.tier_label
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // 1. Activating a device
   if (url.pathname === "/api/v1/activate" && request.method === "POST") {
     await ensureDeviceIdColumn(env);
@@ -173,6 +231,16 @@ export async function handleDrmRoutes(
     if (!license) {
       return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const uHash = (uuid_hash || "").trim();
+    const cHash = (cpu_hash || "").trim();
+    const dHash = (disk_hash || "").trim();
+    if (!uHash && !cHash && !dHash) {
+      return new Response(JSON.stringify({ error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (cannot read hardware fingerprints)" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -297,6 +365,17 @@ export async function handleDrmRoutes(
 
       // Insert new activation record (capture network meta for admin visibility / future geo)
       const net = activationClientMeta(request);
+      const regRes = await registerOrRefreshDevice(env, {
+        uuidHash: uuid_hash || "",
+        cpuHash: cpu_hash || "",
+        diskHash: disk_hash || "",
+        tierLabel: 'paid',
+        licenseCode: license_code,
+        email: license.buyer_email || null,
+        appVersion: body.app_version || null
+      }, net);
+      const authoritativeDeviceId = regRes.device_id || (device_id || "");
+
       await env.DB.prepare(
         "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent, city, region, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
@@ -304,7 +383,7 @@ export async function handleDrmRoutes(
         uuid_hash || "",
         cpu_hash || "",
         disk_hash || "",
-        device_id || "",
+        authoritativeDeviceId,
         new Date().toISOString(),
         net.client_ip,
         net.ip_country,
@@ -325,7 +404,32 @@ export async function handleDrmRoutes(
         const emailHtml = renderEmailWrapper(t.boundTitle, t.boundBody(license_code, actTimeStr, devHashSummary, currentDevicesCount, license.max_devices));
         ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.boundSubject, emailHtml));
       }
+    } else {
+      // Refresh registry active status for already activated device
+      const net = activationClientMeta(request);
+      ctx.waitUntil(registerOrRefreshDevice(env, {
+        uuidHash: uuid_hash || "",
+        cpuHash: cpu_hash || "",
+        diskHash: disk_hash || "",
+        tierLabel: 'paid',
+        licenseCode: license_code,
+        email: license.buyer_email || null,
+        appVersion: body.app_version || null
+      }, net));
     }
+
+    // Ensure we fetch authoritative device_id for response
+    const netMeta = activationClientMeta(request);
+    const finalReg = await registerOrRefreshDevice(env, {
+      uuidHash: uuid_hash || "",
+      cpuHash: cpu_hash || "",
+      diskHash: disk_hash || "",
+      tierLabel: 'paid',
+      licenseCode: license_code,
+      email: license.buyer_email || null,
+      appVersion: body.app_version || null
+    }, netMeta);
+    const authoritativeDeviceId = finalReg.device_id;
 
     const remainingMs = stack.remainingMs;
     let finalExpiresAt = baseExpiresAt;
@@ -380,6 +484,7 @@ export async function handleDrmRoutes(
       uuid_hash: uuid_hash || "",
       cpu_hash: cpu_hash || "",
       disk_hash: disk_hash || "",
+      device_id: authoritativeDeviceId,
       expires_at: finalExpiresAt,
       max_devices: license.max_devices,
       activated_devices: activatedCount,
@@ -503,10 +608,25 @@ export async function handleDrmRoutes(
     const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, certificatePayloadData);
     const certificateSignatureHex = bufToHex(certificateSignatureBuf);
 
+    const net = activationClientMeta(request);
+    const regResult = await registerOrRefreshDevice(env, {
+      uuidHash: uuid_hash || "",
+      cpuHash: cpu_hash || "",
+      diskHash: disk_hash || "",
+      tierLabel: 'paid',
+      licenseCode: license_code,
+      email: license.buyer_email || null,
+      appVersion: body.app_version || null
+    }, net);
+
     return new Response(JSON.stringify({
       status: "OK",
       license_code: license_code,
       tier: license.tier,
+      uuid_hash: uuid_hash || "",
+      cpu_hash: cpu_hash || "",
+      disk_hash: disk_hash || "",
+      device_id: regResult.device_id || "",
       max_devices: license.max_devices || 2,
       activated_devices: activations.length,
       expires_at: baseExpiresAt,

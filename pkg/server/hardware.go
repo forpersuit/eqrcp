@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +16,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"eqt/pkg/config"
+	"eqt/pkg/version"
 )
 
 var hideWindowAttr *syscall.SysProcAttr
@@ -261,9 +267,10 @@ func PrecomputeDeviceFingerprints() {
 			} else {
 				log.Printf("[DRM] Startup online license reconciliation succeeded. Paid Status: %t, Tier: %s", GetPaidStatus(), GetLicenseTier())
 			}
-		} else if verified {
-			// Defensive: verified without readable cert should not happen; keep legacy non-force path.
-			StartOnlineLicenseSync()
+		} else {
+			// Free user startup registration (1 request, fail-open)
+			log.Println("[DRM] Free user startup online device registration...")
+			RegisterDeviceOnline()
 		}
 	}()
 }
@@ -311,59 +318,80 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 	return uuid, cpu, disk
 }
 
-// GetDeviceStableID returns a stable 12-char hex ID derived from hardware fingerprints.
-// It collects the non-empty values of uuid_hash, cpu_hash, disk_hash, sorts them, and
-// SHA256-hashes their "|"-joined string. The result never changes unless hardware changes.
+var (
+	authorityDeviceId   string
+	authorityDeviceIdMu sync.RWMutex
+)
+
+// SetAuthorityDeviceID explicitly updates the server-authoritative device ID in memory.
+func SetAuthorityDeviceID(id string) {
+	authorityDeviceIdMu.Lock()
+	authorityDeviceId = id
+	authorityDeviceIdMu.Unlock()
+}
+
+// GetAuthorityDeviceID returns the server-assigned authoritative device_id.
+// It prioritizes local certificate device_id when available, otherwise falls back to
+// memory cached device_id from anonymous registration, or "未注册" if unassigned.
+func GetAuthorityDeviceID() string {
+	if cert, ok := GetLocalLicenseInfo(); ok && cert.DeviceID != "" {
+		return cert.DeviceID
+	}
+	authorityDeviceIdMu.RLock()
+	defer authorityDeviceIdMu.RUnlock()
+	if authorityDeviceId != "" {
+		return authorityDeviceId
+	}
+	return "未注册"
+}
+
+// GetDeviceStableID is retained for backward compatibility, now delegating directly to GetAuthorityDeviceID.
 func GetDeviceStableID() string {
-	fingerprintMu.Lock()
-	cached := hasCached
-	fingerprintMu.Unlock()
+	return GetAuthorityDeviceID()
+}
 
-	if !cached {
-		// Wait up to 1 second for background precomputation to finish (takes ~5ms normally)
-		for i := 0; i < 100; i++ {
-			time.Sleep(10 * time.Millisecond)
-			fingerprintMu.Lock()
-			cached = hasCached
-			fingerprintMu.Unlock()
-			if cached {
-				break
-			}
-		}
-	}
-
+// RegisterDeviceOnline executes an anonymous device registration request for free users.
+// On success, caches the server-assigned authoritative device_id.
+// Fails silently (Fail-Open) on network error to avoid blocking user flow.
+func RegisterDeviceOnline() {
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	if uuid == "" && cpu == "" && disk == "" && !cached {
-		uuid = GetBoardUUID()
-		cpu = GetCPUSerial()
-		disk = GetSystemDiskSerial()
+	if uuid == "" && cpu == "" && disk == "" {
+		return
 	}
 
-	// Collect non-empty fingerprint values and sort for determinism
-	parts := []string{}
-	if uuid != "" {
-		parts = append(parts, uuid)
-	}
-	if cpu != "" {
-		parts = append(parts, cpu)
-	}
-	if disk != "" {
-		parts = append(parts, disk)
-	}
-	if len(parts) == 0 {
-		return ""
+	reqMap := map[string]string{
+		"uuid_hash":   uuid,
+		"cpu_hash":    cpu,
+		"disk_hash":   disk,
+		"app_version": version.Version(),
+		"lang":        config.GetConfiguredLang(),
 	}
 
-	// Sort for determinism (order doesn't matter, only content)
-	for i := 0; i < len(parts)-1; i++ {
-		for j := i + 1; j < len(parts); j++ {
-			if parts[i] > parts[j] {
-				parts[i], parts[j] = parts[j], parts[i]
-			}
-		}
+	reqBody, _ := json.Marshal(reqMap)
+	apiURL := fmt.Sprintf("%s/api/v1/device/register", getLicenseServer())
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
 	}
 
-	joined := strings.Join(parts, "|")
-	sum := sha256.Sum256([]byte(joined))
-	return hex.EncodeToString(sum[:])[:12]
+	var resData struct {
+		DeviceID string `json:"device_id"`
+		Tier     string `json:"tier"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&resData); err == nil && resData.DeviceID != "" {
+		SetAuthorityDeviceID(resData.DeviceID)
+	}
 }

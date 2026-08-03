@@ -113,4 +113,29 @@ CREATE INDEX IF NOT EXISTS idx_manual_bl_email_hash ON manual_blacklist(email_ha
 CREATE INDEX IF NOT EXISTS idx_manual_bl_device_id ON manual_blacklist(device_id);
 CREATE INDEX IF NOT EXISTS idx_manual_bl_active ON manual_blacklist(active);
 
+CREATE TABLE IF NOT EXISTS device_registry (
+    device_id     TEXT PRIMARY KEY,
+    uuid_hash     TEXT,
+    cpu_hash      TEXT,
+    disk_hash     TEXT,
+    tier_label    TEXT NOT NULL DEFAULT 'free',      -- 'free' | 'paid'
+    license_code  TEXT DEFAULT NULL,                 -- associated license code when paid
+    email         TEXT DEFAULT NULL,                 -- buyer email associated on activation
+    registered_at TEXT NOT NULL,
+    last_seen_at  TEXT,                               -- last app startup / active check time
+    last_ip       TEXT DEFAULT NULL,
+    ip_country    TEXT DEFAULT NULL,
+    city          TEXT DEFAULT NULL,
+    region        TEXT DEFAULT NULL,
+    latitude      REAL DEFAULT NULL,
+    longitude     REAL DEFAULT NULL,
+    app_version   TEXT DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_registry_live ON device_registry(tier_label, last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_registry_uuid ON device_registry(uuid_hash);
+CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash);
+CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash);
+
+
 

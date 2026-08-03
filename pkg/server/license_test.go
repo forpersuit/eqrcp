@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -599,3 +601,179 @@ func TestActivateLicenseOnlineWithLang(t *testing.T) {
 		t.Errorf("expected default fallback lang='zh', got lang='%s', Accept-Language='%s'", receivedLang, receivedAcceptLang)
 	}
 }
+
+func TestZeroComponentActivationRejection(t *testing.T) {
+	// Force all hardware fingerprints to be empty
+	fingerprintMu.Lock()
+	cachedUUID = ""
+	cachedCPU = ""
+	cachedDisk = ""
+	hasCached = true
+	fingerprintMu.Unlock()
+
+	origUUID := testBoardUUID
+	origCPU := testCPUSerial
+	origDisk := testDiskSerial
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+	defer func() {
+		testBoardUUID = origUUID
+		testCPUSerial = origCPU
+		testDiskSerial = origDisk
+		fingerprintMu.Lock()
+		hasCached = false
+		precomputeStarted = false
+		fingerprintMu.Unlock()
+	}()
+
+	err := ActivateLicenseOnlineWithLang("TEST-ZERO-COMP", "en")
+	if err == nil {
+		t.Fatal("expected error when activating with 0 hardware components, got nil")
+	}
+	if !strings.Contains(err.Error(), "insufficient hardware permissions") {
+		t.Errorf("expected error message to contain 'insufficient hardware permissions', got: %v", err)
+	}
+}
+
+func TestRegisterDeviceOnlineAndAuthorityID(t *testing.T) {
+	// Setup mock registration server
+	mockID := "dev_mock_hex_1234567890abcdef"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/device/register" && r.Method == "POST" {
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"device_id": mockID,
+				"tier":      "free",
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+
+	ResetLicense()
+	SetAuthorityDeviceID("")
+
+	// Ensure fingerprint is non-empty for test
+	testBoardUUID = "board_uuid_test"
+	defer func() { testBoardUUID = "" }()
+
+	RegisterDeviceOnline()
+
+	authorityID := GetAuthorityDeviceID()
+	if authorityID != mockID {
+		t.Errorf("expected authority device_id '%s', got '%s'", mockID, authorityID)
+	}
+
+	// Stable ID alias should also return authoritative ID
+	stableID := GetDeviceStableID()
+	if stableID != mockID {
+		t.Errorf("expected GetDeviceStableID() to return '%s', got '%s'", mockID, stableID)
+	}
+}
+
+func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
+	testBoardUUID = "mock_board_uuid"
+	testCPUSerial = "mock_cpu_serial"
+	testDiskSerial = "mock_disk_serial"
+	defer func() {
+		testBoardUUID = ""
+		testCPUSerial = ""
+		testDiskSerial = ""
+	}()
+
+	mockServerDeviceID := "dev_server_authoritative_9999"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/verify" && r.Method == "POST" {
+			var req map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&req)
+			nowStr := time.Now().UTC().Format(time.RFC3339)
+
+			dummyCert := LicenseCertificate{
+				LicenseCode:        req["license_code"],
+				Tier:               "PLUS",
+				UUIDHash:           req["uuid_hash"],
+				CPUHash:            req["cpu_hash"],
+				DiskHash:           req["disk_hash"],
+				DeviceID:           mockServerDeviceID,
+				ExpiresAt:          "LIFETIME",
+				MaxDevices:         2,
+				LastOnlineSyncTime: nowStr,
+			}
+			certSig := signTestPayload(dummyCert)
+			syncSig := signTestVerifyPayload(dummyCert)
+
+			resp := map[string]interface{}{
+				"status":                "OK",
+				"license_code":          req["license_code"],
+				"tier":                  "PLUS",
+				"uuid_hash":             req["uuid_hash"],
+				"cpu_hash":              req["cpu_hash"],
+				"disk_hash":             req["disk_hash"],
+				"device_id":             mockServerDeviceID,
+				"max_devices":           2,
+				"activated_devices":     1,
+				"expires_at":            "LIFETIME",
+				"buyer_email":           "buyer@example.com",
+				"certificate_signature": certSig,
+				"current_time":          nowStr,
+				"signature":             syncSig,
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+
+	ResetLicense()
+	defer ResetLicense()
+
+	initialCert := LicenseCertificate{
+		LicenseCode:        "TEST-SYNC-DEV-ID",
+		Tier:               "PLUS",
+		UUIDHash:           "mock_board_uuid",
+		CPUHash:            "mock_cpu_serial",
+		DiskHash:           "mock_disk_serial",
+		DeviceID:           "dev_old_local_id",
+		ExpiresAt:          "LIFETIME",
+		MaxDevices:         2,
+		LastOnlineSyncTime: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	initialCert.Signature = signTestPayload(initialCert)
+	initialCert.VerifySignature = signTestVerifyPayload(initialCert)
+
+	path := getLicenseFilePath()
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+	b, _ := json.Marshal(initialCert)
+	_ = os.WriteFile(path, b, 0644)
+
+	licenseCacheMu.Lock()
+	cachedLicense = nil
+	hasCachedLicense = false
+	licenseCacheMu.Unlock()
+
+	if !VerifyLocalLicense() {
+		t.Fatal("VerifyLocalLicense failed for initialCert in test")
+	}
+
+	err := ForceOnlineLicenseSync()
+	if err != nil {
+		t.Fatalf("ForceOnlineLicenseSync failed: %v", err)
+	}
+
+	updatedCert, ok := GetLocalLicenseInfo()
+	if !ok {
+		t.Fatal("failed to get local license info after sync")
+	}
+	if updatedCert.DeviceID != mockServerDeviceID {
+		t.Errorf("expected updated certificate DeviceID '%s', got '%s'", mockServerDeviceID, updatedCert.DeviceID)
+	}
+}
+

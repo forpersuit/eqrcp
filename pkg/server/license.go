@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"eqt/pkg/config"
+	"eqt/pkg/version"
 )
 
 // Default Ed25519 public key corresponding to our Cloudflare Workers private key
@@ -31,6 +32,7 @@ type LicenseCertificate struct {
 	UUIDHash           string `json:"uuid_hash"`
 	CPUHash            string `json:"cpu_hash"`
 	DiskHash           string `json:"disk_hash"`
+	DeviceID           string `json:"device_id,omitempty"`
 	ExpiresAt          string `json:"expires_at"`                      // ISO string or "LIFETIME"
 	MaxDevices         int    `json:"max_devices"`                     // Maximum activation count
 	ActivatedDevices   int    `json:"activated_devices"`               // Current activated devices count
@@ -243,6 +245,9 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	}
 
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	if uuid == "" && cpu == "" && disk == "" {
+		return errors.New("insufficient hardware permissions: cannot retrieve hardware fingerprints")
+	}
 
 	reqMap := map[string]string{
 		"license_code": licenseCode,
@@ -250,6 +255,7 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 		"cpu_hash":     cpu,
 		"disk_hash":    disk,
 		"device_id":    GetDeviceStableID(),
+		"app_version":  version.Version(),
 	}
 	if lang != "" {
 		reqMap["lang"] = lang
@@ -366,6 +372,7 @@ func doOnlineLicenseSync(force bool) error {
 		"uuid_hash":    uuid,
 		"cpu_hash":     cpu,
 		"disk_hash":    disk,
+		"app_version":  version.Version(),
 	})
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -399,6 +406,7 @@ func doOnlineLicenseSync(force bool) error {
 		UUIDHash             string `json:"uuid_hash"`
 		CPUHash              string `json:"cpu_hash"`
 		DiskHash             string `json:"disk_hash"`
+		DeviceID             string `json:"device_id"`
 		MaxDevices           int    `json:"max_devices"`
 		ActivatedDevices     int    `json:"activated_devices"`
 		ExpiresAt            string `json:"expires_at"`
@@ -423,6 +431,7 @@ func doOnlineLicenseSync(force bool) error {
 		UUIDHash:           verifyResp.UUIDHash,
 		CPUHash:            verifyResp.CPUHash,
 		DiskHash:           verifyResp.DiskHash,
+		DeviceID:           verifyResp.DeviceID,
 		ExpiresAt:          verifyResp.ExpiresAt,
 		MaxDevices:         verifyResp.MaxDevices,
 		ActivatedDevices:   verifyResp.ActivatedDevices,

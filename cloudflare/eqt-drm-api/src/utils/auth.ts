@@ -67,6 +67,39 @@ export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> 
   }
 }
 
+export async function ensureDeviceRegistryTable(env: Env): Promise<void> {
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS device_registry (
+            device_id     TEXT PRIMARY KEY,
+            uuid_hash     TEXT,
+            cpu_hash      TEXT,
+            disk_hash     TEXT,
+            tier_label    TEXT NOT NULL DEFAULT 'free',
+            license_code  TEXT DEFAULT NULL,
+            email         TEXT DEFAULT NULL,
+            registered_at TEXT NOT NULL,
+            last_seen_at  TEXT,
+            last_ip       TEXT DEFAULT NULL,
+            ip_country    TEXT DEFAULT NULL,
+            city          TEXT DEFAULT NULL,
+            region        TEXT DEFAULT NULL,
+            latitude      REAL DEFAULT NULL,
+            longitude     REAL DEFAULT NULL,
+            app_version   TEXT DEFAULT NULL
+        )
+      `),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_live ON device_registry(tier_label, last_seen_at)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_uuid ON device_registry(uuid_hash)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash)`)
+    ]);
+  } catch (err) {
+    console.error("Failed to ensure device_registry table:", err);
+  }
+}
+
 export async function ensureDrmTables(env: Env): Promise<void> {
   try {
     await env.DB.batch([
@@ -117,6 +150,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   await ensureDeviceIdColumn(env);
   await ensureActivationNetworkColumns(env);
   await ensureManualBlacklistTable(env);
+  await ensureDeviceRegistryTable(env);
 }
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */

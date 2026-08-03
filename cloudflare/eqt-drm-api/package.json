@@ -10,7 +10,9 @@
     "db:init:local": "wrangler d1 execute eqt-drm-db --local --file=./schema.sql",
     "db:init:remote": "wrangler d1 execute eqt-drm-db --remote --file=./schema.sql",
     "test:e2e": "node tests/e2e-drm-test.js",
-    "test:admin": "node tests/e2e-admin-test.js"
+    "test:admin": "node tests/e2e-admin-test.js",
+    "test:device-reg": "node tests/device-registration-test.js",
+    "test:device-reg:offline": "node tests/device-reg-offline-test.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",
