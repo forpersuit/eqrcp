@@ -3,7 +3,7 @@ import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { ensureLicenseSourceColumns } from '../utils/auth';
-import { revokeByPaddleSubSql, revokeByPaddleTxnSql } from '../utils/license-source';
+import { revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
 
 function detectBuyerLang(data: any): string {
@@ -486,12 +486,10 @@ export async function handlePaddleRoutes(
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         } else if (upgradeRow.status === 'applied') {
-          const targetLic = await env.DB.prepare(
-            "SELECT license_code, buyer_email, tier FROM licenses WHERE license_code = ?"
-          ).bind(upgradeRow.target_license_code).first<any>();
-          if (targetLic) {
-            await env.DB.prepare(revokeByPaddleTxnSql()).bind(new Date().toISOString(), "refund", transactionId).run();
-          }
+          await env.DB.prepare(
+            "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
+          ).bind(upgradeRow.id).run();
+          await env.DB.prepare(revokeLicenseSql()).bind(new Date().toISOString(), "refund", upgradeRow.target_license_code).run();
           return new Response(JSON.stringify({ message: "Applied lifetime upgrade revoked due to refund", status: "revoked" }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -539,11 +537,20 @@ export async function handlePaddleRoutes(
             await env.DB.prepare(
               "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
             ).bind(upgradeRow.id).run();
+            return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to adjustment refund", status: "cancelled" }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          } else if (upgradeRow.status === 'applied') {
+            await env.DB.prepare(
+              "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
+            ).bind(upgradeRow.id).run();
+            await env.DB.prepare(revokeLicenseSql()).bind(new Date().toISOString(), action, upgradeRow.target_license_code).run();
+            return new Response(JSON.stringify({ message: "Applied lifetime upgrade revoked due to adjustment refund", status: "revoked" }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
           }
-          return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to adjustment refund", status: "cancelled" }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
         }
 
         const reason = action === "chargeback" ? "chargeback" : "refund";

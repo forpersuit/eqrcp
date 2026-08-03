@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     source TEXT DEFAULT NULL,    -- 'purchase' | 'promo' | 'admin' | 'test'
     revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
     revoke_reason TEXT DEFAULT NULL, -- 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | …
+    last_purchased_at TEXT DEFAULT NULL, -- ISO time of initial purchase or latest renewal
     created_at TEXT NOT NULL
 );
 

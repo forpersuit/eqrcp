@@ -18,6 +18,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Entkopplungslimit erreicht (maximal 4 Geräteentkopplungen pro 365 Tage).",
     fr: "Limite de dissociation atteinte (maximum 4 dissociations par 365 jours)."
   },
+  refund_window_block: {
+    zh: "目标授权码处于14天退款保修期内，不支持直接升级，请先申请退款再购买终身版。",
+    en: "Target license is within the 14-day refund window. Please request a refund first before purchasing lifetime.",
+    ja: "対象のライセンスは14日間の返金保証期間内です。先に返金を申請してから無期限版をご購入ください。",
+    ko: "대상 라이선스가 14일 환불 보증 기간 내에 있습니다. 먼저 환불을 신청한 후 평생 라이선스를 구매해 주세요.",
+    es: "La licencia de destino está dentro del período de reembolso de 14 días. Solicite un reembolso primero antes de comprar la versión de por vida.",
+    de: "Die Ziellizenz befindet sich innerhalb der 14-tägigen Rückerstattungsfrist. Bitte beantragen Sie zuerst eine Rückerstattung, bevor Sie die Lifetime-Version kaufen.",
+    fr: "La licence cible est dans la période de remboursement de 14 jours. Veuillez d'abord demander un remboursement avant d'acheter la version à vie."
+  },
   unbind_success: {
     zh: "设备已成功解绑",
     en: "Device unbound successfully",
