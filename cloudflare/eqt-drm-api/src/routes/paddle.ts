@@ -170,7 +170,7 @@ export async function handlePaddleRoutes(
 
       if (targetCode) {
         const targetLic = await env.DB.prepare(
-          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash
+          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash, duration_days
            FROM licenses WHERE license_code = ?`
         ).bind(targetCode).first<any>();
 
@@ -186,8 +186,29 @@ export async function handlePaddleRoutes(
 
         // Strictly check ownership, active status, tier match, and reject if already LIFETIME
         if (targetLic && isOwner && targetLic.tier === tier && targetLic.status === "active" && targetLic.expires_at !== "LIFETIME") {
+          // §6.6 Policy: If user already owns another active LIFETIME license for same tier, reject lifetime upgrade to prevent duplicate purchase
+          if (matchedPriceId === PRICE_LIFETIME_ID && buyerEmail) {
+            const existingLifetime = await env.DB.prepare(
+              `SELECT license_code FROM licenses
+               WHERE status = 'active' AND tier = ? AND expires_at = 'LIFETIME'
+                 AND (buyer_email = ? OR buyer_email_hash = ?)
+               LIMIT 1`
+            ).bind(tier, buyerEmail.trim().toLowerCase(), emailHash).first<any>();
+            if (existingLifetime) {
+              console.warn(`[DRM] Buyer ${buyerEmail} already owns lifetime license ${existingLifetime.license_code}, skipping target upgrade.`);
+              return new Response(JSON.stringify({
+                message: "Buyer already owns lifetime license",
+                reason_key: "lifetime_already_owned",
+                license_code: existingLifetime.license_code
+              }), {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              });
+            }
+          }
+
           let newExpires = expiresAt;
-          let durationDaysUpdate: number | null = targetLic.duration_days;
+          let durationDaysUpdate: number | null = targetLic.duration_days ?? null;
           if (matchedPriceId === PRICE_LIFETIME_ID) {
             newExpires = "LIFETIME";
             durationDaysUpdate = null; // Clear duration_days so verify won't override LIFETIME

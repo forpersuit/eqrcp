@@ -915,6 +915,20 @@ export async function handlePortalRoutes(
       });
     }
 
+    // Reject renewal if user already owns another active LIFETIME license for same tier
+    const existingLifetime = await env.DB.prepare(
+      `SELECT license_code FROM licenses
+       WHERE status = 'active' AND tier = ? AND expires_at = 'LIFETIME'
+         AND (buyer_email = ? OR buyer_email_hash = ?)
+       LIMIT 1`
+    ).bind(license.tier, session.email.trim().toLowerCase(), sessionEmailHash).first<any>();
+    if (existingLifetime) {
+      return new Response(JSON.stringify({ error: getApiTranslation("lifetime_already_owned", reqLang) || "You already own a lifetime license for this tier" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     if (license.status !== "active") {
       return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
         status: 403,
