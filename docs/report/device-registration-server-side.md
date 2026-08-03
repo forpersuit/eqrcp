@@ -418,9 +418,24 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 1. **目标码上下文**：Portal 续期入口必须携带 `target_license_code`（用户选择的目标码）+ `user_email`，经 Paddle checkout 的 `passthrough` 字段随支付回调带回，否则 webhook 无法知道该给哪个码续期；
 2. **新增 `renewal_requests` 表**（或复用 pending 表）：`user_email, target_license_code, price_id, paddle_transaction_id, status, created_at`，供 webhook 侧将"新支付"绑定到"目标码"；
 3. **paddle.ts webhook 分支**：`transaction.completed` 时若 `passthrough` 含 `target_license_code` → **不走铸造**，改为扩展目标码 `expires_at`（沿用现有扩展逻辑）+ 更新 `paddle_transaction_id` + 更新 `renewal_requests.status`；
-4. **约束**：仅同 tier 可合并（PLUS 续 PLUS）；目标码必须是 `buyer_email` 归属用户的 active 码（防给他人码续期）；目标码为 `LIFETIME` 时拒绝（终身不可续）；已有同 tier 终身权益时对"新购终身"拒绝（现有 `lifetime_already_owned` 政策）；
+4. **约束**：仅同 tier 可合并（PLUS 续 PLUS）；目标码必须是 `buyer_email` 归属用户的 active 码（防给他人码续期）；目标码为 `LIFETIME` 时拒绝（终身不可续）；~~已有同 tier 终身权益时对"新购终身"拒绝（现有 `lifetime_already_owned` 政策）~~——**已作废**：业务模型允许一邮箱多码、可重复购买终身（见 D-11/D-13），`lifetime_already_owned` 检查实际作用域与新模型矛盾，处置见 D-13；
 5. **与设备注册的关系**：续期只改 `expires_at`，不动 device_id/device_registry，不影响本报告主体；但 **M2 签名载荷改动后，续期后的目标码需在下一次 verify 重新签发**（客户端下次启动 verify 自然拿到新 `expires_at` 的新签名 .lic，无需额外动作）；
 6. **不纳入**：多码 entitlement 合并（"多码→单权益"时间轴合并，`docs/payment/license-source-and-refund-policy.md:270` 标为 P2 待办）不在本报告范围，手动续期只做"单码加时长"。
+
+### 6.7 年付 → 终身升级（用户确认，2026-08-03）
+
+**业务模型（已确认）**：一邮箱可持多个激活码（无数量上限）；可续年付、可购新码（年付/终身皆可）；"可重复购买终身"成立（铸造路径不拦，见 D-11）。在该模型下新增"年付→终身升级"：
+
+1. **定价**：**全额支付终身价**（复用 `PRICE_LIFETIME_ID`），不做差价折算、无 prorated——定价最简单，账目清晰。
+2. **升级语义（状态隔离）**：不吞剩余年付。目标码**不在退款期** → 年付码继续走完 `expires_at`，终身权益在**该码年付到期后自动生效**；目标码**在退款期** → 不支持升级，只能先退款、再购终身。年付与终身是两笔独立交易，退款各自独立（年付退款退年付、终身退款退终身）。
+3. **待生效存储**：新增 `license_upgrades` 表（`user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status`）。webhook 带 `targetCode` 的终身交易走"待生效升级"；无 `targetCode` 的终身交易仍是正常铸造（立即终身），两路径天然区分。
+4. **惰性生效（不做 cron）**：verify/activate 时判断 `effective_at <= now && expires_at != 'LIFETIME'` → 条件更新 `expires_at='LIFETIME', duration_days=NULL` 后返回 LIFETIME 签名；竞态用 `WHERE expires_at != 'LIFETIME'` 幂等。客户端下次启动自然收敛终身证书，Go 侧无需改动。
+5. **生效时间快照**：`effective_at` = 升级时刻年付到期日快照，不随后续续费顺延。
+6. **退款期判定**：基于**最近一期交易**的购买时间（勿用 license.created_at，连续续费会误判），窗口天数与 Paddle 产品设置对齐（需配置常量，可能需补交易时间列）。
+7. **升级后停 auto-renew（防双重扣款）**：升级完成时取消该码 Paddle 订阅自动续费 + 置 `auto_renew=0`——否则用户付了终身全价还会被扣下一年年付，是本功能最易爆雷点。
+8. **终身退款撤回升级**：refund webhook（paddle.ts:376）按 `lifetime_txn_id` 定位待生效记录并取消，年付码保持年付。
+9. **Portal 展示**：待生效期间显示"终身权益已购买，将于 YYYY-MM-DD 生效"，避免"付了终身还是年付"的困惑。
+10. **`lifetime_already_owned` 处置**：既有两处检查与新模型矛盾（portal 预检过宽、webhook 半吊子），处置见 D-13；铸造路径不查正确保留。
 
 ---
 
@@ -429,7 +444,7 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 | 里程碑 | 内容 |
 | --- | --- |
 | M1 | D1 新增 `device_registry` 表（单一 `last_seen_at`，含 `email`/`license_code` 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动序列改造（付费 verify 顺带活跃登记与 device_id 回写、免费 register，见 4.1.1）+ **verify 响应契约修正（回显三指纹 + 新增 device_id，见附录 D-8）**；0 分量付费拒绝；遥测开关与隐私说明就绪；**开发期清库重置 `activations`/`device_registry`（用户已确认现有数据可弃，见 6.2）** |
-| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** |
+| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** + **年付→终身升级（全额支付、待生效、退款期隔离，见 6.7）** |
 | M3 | `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关（活跃数据单源 `device_registry.last_seen_at`，**activations 不加活跃列**） |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
 
@@ -500,3 +515,20 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 8. **verify 契约漂移**（现存问题，非本报告引入，M1 一并修）：Go 侧 `doOnlineLicenseSync` 解析响应中的 `uuid_hash/cpu_hash/disk_hash` 并拷入 updatedCert（license.go:422-424），但 drm.ts:505-518 的 verify 响应**不含这三字段**，线上 sync 后 `VerifyLicenseSignature`/`VerifySyncSignature` 验签会失败（服务端用请求里的非空指纹签名）。测试 mock 回显了这些字段所以 Go 测试通过。M1 修正响应契约（回显三指纹 + 新增 `device_id`）。
 9. **D1 表清单**：当前 8 张 = licenses / activations / verification_codes / user_sessions / unbind_records / system_error_logs / admin_audit_logs / manual_blacklist；`device_registry` 为计划新增（§4.2.1 已补 system_error_logs、标注 device_registry 新增）。
 10. **Paddle 铸造细节**：终身与年付均 `tier='PLUS'`、`max_devices=2`（paddle.ts:137,242）；若已有 license 是 LIFETIME，年付续费时保留 `"LIFETIME"` 不降级（paddle.ts:170-172）。
+
+11. **业务模型确认（2026-08-03）**：一邮箱可持多码、无数量上限；可续年付、可购新码（年付/终身皆可）；**"可重复购买终身"成立** → 铸造路径不查 `lifetime_already_owned` 是**正确**的（此前审阅曾建议铸造路径加检查，撤回）。§6.6 第 4 条"新购终身拒绝"表述已随之修订（删除线作废）。
+
+12. **M2 续期/签名代码审阅留档（2026-08-03，均已修复）**：
+    - `drm.ts:648` verify 分支引用未声明 `device_id`（潜在 ReferenceError）→ 改用权威 `regResult.device_id`（§5.3 服务端权威），commit 280bff7；
+    - 对账签名（`signature`）补入 device_id（§5.2）→ activate/verify 双侧 + Go `VerifySyncSignature` 双版本（V2 含 device_id、V1 回退），commit 280bff7；
+    - Portal 免费直改库端点（`/user/license/renew`）→ 支付驱动 `/user/renew-checkout`（返回 passthrough，走 Paddle），commit 6f02e43；
+    - LIFETIME 反向处理（终身被转限时）→ portal/webhook 双向拒绝 + `lifetime_cannot_renew` i18n，commit 6f02e43；
+    - 手动续期 `duration_days` 漂移 + LIFETIME 升级未清 `duration_days`（verify 按 `now+duration_days` 覆盖）→ webhook 按 `matchedPriceId` 推导：LIFETIME 价置 `expires_at='LIFETIME'` 且 `duration_days=NULL`，commit 9d556bf/adebe42；
+    - webhook 续期 SELECT 漏列 `duration_days`（`targetLic.duration_days` 恒 undefined，YEARLY 续期被静默清空）→ 补列 + `?? null`（**Option 1：保留原 `duration_days`**，与自动续期路径语义一致），commit adebe42。
+
+13. **`lifetime_already_owned` 两处检查作用域不一致（待处置）**：
+    - portal `/renew-checkout` 预检（已有同 tier 终身即拦所有 renew-checkout）→ **误拦**"终身+年付双码用户续年付"，且与"可重复买终身"矛盾 → 建议**移除**（或带 `price_id` 收窄，仅对终身价预检）；
+    - webhook 只拦"已有终身 + LIFETIME 价升级"→ 想升级直接买新终身码即可绕开（铸造不查）→ 与模型矛盾，建议**移除**（若产品坚持"已持终身不可升级"才保留）；
+    - 铸造路径不查 → **正确保留**（D-11）。
+
+14. **年付→终身升级方案（用户确认，见 6.7）**：全额终身价、不吞剩余年付（状态隔离）、退款期内仅"退款+重购"、到期自动生效（惰性翻转、非 cron）、升级后停 auto-renew 防双重扣款、待生效存储 `license_upgrades`、终身退款撤回升级。
