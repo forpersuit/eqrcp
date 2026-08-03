@@ -245,7 +245,14 @@ export async function handlePortalRoutes(
       ).bind(lic.license_code, oneYearAgoIso).first<any>();
       const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
       const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
-      const source = normalizeLicenseSource(lic.source, lic.paddle_transaction_id);
+      // Check pending lifetime upgrade & refund window (§6.7)
+      const pendingUpgrade = await env.DB.prepare(
+        "SELECT lifetime_txn_id, effective_at, purchased_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+      ).bind(lic.license_code).first<any>();
+
+      const REFUND_WINDOW_MS = 14 * 86400 * 1000;
+      const createdTime = lic.created_at ? new Date(lic.created_at).getTime() : 0;
+      const isInRefundWindow = createdTime > 0 && (Date.now() - createdTime < REFUND_WINDOW_MS);
 
       list.push({
         ...lic,
@@ -259,7 +266,9 @@ export async function handlePortalRoutes(
         activations: activations,
         used_unbinds: unbindCount,
         remaining_unbinds: remainingUnbinds,
-        max_yearly_unbinds: MAX_YEARLY_UNBINDS
+        max_yearly_unbinds: MAX_YEARLY_UNBINDS,
+        pending_upgrade: pendingUpgrade || null,
+        is_in_refund_window: isInRefundWindow
       });
     }
 

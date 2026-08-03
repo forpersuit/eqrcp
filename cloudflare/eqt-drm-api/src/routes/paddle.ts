@@ -170,7 +170,7 @@ export async function handlePaddleRoutes(
 
       if (targetCode) {
         const targetLic = await env.DB.prepare(
-          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash, duration_days
+          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash, duration_days, created_at, paddle_subscription_id
            FROM licenses WHERE license_code = ?`
         ).bind(targetCode).first<any>();
 
@@ -186,55 +186,137 @@ export async function handlePaddleRoutes(
 
         // Strictly check ownership, active status, tier match, and reject if target is already LIFETIME (§6.6/6.7)
         if (targetLic && isOwner && targetLic.tier === tier && targetLic.status === "active" && targetLic.expires_at !== "LIFETIME") {
-          let newExpires = expiresAt;
-          let durationDaysUpdate: number | null = targetLic.duration_days ?? null;
+          // Check refund window (14 days from target license creation/last purchase) (§6.7)
+          const REFUND_WINDOW_MS = 14 * 86400 * 1000;
+          const createdTime = targetLic.created_at ? new Date(targetLic.created_at).getTime() : 0;
+          const isInRefundWindow = createdTime > 0 && (Date.now() - createdTime < REFUND_WINDOW_MS);
+
           if (matchedPriceId === PRICE_LIFETIME_ID) {
-            newExpires = "LIFETIME";
-            durationDaysUpdate = null; // Clear duration_days so verify won't override LIFETIME
+            if (isInRefundWindow) {
+              return new Response(JSON.stringify({
+                error: "Target license is within the 14-day refund window. Please request a refund first before purchasing lifetime.",
+                code: "UPGRADE_BLOCKED_REFUND_WINDOW"
+              }), {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              });
+            }
+
+            // §6.7 Pending Lifetime Upgrade (State Isolation)
+            // Effective time is the snapshot of the current yearly expires_at
+            let effectiveAt = targetLic.expires_at;
+            if (!effectiveAt || isNaN(new Date(effectiveAt).getTime()) || new Date(effectiveAt).getTime() < Date.now()) {
+              effectiveAt = new Date().toISOString();
+            }
+
+            const nowIso = new Date().toISOString();
+            await env.DB.prepare(`
+              INSERT INTO license_upgrades (
+                user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status, created_at
+              ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            `).bind(
+              buyerEmail || targetLic.buyer_email || "",
+              targetLic.license_code,
+              transactionId,
+              nowIso,
+              effectiveAt,
+              nowIso
+            ).run();
+
+            // Cancel auto-renewal for this license so user is not double-billed at period end (§6.7 item 7)
+            await env.DB.prepare(`
+              UPDATE licenses SET
+                auto_renew = 0,
+                paddle_transaction_id = ?,
+                buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+                buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+              WHERE license_code = ?
+            `).bind(
+              transactionId,
+              buyerEmail || null,
+              emailHash || null,
+              targetLic.license_code
+            ).run();
+
+            // Turn off Paddle auto-renew if subscription ID is present
+            const subId = targetLic.paddle_subscription_id;
+            if (subId && env.PADDLE_API_KEY) {
+              const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
+              const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+              try {
+                ctx.waitUntil(fetch(`${paddleBaseUrl}/subscriptions/${subId}/cancel`, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${env.PADDLE_API_KEY}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({ effective_from: "next_billing_period" })
+                }).catch(() => {}));
+              } catch (_) {}
+            }
+
+            if (buyerEmail) {
+              const buyerLang = detectBuyerLang(data);
+              const expiresStr = new Date(effectiveAt).toLocaleDateString();
+              const tmpl = getRenewalEmailTemplate(buyerLang);
+              const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, `Pending Lifetime (Effective ${expiresStr})`));
+              ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));
+            }
+
+            return new Response(JSON.stringify({
+              message: "Lifetime upgrade purchased and scheduled (pending effective date)",
+              license_code: targetLic.license_code,
+              effective_at: effectiveAt,
+              status: "pending_upgrade"
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
           } else if (matchedPriceId === PRICE_YEARLY_ID) {
+            let newExpires = expiresAt;
             if (targetLic.expires_at) {
               const prev = new Date(targetLic.expires_at).getTime();
               const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
               newExpires = new Date(base + YEARLY_MS).toISOString();
             }
+
+            await env.DB.prepare(`
+              UPDATE licenses SET
+                status = 'active',
+                expires_at = ?,
+                duration_days = ?,
+                paddle_transaction_id = ?,
+                revoked_at = NULL,
+                revoke_reason = NULL,
+                buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+                buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+              WHERE license_code = ?
+            `).bind(
+              newExpires,
+              targetLic.duration_days ?? null,
+              transactionId,
+              buyerEmail || null,
+              emailHash || null,
+              targetLic.license_code
+            ).run();
+
+            if (buyerEmail) {
+              const buyerLang = detectBuyerLang(data);
+              const expiresStr = new Date(newExpires).toLocaleDateString();
+              const tmpl = getRenewalEmailTemplate(buyerLang);
+              const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, expiresStr));
+              ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));
+            }
+
+            return new Response(JSON.stringify({
+              message: "Target license renewed via payment",
+              license_code: targetLic.license_code,
+              expires_at: newExpires
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
           }
-
-          await env.DB.prepare(`
-            UPDATE licenses SET
-              status = 'active',
-              expires_at = ?,
-              duration_days = ?,
-              paddle_transaction_id = ?,
-              revoked_at = NULL,
-              revoke_reason = NULL,
-              buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
-              buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
-            WHERE license_code = ?
-          `).bind(
-            newExpires,
-            durationDaysUpdate,
-            transactionId,
-            buyerEmail || null,
-            emailHash || null,
-            targetLic.license_code
-          ).run();
-
-          if (buyerEmail) {
-            const buyerLang = detectBuyerLang(data);
-            const expiresStr = newExpires === "LIFETIME" ? "Lifetime" : new Date(newExpires).toLocaleDateString();
-            const tmpl = getRenewalEmailTemplate(buyerLang);
-            const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, expiresStr));
-            ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));
-          }
-
-          return new Response(JSON.stringify({
-            message: "Target license renewed via payment",
-            license_code: targetLic.license_code,
-            expires_at: newExpires
-          }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
         }
       }
 
@@ -352,9 +434,26 @@ export async function handlePaddleRoutes(
       });
     }
 
-    // Revoke license on refund (status remains revoked; reason=refund — not a separate status)
+    // Revoke license or cancel pending upgrade on refund
     if (eventType === "transaction.refunded") {
       const transactionId = data.id;
+
+      // §6.7 Refund lifetime upgrade: if pending, cancel upgrade and keep yearly license active
+      const upgradeRow = await env.DB.prepare(
+        "SELECT id, target_license_code, status FROM license_upgrades WHERE lifetime_txn_id = ?"
+      ).bind(transactionId).first<any>();
+
+      if (upgradeRow) {
+        if (upgradeRow.status === 'pending') {
+          await env.DB.prepare(
+            "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
+          ).bind(upgradeRow.id).run();
+        }
+        return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to refund", status: "cancelled" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
 
       // Query the email of the license owner
       const license = await env.DB.prepare(
@@ -387,6 +486,22 @@ export async function handlePaddleRoutes(
       const action = String(data.action || data.type || "").toLowerCase();
       const transactionId = data.transaction_id || data.transactionId || null;
       if (transactionId && (action === "chargeback" || action === "refund")) {
+        const upgradeRow = await env.DB.prepare(
+          "SELECT id, target_license_code, status FROM license_upgrades WHERE lifetime_txn_id = ?"
+        ).bind(transactionId).first<any>();
+
+        if (upgradeRow) {
+          if (upgradeRow.status === 'pending') {
+            await env.DB.prepare(
+              "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
+            ).bind(upgradeRow.id).run();
+          }
+          return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to adjustment refund", status: "cancelled" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
         const reason = action === "chargeback" ? "chargeback" : "refund";
         const license = await env.DB.prepare(
           "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"

@@ -125,12 +125,18 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 
 ---
 
-## 5. Paddle 支付履约 Webhook 与 License 查询对账
+## 5. Paddle 支付履约 Webhook、订阅续期与年付→终身待生效升级
 
 在 Cloudflare Workers (`eqt-drm-api`) 和 D1 数据库中实现专有通道：
-- **D1 字段**：`paddle_transaction_id`（交易 ID）与 `paddle_subscription_id`（订阅 ID）。
+- **D1 字段与扩展表**：`paddle_transaction_id`（交易 ID）、`paddle_subscription_id`（订阅 ID）以及 `license_upgrades` 表（记录年付转终身的待生效升级，包含字段 `user_email`, `target_license_code`, `lifetime_txn_id`, `purchased_at`, `effective_at`, `status`）。
+- **年付→终身待生效升级 (§6.7 架构)**：
+  1. **全额买断与状态隔离**：用户在年付订阅期间全额购买终身升级，不会立即覆盖现有年付到期日，终身权益在当前年付到期时刻（`effective_at` 快照）生效；
+  2. **14 天退款窗口期阻断**：新购 14 天退款窗口期内的年付码不可直接升级，引导用户先退款再直接购买终身版；
+  3. **防双重扣款 (Auto-renew OFF)**：建立待生效升级时，服务端自动取消该激活码在 Paddle 侧下一个账期的自动续费 (`auto_renew = 0`)；
+  4. **惰性生效 (Lazy Flip)**：客户端在 `verify` / `activate` 时触发 `checkAndApplyPendingUpgrade`，当 `now >= effective_at` 时翻转 `expires_at = 'LIFETIME'` 且更新 `license_upgrades.status = 'applied'`，无须 cron 任务；
+  5. **退款撤回**：若待生效期间终身升级交易被退款，`license_upgrades.status` 改为 `'cancelled'`，目标年付激活码保持原年付期效与功能。
 - **路由设计**：
-  1. `/api/v1/paddle/webhook` (POST)：接收 `Paddle-Signature` 利用 HMAC-SHA256 验签。履约 `transaction.completed` 时判断 Lifetime/Yearly 自动生成对应天数授权写入 D1。捕获 `transaction.refunded` 或 `subscription.canceled` 时将授权状态更新为 `revoked`。
+  1. `/api/v1/paddle/webhook` (POST)：接收 `Paddle-Signature` 利用 HMAC-SHA256 验签。履约 `transaction.completed` 时判断 Lifetime/Yearly 或 `target_license_code` 升级参数。捕获 `transaction.refunded` 或 `subscription.canceled` 时更新状态。
   2. `/api/v1/paddle/license-query` (GET)：接收 `transaction_id`，供前端支付完成（`checkout.completed`）时轮询弹出新授权码。
 
 ---

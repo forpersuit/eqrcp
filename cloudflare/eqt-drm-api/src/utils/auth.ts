@@ -100,6 +100,29 @@ export async function ensureDeviceRegistryTable(env: Env): Promise<void> {
   }
 }
 
+export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS license_upgrades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT NOT NULL,
+            target_license_code TEXT NOT NULL,
+            lifetime_txn_id TEXT NOT NULL,
+            purchased_at TEXT NOT NULL,
+            effective_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL
+        )
+      `),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_upgrades_txn ON license_upgrades(lifetime_txn_id)`)
+    ]);
+  } catch (err) {
+    console.error("Failed to ensure license_upgrades table:", err);
+  }
+}
+
 export async function ensureDrmTables(env: Env): Promise<void> {
   try {
     await env.DB.batch([
@@ -151,6 +174,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   await ensureActivationNetworkColumns(env);
   await ensureManualBlacklistTable(env);
   await ensureDeviceRegistryTable(env);
+  await ensureLicenseUpgradesTable(env);
 }
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */

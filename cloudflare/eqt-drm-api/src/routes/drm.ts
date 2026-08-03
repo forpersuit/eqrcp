@@ -312,11 +312,50 @@ export async function handleDrmRoutes(
       }
     }
 
+async function checkAndApplyPendingUpgrade(
+  env: Env,
+  licenseCode: string,
+  currentExpiresAt: string
+): Promise<string> {
+  if (currentExpiresAt === "LIFETIME") return "LIFETIME";
+
+  try {
+    const upgrade = await env.DB.prepare(`
+      SELECT id, effective_at FROM license_upgrades
+      WHERE target_license_code = ? AND status = 'pending'
+      ORDER BY id ASC LIMIT 1
+    `).bind(licenseCode).first<any>();
+
+    if (upgrade && upgrade.effective_at) {
+      const effectiveTime = new Date(upgrade.effective_at).getTime();
+      if (!isNaN(effectiveTime) && effectiveTime <= Date.now()) {
+        // Lazy flip to LIFETIME (idempotent WHERE clause)
+        await env.DB.prepare(`
+          UPDATE licenses SET expires_at = 'LIFETIME', duration_days = NULL
+          WHERE license_code = ? AND expires_at != 'LIFETIME'
+        `).bind(licenseCode).run();
+
+        await env.DB.prepare(`
+          UPDATE license_upgrades SET status = 'applied' WHERE id = ?
+        `).bind(upgrade.id).run();
+
+        return "LIFETIME";
+      }
+    }
+  } catch (err) {
+    console.error("Error in checkAndApplyPendingUpgrade:", err);
+  }
+
+  return currentExpiresAt;
+}
+
     let baseExpiresAt = license.expires_at || "LIFETIME";
-    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0) {
+    baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
+
+    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
       baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
-    } else if (license.expires_at && license.expires_at !== "LIFETIME") {
-      const expires = new Date(license.expires_at);
+    } else if (baseExpiresAt && baseExpiresAt !== "LIFETIME") {
+      const expires = new Date(baseExpiresAt);
       if (expires.getTime() < Date.now()) {
         return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
           status: 403,
@@ -603,7 +642,9 @@ export async function handleDrmRoutes(
     }
 
     let baseExpiresAt = license.expires_at || "LIFETIME";
-    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0) {
+    baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
+
+    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
       baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
     }
 

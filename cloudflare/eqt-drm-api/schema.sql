@@ -137,5 +137,21 @@ CREATE INDEX IF NOT EXISTS idx_registry_uuid ON device_registry(uuid_hash);
 CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash);
 CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash);
 
+-- Pending lifetime upgrades for yearly licenses (§6.7)
+CREATE TABLE IF NOT EXISTS license_upgrades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    target_license_code TEXT NOT NULL,
+    lifetime_txn_id TEXT NOT NULL,
+    purchased_at TEXT NOT NULL,
+    effective_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'applied' | 'cancelled'
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status);
+CREATE INDEX IF NOT EXISTS idx_upgrades_txn ON license_upgrades(lifetime_txn_id);
+
+
 
 

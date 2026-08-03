@@ -298,6 +298,9 @@
                 "unbind_success": "Device unbound successfully!",
                 "auto_renew_on_btn": "Auto-renew: ON",
                 "auto_renew_off_btn": "Auto-renew: OFF",
+                "pending_upgrade_banner": "Lifetime pass purchased, effective on {date}",
+                "upgrade_to_lifetime": "Upgrade to Lifetime",
+                "upgrade_blocked_refund_window": "Upgrades unavailable during 14-day refund window. Please refund first then purchase Lifetime.",
                 "toast_code_sent": "Verification code sent to your email.",
                 "toast_enter_valid_email": "Please enter a valid email address",
                 "sending_code": "Sending...",
@@ -373,6 +376,9 @@
                 "unbind_success": "设备解绑成功！",
                 "auto_renew_on_btn": "自动续费：开启",
                 "auto_renew_off_btn": "自动续费：已关闭",
+                "pending_upgrade_banner": "终身权益已购买，将于 {date} 生效",
+                "upgrade_to_lifetime": "升级为终身版",
+                "upgrade_blocked_refund_window": "14天退款期内暂不可升级。请先申请退款，再重新购买终身版。",
                 "toast_code_sent": "验证码已发送至您的邮箱，请注意查收。",
                 "toast_enter_valid_email": "请输入有效的电子邮箱地址",
                 "sending_code": "发送中...",
@@ -1155,11 +1161,47 @@
                     `;
                 }
 
-                // Invoice / auto-renew toggle / refund (API sets invoiceable / refundable)
+                // Pending upgrade banner (§6.7)
+                let pendingUpgradeHtml = '';
+                if (lic.pending_upgrade && lic.pending_upgrade.effective_at) {
+                    const effDateStr = new Date(lic.pending_upgrade.effective_at).toLocaleDateString(dateLocales[state.lang] || 'en-US', {
+                        year: 'numeric', month: 'long', day: 'numeric'
+                    });
+                    const bannerText = (dict.pending_upgrade_banner || "Lifetime pass purchased, effective on {date}").replace('{date}', effDateStr);
+                    pendingUpgradeHtml = `
+                        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs flex items-center justify-between text-amber-300">
+                            <span class="flex items-center gap-1.5 font-semibold">
+                                <span class="material-symbols-outlined text-sm">schedule</span>
+                                <span>${bannerText}</span>
+                            </span>
+                        </div>
+                    `;
+                }
+
+                // Invoice / auto-renew toggle / refund / upgrade (API sets invoiceable / refundable)
                 const actionBtns = [];
                 const canInvoice = lic.invoiceable === true && !!lic.paddle_transaction_id;
                 const canRefund = lic.status === 'active' && lic.refundable === true;
                 const canToggleAutoRenew = lic.status === 'active' && Boolean(lic.paddle_subscription_id);
+                const canUpgrade = lic.status === 'active' && !isLifetime && !lic.pending_upgrade;
+
+                if (canUpgrade) {
+                    if (lic.is_in_refund_window) {
+                        actionBtns.push(`
+                            <button class="flex items-center gap-1 bg-white/5 text-white/40 border border-white/10 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${dict.upgrade_blocked_refund_window || 'Upgrades unavailable during 14-day refund window. Please refund first then purchase Lifetime.'}">
+                                <span class="material-symbols-outlined text-sm">workspace_premium</span>
+                                <span>${dict.upgrade_to_lifetime || 'Upgrade to Lifetime'}</span>
+                            </button>
+                        `);
+                    } else {
+                        actionBtns.push(`
+                            <button class="upgrade-trigger-btn flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                                <span class="material-symbols-outlined text-sm">workspace_premium</span>
+                                <span>${dict.upgrade_to_lifetime || 'Upgrade to Lifetime'}</span>
+                            </button>
+                        `);
+                    }
+                }
 
                 if (canToggleAutoRenew) {
                     const isAutoRenewOn = lic.auto_renew !== 0;
@@ -1214,6 +1256,8 @@
                         ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${dict.paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
                     </div>
 
+                    ${pendingUpgradeHtml}
+
                     <!-- Annual Unbind Quota Banner -->
                     <div class="bg-white/5 border border-white/10 rounded-xl p-3 text-xs flex items-center justify-between text-on-surface-variant">
                         <span class="flex items-center gap-1.5 text-primary font-medium">
@@ -1260,6 +1304,14 @@
                 });
             });
 
+            // Wire upgrade buttons (§6.7)
+            container.querySelectorAll('.upgrade-trigger-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const license = btn.getAttribute('data-license');
+                    handleOpenUpgradeCheckout(license);
+                });
+            });
+
             // Wire refund buttons
             container.querySelectorAll('.refund-trigger-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1284,6 +1336,22 @@
                     handleOpenInvoice(license, txn, btn);
                 });
             });
+        }
+
+        function handleOpenUpgradeCheckout(licenseCode) {
+            if (!licenseCode) return;
+            const dict = translations[state.lang] || translations.en;
+            if (typeof Paddle !== 'undefined' && Paddle.Checkout) {
+                Paddle.Checkout.open({
+                    items: [{ priceId: 'pri_01j74000000000000000000000', quantity: 1 }], // PRICE_LIFETIME_ID
+                    customData: { target_license_code: licenseCode, buyer_email: state.email },
+                    customer: { email: state.email }
+                });
+            } else {
+                // Fallback: Redirect to pricing page with target_license_code param
+                const upgradeUrl = `/pricing.html?target_license_code=${encodeURIComponent(licenseCode)}&email=${encodeURIComponent(state.email)}`;
+                window.location.href = upgradeUrl;
+            }
         }
 
         let invoiceInFlight = false;
