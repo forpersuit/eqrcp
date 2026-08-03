@@ -253,6 +253,7 @@ export namespace main {
 	    lang: string;
 	    showHistory: boolean;
 	    enableChatV2: boolean;
+	    enableTelemetry: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
 	
@@ -283,6 +284,7 @@ export namespace main {
 	        this.lang = source["lang"];
 	        this.showHistory = source["showHistory"];
 	        this.enableChatV2 = source["enableChatV2"];
+	        this.enableTelemetry = source["enableTelemetry"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
 	    }
