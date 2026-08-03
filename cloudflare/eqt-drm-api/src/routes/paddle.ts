@@ -170,17 +170,31 @@ export async function handlePaddleRoutes(
 
       if (targetCode) {
         const targetLic = await env.DB.prepare(
-          `SELECT license_code, expires_at, status, tier, buyer_email
+          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash
            FROM licenses WHERE license_code = ?`
         ).bind(targetCode).first<any>();
 
-        // Only renew if active/expired, same tier, and not LIFETIME (§6.6 constraint)
-        if (targetLic && targetLic.tier === tier && targetLic.expires_at !== "LIFETIME" && targetLic.status !== "revoked") {
+        // Verify buyer email ownership (§6.6 requirement: must match buyer_email)
+        let isOwner = false;
+        if (targetLic && buyerEmail) {
+          const targetEmail = (targetLic.buyer_email || "").trim().toLowerCase();
+          const currentEmail = buyerEmail.trim().toLowerCase();
+          if (!targetEmail || targetEmail === currentEmail || (targetLic.buyer_email_hash && targetLic.buyer_email_hash === emailHash)) {
+            isOwner = true;
+          }
+        }
+
+        // Strictly check ownership, active status, tier match, and reject if already LIFETIME
+        if (targetLic && isOwner && targetLic.tier === tier && targetLic.status === "active" && targetLic.expires_at !== "LIFETIME") {
           let newExpires = expiresAt;
-          if (targetLic.expires_at) {
-            const prev = new Date(targetLic.expires_at).getTime();
-            const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
-            newExpires = new Date(base + YEARLY_MS).toISOString();
+          if (matchedPriceId === PRICE_LIFETIME_ID) {
+            newExpires = "LIFETIME";
+          } else if (matchedPriceId === PRICE_YEARLY_ID) {
+            if (targetLic.expires_at) {
+              const prev = new Date(targetLic.expires_at).getTime();
+              const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
+              newExpires = new Date(base + YEARLY_MS).toISOString();
+            }
           }
 
           await env.DB.prepare(`
@@ -203,7 +217,7 @@ export async function handlePaddleRoutes(
 
           if (buyerEmail) {
             const buyerLang = detectBuyerLang(data);
-            const expiresStr = new Date(newExpires).toLocaleDateString();
+            const expiresStr = newExpires === "LIFETIME" ? "Lifetime" : new Date(newExpires).toLocaleDateString();
             const tmpl = getRenewalEmailTemplate(buyerLang);
             const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, expiresStr));
             ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));

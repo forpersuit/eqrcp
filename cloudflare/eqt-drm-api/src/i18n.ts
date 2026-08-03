@@ -108,6 +108,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Lizenz wurde bereits erstattet oder widerrufen",
     fr: "La licence est déjà remboursée ou révoquée"
   },
+  lifetime_cannot_renew: {
+    zh: "终身授权无需续期",
+    en: "Lifetime licenses cannot be renewed",
+    ja: "永久ライセンスは更新できません",
+    ko: "영구 라이선스는 연장할 수 없습니다",
+    es: "Las licencias de por vida no se pueden renovar",
+    de: "Lifetime-Lizenzen können nicht verlängert werden",
+    fr: "Les licences à vie ne peuvent pas être renouvelées"
+  },
   no_paddle_transaction: {
     zh: "该授权无关联的 Paddle 交易，无法自助退款",
     en: "No associated Paddle transaction found for this license",
