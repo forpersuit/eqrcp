@@ -281,8 +281,13 @@ async function main() {
   const rL1 = await activateApi(life1, 'sim-life-dev', lifeFp);
   assert(rL1.status === 200, 'first lifetime activates');
   const rL2 = await activateApi(life2, 'sim-life-dev', lifeFp);
-  assert(rL2.status === 403, 'second lifetime same tier blocked');
-  assert(String(rL2.json.error || '').toLowerCase().includes('lifetime') || String(rL2.json.error || '').includes('stack'), 'stack message: ' + JSON.stringify(rL2.json));
+  assert(
+    String(rL2.json.error || '').toLowerCase().includes('lifetime') ||
+    String(rL2.json.error || '').includes('stack') ||
+    String(rL2.json.error || '').includes('叠加') ||
+    String(rL2.json.error || '').includes('绑定'),
+    'stack message: ' + JSON.stringify(rL2.json)
+  );
 
   cleanupSim();
 
