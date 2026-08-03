@@ -183,6 +183,7 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
     "ALTER TABLE licenses ADD COLUMN source TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoked_at TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoke_reason TEXT DEFAULT NULL",
+    "ALTER TABLE licenses ADD COLUMN last_purchased_at TEXT DEFAULT NULL",
   ];
   for (const sql of alters) {
     try {

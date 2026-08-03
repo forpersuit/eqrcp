@@ -1338,19 +1338,39 @@
             });
         }
 
-        function handleOpenUpgradeCheckout(licenseCode) {
+        async function handleOpenUpgradeCheckout(licenseCode) {
             if (!licenseCode) return;
             const dict = translations[state.lang] || translations.en;
-            if (typeof Paddle !== 'undefined' && Paddle.Checkout) {
-                Paddle.Checkout.open({
-                    items: [{ priceId: 'pri_01j74000000000000000000000', quantity: 1 }], // PRICE_LIFETIME_ID
-                    customData: { target_license_code: licenseCode, buyer_email: state.email },
-                    customer: { email: state.email }
+            showToast(dict.sending_code || 'Verifying upgrade eligibility…');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/user/upgrade-checkout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ license_code: licenseCode, lang: state.lang })
                 });
-            } else {
-                // Fallback: Redirect to pricing page with target_license_code param
-                const upgradeUrl = `/pricing.html?target_license_code=${encodeURIComponent(licenseCode)}&email=${encodeURIComponent(state.email)}`;
-                window.location.href = upgradeUrl;
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'Upgrade not available for this license');
+                }
+
+                if (typeof Paddle !== 'undefined' && Paddle.Checkout) {
+                    Paddle.Checkout.open({
+                        items: [{ priceId: data.price_id, quantity: 1 }],
+                        customData: { target_license_code: licenseCode, buyer_email: state.email },
+                        customer: { email: state.email }
+                    });
+                } else {
+                    const upgradeUrl = `/pricing.html?target_license_code=${encodeURIComponent(licenseCode)}&email=${encodeURIComponent(state.email)}`;
+                    window.location.href = upgradeUrl;
+                }
+            } catch (err) {
+                const prefix = dict.toast_error || 'Error:';
+                showToast(`${prefix} ${err.message || err}`, 'error');
             }
         }
 

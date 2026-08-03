@@ -1,4 +1,4 @@
-import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS } from '../types';
+import { Env, ONE_YEAR_MS, MAX_YEARLY_UNBINDS, PRICE_LIFETIME_ID } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getLicenseRevokeEmailTemplate, AUTH_CODE_EMAIL_I18N } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
@@ -14,7 +14,7 @@ import {
   normalizeLicenseSource,
   revokeLicenseSql
 } from '../utils/license-source';
-import { ensureLicenseSourceColumns } from '../utils/auth';
+import { ensureLicenseSourceColumns, ensureLicenseUpgradesTable } from '../utils/auth';
 
 /** Never leak raw Paddle JSON dumps to the browser toast. */
 function sanitizeRefundPublicError(err: unknown, reqLang: string): string {
@@ -245,14 +245,16 @@ export async function handlePortalRoutes(
       ).bind(lic.license_code, oneYearAgoIso).first<any>();
       const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
       const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
+      const source = normalizeLicenseSource(lic.source, lic.paddle_transaction_id);
       // Check pending lifetime upgrade & refund window (§6.7)
       const pendingUpgrade = await env.DB.prepare(
         "SELECT lifetime_txn_id, effective_at, purchased_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
       ).bind(lic.license_code).first<any>();
 
       const REFUND_WINDOW_MS = 14 * 86400 * 1000;
-      const createdTime = lic.created_at ? new Date(lic.created_at).getTime() : 0;
-      const isInRefundWindow = createdTime > 0 && (Date.now() - createdTime < REFUND_WINDOW_MS);
+      const lastPurchasedStr = lic.last_purchased_at || lic.created_at;
+      const lastPurchaseTime = lastPurchasedStr ? new Date(lastPurchasedStr).getTime() : 0;
+      const isInRefundWindow = lastPurchaseTime > 0 && (Date.now() - lastPurchaseTime < REFUND_WINDOW_MS);
 
       list.push({
         ...lic,
@@ -593,6 +595,107 @@ export async function handlePortalRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+  }
+
+  // 0.4.4 Server-side precheck endpoint for lifetime upgrade checkout (§6.7 Issue 7)
+  if (url.pathname === "/api/v1/user/upgrade-checkout" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    await ensureLicenseUpgradesTable(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status !== "active" || license.expires_at === "LIFETIME") {
+      return new Response(JSON.stringify({ error: getApiTranslation("cancel_not_allowed", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Check refund window (14 days from last_purchased_at / created_at)
+    const REFUND_WINDOW_MS = 14 * 86400 * 1000;
+    const lastPurchasedStr = license.last_purchased_at || license.created_at;
+    const lastPurchaseTime = lastPurchasedStr ? new Date(lastPurchasedStr).getTime() : 0;
+    if (lastPurchaseTime > 0 && (Date.now() - lastPurchaseTime < REFUND_WINDOW_MS)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("refund_window_block", reqLang) || "Target license is within the 14-day refund window. Please request a refund first before purchasing lifetime.",
+        code: "UPGRADE_BLOCKED_REFUND_WINDOW"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Check existing pending upgrade
+    const existingPending = await env.DB.prepare(
+      "SELECT id FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+    ).bind(license_code).first<any>();
+
+    if (existingPending) {
+      return new Response(JSON.stringify({
+        error: "Target license already has a pending lifetime upgrade scheduled",
+        code: "UPGRADE_ALREADY_PENDING"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      price_id: PRICE_LIFETIME_ID,
+      target_license_code: license_code,
+      passthrough: JSON.stringify({ target_license_code: license_code })
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   // 0.4.5 Toggle Auto-Renew (Auto-Renew Off keeps license active until expires_at!)

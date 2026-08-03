@@ -75,6 +75,7 @@ export async function handlePaddleRoutes(
 
     try {
     if (eventType === "transaction.completed") {
+      const nowMs = Date.now();
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
       let buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || data.custom_data?.buyer_email || data.custom_data?.buyerEmail || "";
@@ -170,7 +171,7 @@ export async function handlePaddleRoutes(
 
       if (targetCode) {
         const targetLic = await env.DB.prepare(
-          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash, duration_days, created_at, paddle_subscription_id
+          `SELECT license_code, expires_at, status, tier, buyer_email, buyer_email_hash, duration_days, created_at, last_purchased_at, paddle_subscription_id, paddle_transaction_id
            FROM licenses WHERE license_code = ?`
         ).bind(targetCode).first<any>();
 
@@ -186,15 +187,15 @@ export async function handlePaddleRoutes(
 
         // Strictly check ownership, active status, tier match, and reject if target is already LIFETIME (§6.6/6.7)
         if (targetLic && isOwner && targetLic.tier === tier && targetLic.status === "active" && targetLic.expires_at !== "LIFETIME") {
-          // Check refund window (14 days from target license creation/last purchase) (§6.7)
+          // Check refund window based on last_purchased_at (fallback to created_at) (§6.7 Item 6 / Issue 4)
           const REFUND_WINDOW_MS = 14 * 86400 * 1000;
-          const createdTime = targetLic.created_at ? new Date(targetLic.created_at).getTime() : 0;
-          const isInRefundWindow = createdTime > 0 && (Date.now() - createdTime < REFUND_WINDOW_MS);
+          const lastPurchaseTime = (targetLic.last_purchased_at || targetLic.created_at) ? new Date(targetLic.last_purchased_at || targetLic.created_at).getTime() : 0;
+          const isInRefundWindow = lastPurchaseTime > 0 && (nowMs - lastPurchaseTime < REFUND_WINDOW_MS);
 
           if (matchedPriceId === PRICE_LIFETIME_ID) {
             if (isInRefundWindow) {
               return new Response(JSON.stringify({
-                error: "Target license is within the 14-day refund window. Please request a refund first before purchasing lifetime.",
+                error: "Target license is within the 14-day refund window of its latest payment. Please request a refund first before purchasing lifetime.",
                 code: "UPGRADE_BLOCKED_REFUND_WINDOW"
               }), {
                 status: 400,
@@ -202,14 +203,31 @@ export async function handlePaddleRoutes(
               });
             }
 
+            // Prevent duplicate pending upgrade for the same license (Issue 6)
+            const existingPending = await env.DB.prepare(
+              "SELECT id, effective_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+            ).bind(targetLic.license_code).first<any>();
+
+            if (existingPending) {
+              return new Response(JSON.stringify({
+                message: "Target license already has a pending lifetime upgrade scheduled",
+                license_code: targetLic.license_code,
+                effective_at: existingPending.effective_at,
+                status: "pending_upgrade"
+              }), {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              });
+            }
+
             // §6.7 Pending Lifetime Upgrade (State Isolation)
             // Effective time is the snapshot of the current yearly expires_at
             let effectiveAt = targetLic.expires_at;
-            if (!effectiveAt || isNaN(new Date(effectiveAt).getTime()) || new Date(effectiveAt).getTime() < Date.now()) {
-              effectiveAt = new Date().toISOString();
+            if (!effectiveAt || isNaN(new Date(effectiveAt).getTime()) || new Date(effectiveAt).getTime() < nowMs) {
+              effectiveAt = new Date(nowMs).toISOString();
             }
 
-            const nowIso = new Date().toISOString();
+            const nowIso = new Date(nowMs).toISOString();
             await env.DB.prepare(`
               INSERT INTO license_upgrades (
                 user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status, created_at
@@ -223,36 +241,45 @@ export async function handlePaddleRoutes(
               nowIso
             ).run();
 
-            // Cancel auto-renewal for this license so user is not double-billed at period end (§6.7 item 7)
+            // Cancel auto-renewal ONLY; DO NOT OVERWRITE paddle_transaction_id to protect yearly refund checks! (Issue 5)
             await env.DB.prepare(`
               UPDATE licenses SET
                 auto_renew = 0,
-                paddle_transaction_id = ?,
                 buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
                 buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
               WHERE license_code = ?
             `).bind(
-              transactionId,
               buyerEmail || null,
               emailHash || null,
               targetLic.license_code
             ).run();
 
-            // Turn off Paddle auto-renew if subscription ID is present
+            // Turn off Paddle auto-renew with proper error logging (Issue 8)
             const subId = targetLic.paddle_subscription_id;
             if (subId && env.PADDLE_API_KEY) {
               const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
               const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
-              try {
-                ctx.waitUntil(fetch(`${paddleBaseUrl}/subscriptions/${subId}/cancel`, {
-                  method: "POST",
-                  headers: {
-                    "Authorization": `Bearer ${env.PADDLE_API_KEY}`,
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ effective_from: "next_billing_period" })
-                }).catch(() => {}));
-              } catch (_) {}
+              ctx.waitUntil((async () => {
+                try {
+                  const res = await fetch(`${paddleBaseUrl}/subscriptions/${subId}/cancel`, {
+                    method: "POST",
+                    headers: {
+                      "Authorization": `Bearer ${env.PADDLE_API_KEY}`,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ effective_from: "next_billing_period" })
+                  });
+                  if (!res.ok) {
+                    const errText = await res.text().catch(() => '');
+                    await logSystemError(env, 'PADDLE_API_ERROR', 'WARN',
+                      new Error(`Paddle cancel subscription HTTP ${res.status}`),
+                      { subscription_id: subId, license_code: targetLic.license_code, response: errText.slice(0, 300) });
+                  }
+                } catch (e) {
+                  await logSystemError(env, 'PADDLE_API_ERROR', 'WARN', e,
+                    { subscription_id: subId, license_code: targetLic.license_code, action: 'cancel_subscription' });
+                }
+              })());
             }
 
             if (buyerEmail) {
@@ -276,7 +303,7 @@ export async function handlePaddleRoutes(
             let newExpires = expiresAt;
             if (targetLic.expires_at) {
               const prev = new Date(targetLic.expires_at).getTime();
-              const base = Number.isFinite(prev) ? Math.max(Date.now(), prev) : Date.now();
+              const base = Number.isFinite(prev) ? Math.max(nowMs, prev) : nowMs;
               newExpires = new Date(base + YEARLY_MS).toISOString();
             }
 
@@ -286,6 +313,7 @@ export async function handlePaddleRoutes(
                 expires_at = ?,
                 duration_days = ?,
                 paddle_transaction_id = ?,
+                last_purchased_at = ?,
                 revoked_at = NULL,
                 revoke_reason = NULL,
                 buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
@@ -295,6 +323,7 @@ export async function handlePaddleRoutes(
               newExpires,
               targetLic.duration_days ?? null,
               transactionId,
+              new Date(nowMs).toISOString(),
               buyerEmail || null,
               emailHash || null,
               targetLic.license_code
@@ -346,6 +375,7 @@ export async function handlePaddleRoutes(
               expires_at = ?,
               duration_days = COALESCE(duration_days, ?),
               paddle_transaction_id = ?,
+              last_purchased_at = ?,
               revoked_at = NULL,
               revoke_reason = NULL,
               buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
@@ -355,6 +385,7 @@ export async function handlePaddleRoutes(
             newExpires,
             durationDays,
             transactionId,
+            new Date().toISOString(),
             buyerEmail || null,
             emailHash || null,
             subLicense.license_code
@@ -395,14 +426,15 @@ export async function handlePaddleRoutes(
       const checkHashBuf = await crypto.subtle.digest("MD5", encoder.encode(checkSumPayload));
       const checkHex = Array.prototype.map.call(new Uint8Array(checkHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('').slice(0, 4).toUpperCase();
       const licenseCode = `EQT-${tier}-${todayStr}-${randStr}-${checkHex}`;
+      const nowIso = new Date().toISOString();
 
       // Write to DB (paid fulfillment is always source=purchase)
       await env.DB.prepare(`
         INSERT INTO licenses (
           license_code, tier, status, max_devices, expires_at, duration_days,
           buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id,
-          source, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          source, created_at, last_purchased_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         licenseCode,
         tier,
@@ -415,7 +447,8 @@ export async function handlePaddleRoutes(
         transactionId,
         subscriptionId,
         "purchase",
-        new Date().toISOString()
+        nowIso,
+        nowIso
       ).run();
 
       // Send confirmation email to the buyer asynchronously
@@ -438,7 +471,7 @@ export async function handlePaddleRoutes(
     if (eventType === "transaction.refunded") {
       const transactionId = data.id;
 
-      // §6.7 Refund lifetime upgrade: if pending, cancel upgrade and keep yearly license active
+      // §6.7 Refund lifetime upgrade: if pending, cancel upgrade and keep yearly license active; if applied, revoke code
       const upgradeRow = await env.DB.prepare(
         "SELECT id, target_license_code, status FROM license_upgrades WHERE lifetime_txn_id = ?"
       ).bind(transactionId).first<any>();
@@ -448,11 +481,22 @@ export async function handlePaddleRoutes(
           await env.DB.prepare(
             "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
           ).bind(upgradeRow.id).run();
+          return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to refund", status: "cancelled" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        } else if (upgradeRow.status === 'applied') {
+          const targetLic = await env.DB.prepare(
+            "SELECT license_code, buyer_email, tier FROM licenses WHERE license_code = ?"
+          ).bind(upgradeRow.target_license_code).first<any>();
+          if (targetLic) {
+            await env.DB.prepare(revokeByPaddleTxnSql()).bind(new Date().toISOString(), "refund", transactionId).run();
+          }
+          return new Response(JSON.stringify({ message: "Applied lifetime upgrade revoked due to refund", status: "revoked" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
         }
-        return new Response(JSON.stringify({ message: "Pending lifetime upgrade cancelled due to refund", status: "cancelled" }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
       }
 
       // Query the email of the license owner
