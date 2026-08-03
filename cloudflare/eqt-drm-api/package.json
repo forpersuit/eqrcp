@@ -13,7 +13,7 @@
     "test:admin": "node tests/e2e-admin-test.js",
     "test:device-reg": "node tests/device-registration-test.js",
     "test:device-reg:offline": "node tests/device-reg-offline-test.js",
-    "test:upgrade:offline": "node tests/verify-pending-lifetime-upgrade-offline.js"
+    "test:upgrade:offline": "npx esbuild src/routes/drm.ts src/routes/paddle.ts src/routes/portal.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outdir=tests/compiled --platform=node --format=cjs && node tests/verify-pending-lifetime-upgrade-offline.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",
