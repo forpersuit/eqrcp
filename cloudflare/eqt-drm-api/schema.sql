@@ -150,7 +150,9 @@ CREATE TABLE IF NOT EXISTS license_upgrades (
     created_at TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status);
+-- Partial unique index: at most one pending upgrade per license, enforced at DB level.
+-- INSERT OR IGNORE + this index make concurrent same-code purchases atomic (no orphan rows).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code) WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id);
 
 

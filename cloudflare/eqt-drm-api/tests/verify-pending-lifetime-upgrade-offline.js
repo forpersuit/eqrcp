@@ -102,6 +102,8 @@ class RealWorkerD1Mock {
     }
     // Query pending license_upgrades by target_license_code
     if (s.includes('SELECT') && s.includes('FROM license_upgrades WHERE target_license_code =') && s.includes("status = 'pending'")) {
+      // concurrencyWindow simulates two transactions reading "no pending" before either commits
+      if (this.concurrencyWindow) return null;
       const code = args[0];
       for (const row of this.tables.license_upgrades.values()) {
         if (row.target_license_code === code && row.status === 'pending') {
@@ -124,8 +126,17 @@ class RealWorkerD1Mock {
   executeSqlRun(sql, args) {
     const s = sql.replace(/\s+/g, ' ').trim();
 
-    // Insert license_upgrades (supporting INSERT OR IGNORE)
+    // Insert license_upgrades (simulating INSERT OR IGNORE + both UNIQUE indexes)
     if (s.includes('INTO license_upgrades')) {
+      // idx_upgrades_lifetime_txn UNIQUE: redelivery of the same txn is silently ignored
+      for (const row of this.tables.license_upgrades.values()) {
+        if (row.lifetime_txn_id === args[2]) return { meta: { changes: 0 } };
+      }
+      // idx_upgrades_target partial UNIQUE (target_license_code) WHERE status='pending':
+      // a concurrent second pending upgrade for the same license is silently ignored → no orphan rows
+      for (const row of this.tables.license_upgrades.values()) {
+        if (row.target_license_code === args[1] && row.status === 'pending') return { meta: { changes: 0 } };
+      }
       const id = this.autoIncrement.license_upgrades++;
       const row = {
         id,
@@ -398,8 +409,64 @@ async function runTests() {
   assert(licAfterAppliedRefund.status === 'revoked', 'REAL handler successfully revoked target license in DB by target_license_code!');
   assert(licAfterAppliedRefund.revoke_reason === 'refund', 'REAL handler set revoke_reason = refund');
 
+  // Test 7: REAL concurrent same-code atomicity — partial unique index prevents orphan rows (N3 blind spot)
+  console.log('\nTest 7: REAL concurrent different-txn inserts for same code → partial unique index prevents orphan...');
+  const dbConc = new RealWorkerD1Mock();
+  const envConc = { DB: dbConc, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const concCode = 'EQT-PLUS-CONC-777';
+  const concCreatedAt = new Date(nowMs - 40 * 86400 * 1000).toISOString();
+  dbConc.tables.licenses.set(concCode, {
+    license_code: concCode,
+    tier: 'PLUS',
+    status: 'active',
+    expires_at: futureExpiresIso,
+    created_at: concCreatedAt,
+    last_purchased_at: concCreatedAt,
+    buyer_email: 'conc@example.com'
+  });
+
+  // Simulate both transactions completing at the same instant: each request reads "no pending" before either commits
+  dbConc.concurrencyWindow = true;
+
+  const mkUpgradeReq = async (txnId) => {
+    const obj = {
+      event_type: 'transaction.completed',
+      data: {
+        id: txnId,
+        customer: { email: 'conc@example.com' },
+        items: [{ price_id: PRICE_LIFETIME_ID }],
+        custom_data: { target_license_code: concCode, buyer_email: 'conc@example.com' }
+      }
+    };
+    const raw = JSON.stringify(obj);
+    const sig = await createPaddleSignature(raw, SECRET_KEY);
+    return new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paddle-signature': sig },
+      body: raw
+    });
+  };
+
+  const reqConc = new URL('https://lic.eqt.net.im/api/v1/paddle/webhook');
+  const resConcA = await handlePaddleRoutes(await mkUpgradeReq('txn_conc_A'), envConc, ctx, reqConc, corsHeaders);
+  assert(resConcA.status === 200, 'Concurrent txn A returned 200');
+  const resConcB = await handlePaddleRoutes(await mkUpgradeReq('txn_conc_B'), envConc, ctx, reqConc, corsHeaders);
+  assert(resConcB.status === 200, 'Concurrent txn B returned 200 (INSERT OR IGNORE silently swallowed, no 400 needed)');
+
+  const concPending = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
+  assert(concPending.length === 1, 'Partial unique index kept exactly ONE pending row for the same code (no orphan!)');
+  assert(concPending[0].lifetime_txn_id === 'txn_conc_A', 'The surviving pending row is the first transaction (id ASC order)');
+
+  // Lazy flip consumes the single row; nothing left pending afterward
+  dbConc.concurrencyWindow = false; // concurrency window closed: subsequent reads see committed state
+  concPending[0].effective_at = new Date(nowMs - 1000).toISOString();
+  const concFlip = await checkAndApplyPendingUpgrade(envConc, concCode, futureExpiresIso);
+  assert(concFlip === 'LIFETIME', 'Lazy flip applied LIFETIME from the single pending row');
+  const concPendingAfter = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
+  assert(concPendingAfter.length === 0, 'No orphan pending row remains after lazy flip');
+
   console.log('\n========================================');
-  console.log('🎉 ALL 6 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
+  console.log('🎉 ALL 7 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 
