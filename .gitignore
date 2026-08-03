@@ -22,7 +22,7 @@ go.work
 bin/
 dist/
 /build/
-tests/compiled/
+**/tests/compiled/
 desktop/gui/build/bin/
 desktop/gui/eqt-desktop
 docs/img/venv/

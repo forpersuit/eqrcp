@@ -203,12 +203,26 @@ export async function handlePaddleRoutes(
               });
             }
 
-            // Prevent duplicate pending upgrade for the same license (V1 & V2)
+            // Prevent duplicate pending upgrade for the same license (V1 & V2 & N1)
             const existingPending = await env.DB.prepare(
-              "SELECT id, effective_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+              "SELECT id, lifetime_txn_id, effective_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
             ).bind(targetLic.license_code).first<any>();
 
             if (existingPending) {
+              // Same transaction re-delivered (Paddle webhook retry) → idempotent 200, no error log
+              if (existingPending.lifetime_txn_id === transactionId) {
+                return new Response(JSON.stringify({
+                  message: "Upgrade already processed",
+                  status: "pending_upgrade",
+                  license_code: targetLic.license_code,
+                  effective_at: existingPending.effective_at
+                }), {
+                  status: 200,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
+              }
+
+              // A genuinely different transaction → reject + audit for manual review
               ctx.waitUntil(logSystemError(env, 'DUPLICATE_UPGRADE_ATTEMPT', 'WARN',
                 new Error(`Duplicate lifetime upgrade attempted for license ${targetLic.license_code}`),
                 { target_license_code: targetLic.license_code, duplicate_txn_id: transactionId, existing_effective_at: existingPending.effective_at }));

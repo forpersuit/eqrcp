@@ -27,6 +27,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Die Ziellizenz befindet sich innerhalb der 14-tägigen Rückerstattungsfrist. Bitte beantragen Sie zuerst eine Rückerstattung, bevor Sie die Lifetime-Version kaufen.",
     fr: "La licence cible est dans la période de remboursement de 14 jours. Veuillez d'abord demander un remboursement avant d'acheter la version à vie."
   },
+  upgrade_pending_cannot_renew: {
+    zh: "终身升级正在等待生效，无法续费。请待终身权益生效后再操作。",
+    en: "A lifetime upgrade is pending. Renewal is not available until it takes effect.",
+    ja: "無期限アップグレードが予定されているため、更新できません。発効後にご利用ください。",
+    ko: "평생 업그레이드가 예정되어 있어 갱신할 수 없습니다. 적용 후에 시도해 주세요.",
+    es: "Hay una actualización de por vida pendiente. La renovación no está disponible hasta que tenga efecto.",
+    de: "Ein Lifetime-Upgrade steht aus. Die Verlängerung ist erst verfügbar, wenn es wirksam wird.",
+    fr: "Une mise à niveau à vie est en attente. Le renouvellement n'est disponible qu'après sa prise d'effet."
+  },
   unbind_success: {
     zh: "设备已成功解绑",
     en: "Device unbound successfully",

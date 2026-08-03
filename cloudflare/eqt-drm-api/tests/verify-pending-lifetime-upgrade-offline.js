@@ -286,17 +286,37 @@ async function runTests() {
   assert(licAfterUpg.auto_renew === 0, 'REAL handler updated auto_renew = 0');
   assert(db.tables.license_upgrades.size === 1, 'REAL handler created row in license_upgrades table');
 
-  // Test 2: REAL Duplicate Upgrade Prevention (V1 & V2)
-  console.log('\nTest 2: REAL handlePaddleRoutes duplicate pending upgrade prevention (400 Bad Request)...');
-  const req2 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+  // Test 2: REAL Duplicate Upgrade Prevention (V1 & V2 & N1)
+  console.log('\nTest 2: REAL handlePaddleRoutes idempotent redelivery + duplicate purchase rejection...');
+
+  // 2a: Same transaction re-delivered → idempotent 200 (N1 Fix)
+  const req2Idem = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'paddle-signature': sig1 },
     body: rawBody1
   });
-  const res2 = await handlePaddleRoutes(req2, env, ctx, new URL(req2.url), corsHeaders);
-  assert(res2.status === 400, 'Duplicate upgrade request correctly rejected with 400 Bad Request (V1 Fix)');
-  const res2Json = await res2.json();
-  assert(res2Json.code === 'UPGRADE_ALREADY_PENDING', 'REAL handler returned UPGRADE_ALREADY_PENDING code');
+  const res2Idem = await handlePaddleRoutes(req2Idem, env, ctx, new URL(req2Idem.url), corsHeaders);
+  assert(res2Idem.status === 200, 'Same txn redelivery idempotently returns 200 (N1 Fix)');
+  const res2IdemJson = await res2Idem.json();
+  assert(res2IdemJson.status === 'pending_upgrade', 'Same txn redelivery returns pending_upgrade status');
+
+  // 2b: Different transaction for the same license → 400 UPGRADE_ALREADY_PENDING (V1 Fix)
+  const dupWebhookObj = {
+    event_type: 'transaction.completed',
+    data: { ...webhookBodyObj.data, id: 'txn_lifetime_upg_889' }
+  };
+  const rawBodyDup = JSON.stringify(dupWebhookObj);
+  const sigDup = await createPaddleSignature(rawBodyDup, SECRET_KEY);
+  const reqDup = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigDup },
+    body: rawBodyDup
+  });
+  const resDup = await handlePaddleRoutes(reqDup, env, ctx, new URL(reqDup.url), corsHeaders);
+  assert(resDup.status === 400, 'Duplicate purchase (different txn) correctly rejected with 400 Bad Request (V1 Fix)');
+  const resDupJson = await resDup.json();
+  assert(resDupJson.code === 'UPGRADE_ALREADY_PENDING', 'REAL handler returned UPGRADE_ALREADY_PENDING code');
+  assert(db.tables.license_upgrades.size === 1, 'No extra license_upgrades row inserted for duplicate purchase');
 
   // Test 3: REAL Refund Window Block (< 14 days) (Issue 4)
   console.log('\nTest 3: REAL handlePaddleRoutes 14-day refund window block...');

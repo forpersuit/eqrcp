@@ -1034,6 +1034,17 @@ export async function handlePortalRoutes(
       });
     }
 
+    // Reject renewal while a lifetime upgrade is pending (§6.7 V3)
+    const pendingUpgrade = await env.DB.prepare(
+      "SELECT id FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+    ).bind(license_code).first<any>();
+    if (pendingUpgrade) {
+      return new Response(JSON.stringify({ error: getApiTranslation("upgrade_pending_cannot_renew", reqLang) || "A lifetime upgrade is pending. Renewal is not available until it takes effect." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // Construct payment checkout passthrough payload for Paddle webhook handler
     const passthroughObj = {
       target_license_code: license_code,
