@@ -9,7 +9,7 @@
 ## 1. 结论摘要
 
 - 当前设备码（device_id）是**本地确定性计算**产物，熵低、可离线复现、客户端自报，**不适合作为安全边界**，仅适合做展示标识。
-- 建议改为**服务端权威登记**：device_id 由服务端派发**纯随机 ≥16 hex**，仅作展示标识与聚合键，不承载安全语义。授权安全由**三因子**承担：**device_id（展示）+ 邮箱（购买者身份）+ max_devices（授权名额）**。
+- 建议改为**服务端权威登记**：device_id 由服务端派发**纯随机 ≥16 hex**，仅作展示标识与聚合键，不承载安全语义。授权职责拆分：**指纹（运行时身份）+ max_devices（运行时名额）** 是运行时要件；**邮箱（购买者身份/退款/黑名单）与 device_id（展示/聚合）是账户层与展示层因子，不参与运行时 verify**。
 - **复制的虚拟机无需对抗**：克隆机共享指纹 → 共享 device_id → 只占一个授权名额，被 `max_devices` 天然免疫；多 IP/异常频率检测从"必需品"降级为**可选运营告警**。
 - 付费兑换时云端签发/下发 device_id；免费用户不强制，能联网则匿名注册；启动时注册设备并登记 IP 与活跃状态。
 - Admin 已有 globe.gl 大屏，当前只聚合付费激活、按数量配色；需扩展为"区间活跃设备"口径并按付费/免费双色展示。
@@ -59,7 +59,7 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 
 12 个 hex 字符只有 **48 bit 空间**。生日攻击下约 2^24（约 1677 万）个 ID 就有 50% 碰撞概率。当前设备量远低于该阈值，但 device_id 一旦被用于黑名单、授权绑定等长期凭据，空间过小且算法公开，攻击者可以离线枚举、撞库。
 
-> 注意：该碰撞风险在旧方案（本地计算 12hex）下成立。新方案下 device_id 改由服务端派发**纯随机 ≥16 hex**（64 bit 空间，生日界约 43 亿），且授权安全由三因子（device_id + 邮箱 + max_devices）共同承担，device_id 本身不再承载授权判定，碰撞被**结构性消除**（见 §4.1）。
+> 注意：该碰撞风险在旧方案（本地计算 12hex）下成立。新方案下 device_id 改由服务端派发**纯随机 ≥16 hex**（64 bit 空间，生日界约 43 亿），且授权职责拆分后 device_id 本身不承载授权判定（运行时判定 = 指纹 + max_devices，见 3.6.1），碰撞被**结构性消除**（见 §4.1）。
 
 ### 3.2 算法与输入完全公开，可离线复现
 
@@ -83,21 +83,21 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 
 **当前本地计算方式不安全**（低熵、可复现、自报无校验），不能作为设备注册、防共享、黑名单的安全基础。服务端权威化的**实质收益**是：更长 ID（消除碰撞/枚举）、防本地篡改 device_id（签名绑定）、以及可用的"设备在用"统计口径；它**不改变授权判定的安全上限**——服务端按指纹哈希（uuid/cpu/disk 3 选 2）匹配激活记录，伪造指纹照样能注册到新 ID。指纹可伪造是纯软件 DRM 的固有边界（见 5.6），服务端化是成本抬升，不是质变。
 
-#### 3.6.1 三因子授权模型（代替单凭据对抗思路）
+#### 3.6.1 授权职责拆分（代替单凭据对抗思路）
 
-把"设备码"当作唯一防线，会逼出各种对抗设计（防克隆、防碰撞、防篡改）。但授权本就有三个独立因子，应各司其职、互不重叠：
+把"设备码"当作唯一防线，会逼出各种对抗设计（防克隆、防碰撞、防篡改）。但授权本就有多个独立因子，应各司其职、互不重叠。注意：**运行时（activate/verify/register）真正参与授权判定的只有指纹 + max_devices**；邮箱与 device_id 是账户层/展示层因子，不参与运行时校验：
 
-| 因子 | 谁生成 | 管什么 | 为什么够用 |
+| 因子 | 层级 | 谁生成 | 管什么 |
 |---|---|---|---|
-| **device_id** | 服务端纯随机 ≥16hex | 设备展示标识、大屏聚合键 | 64bit 随机空间，碰撞概率可忽略；**不承载授权判定** |
-| **邮箱** | 购买/激活时绑定 | 购买者身份 | 语义锁定"人"，切断换购/转移 |
-| **max_devices** | 激活码自带名额 | 授权上限 | **克隆免疫机制**，见下 |
+| **指纹（uuid/cpu/disk）** | 运行时身份 | 客户端采集哈希 | 判定"是不是同一台设备"；激活/对账/黑名单的唯一运行时身份键 |
+| **max_devices** | 运行时名额 | 激活码自带 | 授权上限；克隆合并免疫机制，见下 |
+| **邮箱** | 账户层 | 购买/激活时绑定 | 购买者身份；退款/黑名单/unbind 配额/Portal 归属。**不参与运行时 verify** |
+| **device_id** | 展示层 | 服务端纯随机 ≥16hex | 设备展示标识、大屏聚合键；**不承载授权判定** |
 
-**复制的虚拟机（克隆机）无需对抗**：
+**复制的虚拟机（克隆机）无需专门对抗（精确边界）**：
 
-- 克隆机与母机指纹完全一致 → 匹配判为同一台 → 共享同一 device_id → **只占一个授权名额**；
-- 想让克隆机多占名额？做不到——指纹相同必被合并；
-- 因此克隆不产生任何额外授权收益，**被 `max_devices` 天然免疫**，防克隆的边际收益趋近于零，无需专门设计。
+- 不改指纹的纯克隆：克隆机与母机指纹完全一致 → 匹配判为同一台 → 共享同一 device_id → **只占一个授权名额**；
+- 但"克隆机**不可能**多占名额"**不成立**——克隆机只要改一个指纹分量（如伪造磁盘序列号）就变成"新设备"再占名额。因此防克隆本身无增量收益（指纹伪造在纯软件下本来就无解，见 5.6），**结论是不做专门防克隆，但论据是"指纹伪造无解、防克隆无增量收益"，不是"做不到"**；
 - 反直觉点：**不要给克隆机加"区分随机盐"让每台克隆拿到不同 ID**——那会把 5 台克隆变成 5 台看似合法的独立设备，唯一可用的"一个身份多 IP"行为信号就消失了。合并 + 行为检测（可选告警）才是既诚实又能出信号的组合。
 
 ---
@@ -149,6 +149,27 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 - **付费用户**：兑换激活码时走 `/api/v1/activate`，端点**内联完成"注册/复用 device_id → 写 activations → 签发 `.lic` 下发"三步，一次请求原子做完**（付费无需先调 `register`，见附录 C-2），客户端持久化。
 - 启动时的静默对账沿用现有 `ForceOnlineLicenseSync()`（仅付费）；**注意其 `force=true` 完全绕过节流，即启动路径每次注册不节流**，12 小时节流只作用于后台 sync（`license.go:352-359`）。
 
+#### 4.1.1 启动时请求序列（现状与目标，合一方案，用户已确认）
+
+**现状**（Go 侧 `PrecomputeDeviceFingerprints`，hardware.go:201-269）：
+
+- 付费用户（本地有 .lic）：离线 `VerifyLocalLicense()`（无 HTTP）→ 有网则 `ForceOnlineLicenseSync()` → **仅 1 个 HTTP 请求 `POST /api/v1/verify`**（license.go:362），体为 `{license_code, uuid_hash, cpu_hash, disk_hash}`；无网则 7 天租约内离线可用。更新检查由 GUI 定时器触发、不属启动路径。**无其他启动请求**。
+- 免费用户：启动时**零请求**（无 .lic、无 verify）。
+
+**目标（合一）**：启动路径每用户每启动**至多 1 个 license 请求**。
+
+| 用户 | 启动请求 | 作用 |
+|---|---|---|
+| 付费 | `POST /api/v1/verify`（唯一） | 授权对账 + 续租约 + **顺带活跃登记**（服务端同步刷新 `device_registry.last_seen_at/last_ip/GeoIP`，5 分钟写防抖）+ **回写权威 device_id** |
+| 免费 | `POST /api/v1/device/register`（唯一） | 匿名设备登记 + 下发 device_id + 活跃上报；失败静默（fail-open） |
+
+- **两个请求都 fail-open**：网络失败/被限频/黑名单均静默忽略，不弹窗、不阻断使用。黑名单只拦截 activate/verify/register 的**服务端写入**，不阻止本机已签发权益离线使用。
+- 免费用户不调 verify（无 license_code）；付费用户不单独调 register（活跃登记已由 verify 顺带完成）。`register` 端点实际主要服务免费用户；付费设备的 registry 行由 `activate` 内联注册建立、之后靠 verify 顺带刷新。
+- **请求体/响应契约变化**：
+  - verify 请求体不变（license_code + 三指纹）；**邮箱、device_id 不进 verify 请求**——邮箱是账户层因子，device_id 是展示层因子，均不参与运行时判定；
+  - verify 响应新增 `device_id`（权威值，客户端持久化到 .lic 覆盖本地被改值）。M2 起 device_id 进 verify 签名载荷；M1 期间先以普通字段返回。**当前 verify 响应还缺三指纹回显（契约漂移，见附录 D-8），M1 一并修正**；
+  - register 请求体 `{uuid_hash, cpu_hash, disk_hash, app_version, lang}`，可选带 `license_code`（付费未内联场景识别付费身份并置 `tier_label=paid`）。
+
 ### 4.2 数据模型变更
 
 新增表 `device_registry`（**免费与付费统一入口**，按 `tier_label` 区分，不做分表）：
@@ -194,7 +215,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 2. **【设备与硬件域】（设备与运行基本信息套件）**：关注“哪台设备在用、硬件指纹是什么、随机设备码 device_id 是什么、什么时候在哪个 IP 启动了”。
 3. **【关联与解绑】**：激活时在 `activations` 建立关联；解绑时销毁解绑关系，**购买账户不变，设备本身的信息沉淀也不变**。
 
-Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
+Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如下（`device_registry` 为**计划新增**，不在现存 8 张之内；初稿把 `device_registry` 计入"实际在用"且漏列 `system_error_logs`，已修正）：
 
 | 表名 (Table Name) | 数据所属域 | 核心字段与作用描述 |
 |---|---|---|
@@ -206,8 +227,9 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 | **`verification_codes`** | 门户/发信域 | **验证码表**：存储用户登录自服务门户 (Portal) 或结账前的邮箱验证码，带 60s 发信防刷限频。 |
 | **`user_sessions`** | 门户鉴权域 | **登录 Session 表**：存储用户在许可证自服务门户 (Portal) 无密码登录后的 24h Session Token。 |
 | **`admin_audit_logs`** | 运维审计域 | **操作审计日志表**：审计留痕管理员高危操作（手动发码 `GENERATE`、吊销 `REVOKE`、解绑 `UNBIND`、清日志 `CLEAR_LOGS`）。 |
+| **`system_error_logs`** | 运维审计域 | **系统错误日志表**：记录 Workers 运行错误/告警（level `ERROR`/`WARN`/`CRITICAL`），供排障审计。初稿遗漏，已补。 |
 
-`activations` 增加 `last_seen_at`、`last_ip` 列（幂等 ALTER，沿用 `ensureActivationNetworkColumns` / `ensureDeviceIdColumn` 模式，见 `cloudflare/eqt-drm-api/src/utils/auth.ts:29-57`）。
+`activations` **不加** `last_seen_at`/`last_ip` 列（初稿提议作废）：活跃是**设备维度**，单源 `device_registry.last_seen_at`；activations 是**授权维度**（同一台设备可因多张授权码存在多行，`last_seen` 写哪行都不对），加活跃列只会双写漂移。activations 的网络列仍由现有幂等 ALTER 管理（`ensureActivationNetworkColumns` / `ensureDeviceIdColumn`，见 `cloudflare/eqt-drm-api/src/utils/auth.ts:29-57`）。
 
 ### 4.3 "在用"判定口径
 
@@ -252,7 +274,7 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 城市/地区/经纬度只可能来自 **Cloudflare Workers 内置 `request.cf` 的 geolocation**（`drm.ts:10-46 activationClientMeta()` 读取 `cf.city/cf.latitude/cf.longitude/cf.regionCode`，并回退同名 `CF-*` 请求头），**没有外部 GeoIP 服务兜底**。落地时注意三个现状：
 
 1. `request.cf` 的 city/lat/lng 属 Workers 运行时提供但**文档未承诺一定非空**；代理/VPN/数据中心出口会得到 `XX`/`T1`（代码已排除），此时该行地理数据为空。
-2. 只有**新激活**才写这些列（`drm.ts:290`），已激活设备的重复激活不刷新网络元数据——**register 端点必须显式刷新 `last_seen_at/last_ip/lat/lng`，不能沿用 activate 的写库时机**。
+2. 只有**新激活**才写这些列（`drm.ts:290`），已激活设备的重复激活不刷新网络元数据——**付费设备由 verify 顺带刷新 `last_seen_at/last_ip/lat/lng`，免费设备由 register 刷新，不能沿用 activate 仅新激活写库的时机**（见 4.1.1）。
 3. 前端 `LicenseGlobeCard.svelte:99-106 getCoordForItem()` 对经纬度为空的点回退到 `COUNTRY_COORDS` 国家中心点表（无表项再兜底中国中心）——大屏不会白屏，但大量点位只是**国别级近似**。若要求城市级精度，需另接 GeoIP 服务（成本项，本期不做）。
 
 ---
@@ -281,12 +303,12 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 
 ### 5.4 异常检测降级为可选运营告警（克隆已免疫）
 
-> 定位修正：在 §3.6.1 三因子模型下，克隆机被 `max_devices` 天然免疫，不产生额外授权收益。**多 IP/频率检测不再是防克隆的必需品**，降级为可选运营告警，价值在于发现共号/异地使用等滥用信号，不承诺阻断。
+> 定位修正：在 §3.6.1 授权职责拆分模型下，不改指纹的克隆机被 `max_devices` 天然合并免疫，不产生额外授权收益（克隆 + 伪造指纹则已落入"指纹伪造无解"的边界，见 5.6）。**多 IP/频率检测不再是防克隆的必需品**，降级为可选运营告警，价值在于发现共号/异地使用等滥用信号，不承诺阻断。
 
 1. **多 IP 检测**：同一 device_id 在滑动 24h 内出现 ≥3 个不同 IP 或 ≥2 个国家 → 标记 `SUSPECT` 并写审计日志（`admin_audit_logs`，action=`DEVICE_SUSPECT`）；
 2. **频率检测**：同一 device_id 注册/激活/对账频率超过阈值（如 1 小时内 > 10 次，或 1 分钟内 > 3 次）→ 临时限流（429）；
 3. **二次确认转黑名单**：可疑标记叠加（多 IP + 高频）或管理员确认后，写入现有 `manual_blacklist`（`kind='device'`，已有 admin 管理界面可直接复用）；
-4. 黑名单命中在 `register/activate/verify` 三处统一拦截。
+4. 黑名单命中在 `checkout`（邮箱门禁）、`register/activate/verify` 四处统一拦截。实际拦截点现状与精确语义见 5.4.1。
 
 **落地实现（register 路由限频，随 M1 一起做，不拖到 M4）**：
 
@@ -294,6 +316,17 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 - **限频 key**：用 `IP + 指纹哈希` 组合（纯 IP 会误伤 NAT/共享出口，纯指纹可被伪造）；
 - **副作用安全**：免费注册失败不阻断任何功能（无网也跳过），故对 register 限频是低风险动作；
 - **边界**：仅缓解 C-1 免费侧口径失真，不能根治——伪造者可换 IP + 换指纹重刷；免费侧定位仍为"抽样展示"，勿将免费数据质量当安全目标。
+
+#### 5.4.1 黑名单与退款行为（现状确认，2026-08-03）
+
+对 §5.4 与用户关切的事实核对（`blacklist.ts` / `paddle.ts` 实证）：
+
+- **退款不写黑名单**：退款/拒付只把对应 license 行置 `status='revoked'`（`paddle.ts` revokeByTxnSql / revokeBySubSql / portal refund），**不**插入 `manual_blacklist`。退款买家可以再买、再激活。
+- **未兑换（未激活）的退款放行**：自动滥用窗口只统计"曾被激活过"的撤销（`wasEverActivated`：act_n>0 或 unbind_n>0，blacklist.ts:93-97）。**从未激活就退款的 license 不计入滥用计数**——用户印象正确。
+- **自动滥用窗口**：365 天滚动窗口内，**≥3 次**"purchase 来源 + 曾被激活 + 退款/拒付撤销"（`MAX_YEARLY_ABUSIVE_REFUNDS=3`，types.ts:88）才触发邮箱（Gate A）或设备（Gate B，指纹 3选2）封禁。**不是"1 次退款即封一年"**；触发后 activate/verify/checkout 被拦，窗口随 365 天滚动自然失效。
+- **手动黑名单**（admin 写入 `manual_blacklist`，kind=`email`/`device`，active=1）：立即生效 + 无限期（直到 admin 解禁），是唯一"即刻封禁"手段。
+- **拦截点**：checkout/send-code（邮箱门禁，portal.ts:95、auth.ts:95/159）、activate（drm.ts:190）、verify（drm.ts:427）；新方案下 register 端点同步拦截。均只拦"服务端写入/换绑"，不拦本机已签发权益的离线使用。
+- **黑名单按哪个键**：授权判定与黑名单以**指纹**为准（可靠键），`device_id` 仅作人工检索/辅助——免费 device_id 可伪造、换 ID 即绕过，不作为拦截依据（manual_blacklist 的 kind=device 行可按指纹三列命中，见 blacklist.ts:163-199）。
 
 ### 5.5 其他低成本方案清单
 
@@ -316,8 +349,9 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 
 为确保系统在离线断网、时钟调整与响应伪造攻击下的工业级安全性，对离线校验机制做了以下精确界定：
 
-1. **防回拨容忍度优化（30 分钟~1 小时容忍 + 大跨度拦截）**：
-   死板的 10 分钟偏差限制极易因用户 BIOS 电池衰减、NTP 未同步或跨时区出差而误伤合法用户。优化为**对 30 分钟~1 小时以内的微小时钟抖动静默容忍**，仅当系统时间倒流超过 **1 小时** 时，才判定为 `ClockTampered` 并发起功能锁定。
+1. **防回拨容忍度（现状 10 分钟；"30 分钟~1 小时"为提案，非现状）**：
+   现状（license.go:203）为 **10 分钟**倒流容忍，超过即 `SetClockTampered(true)` 并发起功能锁定。10 分钟可能因 BIOS 电池衰减、NTP 未同步、跨时区出差误伤合法用户。**提案**：放宽为对 30 分钟~1 小时以内的微小时钟抖动静默容忍，仅当系统时间倒流超过 1 小时才判定 `ClockTampered`。
+   ⚠️ **取舍**：放宽容忍会同步削弱"冻结时间"攻击的检测强度（把时间调到昨天、倒流不足 1 小时即不再触发锁定）。若两者都要，实现上应把"容忍窗口"与"单向步进锁"分开：容忍窗口只作用于 NTP 级抖动，冻结检测仍用 `LastSeenLocalTime` 严格单向步进。这是实现时必须明确的取舍，不是免费午餐。
 2. **断网环境下的 SSOT 与 Ed25519 不可伪造性**：
    断网无网时，`.lic` 数字证书是本地唯一的可信源 (SSOT)。证书安全性依靠 **Ed25519 非对称数字签名**保障：云端持有私钥签发证书，客户端公钥校验。没有云端私钥，在纯软件环境下任何篡改（如修改 `tier` 或 `expires_at`）均会在公钥验签时数学返回失败，绝对无法伪造。
 3. **断网 7 天租约与“冻结时间”对抗机制**：
@@ -366,28 +400,50 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 - 需跑 `go test ./...`、`npm run test:e2e`、`npm run test:admin`；
 - 新路由在 `docs/test-analysis.md` 或对应契约文档登记。
 
+### 6.6 订阅续期与手动续期能力
+
+**现状（已实现，非本报告新增）**：续期完全由 Paddle webhook 驱动、按 `subscription_id` 自动扩展，核心原则是**"一订阅一激活码（Single Code Per Subscription）"**（`docs/payment/subscription-renewal-and-refund-workflow.md`）：
+
+- 年付订阅续费：webhook 按 `paddle_subscription_id` 找到唯一 license_code → `expires_at = MAX(now, 原expires) + 365 天`，`paddle_transaction_id` 指向最新期次（paddle.ts:157-212）。**续费不换码**。
+- 一个邮箱买多个年付订阅 → 多个 subscription_id → 多个码**各自独立自动续费**，互不干扰。
+- 终身版无 `paddle_subscription_id`，`expires_at='LIFETIME'` 永不过期，不参与续费。
+- Portal 现无任何续期/加时长动作（只有 send-code / verify-code / licenses / unbind-device / refund / toggle-auto-renew / cancel-subscription / invoice-link，portal.ts 端点清单见附录）。
+
+**需求（用户确认：需要手动续期能力）**——Portal 增加"为指定激活码续期/加时长"：
+
+场景：用户关闭自动续费后想主动续、或持有某码想加时长时，可在 Portal 选择**指定激活码**购买对应 tier 时长，权益**合并到该码**（延续"续费同码"原则，不铸造新码）。
+
+设计要点：
+
+1. **目标码上下文**：Portal 续期入口必须携带 `target_license_code`（用户选择的目标码）+ `user_email`，经 Paddle checkout 的 `passthrough` 字段随支付回调带回，否则 webhook 无法知道该给哪个码续期；
+2. **新增 `renewal_requests` 表**（或复用 pending 表）：`user_email, target_license_code, price_id, paddle_transaction_id, status, created_at`，供 webhook 侧将"新支付"绑定到"目标码"；
+3. **paddle.ts webhook 分支**：`transaction.completed` 时若 `passthrough` 含 `target_license_code` → **不走铸造**，改为扩展目标码 `expires_at`（沿用现有扩展逻辑）+ 更新 `paddle_transaction_id` + 更新 `renewal_requests.status`；
+4. **约束**：仅同 tier 可合并（PLUS 续 PLUS）；目标码必须是 `buyer_email` 归属用户的 active 码（防给他人码续期）；目标码为 `LIFETIME` 时拒绝（终身不可续）；已有同 tier 终身权益时对"新购终身"拒绝（现有 `lifetime_already_owned` 政策）；
+5. **与设备注册的关系**：续期只改 `expires_at`，不动 device_id/device_registry，不影响本报告主体；但 **M2 签名载荷改动后，续期后的目标码需在下一次 verify 重新签发**（客户端下次启动 verify 自然拿到新 `expires_at` 的新签名 .lic，无需额外动作）；
+6. **不纳入**：多码 entitlement 合并（"多码→单权益"时间轴合并，`docs/payment/license-source-and-refund-policy.md:270` 标为 P2 待办）不在本报告范围，手动续期只做"单码加时长"。
+
 ---
 
 ## 7. 建议实施顺序（里程碑）
 
 | 里程碑 | 内容 |
 | --- | --- |
-| M1 | D1 新增 `device_registry` 表（含 `email` 列 + 每模式 last_seen 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、每模式 5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动注册（免费匿名、付费复用，绑定邮箱）；0 分量付费拒绝；遥测通道与对账通道分离（见 4.1）；遥测开关与隐私说明就绪；开发期清库重置 `activations` |
-| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**） |
-| M3 | `last_seen_at/last_ip` 列 + `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关 |
+| M1 | D1 新增 `device_registry` 表（单一 `last_seen_at`，含 `email`/`license_code` 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动序列改造（付费 verify 顺带活跃登记与 device_id 回写、免费 register，见 4.1.1）+ **verify 响应契约修正（回显三指纹 + 新增 device_id，见附录 D-8）**；0 分量付费拒绝；遥测开关与隐私说明就绪；**开发期清库重置 `activations`/`device_registry`（用户已确认现有数据可弃，见 6.2）** |
+| M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** |
+| M3 | `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关（活跃数据单源 `device_registry.last_seen_at`，**activations 不加活跃列**） |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
 
 ---
 
 ## 8. 总结
 
-当前本地设备码计算不安全（低熵、可复现、自报无校验）。改为服务端计算/签发后，以**三因子授权模型**收敛（device_id 展示 + 邮箱绑定 + max_devices 名额）：免费用户不强制、联网即匿名注册；付费兑换时云端下发并签名绑定；启动注册登记 IP 与活跃状态。**复制的虚拟机被授权名额天然免疫，无需对抗**（见 3.6.1）；异常检测降级为可选运营告警。大屏以付费/免费双色展示区间活跃设备（默认最近 1h）。防修改依赖签名与服务端权威化，防伪造依靠限流、黑名单等低成本手段抬高成本，并明确纯软件 DRM 的边界。
+当前本地设备码计算不安全（低熵、可复现、自报无校验）。改为服务端计算/签发后，授权职责拆分为：**指纹（运行时身份）+ max_devices（运行时名额）** 承载判定，**邮箱（账户层）与 device_id（展示层）不参与运行时校验**。免费用户不强制、联网即匿名注册（启动 1 个 register 请求）；付费兑换时云端内联注册并签名绑定；**启动路径每用户每启动至多 1 个 license 请求**——付费为 verify（顺带活跃登记与 device_id 回写）、免费为 register（见 4.1.1）。**复制的虚拟机无需专门对抗**（纯克隆合并占一额；指纹伪造本就无解，防克隆无增量收益，见 3.6.1）；异常检测降级为可选运营告警。大屏以付费/免费双色展示区间活跃设备（默认最近 1h，数据单源 `device_registry`）。防修改依赖签名与服务端权威化，防伪造依靠限流、黑名单等低成本手段抬高成本，并明确纯软件 DRM 的边界。订阅续期现状为"一订阅一码自动续费"，新增 Portal 手动续期能力（见 6.6）；退款不封邮箱、未激活退款放行（见 5.4.1）。
 
 ---
 
 ## 附：代码核对与审阅意见（2026-08-02）
 
-> 本节是对上文的逐条代码实证核对（Go 侧 + Cloudflare 侧），以及针对审阅反馈的决策记录。**结论：报告事实基础扎实（20 条 claims 中 17 条 CONFIRMED），核心方向正确；已按审阅意见修正正文，并在此留档。**
+> 本节是对上文的逐条代码实证核对（Go 侧 + Cloudflare 侧），以及针对审阅反馈的决策记录。**结论：报告事实基础扎实（20 条 claims 中 17 条 CONFIRMED），核心方向正确；已按审阅意见修正正文，并在此留档。** ⚠️ 该评估略有乐观：A 表核对范围未覆盖 schema 全表清单与 §5.7，这两处初稿有事实错误（表清单漏 `system_error_logs`、时钟容忍把提案当现状），已在 2026-08-03 复核中修正，见附录 D。
 
 ### A. 事实核对结果
 
@@ -419,7 +475,7 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 4. **安全预期**：下调——服务端化是成本抬升不是质变，指纹伪造由异常检测兜底；已改写 3.6。
 5. **活跃口径**：默认最近 1h，可切换 1h/12h/24h/7d，抛物线可开关；已写入 4.3/4.4。
 6. **M2 存量数据**：当前 activations 均为测试数据，可清库重来，回填章节弱化为开发期清库；已改写 6.2。
-7. **克隆免疫 + 三因子模型**：复制的虚拟机被授权名额天然免疫（共享指纹 → 共享 device_id → 只占一个名额），无需专门对抗；授权安全收敛为 device_id + 邮箱 + max_devices 三因子；指纹匹配改为"共享分量一致"规则（废弃"3 选 2"表述）；多 IP/异常检测降级为可选运营告警；已写入 3.6.1/4.1/5.4。
+7. **克隆免疫 + 三因子模型**：复制的虚拟机被授权名额天然免疫（共享指纹 → 共享 device_id → 只占一个名额），无需专门对抗；授权安全收敛为 device_id + 邮箱 + max_devices 三因子；指纹匹配改为"共享分量一致"规则（废弃"3 选 2"表述）；多 IP/异常检测降级为可选运营告警；已写入 3.6.1/4.1/5.4。> ⚠️ 2026-08-03 修正："三因子"表述改为"授权职责拆分"（指纹+max_devices 是运行时要件，邮箱/device_id 是账户/展示层因子不参与 verify）；"克隆免疫"边界收窄（纯克隆合并免疫，克隆+伪造指纹仍可多占名额）；见 3.6.1 与附录 D。
 
 ### C. 遗留风险（不属于上述决策，需在实施时再评估）
 
@@ -427,3 +483,20 @@ Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
 - **C-2 Paddle 衔接**：`device_id` 进签名载荷的改动落在 `drm.ts` activate/verify，与 `paddle.ts` 铸造流程强耦合；webhook 铸造的激活码在首次 activate 前没有指纹。**解法：activate 端点内联注册**（注册/复用 device_id → 写 activations → 签名下发三步原子完成，见 4.1），不依赖"register 先于 activate"的先后约束。两个实现约束：① **并发超卖**——同一激活码被两台设备同时 activate 时，须用 D1 事务或条件更新（`WHERE 已绑数量 < max_devices`）保证不超卖；② **幂等**——客户端重发 activate 须按 `(license_code, 指纹)` 幂等，防重试多扣名额。
 - **C-3 多 IP 告警误伤**：移动办公/VPN 用户会被"同 ID 多 IP"标记；因克隆已免疫、检测降级为可选告警（见 5.4），仅作运营参考，不做自动黑名单。
 - **C-4 隐私合规**：IP/经纬度登记需纳入隐私说明，遥测开关（见 5.5）应作为 M1 就绪项而非后续项。
+
+---
+
+### D. 复核记录（2026-08-03）
+
+按用户反馈与独立代码核对（Go + Cloudflare 双侧实证），本节修正/补充上文，均为已确认决策或事实：
+
+1. **开发期数据可弃**（用户确认）：`activations` 现有数据可直接清库，无需回填迁移（对应 2.a）。§6.2 维持。
+2. **启动请求序列——合一方案**（用户确认）：付费启动 = 1 个 verify（顺带活跃登记 + device_id 回写）；免费启动 = 1 个 register。每用户每启动至多 1 个 license 请求，见 4.1.1。
+3. **activations 不加 last_seen_at/last_ip**：活跃单源 `device_registry`（§4.2、M3）。初稿的 activations 加列提议作废。
+4. **续期需要手动能力**（用户确认）：Portal 增加"为指定激活码续期/加时长"，见 6.6；现状"一订阅一码自动续费"已闭环、多码 entitlement 合并仍为 P2 待办。
+5. **黑名单/退款确认**：退款不封邮箱、未激活退款放行、自动窗口 = 365 天滚动 ≥3 次"曾激活的退款吊销"、手动黑名单立即且无限期，拦截点在 checkout/activate/verify（+新 register），见 5.4.1。
+6. **PRO 不考虑**（用户确认）：Paddle 铸造路径硬编码 `tier='PLUS'`（paddle.ts:137），与当前产品线（PLUS Lifetime / PLUS Yearly 均属 PLUS tier，区别在 `expires_at` 与 `paddle_subscription_id`）一致，属**已知限制**；schema 中 `'PLUS' | 'PRO'` 的 PRO 暂不展开。若未来卖 PRO 需新增 PRO 价格 ID + tier 分支。
+7. **§5.7 时钟容忍**：现状 10 分钟（license.go:203），"30 分钟~1 小时容忍"是**提案**非现状，已修正（§5.7.1），并记录与"冻结时间"检测强度的取舍。
+8. **verify 契约漂移**（现存问题，非本报告引入，M1 一并修）：Go 侧 `doOnlineLicenseSync` 解析响应中的 `uuid_hash/cpu_hash/disk_hash` 并拷入 updatedCert（license.go:422-424），但 drm.ts:505-518 的 verify 响应**不含这三字段**，线上 sync 后 `VerifyLicenseSignature`/`VerifySyncSignature` 验签会失败（服务端用请求里的非空指纹签名）。测试 mock 回显了这些字段所以 Go 测试通过。M1 修正响应契约（回显三指纹 + 新增 `device_id`）。
+9. **D1 表清单**：当前 8 张 = licenses / activations / verification_codes / user_sessions / unbind_records / system_error_logs / admin_audit_logs / manual_blacklist；`device_registry` 为计划新增（§4.2.1 已补 system_error_logs、标注 device_registry 新增）。
+10. **Paddle 铸造细节**：终身与年付均 `tier='PLUS'`、`max_devices=2`（paddle.ts:137,242）；若已有 license 是 LIFETIME，年付续费时保留 `"LIFETIME"` 不降级（paddle.ts:170-172）。
