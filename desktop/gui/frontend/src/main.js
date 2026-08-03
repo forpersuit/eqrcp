@@ -2170,6 +2170,15 @@ function renderSettingsPanel() {
                         ${renderSwitch('settings-show-history', state.settings?.showHistory !== false)}
                     </div>
                 </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('telemetry')}</strong>
+                        <span>${t('telemetry_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-telemetry', state.settings?.enableTelemetry !== false)}
+                    </div>
+                </div>
             </section>
 
             <section class="settings-section">
@@ -4059,6 +4068,7 @@ function syncSettingsFromDOM() {
     const updateInterval = document.querySelector('#settings-update-interval');
     const lang = document.querySelector('#settings-lang');
     const showHistory = document.querySelector('#settings-show-history');
+    const telemetrySwitch = document.querySelector('#settings-telemetry');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -4076,6 +4086,7 @@ function syncSettingsFromDOM() {
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
     if (lang) state.settings.lang = lang.value;
     if (showHistory) state.settings.showHistory = showHistory.checked;
+    if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
 
 
     state.receiveDir = state.settings.output || '';
