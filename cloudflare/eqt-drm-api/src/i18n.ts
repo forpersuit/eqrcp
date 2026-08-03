@@ -1,5 +1,14 @@
 // Dynamic API i18n Dictionary (Supporting 7 Languages with graceful Fallback)
 export const API_I18N: Record<string, Record<string, string>> = {
+  too_many_requests: {
+    zh: "请求过于频繁，请稍后再试",
+    en: "Too many requests. Please try again later.",
+    ja: "リクエストが多すぎます。後ほど再試行してください。",
+    ko: "요청이 너무 많습니다. 나중에 다시 시도해 주세요.",
+    es: "Demasiadas solicitudes. Por favor, inténtelo de nuevo más tarde.",
+    de: "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+    fr: "Trop de requêtes. Veuillez réessayer plus tard."
+  },
   unbind_limit_reached: {
     zh: "该授权码过去365天内已达到4次解绑设备上限，无法继续解绑。",
     en: "Unbind limit reached (maximum 4 device unbinds allowed per 365 days).",

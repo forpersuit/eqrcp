@@ -779,6 +779,7 @@ func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 
 func TestCrossPlatformContractLock(t *testing.T) {
 	// Lock JSON key naming contract between Go client and Workers DRM API to prevent D-8 drift
+	// 1. Lock Local Certificate存盘契约
 	cert := LicenseCertificate{
 		LicenseCode: "CONTRACT-LOCK-101",
 		Tier:        "PLUS",
@@ -800,11 +801,53 @@ func TestCrossPlatformContractLock(t *testing.T) {
 		t.Fatalf("Unmarshal map failed: %v", err)
 	}
 
-	expectedKeys := []string{"license_code", "tier", "uuid_hash", "cpu_hash", "disk_hash", "device_id", "expires_at", "max_devices"}
-	for _, key := range expectedKeys {
+	expectedCertKeys := []string{"license_code", "tier", "uuid_hash", "cpu_hash", "disk_hash", "device_id", "expires_at", "max_devices"}
+	for _, key := range expectedCertKeys {
 		if _, exists := m[key]; !exists {
 			t.Errorf("Contract drift detected! Expected JSON key '%s' missing from LicenseCertificate serialization", key)
 		}
 	}
-}
 
+	// 2. Lock HTTP /api/v1/verify response contract struct (Preventing D-8 drift)
+	mockVerifyJSON := `{
+		"status": "OK",
+		"license_code": "CONTRACT-LOCK-101",
+		"tier": "PLUS",
+		"uuid_hash": "u1",
+		"cpu_hash": "c1",
+		"disk_hash": "d1",
+		"device_id": "dev_32hex_id_sample_99999999",
+		"max_devices": 2,
+		"activated_devices": 1,
+		"expires_at": "LIFETIME",
+		"buyer_email": "user@example.com",
+		"certificate_signature": "sig_cert_test",
+		"current_time": "2026-08-03T12:00:00Z",
+		"signature": "sig_verify_test"
+	}`
+
+	var verifyResp struct {
+		Status               string `json:"status"`
+		LicenseCode          string `json:"license_code"`
+		Tier                 string `json:"tier"`
+		UUIDHash             string `json:"uuid_hash"`
+		CPUHash              string `json:"cpu_hash"`
+		DiskHash             string `json:"disk_hash"`
+		DeviceID             string `json:"device_id"`
+		MaxDevices           int    `json:"max_devices"`
+		ActivatedDevices     int    `json:"activated_devices"`
+		ExpiresAt            string `json:"expires_at"`
+		BuyerEmail           string `json:"buyer_email"`
+		CertificateSignature string `json:"certificate_signature"`
+		CurrentTime          string `json:"current_time"`
+		Signature            string `json:"signature"`
+	}
+
+	if err := json.Unmarshal([]byte(mockVerifyJSON), &verifyResp); err != nil {
+		t.Fatalf("Unmarshal verifyResp failed: %v", err)
+	}
+
+	if verifyResp.UUIDHash != "u1" || verifyResp.CPUHash != "c1" || verifyResp.DiskHash != "d1" || verifyResp.DeviceID != "dev_32hex_id_sample_99999999" {
+		t.Errorf("Contract drift detected! HTTP Verify response deserialization failed to bind fingerprint or device_id fields: %+v", verifyResp)
+	}
+}
