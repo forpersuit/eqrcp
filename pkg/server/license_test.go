@@ -711,6 +711,38 @@ func TestRegisterDeviceOnlineAndAuthorityID(t *testing.T) {
 	}
 }
 
+func TestRegisterDeviceOnlineTelemetryDisabled(t *testing.T) {
+	called := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"device_id":"should_not_be_called"}`))
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+
+	ResetLicense()
+	SetAuthorityDeviceID("")
+
+	testBoardUUID = "board_uuid_test"
+	defer func() { testBoardUUID = "" }()
+
+	// Set telemetry disabled via env var
+	os.Setenv("EQT_ENABLE_TELEMETRY", "false")
+	defer os.Unsetenv("EQT_ENABLE_TELEMETRY")
+
+	RegisterDeviceOnline()
+
+	if called {
+		t.Error("expected RegisterDeviceOnline to skip network request when telemetry is disabled")
+	}
+	if id := GetAuthorityDeviceID(); id != "未注册" {
+		t.Errorf("expected device_id to remain '未注册', got '%s'", id)
+	}
+}
+
 func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 	testBoardUUID = "mock_board_uuid"
 	testCPUSerial = "mock_cpu_serial"

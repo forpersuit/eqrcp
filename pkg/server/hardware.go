@@ -354,6 +354,10 @@ func GetDeviceStableID() string {
 // On success, caches the server-assigned authoritative device_id.
 // Fails silently (Fail-Open) on network error to avoid blocking user flow.
 func RegisterDeviceOnline() {
+	if !config.IsTelemetryEnabled() {
+		log.Println("[DRM] Telemetry disabled by user configuration. Skipping anonymous device registration.")
+		return
+	}
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
 	if uuid == "" && cpu == "" && disk == "" {
 		return

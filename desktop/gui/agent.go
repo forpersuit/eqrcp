@@ -411,6 +411,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
+		EnableTelemetry:          s.EnableTelemetry,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -447,6 +448,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		Lang:                     s.Lang,
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
+		EnableTelemetry:          s.EnableTelemetry,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}

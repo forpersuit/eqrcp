@@ -30,15 +30,16 @@ type Config struct {
 	FQDN         string `yaml:",omitempty"`
 	Output       string `yaml:",omitempty"`
 	Reversed     bool   `yaml:",omitempty"`
-	Lang         string `yaml:",omitempty"`
-	EnableChatV2 bool   `yaml:"enableChatV2,omitempty"`
+	Lang            string `yaml:",omitempty"`
+	EnableChatV2    bool   `yaml:"enableChatV2,omitempty"`
+	EnableTelemetry bool   `yaml:"enableTelemetry,omitempty"`
 }
 
 var interactive bool = false
 
 func New(app application.App) (Config, error) {
 	log := logger.New(app.Flags.Quiet)
-	v := getViperInstance(app)
+	v := GetViperInstance(app)
 	var err error
 	cfg := Config{}
 
@@ -151,7 +152,7 @@ func New(app application.App) (Config, error) {
 	return cfg, nil
 }
 
-func getViperInstance(app application.App) *viper.Viper {
+func GetViperInstance(app application.App) *viper.Viper {
 	var configType string
 	var configFile string
 	v := viper.New()
@@ -194,7 +195,7 @@ func Wizard(app application.App) error {
 	if err != nil {
 		return err
 	}
-	v := getViperInstance(app)
+	v := GetViperInstance(app)
 	// Choose interface
 	cfg.Interface, err = chooseInterface(app.Flags)
 	if err != nil {

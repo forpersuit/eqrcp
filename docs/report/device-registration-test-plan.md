@@ -31,11 +31,14 @@ go test ./...
 # 专门测试 DRM 授权与对账契约锁
 go test -v ./pkg/server -run TestCrossPlatformContractLock
 go test -v ./pkg/server -run TestVerifyLicenseSignature
+go test -v ./pkg/server -run TestRegisterDeviceOnlineTelemetryDisabled
 ```
 
 **验证判定标准**：
 - `TestCrossPlatformContractLock` 必须直接 Unmarshal 生产环境导出的 `VerifyAPIResponse` 结构体，确保字段 JSON Tag 无漂移；
-- `TestVerifyLicenseSignature` 验证 V2 签名（含 8 字段证书载荷与 6 字段对账载荷）校验成功，且对 V1 历史签名具备向后兼容解析能力。
+- `TestVerifyLicenseSignature` 验证 V2 证书签名（8 字段载荷含 device_id）校验成功，且对 V1 历史签名具备向后兼容解析能力；
+- `TestRegisterDeviceOnlineTelemetryDisabled` 验证当 `enableTelemetry` 设为 `false` / `EQT_ENABLE_TELEMETRY=false` 时，启动静默拦截匿名设备注册请求；
+- 对账签名（6 字段载荷含 device_id，`VerifySyncSignature`）由 `TestOnlineSyncDeviceIDUpdate` 等在线对账测试覆盖。
 
 ---
 

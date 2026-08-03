@@ -35,6 +35,7 @@ type DesktopSettings struct {
 	Lang                     string                   `json:"lang"`
 	ShowHistory              bool                     `json:"showHistory"`
 	EnableChatV2             bool                     `json:"enableChatV2"`
+	EnableTelemetry          bool                     `json:"enableTelemetry"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 }
@@ -61,7 +62,7 @@ func NormalizeLangCode(raw string) string {
 
 // GetConfiguredLang reads the configured language from viper config, defaulting to "zh" if unset or on error.
 func GetConfiguredLang() string {
-	v := getViperInstance(application.App{})
+	v := GetViperInstance(application.App{})
 	if err := v.ReadInConfig(); err == nil {
 		if v.IsSet("lang") {
 			l := NormalizeLangCode(v.GetString("lang"))
@@ -81,7 +82,7 @@ type DesktopInterfaceOption struct {
 }
 
 func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
-	v := getViperInstance(app)
+	v := GetViperInstance(app)
 	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
@@ -158,6 +159,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		showHistory = v.GetBool("showHistory")
 	}
 	enableChatV2 := true
+	enableTelemetry := true
+	if v.IsSet("enableTelemetry") {
+		enableTelemetry = v.GetBool("enableTelemetry")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -183,9 +188,30 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		Lang:                     lang,
 		ShowHistory:              showHistory,
 		EnableChatV2:             enableChatV2,
+		EnableTelemetry:          enableTelemetry,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 	}, nil
+}
+
+// IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).
+func IsTelemetryEnabled() bool {
+	if raw := os.Getenv("EQT_ENABLE_TELEMETRY"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	if raw := os.Getenv("EQT_TELEMETRY"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("enableTelemetry") {
+			return v.GetBool("enableTelemetry")
+		}
+		if v.IsSet("telemetry") {
+			return v.GetBool("telemetry")
+		}
+	}
+	return true
 }
 
 func WriteDesktopSettings(app application.App, settings DesktopSettings) (DesktopSettings, error) {
@@ -210,7 +236,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	if err := validateDesktopOutput(output); err != nil {
 		return DesktopSettings{}, err
 	}
-	v := getViperInstance(app)
+	v := GetViperInstance(app)
 	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
@@ -245,6 +271,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("lang", settings.Lang)
 	v.Set("showHistory", settings.ShowHistory)
 	v.Set("enableChatV2", settings.EnableChatV2)
+	v.Set("enableTelemetry", settings.EnableTelemetry)
 	v.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	v.Set("logDir", strings.TrimSpace(settings.LogDir))
 	fmt.Printf("[Config Debug] WriteDesktopSettings: enableChatV2=%v, configFileUsed=%s\n", settings.EnableChatV2, v.ConfigFileUsed())
