@@ -185,6 +185,26 @@ CREATE TABLE IF NOT EXISTS device_registry (
 2. **Free 设备数据保留，不设 TTL 清扫**：
    大屏活跃查询是 `last_seen_at >= now - window` 的条件过滤，配合 `idx_registry_live` 索引，死数据不进扫描范围、不影响渲染；宽表一行一设备，行数 = 去重设备数（有界），非事件数。故 Free 死数据**保留沉淀**，不删除——历史活跃可留作长期分析，且**消除"付费设备被 TTL 误删"的风险**。增长由 register 限频（见 5.4）兜底。
 
+#### 4.2.1 数据库架构全景与表功能统计（D1 全量清单）
+
+底层数据模型清晰解耦为**两大核心域**与**中间绑定/风控表**：
+1. **【购买与账户域】（账户 & 授权码套件）**：关注“谁买的、买了几个名额、邮箱是什么、退没退款”。
+2. **【设备与硬件域】（设备与运行基本信息套件）**：关注“哪台设备在用、硬件指纹是什么、随机设备码 device_id 是什么、什么时候在哪个 IP 启动了”。
+3. **【关联与解绑】**：激活时在 `activations` 建立关联；解绑时销毁解绑关系，**购买账户不变，设备本身的信息沉淀也不变**。
+
+Cloudflare D1 数据库目前实际在用的全量 8 张数据表清单如下：
+
+| 表名 (Table Name) | 数据所属域 | 核心字段与作用描述 |
+|---|---|---|
+| **`licenses`** | 购买/账户域 | **授权码主表**：存储授权码状态 `status`、购买者邮箱 `buyer_email`、Tier (PLUS/PRO)、绑定名额上限 `max_devices`、Paddle 交易单号等。 |
+| **`device_registry`** *(新增)* | 设备/硬件域 | **设备统一注册表**：存储随机派发的 `device_id` (PK)、硬件指纹、`tier_label` (free/paid)、首次注册时间、最近启动时间 `last_seen_at`、边缘 GeoIP 地理位置等。 |
+| **`activations`** | 关联/绑定域 | **激活记录表**：记录某张授权码绑定了哪个 `device_id` 及激活时的硬件指纹与网络 IP。 |
+| **`unbind_records`** | 审计与解绑控额 | **解绑历史表**：记录设备解绑时间，用于执行“365 天内最多解绑 4 次 (`MAX_YEARLY_UNBINDS = 4`)”的风控规则。 |
+| **`manual_blacklist`** | 安全风控域 | **黑名单表**：存储管理员手动封禁或系统自动标记的违规黑名单（支持按 `email` 或 `device_id` 封禁）。 |
+| **`verification_codes`** | 门户/发信域 | **验证码表**：存储用户登录自服务门户 (Portal) 或结账前的邮箱验证码，带 60s 发信防刷限频。 |
+| **`user_sessions`** | 门户鉴权域 | **登录 Session 表**：存储用户在许可证自服务门户 (Portal) 无密码登录后的 24h Session Token。 |
+| **`admin_audit_logs`** | 运维审计域 | **操作审计日志表**：审计留痕管理员高危操作（手动发码 `GENERATE`、吊销 `REVOKE`、解绑 `UNBIND`、清日志 `CLEAR_LOGS`）。 |
+
 `activations` 增加 `last_seen_at`、`last_ip` 列（幂等 ALTER，沿用 `ensureActivationNetworkColumns` / `ensureDeviceIdColumn` 模式，见 `cloudflare/eqt-drm-api/src/utils/auth.ts:29-57`）。
 
 ### 4.3 "在用"判定口径
