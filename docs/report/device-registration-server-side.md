@@ -463,7 +463,7 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 
 | 里程碑 | 内容 |
 | --- | --- |
-| M1 | D1 新增 `device_registry` 表（单一 `last_seen_at`，含 `email`/`license_code` 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动序列改造（付费 verify 顺带活跃登记与 device_id 回写、免费 register，见 4.1.1）+ **verify 响应契约修正（回显三指纹 + 新增 device_id，见附录 D-8）**；0 分量付费拒绝；遥测开关与隐私说明就绪；**开发期清库重置 `activations`/`device_registry`（用户已确认现有数据可弃，见 6.2）** |
+| M1 | D1 新增 `device_registry` 表（单一 `last_seen_at`，含 `email`/`license_code` 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动序列改造（付费 verify 顺带活跃登记与 device_id 回写、免费 register，见 4.1.1）+ **verify 响应契约修正（回显三指纹 + 新增 device_id，见附录 D-8）**；0 分量付费拒绝；**遥测开关已落地**（GUI 设置开关 commit `23f3fd6` + config/env gate `IsTelemetryEnabled()`，默认开、禁用则跳过匿名注册）；**隐私说明文案仍待补**（非开关本身，见 5.5）；**开发期清库重置 `activations`/`device_registry`（用户已确认现有数据可弃，见 6.2）** |
 | M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**）+ **手动续期能力（Portal 指定码续期，见 6.6）** + **年付→终身升级（全额支付、退款期隔离，见 6.7；⚠️ 待生效机制未实现，开放入口前须先完成 6.7 实现顺序）** |
 | M3 | `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关（活跃数据单源 `device_registry.last_seen_at`，**activations 不加活跃列**） |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
