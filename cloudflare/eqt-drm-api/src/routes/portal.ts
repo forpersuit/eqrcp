@@ -853,6 +853,94 @@ export async function handlePortalRoutes(
     }
   }
 
+  // 0.55 Manual license renewal (§6.6 User Portal renewal)
+  if (url.pathname === "/api/v1/user/license/renew" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license_code = (body.license_code || "").trim();
+    const addDays = Math.max(1, Math.min(3650, Number(body.add_days || 30)));
+
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const sessionEmailHash = await sha256Hex(session.email.trim().toLowerCase());
+    if (!licenseOwnedByEmail(license, session.email, sessionEmailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status !== "active") {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Calculate new expiration
+    let currentExpMs = Date.now();
+    if (license.expires_at && license.expires_at !== "LIFETIME") {
+      const parsed = new Date(license.expires_at).getTime();
+      if (!Number.isNaN(parsed) && parsed > currentExpMs) {
+        currentExpMs = parsed;
+      }
+    }
+    const newExpiresAt = new Date(currentExpMs + addDays * 86400 * 1000).toISOString();
+
+    await env.DB.prepare(
+      "UPDATE licenses SET expires_at = ?, duration_days = COALESCE(duration_days, 0) + ? WHERE license_code = ?"
+    ).bind(newExpiresAt, addDays, license_code).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      license_code: license_code,
+      tier: license.tier,
+      expires_at: newExpiresAt,
+      renewed_days: addDays
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // 0.6 Invoice / receipt link (Paddle MoR — temporary PDF or customer portal URL)
   if (url.pathname === "/api/v1/user/invoice-link" && request.method === "POST") {
     await ensureLicenseSourceColumns(env);

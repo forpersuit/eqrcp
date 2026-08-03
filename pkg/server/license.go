@@ -97,7 +97,7 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
 }
 
-// VerifySyncSignature checks the cryptographic signature of the online sync response
+// VerifySyncSignature checks the cryptographic signature of the online sync response (Supports V2 6-field with device_id & V1 legacy)
 func VerifySyncSignature(cert LicenseCertificate) bool {
 	if cert.VerifySignature == "" || cert.LastOnlineSyncTime == "" {
 		return false
@@ -108,22 +108,35 @@ func VerifySyncSignature(cert LicenseCertificate) bool {
 	}
 	pubKey := ed25519.PublicKey(pubBytes)
 
-	// Format matching worker sync signature payload: OK|license_code|uuid_hash|cpu_hash|disk_hash|last_online_sync_time
-	payloadStr := fmt.Sprintf("OK|%s|%s|%s|%s|%s",
+	sigBytes, err := hex.DecodeString(cert.VerifySignature)
+	if err != nil {
+		return false
+	}
+
+	// 1. Try V2 Sync Payload format (with device_id):
+	// OK|license_code|uuid_hash|cpu_hash|disk_hash|device_id|last_online_sync_time
+	v2PayloadStr := fmt.Sprintf("OK|%s|%s|%s|%s|%s|%s",
+		cert.LicenseCode,
+		cert.UUIDHash,
+		cert.CPUHash,
+		cert.DiskHash,
+		cert.DeviceID,
+		cert.LastOnlineSyncTime,
+	)
+	if ed25519.Verify(pubKey, []byte(v2PayloadStr), sigBytes) {
+		return true
+	}
+
+	// 2. Fallback to Legacy V1 Sync Payload format (without device_id):
+	// OK|license_code|uuid_hash|cpu_hash|disk_hash|last_online_sync_time
+	v1PayloadStr := fmt.Sprintf("OK|%s|%s|%s|%s|%s",
 		cert.LicenseCode,
 		cert.UUIDHash,
 		cert.CPUHash,
 		cert.DiskHash,
 		cert.LastOnlineSyncTime,
 	)
-	payloadData := []byte(payloadStr)
-
-	sigBytes, err := hex.DecodeString(cert.VerifySignature)
-	if err != nil {
-		return false
-	}
-
-	return ed25519.Verify(pubKey, payloadData, sigBytes)
+	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
 }
 
 // VerifyFingerprint checks if current hardware matches the certificate hashes using 3-of-2 model

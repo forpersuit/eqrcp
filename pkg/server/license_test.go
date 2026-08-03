@@ -55,13 +55,25 @@ func signTestVerifyPayload(cert LicenseCertificate) string {
 	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
 	privKey := ed25519.NewKeyFromSeed(seedBytes)
 
-	payloadStr := fmt.Sprintf("OK|%s|%s|%s|%s|%s",
-		cert.LicenseCode,
-		cert.UUIDHash,
-		cert.CPUHash,
-		cert.DiskHash,
-		cert.LastOnlineSyncTime,
-	)
+	var payloadStr string
+	if cert.DeviceID != "" {
+		payloadStr = fmt.Sprintf("OK|%s|%s|%s|%s|%s|%s",
+			cert.LicenseCode,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.DeviceID,
+			cert.LastOnlineSyncTime,
+		)
+	} else {
+		payloadStr = fmt.Sprintf("OK|%s|%s|%s|%s|%s",
+			cert.LicenseCode,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.LastOnlineSyncTime,
+		)
+	}
 	payloadData := []byte(payloadStr)
 	sigBytes := ed25519.Sign(privKey, payloadData)
 	return hex.EncodeToString(sigBytes)

@@ -499,7 +499,7 @@ export async function handleDrmRoutes(
     const signatureHex = bufToHex(signatureBuf);
 
     const currentTime = new Date().toISOString();
-    const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${currentTime}`;
+    const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${authoritativeDeviceId || ""}|${currentTime}`;
     const verifyPayloadData = encoder.encode(verifyPayloadStr);
     const verifySignatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
     const verifySignatureHex = bufToHex(verifySignatureBuf);
@@ -607,8 +607,20 @@ export async function handleDrmRoutes(
       baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
     }
 
+    const net = activationClientMeta(request);
+    const regResult = await registerOrRefreshDevice(env, {
+      uuidHash: uuid_hash || "",
+      cpuHash: cpu_hash || "",
+      diskHash: disk_hash || "",
+      tierLabel: 'paid',
+      licenseCode: license_code,
+      email: license.buyer_email || null,
+      appVersion: body.app_version || null
+    }, net);
+
+    const activeDeviceId = regResult.device_id || "";
     const currentTime = new Date().toISOString();
-    const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${currentTime}`;
+    const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${activeDeviceId}|${currentTime}`;
     const encoder = new TextEncoder();
     const verifyPayloadData = encoder.encode(verifyPayloadStr);
 
@@ -633,19 +645,7 @@ export async function handleDrmRoutes(
     const verifySignatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
     const verifySignatureHex = bufToHex(verifySignatureBuf);
 
-    const net = activationClientMeta(request);
-    const regResult = await registerOrRefreshDevice(env, {
-      uuidHash: uuid_hash || "",
-      cpuHash: cpu_hash || "",
-      diskHash: disk_hash || "",
-      tierLabel: 'paid',
-      licenseCode: license_code,
-      email: license.buyer_email || null,
-      appVersion: body.app_version || null
-    }, net);
-
     // Also produce updated certificate signature for local cache renewal (V2 payload format)
-    const activeDeviceId = regResult.device_id || (device_id || "");
     const certificatePayloadStr = `${license_code}|${license.tier}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${activeDeviceId}|${baseExpiresAt}|${license.max_devices}`;
     const certificatePayloadData = encoder.encode(certificatePayloadStr);
     const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, certificatePayloadData);
