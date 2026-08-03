@@ -392,9 +392,14 @@ export async function handleDrmRoutes(
       }, net);
       const authoritativeDeviceId = regRes.device_id || (device_id || "");
 
-      await env.DB.prepare(
-        "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent, city, region, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      ).bind(
+      const insRes = await env.DB.prepare(`
+        INSERT INTO activations (
+          license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at,
+          client_ip, ip_country, user_agent, city, region, latitude, longitude
+        )
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        WHERE (SELECT COUNT(*) FROM activations WHERE license_code = ?) < ?
+      `).bind(
         license_code,
         uuid_hash || "",
         cpu_hash || "",
@@ -407,8 +412,18 @@ export async function handleDrmRoutes(
         net.city,
         net.region,
         net.latitude,
-        net.longitude
+        net.longitude,
+        license_code,
+        license.max_devices
       ).run();
+
+      // If changes === 0, race condition hit max_devices limit -> Block overselling
+      if (!insRes.meta || insRes.meta.changes === 0) {
+        return new Response(JSON.stringify({ error: getApiTranslation("max_devices_reached", reqLang) }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
 
       // Send activation notification email to the buyer asynchronously
       if (license.buyer_email) {

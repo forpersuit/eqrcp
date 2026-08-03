@@ -776,3 +776,35 @@ func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 		t.Errorf("expected updated certificate DeviceID '%s', got '%s'", mockServerDeviceID, updatedCert.DeviceID)
 	}
 }
+
+func TestCrossPlatformContractLock(t *testing.T) {
+	// Lock JSON key naming contract between Go client and Workers DRM API to prevent D-8 drift
+	cert := LicenseCertificate{
+		LicenseCode: "CONTRACT-LOCK-101",
+		Tier:        "PLUS",
+		UUIDHash:    "u1",
+		CPUHash:     "c1",
+		DiskHash:    "d1",
+		DeviceID:    "dev_32hex_id_sample_99999999",
+		ExpiresAt:   "LIFETIME",
+		MaxDevices:  2,
+	}
+
+	data, err := json.Marshal(cert)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Unmarshal map failed: %v", err)
+	}
+
+	expectedKeys := []string{"license_code", "tier", "uuid_hash", "cpu_hash", "disk_hash", "device_id", "expires_at", "max_devices"}
+	for _, key := range expectedKeys {
+		if _, exists := m[key]; !exists {
+			t.Errorf("Contract drift detected! Expected JSON key '%s' missing from LicenseCertificate serialization", key)
+		}
+	}
+}
+

@@ -115,6 +115,8 @@ export function clientIpFromRequest(request: Request): string {
 }
 
 // --- Device Registration Rate Limiter (§5.4 IP + Fingerprint Key) ---
+// Design Note: In-isolate Map provides cost-raising protection per Worker instance (resets on isolate recycle).
+// Multi-region instances multiply rate window slightly, which is acceptable for M1 C-1 sampling.
 const DEV_REG_WINDOW_MS = 60 * 1000; // 1 minute window
 const DEV_REG_MAX_REQUESTS = 10;     // max 10 requests per minute
 
