@@ -1205,12 +1205,21 @@
 
                 if (canToggleAutoRenew) {
                     const isAutoRenewOn = lic.auto_renew !== 0;
-                    actionBtns.push(`
-                        <button class="toggle-auto-renew-btn flex items-center gap-1.5 ${isAutoRenewOn ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/40'} border px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-current-renew="${isAutoRenewOn ? '1' : '0'}">
-                            <span class="material-symbols-outlined text-sm">${isAutoRenewOn ? 'sync' : 'sync_disabled'}</span>
-                            <span>${isAutoRenewOn ? (dict.auto_renew_on_btn || 'Auto-renew: ON') : (dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
-                        </button>
-                    `);
+                    if (lic.pending_upgrade) {
+                        actionBtns.push(`
+                            <button class="flex items-center gap-1.5 bg-slate-800/40 text-slate-400 border border-slate-700/40 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${dict.auto_renew_disabled_pending || 'Auto-renew is disabled because a lifetime upgrade is scheduled.'}">
+                                <span class="material-symbols-outlined text-sm">sync_disabled</span>
+                                <span>${dict.auto_renew_off_btn || 'Auto-renew: OFF'}</span>
+                            </button>
+                        `);
+                    } else {
+                        actionBtns.push(`
+                            <button class="toggle-auto-renew-btn flex items-center gap-1.5 ${isAutoRenewOn ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/40'} border px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-current-renew="${isAutoRenewOn ? '1' : '0'}">
+                                <span class="material-symbols-outlined text-sm">${isAutoRenewOn ? 'sync' : 'sync_disabled'}</span>
+                                <span>${isAutoRenewOn ? (dict.auto_renew_on_btn || 'Auto-renew: ON') : (dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
+                            </button>
+                        `);
+                    }
                 }
                 if (canInvoice) {
                     actionBtns.push(`

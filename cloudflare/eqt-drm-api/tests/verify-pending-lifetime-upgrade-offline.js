@@ -124,8 +124,8 @@ class RealWorkerD1Mock {
   executeSqlRun(sql, args) {
     const s = sql.replace(/\s+/g, ' ').trim();
 
-    // Insert license_upgrades
-    if (s.includes('INSERT INTO license_upgrades')) {
+    // Insert license_upgrades (supporting INSERT OR IGNORE)
+    if (s.includes('INTO license_upgrades')) {
       const id = this.autoIncrement.license_upgrades++;
       const row = {
         id,
@@ -286,17 +286,17 @@ async function runTests() {
   assert(licAfterUpg.auto_renew === 0, 'REAL handler updated auto_renew = 0');
   assert(db.tables.license_upgrades.size === 1, 'REAL handler created row in license_upgrades table');
 
-  // Test 2: REAL Duplicate Upgrade Prevention (Issue 6)
-  console.log('\nTest 2: REAL handlePaddleRoutes duplicate pending upgrade prevention...');
+  // Test 2: REAL Duplicate Upgrade Prevention (V1 & V2)
+  console.log('\nTest 2: REAL handlePaddleRoutes duplicate pending upgrade prevention (400 Bad Request)...');
   const req2 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'paddle-signature': sig1 },
     body: rawBody1
   });
   const res2 = await handlePaddleRoutes(req2, env, ctx, new URL(req2.url), corsHeaders);
-  assert(res2.status === 200, 'Duplicate upgrade request handled gracefully with 200 OK');
+  assert(res2.status === 400, 'Duplicate upgrade request correctly rejected with 400 Bad Request (V1 Fix)');
   const res2Json = await res2.json();
-  assert(res2Json.status === 'pending_upgrade' && res2Json.message.includes('already has a pending'), 'REAL handler prevented duplicate upgrade insert!');
+  assert(res2Json.code === 'UPGRADE_ALREADY_PENDING', 'REAL handler returned UPGRADE_ALREADY_PENDING code');
 
   // Test 3: REAL Refund Window Block (< 14 days) (Issue 4)
   console.log('\nTest 3: REAL handlePaddleRoutes 14-day refund window block...');

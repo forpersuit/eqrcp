@@ -203,19 +203,23 @@ export async function handlePaddleRoutes(
               });
             }
 
-            // Prevent duplicate pending upgrade for the same license (Issue 6)
+            // Prevent duplicate pending upgrade for the same license (V1 & V2)
             const existingPending = await env.DB.prepare(
               "SELECT id, effective_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
             ).bind(targetLic.license_code).first<any>();
 
             if (existingPending) {
+              ctx.waitUntil(logSystemError(env, 'DUPLICATE_UPGRADE_ATTEMPT', 'WARN',
+                new Error(`Duplicate lifetime upgrade attempted for license ${targetLic.license_code}`),
+                { target_license_code: targetLic.license_code, duplicate_txn_id: transactionId, existing_effective_at: existingPending.effective_at }));
+
               return new Response(JSON.stringify({
-                message: "Target license already has a pending lifetime upgrade scheduled",
+                error: "Target license already has a pending lifetime upgrade scheduled",
+                code: "UPGRADE_ALREADY_PENDING",
                 license_code: targetLic.license_code,
-                effective_at: existingPending.effective_at,
-                status: "pending_upgrade"
+                effective_at: existingPending.effective_at
               }), {
-                status: 200,
+                status: 400,
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
               });
             }
@@ -229,7 +233,7 @@ export async function handlePaddleRoutes(
 
             const nowIso = new Date(nowMs).toISOString();
             await env.DB.prepare(`
-              INSERT INTO license_upgrades (
+              INSERT OR IGNORE INTO license_upgrades (
                 user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status, created_at
               ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
             `).bind(
@@ -490,6 +494,19 @@ export async function handlePaddleRoutes(
             "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
           ).bind(upgradeRow.id).run();
           await env.DB.prepare(revokeLicenseSql()).bind(new Date().toISOString(), "refund", upgradeRow.target_license_code).run();
+
+          const targetLic = await env.DB.prepare(
+            "SELECT license_code, buyer_email, tier FROM licenses WHERE license_code = ?"
+          ).bind(upgradeRow.target_license_code).first<any>();
+
+          if (targetLic && targetLic.buyer_email) {
+            const buyerLang = detectBuyerLang(data);
+            const planName = targetLic.tier === "PLUS" ? "EQT Plus" : (targetLic.tier === "PRO" ? "EQT Pro" : targetLic.tier);
+            const t = getLicenseRevokeEmailTemplate(buyerLang, "refund");
+            const emailHtml = renderEmailWrapper(t.title, t.body(targetLic.license_code, planName));
+            ctx.waitUntil(sendDRMEmail(env, targetLic.buyer_email, t.subject, emailHtml));
+          }
+
           return new Response(JSON.stringify({ message: "Applied lifetime upgrade revoked due to refund", status: "revoked" }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" }

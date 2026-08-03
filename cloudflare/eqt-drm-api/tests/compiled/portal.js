@@ -1331,7 +1331,7 @@ async function ensureLicenseUpgradesTable(env) {
         )
       `),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status)`),
-      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_upgrades_txn ON license_upgrades(lifetime_txn_id)`)
+      env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id)`)
     ]);
   } catch (err) {
     console.error("Failed to ensure license_upgrades table:", err);

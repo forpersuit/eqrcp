@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS license_upgrades (
 );
 
 CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status);
-CREATE INDEX IF NOT EXISTS idx_upgrades_txn ON license_upgrades(lifetime_txn_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id);
 
 
 
