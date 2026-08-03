@@ -104,7 +104,7 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 
 ## 4. 目标方案设计
 
-### 4.1 启动注册与模式遥测（能联网就注册，不联网不强求）
+### 4.1 启动注册（能联网就注册，不联网不强求）
 
 新增端点 `POST /api/v1/device/register`，请求体：
 
@@ -114,20 +114,19 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
   "cpu_hash": "...",
   "disk_hash": "...",
   "app_version": "x.y.z",
-  "lang": "zh",
-  "mode": "send" | "receive" | "chat"
+  "lang": "zh"
 }
 ```
 
 服务端逻辑：
 
 1. **IP 必须取自 Cloudflare 请求头（CF-Connecting-IP）**，禁止信任 body 传入的 IP；
-2. 按指纹匹配已有设备记录 → 命中则**复用原 device_id**，更新 `last_seen_at/last_ip/经纬度/last_mode`（**显式刷新，不能沿用 activate 仅新激活写库的时机**，见 4.4 前提）；
+2. **身份查找靠指纹，不信任 body 里的 device_id**（服务端以库为准）：粗筛（对本次非空分量做 `uuid_hash=? OR cpu_hash=? OR disk_hash=?` 等值查询，走各自索引）→ 精筛（候选行中"本次与库中都非空"的分量须**全部相等**，任一不等即剔除=换机）→ 命中则**复用原 device_id**，更新 `last_seen_at` + `last_ip/经纬度`（**显式刷新，不能沿用 activate 仅新激活写库的时机**，见 4.4 前提）；
 3. 未命中 → 服务端生成**纯随机 device_id（≥16 hex，用 randomUUID，不掺指纹派生）**，写入设备注册表；
 4. 返回 `{ device_id, tier: "free"|"paid" }`。
 
-> **无感遥测与 Fail-open 原则**：
-> CLI/桌面端在启动任意模式（`send` / `receive` / `chat`）时可异步发起上报。无网或请求失败时直接静默丢弃（Fail-open），绝不上报 alert 弹窗或阻断用户任何正常的传输与聊天流程。
+> **边界说明（仅软件启动时请求一次）**：
+> 现阶段不追踪不同传输/聊天模式，也不在切换模式时发送状态。仅在**应用打开/启动时**尝试发起一次注册/刷新请求；无网或请求失败时静默丢弃（Fail-open），绝不上报 alert 弹窗或阻断用户任何正常使用。
 
 > **指纹匹配规则（共享分量一致即同一台）**：能比的分量都比了，全相等就是同一台；缺失项不参与比较，既不判等也不判不等。
 >
@@ -146,7 +145,7 @@ device_id = SHA256( sort(non_empty{uuid_hash, cpu_hash, disk_hash}).join("|") )[
 
 - **Free 用户**：不强制。启动时有网 → 匿名注册（不绑定授权码）；无网 → 跳过，不阻断任何功能，本地可显示"未注册"。
 - **付费用户**：兑换激活码时走 `/api/v1/activate`，端点**内联完成"注册/复用 device_id → 写 activations → 签发 `.lic` 下发"三步，一次请求原子做完**（付费无需先调 `register`，见附录 C-2），客户端持久化。
-- 启动时的静默对账沿用现有 `ForceOnlineLicenseSync()`；**注意其 `force=true` 完全绕过节流，即启动路径每次注册不节流**，12 小时节流只作用于后台 sync（`license.go:352-359`）。注册动作可并入其中，避免新增请求次数。
+- 启动时的静默对账沿用现有 `ForceOnlineLicenseSync()`（仅付费）；**注意其 `force=true` 完全绕过节流，即启动路径每次注册不节流**，12 小时节流只作用于后台 sync（`license.go:352-359`）。
 
 ### 4.2 数据模型变更
 
@@ -162,16 +161,17 @@ CREATE TABLE IF NOT EXISTS device_registry (
   license_code  TEXT,                               -- 付费时关联
   email         TEXT,                               -- 激活时绑定，购买者身份因子
   registered_at TEXT NOT NULL,
-  last_seen_at  TEXT,
+  last_seen_at  TEXT,                               -- 最近一次应用启动/活跃时间
   last_ip       TEXT,
   ip_country    TEXT,
   city          TEXT,
   region        TEXT,
   latitude      REAL,
   longitude     REAL,
-  app_version   TEXT,
-  last_mode     TEXT                                -- send | receive | chat
+  app_version   TEXT
 );
+-- 索引：CREATE INDEX idx_registry_live ON device_registry(tier_label, last_seen_at);
+-- 索引：uuid_hash / cpu_hash / disk_hash 各自建索引（供粗筛 OR 等值查询）
 ```
 
 > 说明：早先考虑过"免费/付费分表"，已否决。统一表 + `tier_label` 过滤即可避免免费流量污染授权口径（聚合查询按 tier 过滤），分表反而让"同一台设备先免费后付费"的升级路径（需更新 device_id 关联）变得复杂。
@@ -181,9 +181,9 @@ CREATE TABLE IF NOT EXISTS device_registry (
 #### 性能与存储防护策略：
 
 1. **Workers 端 5 分钟写防抖 (Write Debouncing)**：
-   CLI 工具在脚本循环中可能发生高频脉冲并发。为防止频繁 SQL `UPDATE` 触发 SQLite/D1 锁死与配额激增，Workers 在校验 `now() - last_seen_at < 5 minutes` 时直接返回内存响应，跳过 D1 写事务落盘。
-2. **Free 设备 30 天 TTL 自动清扫**：
-   为防止匿名 Free 注册积累死数据，D1 配置 Cron Trigger，定时**自动删除 `tier_label = 'free'` 且 `last_seen_at` 超过 30 天未更新的僵尸设备**；`paid` 设备记录永久保留。
+   应用/CLI 在短时间内可能被频繁多次启动。为防止高频请求引发 SQL `UPDATE` 导致 SQLite/D1 锁锁竞争与资源浪费，Workers 对 `last_seen_at` 列做写防抖：若 `now() - last_seen_at < 5 minutes`，直接返回内存响应，跳过 D1 写事务落盘。
+2. **Free 设备数据保留，不设 TTL 清扫**：
+   大屏活跃查询是 `last_seen_at >= now - window` 的条件过滤，配合 `idx_registry_live` 索引，死数据不进扫描范围、不影响渲染；宽表一行一设备，行数 = 去重设备数（有界），非事件数。故 Free 死数据**保留沉淀**，不删除——历史活跃可留作长期分析，且**消除"付费设备被 TTL 误删"的风险**。增长由 register 限频（见 5.4）兜底。
 
 `activations` 增加 `last_seen_at`、`last_ip` 列（幂等 ALTER，沿用 `ensureActivationNetworkColumns` / `ensureDeviceIdColumn` 模式，见 `cloudflare/eqt-drm-api/src/utils/auth.ts:29-57`）。
 
@@ -331,7 +331,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 
 | 里程碑 | 内容 |
 | --- | --- |
-| M1 | D1 新增 `device_registry` 表（含 `email` 列）+ `register` 端点（IP+指纹组合限频，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动注册（免费匿名、付费复用，绑定邮箱）；共享分量匹配规则 + 0 分量付费拒绝；遥测开关与隐私说明就绪；开发期清库重置 `activations` |
+| M1 | D1 新增 `device_registry` 表（含 `email` 列 + 每模式 last_seen 列，无 TTL）+ `register` 端点（粗筛+精筛指纹匹配、IP+指纹组合限频、每模式 5 分钟写防抖，见 5.4）+ `activate` 内联注册（并发事务 + 幂等，见 C-2）+ 客户端启动注册（免费匿名、付费复用，绑定邮箱）；0 分量付费拒绝；遥测通道与对账通道分离（见 4.1）；遥测开关与隐私说明就绪；开发期清库重置 `activations` |
 | M2 | device_id 纳入证书/对账签名载荷 + 客户端双版本验签 + 存量强制重签（**联动 paddle.ts 铸造/吊销/续费路径**） |
 | M3 | `last_seen_at/last_ip` 列 + `/admin/devices/live`（区间参数）+ 大屏付费/免费双色与活跃口径 + 抛物线开关 |
 | M4 | **可选**运营告警（同 ID 多国家）+ 频率限流 + 证书固定；**不**做自动黑名单，异常检测不作为授权阻断（克隆已免疫，见 3.6.1/5.4） |
