@@ -826,28 +826,12 @@ func TestCrossPlatformContractLock(t *testing.T) {
 		"signature": "sig_verify_test"
 	}`
 
-	var verifyResp struct {
-		Status               string `json:"status"`
-		LicenseCode          string `json:"license_code"`
-		Tier                 string `json:"tier"`
-		UUIDHash             string `json:"uuid_hash"`
-		CPUHash              string `json:"cpu_hash"`
-		DiskHash             string `json:"disk_hash"`
-		DeviceID             string `json:"device_id"`
-		MaxDevices           int    `json:"max_devices"`
-		ActivatedDevices     int    `json:"activated_devices"`
-		ExpiresAt            string `json:"expires_at"`
-		BuyerEmail           string `json:"buyer_email"`
-		CertificateSignature string `json:"certificate_signature"`
-		CurrentTime          string `json:"current_time"`
-		Signature            string `json:"signature"`
-	}
-
+	var verifyResp VerifyAPIResponse
 	if err := json.Unmarshal([]byte(mockVerifyJSON), &verifyResp); err != nil {
 		t.Fatalf("Unmarshal verifyResp failed: %v", err)
 	}
 
-	if verifyResp.UUIDHash != "u1" || verifyResp.CPUHash != "c1" || verifyResp.DiskHash != "d1" || verifyResp.DeviceID != "dev_32hex_id_sample_99999999" {
-		t.Errorf("Contract drift detected! HTTP Verify response deserialization failed to bind fingerprint or device_id fields: %+v", verifyResp)
+	if verifyResp.UUIDHash != "u1" || verifyResp.CPUHash != "c1" || verifyResp.DiskHash != "d1" || verifyResp.DeviceID != "dev_32hex_id_sample_99999999" || verifyResp.SyncSignature != "sig_verify_test" {
+		t.Errorf("Contract drift detected! HTTP Verify response deserialization failed to bind fingerprint, device_id or signature fields: %+v", verifyResp)
 	}
 }

@@ -348,6 +348,24 @@ func StartOnlineLicenseSync() {
 	}()
 }
 
+// VerifyAPIResponse represents the server DRM /api/v1/verify response contract.
+type VerifyAPIResponse struct {
+	Status               string `json:"status"`
+	LicenseCode          string `json:"license_code"`
+	Tier                 string `json:"tier"`
+	UUIDHash             string `json:"uuid_hash"`
+	CPUHash              string `json:"cpu_hash"`
+	DiskHash             string `json:"disk_hash"`
+	DeviceID             string `json:"device_id"`
+	MaxDevices           int    `json:"max_devices"`
+	ActivatedDevices     int    `json:"activated_devices"`
+	ExpiresAt            string `json:"expires_at"`
+	BuyerEmail           string `json:"buyer_email"`
+	CertificateSignature string `json:"certificate_signature"`
+	CurrentTime          string `json:"current_time"`
+	SyncSignature        string `json:"signature"`
+}
+
 func doOnlineLicenseSync(force bool) error {
 	// 1. Get local license
 	cert, ok := GetLocalLicenseInfo()
@@ -399,22 +417,7 @@ func doOnlineLicenseSync(force bool) error {
 		return fmt.Errorf("server returned status code %d", resp.StatusCode)
 	}
 
-	var verifyResp struct {
-		Status               string `json:"status"`
-		LicenseCode          string `json:"license_code"`
-		Tier                 string `json:"tier"`
-		UUIDHash             string `json:"uuid_hash"`
-		CPUHash              string `json:"cpu_hash"`
-		DiskHash             string `json:"disk_hash"`
-		DeviceID             string `json:"device_id"`
-		MaxDevices           int    `json:"max_devices"`
-		ActivatedDevices     int    `json:"activated_devices"`
-		ExpiresAt            string `json:"expires_at"`
-		BuyerEmail           string `json:"buyer_email"`
-		CertificateSignature string `json:"certificate_signature"`
-		CurrentTime          string `json:"current_time"`
-		SyncSignature        string `json:"signature"`
-	}
+	var verifyResp VerifyAPIResponse
 	if err := json.Unmarshal(respData, &verifyResp); err != nil {
 		return fmt.Errorf("failed to parse sync response: %w", err)
 	}
