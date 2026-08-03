@@ -246,7 +246,7 @@ export async function handlePaddleRoutes(
             }
 
             const nowIso = new Date(nowMs).toISOString();
-            await env.DB.prepare(`
+            const insertResult = await env.DB.prepare(`
               INSERT OR IGNORE INTO license_upgrades (
                 user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status, created_at
               ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
@@ -258,6 +258,13 @@ export async function handlePaddleRoutes(
               effectiveAt,
               nowIso
             ).run();
+
+            // Concurrent duplicate swallowed by the partial unique index → audit for manual review (matches sequential-path WARN)
+            if (insertResult && insertResult.meta && insertResult.meta.changes === 0) {
+              ctx.waitUntil(logSystemError(env, 'DUPLICATE_UPGRADE_ATTEMPT', 'WARN',
+                new Error(`Lifetime upgrade for license ${targetLic.license_code} swallowed by unique index (concurrent duplicate, txn ${transactionId})`),
+                { target_license_code: targetLic.license_code, swallowed_txn_id: transactionId }));
+            }
 
             // Cancel auto-renewal ONLY; DO NOT OVERWRITE paddle_transaction_id to protect yearly refund checks! (Issue 5)
             await env.DB.prepare(`

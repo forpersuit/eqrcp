@@ -115,7 +115,8 @@ export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
             created_at TEXT NOT NULL
         )
       `),
-      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code, status)`),
+      // Partial unique index: at most one pending upgrade per license (must match schema.sql — same name + definition)
+      env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code) WHERE status = 'pending'`),
       env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id)`)
     ]);
   } catch (err) {

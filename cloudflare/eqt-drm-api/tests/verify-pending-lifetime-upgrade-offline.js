@@ -453,6 +453,12 @@ async function runTests() {
   const resConcB = await handlePaddleRoutes(await mkUpgradeReq('txn_conc_B'), envConc, ctx, reqConc, corsHeaders);
   assert(resConcB.status === 200, 'Concurrent txn B returned 200 (INSERT OR IGNORE silently swallowed, no 400 needed)');
 
+  // WARN audit for the swallowed concurrent duplicate (observability aligned with sequential-path WARN)
+  await new Promise(resolve => setTimeout(resolve, 10));
+  const swallowAudit = Array.from(dbConc.tables.system_error_logs.values())
+    .filter(r => r.args && r.args.includes('DUPLICATE_UPGRADE_ATTEMPT'));
+  assert(swallowAudit.length === 1, 'Swallowed concurrent duplicate produced a DUPLICATE_UPGRADE_ATTEMPT WARN audit row');
+
   const concPending = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
   assert(concPending.length === 1, 'Partial unique index kept exactly ONE pending row for the same code (no orphan!)');
   assert(concPending[0].lifetime_txn_id === 'txn_conc_A', 'The surviving pending row is the first transaction (id ASC order)');
