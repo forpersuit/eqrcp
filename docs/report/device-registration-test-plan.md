@@ -30,12 +30,12 @@ go test ./...
 
 # 专门测试 DRM 授权与对账契约锁
 go test -v ./pkg/server -run TestCrossPlatformContractLock
-go test -v ./pkg/server -run TestDualVersionSignature
+go test -v ./pkg/server -run TestVerifyLicenseSignature
 ```
 
 **验证判定标准**：
 - `TestCrossPlatformContractLock` 必须直接 Unmarshal 生产环境导出的 `VerifyAPIResponse` 结构体，确保字段 JSON Tag 无漂移；
-- `TestDualVersionSignature` 验证 V2 签名（含 8 字段证书载荷与 6 字段对账载荷）校验成功，且对 V1 历史签名具备向后兼容解析能力。
+- `TestVerifyLicenseSignature` 验证 V2 签名（含 8 字段证书载荷与 6 字段对账载荷）校验成功，且对 V1 历史签名具备向后兼容解析能力。
 
 ---
 
