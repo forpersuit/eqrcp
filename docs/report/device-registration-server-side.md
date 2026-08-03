@@ -556,3 +556,10 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 15. **§6.7 升级实现状态审查（2026-08-03）**：代码仅具备**立即生效**升级分支（paddle.ts:190-193），待生效机制（`license_upgrades`、惰性翻转、退款期判定、停 auto-renew、退款撤回）**均未实现**；D-13 两处 `lifetime_already_owned` 检查已移除（commit ffa01f9），该 i18n key 暂成死 key（保留待用/后续清理）。**用户决定按"开放升级"推进**：开放前端升级入口前，须先完成 §6.7 实现顺序全部步骤；此期间后端"立即升级"能力保持闲置，不开放入口。
 
 16. **订阅吊销语义与自动续费策略（用户确认，2026-08-03，见 §6.6 补充）**：`subscription.canceled`（退款窗口外）仅停自动续费、不吊销（吊销只由退款驱动），修正 paddle.ts:440 过度吊销；`past_due`/`paused` 欠费即停（revoke，不做重试恢复）；auto_renew **真默认关闭**（铸造时 Paddle `scheduled_change=cancel` 期末不续）；主动"终止订阅"保留立即吊销 + 网站风格二次确认；Portal `entitlement_term` 补 ja/ko/es/de/fr 五种翻译。
+
+17. **§6.7 待生效升级实现闭环（2026-08-04，commits ecc1c5e + fb944e5）**：审查员两轮复核后，幂等性与并发正确性已完整闭环——
+    - 数据层：`license_upgrades` 部分唯一索引 `idx_upgrades_target (target_license_code) WHERE status='pending'` + `INSERT OR IGNORE`，保证"每码至多一条 pending"、无孤儿行；运行时创建路径 auth.ts 已与 schema.sql 对齐（消除双路径同名不同定义冲突，SQLite `IF NOT EXISTS` 按名跳过不替换的坑）；
+    - 语义层：同笔重投 200 幂等、异笔重复 400 + `DUPLICATE_UPGRADE_ATTEMPT` WARN、并发异笔重复被吞 + 同款 WARN 审计（含 `swallowed_txn_id`，可人工发现并退款）；
+    - 测试层：7 项真实 Worker 路由测试覆盖顺序幂等、并发原子性、审计落库全路径。
+    - **残留（可接受，记录即可）**：① `changes===0` 无法区分"同笔并发重投"与"异笔并发重复"，两者均打 WARN，理论上会误报，但实际不可达（Paddle 重试为分钟级退避，不会落入毫秒级并发窗口）；② HTTP 状态不一致——顺序重复 400、并发重复 200（两者均有 WARN），源于 `INSERT OR IGNORE` 无法在 DB 层拒绝，审计已兜底。
+    - **存量 D1 状态**：生产库 `license_upgrades` 表系本工作新建（此前整表缺失，见 D-15 之后补建），已直接以部分唯一索引创建（`pragma_index_list` 确认 `idx_upgrades_target` unique=1/partial=1、`idx_upgrades_lifetime_txn` unique=1），无旧索引、无重复 pending 行——审查员"上线前重建索引"待办**已满足，无需再动**。
