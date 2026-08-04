@@ -272,7 +272,9 @@ export async function handleAdminRoutes(
     });
   }
 
-  // 3.8 Admin Endpoint: Active License Locations Aggregation (No arcs, points only for active activations)
+  // 3.8 Admin Endpoint (legacy): Active License Locations Aggregation — authorization-distribution
+  // view over activations. KEPT per design doc §4.4 ("授权分布口径"). Active-device view
+  // (paid/free, time window) lives at §3.9 /api/v1/admin/devices/live.
   if (url.pathname === "/api/v1/admin/activation-locations" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
