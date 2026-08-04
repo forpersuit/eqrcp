@@ -127,7 +127,8 @@
     if (!globeContainerRef) return;
     try {
       const loadPromise = loadScript('/vendor/globe.gl.min.js');
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('CDN timeout')), 3000));
+      // 同源自托管（public/vendor/），超时仅作保险：WebGL/脚本异常时才回落 2D。
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('script load timeout')), 3000));
       await Promise.race([loadPromise, timeoutPromise]).catch(() => {});
 
       // @ts-ignore

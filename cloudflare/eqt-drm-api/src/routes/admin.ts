@@ -529,23 +529,28 @@ export async function handleAdminRoutes(
               const n2 = nodes[j];
               const locKey1 = `${n1.country}:${n1.city || ''}`;
               const locKey2 = `${n2.country}:${n2.city || ''}`;
-              if (locKey1 !== locKey2) {
-                const pairKey = `${code}:${locKey1}->${locKey2}`;
-                if (!seenPairs.has(pairKey)) {
-                  seenPairs.add(pairKey);
-                  crossRegionArcs.push({
-                    license_code: code,
-                    from_country: n1.country,
-                    from_city: n1.city,
-                    from_lat: n1.latitude,
-                    from_lng: n1.longitude,
-                    to_country: n2.country,
-                    to_city: n2.city,
-                    to_lat: n2.latitude,
-                    to_lng: n2.longitude
-                  });
-                }
-              }
+              if (locKey1 === locKey2) continue;
+              // Normalize the unordered city pair (min->max lexicographic) so a given
+              // pair ALWAYS produces the same directional arc. Node order within a code
+              // is rowid order (not semantic), so without normalization the same visual
+              // pair could flip A->B / B->A across reloads — and never emit both at once.
+              const [fromKey, toKey] = [locKey1, locKey2].sort();
+              const pairKey = `${code}:${fromKey}->${toKey}`;
+              if (seenPairs.has(pairKey)) continue;
+              seenPairs.add(pairKey);
+              // fromNode is whichever raw node matches the normalized "from" key.
+              const [fromNode, toNode] = locKey1 === fromKey ? [n1, n2] : [n2, n1];
+              crossRegionArcs.push({
+                license_code: code,
+                from_country: fromNode.country,
+                from_city: fromNode.city,
+                from_lat: fromNode.latitude,
+                from_lng: fromNode.longitude,
+                to_country: toNode.country,
+                to_city: toNode.city,
+                to_lat: toNode.latitude,
+                to_lng: toNode.longitude
+              });
             }
           }
         }

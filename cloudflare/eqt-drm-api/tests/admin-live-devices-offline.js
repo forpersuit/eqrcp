@@ -203,6 +203,30 @@ async function runTests() {
   const details = JSON.parse(latest.details_json || '{}');
   assert(details.total_active_devices === 4, 'audit details carry total_active_devices=4');
 
+  // --- T7: unordered city-pair normalization — 2 devices in city A + 1 in city B for
+  // --- the SAME license code must emit exactly ONE arc (not one per direction).
+  console.log('\nTest 7: unordered pair normalization (2-in-A + 1-in-B = 1 arc, deterministic direction)...');
+  const db7 = new SqliteD1Mock();
+  env.DB = db7;
+  // Kick schema creation (ensureDrmTables via requireAdminAuth), then seed.
+  await adminGet(db7, 'https://lic.eqt.net.im/api/v1/admin/devices/live?window=1h');
+  await seedDevice(db7, { device_id: 'devG1', uuid_hash: 'g1', tier_label: 'paid', license_code: 'EQT-MULTI-1', email: 'm@x.com', last_seen_at: ago(1), ip_country: 'CN', city: 'Guangzhou', region: 'GD', latitude: 23.13, longitude: 113.26 });
+  await seedDevice(db7, { device_id: 'devG2', uuid_hash: 'g2', tier_label: 'paid', license_code: 'EQT-MULTI-1', email: 'm@x.com', last_seen_at: ago(2), ip_country: 'CN', city: 'Guangzhou', region: 'GD', latitude: 23.13, longitude: 113.26 });
+  await seedDevice(db7, { device_id: 'devC1', uuid_hash: 'c1', tier_label: 'paid', license_code: 'EQT-MULTI-1', email: 'm@x.com', last_seen_at: ago(3), ip_country: 'CN', city: 'Chengdu', region: 'SC', latitude: 30.57, longitude: 104.07 });
+  const res7 = await adminGet(db7, 'https://lic.eqt.net.im/api/v1/admin/devices/live?window=1h&arcs=1');
+  assert(res7.status === 200, '200 OK');
+  const j7 = await res7.json();
+  assert(j7.cross_region_arcs.length === 1, `exactly 1 arc (not 2) for Guangzhou(2)+Chengdu(1) — got ${j7.cross_region_arcs.length}`);
+  const arc7 = j7.cross_region_arcs[0];
+  const arc7Endpoints = [arc7.from_city, arc7.to_city].sort().join(',');
+  assert(arc7Endpoints === 'Chengdu,Guangzhou', `arc spans the right pair, got ${arc7Endpoints}`);
+  // Deterministic: run the query twice; direction must not flip.
+  const res7b = await adminGet(db7, 'https://lic.eqt.net.im/api/v1/admin/devices/live?window=1h&arcs=1');
+  const j7b = await res7b.json();
+  const arc7b = j7b.cross_region_arcs[0];
+  assert(arc7.from_city === arc7b.from_city && arc7.to_city === arc7b.to_city,
+    `arc direction deterministic across calls (${arc7.from_city}->${arc7.to_city})`);
+
   console.log('\n🎉🎉 ALL /api/v1/admin/devices/live OFFLINE TESTS PASSED DETERMINISTICALLY! 🎉🎉');
 }
 
