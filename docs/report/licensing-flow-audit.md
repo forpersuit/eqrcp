@@ -163,3 +163,30 @@ sub 回退用 `.first()` 取任意一行；同一 `paddle_subscription_id` 下�
 ### 7.3 配套修复：A2 唯一索引暴露的测试 fixture 硬编码
 
 A2 的 `idx_licenses_paddle_txn` 唯一索引上线后，`verify-subscription-cancel.js` 和 `verify-yearly-renewal.js` 中硬编码的 `paddle_transaction_id`（`txn_cancel_001` / `txn_init_001`）与生产已有行冲突，导致 `SQLITE_CONSTRAINT_UNIQUE` 错误。修复：改为 `Date.now()` 动态生成唯一 txn_id。
+
+---
+
+## 八、P3 处置记录（2026-08-04）
+
+### 8.1 B2 退款窗口口径统一 — 已处置（commit `2098580`，Worker `382dc042`）
+
+**问题**：`isLicenseRefundable()` 用 `created_at`（原始购买日）算 14 天窗口，但 portal 展示用 `last_purchased_at || created_at`（最近续期日）。年付续期后两标志矛盾：UI 显示在退款窗口内、后端拒绝退款。
+
+**修复**：`isLicenseRefundable` 增加 `last_purchased_at` 参数，窗口判断改为 `last_purchased_at || created_at`。调用方（portal.ts 两处）已通过 `SELECT *` + spread 自动传入 `last_purchased_at`，无需改调用签名。
+
+### 8.2 B4/B5 device_registry 残留清理 — 已处置（commit `2098580`，Worker `382dc042`）
+
+**问题**：解绑只删 `activations` 不清理 `device_registry`；吊销只改 `licenses.status` 不清理 `device_registry`。残留行保持 `tier_label='paid'` 指向已吊销/已解绑 license，导致 M3 地球仪统计失真。
+
+**修复**：在以下路径添加 `UPDATE device_registry SET tier_label='free', license_code=NULL, email=NULL WHERE ...`：
+
+| 路径 | 位置 | 触发条件 |
+|---|---|---|
+| Portal 解绑 | `portal.ts` unbind handler | 用户主动解绑设备 |
+| Portal 退款/取消 | `portal.ts` `revokeLicenseAndNotify` | 用户发起退款/取消订阅 |
+| Paddle 退款 webhook | `paddle.ts` `transaction.refunded` | Paddle 退款通知 |
+| Paddle 调整 webhook | `paddle.ts` `adjustment.*` refund/chargeback | Paddle 调整通知 |
+| Paddle 欠费吊销 | `paddle.ts` `subscription.updated` past_due/paused | 订阅扣款失败 |
+| Admin 吊销 | `admin.ts` revoke endpoint | 管理员手动吊销 |
+
+**验证**：`npm run test:upgrade:offline` 16/16 通过，`test:device-reg:offline` 7/7 通过，`test:upgrade:e2e` 通过，tsc --noEmit 通过。
