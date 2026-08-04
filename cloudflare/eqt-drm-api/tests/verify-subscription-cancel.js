@@ -28,6 +28,7 @@ async function main() {
 
   const subId = 'sub_test_cancel_semantics_' + Date.now();
   const testCode = 'EQT-PLUS-CANCEL-TEST-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+  const txnId = 'txn_cancel_' + Date.now();
   const expiresAt = new Date(Date.now() + 180 * 86400000).toISOString(); // 180 days remaining
   const email = 'cancel_tester@301098.xyz';
 
@@ -39,7 +40,7 @@ async function main() {
       buyer_email, paddle_transaction_id, paddle_subscription_id, auto_renew, source, created_at
     ) VALUES (
       '${testCode}', 'PLUS', 'active', 2, '${expiresAt}', 365,
-      '${email}', 'txn_cancel_001', '${subId}', 1, 'purchase', datetime('now')
+      '${email}', '${txnId}', '${subId}', 1, 'purchase', datetime('now')
     )
   `);
 

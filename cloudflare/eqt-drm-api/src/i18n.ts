@@ -432,6 +432,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Este dispositivo no está activado bajo la licencia proporcionada",
     de: "Dieses Gerät ist nicht unter der angegebenen Lizenz aktiviert",
     fr: "Cet appareil n'est pas activé sous la licence fournie"
+  },
+  rate_limit_exceeded: {
+    zh: "操作过于频繁，请稍后重试。",
+    en: "Too many requests. Please try again later.",
+    ja: "リクエストが多すぎます。後でもう一度お試しください。",
+    ko: "요청이 너무 많습니다. 나중에 다시 시도해 주세요.",
+    es: "Demasiadas solicitudes. Inténtelo de nuevo más tarde.",
+    de: "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+    fr: "Trop de requêtes. Veuillez réessayer plus tard."
   }
 };
 

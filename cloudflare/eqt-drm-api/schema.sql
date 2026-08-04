@@ -53,6 +53,16 @@ CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 -- index is created (see ensureLicensePaddleTxnIndex: it pre-checks duplicates and skips with a WARN).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_paddle_txn ON licenses(paddle_transaction_id);
 
+-- A3 (audit licensing-flow-audit.md): D1-persistent rate limiter for activate/verify.
+-- Key format: "activate:<license_code>" or "verify:<license_code>".
+-- Window resets when window_start + window_ms passes current time.
+-- Pruned lazily by isD1RateLimited (old windows are overwritten, not accumulated).
+CREATE TABLE IF NOT EXISTS rate_limits (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 1,
+    window_start TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS verification_codes (
     -- PK value is purpose-prefixed: "portal:user@x.com" or "checkout:user@x.com"
     -- (column name remains email for backward compatibility with existing D1 rows)

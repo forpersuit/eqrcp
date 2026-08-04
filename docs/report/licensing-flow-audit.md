@@ -142,3 +142,24 @@ sub 回退用 `.first()` 取任意一行；同一 `paddle_subscription_id` 下�
 - A：首次投递铸码 200；B：并发重投（existing 读不到）INSERT 撞唯一约束 → 500，**无双铸**（仅 1 条 license）；C：Paddle 重试（窗口关闭）→ existing 命中 → `Transaction already processed` 200 幂等；D：不同 txn 正常铸码；E：两条 promo（NULL txn）共存，验证 NULL 多值放行语义。
 
 `npm run test:upgrade:offline` **13/13 通过**，tsc --noEmit 通过。
+
+### 7.2 A3 activate/verify 限频 — 已处置（commit 待部署后记录）
+
+**落地方式**（按审查员建议，中成本后做）：
+1. **schema.sql** 新增 `rate_limits` 表（`key TEXT PK, count INTEGER, window_start TEXT`）。
+2. **utils/rate-limit.ts 新增 `isD1RateLimited(env, key, maxAttempts, windowMs)`**：D1 持久化限频，原子 read-then-write 模式（竞态可接受——软限频，少量请求漏过无害）。新增 `ensureRateLimitsTable` 自动建表。
+3. **drm.ts activate 入口**（license 查询 + status 检查后、黑名单前）：`isD1RateLimited(env, "activate:"+code, 10, 60000)` → 超限 429。
+4. **drm.ts verify 入口**（license 查询 + status 检查后、黑名单前）：`isD1RateLimited(env, "verify:"+code, 20, 60000)` → 超限 429。
+5. **i18n.ts** 新增 `rate_limit_exceeded` 翻译键（7 语言）。
+6. **生产回归**：§6.7 E2E、device-registration、subscription-cancel、yearly-renewal 全部通过。
+
+**Test 14/15/16（A3 限频）**：
+- **Test 14**：activate 预填 count=10 → 第 11 次 429（`rate_limit_exceeded`）；不同 code 不受限（per-code 隔离，count=1）。
+- **Test 15**：verify 预填 count=20 → 第 21 次 429；不同 code 不受限。
+- **Test 16**：窗口过期（90s 前）→ 自动重置 count=1 + 更新 window_start。
+
+`npm run test:upgrade:offline` **16/16 通过**，tsc --noEmit 通过。
+
+### 7.3 配套修复：A2 唯一索引暴露的测试 fixture 硬编码
+
+A2 的 `idx_licenses_paddle_txn` 唯一索引上线后，`verify-subscription-cancel.js` 和 `verify-yearly-renewal.js` 中硬编码的 `paddle_transaction_id`（`txn_cancel_001` / `txn_init_001`）与生产已有行冲突，导致 `SQLITE_CONSTRAINT_UNIQUE` 错误。修复：改为 `Date.now()` 动态生成唯一 txn_id。

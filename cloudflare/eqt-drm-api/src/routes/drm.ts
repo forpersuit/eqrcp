@@ -4,7 +4,7 @@ import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
-import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest } from '../utils/rate-limit';
+import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
 
@@ -305,6 +305,14 @@ export async function handleDrmRoutes(
       });
     }
 
+    // A3: D1-persistent rate limit — max 10 activate attempts per license_code per minute
+    if (await isD1RateLimited(env, `activate:${license_code}`, 10, 60000)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("rate_limit_exceeded", reqLang) }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
 
     // Gate A email + Gate B device (rolling 365d, activated purchase refunds/chargebacks only)
@@ -595,6 +603,14 @@ export async function handleDrmRoutes(
     if (license.status !== "active") {
       return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // A3: D1-persistent rate limit — max 20 verify attempts per license_code per minute
+    if (await isD1RateLimited(env, `verify:${license_code}`, 20, 60000)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("rate_limit_exceeded", reqLang) }), {
+        status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }

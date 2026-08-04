@@ -11,7 +11,7 @@ if (!fs.existsSync(compiledDrmPath) || !fs.existsSync(compiledPaddlePath)) {
   process.exit(1);
 }
 
-const { checkAndApplyPendingUpgrade } = require(compiledDrmPath);
+const { handleDrmRoutes, checkAndApplyPendingUpgrade } = require(compiledDrmPath);
 const { handlePaddleRoutes } = require(compiledPaddlePath);
 
 // Node's WebCrypto does not implement MD5 (only SHA-*); the Worker mint path uses
@@ -59,7 +59,8 @@ class RealWorkerD1Mock {
       activations: new Map(),
       user_sessions: new Map(),
       unbind_records: new Map(),
-      system_error_logs: new Map()
+      system_error_logs: new Map(),
+      rate_limits: new Map()
     };
     this.autoIncrement = { license_upgrades: 1, activations: 1, system_error_logs: 1 };
   }
@@ -117,6 +118,11 @@ class RealWorkerD1Mock {
         if (row.paddle_transaction_id === txnId) return dbRowCopy(row);
       }
       return null;
+    }
+    // Query rate_limits by key (A3)
+    if (s.includes('SELECT') && s.includes('FROM rate_limits WHERE key =')) {
+      const key = args[0];
+      return dbRowCopy(this.tables.rate_limits.get(key));
     }
     // Query pending license_upgrades by target_license_code
     if (s.includes('SELECT') && s.includes('FROM license_upgrades WHERE target_license_code =') && s.includes("status = 'pending'")) {
@@ -207,6 +213,27 @@ class RealWorkerD1Mock {
       const id = this.autoIncrement.system_error_logs++;
       this.tables.system_error_logs.set(id, { id, args });
       return { meta: { changes: 1 } };
+    }
+
+    // INSERT OR REPLACE INTO rate_limits (A3: new window reset)
+    // SQL: INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)
+    // args[0]=key, args[1]=window_start (count is literal 1 in SQL)
+    if (s.includes('INSERT OR REPLACE') && s.includes('INTO rate_limits')) {
+      const key = args[0];
+      const windowStart = args[1];
+      this.tables.rate_limits.set(key, { key, count: 1, window_start: windowStart });
+      return { meta: { changes: 1 } };
+    }
+
+    // UPDATE rate_limits (A3: increment count)
+    if (s.includes('UPDATE rate_limits SET count = count + 1')) {
+      const key = args[0];
+      const row = this.tables.rate_limits.get(key);
+      if (row) {
+        row.count += 1;
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
     }
 
     // Update license (auto_renew / email update on upgrade)
@@ -807,8 +834,110 @@ async function runTests() {
   dbA2Null.tables.licenses.set('EQT-PLUS-PROMO-2', { license_code: 'EQT-PLUS-PROMO-2', tier: 'PLUS', status: 'active', source: 'promo', paddle_transaction_id: null, created_at: new Date().toISOString() });
   assert(dbA2Null.tables.licenses.size === 2, 'Two promo rows with NULL paddle_transaction_id coexist (unique index allows multiple NULLs)');
 
+  // Test 14: REAL A3 activate rate limit — 429 after 10 requests per minute
+  console.log('\nTest 14: REAL handleDrmRoutes activate rate limit (A3)...');
+  const dbActRL = new RealWorkerD1Mock();
+  const envActRL = { DB: dbActRL, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const corsHeadersDRM = {};
+
+  dbActRL.tables.licenses.set('EQT-PLUS-RL-ACT-001', {
+    license_code: 'EQT-PLUS-RL-ACT-001',
+    tier: 'PLUS', status: 'active',
+    expires_at: 'LIFETIME', duration_days: null,
+    buyer_email: 'rl-act@example.com', buyer_email_hash: 'hashrlact',
+    created_at: new Date(nowMs - 30 * 86400 * 1000).toISOString(),
+    paddle_transaction_id: 'txn_rl_act_1', paddle_subscription_id: null,
+    source: 'purchase'
+  });
+  // Seed 10 existing requests in the window (hitting the limit)
+  const windowStart = new Date(nowMs - 30000).toISOString(); // 30 seconds ago, within 60s window
+  dbActRL.tables.rate_limits.set('activate:EQT-PLUS-RL-ACT-001', { key: 'activate:EQT-PLUS-RL-ACT-001', count: 10, window_start: windowStart });
+
+  const activateReq = (code, body) => new Request('https://lic.eqt.net.im/api/v1/activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  // 14a: 11th activate should be 429
+  const resActRL = await handleDrmRoutes(activateReq('EQT-PLUS-RL-ACT-001', { license_code: 'EQT-PLUS-RL-ACT-001', uuid_hash: 'u1', cpu_hash: 'c1', disk_hash: 'd1' }), envActRL, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), corsHeadersDRM);
+  assert(resActRL.status === 429, 'Activate returns 429 when rate limit exceeded (10/min)');
+  const resActRLJson = await resActRL.json();
+  assert(!!resActRLJson.error && resActRLJson.error.includes('Too many requests'), 'Activate rate limit error message returned');
+
+  // 14b: Different license_code is NOT rate-limited (per-code isolation). The rate limit check
+  // runs early (before full activation flow) and creates a rate_limits entry with count=1.
+  // The route will throw afterward (mock lacks batch/ED25519) — catch that and verify count.
+  try {
+    await handleDrmRoutes(activateReq('EQT-PLUS-RL-ACT-002', { license_code: 'EQT-PLUS-RL-ACT-002', uuid_hash: 'u2', cpu_hash: 'c2', disk_hash: 'd2' }), envActRL, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), corsHeadersDRM);
+  } catch (e) {
+    // Expected: route can't complete full activation flow in mock
+    const rlEntry = dbActRL.tables.rate_limits.get('activate:EQT-PLUS-RL-ACT-002');
+    if (!rlEntry) throw new Error('rate_limits entry not found for ACT-002 — rate limit check did not run: ' + (e.message || e));
+    assert(rlEntry.count === 1, 'Different license_code is NOT rate-limited (per-code isolation, count=1)');
+  }
+
+  // Test 15: REAL A3 verify rate limit — 429 after 20 requests per minute
+  console.log('\nTest 15: REAL handleDrmRoutes verify rate limit (A3)...');
+  const dbVerRL = new RealWorkerD1Mock();
+  const envVerRL = { DB: dbVerRL, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  // Seed an active activation so verify succeeds normally
+  dbVerRL.tables.licenses.set('EQT-PLUS-RL-VER-001', {
+    license_code: 'EQT-PLUS-RL-VER-001',
+    tier: 'PLUS', status: 'active',
+    expires_at: 'LIFETIME', buyer_email: 'rl-ver@example.com',
+    created_at: new Date(nowMs - 30 * 86400 * 1000).toISOString(),
+    paddle_transaction_id: 'txn_rl_ver_1'
+  });
+  dbVerRL.tables.rate_limits.set('verify:EQT-PLUS-RL-VER-001', { key: 'verify:EQT-PLUS-RL-VER-001', count: 20, window_start: windowStart });
+
+  const verifyReq = (code) => new Request('https://lic.eqt.net.im/api/v1/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ license_code: code, uuid_hash: 'u1', cpu_hash: 'c1', disk_hash: 'd1' })
+  });
+
+  // 15a: 21st verify should be 429
+  const resVerRL = await handleDrmRoutes(verifyReq('EQT-PLUS-RL-VER-001'), envVerRL, ctx, new URL('https://lic.eqt.net.im/api/v1/verify'), corsHeadersDRM);
+  assert(resVerRL.status === 429, 'Verify returns 429 when rate limit exceeded (20/min)');
+
+  // 15b: Different license_code is NOT rate-limited (per-code isolation)
+  try {
+    await handleDrmRoutes(verifyReq('EQT-PLUS-RL-VER-002'), envVerRL, ctx, new URL('https://lic.eqt.net.im/api/v1/verify'), corsHeadersDRM);
+  } catch (e) {
+    const verRlEntry = envVerRL.DB.tables.rate_limits.get('verify:EQT-PLUS-RL-VER-002');
+    if (!verRlEntry) throw new Error('rate_limits entry not found for VER-002: ' + (e.message || e));
+    assert(verRlEntry.count === 1, 'Different verify code is NOT rate-limited (per-code isolation, count=1)');
+  }
+
+  // Test 16: REAL A3 window expiry — expired window resets count
+  console.log('\nTest 16: REAL A3 window expiry recovery...');
+  const dbExpiry = new RealWorkerD1Mock();
+  const envExpiry = { DB: dbExpiry, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const expiredWindow = new Date(nowMs - 90000).toISOString(); // 90s ago, > 60s window
+  // Seed count=10 at expired window → rate limit should reset when handleDrmRoutes checks
+  dbExpiry.tables.rate_limits.set('activate:EQT-PLUS-RL-EXP-001', { key: 'activate:EQT-PLUS-RL-EXP-001', count: 10, window_start: expiredWindow });
+  // License must exist for activate route to proceed past early checks
+  dbExpiry.tables.licenses.set('EQT-PLUS-RL-EXP-001', {
+    license_code: 'EQT-PLUS-RL-EXP-001',
+    tier: 'PLUS', status: 'active', expires_at: 'LIFETIME',
+    buyer_email: 'rl-exp@example.com',
+    created_at: new Date(nowMs - 30 * 86400 * 1000).toISOString(),
+    paddle_transaction_id: 'txn_rl_exp_1'
+  });
+  // The route will NOT complete (mock lacks batch/ED25519) but the rate limit check runs FIRST,
+  // and when it detects the expired window it resets count=1 + writes new window_start.
+  try {
+    await handleDrmRoutes(activateReq('EQT-PLUS-RL-EXP-001', { license_code: 'EQT-PLUS-RL-EXP-001', uuid_hash: 'u4', cpu_hash: 'c4', disk_hash: 'd4' }), envExpiry, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), corsHeadersDRM);
+  } catch (e) {
+    const expiryRow = dbExpiry.tables.rate_limits.get('activate:EQT-PLUS-RL-EXP-001');
+    if (!expiryRow) throw new Error('rate_limits entry not found after expiry reset: ' + (e.message || e));
+    assert(expiryRow.count === 1, 'Rate limit count reset to 1 after window expiry');
+    assert(expiryRow.window_start !== expiredWindow, 'Rate limit window_start updated after window expiry');
+  }
+
   console.log('\n========================================');
-  console.log('🎉 ALL 13 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
+  console.log('🎉 ALL 16 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 

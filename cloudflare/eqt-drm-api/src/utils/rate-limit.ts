@@ -1,3 +1,5 @@
+import { Env } from '../types';
+
 /**
  * In-isolate admin auth rate limiter (failed secret attempts).
  * Not a global Cloudflare edge limit — still blocks brute-force within an isolate.
@@ -162,5 +164,59 @@ export function recordDeviceRegisterRequest(ip: string, uuidHash: string, cpuHas
     return;
   }
   b.count += 1;
+}
+
+// --- A3: D1-persistent rate limiter for activate/verify (audit licensing-flow-audit.md) ---
+// D1 persistence avoids in-isolate Map dilution across multi-region Worker instances.
+// Uses read-then-write (race acceptable for soft rate limiting — worst case a few extra
+// requests slip through before the count catches up).
+
+export async function ensureRateLimitsTable(env: Env): Promise<void> {
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS rate_limits (
+        key TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 1,
+        window_start TEXT NOT NULL
+      )
+    `).run();
+  } catch (err) {
+    console.error("Failed to ensure rate_limits table:", err);
+  }
+}
+
+/**
+ * D1-persistent rate limiter. Returns true if the key has exceeded maxAttempts within windowMs.
+ * On first call in a window, resets count=1. On subsequent calls, increments count.
+ * Old windows are naturally overwritten (no accumulation), so no explicit pruning is needed.
+ */
+export async function isD1RateLimited(
+  env: Env,
+  key: string,
+  maxAttempts: number,
+  windowMs: number
+): Promise<boolean> {
+  await ensureRateLimitsTable(env);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  const row = await env.DB.prepare(
+    "SELECT count, window_start FROM rate_limits WHERE key = ?"
+  ).bind(key).first<{ count: number; window_start: string }>();
+
+  if (!row || (now - new Date(row.window_start).getTime()) > windowMs) {
+    // New window: reset
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)"
+    ).bind(key, nowIso).run();
+    return false;
+  }
+
+  if (row.count >= maxAttempts) return true;
+
+  await env.DB.prepare(
+    "UPDATE rate_limits SET count = count + 1 WHERE key = ?"
+  ).bind(key).run();
+  return false;
 }
 

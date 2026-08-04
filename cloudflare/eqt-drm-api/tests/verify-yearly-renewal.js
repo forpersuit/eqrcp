@@ -35,6 +35,7 @@ async function main() {
   const testCode = 'EQT-PLUS-RENEWAL-TEST-' + crypto.randomBytes(3).toString('hex').toUpperCase();
   const originalExpires = new Date(Date.now() + 30 * 86400000).toISOString(); // 30 days from now
   const email = 'renewal_tester@301098.xyz';
+  const initTxnId = 'txn_init_' + Date.now();
 
   // 1. Initial State: Insert existing yearly subscription in D1
   console.log('1. Setting up initial active subscription expiring in 30 days...');
@@ -44,7 +45,7 @@ async function main() {
       buyer_email, paddle_transaction_id, paddle_subscription_id, source, created_at
     ) VALUES (
       '${testCode}', 'PLUS', 'active', 2, '${originalExpires}', 365,
-      '${email}', 'txn_init_001', '${subId}', 'purchase', datetime('now')
+      '${email}', '${initTxnId}', '${subId}', 'purchase', datetime('now')
     )
   `);
 
