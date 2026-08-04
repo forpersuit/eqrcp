@@ -408,6 +408,162 @@ export async function handleAdminRoutes(
     });
   }
 
+  // 3.9 Admin Endpoint: Live devices from device_registry (paid/free, time window, optional arcs)
+  if (url.pathname === "/api/v1/admin/devices/live" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const windowParam = (url.searchParams.get("window") || "1h").trim();
+    const arcsParam = url.searchParams.get("arcs") === "1";
+
+    const WINDOW_MS: Record<string, number> = {
+      "1h": 60 * 60 * 1000,
+      "12h": 12 * 60 * 60 * 1000,
+      "24h": 24 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000
+    };
+    const windowMs = WINDOW_MS[windowParam] || WINDOW_MS["1h"];
+    const cutoff = new Date(Date.now() - windowMs).toISOString();
+
+    const locationsSql = `
+      SELECT
+        ip_country AS country,
+        region,
+        city,
+        latitude,
+        longitude,
+        SUM(CASE WHEN tier_label = 'paid' THEN 1 ELSE 0 END) AS paid_count,
+        SUM(CASE WHEN tier_label = 'free' THEN 1 ELSE 0 END) AS free_count,
+        COUNT(*) AS total_count,
+        MAX(last_seen_at) AS latest_seen_at
+      FROM device_registry
+      WHERE last_seen_at >= ?
+        AND ip_country IS NOT NULL AND ip_country != ''
+        AND latitude IS NOT NULL AND longitude IS NOT NULL
+      GROUP BY ip_country, region, city, latitude, longitude
+      ORDER BY total_count DESC
+    `;
+    const locRes = await env.DB.prepare(locationsSql).bind(cutoff).all<{
+      country: string;
+      region?: string | null;
+      city?: string | null;
+      latitude: number;
+      longitude: number;
+      paid_count: number;
+      free_count: number;
+      total_count: number;
+      latest_seen_at: string;
+    }>();
+
+    const locations = locRes.results || [];
+    let totalActiveDevices = 0;
+    let totalPaidDevices = 0;
+    let totalFreeDevices = 0;
+    for (const loc of locations) {
+      totalActiveDevices += loc.total_count;
+      totalPaidDevices += loc.paid_count;
+      totalFreeDevices += loc.free_count;
+    }
+
+    let crossRegionArcs: {
+      device_id: string;
+      from_country: string;
+      from_city?: string;
+      from_lat: number;
+      from_lng: number;
+      to_country: string;
+      to_city?: string;
+      to_lat: number;
+      to_lng: number;
+    }[] = [];
+
+    if (arcsParam) {
+      const rawSql = `
+        SELECT device_id, ip_country AS country, city, latitude, longitude
+        FROM device_registry
+        WHERE last_seen_at >= ?
+          AND ip_country IS NOT NULL AND ip_country != ''
+          AND latitude IS NOT NULL AND longitude IS NOT NULL
+        ORDER BY device_id
+      `;
+      const rawRes = await env.DB.prepare(rawSql).bind(cutoff).all<{
+        device_id: string;
+        country: string;
+        city?: string | null;
+        latitude: number;
+        longitude: number;
+      }>();
+      const rawList = rawRes.results || [];
+
+      const deviceNodesMap = new Map<string, Array<{ country: string; city?: string; latitude: number; longitude: number }>>();
+      for (const item of rawList) {
+        const did = item.device_id;
+        if (!deviceNodesMap.has(did)) {
+          deviceNodesMap.set(did, []);
+        }
+        deviceNodesMap.get(did)!.push({
+          country: item.country.toUpperCase(),
+          city: item.city || undefined,
+          latitude: item.latitude,
+          longitude: item.longitude
+        });
+      }
+
+      const seenPairs = new Set<string>();
+      for (const [did, nodes] of deviceNodesMap.entries()) {
+        if (nodes.length > 1) {
+          for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+              const n1 = nodes[i];
+              const n2 = nodes[j];
+              const locKey1 = `${n1.country}:${n1.city || ''}`;
+              const locKey2 = `${n2.country}:${n2.city || ''}`;
+              if (locKey1 !== locKey2) {
+                const pairKey = `${did}:${locKey1}->${locKey2}`;
+                if (!seenPairs.has(pairKey)) {
+                  seenPairs.add(pairKey);
+                  crossRegionArcs.push({
+                    device_id: did,
+                    from_country: n1.country,
+                    from_city: n1.city,
+                    from_lat: n1.latitude,
+                    from_lng: n1.longitude,
+                    to_country: n2.country,
+                    to_city: n2.city,
+                    to_lat: n2.latitude,
+                    to_lng: n2.longitude
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    ctx.waitUntil(logAdminAudit(env, 'QUERY_LIVE_DEVICES', 'SYSTEM', null, {
+      window: windowParam,
+      total_active_devices: totalActiveDevices,
+      total_paid_devices: totalPaidDevices,
+      total_free_devices: totalFreeDevices,
+      location_count: locations.length,
+      cross_region_arcs_count: crossRegionArcs.length
+    }, clientIp));
+
+    return new Response(JSON.stringify({
+      success: true,
+      window: windowParam,
+      locations,
+      total_active_devices: totalActiveDevices,
+      total_paid_devices: totalPaidDevices,
+      total_free_devices: totalFreeDevices,
+      cross_region_arcs: crossRegionArcs
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // 4. Admin Endpoint: Search all licenses (sort by created_at; real activations columns)
   if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);

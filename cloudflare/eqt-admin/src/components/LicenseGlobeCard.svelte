@@ -1,35 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
-
-  interface LocationItem {
-    country: string;
-    region?: string;
-    city?: string;
-    latitude?: number;
-    longitude?: number;
-    active_count: number;
-    latest_activated_at?: string;
-  }
-
-  interface CrossRegionArc {
-    license_code: string;
-    from_country: string;
-    from_city?: string;
-    from_lat?: number;
-    from_lng?: number;
-    to_country: string;
-    to_city?: string;
-    to_lat?: number;
-    to_lng?: number;
-  }
-
-  interface LocationsResponse {
-    success: boolean;
-    locations: LocationItem[];
-    total_active_devices: number;
-    cross_region_arcs?: CrossRegionArc[];
-  }
+  import type { LiveDeviceLocation, LiveDeviceArc, LiveDevicesResponse } from '../lib/types';
 
   const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
     'CN': { lat: 35.8617, lng: 104.1954, name: '中国' },
@@ -53,11 +25,16 @@
   };
 
   let globeContainerRef: HTMLDivElement | null = $state(null);
-  let locations = $state<LocationItem[]>([]);
-  let crossRegionArcs = $state<CrossRegionArc[]>([]);
+  let locations = $state<LiveDeviceLocation[]>([]);
+  let crossRegionArcs = $state<LiveDeviceArc[]>([]);
   let totalActiveDevices = $state(0);
+  let totalPaidDevices = $state(0);
+  let totalFreeDevices = $state(0);
   let loading = $state(true);
   let errorMsg = $state<string | null>(null);
+
+  let activeWindow = $state<string>('1h');
+  let showArcs = $state<boolean>(true);
 
   let globeInstance: any = null;
   let isFallback2D = $state(false);
@@ -65,18 +42,31 @@
   let animFrameId: number | null = null;
   let resizeObserver: ResizeObserver | null = null;
 
+  function getColumnColor(item: LiveDeviceLocation): string {
+    if (item.total_count === 0) return '#64748b';
+    const paidRatio = item.paid_count / item.total_count;
+    if (paidRatio >= 0.7) return '#f5b301';   // mostly paid → gold
+    if (paidRatio >= 0.3) return '#22c55e';   // mixed → green
+    if (item.paid_count > 0) return '#38bdf8'; // some paid → blue
+    return '#64748b';                           // all free → gray
+  }
+
   export async function refreshData() {
     try {
       errorMsg = null;
-      const res = await adminFetch<LocationsResponse>('/api/v1/admin/activation-locations');
+      const params: Record<string, string> = { window: activeWindow };
+      if (showArcs) params.arcs = '1';
+      const res = await adminFetch<LiveDevicesResponse>('/api/v1/admin/devices/live', { params });
       if (res && Array.isArray(res.locations)) {
         locations = res.locations;
         totalActiveDevices = res.total_active_devices || 0;
+        totalPaidDevices = res.total_paid_devices || 0;
+        totalFreeDevices = res.total_free_devices || 0;
         crossRegionArcs = res.cross_region_arcs || [];
         renderGlobeData(locations, crossRegionArcs);
       }
     } catch (err: any) {
-      errorMsg = err.message || '获取授权激活分布失败';
+      errorMsg = err.message || '获取活跃设备分布失败';
     } finally {
       loading = false;
     }
@@ -96,7 +86,7 @@
     });
   }
 
-  function getCoordForItem(item: LocationItem): { lat: number; lng: number; name: string } {
+  function getCoordForItem(item: LiveDeviceLocation): { lat: number; lng: number; name: string } {
     if (typeof item.latitude === 'number' && typeof item.longitude === 'number') {
       const label = item.city ? `${item.city}` : (COUNTRY_COORDS[item.country?.toUpperCase()]?.name || item.country);
       return { lat: item.latitude, lng: item.longitude, name: label };
@@ -131,17 +121,15 @@
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
           .atmosphereAltitude(0.18)
-          // 3D City Vertical Column / Bar Altitude (柱子高度随设备数拔高)
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.05)
           .pointRadius((d: any) => d.radius || 0.6)
-          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: <span style="color:#38bdf8;font-weight:bold;">${d.count}</span> 台设备</div>`)
+          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} 台设备<br/>💛 付费: ${d.paidCount} 台<br/>🩶 免费: ${d.freeCount} 台</div>`)
           .ringsData([])
           .ringColor(() => (t: number) => `rgba(56,189,248,${1 - t})`)
           .ringMaxRadius(3.5)
           .ringPropagationSpeed(2)
           .ringRepeatPeriod(1200)
-          // Cross-City Glowing Arcs
           .arcColor(() => ['#a855f7', '#ec4899'])
           .arcDashLength(0.4)
           .arcDashGap(0.2)
@@ -172,10 +160,8 @@
     }
   }
 
-  function renderGlobeData(locList: LocationItem[], arcsList: CrossRegionArc[]) {
-    if (isFallback2D) {
-      return;
-    }
+  function renderGlobeData(locList: LiveDeviceLocation[], arcsList: LiveDeviceArc[]) {
+    if (isFallback2D) return;
     if (!globeInstance) return;
 
     const points: any[] = [];
@@ -184,13 +170,11 @@
 
     locList.forEach((item) => {
       const coord = getCoordForItem(item);
-      const count = item.active_count || 1;
-      
-      // 3D 柱体高度 (Column Height): 随该城市的激活设备数动态延伸 (0.05 -> 0.38)
+      const count = item.total_count || 1;
+
       const altitude = Math.min(0.05 + count * 0.03, 0.38);
-      // 3D 柱体半径 (Column Radius)
       const radius = Math.min(0.5 + count * 0.12, 1.6);
-      const color = count > 5 ? '#a855f7' : (count > 2 ? '#22c55e' : '#38bdf8');
+      const color = getColumnColor(item);
 
       points.push({
         lat: coord.lat,
@@ -199,7 +183,9 @@
         altitude,
         color,
         cityName: coord.name,
-        count
+        totalCount: item.total_count,
+        paidCount: item.paid_count,
+        freeCount: item.free_count
       });
 
       rings.push({
@@ -211,31 +197,33 @@
       });
     });
 
-    arcsList.forEach((arc) => {
-      let startLat = arc.from_lat;
-      let startLng = arc.from_lng;
-      if (typeof startLat !== 'number' || typeof startLng !== 'number') {
-        const c1 = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
-        startLat = c1.lat;
-        startLng = c1.lng;
-      }
+    if (showArcs) {
+      arcsList.forEach((arc) => {
+        let startLat = arc.from_lat;
+        let startLng = arc.from_lng;
+        if (typeof startLat !== 'number' || typeof startLng !== 'number') {
+          const c1 = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
+          startLat = c1.lat;
+          startLng = c1.lng;
+        }
 
-      let endLat = arc.to_lat;
-      let endLng = arc.to_lng;
-      if (typeof endLat !== 'number' || typeof endLng !== 'number') {
-        const c2 = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
-        endLat = c2.lat;
-        endLng = c2.lng;
-      }
+        let endLat = arc.to_lat;
+        let endLng = arc.to_lng;
+        if (typeof endLat !== 'number' || typeof endLng !== 'number') {
+          const c2 = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
+          endLat = c2.lat;
+          endLng = c2.lng;
+        }
 
-      arcs.push({
-        startLat,
-        startLng,
-        endLat,
-        endLng,
-        licenseCode: arc.license_code
+        arcs.push({
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+          deviceId: arc.device_id
+        });
       });
-    });
+    }
 
     globeInstance.pointsData(points);
     if (globeInstance.ringsData) {
@@ -303,7 +291,6 @@
         }
       }
 
-      // Draw location points & 2D vertical columns on sphere
       const pointMap = new Map<string, { x: number; y: number; visible: boolean }>();
 
       locations.forEach((item, idx) => {
@@ -316,10 +303,9 @@
         pointMap.set(key, { x: px, y: py, visible });
 
         if (visible) {
-          const colColor = item.active_count > 5 ? '#a855f7' : (item.active_count > 2 ? '#22c55e' : '#38bdf8');
-          const colHeight = Math.min(12 + item.active_count * 3.5, 45);
+          const colColor = getColumnColor(item);
+          const colHeight = Math.min(12 + item.total_count * 3.5, 45);
 
-          // Draw 2D vertical bar column
           ctx.strokeStyle = colColor;
           ctx.lineWidth = 2.5;
           ctx.beginPath();
@@ -327,45 +313,56 @@
           ctx.lineTo(px, py - colHeight);
           ctx.stroke();
 
-          // Column top dot
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
           ctx.arc(px, py - colHeight, 3, 0, Math.PI * 2);
           ctx.fill();
 
-          // Column base dot
           ctx.fillStyle = colColor;
           ctx.beginPath();
-          ctx.arc(px, py, Math.min(3 + item.active_count * 0.5, 7), 0, Math.PI * 2);
+          ctx.arc(px, py, Math.min(3 + item.total_count * 0.5, 7), 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
           ctx.font = '11px sans-serif';
-          ctx.fillText(`${coord.name} (${item.active_count}台)`, px + 8, py - colHeight + 4);
+          ctx.fillText(`${coord.name} (${item.total_count}台, 付费${item.paid_count})`, px + 8, py - colHeight + 4);
         }
       });
 
-      // Draw 2D arcs for same-key cross-location
-      crossRegionArcs.forEach((arc) => {
-        const k1 = `${arc.from_country}:${arc.from_city || ''}`;
-        const k2 = `${arc.to_country}:${arc.to_city || ''}`;
-        const p1 = pointMap.get(k1);
-        const p2 = pointMap.get(k2);
-        if (p1 && p2 && p1.visible && p2.visible) {
-          ctx.strokeStyle = 'rgba(168, 85, 247, 0.65)';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(p1.x, p1.y);
-          const midX = (p1.x + p2.x) / 2;
-          const midY = (p1.y + p2.y) / 2 - 30;
-          ctx.quadraticCurveTo(midX, midY, p2.x, p2.y);
-          ctx.stroke();
-        }
-      });
+      if (showArcs) {
+        crossRegionArcs.forEach((arc) => {
+          const k1 = `${arc.from_country}:${arc.from_city || ''}`;
+          const k2 = `${arc.to_country}:${arc.to_city || ''}`;
+          const p1 = pointMap.get(k1);
+          const p2 = pointMap.get(k2);
+          if (p1 && p2 && p1.visible && p2.visible) {
+            ctx.strokeStyle = 'rgba(168, 85, 247, 0.65)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2 - 30;
+            ctx.quadraticCurveTo(midX, midY, p2.x, p2.y);
+            ctx.stroke();
+          }
+        });
+      }
 
       animFrameId = requestAnimationFrame(animate);
     }
     animate();
+  }
+
+  function handleWindowChange(window: string) {
+    activeWindow = window;
+    refreshData();
+  }
+
+  function handleArcsToggle() {
+    showArcs = !showArcs;
+    if (!isFallback2D) {
+      renderGlobeData(locations, crossRegionArcs);
+    }
   }
 
   onMount(async () => {
@@ -392,17 +389,33 @@
     <div class="header-title">
       <span class="icon">🌍</span>
       <div>
-        <h3>全球城市级授权激活分布视界</h3>
-        <p class="subtitle">城市打点与 3D 柱体高度表征设备激活量；同 Key 跨城/跨国激活绘制紫粉流光弧线，撤销/解绑即时熄灭</p>
+        <h3>全球城市级活跃设备分布视界</h3>
+        <p class="subtitle">城市打点与 3D 柱体高度表征活跃设备量；付费/免费双色区分；同设备跨城/跨国绘制紫粉流光弧线</p>
       </div>
     </div>
     <div class="header-right">
+      <div class="window-selector" role="group" aria-label="时间窗口">
+        {#each ['1h', '12h', '24h', '7d'] as w}
+          <button
+            class="btn btn-xs window-btn"
+            class:active={activeWindow === w}
+            onclick={() => handleWindowChange(w)}
+            disabled={loading}
+          >{w}</button>
+        {/each}
+      </div>
+
+      <label class="arcs-toggle" title="显示/隐藏跨区域弧线">
+        <input type="checkbox" checked={showArcs} onchange={handleArcsToggle} />
+        <span class="toggle-label">弧线</span>
+      </label>
+
       {#if crossRegionArcs.length > 0}
-        <span class="badge badge-purple" title="存在同一 Key 在不同城市/国家被激活">
+        <span class="badge badge-purple" title="存在同一设备在不同城市/国家被记录">
           ⚡ 跨城流光链路: {crossRegionArcs.length} 条
         </span>
       {/if}
-      <span class="badge badge-info">在用活跃设备总数: {totalActiveDevices}</span>
+      <span class="badge badge-info">活跃: {totalActiveDevices} 台 (付费 {totalPaidDevices} / 免费 {totalFreeDevices})</span>
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>
         🔄 刷新点位
       </button>
@@ -422,12 +435,14 @@
         <div class="loc-chip">
           <span class="flag">{loc.country}</span>
           <span class="name">{loc.city ? `${countryName} · ${loc.city}` : countryName}</span>
-          <span class="count-badge">{loc.active_count} 台</span>
+          <span class="count-badge">{loc.total_count} 台</span>
+          <span class="paid-badge">{loc.paid_count} 付费</span>
+          <span class="free-badge">{loc.free_count} 免费</span>
         </div>
       {/each}
     </div>
   {:else if !loading}
-    <div class="empty-bar">尚无生效中的客户端激活记录（所有已被撤销或未激活）</div>
+    <div class="empty-bar">尚无区间内活跃设备记录</div>
   {/if}
 </div>
 
@@ -480,6 +495,63 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .window-selector {
+    display: flex;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .window-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary, #94a3b8);
+    font-family: monospace;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .window-btn:hover {
+    color: var(--text-primary, #f8fafc);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .window-btn.active {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+
+  .window-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .arcs-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #94a3b8);
+    user-select: none;
+  }
+
+  .arcs-toggle input[type="checkbox"] {
+    accent-color: #a855f7;
+    cursor: pointer;
+  }
+
+  .toggle-label {
+    font-weight: 500;
   }
 
   .globe-wrapper {
@@ -527,6 +599,24 @@
     border-radius: 4px;
     font-weight: 600;
     font-size: 0.75rem;
+  }
+
+  .paid-badge {
+    background: rgba(245, 179, 1, 0.15);
+    color: #f5b301;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.7rem;
+  }
+
+  .free-badge {
+    background: rgba(100, 116, 139, 0.2);
+    color: #94a3b8;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.7rem;
   }
 
   .empty-bar {

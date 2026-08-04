@@ -162,3 +162,40 @@ export interface AdminUnbindBody {
   license_code: string;
   activation_id?: number;
 }
+
+/** Single location entry in GET /api/v1/admin/devices/live response */
+export interface LiveDeviceLocation {
+  country: string;
+  region?: string | null;
+  city?: string | null;
+  latitude: number;
+  longitude: number;
+  paid_count: number;
+  free_count: number;
+  total_count: number;
+  latest_seen_at: string;
+}
+
+/** Cross-region arc for a device seen in multiple locations */
+export interface LiveDeviceArc {
+  device_id: string;
+  from_country: string;
+  from_city?: string | null;
+  from_lat: number;
+  from_lng: number;
+  to_country: string;
+  to_city?: string | null;
+  to_lat: number;
+  to_lng: number;
+}
+
+/** Full response from GET /api/v1/admin/devices/live */
+export interface LiveDevicesResponse {
+  success: boolean;
+  window: string;
+  locations: LiveDeviceLocation[];
+  total_active_devices: number;
+  total_paid_devices: number;
+  total_free_devices: number;
+  cross_region_arcs?: LiveDeviceArc[];
+}
