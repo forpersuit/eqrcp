@@ -205,6 +205,7 @@ export async function handleDrmRoutes(
       return new Response(
         JSON.stringify({
           error: getApiTranslation("too_many_requests", reqLang) || "Too many registration attempts. Please try again later.",
+          retry_after: 60,
           reason_key: "rate_limited"
         }),
         {
