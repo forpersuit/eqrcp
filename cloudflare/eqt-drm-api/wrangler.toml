@@ -1,6 +1,7 @@
 name = "eqt-drm-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-19"
+logpush = true
 
 # D1 Database binding. DB is bound in the code.
 [[d1_databases]]

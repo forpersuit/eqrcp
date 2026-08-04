@@ -79,3 +79,4 @@ docs/img/transparent1.jpg
 # Local agent configuration
 .agents/mcp_config.json
 .mcp.json
+.mcp.json

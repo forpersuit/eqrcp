@@ -512,7 +512,7 @@ async function sendAlert(level: string, message: string) {
 |---|---|---|---|---|---|---|
 | 1 | D1 备份策略（GitHub Actions cron + 恢复演练 + 失败 Telegram 通知） | ✅ 已完成 | — | — | 2026-08-05 | 备份文件可下载恢复，季度演练通过，失败时 Telegram 通知 |
 | 2 | 结构化日志中间件（所有 Worker） | ✅ 已完成 | — | — | 2026-08-05 | 每个请求输出 JSON 日志，Logpush 可查 |
-| 3 | Logpush 配置（R2 目标） | ⬜ 待开始 | — | — | — | R2 中存在日志文件 |
+| 3 | Logpush 配置（R2 目标） | ⏸️ 暂缓 | — | — | — | wrangler.toml 已配 logpush=true，需升级 Workers Paid 计划后开通 |
 | 4 | SLO 定义文档化 | ✅ 已完成 | — | — | 2026-08-05 | 本文档 §6.3 已定义，团队确认 |
 | 5 | 健康检查端点增强（D1/R2 深度检测 + 24h 错误回溯） | ✅ 已完成 | — | — | 2026-08-05 | 返回真实 D1 延迟 + R2 HEAD 探测，UptimeRobot 绿色 |
 | 6 | UptimeRobot 外部监控配置 | ⬜ 待开始 | — | — | — | 3 个监控器均为 UP，月度报告 ≥ 99.5% |
@@ -546,3 +546,4 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-04 | 补充 §5-§9：完整可观测性维度 + P0/P1/P2 事项 + 开发进度追踪 | Codex 分析 |
 | 2026-08-05 | 实施 §6 P0：D1 备份工作流 + 结构化日志中间件 + 健康检查端点 + 设备注册审计 | 开发实施 |
 | 2026-08-05 | 审查修复：error-logger 加 INFO 级别、new_device 降级、R2 真实探测、lastError 24h、备份恢复演练 + 失败通知、文档 Worker 范围修正 | 审查修复 |
+| 2026-08-05 | Logpush 配置：wrangler.toml 加 logpush=true、创建 eqt-logs-bucket、R2 API token 就绪。暂缓开通（需 Workers Paid 计划） | 开发实施 |
