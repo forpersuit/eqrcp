@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "EQT Official Landing Page, Pricing & License Self-service Portal on Cloudflare Pages",
   "scripts": {
-    "deploy": "CLOUDFLARE_API_TOKEN=\"\" wrangler pages deploy ./ --project-name=eqt-website"
+    "deploy": "wrangler pages deploy ./ --project-name=eqt"
   },
   "devDependencies": {
     "wrangler": "^4.113.0"
