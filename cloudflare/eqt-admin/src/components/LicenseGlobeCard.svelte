@@ -42,6 +42,31 @@
   let animFrameId: number | null = null;
   let resizeObserver: ResizeObserver | null = null;
 
+  // Monotonic request token — only the latest refreshData may apply its result,
+  // so a slow older response can never overwrite a newer window's data.
+  let loadSeq = 0;
+  // §4.4: 环/光晕表示"最近 1h 内活跃"。窗口可到 7d，但只有 1h 内的点被视为"热"。
+  const RECENT_ACTIVE_MS = 60 * 60 * 1000;
+
+  function minutesSince(iso: string | null | undefined): number | null {
+    if (!iso) return null;
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return null;
+    return Math.floor((Date.now() - t) / 60000);
+  }
+
+  function recentLabel(item: LiveDeviceLocation): string {
+    const mins = minutesSince(item.latest_seen_at);
+    if (mins === null) return '未知';
+    if (mins < 60) return `${mins} 分钟前`;
+    return `${Math.floor(mins / 60)} 小时前`;
+  }
+
+  function isRecentlyActive(item: LiveDeviceLocation): boolean {
+    const mins = minutesSince(item.latest_seen_at);
+    return mins !== null && mins * 60000 <= RECENT_ACTIVE_MS;
+  }
+
   function getColumnColor(item: LiveDeviceLocation): string {
     if (item.total_count === 0) return '#64748b';
     const paidRatio = item.paid_count / item.total_count;
@@ -52,11 +77,14 @@
   }
 
   export async function refreshData() {
+    const seq = ++loadSeq;
     try {
+      loading = true; // disable window/refresh buttons during the request
       errorMsg = null;
       const params: Record<string, string> = { window: activeWindow };
       if (showArcs) params.arcs = '1';
       const res = await adminFetch<LiveDevicesResponse>('/api/v1/admin/devices/live', { params });
+      if (seq !== loadSeq) return; // superseded by a newer request — drop stale result
       if (res && Array.isArray(res.locations)) {
         locations = res.locations;
         totalActiveDevices = res.total_active_devices || 0;
@@ -66,9 +94,9 @@
         renderGlobeData(locations, crossRegionArcs);
       }
     } catch (err: any) {
-      errorMsg = err.message || '获取活跃设备分布失败';
+      if (seq === loadSeq) errorMsg = err.message || '获取活跃设备分布失败';
     } finally {
-      loading = false;
+      if (seq === loadSeq) loading = false;
     }
   }
 
@@ -98,7 +126,7 @@
   async function initGlobeEngine() {
     if (!globeContainerRef) return;
     try {
-      const loadPromise = loadScript('https://cdn.jsdelivr.net/npm/globe.gl@2.32.0/dist/globe.gl.min.js');
+      const loadPromise = loadScript('/vendor/globe.gl.min.js');
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('CDN timeout')), 3000));
       await Promise.race([loadPromise, timeoutPromise]).catch(() => {});
 
@@ -115,8 +143,8 @@
         // @ts-ignore
         globeInstance = window.Globe()
           (globeContainerRef)
-          .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-night.jpg')
-          .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe/example/img/earth-topology.png')
+          .globeImageUrl('/vendor/earth-night.jpg')
+          .bumpImageUrl('/vendor/earth-topology.png')
           .backgroundColor('#020617')
           .showAtmosphere(true)
           .atmosphereColor('#38bdf8')
@@ -124,7 +152,7 @@
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.05)
           .pointRadius((d: any) => d.radius || 0.6)
-          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} 台设备<br/>💛 付费: ${d.paidCount} 台<br/>🩶 免费: ${d.freeCount} 台</div>`)
+          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} 台设备<br/>💛 付费: ${d.paidCount} 台<br/>🩶 免费: ${d.freeCount} 台<br/>⏱ 最近活跃: ${d.recentLabel}</div>`)
           .ringsData([])
           .ringColor(() => (t: number) => `rgba(56,189,248,${1 - t})`)
           .ringMaxRadius(3.5)
@@ -185,16 +213,21 @@
         cityName: coord.name,
         totalCount: item.total_count,
         paidCount: item.paid_count,
-        freeCount: item.free_count
+        freeCount: item.free_count,
+        recentLabel: recentLabel(item)
       });
 
-      rings.push({
-        lat: coord.lat,
-        lng: coord.lng,
-        maxR: Math.min(2.5 + count * 0.5, 6.5),
-        propagationSpeed: 1.5,
-        repeatPeriod: 1500
-      });
+      // §4.4: 环/光晕表示"最近 1h 内活跃"。宽窗口（7d）里陈旧的点不发脉冲，
+      // 只有最近活跃的位置有光环——latest_seen_at 就是这个语义的数据源。
+      if (isRecentlyActive(item)) {
+        rings.push({
+          lat: coord.lat,
+          lng: coord.lng,
+          maxR: Math.min(2.5 + count * 0.5, 6.5),
+          propagationSpeed: 1.5,
+          repeatPeriod: 1500
+        });
+      }
     });
 
     if (showArcs) {
@@ -291,51 +324,74 @@
         }
       }
 
-      const pointMap = new Map<string, { x: number; y: number; visible: boolean }>();
+      function project(lat: number, lng: number): { x: number; y: number; visible: boolean } {
+        return {
+          x: cx + Math.sin((lng * Math.PI / 180) + angle) * radius * Math.cos(lat * Math.PI / 180),
+          y: cy - Math.sin(lat * Math.PI / 180) * radius,
+          visible: Math.cos((lng * Math.PI / 180) + angle) > -0.2
+        };
+      }
 
-      locations.forEach((item, idx) => {
+      locations.forEach((item) => {
         const coord = getCoordForItem(item);
-        const px = cx + Math.sin((coord.lng * Math.PI / 180) + angle) * radius * Math.cos(coord.lat * Math.PI / 180);
-        const py = cy - Math.sin(coord.lat * Math.PI / 180) * radius;
-        const visible = Math.cos((coord.lng * Math.PI / 180) + angle) > -0.2;
+        const p = project(coord.lat, coord.lng);
 
-        const key = `${item.country}:${item.city || idx}`;
-        pointMap.set(key, { x: px, y: py, visible });
-
-        if (visible) {
+        if (p.visible) {
           const colColor = getColumnColor(item);
           const colHeight = Math.min(12 + item.total_count * 3.5, 45);
+
+          // §4.4 recent-activity halo: soft ring around dots active within the last 1h
+          if (isRecentlyActive(item)) {
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+            ctx.stroke();
+          }
 
           ctx.strokeStyle = colColor;
           ctx.lineWidth = 2.5;
           ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(px, py - colHeight);
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x, p.y - colHeight);
           ctx.stroke();
 
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(px, py - colHeight, 3, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y - colHeight, 3, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = colColor;
           ctx.beginPath();
-          ctx.arc(px, py, Math.min(3 + item.total_count * 0.5, 7), 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, Math.min(3 + item.total_count * 0.5, 7), 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
           ctx.font = '11px sans-serif';
-          ctx.fillText(`${coord.name} (${item.total_count}台, 付费${item.paid_count})`, px + 8, py - colHeight + 4);
+          ctx.fillText(`${coord.name} (${item.total_count}台, 付费${item.paid_count})`, p.x + 8, p.y - colHeight + 4);
         }
       });
 
       if (showArcs) {
         crossRegionArcs.forEach((arc) => {
-          const k1 = `${arc.from_country}:${arc.from_city || ''}`;
-          const k2 = `${arc.to_country}:${arc.to_city || ''}`;
-          const p1 = pointMap.get(k1);
-          const p2 = pointMap.get(k2);
-          if (p1 && p2 && p1.visible && p2.visible) {
+          // Project arc endpoints directly from their coords (same rows as the dots)
+          // instead of string-matching pointMap keys — a location without a city would
+          // otherwise never be found ("US:3" vs "US:") and the arc would silently vanish.
+          let sLat = arc.from_lat;
+          let sLng = arc.from_lng;
+          if (typeof sLat !== 'number' || typeof sLng !== 'number') {
+            const c1 = COUNTRY_COORDS[arc.from_country?.toUpperCase()] || { lat: 35.86, lng: 104.19 };
+            sLat = c1.lat; sLng = c1.lng;
+          }
+          let eLat = arc.to_lat;
+          let eLng = arc.to_lng;
+          if (typeof eLat !== 'number' || typeof eLng !== 'number') {
+            const c2 = COUNTRY_COORDS[arc.to_country?.toUpperCase()] || { lat: 37.09, lng: -95.71 };
+            eLat = c2.lat; eLng = c2.lng;
+          }
+          const p1 = project(sLat, sLng);
+          const p2 = project(eLat, eLng);
+          if (p1.visible && p2.visible) {
             ctx.strokeStyle = 'rgba(168, 85, 247, 0.65)';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -360,7 +416,10 @@
 
   function handleArcsToggle() {
     showArcs = !showArcs;
-    if (!isFallback2D) {
+    if (showArcs && crossRegionArcs.length === 0) {
+      // Last fetch had arcs off (server skipped the raw scan) → backfill arc data
+      refreshData();
+    } else if (!isFallback2D) {
       renderGlobeData(locations, crossRegionArcs);
     }
   }

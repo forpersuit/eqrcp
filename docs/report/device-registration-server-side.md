@@ -273,8 +273,9 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 - 付费设备：金色/绿色系（如 `#f5b301` / `#22c55e`）；
 - 免费设备：灰色/蓝色系（如 `#64748b` / `#38bdf8`）；
 - 柱子高度按该点"区间内活跃"设备数，环/光晕表示最近 1h 内活跃；
-- 悬浮提示展示付费/免费数量拆分；
-- **抛物线（arcs）显示可开关**（沿用现有 `cross_region_arcs` 的弧线渲染）。
+- 悬浮提示展示付费/免费数量拆分，并附"最近活跃"（基于该点 `MAX(last_seen_at)`）；
+- **抛物线（arcs）显示可开关**（沿用现有 `cross_region_arcs` 的弧线渲染）；
+- **环/光晕 = "最近 1h 内活跃"**：`latest_seen_at` 是新鲜度数据源——宽窗口（如 7d）里只有最近活跃的位置才有脉冲光环，陈旧点位只静态打点。
 
 #### 弧线语义（按 license_code 分组）
 
@@ -293,6 +294,10 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 1. `request.cf` 的 city/lat/lng 属 Workers 运行时提供但**文档未承诺一定非空**；代理/VPN/数据中心出口会得到 `XX`/`T1`（代码已排除），此时该行地理数据为空。
 2. 只有**新激活**才写这些列（`drm.ts:290`），已激活设备的重复激活不刷新网络元数据——**付费设备由 verify 顺带刷新 `last_seen_at/last_ip/lat/lng`，免费设备由 register 刷新，不能沿用 activate 仅新激活写库的时机**（见 4.1.1）。
 3. 前端 `LicenseGlobeCard.svelte:99-106 getCoordForItem()` 对经纬度为空的点回退到 `COUNTRY_COORDS` 国家中心点表（无表项再兜底中国中心）——大屏不会白屏，但大量点位只是**国别级近似**。若要求城市级精度，需另接 GeoIP 服务（成本项，本期不做）。
+
+#### 前端渲染资产（自托管，无 CDN 依赖）
+
+globe.gl 库（2.32.0）与地球贴图（`earth-night.jpg` / `earth-topology.png`）已下载到 `cloudflare/eqt-admin/public/vendor/`，经同源 `/vendor/*` 路径加载——**不依赖任何外部 CDN**。此前脚本走 jsDelivr + 3 秒 `Promise.race` 超时，CDN 被墙/慢时会静默降级到 2D 回退；自托管后同源加载近即时，2D 回退仅在 WebGL 不可用时触发。升级 globe.gl 时需同时替换 vendor 文件（锁版本 2.32.0）。
 
 ---
 
