@@ -49,6 +49,10 @@ async function revokeLicenseAndNotify(
     reason,
     license_code
   ).run();
+  // B5: Downgrade device_registry to 'free' on revoke
+  await env.DB.prepare(
+    "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+  ).bind(license_code).run();
 
   const notifyEmail = sessionEmail || license.buyer_email;
   if (notifyEmail) {
@@ -360,7 +364,7 @@ export async function handlePortalRoutes(
     }
 
     const activation = await env.DB.prepare(
-      "SELECT id FROM activations WHERE id = ? AND license_code = ?"
+      "SELECT id, device_id FROM activations WHERE id = ? AND license_code = ?"
     ).bind(activation_id, license_code).first<any>();
 
     if (!activation) {
@@ -380,6 +384,13 @@ export async function handlePortalRoutes(
     await env.DB.prepare(
       "INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)"
     ).bind(license_code, activation_id, nowIso).run();
+
+    // B4: Downgrade device_registry tier to 'free' on unbind (no longer associated with a paid license)
+    if (activation.device_id) {
+      await env.DB.prepare(
+        "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?"
+      ).bind(activation.device_id).run();
+    }
 
     // Send unbind security email notification asynchronously
     const targetEmail = session.email || license.buyer_email;

@@ -581,6 +581,10 @@ export async function handlePaddleRoutes(
             "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
           ).bind(upgradeRow.id).run();
           await env.DB.prepare(revokeLicenseSql()).bind(new Date().toISOString(), "refund", upgradeRow.target_license_code).run();
+          // B5: Downgrade device_registry to 'free' on revoke
+          await env.DB.prepare(
+            "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+          ).bind(upgradeRow.target_license_code).run();
 
           const targetLic = await env.DB.prepare(
             "SELECT license_code, buyer_email, tier FROM licenses WHERE license_code = ?"
@@ -621,6 +625,10 @@ export async function handlePaddleRoutes(
           "refund",
           license.license_code
         ).run();
+        // B5: Downgrade device_registry to 'free' on revoke
+        await env.DB.prepare(
+          "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+        ).bind(license.license_code).run();
       } else {
         // Legacy no-op path preserved (0-row update) + audit so a silent miss is visible.
         const res = await env.DB.prepare(revokeByPaddleTxnSql()).bind(
@@ -673,6 +681,10 @@ export async function handlePaddleRoutes(
               "UPDATE license_upgrades SET status = 'cancelled' WHERE id = ?"
             ).bind(upgradeRow.id).run();
             await env.DB.prepare(revokeLicenseSql()).bind(new Date().toISOString(), action, upgradeRow.target_license_code).run();
+            // B5: Downgrade device_registry to 'free' on revoke
+            await env.DB.prepare(
+              "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+            ).bind(upgradeRow.target_license_code).run();
             return new Response(JSON.stringify({ message: "Applied lifetime upgrade revoked due to adjustment refund", status: "revoked" }), {
               status: 200,
               headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -699,6 +711,10 @@ export async function handlePaddleRoutes(
             reason,
             license.license_code
           ).run();
+          // B5: Downgrade device_registry to 'free' on revoke
+          await env.DB.prepare(
+            "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+          ).bind(license.license_code).run();
         } else {
           const res = await env.DB.prepare(revokeByPaddleTxnSql()).bind(
             new Date().toISOString(),
@@ -758,6 +774,13 @@ export async function handlePaddleRoutes(
           status,
           subscriptionId
         ).run();
+
+        // B5: Downgrade device_registry to 'free' on revoke
+        if (license) {
+          await env.DB.prepare(
+            "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+          ).bind(license.license_code).run();
+        }
 
         if (license && license.buyer_email) {
           const buyerLang = detectBuyerLang(data);

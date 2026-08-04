@@ -506,6 +506,10 @@ export async function handleAdminRoutes(
            revoke_reason = COALESCE(revoke_reason, 'admin')
        WHERE license_code = ?`
     ).bind(new Date().toISOString(), license_code).run();
+    // B5: Downgrade device_registry to 'free' on admin revoke
+    await env.DB.prepare(
+      "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+    ).bind(license_code).run();
     ctx.waitUntil(logAdminAudit(env, 'REVOKE', 'LICENSE', license_code, {
       revoke_reason: 'admin',
       license_code,

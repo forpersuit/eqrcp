@@ -60,22 +60,26 @@ export function normalizeLicenseSource(
   return 'admin';
 }
 
-/** Portal self-service refund + Paddle Adjustments path (14-day cooling-off window). */
+/** Portal self-service refund + Paddle Adjustments path (14-day cooling-off window).
+ *  Refund window is measured from last_purchased_at (latest renewal) with fallback to created_at (original purchase),
+ *  matching the portal's is_in_refund_window display (B2 audit). */
 export function isLicenseRefundable(license: {
   status?: string | null;
   source?: string | null;
   paddle_transaction_id?: string | null;
   created_at?: string | null;
+  last_purchased_at?: string | null;
 }): boolean {
   if ((license.status || '') !== 'active') return false;
   const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
   if (source !== 'purchase') {
     return false;
   }
-  // Enforce 14-day refund window (14 * 86400 * 1000 ms)
-  if (license.created_at) {
-    const createdTime = new Date(license.created_at).getTime();
-    if (!isNaN(createdTime) && Date.now() - createdTime > 14 * 86400 * 1000) {
+  // Enforce 14-day refund window from last_purchased_at (renewal) or created_at (original)
+  const windowStart = license.last_purchased_at || license.created_at;
+  if (windowStart) {
+    const startTime = new Date(windowStart).getTime();
+    if (!isNaN(startTime) && Date.now() - startTime > 14 * 86400 * 1000) {
       return false;
     }
   }
