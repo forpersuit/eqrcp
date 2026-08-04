@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 1. **Workers 端 5 分钟写防抖 (Write Debouncing)**：
    应用/CLI 在短时间内可能被频繁多次启动。为防止高频请求引发 SQL `UPDATE` 导致 SQLite/D1 锁锁竞争与资源浪费，Workers 对 `last_seen_at` 列做写防抖：若 `now() - last_seen_at < 5 minutes`，直接返回内存响应，跳过 D1 写事务落盘。
 2. **Free 设备数据保留，不设 TTL 清扫**：
-   大屏活跃查询是 `last_seen_at >= now - window` 的条件过滤，配合 `idx_registry_live` 索引，死数据不进扫描范围、不影响渲染；宽表一行一设备，行数 = 去重设备数（有界），非事件数。故 Free 死数据**保留沉淀**，不删除——历史活跃可留作长期分析，且**消除"付费设备被 TTL 误删"的风险**。增长由 register 限频（见 5.4）兜底。
+   大屏活跃查询是 `last_seen_at >= now - window` 的条件过滤，配合 `idx_registry_last_seen`（单列索引）做 range scan，死数据不进扫描范围、不影响渲染；`idx_registry_live (tier_label, last_seen_at)` 前导列是 tier_label，无法直接支撑 last_seen_at 区间扫描，故另建单列索引。宽表一行一设备，行数 = 去重设备数（有界），非事件数。故 Free 死数据**保留沉淀**，不删除——历史活跃可留作长期分析，且**消除"付费设备被 TTL 误删"的风险**。增长由 register 限频（见 5.4）兜底。
 
 #### 4.2.1 数据库架构全景与表功能统计（D1 全量清单）
 
@@ -245,17 +245,26 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 
 ### 4.4 Admin 地球大屏改造
 
-新端点 `GET /api/v1/admin/devices/live?window=1h|12h|24h|7d&arcs=1`（Admin 鉴权），返回区间内每台活跃设备的：
+新端点 `GET /api/v1/admin/devices/live?window=1h|12h|24h|7d&arcs=1`（Admin 鉴权）。`device_registry` 一行一设备（device_id 为主键），响应按 `ip_country,region,city,latitude,longitude` 聚合（同城多设备合并打点）：
 
 ```json
 {
-  "device_id": "...",
-  "tier_label": "paid" | "free",
-  "country": "CN",
-  "city": "Shanghai",
-  "latitude": 31.23,
-  "longitude": 121.47,
-  "last_seen_at": "..."
+  "success": true,
+  "window": "1h",
+  "locations": [{
+    "country": "CN", "region": "SH", "city": "Shanghai",
+    "latitude": 31.23, "longitude": 121.47,
+    "paid_count": 3, "free_count": 2, "total_count": 5,
+    "latest_seen_at": "..."
+  }],
+  "total_active_devices": 42,
+  "total_paid_devices": 30,
+  "total_free_devices": 12,
+  "cross_region_arcs": [{
+    "license_code": "EQT-XXX", "from_country": "CN", "from_city": "Shanghai",
+    "from_lat": 31.23, "from_lng": 121.47, "to_country": "US", "to_city": "NY",
+    "to_lat": 40.7, "to_lng": -74.0
+  }]
 }
 ```
 
@@ -267,7 +276,15 @@ Cloudflare D1 数据库当前实际在用的全量 **8 张**数据表清单如�
 - 悬浮提示展示付费/免费数量拆分；
 - **抛物线（arcs）显示可开关**（沿用现有 `cross_region_arcs` 的弧线渲染）。
 
-现有 `/admin/activation-locations` 保留（授权分布口径），新端点承载"区间活跃"口径。
+#### 弧线语义（按 license_code 分组）
+
+`device_registry` 以 `device_id` 为主键，**一行一设备**——同 device_id 永远只有一行，按 device_id 分组无法产生"同设备多地点"弧线。弧线按 **`license_code`** 分组：同一激活码在多台设备上兑换、且这些设备位于不同城市/国家时，两点连弧（免费设备 `license_code` 为空，天然不参与）。这依赖"同码多设备各占一行"这一事实（见 4.1.1：指纹不匹配则 INSERT 新行）。产品策略禁止同一物理设备同时激活多个激活码（`findPeerActiveLicensesOnDevice` + `evaluateStacking`，跨码 403），故任意时刻一设备至多归属一个码，分组无歧义。
+
+#### 活跃设备总数口径
+
+`total_active_devices` = **窗口内且有完整经纬度地理信息的设备数**（`ip_country != '' AND latitude/longitude IS NOT NULL`）。边界即"能连上大屏窗口、且具备可打点地理信息"的子集——离线设备本身无法上报、不计入；代理/VPN/数据中心出口（`XX`/`T1`）无经纬度，既不上点也不计入。该口径是刻意选取的展示边界：无地理信息则无法在图上呈现，纳入总数会与打点数对不上；若未来要含无地理设备，需另接 GeoIP（成本项，本期不做）。
+
+现有 `/admin/activation-locations` 保留（授权分布口径，按 activations 表聚合），新端点承载"区间活跃"口径。
 
 #### 经纬度来源（重要前提）
 

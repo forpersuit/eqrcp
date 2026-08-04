@@ -176,9 +176,9 @@ export interface LiveDeviceLocation {
   latest_seen_at: string;
 }
 
-/** Cross-region arc for a device seen in multiple locations */
+/** Cross-region arc for a license code redeemed on devices in multiple locations */
 export interface LiveDeviceArc {
-  device_id: string;
+  license_code: string;
   from_country: string;
   from_city?: string | null;
   from_lat: number;

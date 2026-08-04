@@ -220,7 +220,7 @@
           startLng,
           endLat,
           endLng,
-          deviceId: arc.device_id
+          licenseCode: arc.license_code
         });
       });
     }
@@ -390,7 +390,7 @@
       <span class="icon">🌍</span>
       <div>
         <h3>全球城市级活跃设备分布视界</h3>
-        <p class="subtitle">城市打点与 3D 柱体高度表征活跃设备量；付费/免费双色区分；同设备跨城/跨国绘制紫粉流光弧线</p>
+        <p class="subtitle">城市打点与 3D 柱体高度表征活跃设备量；付费/免费双色区分；同一激活码的多台设备跨城/跨国绘制紫粉流光弧线</p>
       </div>
     </div>
     <div class="header-right">
@@ -411,9 +411,7 @@
       </label>
 
       {#if crossRegionArcs.length > 0}
-        <span class="badge badge-purple" title="存在同一设备在不同城市/国家被记录">
-          ⚡ 跨城流光链路: {crossRegionArcs.length} 条
-        </span>
+        <span class="badge badge-purple" title="同一激活码绑定在多台设备上，且这些设备位于不同城市/国家">⚡ 跨城流光链路: {crossRegionArcs.length} 条</span>
       {/if}
       <span class="badge badge-info">活跃: {totalActiveDevices} 台 (付费 {totalPaidDevices} / 免费 {totalFreeDevices})</span>
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>

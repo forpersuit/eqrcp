@@ -424,7 +424,10 @@ export async function handleAdminRoutes(
       "24h": 24 * 60 * 60 * 1000,
       "7d": 7 * 24 * 60 * 60 * 1000
     };
-    const windowMs = WINDOW_MS[windowParam] || WINDOW_MS["1h"];
+    // Invalid window values silently fall back to 1h (reviewer P3); echo the EFFECTIVE
+    // window so the response never claims a window that wasn't applied.
+    const effectiveWindow = WINDOW_MS[windowParam] ? windowParam : "1h";
+    const windowMs = WINDOW_MS[effectiveWindow];
     const cutoff = new Date(Date.now() - windowMs).toISOString();
 
     const locationsSql = `
@@ -468,7 +471,7 @@ export async function handleAdminRoutes(
     }
 
     let crossRegionArcs: {
-      device_id: string;
+      license_code: string;
       from_country: string;
       from_city?: string;
       from_lat: number;
@@ -480,16 +483,22 @@ export async function handleAdminRoutes(
     }[] = [];
 
     if (arcsParam) {
+      // Arc semantics (§4.4): group by license_code — one license redeemed on multiple
+      // devices (each its own device_registry row) that appear in different cities/
+      // countries. device_registry is one row per device (device_id PK), so grouping by
+      // device_id would always yield a single node (dead code). Free devices have
+      // license_code = NULL and are excluded by the filter below.
       const rawSql = `
-        SELECT device_id, ip_country AS country, city, latitude, longitude
+        SELECT license_code, ip_country AS country, city, latitude, longitude
         FROM device_registry
         WHERE last_seen_at >= ?
+          AND license_code IS NOT NULL AND license_code != ''
           AND ip_country IS NOT NULL AND ip_country != ''
           AND latitude IS NOT NULL AND longitude IS NOT NULL
-        ORDER BY device_id
+        ORDER BY license_code
       `;
       const rawRes = await env.DB.prepare(rawSql).bind(cutoff).all<{
-        device_id: string;
+        license_code: string;
         country: string;
         city?: string | null;
         latitude: number;
@@ -497,13 +506,13 @@ export async function handleAdminRoutes(
       }>();
       const rawList = rawRes.results || [];
 
-      const deviceNodesMap = new Map<string, Array<{ country: string; city?: string; latitude: number; longitude: number }>>();
+      const codeNodesMap = new Map<string, Array<{ country: string; city?: string; latitude: number; longitude: number }>>();
       for (const item of rawList) {
-        const did = item.device_id;
-        if (!deviceNodesMap.has(did)) {
-          deviceNodesMap.set(did, []);
+        const code = item.license_code;
+        if (!codeNodesMap.has(code)) {
+          codeNodesMap.set(code, []);
         }
-        deviceNodesMap.get(did)!.push({
+        codeNodesMap.get(code)!.push({
           country: item.country.toUpperCase(),
           city: item.city || undefined,
           latitude: item.latitude,
@@ -512,7 +521,7 @@ export async function handleAdminRoutes(
       }
 
       const seenPairs = new Set<string>();
-      for (const [did, nodes] of deviceNodesMap.entries()) {
+      for (const [code, nodes] of codeNodesMap.entries()) {
         if (nodes.length > 1) {
           for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
@@ -521,11 +530,11 @@ export async function handleAdminRoutes(
               const locKey1 = `${n1.country}:${n1.city || ''}`;
               const locKey2 = `${n2.country}:${n2.city || ''}`;
               if (locKey1 !== locKey2) {
-                const pairKey = `${did}:${locKey1}->${locKey2}`;
+                const pairKey = `${code}:${locKey1}->${locKey2}`;
                 if (!seenPairs.has(pairKey)) {
                   seenPairs.add(pairKey);
                   crossRegionArcs.push({
-                    device_id: did,
+                    license_code: code,
                     from_country: n1.country,
                     from_city: n1.city,
                     from_lat: n1.latitude,
@@ -544,7 +553,7 @@ export async function handleAdminRoutes(
     }
 
     ctx.waitUntil(logAdminAudit(env, 'QUERY_LIVE_DEVICES', 'SYSTEM', null, {
-      window: windowParam,
+      window: effectiveWindow,
       total_active_devices: totalActiveDevices,
       total_paid_devices: totalPaidDevices,
       total_free_devices: totalFreeDevices,
@@ -554,7 +563,7 @@ export async function handleAdminRoutes(
 
     return new Response(JSON.stringify({
       success: true,
-      window: windowParam,
+      window: effectiveWindow,
       locations,
       total_active_devices: totalActiveDevices,
       total_paid_devices: totalPaidDevices,

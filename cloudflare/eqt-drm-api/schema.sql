@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS device_registry (
 );
 
 CREATE INDEX IF NOT EXISTS idx_registry_live ON device_registry(tier_label, last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_registry_last_seen ON device_registry(last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_registry_uuid ON device_registry(uuid_hash);
 CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash);
 CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash);

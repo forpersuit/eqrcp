@@ -91,6 +91,7 @@ export async function ensureDeviceRegistryTable(env: Env): Promise<void> {
         )
       `),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_live ON device_registry(tier_label, last_seen_at)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_last_seen ON device_registry(last_seen_at)`),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_uuid ON device_registry(uuid_hash)`),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash)`),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash)`)
