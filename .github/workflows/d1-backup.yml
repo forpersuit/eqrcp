@@ -1,0 +1,65 @@
+name: D1 Backup
+
+on:
+  schedule:
+    # Daily at 00:00 UTC — RPO ≤ 24h (§6.1)
+    - cron: '7 0 * * *'
+  workflow_dispatch:
+    # Manual trigger for ad-hoc backups or recovery drills
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Create D1 database snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Authenticate Wrangler
+        run: |
+          echo "$CLOUDFLARE_API_TOKEN" | wrangler login --token-stdin
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Backup eqt-drm-db
+        id: backup-drm
+        working-directory: cloudflare/eqt-drm-api
+        run: |
+          echo "=== Creating D1 backup for eqt-drm-db ==="
+          OUTPUT=$(wrangler d1 backup create eqt-drm-db --remote 2>&1)
+          echo "$OUTPUT"
+          # Extract backup ID from output for artifact naming
+          BACKUP_ID=$(echo "$OUTPUT" | grep -oP 'backup_id:\s*\K[a-f0-9-]+' || echo "unknown")
+          echo "backup_id=$BACKUP_ID" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Backup eqt-feedback-db
+        id: backup-feedback
+        working-directory: cloudflare/eqt-feedback-api
+        run: |
+          echo "=== Creating D1 backup for eqt-feedback-db ==="
+          OUTPUT=$(wrangler d1 backup create eqt-feedback-db --remote 2>&1)
+          echo "$OUTPUT"
+          BACKUP_ID=$(echo "$OUTPUT" | grep -oP 'backup_id:\s*\K[a-f0-9-]+' || echo "unknown")
+          echo "backup_id=$BACKUP_ID" >> $GITHUB_OUTPUT
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Log backup result
+        run: |
+          echo "=== D1 Backup Summary ==="
+          echo "eqt-drm-db backup ID: ${{ steps.backup-drm.outputs.backup_id }}"
+          echo "eqt-feedback-db backup ID: ${{ steps.backup-feedback.outputs.backup_id }}"
+          echo "Timestamp: ${{ steps.backup-drm.outputs.timestamp }}"

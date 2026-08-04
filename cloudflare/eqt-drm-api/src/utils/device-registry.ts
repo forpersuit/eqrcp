@@ -1,5 +1,6 @@
 import { Env } from '../types';
 import { ensureDeviceRegistryTable } from './auth';
+import { logSystemError } from './error-logger';
 
 export interface DeviceRegistryParams {
   uuidHash?: string | null;
@@ -110,6 +111,13 @@ export async function registerOrRefreshDevice(
     let newTier = matchedRow.tier_label;
     if (tier === 'paid' && matchedRow.tier_label !== 'paid') {
       newTier = 'paid';
+    } else if (tier === 'free' && matchedRow.tier_label === 'paid') {
+      // Tier protection: existing paid device gets free-tier request — keep paid
+      logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('tier_protection'), {
+        device_id: matchedRow.device_id,
+        existing_tier: matchedRow.tier_label,
+        incoming_tier: tier
+      });
     }
 
     // 2. Write debouncing check (5 minutes)
@@ -145,6 +153,14 @@ export async function registerOrRefreshDevice(
         params.appVersion || null,
         deviceId
       ).run();
+    } else {
+      // Debounce skip: last_seen within 5 min and same tier — no write needed
+      const ageSec = lastSeen ? Math.floor((Date.now() - lastSeen) / 1000) : 0;
+      logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('debounce_skip'), {
+        device_id: deviceId,
+        age_seconds: ageSec,
+        tier: newTier
+      });
     }
 
     return { device_id: deviceId, tier_label: newTier };
@@ -175,6 +191,14 @@ export async function registerOrRefreshDevice(
     net.longitude,
     params.appVersion || null
   ).run();
+
+  // Audit: new device created (no fingerprint match found)
+  logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('new_device'), {
+    device_id_prefix: newDeviceId.substring(0, 8),
+    has_cpu_hash: Boolean(cpu),
+    has_disk_hash: Boolean(disk),
+    tier
+  });
 
   return { device_id: newDeviceId, tier_label: tier };
 }

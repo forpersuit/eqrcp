@@ -1,3 +1,5 @@
+import { logStructuredRequest } from './structured-logger';
+
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
@@ -7,11 +9,12 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const startMs = Date.now();
     const url = new URL(request.url);
 
     // 1. Handle CORS Preflight
     if (request.method === "OPTIONS") {
-      return new Response(null, {
+      const resp = new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -19,43 +22,44 @@ export default {
           "Access-Control-Max-Age": "86400",
         },
       });
+      ctx.waitUntil(logStructuredRequest(request, resp, startMs));
+      return resp;
     }
+
+    let response: Response | null = null;
 
     // 2. Routing: GET /image/:key
     if (request.method === "GET" && url.pathname.startsWith("/image/")) {
-      const filename = url.pathname.substring(7); // remove "/image/"
+      const filename = url.pathname.substring(7);
       if (!filename) {
-        return new Response("Filename missing", { status: 400 });
-      }
-
-      try {
-        const object = await env.BUCKET.get(filename);
-        if (!object) {
-          return new Response("Image not found", {
-            status: 404,
+        response = new Response("Filename missing", { status: 400 });
+      } else {
+        try {
+          const object = await env.BUCKET.get(filename);
+          if (!object) {
+            response = new Response("Image not found", {
+              status: 404,
+              headers: { "Access-Control-Allow-Origin": "*" }
+            });
+          } else {
+            const headers = new Headers();
+            object.writeHttpMetadata(headers);
+            headers.set("Access-Control-Allow-Origin", "*");
+            headers.set("Content-Type", "image/webp");
+            headers.set("Cache-Control", "public, max-age=31536000");
+            response = new Response(object.body, { headers });
+          }
+        } catch (err: any) {
+          response = new Response(`Error retrieving image: ${err.message}`, {
+            status: 500,
             headers: { "Access-Control-Allow-Origin": "*" }
           });
         }
-
-        const headers = new Headers();
-        object.writeHttpMetadata(headers);
-        headers.set("Access-Control-Allow-Origin", "*");
-        headers.set("Content-Type", "image/webp");
-        headers.set("Cache-Control", "public, max-age=31536000");
-
-        return new Response(object.body, {
-          headers,
-        });
-      } catch (err: any) {
-        return new Response(`Error retrieving image: ${err.message}`, {
-          status: 500,
-          headers: { "Access-Control-Allow-Origin": "*" }
-        });
       }
     }
 
     // 3. Routing: POST /goal or POST /
-    if (request.method === "POST" && (url.pathname === "/goal" || url.pathname === "/")) {
+    if (!response && request.method === "POST" && (url.pathname === "/goal" || url.pathname === "/")) {
       try {
         const payload: any = await request.json();
         const {
@@ -69,84 +73,76 @@ export default {
         } = payload;
 
         if (!message || !category) {
-          return new Response(JSON.stringify({ error: "Missing required fields (message, category)" }), {
+          response = new Response(JSON.stringify({ error: "Missing required fields (message, category)" }), {
             status: 400,
             headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
           });
-        }
+        } else {
+          let imageUrl: string | null = null;
 
-        let imageUrl: string | null = null;
-
-        // 4. Save image to R2 if exists
-        if (imageData && imageData.startsWith("data:image/")) {
-          // Extract base64 content
-          const base64Index = imageData.indexOf("base64,");
-          if (base64Index !== -1) {
-            const base64Data = imageData.substring(base64Index + 7);
-            
-            // Convert Base64 to ArrayBuffer
-            const binaryString = atob(base64Data);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            const format = imageFormat || "image/webp";
-            const ext = format.split("/")[1] || "webp";
-            const filename = `feedback-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-
-            // Save to R2
-            await env.BUCKET.put(filename, bytes.buffer, {
-              httpMetadata: { contentType: format }
-            });
-
-            // Construct feedback.eqt.net.im/image/:key URL
-            imageUrl = `https://feedback.eqt.net.im/image/${filename}`;
-          }
-        }
-
-        const clientVer = clientInfo?.version || null;
-        const clientOs = clientInfo?.os || null;
-        const submitTime = timestamp || new Date().toISOString();
-
-        // 5. Insert into D1 Database
-        await env.DB.prepare(
-          `INSERT INTO feedbacks (category, contact, message, image_url, timestamp, client_version, client_os)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .bind(category, contact || null, message, imageUrl, submitTime, clientVer, clientOs)
-        .run();
-
-        // 6. Push Notification to Telegram Bot (Async Background)
-        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-          ctx.waitUntil(
-            sendTelegramNotification(
-              env.TELEGRAM_BOT_TOKEN,
-              env.TELEGRAM_CHAT_ID,
-              {
-                category,
-                contact: contact || "未提供",
-                message,
-                clientVersion: clientVer || "未知",
-                clientOs: clientOs || "未知",
-                timestamp: submitTime,
-                imageUrl
+          // 4. Save image to R2 if exists
+          if (imageData && imageData.startsWith("data:image/")) {
+            const base64Index = imageData.indexOf("base64,");
+            if (base64Index !== -1) {
+              const base64Data = imageData.substring(base64Index + 7);
+              const binaryString = atob(base64Data);
+              const len = binaryString.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
               }
-            )
-          );
-        }
 
-        return new Response(JSON.stringify({ status: "success", imageUrl }), {
-          status: 200,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Content-Type": "application/json"
+              const format = imageFormat || "image/webp";
+              const ext = format.split("/")[1] || "webp";
+              const filename = `feedback-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+              await env.BUCKET.put(filename, bytes.buffer, {
+                httpMetadata: { contentType: format }
+              });
+
+              imageUrl = `https://feedback.eqt.net.im/image/${filename}`;
+            }
           }
-        });
 
+          const clientVer = clientInfo?.version || null;
+          const clientOs = clientInfo?.os || null;
+          const submitTime = timestamp || new Date().toISOString();
+
+          await env.DB.prepare(
+            `INSERT INTO feedbacks (category, contact, message, image_url, timestamp, client_version, client_os)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(category, contact || null, message, imageUrl, submitTime, clientVer, clientOs)
+          .run();
+
+          if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+            ctx.waitUntil(
+              sendTelegramNotification(
+                env.TELEGRAM_BOT_TOKEN,
+                env.TELEGRAM_CHAT_ID,
+                {
+                  category,
+                  contact: contact || "未提供",
+                  message,
+                  clientVersion: clientVer || "未知",
+                  clientOs: clientOs || "未知",
+                  timestamp: submitTime,
+                  imageUrl
+                }
+              )
+            );
+          }
+
+          response = new Response(JSON.stringify({ status: "success", imageUrl }), {
+            status: 200,
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Content-Type": "application/json"
+            }
+          });
+        }
       } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
+        response = new Response(JSON.stringify({ error: err.message }), {
           status: 500,
           headers: {
             "Access-Control-Allow-Origin": "*",
@@ -157,10 +153,15 @@ export default {
     }
 
     // Default 404
-    return new Response("Not Found", {
-      status: 404,
-      headers: { "Access-Control-Allow-Origin": "*" }
-    });
+    if (!response) {
+      response = new Response("Not Found", {
+        status: 404,
+        headers: { "Access-Control-Allow-Origin": "*" }
+      });
+    }
+
+    ctx.waitUntil(logStructuredRequest(request, response, startMs));
+    return response;
   }
 };
 

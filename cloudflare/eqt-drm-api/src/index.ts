@@ -1,6 +1,7 @@
 import { Env } from './types';
 import { getCorsHeaders } from './utils/auth';
 import { logSystemError, getSafeUserErrorMessage } from './utils/error-logger';
+import { logStructuredRequest } from './utils/structured-logger';
 import { handleDownloadDomain } from './services/github';
 import { handleAdminRoutes } from './routes/admin';
 import { handleAuthRoutes } from './routes/auth';
@@ -10,20 +11,33 @@ import { handleDrmRoutes } from './routes/drm';
 
 export type { Env };
 
+// Worker start time for uptime reporting
+const WORKER_START_MS = Date.now();
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const startMs = Date.now();
     const url = new URL(request.url);
 
     // Dynamic CORS Headers with Origin domain matching
     const corsHeaders = getCorsHeaders(request);
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
+      const resp = new Response(null, { headers: corsHeaders });
+      ctx.waitUntil(logStructuredRequest(request, resp, startMs));
+      return resp;
     }
 
     try {
+      let response: Response | null = null;
+
+      // 0. Public health check (no auth required — for UptimeRobot external monitoring)
+      if (url.pathname === "/api/v1/health" && request.method === "GET") {
+        response = await handlePublicHealth(env, corsHeaders);
+      }
+
       // 1. Route to Download Domain handler if matching download host / paths
-      if (
+      if (!response &&
         (url.hostname === "download.eqt.net.im" ||
          url.hostname === "localhost" ||
          url.hostname === "127.0.0.1" ||
@@ -31,50 +45,105 @@ export default {
          url.pathname.startsWith("/downloads/")) &&
         !url.pathname.startsWith("/api/v1/")
       ) {
-        return await handleDownloadDomain(request, env, ctx, corsHeaders);
+        response = await handleDownloadDomain(request, env, ctx, corsHeaders);
       }
 
       // 2. Route to Admin endpoints (/api/v1/admin/*)
-      if (url.pathname.startsWith("/api/v1/admin/")) {
-        const adminResp = await handleAdminRoutes(request, env, ctx, url, corsHeaders);
-        if (adminResp) return adminResp;
+      if (!response && url.pathname.startsWith("/api/v1/admin/")) {
+        response = await handleAdminRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 3. Route to Auth & Checkout endpoints (/api/v1/auth/*, /api/v1/checkout/*)
-      if (url.pathname.startsWith("/api/v1/auth/") || url.pathname.startsWith("/api/v1/checkout/")) {
-        const authResp = await handleAuthRoutes(request, env, ctx, url, corsHeaders);
-        if (authResp) return authResp;
+      if (!response && (url.pathname.startsWith("/api/v1/auth/") || url.pathname.startsWith("/api/v1/checkout/"))) {
+        response = await handleAuthRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 4. Route to User Portal endpoints (/api/v1/user/*)
-      if (url.pathname.startsWith("/api/v1/user/")) {
-        const portalResp = await handlePortalRoutes(request, env, ctx, url, corsHeaders);
-        if (portalResp) return portalResp;
+      if (!response && url.pathname.startsWith("/api/v1/user/")) {
+        response = await handlePortalRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 5. Route to Paddle Webhook & License Query endpoints (/api/v1/paddle/*)
-      if (url.pathname.startsWith("/api/v1/paddle/")) {
-        const paddleResp = await handlePaddleRoutes(request, env, ctx, url, corsHeaders);
-        if (paddleResp) return paddleResp;
+      if (!response && url.pathname.startsWith("/api/v1/paddle/")) {
+        response = await handlePaddleRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 6. Route to Client DRM endpoints (/api/v1/activate, /api/v1/verify, /api/v1/update/check)
-      const drmResp = await handleDrmRoutes(request, env, ctx, url, corsHeaders);
-      if (drmResp) return drmResp;
+      if (!response) {
+        response = await handleDrmRoutes(request, env, ctx, url, corsHeaders);
+      }
 
       // 7. Health check or basic index fallback
-      return new Response(JSON.stringify({ status: "EQT DRM Serverless API Running" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      if (!response) {
+        response = new Response(JSON.stringify({ status: "EQT DRM Serverless API Running" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      ctx.waitUntil(logStructuredRequest(request, response, startMs));
+      return response;
 
     } catch (e: any) {
       ctx.waitUntil(logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', e, { url: request.url, method: request.method }));
       const safeMsg = getSafeUserErrorMessage(e.message || String(e), "An unexpected server error occurred. Please try again later.");
-      return new Response(JSON.stringify({ error: safeMsg }), {
+      const errorResp = new Response(JSON.stringify({ error: safeMsg }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
+      ctx.waitUntil(logStructuredRequest(request, errorResp, startMs));
+      return errorResp;
     }
   }
 };
+
+/**
+ * Public health check endpoint — no auth required.
+ * Returns D1/R2 connectivity, latency, version, and uptime.
+ * Used by UptimeRobot for external monitoring (§6.3).
+ */
+async function handlePublicHealth(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const dbStart = Date.now();
+  let dbConnected = false;
+  let dbLatencyMs = 0;
+  let lastError: string | null = null;
+
+  try {
+    await env.DB.prepare("SELECT 1 as ok").first();
+    dbLatencyMs = Date.now() - dbStart;
+    dbConnected = true;
+  } catch (err: any) {
+    dbLatencyMs = Date.now() - dbStart;
+    dbConnected = false;
+    lastError = err?.message || String(err);
+  }
+
+  // Check for recent CRITICAL errors (last hour)
+  try {
+    const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+    const errRes = await env.DB.prepare(
+      "SELECT created_at FROM system_error_logs WHERE level = 'CRITICAL' AND created_at >= ? ORDER BY id DESC LIMIT 1"
+    ).bind(hourAgo).first<{ created_at: string }>();
+    if (errRes) {
+      lastError = `CRITICAL error at ${errRes.created_at}`;
+    }
+  } catch {
+    // Non-critical: probe failure shouldn't break health check
+  }
+
+  const r2Configured = Boolean(env.R2_PUBLIC_URL);
+  const status = dbConnected ? "healthy" : "degraded";
+
+  return new Response(JSON.stringify({
+    status,
+    d1: { connected: dbConnected, queryLatencyMs: dbLatencyMs },
+    r2: { connected: r2Configured },
+    uptime: Math.floor((Date.now() - WORKER_START_MS) / 1000),
+    version: "1.5.0",
+    lastError,
+    timestamp: new Date().toISOString()
+  }), {
+    status: dbConnected ? 200 : 503,
+    headers: { ...corsHeaders, "Content-Type": "application/json" }
+  });
+}
