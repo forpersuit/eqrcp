@@ -1245,6 +1245,33 @@
                         </button>
                     `);
                 }
+                const canCancel = lic.cancellable === true;
+                if (canCancel) {
+                    actionBtns.push(`
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <span class="material-symbols-outlined text-sm">cancel_schedule_send</span>
+                            <span>${dict.cancel_subscription || 'Cancel subscription'}</span>
+                        </button>
+                    `);
+                }
+                const canCancel = lic.cancellable === true;
+                if (canCancel) {
+                    actionBtns.push(`
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <span class="material-symbols-outlined text-sm">cancel_schedule_send</span>
+                            <span>${dict.cancel_subscription || 'Cancel subscription'}</span>
+                        </button>
+                    `);
+                }
+                const canCancel = lic.cancellable === true;
+                if (canCancel) {
+                    actionBtns.push(`
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <span class="material-symbols-outlined text-sm">cancel_schedule_send</span>
+                            <span>${dict.cancel_subscription || 'Cancel subscription'}</span>
+                        </button>
+                    `);
+                }
                 const actionBtnHtml = actionBtns.length
                     ? `<div class="flex flex-wrap gap-2 justify-end">${actionBtns.join('')}</div>`
                     : '';

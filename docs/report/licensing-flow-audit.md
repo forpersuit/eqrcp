@@ -190,3 +190,22 @@ A2 的 `idx_licenses_paddle_txn` 唯一索引上线后，`verify-subscription-ca
 | Admin 吊销 | `admin.ts` revoke endpoint | 管理员手动吊销 |
 
 **验证**：`npm run test:upgrade:offline` 16/16 通过，`test:device-reg:offline` 7/7 通过，`test:upgrade:e2e` 通过，tsc --noEmit 通过。
+
+---
+
+## 九、P4 处置记录（2026-08-04）
+
+### 9.1 B3 取消订阅按钮死代码 — 已修复（commit 待部署后记录）
+
+**问题**：portal.html 中 `cancel-sub-trigger-btn` 的事件绑定（line 1341→1371）、确认弹窗（line 181-192）、后端 `/api/v1/user/cancel-subscription` handler（portal.ts:809）、i18n 翻译全部就绪，但 `actionBtns` 渲染段缺少 `canCancel` 判断，按钮从未被渲染进 DOM，导致订阅取消入口在页面上不可达。
+
+**修复**：在 `actionBtns` 渲染段（`canRefund` 块后）增加 `canCancel` 判断，当 `lic.cancellable === true` 时渲染 `.cancel-sub-trigger-btn`。按钮样式与 refund 按钮一致（amber 色系），图标 `cancel_schedule_send`，文案使用已有 i18n key `cancel_subscription`。
+
+### 9.2 A4/A5/C1/C2 记录项
+
+| 项 | 说明 | 处置 |
+|---|---|---|
+| **A4** OTP 无 capability 绑定 | verify-code 返回裸 `{success:true}`，无 token/price 绑定；Paddle checkout 纯客户端打开 | 已接受。履约全在 webhook，客户端传任意 priceId 不影响实际铸码。随主流程重构时处理。 |
+| **A5** 退款查找只认单笔 txn | 见 B1（同根问题） | 已随 P1 B1 修复（subscription_id 回退查找）。 |
+| **C1** 退款吊销邮件发给当前 buyer_email | 当前无赠送功能，owner 不会转移 | 已接受。若未来上线赠送（M5），需在赠送时同步处理退款关系。 |
+| **C2** in-isolate 限频 | `/device/register` 限频是每 Worker 实例内存 Map | 已接受。OTP 限频已为 D1 持久化（正确）。`/device/register` 的 in-isolate 限频作为成本提升手段足够。 |
