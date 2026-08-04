@@ -698,6 +698,97 @@ async function runTests() {
   assert(rows15.length === 2, '2 rows for 2 distinct devices');
   await flushCtx();
 
+  // ============================================================
+  // T16: Activate rate limit — 4th request returns 429 (§M4 P1)
+  // ============================================================
+  console.log('\nTest 16: Activate rate limit — 4th request returns 429...');
+  const db16 = new SqliteD1Mock();
+  ensureAllTables(db16);
+  env.DB = db16;
+  await seedLicense(db16, { license_code: 'EQT-RL-16', max_devices: 5 });
+  for (let i = 1; i <= 4; i++) {
+    const res = await handleDrmRoutes(activateReq({
+      license_code: 'EQT-RL-16',
+      uuid_hash: `uuid-rl-16-${i}`,
+      cpu_hash: `cpu-rl-16-${i}`,
+      disk_hash: `disk-rl-16-${i}`
+    }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), {});
+    if (i <= 3) {
+      assert(res.status === 200, `activate #${i} 200 OK`);
+    } else {
+      assert(res.status === 429, `activate #${i} returns 429`);
+      const j = await res.json();
+      assert(j.retry_after === 60, `retry_after=60 in 429 response (got ${j.retry_after})`);
+    }
+  }
+  await flushCtx();
+
+  // ============================================================
+  // T17: Verify rate limit — 11th request returns 429 (§M4 P1)
+  // ============================================================
+  console.log('\nTest 17: Verify rate limit — 11th request returns 429...');
+  const db17 = new SqliteD1Mock();
+  ensureAllTables(db17);
+  env.DB = db17;
+  await seedLicense(db17, { license_code: 'EQT-RL-17', max_devices: 15 });
+  // Activate first (needs a valid activation record for verify to pass)
+  const res17act = await handleDrmRoutes(activateReq({
+    license_code: 'EQT-RL-17',
+    uuid_hash: 'uuid-rl-17',
+    cpu_hash: 'cpu-rl-17',
+    disk_hash: 'disk-rl-17'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), {});
+  assert(res17act.status === 200, 'activate 200 OK for verify test setup');
+  const j17act = await res17act.json();
+  const devId17 = j17act.device_id;
+  // Send 11 verify requests
+  for (let i = 1; i <= 11; i++) {
+    const res = await handleDrmRoutes(new Request('https://lic.eqt.net.im/api/v1/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-forwarded-for': '1.2.3.4',
+        'cf-ipcountry': 'CN',
+        'cf-ipcity': 'Shenzhen',
+        'cf-region-code': 'GD',
+        'cf-iplatitude': '22.54',
+        'cf-iplongitude': '114.06'
+      },
+      body: JSON.stringify({
+        license_code: 'EQT-RL-17',
+        uuid_hash: 'uuid-rl-17',
+        cpu_hash: 'cpu-rl-17',
+        disk_hash: 'disk-rl-17',
+        device_id: devId17
+      })
+    }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/verify'), {});
+    if (i <= 10) {
+      assert(res.status === 200, `verify #${i} 200 OK`);
+    } else {
+      assert(res.status === 429, `verify #${i} returns 429`);
+      const j = await res.json();
+      assert(j.retry_after === 60, `retry_after=60 in 429 response (got ${j.retry_after})`);
+    }
+  }
+  await flushCtx();
+
+  // ============================================================
+  // T18: Register rate limit unaffected by activate/verify limits (§M4 P1)
+  // ============================================================
+  console.log('\nTest 18: Register rate limit unaffected by activate/verify limits...');
+  const db18 = new SqliteD1Mock();
+  ensureAllTables(db18);
+  env.DB = db18;
+  // Register should work fine (different key prefix from activate/verify)
+  const res18 = await handleDrmRoutes(registerReq({
+    uuid_hash: 'uuid-rl-18',
+    cpu_hash: 'cpu-rl-18',
+    disk_hash: 'disk-rl-18',
+    app_version: '1.0.0'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/device/register'), {});
+  assert(res18.status === 200, 'register 200 OK after activate/verify rate limit tests');
+  await flushCtx();
+
   console.log('\n🎉🎉 ALL DEVICE REGISTRY WRITE PATH TESTS PASSED! 🎉🎉');
 }
 

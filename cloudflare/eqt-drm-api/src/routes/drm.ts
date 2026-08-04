@@ -305,9 +305,12 @@ export async function handleDrmRoutes(
       });
     }
 
-    // A3: D1-persistent rate limit — max 10 activate attempts per license_code per minute
-    if (await isD1RateLimited(env, `activate:${license_code}`, 10, 60000)) {
-      return new Response(JSON.stringify({ error: getApiTranslation("rate_limit_exceeded", reqLang) }), {
+    // A3: D1-persistent rate limit — max 3 activate attempts per license_code per minute (§M4 P1)
+    if (await isD1RateLimited(env, `activate:${license_code}`, 3, 60000)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("rate_limit_exceeded", reqLang),
+        retry_after: 60
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -607,9 +610,12 @@ export async function handleDrmRoutes(
       });
     }
 
-    // A3: D1-persistent rate limit — max 20 verify attempts per license_code per minute
-    if (await isD1RateLimited(env, `verify:${license_code}`, 20, 60000)) {
-      return new Response(JSON.stringify({ error: getApiTranslation("rate_limit_exceeded", reqLang) }), {
+    // A3: D1-persistent rate limit — max 10 verify attempts per license_code per minute (§M4 P1)
+    if (await isD1RateLimited(env, `verify:${license_code}`, 10, 60000)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("rate_limit_exceeded", reqLang),
+        retry_after: 60
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
