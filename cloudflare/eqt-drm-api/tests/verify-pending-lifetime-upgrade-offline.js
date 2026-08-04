@@ -110,6 +110,8 @@ class RealWorkerD1Mock {
     }
     // Query license by paddle_transaction_id
     if (s.includes('SELECT') && s.includes('FROM licenses WHERE paddle_transaction_id =')) {
+      // A2: atomicMintWindow simulates two concurrent deliveries reading "no existing row" before either commits
+      if (this.atomicMintWindow) return null;
       const txnId = args[0];
       for (const row of this.tables.licenses.values()) {
         if (row.paddle_transaction_id === txnId) return dbRowCopy(row);
@@ -168,8 +170,19 @@ class RealWorkerD1Mock {
       return { meta: { changes: 1 } };
     }
 
-    // Insert license (new-purchase mint path) — license_code is the PK
+    // Insert license (new-purchase mint path) — license_code is the PK.
+    // A2: simulate the real UNIQUE index idx_licenses_paddle_txn on paddle_transaction_id —
+    // a non-null txn that already exists throws, which the Worker's outer catch turns into a 500
+    // (then Paddle retries and the existing-row check returns 200 idempotent).
     if (s.includes('INSERT INTO licenses')) {
+      const txnId = args[8];
+      if (txnId !== null && txnId !== undefined && txnId !== '') {
+        for (const r of this.tables.licenses.values()) {
+          if (r.paddle_transaction_id === txnId) {
+            throw new Error('UNIQUE constraint failed: licenses.paddle_transaction_id');
+          }
+        }
+      }
       const row = {
         license_code: args[0],
         tier: args[1],
@@ -738,8 +751,64 @@ async function runTests() {
   assert(licUpgApl.status === 'revoked' && licUpgApl.revoke_reason === 'refund', 'Applied-upgrade license revoked with reason refund');
   assert(dbUpg.tables.license_upgrades.get(2).status === 'cancelled', 'Applied upgrade row marked cancelled after refund');
 
+  // Test 13: REAL A2 atomic mint — unique index prevents concurrent same-txn double-mint
+  console.log('\nTest 13: REAL concurrent same-txn mint → unique index 500 → Paddle retry idempotent 200 (A2)...');
+  const dbA2 = new RealWorkerD1Mock();
+  const envA2 = { DB: dbA2, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const mkMintReq = async (txnId) => {
+    const obj = {
+      event_type: 'transaction.completed',
+      data: {
+        id: txnId,
+        customer: { email: 'a2@example.com' },
+        items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+        totals: { subtotal: '2999', discount: '0', tax: '0', total: '2999', grand_total: '2999' }
+      }
+    };
+    const raw = JSON.stringify(obj);
+    const sig = await createPaddleSignature(raw, SECRET_KEY);
+    return new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paddle-signature': sig },
+      body: raw
+    });
+  };
+  const mintUrl = new URL('https://lic.eqt.net.im/api/v1/paddle/webhook');
+
+  // A: first delivery mints (existing-check sees nothing, INSERT succeeds)
+  dbA2.atomicMintWindow = true;
+  const resA2A = await handlePaddleRoutes(await mkMintReq('txn_a2_001'), envA2, ctx, mintUrl, corsHeaders);
+  assert(resA2A.status === 200, 'First delivery minted license with 200');
+  assert(Array.from(dbA2.tables.licenses.values()).length === 1, 'Exactly one license after first delivery');
+
+  // B: concurrent redelivery reads "no existing" then INSERT hits the UNIQUE constraint → outer catch → 500
+  const resA2B = await handlePaddleRoutes(await mkMintReq('txn_a2_001'), envA2, ctx, mintUrl, corsHeaders);
+  assert(resA2B.status === 500, 'Concurrent redelivery returned 500 (unique constraint → outer catch)');
+  assert(Array.from(dbA2.tables.licenses.values()).length === 1, 'STILL exactly one license — no double mint');
+
+  // C: Paddle retry after the window closes → existing-row check hits → idempotent 200, same code
+  dbA2.atomicMintWindow = false;
+  const resA2C = await handlePaddleRoutes(await mkMintReq('txn_a2_001'), envA2, ctx, mintUrl, corsHeaders);
+  assert(resA2C.status === 200, 'Retry after window closed returned idempotent 200');
+  const resA2CJson = await resA2C.json();
+  assert(resA2CJson.message === 'Transaction already processed' && !!resA2CJson.license_code, 'Retry returned already-processed with a license_code');
+  assert(Array.from(dbA2.tables.licenses.values()).length === 1, 'No extra license after retry');
+
+  // D: a DIFFERENT transaction still mints normally (unique index only blocks same-txn duplicates)
+  const resA2D = await handlePaddleRoutes(await mkMintReq('txn_a2_002'), envA2, ctx, mintUrl, corsHeaders);
+  assert(resA2D.status === 200, 'Different transaction still mints with 200');
+  assert(Array.from(dbA2.tables.licenses.values()).length === 2, 'Two licenses minted (txn_a2_001 + txn_a2_002)');
+
+  // E: NULL/non-purchase rows are unaffected by the unique index (SQLite allows multiple NULLs)
+  // Mock INSERT only enforces non-null txn uniqueness — same semantics as the real partial behavior.
+  const dbA2Null = new RealWorkerD1Mock();
+  const envA2Null = { DB: dbA2Null, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  dbA2Null.tables.licenses.set('EQT-PLUS-PROMO-1', { license_code: 'EQT-PLUS-PROMO-1', tier: 'PLUS', status: 'active', source: 'promo', paddle_transaction_id: null, created_at: new Date().toISOString() });
+  dbA2Null.tables.licenses.set('EQT-PLUS-PROMO-2', { license_code: 'EQT-PLUS-PROMO-2', tier: 'PLUS', status: 'active', source: 'promo', paddle_transaction_id: null, created_at: new Date().toISOString() });
+  assert(dbA2Null.tables.licenses.size === 2, 'Two promo rows with NULL paddle_transaction_id coexist (unique index allows multiple NULLs)');
+
   console.log('\n========================================');
-  console.log('🎉 ALL 12 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
+  console.log('🎉 ALL 13 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 

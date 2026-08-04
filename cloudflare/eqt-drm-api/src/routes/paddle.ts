@@ -2,7 +2,7 @@ import { Env, PRICE_LIFETIME_ID, PRICE_YEARLY_ID } from '../types';
 import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { ensureLicenseSourceColumns } from '../utils/auth';
+import { ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
 import { revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
 
@@ -79,6 +79,7 @@ export async function handlePaddleRoutes(
   // 3.5.1 Paddle Webhook: fulfillment and cancellation/refund
   if (url.pathname === "/api/v1/paddle/webhook" && request.method === "POST") {
     await ensureLicenseSourceColumns(env);
+    await ensureLicensePaddleTxnIndex(env);
     const rawBody = await request.text();
     const signature = request.headers.get("paddle-signature");
     const webhookSecret = env.PADDLE_WEBHOOK_SECRET;

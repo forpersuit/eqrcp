@@ -44,6 +44,15 @@ CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);
 CREATE INDEX IF NOT EXISTS idx_licenses_email_hash ON licenses(buyer_email_hash);
 CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 
+-- A2 (audit licensing-flow-audit.md): atomic mint idempotency.
+-- UNIQUE on paddle_transaction_id makes the SELECT→INSERT mint path atomic — a concurrent
+-- redelivery of the same transaction cannot double-mint (2nd INSERT hits the constraint,
+-- outer catch returns 500, Paddle retries, existing-row check then returns 200 idempotent).
+-- SQLite unique indexes allow multiple NULLs, so non-purchase rows (source=promo/admin/test,
+-- paddle_transaction_id NULL) are unaffected. Production D1 must be deduplicated BEFORE this
+-- index is created (see ensureLicensePaddleTxnIndex: it pre-checks duplicates and skips with a WARN).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_paddle_txn ON licenses(paddle_transaction_id);
+
 CREATE TABLE IF NOT EXISTS verification_codes (
     -- PK value is purpose-prefixed: "portal:user@x.com" or "checkout:user@x.com"
     -- (column name remains email for backward compatibility with existing D1 rows)

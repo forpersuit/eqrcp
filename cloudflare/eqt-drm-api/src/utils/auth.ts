@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { ensureManualBlacklistTable } from './blacklist';
 import { verifyCloudflareAccessJwt } from './cf-access-jwt';
+import { logSystemError } from './error-logger';
 
 export function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") || "";
@@ -123,6 +124,32 @@ export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
   }
 }
 
+/**
+ * A2 (audit licensing-flow-audit.md): UNIQUE index on licenses.paddle_transaction_id makes the
+ * SELECT→INSERT mint path atomic. SQLite unique indexes allow multiple NULLs, so non-purchase rows
+ * (paddle_transaction_id NULL) are unaffected. CREATE UNIQUE INDEX FAILS if duplicates exist, so this
+ * pre-checks duplicates first (like the idx_upgrades_* procedure); if any are found it skips + audits a
+ * WARN so the gap stays visible until duplicates are cleaned manually.
+ */
+export async function ensureLicensePaddleTxnIndex(env: Env): Promise<void> {
+  try {
+    const dup = await env.DB.prepare(
+      "SELECT paddle_transaction_id FROM licenses WHERE paddle_transaction_id IS NOT NULL GROUP BY paddle_transaction_id HAVING COUNT(*) > 1 LIMIT 1"
+    ).first<{ paddle_transaction_id: string }>();
+    if (dup) {
+      await logSystemError(env, 'PADDLE_TXN_UNIQUE_INDEX', 'WARN',
+        new Error(`Cannot create unique index idx_licenses_paddle_txn: duplicate paddle_transaction_id "${dup.paddle_transaction_id}" exists. Clean duplicates first.`),
+        { duplicate_txn_id: dup.paddle_transaction_id });
+      return;
+    }
+    await env.DB.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_paddle_txn ON licenses(paddle_transaction_id)"
+    ).run();
+  } catch (err) {
+    console.error("Failed to ensure paddle_transaction_id unique index:", err);
+  }
+}
+
 export async function ensureDrmTables(env: Env): Promise<void> {
   try {
     await env.DB.batch([
@@ -175,6 +202,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   await ensureManualBlacklistTable(env);
   await ensureDeviceRegistryTable(env);
   await ensureLicenseUpgradesTable(env);
+  await ensureLicensePaddleTxnIndex(env);
 }
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */

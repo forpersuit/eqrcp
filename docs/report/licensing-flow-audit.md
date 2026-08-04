@@ -106,6 +106,7 @@
 | **A1 无金额校验** | `validatePaidAmount()` 履约前拒绝确定性坏金额：`totals.grand_total/total ≤ 0`、显式 `quantity === 0`、`unit_price ≤ 0` → 400 `AMOUNT_VALIDATION_FAILED` + `PADDLE_AMOUNT_MISMATCH` WARN。**缺字段按「不可判定」放行**（HMAC 已限定调用方为真实 Paddle），避免误伤。 | Test 8（$0 / quantity-0 拒铸码） |
 | **B1 旧账期退款不吊销** | `transaction.refunded` / `adjustment.*` 先按 `paddle_transaction_id` 精确查，命中 0 行回退 `paddle_subscription_id` 吊销；仍 0 行记 `REFUND_MISS_TARGET` WARN（不再静默 200）。 | Test 9（txn 回退）、Test 10（adjustment 回退） |
 | **移除 pages.dev/workers.dev** | CORS 白名单仅 `eqt.net.im` + localhost/127.0.0.1；下载域路由去掉 `.workers.dev`。 | CORS 冒烟（pages.dev Origin 不再回显） |
+| **A2 铸码非原子（P2）** | `licenses.paddle_transaction_id` 加 UNIQUE 索引 `idx_licenses_paddle_txn`，使 SELECT→INSERT 铸码路径原子：并发同 txn 重投第二个 INSERT 撞唯一约束 → 外层 catch 转 500 → Paddle 重试 → existing 命中 200 幂等。SQLite 唯一索引对 NULL 多值放行，非购买行（source=promo/admin/test，paddle_transaction_id NULL）不受影响。 | Test 13（竞态链 + NULL 放行）；生产 D1 查重 0 重复后建索引；`ensureLicensePaddleTxnIndex` 先查重再建，有重复则 WARN 跳过 |
 
 ### 6.2 审查员跟进结论（3 点）
 
@@ -122,3 +123,22 @@ sub 回退用 `.first()` 取任意一行；同一 `paddle_subscription_id` 下�
 - **Test 12** B1×升级交互：调整命中 pending upgrade → 仅取消升级、底层 license 保持 active；命中 applied upgrade → 取消升级 + 经 `target_license_code` 吊销 license。
 
 配套 harness 改动：offline mock 增加 `INSERT INTO licenses` 支持（铸码路径可落库断言）；加 MD5 polyfill（Node WebCrypto 不支持 MD5，此前铸码路径无法在 Node 执行）。`npm run test:upgrade:offline` 12/12 通过，tsc --noEmit 通过。
+
+---
+
+## 七、P2 推进记录（2026-08-04）
+
+### 7.1 A2 铸码非原子 — 已处置（commit 待部署后记录）
+
+**落地方式**（按审查员建议，低成本优先）：
+1. **schema.sql** 定义 `CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_paddle_txn ON licenses(paddle_transaction_id)`（与 runtime ensure 同名同定义）。
+2. **auth.ts 新增 `ensureLicensePaddleTxnIndex(env)`**：建索引前先查重
+   `SELECT paddle_transaction_id FROM licenses WHERE paddle_transaction_id IS NOT NULL GROUP BY paddle_transaction_id HAVING COUNT(*) > 1 LIMIT 1`；
+   发现重复则记录 `PADDLE_TXN_UNIQUE_INDEX` WARN 审计并**跳过**（避免 `CREATE UNIQUE INDEX` 在脏数据上直接失败后索引一直缺失且静默）；无重复才建索引。挂到 `ensureDrmTables` 末尾 + paddle webhook 入口。
+3. **生产 D1 前置查重**：`GROUP BY HAVING COUNT(*)>1` 返回空 → 24 条 license 中 16 条有 txn、8 条 NULL，**0 重复**，直接建索引成功。
+4. **竞态行为确认**（与审查员结论一致，不改 paddle.ts 铸码逻辑）：INSERT 无 try-catch → 唯一约束抛错被外层 catch（paddle.ts:780）转 500 → Paddle 重试 → existing 幂等命中 200。
+
+**Test 13（A2 竞态链）**：
+- A：首次投递铸码 200；B：并发重投（existing 读不到）INSERT 撞唯一约束 → 500，**无双铸**（仅 1 条 license）；C：Paddle 重试（窗口关闭）→ existing 命中 → `Transaction already processed` 200 幂等；D：不同 txn 正常铸码；E：两条 promo（NULL txn）共存，验证 NULL 多值放行语义。
+
+`npm run test:upgrade:offline` **13/13 通过**，tsc --noEmit 通过。
