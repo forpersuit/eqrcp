@@ -14,6 +14,22 @@ if (!fs.existsSync(compiledDrmPath) || !fs.existsSync(compiledPaddlePath)) {
 const { checkAndApplyPendingUpgrade } = require(compiledDrmPath);
 const { handlePaddleRoutes } = require(compiledPaddlePath);
 
+// Node's WebCrypto does not implement MD5 (only SHA-*); the Worker mint path uses
+// crypto.subtle.digest("MD5", ...) for the license checksum. Route MD5 through node:crypto
+// so the mint path is exercisable in the offline harness (other algos keep WebCrypto).
+{
+  const nodeCrypto = require('crypto');
+  const origDigest = crypto.subtle.digest.bind(crypto.subtle);
+  crypto.subtle.digest = async (algo, data) => {
+    const name = typeof algo === 'string' ? algo : (algo && algo.name);
+    if (name && name.toUpperCase() === 'MD5') {
+      const h = nodeCrypto.createHash('md5').update(Buffer.from(data)).digest();
+      return h.buffer.slice(h.byteOffset, h.byteOffset + h.byteLength);
+    }
+    return origDigest(algo, data);
+  };
+}
+
 function assert(cond, msg) {
   if (!cond) throw new Error('ASSERT FAIL: ' + msg);
   console.log('  ✓ OK:', msg);
@@ -149,6 +165,27 @@ class RealWorkerD1Mock {
         created_at: args[5]
       };
       this.tables.license_upgrades.set(id, row);
+      return { meta: { changes: 1 } };
+    }
+
+    // Insert license (new-purchase mint path) — license_code is the PK
+    if (s.includes('INSERT INTO licenses')) {
+      const row = {
+        license_code: args[0],
+        tier: args[1],
+        status: args[2],
+        max_devices: args[3],
+        expires_at: args[4],
+        duration_days: args[5],
+        buyer_email_hash: args[6],
+        buyer_email: args[7],
+        paddle_transaction_id: args[8],
+        paddle_subscription_id: args[9],
+        source: args[10],
+        created_at: args[11],
+        last_purchased_at: args[12]
+      };
+      this.tables.licenses.set(row.license_code, row);
       return { meta: { changes: 1 } };
     }
 
@@ -550,8 +587,159 @@ async function runTests() {
   assert(b1Lic.status === 'revoked', 'B1 subscription fallback revoked the license despite stale txn_id');
   assert(b1Lic.revoke_reason === 'refund', 'B1 revoke_reason set to refund');
 
+  // Test 10: REAL adjustment.created/updated B1 branch — subscription fallback revokes (reviewer P2 blind spot)
+  console.log('\nTest 10: REAL adjustment.* refund/chargeback via subscription fallback (B1 branch)...');
+  const mkAdjDb = async () => {
+    const d = new RealWorkerD1Mock();
+    const e = { DB: d, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+    return { d, e };
+  };
+  const adjReq = async (d, e, txnId, overrides) => {
+    const obj = {
+      event_type: 'adjustment.updated',
+      data: { id: 'adj_001', transaction_id: txnId, action: 'refund', ...(overrides || {}) }
+    };
+    const raw = JSON.stringify(obj);
+    const sig = await createPaddleSignature(raw, SECRET_KEY);
+    const req = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paddle-signature': sig },
+      body: raw
+    });
+    return handlePaddleRoutes(req, e, ctx, new URL(req.url), corsHeaders);
+  };
+  const seedAdjLicense = (d, code, txnId, subId) => {
+    d.tables.licenses.set(code, {
+      license_code: code,
+      tier: 'PLUS',
+      status: 'active',
+      expires_at: futureExpiresIso,
+      duration_days: 365,
+      buyer_email: 'adj@example.com',
+      buyer_email_hash: 'hashadj',
+      created_at: new Date(nowMs - 60 * 86400 * 1000).toISOString(),
+      last_purchased_at: new Date(nowMs - 10 * 86400 * 1000).toISOString(),
+      auto_renew: 1,
+      paddle_transaction_id: txnId,
+      paddle_subscription_id: subId
+    });
+  };
+
+  // 10a: adjustment refund on a STALE txn (only subscription links it) → subscription fallback revokes
+  const { d: dbAdj, e: envAdj } = await mkAdjDb();
+  seedAdjLicense(dbAdj, 'EQT-PLUS-ADJ-111', 'txn_adj_latest_1', 'sub_adj_001');
+  const resAdj = await adjReq(dbAdj, envAdj, 'txn_old_period_777', { subscription_id: 'sub_adj_001' });
+  assert(resAdj.status === 200, 'adjustment.updated refund returned 200');
+  const adjLic = dbAdj.tables.licenses.get('EQT-PLUS-ADJ-111');
+  assert(adjLic.status === 'revoked', 'adjustment B1 subscription fallback revoked the license');
+  assert(adjLic.revoke_reason === 'refund', 'adjustment revoke_reason set to refund');
+
+  // 10b: chargeback adjustment also revokes via fallback (reason = chargeback)
+  const { d: dbAdjCb, e: envAdjCb } = await mkAdjDb();
+  seedAdjLicense(dbAdjCb, 'EQT-PLUS-ADJ-222', 'txn_adj_latest_2', 'sub_adj_002');
+  await adjReq(dbAdjCb, envAdjCb, 'txn_old_period_888', { action: 'chargeback', subscription_id: 'sub_adj_002' });
+  const adjLicCb = dbAdjCb.tables.licenses.get('EQT-PLUS-ADJ-222');
+  assert(adjLicCb.status === 'revoked' && adjLicCb.revoke_reason === 'chargeback', 'chargeback adjustment revoked with reason chargeback');
+
+  // 10c: non money-movement action (credit) must NOT revoke
+  const { d: dbAdjCr, e: envAdjCr } = await mkAdjDb();
+  seedAdjLicense(dbAdjCr, 'EQT-PLUS-ADJ-333', 'txn_adj_latest_3', 'sub_adj_003');
+  await adjReq(dbAdjCr, envAdjCr, 'txn_old_period_999', { action: 'credit', subscription_id: 'sub_adj_003' });
+  const adjLicCr = dbAdjCr.tables.licenses.get('EQT-PLUS-ADJ-333');
+  assert(adjLicCr.status === 'active', 'credit adjustment did NOT revoke the license (only refund/chargeback do)');
+
+  // Test 11: REAL A1 discount boundary — $5 discounted lifetime order still fulfills full license (intentional loose design)
+  console.log('\nTest 11: REAL discounted lifetime order ($5 of $29.99) still fulfills full license (A1 deliberate design)...');
+  const dbDisc = new RealWorkerD1Mock();
+  const envDisc = { DB: dbDisc, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const discObj = {
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_discounted_555',
+      customer: { email: 'disc@example.com' },
+      items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+      totals: { subtotal: '2999', discount: '2499', tax: '0', total: '500', grand_total: '500' }
+    }
+  };
+  const rawDisc = JSON.stringify(discObj);
+  const sigDisc = await createPaddleSignature(rawDisc, SECRET_KEY);
+  const reqDisc = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigDisc },
+    body: rawDisc
+  });
+  const resDisc = await handlePaddleRoutes(reqDisc, envDisc, ctx, new URL(reqDisc.url), corsHeaders);
+  assert(resDisc.status === 200, 'Discounted lifetime order fulfilled with 200 (amount > 0 passes validation)');
+  const resDiscJson = await resDisc.json();
+  assert(!!resDiscJson.license_code, 'Discounted order minted a license_code');
+  const discLic = Array.from(dbDisc.tables.licenses.values())[0];
+  assert(discLic && discLic.tier === 'PLUS' && discLic.expires_at === 'LIFETIME', 'Discounted order minted a full PLUS LIFETIME license (intentional loose A1)');
+
+  // Test 12: REAL adjustment × upgrade interaction — pending/applied upgrade short-circuits license fallback
+  console.log('\nTest 12: REAL adjustment refund on lifetime upgrade rows (pending → cancel only, applied → revoke)...');
+  const dbUpg = new RealWorkerD1Mock();
+  const envUpg = { DB: dbUpg, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const upgAdjReq = async (txnId, overrides = {}) => {
+    const obj = {
+      event_type: 'adjustment.updated',
+      data: { id: 'adj_upg_1', transaction_id: txnId, action: 'refund', ...overrides }
+    };
+    const raw = JSON.stringify(obj);
+    const sig = await createPaddleSignature(raw, SECRET_KEY);
+    const req = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paddle-signature': sig },
+      body: raw
+    });
+    return handlePaddleRoutes(req, envUpg, ctx, new URL(req.url), corsHeaders);
+  };
+
+  // 12a: pending upgrade → cancelled, underlying license stays ACTIVE
+  dbUpg.tables.licenses.set('EQT-PLUS-UPG-PND', {
+    license_code: 'EQT-PLUS-UPG-PND',
+    tier: 'PLUS', status: 'active',
+    expires_at: futureExpiresIso, duration_days: 365,
+    buyer_email: 'upg@example.com', buyer_email_hash: 'hashupg',
+    created_at: thirtyDaysAgoIso, last_purchased_at: thirtyDaysAgoIso,
+    auto_renew: 1, paddle_transaction_id: 'txn_yearly_upg_1', paddle_subscription_id: 'sub_upg_1'
+  });
+  dbUpg.tables.license_upgrades.set(1, {
+    id: 1, user_email: 'upg@example.com', target_license_code: 'EQT-PLUS-UPG-PND',
+    lifetime_txn_id: 'txn_upg_adj_pnd', purchased_at: new Date(nowMs).toISOString(),
+    effective_at: futureExpiresIso, status: 'pending', created_at: new Date(nowMs).toISOString()
+  });
+  const resUpgPnd = await upgAdjReq('txn_upg_adj_pnd');
+  assert(resUpgPnd.status === 200, 'Adjustment refund on pending upgrade returned 200');
+  const resUpgPndJson = await resUpgPnd.json();
+  assert(resUpgPndJson.status === 'cancelled', 'Pending upgrade cancelled (status cancelled)');
+  const licUpgPnd = dbUpg.tables.licenses.get('EQT-PLUS-UPG-PND');
+  assert(licUpgPnd.status === 'active', 'Underlying license stays ACTIVE when pending upgrade is cancelled');
+  assert(dbUpg.tables.license_upgrades.get(1).status === 'cancelled', 'Upgrade row marked cancelled');
+
+  // 12b: applied upgrade → cancelled + underlying license revoked via target_license_code
+  dbUpg.tables.licenses.set('EQT-PLUS-UPG-APL', {
+    license_code: 'EQT-PLUS-UPG-APL',
+    tier: 'PLUS', status: 'active',
+    expires_at: 'LIFETIME', duration_days: null,
+    buyer_email: 'upg@example.com', buyer_email_hash: 'hashupg2',
+    created_at: thirtyDaysAgoIso, last_purchased_at: new Date(nowMs - 2 * 86400 * 1000).toISOString(),
+    auto_renew: 0, paddle_transaction_id: 'txn_yearly_upg_2', paddle_subscription_id: 'sub_upg_2'
+  });
+  dbUpg.tables.license_upgrades.set(2, {
+    id: 2, user_email: 'upg@example.com', target_license_code: 'EQT-PLUS-UPG-APL',
+    lifetime_txn_id: 'txn_upg_adj_apl', purchased_at: new Date(nowMs - 30 * 86400 * 1000).toISOString(),
+    effective_at: new Date(nowMs - 29 * 86400 * 1000).toISOString(), status: 'applied', created_at: new Date(nowMs - 30 * 86400 * 1000).toISOString()
+  });
+  const resUpgApl = await upgAdjReq('txn_upg_adj_apl');
+  assert(resUpgApl.status === 200, 'Adjustment refund on applied upgrade returned 200');
+  const resUpgAplJson = await resUpgApl.json();
+  assert(resUpgAplJson.status === 'revoked', 'Applied upgrade refund returned status revoked');
+  const licUpgApl = dbUpg.tables.licenses.get('EQT-PLUS-UPG-APL');
+  assert(licUpgApl.status === 'revoked' && licUpgApl.revoke_reason === 'refund', 'Applied-upgrade license revoked with reason refund');
+  assert(dbUpg.tables.license_upgrades.get(2).status === 'cancelled', 'Applied upgrade row marked cancelled after refund');
+
   console.log('\n========================================');
-  console.log('🎉 ALL 9 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
+  console.log('🎉 ALL 12 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 

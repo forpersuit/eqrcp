@@ -94,3 +94,31 @@
 - 其余为窄窗口竞态（A2）、限频缺口（A3）、口径不一致（B2）、数据残留（B4/B5）、死代码（B3），按 P2/P3/P4 排期。
 
 > ⚠️ 本报告仅为梳理，未修改任何代码。是否按 P1/P2 修复，待用户决策。
+
+---
+
+## 六、P1 处置记录（2026-08-04）
+
+### 6.1 已实施并部署（commit `db06a0c`，Worker `5cfba722`）
+
+| 项 | 处置 | 验证 |
+|---|---|---|
+| **A1 无金额校验** | `validatePaidAmount()` 履约前拒绝确定性坏金额：`totals.grand_total/total ≤ 0`、显式 `quantity === 0`、`unit_price ≤ 0` → 400 `AMOUNT_VALIDATION_FAILED` + `PADDLE_AMOUNT_MISMATCH` WARN。**缺字段按「不可判定」放行**（HMAC 已限定调用方为真实 Paddle），避免误伤。 | Test 8（$0 / quantity-0 拒铸码） |
+| **B1 旧账期退款不吊销** | `transaction.refunded` / `adjustment.*` 先按 `paddle_transaction_id` 精确查，命中 0 行回退 `paddle_subscription_id` 吊销；仍 0 行记 `REFUND_MISS_TARGET` WARN（不再静默 200）。 | Test 9（txn 回退）、Test 10（adjustment 回退） |
+| **移除 pages.dev/workers.dev** | CORS 白名单仅 `eqt.net.im` + localhost/127.0.0.1；下载域路由去掉 `.workers.dev`。 | CORS 冒烟（pages.dev Origin 不再回显） |
+
+### 6.2 审查员跟进结论（3 点）
+
+**① A1 比审计建议宽松 — 产品决策，有意为之**
+审计原意「`unit_price ≥ 对应价格（$29.99）`」；实现只挡「确定性坏金额（≤0）」，故部分折扣单（如 $5 成交）仍会铸出全量 PLUS license。**这是有意设计**：按原价硬校验会误伤未来促销/折扣/发票调整，且 HMAC 已把调用方锁死为真实 Paddle。残余风险：sandbox/测试可构造任意金额的真实签名交易，金额不足但 price_id 匹配仍铸码——已接受。若想收紧是一行改动（`unit_price >= 2999` 判断）。Test 11 以正向断言固化当前宽松语义。
+
+**② B1 极端误吊销 — 已知限制，记录即可**
+sub 回退用 `.first()` 取任意一行；同一 `paddle_subscription_id` 下若存在多条 license，可能命中已吊销旧行。现实几乎不可达：续期是 `UPDATE` 同一行（paddle.ts:402/412），一条 subscription 只对应一条 license；且吊销为幂等 UPDATE，命中旧行也无害。
+
+**③ 测试盲区 — 已补齐（P2 加固，Test 10/11/12）**
+此前离线测试只覆盖 `transaction.refunded` 的 B1。本次新增：
+- **Test 10** adjustment.* 分支 B1 回退：`adjustment.updated` 对 stale txn 的 refund 经 sub 回退吊销（revoke_reason=refund）、chargeback 吊销（reason=chargeback）、`credit` 动作**不**吊销（只有 refund/chargeback 触发资金吊销）。
+- **Test 11** A1 折扣边界：$5 折扣的 lifetime 订单（amount>0）正常铸出全量 PLUS LIFETIME license——正向断言宽松设计不误伤。
+- **Test 12** B1×升级交互：调整命中 pending upgrade → 仅取消升级、底层 license 保持 active；命中 applied upgrade → 取消升级 + 经 `target_license_code` 吊销 license。
+
+配套 harness 改动：offline mock 增加 `INSERT INTO licenses` 支持（铸码路径可落库断言）；加 MD5 polyfill（Node WebCrypto 不支持 MD5，此前铸码路径无法在 Node 执行）。`npm run test:upgrade:offline` 12/12 通过，tsc --noEmit 通过。
