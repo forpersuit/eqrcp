@@ -524,7 +524,7 @@ async function sendAlert(level: string, message: string) {
 | 3 | Logpush 配置（R2 目标） | ⏸️ 暂缓 | — | — | — | wrangler.toml 已配 logpush=true，需升级 Workers Paid 计划后开通 |
 | 4 | SLO 定义文档化 | ✅ 已完成 | — | — | 2026-08-05 | 本文档 §6.3 已定义，团队确认 |
 | 5 | 健康检查端点增强（D1/R2 深度检测 + 24h 错误回溯） | ✅ 已完成 | — | — | 2026-08-05 | 返回真实 D1 延迟 + R2 HEAD 探测，UptimeRobot 绿色 |
-| 6 | UptimeRobot 外部监控配置 | ⬜ 待开始 | — | — | — | 3 个监控器均为 UP，月度报告 ≥ 99.5% |
+| 6 | UptimeRobot 外部监控配置 | ✅ 已完成 | — | — | 2026-08-05 | 3 个监控器均为 UP，月度报告 ≥ 99.5% |
 | 7 | 设备注册写入审计（device-registry.ts 三个静默出口） | ✅ 已完成 | — | — | 2026-08-05 | 防抖跳过/免费不降级写入 WARN，新建设备写入 INFO |
 | 8 | 桌面端崩溃上报（desktop/crash/ 包 + 后端端点） | ⬜ 待开始 | — | — | — | 崩溃后下次启动弹窗询问上传 |
 
@@ -568,3 +568,4 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 审查修复：error-logger 加 INFO 级别、new_device 降级、R2 真实探测、lastError 24h、备份恢复演练 + 失败通知、文档 Worker 范围修正 | 审查修复 |
 | 2026-08-05 | Logpush 配置：wrangler.toml 加 logpush=true、创建 eqt-logs-bucket、R2 API token 就绪。暂缓开通（需 Workers Paid 计划） | 开发实施 |
 | 2026-08-05 | 新增 §10 API Token 清单；更新 §6.3 UptimeRobot 配置步骤（含 API curl 命令） | 文档更新 |
+| 2026-08-05 | 实施 P0 #6：通过 UptimeRobot MCP 创建 3 个 HTTP 监控器（drm-health/feedback/website） | 开发实施 |
