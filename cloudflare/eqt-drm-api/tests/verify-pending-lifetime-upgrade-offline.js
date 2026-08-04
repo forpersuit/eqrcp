@@ -275,7 +275,8 @@ async function runTests() {
     data: {
       id: upgTxnId,
       customer: { email: 'user@example.com' },
-      items: [{ price_id: PRICE_LIFETIME_ID }],
+      items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+      totals: { subtotal: '2999', discount: '0', tax: '0', total: '2999', grand_total: '2999' },
       custom_data: { target_license_code: targetCode, buyer_email: 'user@example.com' }
     }
   };
@@ -348,7 +349,8 @@ async function runTests() {
     data: {
       id: 'txn_fresh_upg',
       customer: { email: 'fresh@example.com' },
-      items: [{ price_id: PRICE_LIFETIME_ID }],
+      items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+      totals: { subtotal: '2999', discount: '0', tax: '0', total: '2999', grand_total: '2999' },
       custom_data: { target_license_code: freshCode, buyer_email: 'fresh@example.com' }
     }
   };
@@ -434,7 +436,8 @@ async function runTests() {
       data: {
         id: txnId,
         customer: { email: 'conc@example.com' },
-        items: [{ price_id: PRICE_LIFETIME_ID }],
+        items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+        totals: { subtotal: '2999', discount: '0', tax: '0', total: '2999', grand_total: '2999' },
         custom_data: { target_license_code: concCode, buyer_email: 'conc@example.com' }
       }
     };
@@ -471,8 +474,84 @@ async function runTests() {
   const concPendingAfter = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
   assert(concPendingAfter.length === 0, 'No orphan pending row remains after lazy flip');
 
+  // Test 8: REAL amount validation (A1) — $0 / quantity-0 transaction must NOT fulfill a license
+  console.log('\nTest 8: REAL handlePaddleRoutes rejects $0 and quantity-0 transactions (A1)...');
+  const dbZero = new RealWorkerD1Mock();
+  const envZero = { DB: dbZero, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const mkZeroReq = async (txnId, overrides) => {
+    const obj = {
+      event_type: 'transaction.completed',
+      data: {
+        id: txnId,
+        customer: { email: 'zero@example.com' },
+        items: [{ price_id: PRICE_LIFETIME_ID, quantity: 1, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }],
+        totals: { subtotal: '2999', discount: '0', tax: '0', total: '2999', grand_total: '2999' },
+        ...overrides
+      }
+    };
+    const raw = JSON.stringify(obj);
+    const sig = await createPaddleSignature(raw, SECRET_KEY);
+    return new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paddle-signature': sig },
+      body: raw
+    });
+  };
+  const zeroReq = await mkZeroReq('txn_zero_000', { totals: { subtotal: '0', discount: '0', tax: '0', total: '0', grand_total: '0' } });
+  const resZero = await handlePaddleRoutes(zeroReq, envZero, ctx, new URL(zeroReq.url), corsHeaders);
+  assert(resZero.status === 400, '$0 lifetime transaction rejected with 400');
+  const resZeroJson = await resZero.json();
+  assert(resZeroJson.code === 'AMOUNT_VALIDATION_FAILED', '$0 transaction returned AMOUNT_VALIDATION_FAILED');
+  assert(dbZero.tables.licenses.size === 0, 'No license minted for $0 transaction');
+
+  const qtyZeroReq = await mkZeroReq('txn_zero_qty', { items: [{ price_id: PRICE_LIFETIME_ID, quantity: 0, price: { id: PRICE_LIFETIME_ID, unit_price: { amount: '2999', currency_code: 'USD' } } }] });
+  const resQtyZero = await handlePaddleRoutes(qtyZeroReq, envZero, ctx, new URL(qtyZeroReq.url), corsHeaders);
+  assert(resQtyZero.status === 400, 'Quantity-0 transaction rejected with 400');
+  const resQtyZeroJson = await resQtyZero.json();
+  assert(resQtyZeroJson.code === 'AMOUNT_VALIDATION_FAILED', 'Quantity-0 transaction returned AMOUNT_VALIDATION_FAILED');
+  assert(dbZero.tables.licenses.size === 0, 'No license minted for quantity-0 transaction');
+
+  // Test 9: REAL refund with OLD txn + subscription fallback (B1) — earlier billing-period refund revokes license
+  console.log('\nTest 9: REAL handlePaddleRoutes refund of older period via subscription fallback (B1)...');
+  const dbB1 = new RealWorkerD1Mock();
+  const envB1 = { DB: dbB1, PADDLE_WEBHOOK_SECRET: SECRET_KEY };
+  const b1Code = 'EQT-PLUS-B1-555';
+  const b1CreatedAt = new Date(nowMs - 60 * 86400 * 1000).toISOString();
+  dbB1.tables.licenses.set(b1Code, {
+    license_code: b1Code,
+    tier: 'PLUS',
+    status: 'active',
+    expires_at: futureExpiresIso,
+    duration_days: 365,
+    buyer_email: 'b1@example.com',
+    buyer_email_hash: 'hashb1',
+    created_at: b1CreatedAt,
+    last_purchased_at: new Date(nowMs - 10 * 86400 * 1000).toISOString(),
+    auto_renew: 1,
+    paddle_transaction_id: 'txn_latest_renew_999', // latest renewal overwrote the txn id
+    paddle_subscription_id: 'sub_b1_001'
+  });
+
+  // Refund an OLDER billing-period txn that is no longer stored; only subscription_id links it
+  const b1RefundObj = {
+    event_type: 'transaction.refunded',
+    data: { id: 'txn_old_period_333', subscription_id: 'sub_b1_001' }
+  };
+  const rawB1 = JSON.stringify(b1RefundObj);
+  const sigB1 = await createPaddleSignature(rawB1, SECRET_KEY);
+  const reqB1 = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigB1 },
+    body: rawB1
+  });
+  const resB1 = await handlePaddleRoutes(reqB1, envB1, ctx, new URL(reqB1.url), corsHeaders);
+  assert(resB1.status === 200, 'Old-period refund webhook returned 200');
+  const b1Lic = dbB1.tables.licenses.get(b1Code);
+  assert(b1Lic.status === 'revoked', 'B1 subscription fallback revoked the license despite stale txn_id');
+  assert(b1Lic.revoke_reason === 'refund', 'B1 revoke_reason set to refund');
+
   console.log('\n========================================');
-  console.log('🎉 ALL 7 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
+  console.log('🎉 ALL 9 REAL WORKER ROUTE INTEGRATION TESTS PASSED PERFECTLY!');
   console.log('========================================\n');
 }
 

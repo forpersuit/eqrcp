@@ -22,6 +22,53 @@ function detectBuyerLang(data: any): string {
   return 'en'; // Baseline is English for all other countries and missing country data
 }
 
+/**
+ * A1 amount validation (audit licensing-flow-audit.md). Ensures a transaction carrying an
+ * EQT price id actually paid a positive amount before it fulfills. Rejection happens ONLY on
+ * deterministic evidence of a bad amount (totals <= 0, explicit unit_price <= 0, or explicit
+ * quantity === 0). Missing amount fields are "not determinable" and pass (HMAC already limits
+ * the caller to genuine Paddle webhooks, which always carry these fields for real transactions).
+ */
+function validatePaidAmount(data: any, matchedPriceId: string): { ok: boolean; reason?: string } {
+  const items = data.items || [];
+  let matchedAny = false;
+  let matchedQtyZero = false;
+  let unitAmount: number | null = null;
+  let hasUnitAmount = false;
+  for (const item of items) {
+    const priceId = item.price?.id || item.price_id;
+    if (priceId !== matchedPriceId) continue;
+    matchedAny = true;
+    const q = item.quantity;
+    if (q !== undefined && q !== null && Number(q) === 0) matchedQtyZero = true;
+    const ua = item.price?.unit_price?.amount;
+    if (ua !== undefined && ua !== null) {
+      const n = Number(ua);
+      if (Number.isFinite(n)) {
+        unitAmount = n;
+        hasUnitAmount = true;
+      }
+    }
+  }
+
+  if (!matchedAny) return { ok: false, reason: `no item matched price ${matchedPriceId}` };
+  if (matchedQtyZero) {
+    return { ok: false, reason: `explicit quantity 0 for price ${matchedPriceId}` };
+  }
+
+  const totals = data.totals || {};
+  const totalRaw = totals.grand_total ?? totals.total;
+  if (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) {
+    if (Number(totalRaw) <= 0) {
+      return { ok: false, reason: `transaction total is ${totalRaw} (<= 0) for price ${matchedPriceId}` };
+    }
+  } else if (hasUnitAmount && unitAmount !== null && unitAmount <= 0) {
+    return { ok: false, reason: `unit_price amount is ${unitAmount} (<= 0) for price ${matchedPriceId}` };
+  }
+
+  return { ok: true };
+}
+
 export async function handlePaddleRoutes(
   request: Request,
   env: Env,
@@ -130,6 +177,24 @@ export async function handlePaddleRoutes(
       if (!matchedPriceId) {
         return new Response(JSON.stringify({ message: "No matching EQT pricing items in transaction" }), {
           status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // A1: amount validation (audit licensing-flow-audit.md). Reject zero/negative-quantity
+      // transactions before mint/renew/upgrade so a $0 invoice or quantity-0 line cannot
+      // fulfill a full license. Only enforced when Paddle supplies the amount fields.
+      const amountCheck = validatePaidAmount(data, matchedPriceId);
+      if (!amountCheck.ok) {
+        ctx.waitUntil(logSystemError(env, 'PADDLE_AMOUNT_MISMATCH', 'WARN',
+          new Error(amountCheck.reason),
+          { transaction_id: transactionId, matched_price_id: matchedPriceId, event_type: eventType }));
+        return new Response(JSON.stringify({
+          message: "Transaction rejected: amount validation failed",
+          code: "AMOUNT_VALIDATION_FAILED",
+          reason: amountCheck.reason
+        }), {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
@@ -535,16 +600,39 @@ export async function handlePaddleRoutes(
         }
       }
 
-      // Query the email of the license owner
-      const license = await env.DB.prepare(
+      // Query the license: exact txn match first, then subscription fallback (B1).
+      // Yearly renewal overwrites paddle_transaction_id with the latest txn, so refunding an
+      // OLDER billing period's txn would otherwise miss the license and silently revoke nothing.
+      const subId = data.subscription_id || data.subscription?.id || null;
+      let license = await env.DB.prepare(
         "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
       ).bind(transactionId).first<any>();
 
-      await env.DB.prepare(revokeByPaddleTxnSql()).bind(
-        new Date().toISOString(),
-        "refund",
-        transactionId
-      ).run();
+      if (!license && subId) {
+        license = await env.DB.prepare(
+          "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
+        ).bind(subId).first<any>();
+      }
+
+      if (license) {
+        await env.DB.prepare(revokeLicenseSql()).bind(
+          new Date().toISOString(),
+          "refund",
+          license.license_code
+        ).run();
+      } else {
+        // Legacy no-op path preserved (0-row update) + audit so a silent miss is visible.
+        const res = await env.DB.prepare(revokeByPaddleTxnSql()).bind(
+          new Date().toISOString(),
+          "refund",
+          transactionId
+        ).run();
+        if (res && res.meta && res.meta.changes === 0) {
+          ctx.waitUntil(logSystemError(env, 'REFUND_MISS_TARGET', 'WARN',
+            new Error(`Refund webhook matched no license (txn ${transactionId})`),
+            { transaction_id: transactionId, subscription_id: subId || null }));
+        }
+      }
 
       if (license && license.buyer_email) {
         const buyerLang = detectBuyerLang(data);
@@ -592,15 +680,36 @@ export async function handlePaddleRoutes(
         }
 
         const reason = action === "chargeback" ? "chargeback" : "refund";
-        const license = await env.DB.prepare(
+        // B1: exact txn match first, then subscription fallback (see transaction.refunded above)
+        const adjSubId = data.subscription_id || data.subscription?.id || null;
+        let license = await env.DB.prepare(
           "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
         ).bind(transactionId).first<any>();
 
-        await env.DB.prepare(revokeByPaddleTxnSql()).bind(
-          new Date().toISOString(),
-          reason,
-          transactionId
-        ).run();
+        if (!license && adjSubId) {
+          license = await env.DB.prepare(
+            "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
+          ).bind(adjSubId).first<any>();
+        }
+
+        if (license) {
+          await env.DB.prepare(revokeLicenseSql()).bind(
+            new Date().toISOString(),
+            reason,
+            license.license_code
+          ).run();
+        } else {
+          const res = await env.DB.prepare(revokeByPaddleTxnSql()).bind(
+            new Date().toISOString(),
+            reason,
+            transactionId
+          ).run();
+          if (res && res.meta && res.meta.changes === 0) {
+            ctx.waitUntil(logSystemError(env, 'REFUND_MISS_TARGET', 'WARN',
+              new Error(`Adjustment ${action} matched no license (txn ${transactionId})`),
+              { transaction_id: transactionId, subscription_id: adjSubId || null, action }));
+          }
+        }
 
         if (license && license.buyer_email) {
           const buyerLang = detectBuyerLang(data);

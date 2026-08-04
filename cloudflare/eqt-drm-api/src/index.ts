@@ -25,7 +25,6 @@ export default {
       // 1. Route to Download Domain handler if matching download host / paths
       if (
         (url.hostname === "download.eqt.net.im" ||
-         url.hostname.endsWith(".workers.dev") ||
          url.hostname === "localhost" ||
          url.hostname === "127.0.0.1" ||
          url.pathname === "/update-metadata.json" ||
