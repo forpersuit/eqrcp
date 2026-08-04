@@ -193,7 +193,7 @@ export async function registerOrRefreshDevice(
   ).run();
 
   // Audit: new device created (no fingerprint match found)
-  logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('new_device'), {
+  logSystemError(env, 'DEVICE_REGISTRY', 'INFO', new Error('new_device'), {
     device_id_prefix: newDeviceId.substring(0, 8),
     has_cpu_hash: Boolean(cpu),
     has_disk_hash: Boolean(disk),

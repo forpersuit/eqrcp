@@ -118,12 +118,12 @@ async function handlePublicHealth(env: Env, corsHeaders: Record<string, string>)
     lastError = err?.message || String(err);
   }
 
-  // Check for recent CRITICAL errors (last hour)
+  // Check for recent CRITICAL errors (last 24 hours)
   try {
-    const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+    const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
     const errRes = await env.DB.prepare(
       "SELECT created_at FROM system_error_logs WHERE level = 'CRITICAL' AND created_at >= ? ORDER BY id DESC LIMIT 1"
-    ).bind(hourAgo).first<{ created_at: string }>();
+    ).bind(dayAgo).first<{ created_at: string }>();
     if (errRes) {
       lastError = `CRITICAL error at ${errRes.created_at}`;
     }
@@ -131,13 +131,27 @@ async function handlePublicHealth(env: Env, corsHeaders: Record<string, string>)
     // Non-critical: probe failure shouldn't break health check
   }
 
-  const r2Configured = Boolean(env.R2_PUBLIC_URL);
+  // Real R2 connectivity probe via public URL HEAD request
+  let r2Connected = false;
+  let r2LatencyMs = 0;
+  if (env.R2_PUBLIC_URL) {
+    const r2Start = Date.now();
+    try {
+      const r2Res = await fetch(env.R2_PUBLIC_URL, { method: 'HEAD' });
+      r2Connected = r2Res.ok || r2Res.status === 403; // 403 = bucket exists but access denied (expected for private buckets)
+      r2LatencyMs = Date.now() - r2Start;
+    } catch {
+      r2LatencyMs = Date.now() - r2Start;
+      r2Connected = false;
+    }
+  }
+
   const status = dbConnected ? "healthy" : "degraded";
 
   return new Response(JSON.stringify({
     status,
     d1: { connected: dbConnected, queryLatencyMs: dbLatencyMs },
-    r2: { connected: r2Configured },
+    r2: { connected: r2Connected, queryLatencyMs: r2LatencyMs },
     uptime: Math.floor((Date.now() - WORKER_START_MS) / 1000),
     version: "1.5.0",
     lastError,

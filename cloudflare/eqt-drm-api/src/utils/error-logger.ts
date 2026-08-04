@@ -21,7 +21,7 @@ export async function ensureAuditLogTable(env: Env): Promise<void> {
 export async function logSystemError(
   env: Env,
   category: string,
-  level: 'ERROR' | 'WARN' | 'CRITICAL',
+  level: 'INFO' | 'ERROR' | 'WARN' | 'CRITICAL',
   error: any,
   context?: any
 ): Promise<void> {

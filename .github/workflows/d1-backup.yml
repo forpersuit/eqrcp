@@ -5,7 +5,12 @@ on:
     # Daily at 00:00 UTC — RPO ≤ 24h (§6.1)
     - cron: '7 0 * * *'
   workflow_dispatch:
-    # Manual trigger for ad-hoc backups or recovery drills
+    inputs:
+      restore_drill:
+        description: 'Run recovery drill after backup (restore + row count verify)'
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -57,7 +62,75 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
+      # ── Restore Drill ──────────────────────────────────────────────
+      # Triggered manually via workflow_dispatch with restore_drill=true.
+      # Restores the latest backup to local SQLite and verifies row counts
+      # against production D1.  Quarterly recovery drill (§6.1).
+      - name: Restore Drill — eqt-drm-db
+        if: ${{ inputs.restore_drill }}
+        working-directory: cloudflare/eqt-drm-api
+        run: |
+          echo "=== Restore Drill: eqt-drm-db ==="
+          BACKUP_ID="${{ steps.backup-drm.outputs.backup_id }}"
+          if [ "$BACKUP_ID" = "unknown" ]; then
+            echo "❌ SKIP: no valid backup ID from previous step"
+            exit 1
+          fi
+          # Restore to local SQLite
+          wrangler d1 backup restore eqt-drm-db "$BACKUP_ID" --local --output ./restore-drill-drm.sqlite 2>&1
+          # Query row counts from local restore
+          echo "--- Local restore row counts ---"
+          sqlite3 ./restore-drill-drm.sqlite \
+            "SELECT 'device_registry', COUNT(*) FROM device_registry
+             UNION ALL SELECT 'activations', COUNT(*) FROM activations
+             UNION ALL SELECT 'licenses', COUNT(*) FROM licenses
+             UNION ALL SELECT 'system_error_logs', COUNT(*) FROM system_error_logs;" 2>&1
+          # Query production row counts
+          echo "--- Production D1 row counts ---"
+          npx wrangler d1 execute eqt-drm-db --remote \
+            --command "SELECT 'device_registry', COUNT(*) FROM device_registry
+                       UNION ALL SELECT 'activations', COUNT(*) FROM activations
+                       UNION ALL SELECT 'licenses', COUNT(*) FROM licenses
+                       UNION ALL SELECT 'system_error_logs', COUNT(*) FROM system_error_logs;" 2>&1
+          echo "✅ Restore drill complete — compare counts above"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Restore Drill — eqt-feedback-db
+        if: ${{ inputs.restore_drill }}
+        working-directory: cloudflare/eqt-feedback-api
+        run: |
+          echo "=== Restore Drill: eqt-feedback-db ==="
+          BACKUP_ID="${{ steps.backup-feedback.outputs.backup_id }}"
+          if [ "$BACKUP_ID" = "unknown" ]; then
+            echo "❌ SKIP: no valid backup ID from previous step"
+            exit 1
+          fi
+          wrangler d1 backup restore eqt-feedback-db "$BACKUP_ID" --local --output ./restore-drill-feedback.sqlite 2>&1
+          echo "--- Local restore row counts ---"
+          sqlite3 ./restore-drill-feedback.sqlite ".tables" 2>&1
+          echo "✅ Restore drill complete"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ── Failure Notification ───────────────────────────────────────
+      - name: Notify failure via Telegram
+        if: ${{ failure() }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          MESSAGE="🚨 [D1 Backup Failed]
+          Timestamp: $TIMESTAMP
+          Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Trigger: ${{ github.event_name }}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown" || echo "⚠️ Telegram notification failed (token/chat_id may not be configured)"
+
       - name: Log backup result
+        if: ${{ !failure() }}
         run: |
           echo "=== D1 Backup Summary ==="
           echo "eqt-drm-db backup ID: ${{ steps.backup-drm.outputs.backup_id }}"

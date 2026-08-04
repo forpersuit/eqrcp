@@ -71,7 +71,7 @@ export interface UnbindRecord {
 
 export interface SystemErrorLog {
   id: number;
-  level: 'ERROR' | 'WARN' | 'CRITICAL';
+  level: 'INFO' | 'ERROR' | 'WARN' | 'CRITICAL';
   category: string;
   error_message: string;
   context_json: string | null;
