@@ -357,14 +357,23 @@ wrangler logpush create --logpush-name "eqt-drm-logs" \
 | 激活成功率 | ≥ 99.9% | D1 聚合查询 | 30 天滚动 |
 | 桌面端崩溃率 | ≤ 2% / 月 | 崩溃上报统计 | 30 天滚动 |
 
-**外部监控配置**：
+**外部监控配置**（需手动操作）：
 
 1. 注册 [UptimeRobot](https://uptimerobot.com)（Free 层 50 个监控器）
-2. 添加监控器：
-   - `GET https://lic.eqt.net.im/api/v1/health` — 每 5 分钟
-   - `GET https://feedback.eqt.net.im/goal` — 每 5 分钟
-   - `GET https://eqt.net.im` — 每 5 分钟
-3. 告警通知：邮件 + Telegram（Free 层支持）
+2. 登录后进入 **Integrations & API** > **API**，复制 API Key
+3. 添加监控器（可通过 API 或仪表盘）：
+
+   ```bash
+   # 通过 API 创建监控器（替换 YOUR_API_KEY）
+   curl -X POST https://api.uptimerobot.com/v2/newMonitor \
+     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://lic.eqt.net.im/api/v1/health&friendly_name=eqt-drm-health&interval=300'
+   curl -X POST https://api.uptimerobot.com/v2/newMonitor \
+     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://feedback.eqt.net.im/goal&friendly_name=eqt-feedback&interval=300'
+   curl -X POST https://api.uptimerobot.com/v2/newMonitor \
+     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://eqt.net.im&friendly_name=eqt-website&interval=300'
+   ```
+
+4. 告警通知：在 UptimeRobot 中配置通知渠道（邮件 + Telegram）
 
 **健康检查端点增强**（复用 §3 P2 方案，升为 P0）：
 
@@ -538,7 +547,18 @@ async function sendAlert(level: string, message: string) {
 
 ---
 
-## 十、文档变更记录
+## 十、API Token 清单
+
+| Token 名称 | 类型 | 存储位置 | 权限范围 | 用途 | 备注 |
+|---|---|---|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | User API Token | GitHub Secrets + 环境变量 | Workers/D1 部署 | GitHub Actions 部署、D1 备份 | 旧 token，Logs/Logpush 仅 Read |
+| `CLOUDFLARE_USER_API_TOKEN_EQT` | User API Token | `.env` | R2 Read&Write、Logs Read | Logpush 配置、R2 管理 | 2026-08-05 创建，已 Roll 一次 |
+| `eqt` (Account API Token) | Account API Token | 仅 Cloudflare 仪表盘 | Logs Write、R2 Write、Workers Scripts Write、D1 Write | 全权限管理 | 共 32 个权限，含 Logs Write |
+| `eqt` (R2 Account Token) | R2 Account API Token | 仅 Cloudflare 仪表盘 | R2 Admin Read&Write | R2 S3 兼容访问 | 用于 downloads.eqt.net.im |
+
+---
+
+## 十一、文档变更记录
 
 | 日期 | 变更内容 | 变更人 |
 |---|---|---|
@@ -547,3 +567,4 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 实施 §6 P0：D1 备份工作流 + 结构化日志中间件 + 健康检查端点 + 设备注册审计 | 开发实施 |
 | 2026-08-05 | 审查修复：error-logger 加 INFO 级别、new_device 降级、R2 真实探测、lastError 24h、备份恢复演练 + 失败通知、文档 Worker 范围修正 | 审查修复 |
 | 2026-08-05 | Logpush 配置：wrangler.toml 加 logpush=true、创建 eqt-logs-bucket、R2 API token 就绪。暂缓开通（需 Workers Paid 计划） | 开发实施 |
+| 2026-08-05 | 新增 §10 API Token 清单；更新 §6.3 UptimeRobot 配置步骤（含 API curl 命令） | 文档更新 |
