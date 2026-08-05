@@ -6471,8 +6471,11 @@ function escapeAttr(value) {
 
 EventsOn('eqt:tray-command', handleTrayCommand);
 
-// Listen for pending crash report from backend — set badge-dot flag instead of direct modal
-EventsOn('eqt:crash-report-pending', async () => {
+// Check for a pending crash dump and set the badge-dot flag instead of a direct modal.
+// The backend also emits eqt:crash-report-pending, but that event can be lost during
+// startup (OnStartup runs before the frontend registers its listener), so the frontend
+// polls once on init and keeps the event as a secondary path.
+async function checkPendingCrashReport() {
     try {
         const info = await CheckCrashReport();
         if (info && info.hasReport) {
@@ -6483,7 +6486,9 @@ EventsOn('eqt:crash-report-pending', async () => {
     } catch (err) {
         LogError('[CrashReport] Failed to check crash report: ' + err);
     }
-});
+}
+
+EventsOn('eqt:crash-report-pending', checkPendingCrashReport);
 
 window.addEventListener('beforeunload', stopChatUsage);
 
@@ -6722,6 +6727,7 @@ async function triggerDownloadUpdate() {
 
 loadChatUsage();
 render();
+checkPendingCrashReport();
 loadSettings().then(() => {
     connectAgentEvents();
     window.setTimeout(() => runAutoUpdateCheck(true), 5000);

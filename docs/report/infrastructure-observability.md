@@ -591,7 +591,7 @@ async function sendAlert(level: string, message: string) {
 | 6 | UptimeRobot 外部监控配置 | ✅ 已完成 | — | — | 2026-08-05 | 3 个监控器均为 UP（drm-health/feedback/www），邮件告警已关联 admin@eqt.net.im，月度报告 ≥ 99.5% |
 | 7 | 设备注册写入审计（device-registry.ts 三个静默出口） | ✅ 已完成 | — | — | 2026-08-05 | 防抖跳过/免费不降级写入 WARN，新建设备写入 INFO |
 | 8 | 桌面端崩溃上报（desktop/crash/ 包 + 后端端点） | ✅ 已完成 | — | — | 2026-08-05 | 崩溃后下次启动弹窗询问上传，panic 恢复写入 crash.dump，后端 D1+R2 双存储 |
-| 8a | 崩溃恢复 UX 优化（小蓝点渐进提示 + 反馈面板预填） | ⬜ 待开始 | — | — | — | 小蓝点引导 → 反馈面板预填崩溃信息 → 关闭即清理 |
+| 8a | 崩溃恢复 UX 优化（小蓝点渐进提示 + 反馈面板预填） | ✅ 已完成 | — | — | 2026-08-05 | 小蓝点引导 → 反馈面板预填崩溃信息 → 关闭即清理；修复启动事件竞态（前端初始化主动 CheckCrashReport） |
 
 ### P1 — 重要，排期跟进
 
@@ -639,4 +639,5 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 实施 P0 #6：通过 UptimeRobot MCP 创建 3 个 HTTP 监控器（drm-health/feedback/website） | 开发实施 |
 | 2026-08-05 | 实施 P0 #8：桌面端崩溃上报（后端 crash-report 端点 + R2 存储 + desktop/crash/ 包 + panic 恢复 + 前端弹窗） | 开发实施 |
 | 2026-08-05 | 崩溃恢复 UX 设计评审：方案 A（渐进式小蓝点 + 反馈面板预填）确定为推荐方案，待排期开发 | 设计评审 |
+| 2026-08-05 | 修复 P0 #8a 启动竞态：OnStartup 中 emit 的 eqt:crash-report-pending 在 WebView 前端加载完成前丢失，改为前端初始化主动调用 CheckCrashReport | 开发实施 |
 | 2026-08-05 | 实施 P1 #9-#13：请求级 trace_id、业务指标仪表盘、告警升级机制、数据清理端点、限流可见性 | 开发实施 |
