@@ -107,8 +107,10 @@ func SaveDump(recovered any) {
 	_ = os.WriteFile(path, data, 0644)
 }
 
-// LoadDump reads a pending crash dump from disk.
-func LoadDump() (*DumpFile, error) {
+// LoadRawDump reads a crash dump from disk regardless of its uploaded or
+// dismissed state. It returns nil if no dump file exists. It is used when a
+// dump has been acknowledged (dismissed) on viewing but may still be submitted.
+func LoadRawDump() (*DumpFile, error) {
 	path := dumpFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -123,11 +125,22 @@ func LoadDump() (*DumpFile, error) {
 		return nil, err
 	}
 
+	return &dump, nil
+}
+
+// LoadDump reads a pending crash dump from disk. A dump that has already been
+// uploaded or dismissed is not considered pending and returns nil.
+func LoadDump() (*DumpFile, error) {
+	dump, err := LoadRawDump()
+	if err != nil || dump == nil {
+		return dump, err
+	}
+
 	if dump.Uploaded || dump.Dismissed {
 		return nil, nil
 	}
 
-	return &dump, nil
+	return dump, nil
 }
 
 // MarkUploaded marks the crash dump as uploaded (so it won't be prompted again).

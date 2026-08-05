@@ -3772,6 +3772,17 @@ function openPanel(panel) {
         state.feedbackSent = false;
         // If there's a pending crash dump, pre-fetch full detail for pre-fill
         if (state.pendingCrashDump) {
+            // Acknowledge the crash the moment the user enters the feedback
+            // interface: mark the dump dismissed so it won't prompt again on a
+            // later launch — even if the app is closed while this panel is open
+            // or the report is never sent. The dump file is kept so a subsequent
+            // Send can still upload it (SubmitCrashReport reads the raw dump).
+            if (!state.crashAcknowledged) {
+                state.crashAcknowledged = true;
+                DismissCrashReportPermanently().catch((err) => {
+                    LogError('[CrashReport] Failed to acknowledge on panel open: ' + err);
+                });
+            }
             GetCrashReportDetail().then((detail) => {
                 if (detail && detail.hasReport) {
                     state.crashDetail = detail;

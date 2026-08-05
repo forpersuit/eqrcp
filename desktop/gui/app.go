@@ -1759,10 +1759,11 @@ func (a *App) GetCrashReportDetail() CrashReportDetail {
 	}
 }
 
-// SubmitCrashReport submits the pending crash dump to the server.
-// Returns the report ID on success.
+// SubmitCrashReport submits the crash dump to the server and returns the report ID.
+// It reads the raw dump so a report that was acknowledged (dismissed) on viewing
+// the feedback panel can still be uploaded if the user chooses to send it.
 func (a *App) SubmitCrashReport() (string, error) {
-	dump, err := crash.LoadDump()
+	dump, err := crash.LoadRawDump()
 	if err != nil {
 		return "", fmt.Errorf("failed to load crash dump: %w", err)
 	}

@@ -174,6 +174,44 @@ func TestClearDump(t *testing.T) {
 	}
 }
 
+// TestLoadRawDumpAfterDismiss verifies that once a dump is acknowledged
+// (MarkDismissed), LoadDump/HasPendingDump hide it so it never prompts again on
+// a later launch, while LoadRawDump still returns it so a subsequent Send can
+// upload the report.
+func TestLoadRawDumpAfterDismiss(t *testing.T) {
+	tempHome := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", oldHome)
+
+	SaveDump("panic")
+
+	// Acknowledge the crash, as the feedback panel does on open.
+	_ = MarkDismissed()
+
+	if HasPendingDump() {
+		t.Fatal("HasPendingDump should be false after MarkDismissed")
+	}
+	if dump, err := LoadDump(); err != nil || dump != nil {
+		t.Errorf("LoadDump should return nil after MarkDismissed (err=%v, dump=%v)", err, dump)
+	}
+
+	// The raw dump must still be readable so Send can upload the acknowledged report.
+	dump, err := LoadRawDump()
+	if err != nil {
+		t.Fatalf("LoadRawDump failed: %v", err)
+	}
+	if dump == nil {
+		t.Fatal("LoadRawDump returned nil, expected the acknowledged dump")
+	}
+	if !dump.Dismissed {
+		t.Error("LoadRawDump should report the dump as dismissed")
+	}
+	if !strings.Contains(dump.Report.StackTrace, "panic") {
+		t.Errorf("stack trace missing panic message, got: %s", dump.Report.StackTrace)
+	}
+}
+
 // TestMarkUploadedThenDismissed tests that a dump marked as uploaded
 // is not affected by a subsequent MarkDismissed call (it stays not pending).
 func TestMarkUploadedThenDismissed(t *testing.T) {

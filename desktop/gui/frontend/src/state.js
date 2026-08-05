@@ -53,4 +53,5 @@ export const state = {
     crashReport: null,
     pendingCrashDump: false,
     crashDetail: null,
+    crashAcknowledged: false,
 };
