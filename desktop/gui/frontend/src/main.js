@@ -1181,6 +1181,7 @@ function renderReceiveDeviceProgressHtml(task) {
 
         const listItems = clients.map(client => {
             const devName = client.deviceName || t('device') || 'Device';
+            const clientID = client.clientID || '';
             let displayName = devName;
             const stateText = getTranslatedState(client.state || 'waiting');
             const percent = client.percent || 0;
@@ -1474,6 +1475,7 @@ function updateReceiveTransferActiveUI(task) {
         } else {
             clients.forEach(client => {
                 const devName = client.deviceName || t('device') || 'Device';
+                const clientID = client.clientID || '';
                 let displayName = devName;
                 const stateText = getTranslatedState(client.state || 'waiting');
                 const percent = client.percent || 0;

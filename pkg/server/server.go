@@ -1705,8 +1705,16 @@ func sanitizeDeviceID(id string) string {
 	return res
 }
 
+func shortDeviceID(id string) string {
+	if len(id) > 4 {
+		return id[len(id)-4:]
+	}
+	return id
+}
+
 func (s *Server) getDeviceOutputDir(clientID string) (string, error) {
 	cleanID := sanitizeDeviceID(clientID)
+	shortID := shortDeviceID(cleanID)
 
 	s.clientSubDirsMu.Lock()
 	if s.clientSubDirs == nil {
@@ -1715,7 +1723,7 @@ func (s *Server) getDeviceOutputDir(clientID string) (string, error) {
 	subDir, ok := s.clientSubDirs[cleanID]
 	if !ok {
 		timestamp := time.Now().Format("20060102_150405")
-		subDir = fmt.Sprintf("eqt_receive_%s_%s", cleanID, timestamp)
+		subDir = fmt.Sprintf("eqt_receive_%s_%s", shortID, timestamp)
 		s.clientSubDirs[cleanID] = subDir
 	}
 	s.clientSubDirsMu.Unlock()

@@ -1926,7 +1926,7 @@ dd {
     justify-content: center;
     padding: 24px;
     position: fixed;
-    z-index: 5;
+    z-index: 1000;
 }
 
 .modal {

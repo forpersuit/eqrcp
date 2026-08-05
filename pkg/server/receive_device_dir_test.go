@@ -80,7 +80,8 @@ func TestReceiveMultipleDevicesSubdirectories(t *testing.T) {
 	uploadFileForDevice("dev_phone_b", "document.pdf", "phone_b_data")
 
 	findDeviceFile := func(clientID, filename string) (string, []byte) {
-		prefix := "eqt_receive_" + sanitizeDeviceID(clientID) + "_"
+		shortID := shortDeviceID(sanitizeDeviceID(clientID))
+		prefix := "eqt_receive_" + shortID + "_"
 		var matchedPath string
 		err := filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
