@@ -66,6 +66,10 @@ export function DownloadUpdate(arg1) {
   return window['go']['main']['App']['DownloadUpdate'](arg1);
 }
 
+export function GetCrashReportDetail() {
+  return window['go']['main']['App']['GetCrashReportDetail']();
+}
+
 export function GetFileInfos(arg1) {
   return window['go']['main']['App']['GetFileInfos'](arg1);
 }

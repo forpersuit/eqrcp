@@ -52,6 +52,7 @@ import {
     StopClientTransfer,
     SubmitFeedback,
     CheckCrashReport,
+    GetCrashReportDetail,
     SubmitCrashReport,
     DismissCrashReport,
     DismissCrashReportPermanently,
@@ -578,10 +579,10 @@ function render() {
                     <div class="topbar-menu">
                         <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
                             <span class="menu-icon">${ellipsisIcon()}</span>
-                            ${state.settings?.autoUpdateMode !== 'off' && (
+                            ${(state.pendingCrashDump) || (state.settings?.autoUpdateMode !== 'off' && (
                                 (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
                                 ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
-                            ) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                            )) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                         </button>
                         ${state.topMenuOpen ? `
                             <div class="topbar-dropdown" role="menu">
@@ -591,8 +592,9 @@ function render() {
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
                                     <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
                                 </button>
-                                <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback">
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback" style="position: relative;">
                                     <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
+                                    ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                                 </button>
                                 <div class="topbar-menu-sep"></div>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="license">
@@ -2830,9 +2832,10 @@ function renderFeedbackPanel() {
         <div class="feedback-panel">
             ${state.feedbackNotice ? `<div class="notice success compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackNotice)}</div>` : ''}
             ${state.feedbackError ? `<div class="notice error compact" style="margin-bottom: 16px;">${escapeHTML(state.feedbackError)}</div>` : ''}
+            ${state.pendingCrashDump ? `<div class="notice" style="margin-bottom: 16px; padding: 10px; background: var(--bg2); border-radius: 6px; font-size: 12px; color: var(--ink); line-height: 1.4; display: flex; align-items: flex-start; gap: 8px;"><span style="font-size: 16px;">💥</span><span>${escapeHTML(t('crash_prefill_notice'))}</span></div>` : ''}
             <label>${t('feedback_category')}</label>
             <select id="feedback-category">
-                <option value="bug">${t('feedback_bug')}</option>
+                <option value="bug"${state.pendingCrashDump ? ' selected' : ''}>${t('feedback_bug')}</option>
                 <option value="transfer">${t('feedback_transfer_fail')}</option>
                 <option value="gui">${t('feedback_gui_issue')}</option>
                 <option value="feature">${t('feedback_feature_req')}</option>
@@ -3761,6 +3764,32 @@ function openPanel(panel) {
     if (panel === 'feedback') {
         state.feedbackNotice = '';
         state.feedbackSent = false;
+        // If there's a pending crash dump, pre-fetch full detail for pre-fill
+        if (state.pendingCrashDump) {
+            GetCrashReportDetail().then((detail) => {
+                if (detail && detail.hasReport) {
+                    state.crashDetail = detail;
+                    // Pre-fill message with crash summary
+                    const crashSummary = [
+                        `[${t('crash_report_title')}]`,
+                        `${t('crash_report_app_version')}: ${detail.appVersion || '?'}`,
+                        `${t('crash_report_timestamp')}: ${detail.timestamp || '?'}`,
+                        detail.osVersion ? `OS: ${detail.osVersion}` : '',
+                        detail.deviceId ? `Device: ${detail.deviceId}` : '',
+                        '',
+                        '--- Stack Trace ---',
+                        (detail.stackTrace || '').slice(0, 2000),
+                    ].filter(Boolean).join('\n');
+                    if (!state.feedbackMessage) {
+                        state.feedbackMessage = crashSummary;
+                    }
+                    render();
+                    openPanel('feedback');
+                }
+            }).catch((err) => {
+                LogError('[CrashReport] Failed to get crash detail: ' + err);
+            });
+        }
     }
     if (panel === 'about') {
         state.showPlanInfoDetails = false;
@@ -3784,6 +3813,14 @@ function closePanel() {
         state.feedbackNotice = '';
         state.feedbackError = '';
         state.feedbackSendResult = '';
+        // Clean up pending crash dump when closing feedback panel
+        if (state.pendingCrashDump) {
+            state.pendingCrashDump = false;
+            state.crashDetail = null;
+            DismissCrashReport().catch((err) => {
+                LogError('[CrashReport] Failed to dismiss on panel close: ' + err);
+            });
+        }
     }
     if (state.activePanel === 'crash-report') {
         state.crashReport = null;
@@ -5059,23 +5096,41 @@ async function sendFeedback(event) {
         : message;
 
     try {
+        // If there's a pending crash dump, submit it first and include the report ID
+        let crashReportId = '';
+        if (state.pendingCrashDump) {
+            try {
+                crashReportId = await SubmitCrashReport();
+                LogInfo('[CrashReport] Submitted via feedback: ' + crashReportId);
+            } catch (crashErr) {
+                LogError('[CrashReport] Failed to submit via feedback: ' + crashErr);
+                // Continue with feedback even if crash submit fails
+            }
+        }
+
+        // Build message with crash report reference if available
+        const crashRef = crashReportId ? `\n\n[Crash Report ID: ${crashReportId}]` : '';
+        const finalMessage = fullMessage + crashRef;
+
         // Call the Go backend method exported via Wails bindings to avoid CORS issues and enable detailed logs.
         await SubmitFeedback(
             category,
             contact,
-            fullMessage,
+            finalMessage,
             state.feedbackImageBase64 || '',
             state.feedbackImageFormat || ''
         );
 
         // Success!
+        state.pendingCrashDump = false;
+        state.crashDetail = null;
         state.feedbackNotice = t('feedback_success');
         state.feedbackSendResult = 'success';
         state.feedbackMessage = '';
         state.feedbackContact = '';
         state.feedbackImageBase64 = null;
         state.feedbackImageFormat = null;
-        
+
         // Clear actual DOM values as well
         const msgEl = document.querySelector('#feedback-message');
         if (msgEl) msgEl.value = '';
@@ -6411,13 +6466,13 @@ function escapeAttr(value) {
 
 EventsOn('eqt:tray-command', handleTrayCommand);
 
-// Listen for pending crash report from backend
+// Listen for pending crash report from backend — set badge-dot flag instead of direct modal
 EventsOn('eqt:crash-report-pending', async () => {
     try {
         const info = await CheckCrashReport();
         if (info && info.hasReport) {
             state.crashReport = info;
-            state.activePanel = 'crash-report';
+            state.pendingCrashDump = true;
             render();
         }
     } catch (err) {

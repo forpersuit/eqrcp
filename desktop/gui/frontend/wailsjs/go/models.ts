@@ -197,6 +197,30 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class CrashReportDetail {
+	    hasReport: boolean;
+	    appVersion?: string;
+	    osVersion?: string;
+	    timestamp?: string;
+	    stackTrace?: string;
+	    deviceId?: string;
+	    licenseCode?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CrashReportDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasReport = source["hasReport"];
+	        this.appVersion = source["appVersion"];
+	        this.osVersion = source["osVersion"];
+	        this.timestamp = source["timestamp"];
+	        this.stackTrace = source["stackTrace"];
+	        this.deviceId = source["deviceId"];
+	        this.licenseCode = source["licenseCode"];
+	    }
+	}
 	export class CrashReportInfo {
 	    hasReport: boolean;
 	    appVersion?: string;

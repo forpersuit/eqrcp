@@ -51,4 +51,6 @@ export const state = {
     topMenuOpen: false,
     updateBackoffCount: 0,
     crashReport: null,
+    pendingCrashDump: false,
+    crashDetail: null,
 };

@@ -1707,6 +1707,18 @@ type CrashReportInfo struct {
 	StackTrace string `json:"stackTrace,omitempty"`
 }
 
+// CrashReportDetail is returned by GetCrashReportDetail with the full crash dump
+// information for pre-filling the feedback panel (not truncated).
+type CrashReportDetail struct {
+	HasReport   bool   `json:"hasReport"`
+	AppVersion  string `json:"appVersion,omitempty"`
+	OSVersion   string `json:"osVersion,omitempty"`
+	Timestamp   string `json:"timestamp,omitempty"`
+	StackTrace  string `json:"stackTrace,omitempty"`
+	DeviceID    string `json:"deviceId,omitempty"`
+	LicenseCode string `json:"licenseCode,omitempty"`
+}
+
 // CheckCrashReport checks if there is a pending crash dump from a previous crash.
 // The frontend calls this on startup to decide whether to show the crash report dialog.
 func (a *App) CheckCrashReport() CrashReportInfo {
@@ -1726,6 +1738,24 @@ func (a *App) CheckCrashReport() CrashReportInfo {
 		AppVersion: dump.Report.AppVersion,
 		Timestamp:  dump.Report.Timestamp,
 		StackTrace: stackPreview,
+	}
+}
+
+// GetCrashReportDetail returns the full crash dump information (not truncated)
+// for pre-filling the feedback panel. Returns HasReport=false if no dump exists.
+func (a *App) GetCrashReportDetail() CrashReportDetail {
+	dump, err := crash.LoadDump()
+	if err != nil || dump == nil {
+		return CrashReportDetail{HasReport: false}
+	}
+	return CrashReportDetail{
+		HasReport:   true,
+		AppVersion:  dump.Report.AppVersion,
+		OSVersion:   dump.Report.OSVersion,
+		Timestamp:   dump.Report.Timestamp,
+		StackTrace:  dump.Report.StackTrace,
+		DeviceID:    dump.Report.DeviceID,
+		LicenseCode: dump.Report.LicenseCode,
 	}
 }
 
