@@ -33,9 +33,9 @@ type Report struct {
 
 // DumpFile is the on-disk format for pending crash dumps.
 type DumpFile struct {
-	Report   Report `json:"report"`
-	Uploaded bool   `json:"uploaded"`
-	Dismissed bool  `json:"dismissed"`
+	Report    Report `json:"report"`
+	Uploaded  bool   `json:"uploaded"`
+	Dismissed bool   `json:"dismissed"`
 }
 
 // dumpFilePath returns the path to the crash dump file.
