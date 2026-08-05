@@ -24,5 +24,6 @@ TELEGRAM_CHAT_ID = "1880182104"
 
 routes = [
   { pattern = "feedback.eqt.net.im/goal", custom_domain = true },
-  { pattern = "feedback.eqt.net.im/image/*", custom_domain = true }
+  { pattern = "feedback.eqt.net.im/image/*", custom_domain = true },
+  { pattern = "feedback.eqt.net.im/api/v1/health", custom_domain = true }
 ]

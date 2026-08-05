@@ -368,12 +368,12 @@ wrangler logpush create --logpush-name "eqt-drm-logs" \
    curl -X POST https://api.uptimerobot.com/v2/newMonitor \
      -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://lic.eqt.net.im/api/v1/health&friendly_name=eqt-drm-health&interval=300'
    curl -X POST https://api.uptimerobot.com/v2/newMonitor \
-     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://feedback.eqt.net.im/goal&friendly_name=eqt-feedback&interval=300'
+     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://feedback.eqt.net.im/api/v1/health&friendly_name=eqt-feedback&interval=300'
    curl -X POST https://api.uptimerobot.com/v2/newMonitor \
-     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://eqt.net.im&friendly_name=eqt-website&interval=300'
+     -d 'api_key=YOUR_API_KEY&format=json&type=1&url=https://www.eqt.net.im&friendly_name=eqt-website&interval=300'
    ```
 
-4. 告警通知：在 UptimeRobot 中配置通知渠道（邮件 + Telegram）
+4. 告警通知：在 UptimeRobot 中配置通知渠道。当前已配置邮件通知到 admin@eqt.net.im，关联到所有监控器。
 
 **健康检查端点增强**（复用 §3 P2 方案，升为 P0）：
 
@@ -524,7 +524,7 @@ async function sendAlert(level: string, message: string) {
 | 3 | Logpush 配置（R2 目标） | ⏸️ 暂缓 | — | — | — | wrangler.toml 已配 logpush=true，需升级 Workers Paid 计划后开通 |
 | 4 | SLO 定义文档化 | ✅ 已完成 | — | — | 2026-08-05 | 本文档 §6.3 已定义，团队确认 |
 | 5 | 健康检查端点增强（D1/R2 深度检测 + 24h 错误回溯） | ✅ 已完成 | — | — | 2026-08-05 | 返回真实 D1 延迟 + R2 HEAD 探测，UptimeRobot 绿色 |
-| 6 | UptimeRobot 外部监控配置 | ✅ 已完成 | — | — | 2026-08-05 | 3 个监控器均为 UP，月度报告 ≥ 99.5% |
+| 6 | UptimeRobot 外部监控配置 | ✅ 已完成 | — | — | 2026-08-05 | 3 个监控器均为 UP（drm-health/feedback/www），邮件告警已关联 admin@eqt.net.im，月度报告 ≥ 99.5% |
 | 7 | 设备注册写入审计（device-registry.ts 三个静默出口） | ✅ 已完成 | — | — | 2026-08-05 | 防抖跳过/免费不降级写入 WARN，新建设备写入 INFO |
 | 8 | 桌面端崩溃上报（desktop/crash/ 包 + 后端端点） | ⬜ 待开始 | — | — | — | 崩溃后下次启动弹窗询问上传 |
 
@@ -567,5 +567,6 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 实施 §6 P0：D1 备份工作流 + 结构化日志中间件 + 健康检查端点 + 设备注册审计 | 开发实施 |
 | 2026-08-05 | 审查修复：error-logger 加 INFO 级别、new_device 降级、R2 真实探测、lastError 24h、备份恢复演练 + 失败通知、文档 Worker 范围修正 | 审查修复 |
 | 2026-08-05 | Logpush 配置：wrangler.toml 加 logpush=true、创建 eqt-logs-bucket、R2 API token 就绪。暂缓开通（需 Workers Paid 计划） | 开发实施 |
+| 2026-08-05 | 修复 UptimeRobot 监控：feedback 改为健康检查端点、website 改为 www.eqt.net.im、删除重复监控、配置邮件告警通知 | 开发实施 |
 | 2026-08-05 | 新增 §10 API Token 清单；更新 §6.3 UptimeRobot 配置步骤（含 API curl 命令） | 文档更新 |
 | 2026-08-05 | 实施 P0 #6：通过 UptimeRobot MCP 创建 3 个 HTTP 监控器（drm-health/feedback/website） | 开发实施 |

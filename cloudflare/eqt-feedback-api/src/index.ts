@@ -28,7 +28,46 @@ export default {
 
     let response: Response | null = null;
 
-    // 2. Routing: GET /image/:key
+    // 2. Health check endpoint (for UptimeRobot external monitoring)
+    if (request.method === "GET" && url.pathname === "/api/v1/health") {
+      const dbStart = Date.now();
+      let dbConnected = false;
+      let dbLatencyMs = 0;
+      try {
+        await env.DB.prepare("SELECT 1 as ok").first();
+        dbLatencyMs = Date.now() - dbStart;
+        dbConnected = true;
+      } catch {
+        dbLatencyMs = Date.now() - dbStart;
+      }
+
+      let r2Connected = false;
+      let r2LatencyMs = 0;
+      const r2Start = Date.now();
+      try {
+        const obj = await env.BUCKET.head("health-probe");
+        r2Connected = true;
+        r2LatencyMs = Date.now() - r2Start;
+      } catch {
+        r2LatencyMs = Date.now() - r2Start;
+        // head() returns null for non-existent keys (not an error),
+        // so a thrown exception means the bucket is unreachable
+        r2Connected = false;
+      }
+
+      const status = dbConnected ? "healthy" : "degraded";
+      response = new Response(JSON.stringify({
+        status,
+        d1: { connected: dbConnected, queryLatencyMs: dbLatencyMs },
+        r2: { connected: r2Connected, queryLatencyMs: r2LatencyMs },
+        timestamp: new Date().toISOString()
+      }), {
+        status: dbConnected ? 200 : 503,
+        headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" }
+      });
+    }
+
+    // 3. Routing: GET /image/:key
     if (request.method === "GET" && url.pathname.startsWith("/image/")) {
       const filename = url.pathname.substring(7);
       if (!filename) {
