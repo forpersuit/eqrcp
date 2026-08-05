@@ -19,6 +19,7 @@ import (
 	"golang.org/x/term"
 
 	"eqt/cmd"
+	"eqt/desktop/crash"
 	"eqt/pkg/application"
 	"eqt/pkg/config"
 	"eqt/pkg/server"
@@ -192,6 +193,13 @@ func isCLICommand(name string) bool {
 }
 
 func runCLIMode() {
+	defer func() {
+		if r := recover(); r != nil {
+			crash.SaveDump(r)
+			panic(r)
+		}
+	}()
+
 	_ = attachWindowsConsole()
 	defer detachWindowsConsole()
 
@@ -285,6 +293,15 @@ func checkAndPerformDisasterRollback(fileLogger *FileLogger) bool {
 }
 
 func startWailsGUI() {
+	// Panic recovery: save crash dump on unexpected panic
+	defer func() {
+		if r := recover(); r != nil {
+			crash.SaveDump(r)
+			// Re-panic so the OS crash dialog still appears
+			panic(r)
+		}
+	}()
+
 	logPath := desktopLogFilePath()
 	
 	settingsApp := application.New()

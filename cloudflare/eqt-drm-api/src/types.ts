@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  CRASH_BUCKET: R2Bucket;
   ED25519_PRIVATE_KEY: string; // 64-char hex string (32 bytes raw private key)
   /** e.g. myteam.cloudflareaccess.com — required for Admin API */
   CF_ACCESS_TEAM_DOMAIN?: string;

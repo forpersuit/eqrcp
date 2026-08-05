@@ -50,4 +50,5 @@ export const state = {
     showShareOverlay: false,
     topMenuOpen: false,
     updateBackoffCount: 0,
+    crashReport: null,
 };

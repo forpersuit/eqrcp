@@ -51,6 +51,9 @@ import {
     SetAutoStop,
     StopClientTransfer,
     SubmitFeedback,
+    CheckCrashReport,
+    SubmitCrashReport,
+    DismissCrashReport,
     DevSetUsedSeconds,
     DevForceOnlineLicenseSync,
 } from '../wailsjs/go/main/App';
@@ -1923,14 +1926,18 @@ function renderPanel() {
         license: t('plan_license_menu'),
         'confirm-switch': t('confirm_switch_title'),
         'plan-comparison': t('plan_desc_title'),
+        'crash-report': t('crash_report_title'),
     }[state.activePanel] || '';
     const isConfirm = state.activePanel === 'confirm-switch';
     const isPlanComp = state.activePanel === 'plan-comparison';
+    const isCrashReport = state.activePanel === 'crash-report';
     let modalStyle = '';
     if (isConfirm) {
         modalStyle = 'style="max-width: 420px; width: min(420px, 100%);"';
     } else if (isPlanComp) {
         modalStyle = 'style="max-width: 780px; width: min(780px, 100%);"';
+    } else if (isCrashReport) {
+        modalStyle = 'style="max-width: 480px; width: min(480px, 100%);"';
     }
     return `
         <div class="overlay" role="presentation">
@@ -1949,6 +1956,7 @@ function renderPanel() {
                 ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
                 ${state.activePanel === 'feedback' ? renderFeedbackPanel() : ''}
                 ${state.activePanel === 'confirm-switch' ? renderConfirmSwitchPanel() : ''}
+                ${state.activePanel === 'crash-report' ? renderCrashReportPanel() : ''}
             </section>
         </div>
     `;
@@ -1977,6 +1985,30 @@ function renderConfirmSwitchPanel() {
             <div style="margin-top: 24px; display: flex; gap: 8px; justify-content: flex-end;">
                 <button type="button" class="btn-mini secondary" id="confirm-switch-cancel">${t('btn_cancel')}</button>
                 <button type="button" class="btn-mini primary" id="confirm-switch-ok">${t('btn_confirm')}</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderCrashReportPanel() {
+    const info = state.crashReport || {};
+    const stackPreview = info.stackTrace ? escapeHTML(info.stackTrace) : '';
+    return `
+        <div class="crash-report-panel">
+            <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 24px;">💥</span>
+                <span style="font-size: 15px; color: var(--ink); line-height: 1.5;">
+                    ${escapeHTML(t('crash_report_desc'))}
+                </span>
+            </div>
+            <div style="margin-bottom: 16px; padding: 10px; background: var(--bg2); border-radius: 6px; font-size: 12px; color: var(--ink-dim);">
+                <div><strong>${escapeHTML(t('crash_report_app_version'))}:</strong> ${escapeHTML(info.appVersion || '')}</div>
+                <div><strong>${escapeHTML(t('crash_report_timestamp'))}:</strong> ${escapeHTML(info.timestamp || '')}</div>
+                ${stackPreview ? `<pre style="margin-top: 8px; max-height: 120px; overflow-y: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all;">${stackPreview}</pre>` : ''}
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" class="btn-mini secondary" id="crash-report-ignore">${escapeHTML(t('crash_report_ignore'))}</button>
+                <button type="button" class="btn-mini primary" id="crash-report-upload">${escapeHTML(t('crash_report_upload'))}</button>
             </div>
         </div>
     `;
@@ -3486,6 +3518,28 @@ function bindPanelEvents() {
         }
         closePanel();
     });
+    document.querySelector('#crash-report-upload')?.addEventListener('click', async () => {
+        const btn = document.querySelector('#crash-report-upload');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = t('crash_report_uploading');
+        }
+        try {
+            const reportId = await SubmitCrashReport();
+            LogInfo('[CrashReport] Submitted: ' + reportId);
+        } catch (err) {
+            LogError('[CrashReport] Upload failed: ' + err);
+        }
+        closePanel();
+    });
+    document.querySelector('#crash-report-ignore')?.addEventListener('click', async () => {
+        try {
+            await DismissCrashReport();
+        } catch (err) {
+            LogError('[CrashReport] Dismiss failed: ' + err);
+        }
+        closePanel();
+    });
     bindSettingsControls();
     document.querySelector('.open-docs')?.addEventListener('click', openExternal);
     document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
@@ -3709,6 +3763,9 @@ function closePanel() {
         state.feedbackNotice = '';
         state.feedbackError = '';
         state.feedbackSendResult = '';
+    }
+    if (state.activePanel === 'crash-report') {
+        state.crashReport = null;
     }
     if (state.activePanel === 'plan-comparison') {
         state.activePanel = 'license';
@@ -6319,6 +6376,20 @@ function escapeAttr(value) {
 
 
 EventsOn('eqt:tray-command', handleTrayCommand);
+
+// Listen for pending crash report from backend
+EventsOn('eqt:crash-report-pending', async () => {
+    try {
+        const info = await CheckCrashReport();
+        if (info && info.hasReport) {
+            state.crashReport = info;
+            state.activePanel = 'crash-report';
+            render();
+        }
+    } catch (err) {
+        LogError('[CrashReport] Failed to check crash report: ' + err);
+    }
+});
 
 window.addEventListener('beforeunload', stopChatUsage);
 

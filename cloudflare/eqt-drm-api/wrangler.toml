@@ -10,6 +10,11 @@ database_name = "eqt-drm-db"
 # Replace with your actual D1 Database ID after running `wrangler d1 create eqt-drm-db`
 database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
+# R2 Bucket for crash report storage
+[[r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports"
+
 [vars]
 # Public CDN base for installs/updates (NOT a secret — see docs/admin/IMPORTANT_drm-secrets.md)
 R2_PUBLIC_URL = "https://download.eqt.net.im"

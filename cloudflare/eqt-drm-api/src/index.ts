@@ -8,6 +8,7 @@ import { handleAuthRoutes } from './routes/auth';
 import { handlePortalRoutes } from './routes/portal';
 import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
+import { handleCrashReport } from './routes/crash-report';
 
 export type { Env };
 
@@ -66,6 +67,11 @@ export default {
       // 5. Route to Paddle Webhook & License Query endpoints (/api/v1/paddle/*)
       if (!response && url.pathname.startsWith("/api/v1/paddle/")) {
         response = await handlePaddleRoutes(request, env, ctx, url, corsHeaders);
+      }
+
+      // 5.5 Route to Crash Report endpoint (no auth required — rate-limited per IP)
+      if (!response && url.pathname === "/api/v1/crash-report") {
+        response = await handleCrashReport(request, env, corsHeaders);
       }
 
       // 6. Route to Client DRM endpoints (/api/v1/activate, /api/v1/verify, /api/v1/update/check)

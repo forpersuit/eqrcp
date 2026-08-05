@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
+	"eqt/desktop/crash"
 	"eqt/pkg/application"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
@@ -183,6 +184,12 @@ func (a *App) startup(ctx context.Context) {
 	// 同步预加载历史记录，确保前端初次请求 AgentStatus() 时能够立刻拿到完整历史
 	if err := a.agent.loadHistory(); err != nil {
 		wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
+	}
+
+	// 检查是否有未上传的崩溃转储，通知前端弹窗
+	if crash.HasPendingDump() {
+		wailsruntime.LogInfo(ctx, "[CrashReport] Pending crash dump found, notifying frontend")
+		wailsruntime.EventsEmit(ctx, "eqt:crash-report-pending", true)
 	}
 
 	// 启动成功，延迟 5 秒后更新 LastSuccessfulVersion 并清理旧的备份文件
@@ -1690,6 +1697,80 @@ type FeedbackPayload struct {
 type FeedbackClientInfo struct {
 	Version string `json:"version"`
 	OS      string `json:"os"`
+}
+
+// CrashReportInfo is returned by CheckCrashReport to describe a pending crash dump.
+type CrashReportInfo struct {
+	HasReport  bool   `json:"hasReport"`
+	AppVersion string `json:"appVersion,omitempty"`
+	Timestamp  string `json:"timestamp,omitempty"`
+	StackTrace string `json:"stackTrace,omitempty"`
+}
+
+// CheckCrashReport checks if there is a pending crash dump from a previous crash.
+// The frontend calls this on startup to decide whether to show the crash report dialog.
+func (a *App) CheckCrashReport() CrashReportInfo {
+	dump, err := crash.LoadDump()
+	if err != nil || dump == nil {
+		return CrashReportInfo{HasReport: false}
+	}
+
+	// Truncate stack trace for the dialog preview (first 500 chars)
+	stackPreview := dump.Report.StackTrace
+	if len(stackPreview) > 500 {
+		stackPreview = stackPreview[:500] + "..."
+	}
+
+	return CrashReportInfo{
+		HasReport:  true,
+		AppVersion: dump.Report.AppVersion,
+		Timestamp:  dump.Report.Timestamp,
+		StackTrace: stackPreview,
+	}
+}
+
+// SubmitCrashReport submits the pending crash dump to the server.
+// Returns the report ID on success.
+func (a *App) SubmitCrashReport() (string, error) {
+	dump, err := crash.LoadDump()
+	if err != nil {
+		return "", fmt.Errorf("failed to load crash dump: %w", err)
+	}
+	if dump == nil {
+		return "", fmt.Errorf("no pending crash dump found")
+	}
+
+	// Attach log tail from the desktop log file
+	logPath := ""
+	if a.logger != nil {
+		logPath = a.logger.GetFilePath()
+	}
+	if logPath == "" {
+		logPath = desktopLogFilePath()
+	}
+	dump.Report.LogTail = crash.ReadLogTail(logPath, 50)
+
+	reportID, err := crash.SubmitAndClean(dump.Report)
+	if err != nil {
+		return "", fmt.Errorf("failed to submit crash report: %w", err)
+	}
+
+	if a.logger != nil {
+		a.logger.Info(fmt.Sprintf("[CrashReport] Submitted successfully, report_id=%s", reportID))
+	}
+
+	return reportID, nil
+}
+
+// DismissCrashReport clears the pending crash dump without uploading.
+func (a *App) DismissCrashReport() error {
+	if err := crash.ClearDump(); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if a.logger != nil {
+		a.logger.Info("[CrashReport] Dismissed by user")
+	}
+	return nil
 }
 
 // SubmitFeedback submits feedback to the Cloudflare Worker API.

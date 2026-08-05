@@ -397,7 +397,14 @@ const translations = {
         "window_settings_desc": "设置关闭 EQT 主窗口时的软件行为。",
         "working": "正在处理...",
         "year": "年",
-        "year_unit": "年"
+        "year_unit": "年",
+        "crash_report_title": "崩溃报告",
+        "crash_report_desc": "上次 EQT 异常退出，是否上传诊断报告帮助改进？",
+        "crash_report_app_version": "版本",
+        "crash_report_timestamp": "发生时间",
+        "crash_report_upload": "上传",
+        "crash_report_ignore": "忽略",
+        "crash_report_uploading": "正在上传..."
     },
     "en": {
         "about": "About EQT",
@@ -795,7 +802,14 @@ const translations = {
         "window_settings_desc": "What happens when the EQT window is closed.",
         "working": "Working...",
         "year": "year",
-        "year_unit": "year"
+        "year_unit": "year",
+        "crash_report_title": "Crash Report",
+        "crash_report_desc": "EQT exited abnormally last time. Would you like to upload a diagnostic report to help improve?",
+        "crash_report_app_version": "Version",
+        "crash_report_timestamp": "Time",
+        "crash_report_upload": "Upload",
+        "crash_report_ignore": "Ignore",
+        "crash_report_uploading": "Uploading..."
     },
     "ja": {
         "about": "EQTについて",
