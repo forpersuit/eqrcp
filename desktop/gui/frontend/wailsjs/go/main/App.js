@@ -26,6 +26,10 @@ export function ChatSaveDirectory() {
   return window['go']['main']['App']['ChatSaveDirectory']();
 }
 
+export function CheckCrashReport() {
+  return window['go']['main']['App']['CheckCrashReport']();
+}
+
 export function CheckForUpdates() {
   return window['go']['main']['App']['CheckForUpdates']();
 }
@@ -40,6 +44,14 @@ export function DevForceOnlineLicenseSync() {
 
 export function DevSetUsedSeconds(arg1) {
   return window['go']['main']['App']['DevSetUsedSeconds'](arg1);
+}
+
+export function DismissCrashReport() {
+  return window['go']['main']['App']['DismissCrashReport']();
+}
+
+export function DismissCrashReportPermanently() {
+  return window['go']['main']['App']['DismissCrashReportPermanently']();
 }
 
 export function DownloadChatAttachment(arg1, arg2) {
@@ -176,6 +188,10 @@ export function StopClientTransfer(arg1) {
 
 export function StopCurrent() {
   return window['go']['main']['App']['StopCurrent']();
+}
+
+export function SubmitCrashReport() {
+  return window['go']['main']['App']['SubmitCrashReport']();
 }
 
 export function SubmitFeedback(arg1, arg2, arg3, arg4, arg5) {

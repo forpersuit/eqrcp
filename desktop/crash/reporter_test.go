@@ -1,0 +1,234 @@
+package crash
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// TestReadLogTail tests reading the last N lines from a log file.
+func TestReadLogTail(t *testing.T) {
+	t.Run("empty file", func(t *testing.T) {
+		dir := t.TempDir()
+		f := filepath.Join(dir, "test.log")
+		os.WriteFile(f, []byte{}, 0644)
+		got := ReadLogTail(f, 10)
+		if got != "" {
+			t.Errorf("expected empty string, got %q", got)
+		}
+	})
+
+	t.Run("file shorter than n", func(t *testing.T) {
+		dir := t.TempDir()
+		f := filepath.Join(dir, "test.log")
+		os.WriteFile(f, []byte("line1\nline2\n"), 0644)
+		got := ReadLogTail(f, 10)
+		if got != "line1\nline2\n" {
+			t.Errorf("expected full content, got %q", got)
+		}
+	})
+
+	t.Run("file longer than n", func(t *testing.T) {
+		dir := t.TempDir()
+		f := filepath.Join(dir, "test.log")
+		lines := make([]string, 100)
+		for i := range 100 {
+			lines[i] = "line"
+		}
+		os.WriteFile(f, []byte(strings.Join(lines, "\n")), 0644)
+		got := ReadLogTail(f, 50)
+		gotLines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+		if len(gotLines) != 50 {
+			t.Errorf("expected 50 lines, got %d", len(gotLines))
+		}
+	})
+
+	t.Run("nonexistent file", func(t *testing.T) {
+		got := ReadLogTail("/nonexistent/path.log", 10)
+		if got != "" {
+			t.Errorf("expected empty string for nonexistent file, got %q", got)
+		}
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		got := ReadLogTail("", 10)
+		if got != "" {
+			t.Errorf("expected empty string for empty path, got %q", got)
+		}
+	})
+}
+
+// TestSaveAndLoadDump tests writing and reading a crash dump file.
+func TestSaveAndLoadDump(t *testing.T) {
+	// Use a temp HOME to redirect DefaultConfigDir
+	tempHome := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", oldHome)
+
+	// Save a dump
+	SaveDump("test panic: something went wrong")
+
+	// Load it back
+	dump, err := LoadDump()
+	if err != nil {
+		t.Fatalf("LoadDump failed: %v", err)
+	}
+	if dump == nil {
+		t.Fatal("LoadDump returned nil, expected a dump")
+	}
+
+	if !strings.Contains(dump.Report.StackTrace, "test panic: something went wrong") {
+		t.Errorf("stack trace missing panic message, got: %s", dump.Report.StackTrace)
+	}
+	if dump.Report.AppVersion == "" {
+		t.Error("AppVersion should not be empty")
+	}
+	if dump.Report.OSVersion == "" {
+		t.Error("OSVersion should not be empty")
+	}
+	if dump.Report.Timestamp == "" {
+		t.Error("Timestamp should not be empty")
+	}
+	if dump.Uploaded {
+		t.Error("Uploaded should be false for a new dump")
+	}
+	if dump.Dismissed {
+		t.Error("Dismissed should be false for a new dump")
+	}
+}
+
+// TestHasPendingDump tests the pending dump detection.
+func TestHasPendingDump(t *testing.T) {
+	t.Run("no dump file", func(t *testing.T) {
+		tempHome := t.TempDir()
+		oldHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempHome)
+		defer os.Setenv("HOME", oldHome)
+
+		if HasPendingDump() {
+			t.Error("HasPendingDump should be false when no dump exists")
+		}
+	})
+
+	t.Run("dump exists and not uploaded", func(t *testing.T) {
+		tempHome := t.TempDir()
+		oldHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempHome)
+		defer os.Setenv("HOME", oldHome)
+
+		SaveDump("panic")
+		if !HasPendingDump() {
+			t.Error("HasPendingDump should be true after SaveDump")
+		}
+	})
+
+	t.Run("dump marked as uploaded", func(t *testing.T) {
+		tempHome := t.TempDir()
+		oldHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempHome)
+		defer os.Setenv("HOME", oldHome)
+
+		SaveDump("panic")
+		MarkUploaded()
+		if HasPendingDump() {
+			t.Error("HasPendingDump should be false after MarkUploaded")
+		}
+	})
+
+	t.Run("dump marked as dismissed", func(t *testing.T) {
+		tempHome := t.TempDir()
+		oldHome := os.Getenv("HOME")
+		os.Setenv("HOME", tempHome)
+		defer os.Setenv("HOME", oldHome)
+
+		SaveDump("panic")
+		MarkDismissed()
+		if HasPendingDump() {
+			t.Error("HasPendingDump should be false after MarkDismissed")
+		}
+	})
+}
+
+// TestClearDump tests removing the crash dump file.
+func TestClearDump(t *testing.T) {
+	tempHome := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", oldHome)
+
+	SaveDump("panic")
+	if !HasPendingDump() {
+		t.Fatal("expected pending dump after SaveDump")
+	}
+
+	if err := ClearDump(); err != nil {
+		t.Fatalf("ClearDump failed: %v", err)
+	}
+
+	if HasPendingDump() {
+		t.Error("HasPendingDump should be false after ClearDump")
+	}
+}
+
+// TestMarkUploadedThenDismissed tests that a dump marked as uploaded
+// is not affected by a subsequent MarkDismissed call (it stays not pending).
+func TestMarkUploadedThenDismissed(t *testing.T) {
+	tempHome := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", oldHome)
+
+	SaveDump("panic")
+	MarkUploaded()
+	MarkDismissed()
+
+	if HasPendingDump() {
+		t.Error("HasPendingDump should be false after MarkUploaded + MarkDismissed")
+	}
+}
+
+// TestCollect verifies that Collect returns a properly structured Report.
+func TestCollect(t *testing.T) {
+	report := Collect("test stack trace", "test log tail")
+
+	if report.AppVersion == "" {
+		t.Error("AppVersion should not be empty")
+	}
+	if report.OSVersion == "" {
+		t.Error("OSVersion should not be empty")
+	}
+	if report.StackTrace != "test stack trace" {
+		t.Errorf("expected 'test stack trace', got %q", report.StackTrace)
+	}
+	if report.LogTail != "test log tail" {
+		t.Errorf("expected 'test log tail', got %q", report.LogTail)
+	}
+	if report.Timestamp == "" {
+		t.Error("Timestamp should not be empty")
+	}
+}
+
+// TestSaveDumpWithNil tests that SaveDump handles nil recovery gracefully.
+func TestSaveDumpWithNil(t *testing.T) {
+	tempHome := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer os.Setenv("HOME", oldHome)
+
+	// SaveDump(nil) simulates a signal-triggered crash
+	SaveDump(nil)
+
+	dump, err := LoadDump()
+	if err != nil {
+		t.Fatalf("LoadDump failed: %v", err)
+	}
+	if dump == nil {
+		t.Fatal("LoadDump returned nil, expected a dump")
+	}
+
+	if !strings.Contains(dump.Report.StackTrace, "crash: SIGABRT or fatal error") {
+		t.Errorf("expected SIGABRT message in stack trace, got: %s", dump.Report.StackTrace)
+	}
+}

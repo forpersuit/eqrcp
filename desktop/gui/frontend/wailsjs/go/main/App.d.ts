@@ -14,6 +14,8 @@ export function Chat():Promise<main.AgentStatus>;
 
 export function ChatSaveDirectory():Promise<string>;
 
+export function CheckCrashReport():Promise<main.CrashReportInfo>;
+
 export function CheckForUpdates():Promise<main.GUIUpdateCheckResult>;
 
 export function ClearHistory():Promise<void>;
@@ -21,6 +23,10 @@ export function ClearHistory():Promise<void>;
 export function DevForceOnlineLicenseSync():Promise<main.AgentStatus>;
 
 export function DevSetUsedSeconds(arg1:number):Promise<main.AgentStatus>;
+
+export function DismissCrashReport():Promise<void>;
+
+export function DismissCrashReportPermanently():Promise<void>;
 
 export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
 
@@ -89,6 +95,8 @@ export function StopChat():Promise<void>;
 export function StopClientTransfer(arg1:string):Promise<boolean>;
 
 export function StopCurrent():Promise<void>;
+
+export function SubmitCrashReport():Promise<string>;
 
 export function SubmitFeedback(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
 

@@ -1773,6 +1773,19 @@ func (a *App) DismissCrashReport() error {
 	return nil
 }
 
+// DismissCrashReportPermanently marks the crash dump as dismissed so it won't
+// prompt again on subsequent launches. Unlike DismissCrashReport, the dump file
+// is kept on disk (marked as dismissed) so the user is never asked again.
+func (a *App) DismissCrashReportPermanently() error {
+	if err := crash.MarkDismissed(); err != nil {
+		return err
+	}
+	if a.logger != nil {
+		a.logger.Info("[CrashReport] Permanently dismissed by user (never ask again)")
+	}
+	return nil
+}
+
 // SubmitFeedback submits feedback to the Cloudflare Worker API.
 // It is called by the frontend via Wails bindings to avoid CORS issues and log request details.
 func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat string) (string, error) {

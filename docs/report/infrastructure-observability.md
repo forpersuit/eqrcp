@@ -67,7 +67,7 @@ Admin API: POST /api/v1/admin/system/prune
 
 ```
 POST /api/v1/crash-report
-Content-Type: multipart/form-data
+Content-Type: application/json
 
 字段：
   - app_version    (string, required)   桌面端版本号
@@ -87,7 +87,7 @@ Content-Type: multipart/form-data
 { "status": "received", "report_id": "uuid" }
 ```
 
-鉴权：不需要管理员 JWT（崩溃时用户可能未登录），但需要简单的 HMAC 签名防伪造（用 `ED25519_PRIVATE_KEY` 验签，桌面端编译时内置公钥）。
+鉴权：不需要鉴权。崩溃时用户可能无法提供有效签名，且 crash 数据不敏感（不含用户文件或凭证）。HMAC 签名防伪造设计已评估但未实现——崩溃场景下要求签名会降低上报率，且伪造 crash 数据的攻击面极低（仅用于调试分析）。
 
 #### 桌面端：崩溃收集器
 

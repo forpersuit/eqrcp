@@ -404,7 +404,8 @@ const translations = {
         "crash_report_timestamp": "发生时间",
         "crash_report_upload": "上传",
         "crash_report_ignore": "忽略",
-        "crash_report_uploading": "正在上传..."
+        "crash_report_uploading": "正在上传...",
+        "crash_report_never_ask": "不再询问"
     },
     "en": {
         "about": "About EQT",
@@ -809,7 +810,8 @@ const translations = {
         "crash_report_timestamp": "Time",
         "crash_report_upload": "Upload",
         "crash_report_ignore": "Ignore",
-        "crash_report_uploading": "Uploading..."
+        "crash_report_uploading": "Uploading...",
+        "crash_report_never_ask": "Never ask again"
     },
     "ja": {
         "about": "EQTについて",

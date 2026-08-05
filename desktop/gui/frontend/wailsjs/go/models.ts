@@ -197,6 +197,24 @@ export namespace main {
 	        this.error = source["error"];
 	    }
 	}
+	export class CrashReportInfo {
+	    hasReport: boolean;
+	    appVersion?: string;
+	    timestamp?: string;
+	    stackTrace?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CrashReportInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasReport = source["hasReport"];
+	        this.appVersion = source["appVersion"];
+	        this.timestamp = source["timestamp"];
+	        this.stackTrace = source["stackTrace"];
+	    }
+	}
 	export class DesktopIntegrationStatus {
 	    supported: boolean;
 	    enabled: boolean;

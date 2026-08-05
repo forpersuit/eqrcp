@@ -1,8 +1,9 @@
 // Package crash provides desktop crash report collection and submission.
 //
 // Usage:
-//   On panic:  crash.SaveDump(recoveredValue)  → writes crash.dump to app data dir
-//   On startup: crash.CheckAndReport()          → if crash.dump exists, prompts user to upload
+//
+//	On panic:  crash.SaveDump(recoveredValue)  → writes crash.dump to app data dir
+//	On startup: crash.CheckAndReport()          → if crash.dump exists, prompts user to upload
 package crash
 
 import (
@@ -34,6 +35,7 @@ type Report struct {
 type DumpFile struct {
 	Report   Report `json:"report"`
 	Uploaded bool   `json:"uploaded"`
+	Dismissed bool  `json:"dismissed"`
 }
 
 // dumpFilePath returns the path to the crash dump file.
@@ -109,7 +111,7 @@ func LoadDump() (*DumpFile, error) {
 		return nil, err
 	}
 
-	if dump.Uploaded {
+	if dump.Uploaded || dump.Dismissed {
 		return nil, nil
 	}
 
@@ -130,6 +132,28 @@ func MarkUploaded() error {
 	}
 
 	dump.Uploaded = true
+	updated, err := json.MarshalIndent(dump, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, updated, 0644)
+}
+
+// MarkDismissed marks the crash dump as dismissed (so it won't be prompted again).
+func MarkDismissed() error {
+	path := dumpFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var dump DumpFile
+	if err := json.Unmarshal(data, &dump); err != nil {
+		return err
+	}
+
+	dump.Dismissed = true
 	updated, err := json.MarshalIndent(dump, "", "  ")
 	if err != nil {
 		return err

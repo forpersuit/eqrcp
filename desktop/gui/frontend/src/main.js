@@ -54,6 +54,7 @@ import {
     CheckCrashReport,
     SubmitCrashReport,
     DismissCrashReport,
+    DismissCrashReportPermanently,
     DevSetUsedSeconds,
     DevForceOnlineLicenseSync,
 } from '../wailsjs/go/main/App';
@@ -2008,6 +2009,7 @@ function renderCrashReportPanel() {
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button type="button" class="btn-mini secondary" id="crash-report-ignore">${escapeHTML(t('crash_report_ignore'))}</button>
+                <button type="button" class="btn-mini secondary" id="crash-report-never-ask">${escapeHTML(t('crash_report_never_ask'))}</button>
                 <button type="button" class="btn-mini primary" id="crash-report-upload">${escapeHTML(t('crash_report_upload'))}</button>
             </div>
         </div>
@@ -3537,6 +3539,14 @@ function bindPanelEvents() {
             await DismissCrashReport();
         } catch (err) {
             LogError('[CrashReport] Dismiss failed: ' + err);
+        }
+        closePanel();
+    });
+    document.querySelector('#crash-report-never-ask')?.addEventListener('click', async () => {
+        try {
+            await DismissCrashReportPermanently();
+        } catch (err) {
+            LogError('[CrashReport] Permanent dismiss failed: ' + err);
         }
         closePanel();
     });

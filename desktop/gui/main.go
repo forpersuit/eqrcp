@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -24,7 +27,6 @@ import (
 	"eqt/pkg/config"
 	"eqt/pkg/server"
 	"eqt/pkg/version"
-	"os/exec"
 )
 
 //go:embed all:frontend/dist
@@ -200,6 +202,9 @@ func runCLIMode() {
 		}
 	}()
 
+	// Signal handler: save crash dump on SIGABRT/SIGSEGV
+	setupSignalHandler()
+
 	_ = attachWindowsConsole()
 	defer detachWindowsConsole()
 
@@ -292,6 +297,20 @@ func checkAndPerformDisasterRollback(fileLogger *FileLogger) bool {
 	return true
 }
 
+// setupSignalHandler registers handlers for OS crash signals (SIGABRT, SIGSEGV).
+// When one arrives, it saves a crash dump before the process terminates.
+// SIGSEGV handling is best-effort (Go runtime behavior varies by platform);
+// SIGABRT is reliable for Go fatal errors (concurrent map writes, OOM, etc.).
+func setupSignalHandler() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGABRT, syscall.SIGSEGV)
+	go func() {
+		<-sigCh
+		crash.SaveDump(nil) // nil → "crash: SIGABRT or fatal error"
+		os.Exit(1)
+	}()
+}
+
 func startWailsGUI() {
 	// Panic recovery: save crash dump on unexpected panic
 	defer func() {
@@ -301,6 +320,9 @@ func startWailsGUI() {
 			panic(r)
 		}
 	}()
+
+	// Signal handler: save crash dump on SIGABRT/SIGSEGV
+	setupSignalHandler()
 
 	logPath := desktopLogFilePath()
 	
