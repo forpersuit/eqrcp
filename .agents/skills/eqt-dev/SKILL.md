@@ -62,6 +62,12 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ## 5. 详细技术细节导航 (Reference Files Navigation)
 
+## 6. Wails 启动期事件竞态与崩溃上报调试 (Startup Event Race & Crash Report Debug)
+
+- **竞态规则**：Wails 的 `OnStartup` 在 WebView 前端 JS 加载完成前异步触发，此时 `EventsEmit` 发出的前端事件会因监听器未注册而被静默丢弃（Wails JS 事件分发无队列）。
+  若需让前端在启动时感知状态（如崩溃 dump 待上报），**必须由前端初始化时主动调用绑定方法**（如 `CheckCrashReport()`），事件通道仅作次要路径。
+- **崩溃上报调试链路**：`config.yml` 开启 `dev: liyuelong` → 设置 → 开发者选项 →「触发崩溃测试」写入 `~/.local/eqt/crash.dump` → 重启 GUI 验证：`...` 菜单小蓝点 + 反馈面板预填。Go 端日志出现 `Pending crash dump found, notifying frontend` 但前端无反应，即为此竞态（事件丢失），不是 dump 未写入。
+
 详细排坑指南、部署说明、表结构和测试方案，请查阅以下参考文档：
 
 * **日志位置与系统运作**：参阅 [logging.md](references/logging.md)
