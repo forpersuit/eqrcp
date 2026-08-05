@@ -1835,6 +1835,7 @@ func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat 
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	crash.SetTraceIDHeader(req)
 
 	startTime := time.Now()
 	resp, err := a.client.Do(req)

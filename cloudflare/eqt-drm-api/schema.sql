@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS activations (
     region TEXT DEFAULT NULL,        -- CF-IPRegion/RegionCode (e.g. GD, CA)
     latitude REAL DEFAULT NULL,      -- CF-Latitude
     longitude REAL DEFAULT NULL,     -- CF-Longitude
+    trace_id TEXT DEFAULT NULL,      -- request-level trace ID (§7.1)
     FOREIGN KEY (license_code) REFERENCES licenses(license_code)
 );
 
@@ -95,7 +96,8 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
     category TEXT NOT NULL,
     error_message TEXT NOT NULL,
     context_json TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    trace_id TEXT                              -- request-level trace ID (§7.1)
 );
 
 CREATE INDEX IF NOT EXISTS idx_system_error_logs_created ON system_error_logs(created_at);

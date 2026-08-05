@@ -93,6 +93,9 @@ export async function handleCrashReport(
     // Continue — D1 metadata is more important than R2 blob
   }
 
+  // Extract trace_id from request headers if present (§7.1)
+  const traceId = request.headers.get('X-Trace-Id') || undefined;
+
   // 2. Store structured metadata in D1 system_error_logs
   const errorMessage = `app_version=${appVersion} os=${osVersion} device_id=${deviceId || 'unknown'} stack=${stackTrace.slice(0, 200)}`;
   const contextJson = JSON.stringify({
@@ -107,14 +110,19 @@ export async function handleCrashReport(
 
   try {
     await ensureAuditLogTable(env);
+    // Ensure trace_id column exists (idempotent)
+    try {
+      await env.DB.prepare("ALTER TABLE system_error_logs ADD COLUMN trace_id TEXT").run();
+    } catch { /* column already exists */ }
     await env.DB.prepare(
-      "INSERT INTO system_error_logs (level, category, error_message, context_json, created_at) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO system_error_logs (level, category, error_message, context_json, created_at, trace_id) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(
       'CRITICAL',
       'DESKTOP_CRASH',
       errorMessage,
       contextJson,
-      new Date().toISOString()
+      new Date().toISOString(),
+      traceId || null
     ).run();
   } catch (err: any) {
     console.error(`Failed to log crash report to D1: ${err.message}`);

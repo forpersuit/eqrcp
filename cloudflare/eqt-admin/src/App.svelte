@@ -8,6 +8,7 @@
   import Licenses from './pages/Licenses.svelte';
   import Blacklist from './pages/Blacklist.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
+  import Metrics from './pages/Metrics.svelte';
   import type { AdminTab } from './lib/types';
 
   let authed = $state(isAuthenticated());
@@ -85,6 +86,14 @@
         >
           <span class="nav-icon">🏥</span> {$t('nav.health')}
         </button>
+
+        <button
+          class="nav-item"
+          class:active={currentTab === 'metrics'}
+          onclick={() => (currentTab = 'metrics')}
+        >
+          <span class="nav-icon">📈</span> {$t('nav.metrics')}
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -107,6 +116,8 @@
         <Blacklist />
       {:else if currentTab === 'health'}
         <SystemHealth />
+      {:else if currentTab === 'metrics'}
+        <Metrics />
       {/if}
     </main>
   </div>

@@ -7,6 +7,7 @@ export const zh = {
     health: "系统健康度",
     opsAudit: "审计日志",
     errorAudit: "异常跟踪",
+    metrics: "业务指标",
     logout: "退出登录"
   },
   common: {
@@ -79,6 +80,19 @@ export const zh = {
     workerStatus: "Cloudflare Worker 状态",
     syncRate: "在线照合成功率",
     avgLatency: "平均 API 时延"
+  },
+  metrics: {
+    title: "业务指标看板",
+    dailyActiveDevices: "每日活跃设备数",
+    activationSuccessRate: "激活成功率 (7天)",
+    tierDistribution: "许可证套餐分布",
+    crashTrend: "崩溃趋势 (30天)",
+    rateLimitHits: "限流命中次数 (24h)",
+    last24h: "过去 24 小时",
+    last7d: "过去 7 天",
+    last30d: "过去 30 天",
+    noData: "暂无数据",
+    refreshes: "数据每小时自动刷新"
   }
 };
 

@@ -224,3 +224,63 @@ export async function isD1RateLimited(
   return false;
 }
 
+// --- Rate Limit Visibility (§3 P1) ---
+
+/**
+ * Log a rate limit hit to system_error_logs for observability.
+ * Call this from route handlers when a rate limit check returns true.
+ */
+export async function logRateLimitHit(
+  env: Env,
+  limiterName: string,
+  key: string,
+  context?: Record<string, unknown>
+): Promise<void> {
+  try {
+    const { ensureAuditLogTable } = await import('./error-logger');
+    await ensureAuditLogTable(env);
+    const contextJson = context ? JSON.stringify(context) : null;
+    await env.DB.prepare(
+      "INSERT INTO system_error_logs (level, category, error_message, context_json, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).bind('WARN', `RATE_LIMIT_${limiterName}`, `Rate limit hit: ${limiterName} key=${key}`, contextJson, new Date().toISOString()).run();
+  } catch (err) {
+    console.error("Failed to log rate limit hit:", err);
+  }
+}
+
+/**
+ * Return current in-isolate rate limiter bucket sizes for admin dashboard.
+ * Only reflects the current isolate — multi-region deployments have independent counts.
+ */
+export function rateLimitStatus(): {
+  adminAuth: { window_ms: number; max_fails: number; active_buckets: number };
+  otpVerify: { window_ms: number; max_fails: number; active_buckets: number };
+  deviceRegister: { window_ms: number; max_requests: number; active_buckets: number };
+} {
+  const now = Date.now();
+
+  // Admin auth buckets
+  let adminAuthActive = 0;
+  for (const [, b] of buckets) {
+    if (now - b.windowStart <= WINDOW_MS) adminAuthActive++;
+  }
+
+  // OTP verify buckets
+  let otpVerifyActive = 0;
+  for (const [, b] of otpVerifyBuckets) {
+    if (now - b.windowStart <= OTP_VERIFY_WINDOW_MS) otpVerifyActive++;
+  }
+
+  // Device register buckets
+  let devRegActive = 0;
+  for (const [, b] of devRegBuckets) {
+    if (now - b.windowStart <= DEV_REG_WINDOW_MS) devRegActive++;
+  }
+
+  return {
+    adminAuth: { window_ms: WINDOW_MS, max_fails: MAX_FAILS, active_buckets: adminAuthActive },
+    otpVerify: { window_ms: OTP_VERIFY_WINDOW_MS, max_fails: OTP_VERIFY_MAX_FAILS, active_buckets: otpVerifyActive },
+    deviceRegister: { window_ms: DEV_REG_WINDOW_MS, max_requests: DEV_REG_MAX_REQUESTS, active_buckets: devRegActive },
+  };
+}
+

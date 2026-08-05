@@ -46,6 +46,10 @@ export function DevSetUsedSeconds(arg1) {
   return window['go']['main']['App']['DevSetUsedSeconds'](arg1);
 }
 
+export function DevTriggerCrash() {
+  return window['go']['main']['App']['DevTriggerCrash']();
+}
+
 export function DismissCrashReport() {
   return window['go']['main']['App']['DismissCrashReport']();
 }

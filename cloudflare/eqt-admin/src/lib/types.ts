@@ -6,7 +6,7 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health' | 'metrics';
 
 /** GET/POST /api/v1/admin/blacklist */
 export interface ManualBlacklistEntry {
@@ -187,6 +187,19 @@ export interface LiveDeviceArc {
   to_city?: string | null;
   to_lat: number;
   to_lng: number;
+}
+
+/** GET /api/v1/admin/metrics — business metrics dashboard (§7.2) */
+export interface AdminMetricsResponse {
+  success: boolean;
+  timestamp: string;
+  metrics: {
+    daily_active_devices: number;
+    activation_success_rate: number | null;
+    tier_distribution: { tier: string; count: number }[];
+    crash_trend: { date: string; count: number }[];
+    rate_limit_hits_24h: number;
+  };
 }
 
 /** Full response from GET /api/v1/admin/devices/live */

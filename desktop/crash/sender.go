@@ -30,7 +30,13 @@ func Submit(report Report) (string, error) {
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Post(getCrashServer(), "application/json", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", getCrashServer(), bytes.NewBuffer(body))
+	if err != nil {
+		return "", fmt.Errorf("failed to create crash report request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	SetTraceIDHeader(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to submit crash report: %w", err)
 	}

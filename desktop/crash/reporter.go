@@ -7,18 +7,52 @@
 package crash
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"eqt/pkg/config"
 	"eqt/pkg/server"
 	"eqt/pkg/version"
 )
+
+// --- Trace ID for request-level tracing (§7.1) ---
+// Generated once at process startup, reused for all outgoing HTTP requests.
+
+var (
+	traceIDOnce sync.Once
+	traceIDVal  string
+)
+
+// TraceID returns the process-wide trace ID, generating it on first call.
+func TraceID() string {
+	traceIDOnce.Do(func() {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			// Fallback: use timestamp-based ID
+			traceIDVal = fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+			return
+		}
+		// Set UUID v4 bits
+		b[6] = (b[6] & 0x0f) | 0x40
+		b[8] = (b[8] & 0x3f) | 0x80
+		traceIDVal = fmt.Sprintf("%08x-%04x-4%03x-%04x-%012x",
+			b[0:4], b[4:6], b[6:7], b[8:10], b[10:16])
+	})
+	return traceIDVal
+}
+
+// SetTraceIDHeader sets the X-Trace-Id header on an HTTP request.
+func SetTraceIDHeader(req *http.Request) {
+	req.Header.Set("X-Trace-Id", TraceID())
+}
 
 // Report represents a collected crash report ready for submission.
 type Report struct {

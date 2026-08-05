@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -299,6 +300,7 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 		return fmt.Errorf("activation request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Trace-Id", getTraceID())
 	if lang != "" {
 		req.Header.Set("Accept-Language", lang)
 	}
@@ -610,4 +612,26 @@ func GetClockTamperedStatus() bool {
 	paidStateMu.RLock()
 	defer paidStateMu.RUnlock()
 	return cachedIsTampered
+}
+
+// getTraceID returns a process-wide trace ID for request-level tracing (§7.1).
+// Generated once at process startup, reused for all outgoing HTTP requests.
+var (
+	getTraceIDOnce sync.Once
+	traceIDValue   string
+)
+
+func getTraceID() string {
+	getTraceIDOnce.Do(func() {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			traceIDValue = fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+			return
+		}
+		b[6] = (b[6] & 0x0f) | 0x40
+		b[8] = (b[8] & 0x3f) | 0x80
+		traceIDValue = fmt.Sprintf("%08x-%04x-4%03x-%04x-%012x",
+			b[0:4], b[4:6], b[6:7], b[8:10], b[10:16])
+	})
+	return traceIDValue
 }

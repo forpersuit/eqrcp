@@ -4,7 +4,7 @@ import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
 import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
-import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited } from '../utils/rate-limit';
+import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited, logRateLimitHit } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
 
@@ -202,6 +202,7 @@ export async function handleDrmRoutes(
     // Rate-limiting check (§5.4 IP + Fingerprint Key)
     const clientIp = clientIpFromRequest(request);
     if (isDeviceRegisterRateLimited(clientIp, uHash, cHash, dHash)) {
+      ctx.waitUntil(logRateLimitHit(env, 'DEVICE_REGISTER', `reg:${clientIp}`, { uuid_hash: uHash.slice(0, 8) }));
       return new Response(
         JSON.stringify({
           error: getApiTranslation("too_many_requests", reqLang) || "Too many registration attempts. Please try again later.",
@@ -308,6 +309,7 @@ export async function handleDrmRoutes(
 
     // A3: D1-persistent rate limit — max 3 activate attempts per license_code per minute (§M4 P1)
     if (await isD1RateLimited(env, `activate:${license_code}`, 3, 60000)) {
+      ctx.waitUntil(logRateLimitHit(env, 'ACTIVATE', `activate:${license_code}`, { license_code }));
       return new Response(JSON.stringify({
         error: getApiTranslation("rate_limit_exceeded", reqLang),
         retry_after: 60
@@ -443,12 +445,14 @@ export async function handleDrmRoutes(
       }, net);
       const authoritativeDeviceId = regRes.device_id || (device_id || "");
 
+      const traceId = request.headers.get('X-Trace-Id') || null;
+
       const insRes = await env.DB.prepare(`
         INSERT INTO activations (
           license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at,
-          client_ip, ip_country, user_agent, city, region, latitude, longitude
+          client_ip, ip_country, user_agent, city, region, latitude, longitude, trace_id
         )
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (SELECT COUNT(*) FROM activations WHERE license_code = ?) < ?
       `).bind(
         license_code,
@@ -464,6 +468,7 @@ export async function handleDrmRoutes(
         net.region,
         net.latitude,
         net.longitude,
+        traceId,
         license_code,
         license.max_devices
       ).run();
@@ -613,6 +618,7 @@ export async function handleDrmRoutes(
 
     // A3: D1-persistent rate limit — max 10 verify attempts per license_code per minute (§M4 P1)
     if (await isD1RateLimited(env, `verify:${license_code}`, 10, 60000)) {
+      ctx.waitUntil(logRateLimitHit(env, 'VERIFY', `verify:${license_code}`, { license_code }));
       return new Response(JSON.stringify({
         error: getApiTranslation("rate_limit_exceeded", reqLang),
         retry_after: 60

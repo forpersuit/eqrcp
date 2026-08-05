@@ -10,6 +10,7 @@ import {
   listManualBlacklist,
   type ManualBlacklistKind
 } from '../utils/blacklist';
+import { rateLimitStatus } from '../utils/rate-limit';
 
 export async function handleAdminRoutes(
   request: Request,
@@ -901,7 +902,144 @@ export async function handleAdminRoutes(
     });
   }
 
-  // 8. Manual blacklist management (email / device)
+  // 7.5 Admin Endpoint: Business Metrics Dashboard (§7.2 P1 业务指标仪表盘)
+  if (url.pathname === "/api/v1/admin/metrics" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    let dailyActiveDevices = 0;
+    let activationSuccessRate: number | null = null;
+    let tierDistribution: { tier: string; count: number }[] = [];
+    let crashTrend: { date: string; count: number }[] = [];
+    let rateLimitHits24h = 0;
+
+    try {
+      // 1. Daily active devices (last 24h)
+      const daRes = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM device_registry WHERE last_seen_at >= ?"
+      ).bind(dayAgo).first<{ count: number }>();
+      dailyActiveDevices = daRes?.count || 0;
+
+      // 2. Activation success rate (last 7 days)
+      const totalActRes = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM activations WHERE activated_at >= ?"
+      ).bind(weekAgo).first<{ count: number }>();
+      const totalActivations = totalActRes?.count || 0;
+      // Count successful activations (activations that led to a device_registry entry with paid tier)
+      const successActRes = await env.DB.prepare(
+        `SELECT COUNT(DISTINCT a.id) as count
+         FROM activations a
+         JOIN device_registry d ON a.device_id = d.device_id
+         WHERE a.activated_at >= ? AND d.tier_label = 'paid'`
+      ).bind(weekAgo).first<{ count: number }>();
+      const successActivations = successActRes?.count || 0;
+      activationSuccessRate = totalActivations > 0 ? Math.round((successActivations / totalActivations) * 10000) / 100 : null;
+
+      // 3. License tier distribution
+      const tierRes = await env.DB.prepare(
+        "SELECT tier, COUNT(*) as count FROM licenses GROUP BY tier ORDER BY count DESC"
+      ).all<{ tier: string; count: number }>();
+      tierDistribution = (tierRes.results || []).map(r => ({ tier: r.tier, count: r.count }));
+
+      // 4. Crash trend (daily count, last 30 days)
+      const crashRes = await env.DB.prepare(
+        `SELECT date(created_at) as date, COUNT(*) as count
+         FROM system_error_logs
+         WHERE category = 'DESKTOP_CRASH' AND created_at >= ?
+         GROUP BY date(created_at)
+         ORDER BY date ASC`
+      ).bind(monthAgo).all<{ date: string; count: number }>();
+      crashTrend = (crashRes.results || []).map(r => ({ date: r.date, count: r.count }));
+
+      // 5. Rate limit hit count (last 24h)
+      const rlRes = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM system_error_logs WHERE category LIKE 'RATE_LIMIT_%' AND created_at >= ?"
+      ).bind(dayAgo).first<{ count: number }>();
+      rateLimitHits24h = rlRes?.count || 0;
+    } catch (err) {
+      // Non-critical: return partial data on query failure
+      console.error("Metrics query error:", err);
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      timestamp: new Date().toISOString(),
+      metrics: {
+        daily_active_devices: dailyActiveDevices,
+        activation_success_rate: activationSuccessRate,
+        tier_distribution: tierDistribution,
+        crash_trend: crashTrend,
+        rate_limit_hits_24h: rateLimitHits24h
+      }
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 8. Admin Endpoint: System Prune — delete old logs (§3 P1 数据清理管理端点)
+  if (url.pathname === "/api/v1/admin/system/prune" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureAuditLogTable(env);
+    await ensureAdminAuditLogTable(env);
+
+    const now = new Date().toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Delete system_error_logs older than 30 days
+    const errDelRes = await env.DB.prepare(
+      "DELETE FROM system_error_logs WHERE created_at < ?"
+    ).bind(thirtyDaysAgo).run();
+    const deletedErrorLogs = errDelRes.meta.changes || 0;
+
+    // Delete admin_audit_logs older than 90 days
+    const auditDelRes = await env.DB.prepare(
+      "DELETE FROM admin_audit_logs WHERE created_at < ?"
+    ).bind(ninetyDaysAgo).run();
+    const deletedAuditLogs = auditDelRes.meta.changes || 0;
+
+    ctx.waitUntil(logAdminAudit(env, 'PRUNE', 'SYSTEM', null, {
+      deleted_error_logs: deletedErrorLogs,
+      deleted_audit_logs: deletedAuditLogs,
+      error_logs_older_than_days: 30,
+      audit_logs_older_than_days: 90
+    }, clientIp));
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: "System logs pruned successfully",
+      deleted_error_logs: deletedErrorLogs,
+      deleted_audit_logs: deletedAuditLogs
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 8.5 Admin Endpoint: Rate Limit Status — read-only view of current isolate buckets (§3 P1 限流可见性)
+  if (url.pathname === "/api/v1/admin/rate-limit-status" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const status = rateLimitStatus();
+
+    return new Response(JSON.stringify({
+      success: true,
+      status,
+      note: "In-isolate only — multi-region deployments have independent counts"
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 9. Manual blacklist management (email / device)
   if (url.pathname === "/api/v1/admin/blacklist" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;

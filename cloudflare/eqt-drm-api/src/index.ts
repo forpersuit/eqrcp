@@ -20,13 +20,17 @@ export default {
     const startMs = Date.now();
     const url = new URL(request.url);
 
+    // Generate trace_id (UUID v4) for request-level tracing (§7.1)
+    const traceId = crypto.randomUUID();
+    request = new Request(request, { headers: { ...request.headers, 'X-Trace-Id': traceId } });
+
     // Dynamic CORS Headers with Origin domain matching
     const corsHeaders = getCorsHeaders(request);
 
     if (request.method === "OPTIONS") {
       const resp = new Response(null, { headers: corsHeaders });
       ctx.waitUntil(logStructuredRequest(request, resp, startMs));
-      return resp;
+      return attachTraceId(resp, traceId);
     }
 
     try {
@@ -88,20 +92,36 @@ export default {
       }
 
       ctx.waitUntil(logStructuredRequest(request, response, startMs));
+      // Attach trace_id to response header (§7.1)
+      response = attachTraceId(response, traceId);
       return response;
 
     } catch (e: any) {
-      ctx.waitUntil(logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', e, { url: request.url, method: request.method }));
+      ctx.waitUntil(logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', e, { url: request.url, method: request.method }, traceId));
       const safeMsg = getSafeUserErrorMessage(e.message || String(e), "An unexpected server error occurred. Please try again later.");
       const errorResp = new Response(JSON.stringify({ error: safeMsg }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
       ctx.waitUntil(logStructuredRequest(request, errorResp, startMs));
-      return errorResp;
+      return attachTraceId(errorResp, traceId);
     }
   }
 };
+
+/**
+ * Attach X-Trace-Id header to a Response object.
+ * Creates a new Response with the added header since Response.headers is immutable after construction.
+ */
+function attachTraceId(response: Response, traceId: string): Response {
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set('X-Trace-Id', traceId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  });
+}
 
 /**
  * Public health check endpoint — no auth required.

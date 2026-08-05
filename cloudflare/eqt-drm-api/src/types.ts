@@ -18,6 +18,10 @@ export interface Env {
   MAIL_SEND_SAFE_PORT?: string;
   TEST_MAIL_RECEIVER?: string;
   PADDLE_API_KEY?: string;
+  /** Telegram bot token for alert notifications (告警升级机制 §7.3) */
+  TELEGRAM_BOT_TOKEN?: string;
+  /** Telegram chat ID for alert notifications */
+  TELEGRAM_CHAT_ID?: string;
 }
 
 /** purchase | promo | admin | test — see docs/payment/license-source-and-refund-policy.md */
