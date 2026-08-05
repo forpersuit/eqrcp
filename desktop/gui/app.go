@@ -1786,6 +1786,19 @@ func (a *App) DismissCrashReportPermanently() error {
 	return nil
 }
 
+// DevTriggerCrash is a developer-only trigger that simulates a crash by
+// writing a crash dump through the exact same collection path a real panic
+// would use (crash.SaveDump). It is a Wails binding available in dev mode
+// only; a normal run will call CrashReportInfo{HasReport:false} via
+// CheckCrashReport and the binding is never surfaced in the UI outside the
+// developer options panel. The process itself is not terminated, so the
+// developer can then restart the app and observe the "previous crash" prompt.
+func (a *App) DevTriggerCrash() CrashReportInfo {
+	a.logInfo("[GUI] DevTriggerCrash: writing crash dump (dev only)")
+	crash.SaveDump("dev-trigger from developer options")
+	return a.CheckCrashReport()
+}
+
 // SubmitFeedback submits feedback to the Cloudflare Worker API.
 // It is called by the frontend via Wails bindings to avoid CORS issues and log request details.
 func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat string) (string, error) {

@@ -325,17 +325,15 @@ func startWailsGUI() {
 	setupSignalHandler()
 
 	logPath := desktopLogFilePath()
-	
 	settingsApp := application.New()
 	settings, err := config.ReadDesktopSettings(settingsApp)
 	enabled := false
 	if err == nil {
 		enabled = settings.DebugLog || settings.DevMode
 	}
-	
+
 	fileLogger := NewFileLogger(logPath, enabled)
 	defer fileLogger.Close()
-
 	fileLogger.Info("EQT GUI Starting...")
 
 	// Perform disaster rollback check FIRST before applying offline updates or cleaning files

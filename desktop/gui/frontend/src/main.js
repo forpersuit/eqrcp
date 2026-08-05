@@ -57,6 +57,7 @@ import {
     DismissCrashReportPermanently,
     DevSetUsedSeconds,
     DevForceOnlineLicenseSync,
+    DevTriggerCrash,
 } from '../wailsjs/go/main/App';
 
 window.addEventListener('error', (e) => {
@@ -2352,7 +2353,17 @@ function renderSettingsPanel() {
                         </div>
                     </div>
 
-                    <!-- Module 3: Exit Dev Mode -->
+                    <!-- Module 3: Crash Debug -->
+                    <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
+                        <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <span>💥</span> ${t('crash_report_title') || '崩溃报告'}
+                        </div>
+                        <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.35;">${t('dev_trigger_crash_desc') || '仅开发环境：写入一次崩溃 dump，重启后即可走完整崩溃上报流程。'}</div>
+                        <button type="button" class="ghost" id="dev-trigger-crash" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 700; width: 100%;">💥 ${t('dev_trigger_crash') || '触发崩溃测试'}</button>
+                        ${state.devCrashMsg ? `<div style="font-size: 11px; margin-top: 8px; color: ${state.devCrashMsg.startsWith('✅') ? 'var(--accent)' : '#ef4444'};">${escapeHTML(state.devCrashMsg)}</div>` : ''}
+                    </div>
+
+                    <!-- Module 4: Exit Dev Mode -->
                     <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
                         ${t('btn_exit_dev_mode') || '退出开发者模式'}
                     </button>
@@ -4666,6 +4677,19 @@ function bindSettingsControls() {
             render();
             openPanel('settings');
         }
+    });
+
+    document.querySelector('#dev-trigger-crash')?.addEventListener('click', async () => {
+        try {
+            const info = await DevTriggerCrash();
+            state.devCrashMsg = (info && info.hasReport)
+                ? '✅ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。')
+                : '❌ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。');
+        } catch (err) {
+            state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || '触发崩溃失败：') + err;
+        }
+        render();
+        openPanel('settings');
     });
 
     document.querySelector('#dev-disable-mode')?.addEventListener('click', async () => {

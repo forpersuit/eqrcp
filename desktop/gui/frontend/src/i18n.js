@@ -405,7 +405,10 @@ const translations = {
         "crash_report_upload": "上传",
         "crash_report_ignore": "忽略",
         "crash_report_uploading": "正在上传...",
-        "crash_report_never_ask": "不再询问"
+        "crash_report_never_ask": "不再询问",
+        "dev_trigger_crash": "触发崩溃测试",
+        "dev_trigger_crash_desc": "仅开发环境：写入一次崩溃 dump，重启后即可走完整崩溃上报流程。",
+        "dev_crash_triggered": "崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。"
     },
     "en": {
         "about": "About EQT",
@@ -811,7 +814,10 @@ const translations = {
         "crash_report_upload": "Upload",
         "crash_report_ignore": "Ignore",
         "crash_report_uploading": "Uploading...",
-        "crash_report_never_ask": "Never ask again"
+        "crash_report_never_ask": "Never ask again",
+        "dev_trigger_crash": "Trigger Crash Test",
+        "dev_trigger_crash_desc": "Dev only: writes one crash dump; restart eqt-desktop to walk the full crash-report flow.",
+        "dev_crash_triggered": "Crash dump written. Restart eqt-desktop to see the crash-report dialog."
     },
     "ja": {
         "about": "EQTについて",
