@@ -12,7 +12,7 @@ func TestReadLogTail(t *testing.T) {
 	t.Run("empty file", func(t *testing.T) {
 		dir := t.TempDir()
 		f := filepath.Join(dir, "test.log")
-		os.WriteFile(f, []byte{}, 0644)
+		_ = os.WriteFile(f, []byte{}, 0644)
 		got := ReadLogTail(f, 10)
 		if got != "" {
 			t.Errorf("expected empty string, got %q", got)
@@ -22,7 +22,7 @@ func TestReadLogTail(t *testing.T) {
 	t.Run("file shorter than n", func(t *testing.T) {
 		dir := t.TempDir()
 		f := filepath.Join(dir, "test.log")
-		os.WriteFile(f, []byte("line1\nline2\n"), 0644)
+		_ = os.WriteFile(f, []byte("line1\nline2\n"), 0644)
 		got := ReadLogTail(f, 10)
 		if got != "line1\nline2\n" {
 			t.Errorf("expected full content, got %q", got)
@@ -36,7 +36,7 @@ func TestReadLogTail(t *testing.T) {
 		for i := range 100 {
 			lines[i] = "line"
 		}
-		os.WriteFile(f, []byte(strings.Join(lines, "\n")), 0644)
+		_ = os.WriteFile(f, []byte(strings.Join(lines, "\n")), 0644)
 		got := ReadLogTail(f, 50)
 		gotLines := strings.Split(strings.TrimRight(got, "\n"), "\n")
 		if len(gotLines) != 50 {
@@ -131,7 +131,7 @@ func TestHasPendingDump(t *testing.T) {
 		defer os.Setenv("HOME", oldHome)
 
 		SaveDump("panic")
-		MarkUploaded()
+		_ = MarkUploaded()
 		if HasPendingDump() {
 			t.Error("HasPendingDump should be false after MarkUploaded")
 		}
@@ -144,7 +144,7 @@ func TestHasPendingDump(t *testing.T) {
 		defer os.Setenv("HOME", oldHome)
 
 		SaveDump("panic")
-		MarkDismissed()
+		_ = MarkDismissed()
 		if HasPendingDump() {
 			t.Error("HasPendingDump should be false after MarkDismissed")
 		}
@@ -181,8 +181,8 @@ func TestMarkUploadedThenDismissed(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	SaveDump("panic")
-	MarkUploaded()
-	MarkDismissed()
+	_ = MarkUploaded()
+	_ = MarkDismissed()
 
 	if HasPendingDump() {
 		t.Error("HasPendingDump should be false after MarkUploaded + MarkDismissed")

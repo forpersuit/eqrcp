@@ -25,6 +25,8 @@ import (
 	"eqt/pkg/server"
 	"eqt/pkg/version"
 	"github.com/spf13/cobra"
+
+	"eqt/desktop/crash"
 )
 
 var desktopAgentAddress = getDesktopAgentAddress()
@@ -162,6 +164,9 @@ func (agent *desktopAgent) routes() http.Handler {
 	mux.HandleFunc("/set-paid-status", agent.handleSetPaidStatus)
 	mux.HandleFunc("/activate", agent.handleActivate)
 	mux.HandleFunc("/reset-license", agent.handleResetLicense)
+	mux.HandleFunc("/dev/crash/dump", agent.handleDevCrashDump)
+	mux.HandleFunc("/dev/crash/trigger", agent.handleDevCrashTrigger)
+	mux.HandleFunc("/dev/crash/report", agent.handleDevCrashReport)
 	mux.HandleFunc("/update/check", agent.handleUpdateCheck)
 	mux.HandleFunc("/update/download", agent.handleUpdateDownload)
 	mux.HandleFunc("/update/install", agent.handleUpdateInstall)
@@ -713,6 +718,104 @@ func (agent *desktopAgent) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, filePath)
+}
+
+// devModeEnabled reports whether the desktop agent is running in developer
+// mode (DevMode or DebugLog). All /dev/* endpoints gate their side effects on
+// this so they are inert in normal customer deployments.
+func (agent *desktopAgent) devModeEnabled() bool {
+	settings, err := agent.readSettings()
+	return err == nil && (settings.DevMode || settings.DebugLog)
+}
+
+// requireDevMode rejects cross-origin callers and non-dev runs with 403.
+// The desktop agent binds to 127.0.0.1 only, so combined with the origin
+// check this keeps /dev/* strictly local + dev-only.
+func (agent *desktopAgent) requireDevMode(w http.ResponseWriter, r *http.Request) bool {
+	if rejectCrossOriginDesktopAgent(w, r) {
+		return false
+	}
+	if !agent.devModeEnabled() {
+		http.Error(w, "dev mode disabled", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// handleDevCrashDump returns the current pending crash dump state without
+// triggering any side effect.
+func (agent *desktopAgent) handleDevCrashDump(w http.ResponseWriter, r *http.Request) {
+	if !agent.requireDevMode(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	dump, err := crash.LoadDump()
+	resp := map[string]any{
+		"hasPending": dump != nil && err == nil,
+		"uploaded":   false,
+		"dismissed":  false,
+	}
+	if dump != nil {
+		resp["uploaded"] = dump.Uploaded
+		resp["dismissed"] = dump.Dismissed
+		resp["report"] = dump.Report
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// handleDevCrashTrigger writes a realistic crash dump to disk (same code path
+// as a real panic recovery) without exiting the process, so a developer can
+// exercise the pending-dump lifecycle and re-prompt flow.
+func (agent *desktopAgent) handleDevCrashTrigger(w http.ResponseWriter, r *http.Request) {
+	if !agent.requireDevMode(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// SaveDump(nil) mirrors the signal-triggered path and captures a real stack.
+	crash.SaveDump("dev-trigger")
+	dump, err := crash.LoadDump()
+	if err != nil || dump == nil {
+		http.Error(w, "failed to write crash dump", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"written":    true,
+		"hasPending": true,
+		"report":     dump.Report,
+	})
+}
+
+// handleDevCrashReport uploads a synthesized crash report to the configured
+// crash server, letting a developer validate the full upload round-trip in
+// dev mode without touching a production dump. Override the target with
+// EQT_CRASH_SERVER (e.g. a local httptest server) to inspect the wire body.
+func (agent *desktopAgent) handleDevCrashReport(w http.ResponseWriter, r *http.Request) {
+	if !agent.requireDevMode(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	report := crash.Collect("dev-mode synthesized crash report", "")
+	reportID, err := crash.Submit(report)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("submit failed: %v", err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"submitted": true,
+		"report_id": reportID,
+	})
 }
 
 func (agent *desktopAgent) handleStopCurrent(w http.ResponseWriter, r *http.Request) {
