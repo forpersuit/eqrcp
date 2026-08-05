@@ -582,7 +582,7 @@ function render() {
                             ${(state.pendingCrashDump) || (state.settings?.autoUpdateMode !== 'off' && (
                                 (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
                                 ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
-                            )) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                            )) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                         </button>
                         ${state.topMenuOpen ? `
                             <div class="topbar-dropdown" role="menu">
@@ -594,7 +594,7 @@ function render() {
                                 </button>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback" style="position: relative;">
                                     <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
-                                    ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                                    ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                                 </button>
                                 <div class="topbar-menu-sep"></div>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="license">
@@ -2872,7 +2872,7 @@ function renderFeedbackPanel() {
                     <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
                         ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? t('feedback_send_success_short') : (state.feedbackSendResult === 'failed' ? t('feedback_send_failed_short') : t('btn_send_feedback_now')))}
                     </button>
-                    ${state.pendingCrashDump ? '<span class="badge-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>' : ''}
+                    ${state.pendingCrashDump ? '<span class="badge-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>' : ''}
                 </div>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
@@ -3869,7 +3869,7 @@ function updateSettingsBadgeUI() {
         if (!badge) {
             badge = document.createElement('span');
             badge.className = 'badge-dot';
-            badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
+            badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
             btn.appendChild(badge);
         }
     } else {
