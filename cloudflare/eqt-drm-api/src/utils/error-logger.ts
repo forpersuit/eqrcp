@@ -95,8 +95,8 @@ export async function logSystemError(
 
     // Alert notification for CRITICAL errors (§7.3 告警升级机制)
     if (level === 'CRITICAL') {
-      // Fire-and-forget: don't block the main flow
-      sendTelegramAlert(env, category, errorMsg);
+      // Await to ensure delivery before ctx.waitUntil() releases the isolate
+      await sendTelegramAlert(env, category, errorMsg);
     }
   } catch (err) {
     console.error("Failed to log system error to D1:", err);

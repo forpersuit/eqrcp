@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -11,9 +12,36 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jhoonb/archivex"
 )
+
+// --- Trace ID for request-level tracing (§7.1) ---
+// Generated once per process, reused across all outgoing HTTP requests.
+
+var (
+	traceIDOnce sync.Once
+	traceIDVal  string
+)
+
+// TraceID returns the process-wide trace ID (UUID v4), generating it on first call.
+func TraceID() string {
+	traceIDOnce.Do(func() {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			traceIDVal = fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+			return
+		}
+		// Set UUID v4 bits
+		b[6] = (b[6] & 0x0f) | 0x40
+		b[8] = (b[8] & 0x3f) | 0x80
+		traceIDVal = fmt.Sprintf("%08x-%04x-4%03x-%04x-%012x",
+			b[0:4], b[4:6], b[6:7], b[8:10], b[10:16])
+	})
+	return traceIDVal
+}
 
 // Expand tilde in paths
 func Expand(input string) string {
