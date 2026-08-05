@@ -335,9 +335,6 @@
                 // Open Paddle Checkout with pre-filled verified customer email & customData fallback
                 setTimeout(() => {
                     if (typeof Paddle !== 'undefined') {
-                        if (typeof window.initPaddle === 'function') {
-                            window.initPaddle();
-                        }
                         try {
                             Paddle.Checkout.open({
                                 items: [{ priceId: this.pendingPriceId, quantity: 1 }],

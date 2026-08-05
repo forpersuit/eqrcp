@@ -342,7 +342,10 @@
                 "verifying_btn": "Verifying...",
                 "invalid_email_err": "Please enter a valid email address",
                 "invalid_code_err": "Please enter 6-digit verification code",
-                "code_sent_success": "Verification code sent to your email!"
+                "code_sent_success": "Verification code sent to your email!",
+                "send_code_failed": "Failed to send verification code. Please try again later.",
+                "verify_failed": "Verification failed. Please check your code.",
+                "paddle_loading_err": "Billing component is loading or blocked by network."
             },
             "zh": {
                 "back_to_home": "返回主页",
@@ -406,7 +409,10 @@
                 "verifying_btn": "验证中...",
                 "invalid_email_err": "请输入有效的电子邮箱地址",
                 "invalid_code_err": "请输入 6 位数字验证码",
-                "code_sent_success": "验证码已成功发送至您的邮箱！"
+                "code_sent_success": "验证码已成功发送至您的邮箱！",
+                "send_code_failed": "验证码发送失败，请稍后重试。",
+                "verify_failed": "验证失败，请检查验证码是否正确。",
+                "paddle_loading_err": "支付组件加载中或网络被拦截。"
             },
             "ja": {
                 "back_to_home": "ホームに戻る",
@@ -436,6 +442,9 @@
                 "send_code_btn": "コード送信",
                 "sending_code": "送信中...",
                 "code_sent_success": "認証コードをメールに送信しました！",
+                "send_code_failed": "認証コードの送信に失敗しました。後でもう一度お試しください。",
+                "verify_failed": "認証に失敗しました。コードを確認してください。",
+                "paddle_loading_err": "支払いコンポーネントを読み込み中、またはネットワークが遮断されています。",
                 "license_sent_to_notice": "ライセンスキーと領収書を送信しました：",
                 "compliance_title": "コンプライアンスと規約",
                 "comp_privacy": "プライバシーポリシー",
@@ -458,6 +467,9 @@
                 "invalid_email_err": "有効なメールアドレスを入力してください",
                 "invalid_code_err": "6桁の認証コードを入力してください",
                 "code_sent_success": "認証コードをメールに送信しました！",
+                "send_code_failed": "認証コードの送信に失敗しました。後でもう一度お試しください。",
+                "verify_failed": "認証に失敗しました。コードを確認してください。",
+                "paddle_loading_err": "支払いコンポーネントを読み込み中、またはネットワークが遮断されています。",
                 "license_sent_to_notice": "ライセンスキーと領収書を送信しました："
             },
             "ko": {
@@ -506,6 +518,9 @@
                 "invalid_email_err": "올바른 이메일 주소를 입력해 주세요",
                 "invalid_code_err": "6자리 인증 코드를 입력해 주세요",
                 "code_sent_success": "인증 코드가 이메일로 전송되었습니다!",
+                "send_code_failed": "인증 코드 전송에 실패했습니다. 나중에 다시 시도해 주세요.",
+                "verify_failed": "인증에 실패했습니다. 코드를 확인해 주세요.",
+                "paddle_loading_err": "결제 구성 요소를 로드 중이거나 네트워크가 차단되었습니다.",
                 "license_sent_to_notice": "라이선스 키와 영수증이 다음 주소로 발송되었습니다:"
             },
             "es": {
@@ -554,6 +569,9 @@
                 "invalid_email_err": "Ingrese un correo electrónico válido",
                 "invalid_code_err": "Ingrese el código de 6 dígitos",
                 "code_sent_success": "¡Código de verificación enviado a su correo!",
+                "send_code_failed": "Error al enviar el código. Intente de nuevo más tarde.",
+                "verify_failed": "Verificación fallida. Verifique su código.",
+                "paddle_loading_err": "El componente de pago se está cargando o está bloqueado por la red.",
                 "license_sent_to_notice": "Clave de licencia y recibo enviados a:"
             },
             "de": {
@@ -602,6 +620,9 @@
                 "invalid_email_err": "Bitte geben Sie eine gültige E-Mail ein",
                 "invalid_code_err": "Bitte 6-stelligen Code eingeben",
                 "code_sent_success": "Bestätigungscode an Ihre E-Mail gesendet!",
+                "send_code_failed": "Code konnte nicht gesendet werden. Bitte später erneut versuchen.",
+                "verify_failed": "Bestätigung fehlgeschlagen. Bitte überprüfen Sie Ihren Code.",
+                "paddle_loading_err": "Zahlungskomponente wird geladen oder durch Netzwerk blockiert.",
                 "license_sent_to_notice": "Lizenzschlüssel und Beleg gesendet an:"
             },
             "fr": {
@@ -654,9 +675,14 @@
                 "invalid_email_err": "Veuillez entrer un e-mail valide",
                 "invalid_code_err": "Veuillez entrer le code à 6 chiffres",
                 "code_sent_success": "Code de vérification envoyé à votre e-mail !",
+                "send_code_failed": "Échec de l'envoi du code. Veuillez réessayer plus tard.",
+                "verify_failed": "Échec de la vérification. Veuillez vérifier votre code.",
+                "paddle_loading_err": "Le composant de paiement charge ou est bloqué par le réseau.",
                 "license_sent_to_notice": "Clé de licence et reçu envoyés à :"
             }
         };
+
+        window.translations = translations;
 
         function getCookie(name) {
             const value = "; " + document.cookie;
