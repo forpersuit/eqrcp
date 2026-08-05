@@ -7,8 +7,8 @@
 package crash
 
 import (
-	"eqt/pkg/util"
 	"encoding/json"
+	"eqt/pkg/util"
 	"fmt"
 	"net/http"
 	"os"

@@ -1,8 +1,10 @@
 package crash
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -230,5 +232,25 @@ func TestSaveDumpWithNil(t *testing.T) {
 
 	if !strings.Contains(dump.Report.StackTrace, "crash: SIGABRT or fatal error") {
 		t.Errorf("expected SIGABRT message in stack trace, got: %s", dump.Report.StackTrace)
+	}
+}
+
+// TestSetTraceIDHeader verifies that SetTraceIDHeader sets a valid UUID v4 trace ID.
+func TestSetTraceIDHeader(t *testing.T) {
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	SetTraceIDHeader(req)
+
+	traceID := req.Header.Get("X-Trace-Id")
+	if traceID == "" {
+		t.Fatal("SetTraceIDHeader did not set X-Trace-Id header")
+	}
+	// UUID v4 format: 8-4-4-4-12 hex digits, version nibble 4, variant 8/9/a/b
+	uuidV4 := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	if !uuidV4.MatchString(traceID) {
+		t.Errorf("SetTraceIDHeader set X-Trace-Id = %q, want UUID v4 format", traceID)
 	}
 }

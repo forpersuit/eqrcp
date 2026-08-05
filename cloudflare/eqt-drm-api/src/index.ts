@@ -113,7 +113,7 @@ export default {
  * Attach X-Trace-Id header to a Response object.
  * Creates a new Response with the added header since Response.headers is immutable after construction.
  */
-function attachTraceId(response: Response, traceId: string): Response {
+export function attachTraceId(response: Response, traceId: string): Response {
   const newHeaders = new Headers(response.headers);
   newHeaders.set('X-Trace-Id', traceId);
   return new Response(response.body, {
