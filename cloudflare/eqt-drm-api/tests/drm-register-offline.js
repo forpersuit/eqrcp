@@ -152,7 +152,8 @@ function ensureAllTables(db) {
       city TEXT DEFAULT NULL,
       region TEXT DEFAULT NULL,
       latitude REAL DEFAULT NULL,
-      longitude REAL DEFAULT NULL
+      longitude REAL DEFAULT NULL,
+      trace_id TEXT DEFAULT NULL
     );
     CREATE TABLE IF NOT EXISTS device_registry (
       device_id TEXT PRIMARY KEY,
@@ -178,7 +179,8 @@ function ensureAllTables(db) {
       category TEXT NOT NULL,
       error_message TEXT NOT NULL,
       context_json TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      trace_id TEXT DEFAULT NULL
     );
     CREATE TABLE IF NOT EXISTS rate_limits (
       key TEXT PRIMARY KEY,
@@ -220,6 +222,18 @@ function queryRegistryById(db, deviceId) {
   return db.db.prepare('SELECT * FROM device_registry WHERE device_id = ?').get(deviceId) || null;
 }
 
+/** Query system_error_logs rows matching an error_message pattern (LIKE match). */
+function queryAuditLogs(db, errorMsgPattern) {
+  return db.db.prepare(
+    "SELECT * FROM system_error_logs WHERE error_message LIKE ? ORDER BY id"
+  ).all(`%${errorMsgPattern}%`);
+}
+
+/** Wait for floating fire-and-forget promises (logSystemError calls) to settle. */
+function waitForPending() {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
 async function runTests() {
   console.log('==============================================');
   console.log('🚀 Device Registry WRITE Path Offline Tests');
@@ -251,6 +265,15 @@ async function runTests() {
   assert(rows1[0].city === 'Shenzhen', 'city stored');
   assert(rows1[0].license_code === null, 'license_code = null (no license)');
   assert(rows1[0].email === null, 'email = null (no email)');
+  // Audit: new_device entry written to system_error_logs
+  await waitForPending();
+  const audit1 = queryAuditLogs(db1, 'new_device');
+  assert(audit1.length === 1, 'audit log has 1 new_device entry for T1');
+  assert(audit1[0].level === 'INFO', 'new_device audit level = INFO');
+  assert(audit1[0].category === 'DEVICE_REGISTRY', 'new_device audit category = DEVICE_REGISTRY');
+  const ctx1 = JSON.parse(audit1[0].context_json);
+  assert(ctx1.tier === 'free', 'new_device audit context tier = free');
+  assert(ctx1.device_id_prefix && ctx1.device_id_prefix.length === 8, 'new_device audit has device_id_prefix');
   await flushCtx();
 
   // ============================================================
@@ -293,6 +316,13 @@ async function runTests() {
   assert(rows3.length === 1, 'exactly 1 row');
   assert(rows3[0].tier_label === 'paid', 'tier_label = paid');
   assert(rows3[0].license_code === 'EQT-PAID-REG', 'license_code stored');
+  // Audit: new_device entry for paid device
+  await waitForPending();
+  const audit3 = queryAuditLogs(db3, 'new_device');
+  assert(audit3.length === 1, 'audit log has 1 new_device entry for T3');
+  assert(audit3[0].level === 'INFO', 'new_device (paid) audit level = INFO');
+  const ctx3 = JSON.parse(audit3[0].context_json);
+  assert(ctx3.tier === 'paid', 'new_device (paid) audit context tier = paid');
   await flushCtx();
 
   // ============================================================
@@ -361,6 +391,16 @@ async function runTests() {
   assert(j5b.tier === 'paid', 'tier stays paid (not downgraded)');
   const row5 = queryRegistryById(db5, devId5);
   assert(row5.tier_label === 'paid', 'tier_label still paid');
+  // Audit: tier_protection entry written to system_error_logs
+  await waitForPending();
+  const audit5 = queryAuditLogs(db5, 'tier_protection');
+  assert(audit5.length === 1, 'audit log has 1 tier_protection entry for T5');
+  assert(audit5[0].level === 'WARN', 'tier_protection audit level = WARN');
+  assert(audit5[0].category === 'DEVICE_REGISTRY', 'tier_protection audit category = DEVICE_REGISTRY');
+  const ctx5 = JSON.parse(audit5[0].context_json);
+  assert(ctx5.device_id === devId5, 'tier_protection audit context has device_id');
+  assert(ctx5.existing_tier === 'paid', 'tier_protection audit context existing_tier = paid');
+  assert(ctx5.incoming_tier === 'free', 'tier_protection audit context incoming_tier = free');
   await flushCtx();
 
   // ============================================================
@@ -392,6 +432,16 @@ async function runTests() {
   const row6b = queryRegistryById(db6, devId6);
   assert(row6b.last_seen_at === firstSeen,
     `last_seen_at unchanged by debounce (${row6b.last_seen_at} === ${firstSeen})`);
+  // Audit: debounce_skip entry written to system_error_logs
+  await waitForPending();
+  const audit6 = queryAuditLogs(db6, 'debounce_skip');
+  assert(audit6.length === 1, 'audit log has 1 debounce_skip entry for T6');
+  assert(audit6[0].level === 'WARN', 'debounce_skip audit level = WARN');
+  assert(audit6[0].category === 'DEVICE_REGISTRY', 'debounce_skip audit category = DEVICE_REGISTRY');
+  const ctx6 = JSON.parse(audit6[0].context_json);
+  assert(ctx6.device_id === devId6, 'debounce_skip audit context has device_id');
+  assert(typeof ctx6.age_seconds === 'number', 'debounce_skip audit context has age_seconds');
+  assert(ctx6.tier === 'free', 'debounce_skip audit context tier = free');
   await flushCtx();
 
   // ============================================================
