@@ -2868,9 +2868,12 @@ function renderFeedbackPanel() {
             <div class="feedback-note">${t('feedback_diag_note')}</div>
             <pre class="diagnostics">${escapeHTML(diagnostics)}</pre>
             <div class="feedback-actions">
-                <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
-                    ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? t('feedback_send_success_short') : (state.feedbackSendResult === 'failed' ? t('feedback_send_failed_short') : t('btn_send_feedback_now')))}
-                </button>
+                <div style="position: relative; display: inline-flex;">
+                    <button class="primary" id="send-feedback" ${state.isSendingFeedback ? 'disabled' : ''} data-mailto="${escapeAttr(mailto)}">
+                        ${state.isSendingFeedback ? t('btn_sending_feedback') : (state.feedbackSendResult === 'success' ? t('feedback_send_success_short') : (state.feedbackSendResult === 'failed' ? t('feedback_send_failed_short') : t('btn_send_feedback_now')))}
+                    </button>
+                    ${state.pendingCrashDump ? '<span class="badge-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; background-color: var(--danger, #fc0035); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>' : ''}
+                </div>
                 <button class="ghost" id="copy-feedback">${t('btn_copy_feedback')}</button>
             </div>
         </div>
@@ -2915,6 +2918,7 @@ function getTranslatedState(s) {
     if (low === 'completed' || low === 'done') return t('completed');
     if (low === 'failed' || low === 'error') return t('failed');
     if (low === 'stopped' || low === 'cancelled') return t('stopped');
+    if (low === 'transferring') return t('transferring');
     return s;
 }
 
@@ -3786,7 +3790,6 @@ function openPanel(panel) {
                         state.feedbackMessage = crashSummary;
                     }
                     render();
-                    openPanel('feedback');
                 }
             }).catch((err) => {
                 LogError('[CrashReport] Failed to get crash detail: ' + err);
