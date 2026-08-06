@@ -522,7 +522,7 @@ globe.gl 库（2.32.0）与地球贴图（`earth-night.jpg` / `earth-topology.pn
 
 #### M4 实际开发项
 
-唯一需要实现的项：**verify/activate 端点频率限流**。
+唯一需要实现的项：**verify/activate 端点频率限流**。（✅ 已于 2026-08-06 完成）
 
 **设计要点**：
 
@@ -548,10 +548,10 @@ globe.gl 库（2.32.0）与地球贴图（`earth-night.jpg` / `earth-topology.pn
 
 | # | 事项 | 状态 | 负责人 | 预计完成 | 实际完成 | 验证方式 |
 |---|---|---|---|---|---|---|
-| 1 | verify 端点限流（`isD1RateLimited` + `verify:<code>` key） | ⬜ 待开始 | — | — | — | 超阈值返回 429，60s 后恢复 |
-| 2 | activate 端点限流（`isD1RateLimited` + `activate:<code>` key） | ⬜ 待开始 | — | — | — | 超阈值返回 429，60s 后恢复 |
-| 3 | 限流响应 body 含 `retry_after` 字段 | ⬜ 待开始 | — | — | — | 429 响应含 `{ error, retry_after }` |
-| 4 | 回归测试：register 限流不受影响 | ⬜ 待开始 | — | — | — | register 现有限流测试全部通过 |
+| 1 | verify 端点限流（`isD1RateLimited` + `verify:<code>` key） | ✅ 已完成 | — | — | 2026-08-06 | `drm.ts:620`，max 10/60s，超阈值返回 429 |
+| 2 | activate 端点限流（`isD1RateLimited` + `activate:<code>` key） | ✅ 已完成 | — | — | 2026-08-06 | `drm.ts:311`，max 3/60s，超阈值返回 429 |
+| 3 | 限流响应 body 含 `retry_after` 字段 | ✅ 已完成 | — | — | 2026-08-06 | 429 响应含 `{ error, retry_after: 60 }` |
+| 4 | 回归测试：register 限流不受影响 | ✅ 已完成 | — | — | 2026-08-06 | T18 验证 register 在 activate/verify 限流后仍 200 OK |
 
 ### 7.3 明确不实现（已决策）
 
