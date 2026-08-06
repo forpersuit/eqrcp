@@ -29,7 +29,8 @@ permissions:
 jobs:
   deploy:
     name: Deploy to Production
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # 仅 push 到 master 的 CI 通过后才部署（排除 PR 触发的 CI）
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
     environment: production
     runs-on: ubuntu-latest
     steps:
@@ -79,7 +80,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
       - name: Deploy eqt-admin to Pages
-        run: npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name=eqt-admin --branch=master
+        run: |
+          # functions/ 必须在部署目录内才能被 Pages Functions 识别
+          cp -r cloudflare/eqt-admin/functions cloudflare/eqt-admin/dist/
+          npx wrangler pages deploy cloudflare/eqt-admin/dist --project-name=eqt-admin --branch=master
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
