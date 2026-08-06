@@ -6,7 +6,9 @@ import { logSystemError } from './error-logger';
 
 /** R1: Max activations per license as multiple of max_devices */
 const LICENSE_ACTIVATION_MULTIPLIER = 3;
-const LICENSE_ACTIVATION_MIN = 10;
+// Minimum floor: even a 1-device license needs at least this many activations to trigger.
+// 6 means a default 2-device license triggers at 6 activations (3× normal capacity).
+const LICENSE_ACTIVATION_MIN = 6;
 
 /** R2: Max distinct licenses a single device fingerprint can appear on */
 const MAX_LICENSES_PER_FINGERPRINT = 5;
@@ -27,12 +29,14 @@ interface AbuseCheckResult {
 
 /**
  * R1: Check if a single license has been activated on too many devices.
- * Threshold: max_devices × 3 (minimum 10).
+ * Threshold: max_devices × 3 (minimum 6).
  *
  * Alert only — the license may be shared legitimately (e.g. org-wide).
  * Admin investigates and decides whether to revoke.
+ *
+ * @visibleForTesting — exported for unit tests; not part of public API.
  */
-async function checkLicenseActivationCount(
+export async function checkLicenseActivationCount(
   env: Env,
   licenseCode: string,
   maxDevices: number
@@ -61,8 +65,10 @@ async function checkLicenseActivationCount(
  * it's strong evidence of device sharing or VM farming.
  *
  * Auto-blacklists the device to block further activations.
+ *
+ * @visibleForTesting — exported for unit tests; not part of public API.
  */
-async function checkDeviceFingerprintReuse(
+export async function checkDeviceFingerprintReuse(
   env: Env,
   uuidHash: string,
   cpuHash: string,
@@ -103,8 +109,10 @@ async function checkDeviceFingerprintReuse(
 /**
  * R3: Check if the same IP has activated too many different licenses in the last hour.
  * Alert only — NAT/CGNAT can cause false positives.
+ *
+ * @visibleForTesting — exported for unit tests; not part of public API.
  */
-async function checkIpActivationRate(
+export async function checkIpActivationRate(
   env: Env,
   clientIp: string | null
 ): Promise<AbuseCheckResult> {
@@ -168,6 +176,13 @@ export async function checkAbuseAfterActivation(
       if (!check.triggered) continue;
 
       // Auto-blacklist device for R2 (fingerprint reuse across licenses)
+      //
+      // NOTE: This runs via ctx.waitUntil() — the current activation has already
+      // returned 200 to the client. The blacklist takes effect on the NEXT
+      // request from this device (activate/verify/register). There is a brief
+      // window between response and blacklist persistence where the device could
+      // make another request. This is acceptable: the window is sub-second, and
+      // the D1-persistent rate limiter (3/min per license) bounds burst volume.
       if (check.autoBlacklist) {
         const blacklistResult = await addManualBlacklist(env, {
           kind: 'device',
