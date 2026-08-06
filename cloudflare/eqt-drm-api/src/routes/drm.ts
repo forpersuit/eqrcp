@@ -7,6 +7,7 @@ import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited, logRateLimitHit } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
+import { checkAbuseAfterActivation } from '../utils/abuse-detection';
 
 
 function activationClientMeta(request: Request): {
@@ -491,6 +492,13 @@ export async function handleDrmRoutes(
         const emailHtml = renderEmailWrapper(t.boundTitle, t.boundBody(license_code, actTimeStr, devHashSummary, currentDevicesCount, license.max_devices));
         ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.boundSubject, emailHtml));
       }
+
+      // Run abuse detection asynchronously (P2 #15)
+      ctx.waitUntil(checkAbuseAfterActivation(
+        env, license_code, license.max_devices,
+        uuid_hash || "", cpu_hash || "", disk_hash || "",
+        net.client_ip
+      ));
     } else {
       // Refresh registry active status for already activated device
       const net = activationClientMeta(request);
@@ -503,6 +511,13 @@ export async function handleDrmRoutes(
         email: license.buyer_email || null,
         appVersion: body.app_version || null
       }, net));
+
+      // Run abuse detection asynchronously (P2 #15)
+      ctx.waitUntil(checkAbuseAfterActivation(
+        env, license_code, license.max_devices,
+        uuid_hash || "", cpu_hash || "", disk_hash || "",
+        net.client_ip
+      ));
     }
 
     // Ensure we fetch authoritative device_id for response
