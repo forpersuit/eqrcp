@@ -2,6 +2,8 @@
 
 > 本文档说明 EQT 项目的部署架构、自动/手动部署流程及各项目的部署特点。
 > 最后更新：2026-08-06
+>
+> 关联文档：[基础设施可观测性](../report/infrastructure-observability.md)（P2 #13 回滚策略）
 
 ---
 
@@ -10,12 +12,13 @@
 1. [部署架构总览](#1-部署架构总览)
 2. [自动部署流水线](#2-自动部署流水线)
 3. [手动部署场景](#3-手动部署场景)
-4. [各项目部署特点](#4-各项目部署特点)
-5. [发布流程](#5-发布流程)
-6. [D1 数据库备份](#6-d1-数据库备份)
-7. [环境配置指南](#7-环境配置指南)
-8. [验证清单](#8-验证清单)
-9. [故障排查](#9-故障排查)
+4. [回滚策略](#4-回滚策略)
+5. [各项目部署特点](#5-各项目部署特点)
+6. [发布流程](#6-发布流程)
+7. [D1 数据库备份](#7-d1-数据库备份)
+8. [环境配置指南](#8-环境配置指南)
+9. [验证清单](#9-验证清单)
+10. [故障排查](#10-故障排查)
 
 ---
 
@@ -185,9 +188,72 @@ npx wrangler rollback
 
 ---
 
-## 4. 各项目部署特点
+## 4. 回滚策略
 
-### 4.1 eqt-drm-api（Worker）
+### 4.1 版本记录
+
+每次 `deploy.yml` 执行时，会在 workflow 的 **Step Summary** 中自动记录当前部署的版本信息：
+
+```
+## 🚀 Deploy Summary
+
+Commit: a1b2c3d4e5f6...
+Timestamp: 2026-08-06T22:00:00Z
+
+### eqt-drm-api versions
+Version ID:  v1-20260806-220000-xxxxxxxx
+Created:     2026-08-06T22:00:00Z
+
+### eqt-feedback-api versions
+Version ID:  v1-20260806-220000-yyyyyyyy
+Created:     2026-08-06T22:00:00Z
+```
+
+查看方式：GitHub Actions → 对应 Deploy run → **Summary** 页面底部。
+
+### 4.2 回滚方式
+
+| 方式 | 命令 | 适用场景 | 速度 |
+|---|---|---|---|
+| **wrangler rollback** | `npx wrangler rollback` | 回退到上一版本 | 秒级 |
+| **wrangler versions deploy** | `npx wrangler versions deploy <version-id>` | 回退到指定版本 | 秒级 |
+| **Cloudflare 仪表盘** | Workers & Pages → 选择 Worker → Deployments → 找到版本 → Deploy | 无需 CLI | 秒级 |
+| **Pages 快速回滚** | 仪表盘 → eqt 项目 → Production → Deployments → 上一版本 | Pages 回滚 | 秒级 |
+
+### 4.3 回滚流程
+
+```mermaid
+graph TD
+    Incident[🚨 发现部署问题] --> Decide{影响范围}
+    Decide -->|严重故障| Rollback[立即回滚]
+    Decide -->|小问题| Fix[提交修复<br/>走正常部署流程]
+
+    Rollback --> Method{回滚方式}
+    Method -->|CLI 可用| CLI[npx wrangler rollback]
+    Method -->|CLI 不可用| Dashboard[Cloudflare 仪表盘回滚]
+    CLI --> Verify[验证服务恢复]
+    Dashboard --> Verify
+    Verify --> Report[记录回滚原因<br/>提交修复 PR]
+```
+
+### 4.4 回滚注意事项
+
+- **Worker 回滚**：`wrangler rollback` 回退到上一版本，不影响 D1 数据库数据
+- **Pages 回滚**：在仪表盘中操作，回退到上一部署版本
+- **数据库回滚**：D1 不支持回滚，需要从备份恢复（见 §7）
+- **回滚后**：回滚不会阻止下一次 push 触发的正常部署，修复后 push 即可覆盖
+- **版本保留**：Cloudflare 保留最近 10 个 Worker 版本，超出后旧版本自动删除
+
+### 4.5 预防措施
+
+- 部署前确保 CI 全部通过（deploy.yml 已强制要求）
+- 审批人检查变更内容后再批准
+- 关键变更先在本地 `wrangler dev` 测试
+- 复杂变更考虑在非高峰时段部署
+
+## 5. 各项目部署特点
+
+### 5.1 eqt-drm-api（Worker）
 
 | 属性 | 说明 |
 |---|---|
@@ -204,7 +270,7 @@ npx wrangler rollback
 - 修改 `wrangler.toml` 中的 routes 需要重新部署才能生效
 - Secrets 在 CI 中通过 GitHub Secrets 注入，本地部署需要 `.env` 或 `wrangler secret put`
 
-### 4.2 eqt-feedback-api（Worker）
+### 5.2 eqt-feedback-api（Worker）
 
 | 属性 | 说明 |
 |---|---|
@@ -221,7 +287,7 @@ npx wrangler rollback
 - 修改路由模式需要同步更新 Cloudflare 仪表盘中的路由规则
 - Telegram bot token 通过 GitHub Secrets 注入
 
-### 4.3 eqt-website（Pages）
+### 5.3 eqt-website（Pages）
 
 | 属性 | 说明 |
 |---|---|
@@ -239,7 +305,7 @@ npx wrangler rollback
 - 修改 `_headers` 或 `_redirects` 后部署即生效
 - 在 `release.yml` 中也会被部署（打 tag 时），但 deploy.yml 覆盖了日常 push 场景
 
-### 4.4 eqt-admin（Pages + Svelte SPA）
+### 5.4 eqt-admin（Pages + Svelte SPA）
 
 | 属性 | 说明 |
 |---|---|
@@ -258,7 +324,7 @@ npx wrangler rollback
 - 构建依赖 `svelte`、`vite`、`typescript`，node_modules 约 50MB
 - 如果 `eqt-admin` Pages 项目不存在，`wrangler pages deploy` 会自动创建
 
-### 4.5 eqt-desktop（Windows Wails GUI）
+### 5.5 eqt-desktop（Windows Wails GUI）
 
 | 属性 | 说明 |
 |---|---|
@@ -271,9 +337,9 @@ npx wrangler rollback
 
 ---
 
-## 5. 发布流程
+## 6. 发布流程
 
-### 5.1 打版发布
+### 6.1 打版发布
 
 ```mermaid
 graph LR
@@ -286,7 +352,7 @@ graph LR
     GenMeta --> R2Upload[Upload artifacts to R2<br/>downloads/latest + downloads/v1.6.0]
 ```
 
-### 5.2 发布步骤
+### 6.2 发布步骤
 
 ```bash
 # 1. 确保所有代码已合并到 master
@@ -310,7 +376,7 @@ git push --tags
 #    - 桌面端检查更新可发现新版本
 ```
 
-### 5.3 发布 vs 部署对比
+### 6.3 发布 vs 部署对比
 
 | 特性 | 日常部署（deploy.yml） | 版本发布（release.yml） |
 |---|---|---|
@@ -324,9 +390,9 @@ git push --tags
 
 ---
 
-## 6. D1 数据库备份
+## 7. D1 数据库备份
 
-### 6.1 自动备份
+### 7.1 自动备份
 
 `.github/workflows/d1-backup.yml`
 
@@ -335,7 +401,7 @@ git push --tags
 - **RPO**: ≤ 24 小时
 - **失败通知**: Telegram
 
-### 6.2 手动恢复演练
+### 7.2 手动恢复演练
 
 ```bash
 # 触发带恢复演练的备份
@@ -349,9 +415,9 @@ wrangler d1 backup restore eqt-drm-db <backup-id> --local
 
 ---
 
-## 7. 环境配置指南
+## 8. 环境配置指南
 
-### 7.1 GitHub Environment 配置
+### 8.1 GitHub Environment 配置
 
 deploy.yml 使用 GitHub Environment `production` 作为审批门禁。首次使用需要配置：
 
@@ -366,7 +432,7 @@ deploy.yml 使用 GitHub Environment `production` 作为审批门禁。首次使
 
 配置完成后，每次 deploy.yml 触发时，部署 job 会等待指定 reviewer 审批后才执行。
 
-### 7.2 GitHub Secrets 清单
+### 8.2 GitHub Secrets 清单
 
 以下 Secrets 必须在仓库级别配置（Settings → Secrets and variables → Actions）：
 
@@ -379,7 +445,7 @@ deploy.yml 使用 GitHub Environment `production` 作为审批门禁。首次使
 | `UPDATE_SIGNING_PRIVATE_KEY` | 更新签名（release.yml） | 本地生成 |
 | `R2_BUCKET_NAME` | R2 上传目标（release.yml） | Cloudflare R2 |
 
-### 7.3 本地开发环境
+### 8.3 本地开发环境
 
 ```bash
 # 安装 wrangler
@@ -399,9 +465,9 @@ npx wrangler pages dev ./
 
 ---
 
-## 8. 验证清单
+## 9. 验证清单
 
-### 8.1 部署后验证
+### 9.1 部署后验证
 
 | 检查项 | 命令/URL | 预期结果 |
 |---|---|---|
@@ -412,7 +478,7 @@ npx wrangler pages dev ./
 | Telegram 通知 | 检查 Telegram | 收到 ✅ Deploy Succeeded |
 | UptimeRobot | 仪表盘 | 3 个监控器均为 UP |
 
-### 8.2 发布后验证
+### 9.2 发布后验证
 
 | 检查项 | 预期结果 |
 |---|---|
@@ -422,9 +488,9 @@ npx wrangler pages dev ./
 
 ---
 
-## 9. 故障排查
+## 10. 故障排查
 
-### 9.1 Deploy workflow 未触发
+### 10.1 Deploy workflow 未触发
 
 **可能原因**：
 - CI workflow 名称不是 `CI`（检查 `ci.yml` 中的 `name:`）
@@ -437,7 +503,7 @@ npx wrangler pages dev ./
 gh run list --workflow=CI --branch=master
 ```
 
-### 9.2 Wrangler 部署失败
+### 10.2 Wrangler 部署失败
 
 **可能原因**：
 - `CLOUDFLARE_API_TOKEN` 过期或权限不足
@@ -449,7 +515,7 @@ gh run list --workflow=CI --branch=master
 - 在本地运行 `npx wrangler deploy` 测试
 - 检查 `wrangler.toml` 中的 `database_id` 和 `bucket_name`
 
-### 9.3 Pages 部署失败
+### 10.3 Pages 部署失败
 
 **可能原因**：
 - Pages 项目不存在（首次部署时会自动创建，但可能需要额外配置）
@@ -465,7 +531,7 @@ cp -r functions dist/
 ls dist/functions/  # 确认 functions 已复制
 ```
 
-### 9.4 审批门禁不生效
+### 10.4 审批门禁不生效
 
 **可能原因**：
 - GitHub Environment `production` 未创建

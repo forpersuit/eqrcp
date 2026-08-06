@@ -608,7 +608,7 @@ async function sendAlert(level: string, message: string) {
 | # | 事项 | 状态 | 负责人 | 预计完成 | 实际完成 | 验证方式 |
 |---|---|---|---|---|---|---|
 | 12 | 部署流水线（GitHub Actions） | ✅ 已完成 | — | — | 2026-08-06 | CI 通过后自动触发，手动审批后部署 Workers + Pages，Telegram 通知 |
-| 13 | 回滚策略（wrangler versions） | ⬜ 待开始 | — | — | — | 可秒级回滚到上一版本 |
+| 13 | 回滚策略（wrangler versions） | ✅ 已完成 | — | — | 2026-08-06 | deploy.yml 自动记录版本 ID 到 workflow summary，支持 wrangler rollback / versions deploy / 仪表盘三种回滚方式 |
 | 14 | 成本监控（CF 预算告警） | ⬜ 待开始 | — | — | — | 仪表盘有预算告警配置 |
 | 15 | 滥用检测自动化 | ⬜ 待开始 | — | — | — | 异常激活自动触发限流 |
 
@@ -642,3 +642,6 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 修复 P0 #8a 启动竞态：OnStartup 中 emit 的 eqt:crash-report-pending 在 WebView 前端加载完成前丢失，改为前端初始化主动调用 CheckCrashReport | 开发实施 |
 | 2026-08-05 | 实施 P1 #9-#13：请求级 trace_id、业务指标仪表盘、告警升级机制、数据清理端点、限流可见性 | 开发实施 |
 | 2026-08-06 | 实施 P2 #12：部署流水线（deploy.yml），CI 通过后手动审批部署 Workers + Pages，Telegram 通知 | 开发实施 |
+| 2026-08-06 | 审查修复：eqt-website functions 注释说明、deploy 后自动记录版本 ID 用于回滚 | 审查修复 |
+| 2026-08-06 | 实施 P2 #13：回滚策略（wrangler rollback + versions deploy + 仪表盘），deploy.yml 记录版本到 workflow summary | 开发实施 |
+| 2026-08-06 | 新增 docs/deploy/README.md：部署流水线完整文档，含 Mermaid 架构图、自动/手动部署说明、各项目特点、回滚策略 | 文档新增 |
