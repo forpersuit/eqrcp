@@ -7,7 +7,6 @@ logpush = true
 [[d1_databases]]
 binding = "DB"
 database_name = "eqt-drm-db"
-# Replace with your actual D1 Database ID after running `wrangler d1 create eqt-drm-db`
 database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
 
 # R2 Bucket for crash report storage
@@ -16,17 +15,13 @@ binding = "CRASH_BUCKET"
 bucket_name = "eqt-crash-reports"
 
 [vars]
-# Public CDN base for installs/updates (NOT a secret — see docs/admin/IMPORTANT_drm-secrets.md)
 R2_PUBLIC_URL = "https://download.eqt.net.im"
-# Admin API is Access-JWT only (no ADMIN_SECRET). TEAM_DOMAIN/AUD are secrets.
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
-# Non-sensitive SMTP identity / host (password → wrangler secret MAIL_SENDER_PASSWORD)
 MAIL_SENDER = "noreply@eqt.net.im"
 MAIL_SEND_SERVER = "smtpserver.301098.xyz"
 MAIL_SEND_SAFE_PORT = "465"
-# PRODUCTION: do NOT set TEST_MAIL_RECEIVER (R1). Local/dev only via .dev.vars if needed.
-# PADDLE_WEBHOOK_SECRET → wrangler secret (never commit)
-# MAIL_SENDER_PASSWORD → wrangler secret (never commit)
+# Non-sensitive notification target (token → wrangler secret TELEGRAM_BOT_TOKEN)
+TELEGRAM_CHAT_ID = "1880182104"
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true },
