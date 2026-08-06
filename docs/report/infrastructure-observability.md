@@ -609,7 +609,7 @@ async function sendAlert(level: string, message: string) {
 |---|---|---|---|---|---|---|
 | 12 | 部署流水线（GitHub Actions） | ✅ 已完成 | — | — | 2026-08-06 | CI 通过后自动触发，手动审批后部署 Workers + Pages，Telegram 通知 |
 | 13 | 回滚策略（wrangler versions） | ✅ 已完成 | — | — | 2026-08-06 | deploy.yml 自动记录版本 ID 到 workflow summary，支持 wrangler rollback / versions deploy / 仪表盘三种回滚方式 |
-| 14 | 成本监控（CF 预算告警） | ⬜ 待开始 | — | — | — | 仪表盘有预算告警配置 |
+| 14 | 成本监控（CF 预算告警） | ✅ 已完成 | — | — | 2026-08-06 | Billable Usage 仪表盘可查看每日用量费用；2 个预算告警已配置（$5 和 $10），超阈值时邮件通知 leeyelon@gmail.com |
 | 15 | 滥用检测自动化 | ⬜ 待开始 | — | — | — | 异常激活自动触发限流 |
 
 ---
@@ -645,3 +645,4 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-06 | 审查修复：eqt-website functions 注释说明、deploy 后自动记录版本 ID 用于回滚 | 审查修复 |
 | 2026-08-06 | 实施 P2 #13：回滚策略（wrangler rollback + versions deploy + 仪表盘），deploy.yml 记录版本到 workflow summary | 开发实施 |
 | 2026-08-06 | 新增 docs/deploy/README.md：部署流水线完整文档，含 Mermaid 架构图、自动/手动部署说明、各项目特点、回滚策略 | 文档新增 |
+| 2026-08-06 | 实施 P2 #14：成本监控，Cloudflare Billable Usage 仪表盘就绪，配置 $5 + $10 两个预算告警，邮件通知 leeyelon@gmail.com | 开发实施 |
