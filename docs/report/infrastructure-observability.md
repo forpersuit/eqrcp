@@ -607,7 +607,7 @@ async function sendAlert(level: string, message: string) {
 
 | # | 事项 | 状态 | 负责人 | 预计完成 | 实际完成 | 验证方式 |
 |---|---|---|---|---|---|---|
-| 12 | 部署流水线（GitHub Actions） | ⬜ 待开始 | — | — | — | push 到 main 自动部署 staging |
+| 12 | 部署流水线（GitHub Actions） | ✅ 已完成 | — | — | 2026-08-06 | CI 通过后自动触发，手动审批后部署 Workers + Pages，Telegram 通知 |
 | 13 | 回滚策略（wrangler versions） | ⬜ 待开始 | — | — | — | 可秒级回滚到上一版本 |
 | 14 | 成本监控（CF 预算告警） | ⬜ 待开始 | — | — | — | 仪表盘有预算告警配置 |
 | 15 | 滥用检测自动化 | ⬜ 待开始 | — | — | — | 异常激活自动触发限流 |
@@ -641,3 +641,4 @@ async function sendAlert(level: string, message: string) {
 | 2026-08-05 | 崩溃恢复 UX 设计评审：方案 A（渐进式主题色圆点 + 反馈面板预填）确定为推荐方案，待排期开发 | 设计评审 |
 | 2026-08-05 | 修复 P0 #8a 启动竞态：OnStartup 中 emit 的 eqt:crash-report-pending 在 WebView 前端加载完成前丢失，改为前端初始化主动调用 CheckCrashReport | 开发实施 |
 | 2026-08-05 | 实施 P1 #9-#13：请求级 trace_id、业务指标仪表盘、告警升级机制、数据清理端点、限流可见性 | 开发实施 |
+| 2026-08-06 | 实施 P2 #12：部署流水线（deploy.yml），CI 通过后手动审批部署 Workers + Pages，Telegram 通知 | 开发实施 |
