@@ -5,6 +5,7 @@
 >
 > 关联文档：[基础设施可观测性](../report/infrastructure-observability.md)（P2 #13 回滚策略）
 > 测试环境搭建：[test-environment.md](./test-environment.md)；GUI 环境开关：[gui-environment.md](./gui-environment.md)
+> **测试/生产对照执行手册（操作前必读）**：[environment-runbook.md](./environment-runbook.md)
 
 ---
 
@@ -21,6 +22,8 @@
 9. [验证清单](#9-验证清单)
 10. [故障排查](#10-故障排查)
 11. [测试环境](#11-测试环境)
+
+> 每个操作先查 [environment-runbook.md](./environment-runbook.md)：环境对照总表（§2）、执行方式对照（§3）、测试执行步骤（§4）、生产清理（§5）、防混淆清单（§6）。
 
 ---
 
