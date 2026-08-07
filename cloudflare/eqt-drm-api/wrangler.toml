@@ -24,6 +24,7 @@ MAIL_SEND_SAFE_PORT = "465"
 TELEGRAM_CHAT_ID = "1880182104"
 
 routes = [
-  { pattern = "lic.eqt.net.im", custom_domain = true },
-  { pattern = "download.eqt.net.im", custom_domain = true }
+  { pattern = "lic.eqt.net.im", custom_domain = true }
+  # download.eqt.net.im 由 R2 桶 eqt-downloads 的 custom domain 直接接管（只服务 /downloads/），
+  # 不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败。
 ]

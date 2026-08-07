@@ -129,55 +129,52 @@ wrangler secret put MAIL_SENDER_PASSWORD
 
 **现状**：`TELEGRAM_BOT_TOKEN` 仅在 `eqt-feedback-api` 配置为 wrangler secret，但 `eqt-drm-api` 的 `error-logger.ts` 也引用它（CRITICAL 级别错误 → Telegram 告警，包括滥用检测触发）。当前 drm-api 的 CRITICAL 告警**静默失败**——不会发送 Telegram 消息。
 
-**验证结果（2026-08-07）**：
+**验证结果（2026-08-07 复查）**：
 ```bash
 # feedback-api: ✅ TELEGRAM_BOT_TOKEN 已配置
-npx wrangler secret list  # (在 eqt-feedback-api 目录)
-# → TELEGRAM_BOT_TOKEN (secret_text) ✅
-
-# drm-api: ❌ TELEGRAM_BOT_TOKEN 未配置
-npx wrangler secret list  # (在 eqt-drm-api 目录)
-# → 无 TELEGRAM_BOT_TOKEN ❌
-# → 无 TELEGRAM_CHAT_ID（也不在 wrangler.toml vars 中）❌
+# drm-api: ✅ 已修复
+# - TELEGRAM_CHAT_ID 已加入 wrangler.toml [vars]（commit 46255ce，部署生效）
+# - TELEGRAM_BOT_TOKEN 已由运维手动 wrangler secret put 到 eqt-drm-api（用户确认 2026-08-07）
+# drm-api CRITICAL 告警不再静默失败
 ```
 
-**操作步骤**：
+**现状**：客户端检查 `https://lic.eqt.net.im/update-metadata.json` 获取更新信息（Worker `github.ts` 代理 GitHub Releases API，正常返回 JSON）。
 
+**download 域名隔离（2026-08-07 实施完成）**：`download.eqt.net.im` 已从 Pages 项目 `eqt` 移除，改由 **R2 桶 `eqt-downloads` 的 custom domain 直接接管**。各域名职责完全隔离：
+- `download.eqt.net.im` → 只服务 `/downloads/{version}/{file}` 与 `/downloads/latest/{file}`（R2 直出），其余任意路径返回 404（R2 默认页，不含网站内容）
+- `www.eqt.net.im` → 网站（不变）
+- `lic.eqt.net.im` → Worker（DRM API + `update-metadata.json`）
+
+**实施细节**：
+- 创建 R2 桶 `eqt-downloads`，挂 custom domain `download.eqt.net.im`（DNS CNAME → `public.r2.dev`）
+- 从 Pages 项目 `eqt` 的 custom domains 移除 `download.eqt.net.im`（保留 `www.eqt.net.im`）
+- 删除 `wrangler.toml` 中 drm-api 的 `download.eqt.net.im` 路由，避免域名归属冲突导致后续 deploy 失败
+- 网站 `cloudflare/eqt-website/index.html` 的 `fetchLatestVersion()` 改为从 `lic.eqt.net.im/update-metadata.json` 拉取（下载 URL 仍指向 download 域名）
+- v1.12.0 构建产物（exe + sig + metadata）已上传到桶的 `downloads/v1.12.0/` 与 `downloads/latest/`
+
+**验证结果（2026-08-07）**：
 ```bash
-cd cloudflare/eqt-drm-api
-# 1. 将 TELEGRAM_CHAT_ID 加入 wrangler.toml vars（与 feedback-api 相同值）
-# 2. 设置 TELEGRAM_BOT_TOKEN
-wrangler secret put TELEGRAM_BOT_TOKEN
-# 3. 部署
-wrangler deploy
-```
+# 下载直出（R2）
+curl -sI https://download.eqt.net.im/downloads/latest/eqt-desktop-windows-amd64.exe
+# → 200, content-type: application/octet-stream, 18381824B
 
-**现状**：客户端检查 `https://download.eqt.net.im/update-metadata.json` 获取更新信息。实际 `download.eqt.net.im` 域名被 Cloudflare Pages 项目劫持（返回网站 HTML），而非路由到 Worker。
+# 隔离（非下载路径一律 404，非网站 HTML）
+curl -s -o /dev/null -w "%{http_code}" https://download.eqt.net.im/
+# → 404
 
-**实际 Worker 路由**：`lic.eqt.net.im/update-metadata.json` 正常工作——Worker 的 `github.ts` 代理 GitHub Releases API 返回 JSON。
-
-**修复（2026-08-07）**：✅ 已实施方案 A
-- 修改 `pkg/server/update.go:101`，将 URL 从 `download.eqt.net.im` 改为 `lic.eqt.net.im`
-- 编译验证通过，测试通过
-
-**验证结果**：
-```bash
+# 元数据仍正常
 curl -s https://lic.eqt.net.im/update-metadata.json | jq '.version'
 # → "v1.12.0"（GitHub 最新 release）
 ```
 
-**已知问题**：
-- GitHub 最新 release 是 `v1.12.0`（2026-07-17），但当前代码版本是 `v1.24.0`。上线前需要创建新的 GitHub Release 并上传构建产物。
-- `download.eqt.net.im/downloads/` 路径由 R2 公共桶提供服务（`R2_PUBLIC_URL`），文件下载正常。但 `download.eqt.net.im` 根路径被 Pages 劫持的问题需要 Cloudflare 仪表盘配置修复（将 custom domain 从 Pages 移到 Worker）。
-
-**需要确认**：
+**仍需完成（分发就绪）**：
 
 | 事项 | 说明 |
 |---|---|
-| 创建 GitHub Release `v1.24.0` | 当前代码版本，需 tag + release + 上传构建产物 |
-| 构建产物 + Ed25519 签名 | 使用 `scripts/generate-update-sig` 生成 `.sig` 文件 |
-| 上传到 R2 | 产物需上传到 R2 桶的 `downloads/v1.24.0/` 目录 |
-| Ed25519 私钥安全保存 | `scripts/generate-update-sig/main.go` 中的 `testPrivateKeySeedHex` 仅用于测试，生产需用 `UPDATE_SIGNING_PRIVATE_KEY` 环境变量 |
+| 创建 GitHub Release `v1.24.0` | 当前代码版本（`pkg/version/version.go:12`），需 tag + release + 上传构建产物 |
+| 构建产物 + Ed25519 签名 | `scripts/generate-update-sig` 生成 `.sig` 文件；`release.yml` 会自动上传 R2 |
+| 触发 release 后上传 R2 | `release.yml` 会写 `downloads/v1.24.0/` 与 `downloads/latest/`（也可手动 `wrangler r2 object put`） |
+| Ed25519 私钥安全保存 | `scripts/generate-update-sig/main.go` 中 `testPrivateKeySeedHex` 仅用于测试，生产用 `UPDATE_SIGNING_PRIVATE_KEY` 环境变量 |
 
 ---
 
@@ -275,19 +272,20 @@ Step 2 ── 密钥配置
   ├─ wrangler secret put PADDLE_WEBHOOK_SECRET（✅ 已配置）
   ├─ wrangler secret put MAIL_SENDER_PASSWORD（✅ 已配置）
   ├─ wrangler secret put PADDLE_API_KEY（✅ 已配置）
-  ├─ wrangler.toml 加 TELEGRAM_CHAT_ID var（❌ 缺失）
-  └─ wrangler secret put TELEGRAM_BOT_TOKEN（❌ 仅在 feedback-api 配置，drm-api 缺失）
+  ├─ wrangler.toml 加 TELEGRAM_CHAT_ID var（✅ 已配置，commit 46255ce）
+  └─ wrangler secret put TELEGRAM_BOT_TOKEN（✅ 已配置：feedback-api + drm-api）
 
 Step 3 ── 更新定价页
   ├─ pricing.html 替换价格 ID
   └─ 确认 PADDLE_ENV 从 sandbox 切为 production
 
 Step 4 ── 更新分发就绪
-  ├─ 修复 update-metadata.json URL 不匹配（方案 A：改桌面端 URL 为 www.eqt.net.im）
-  ├─ 构建当前版本 Windows 二进制
-  ├─ 生成 Ed25519 签名
-  ├─ 上传到 download.eqt.net.im
-  └─ 创建/更新 update-metadata.json
+  ├─ 桌面端 update URL 已改为 lic.eqt.net.im/update-metadata.json（✅ 完成）
+  ├─ download.eqt.net.im 已隔离：R2 桶 eqt-downloads 接管，只服务 /downloads/（✅ 完成）
+  ├─ 网站 metadata 拉取已改 lic.eqt.net.im（✅ 完成，已部署）
+  ├─ 构建当前版本 Windows 二进制 + 生成 Ed25519 签名（❌ 待 v1.24.0 release）
+  ├─ 上传到 R2 桶 downloads/v1.24.0/ + downloads/latest/（v1.12.0 已就位）
+  └─ 创建/更新 update-metadata.json（v1.12.0 已就位）
 
 Step 5 ── 端到端验证
   ├─ 沙箱购买 → 许可证铸造 → 激活 → 验证
@@ -318,3 +316,4 @@ Step 6 ── 上线
 | 2026-08-07 | 初始版本：上线前检查清单 | 分析报告 |
 | 2026-08-07 | 审查更新：CORS 验证、URL 不匹配修复、SMTP/Paddle 密钥确认、TELEGRAM_BOT_TOKEN 缺失发现 | 审查员 + 开发实施 |
 | 2026-08-07 | 审查修复：修正 Portal i18n 声明、补充 CORS 验证、标注 update URL 不匹配、补充 DNS 验证命令、补充 webhook 幂等性和验证码限流确认 | 审查修复 |
+| 2026-08-07 | download 域名隔离实施：download.eqt.net.im 从 Pages 移到 R2 桶 eqt-downloads（只服务 /downloads/），网站 metadata 改拉 lic，drm-api 移除 download 路由；确认 drm-api Telegram 密钥就位 | 开发实施 |

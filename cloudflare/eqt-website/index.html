@@ -1214,7 +1214,7 @@
 
     async function fetchLatestVersion() {
         try {
-            const res = await fetch('https://download.eqt.net.im/update-metadata.json');
+            const res = await fetch('https://lic.eqt.net.im/update-metadata.json');
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.version) {
