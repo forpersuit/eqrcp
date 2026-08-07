@@ -38,15 +38,18 @@ routes = [
 name = "eqt-feedback-api-test"
 workers_dev = true
 routes = []
+# logpush 也是 inheritable 键,但测试账户无 Logpush 权限(10023),必须显式关闭
+logpush = false
 
 [[env.test.d1_databases]]
 binding = "DB"
 database_name = "eqt-feedback-db-test"
-database_id = "<TEST_FEEDBACK_DB_ID>"
+database_id = "9f2705cc-eec3-48cc-a691-8670475d4770"
 
 [[env.test.r2_buckets]]
 binding = "BUCKET"
 bucket_name = "eqt-feedback-bucket-test"
 
 [env.test.vars]
-TELEGRAM_CHAT_ID = "<TEST_CHAT_ID>"
+# 测试通知复用生产运维群(部署/错误通知)
+TELEGRAM_CHAT_ID = "1880182104"

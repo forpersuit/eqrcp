@@ -13,7 +13,7 @@
     'use strict';
     var host = window.location.hostname;
     // ⚠️ 占位符:搭建测试环境(文档 P1 步骤)后,把 <subdomain> 换成实际 workers.dev 子域。
-    var TEST_API = 'https://eqt-drm-api-test.<subdomain>.workers.dev';
+    var TEST_API = 'https://eqt-drm-api-test.leeyelon.workers.dev';
     var base;
     if (host === 'localhost' || host.indexOf('127.0.0.1') === 0) {
         base = 'http://localhost:8787';

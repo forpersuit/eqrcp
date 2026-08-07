@@ -42,7 +42,7 @@ cd desktop/gui
 wails dev -tags eqtdev        # GUI 激活/验证/更新/崩溃上报全部走测试 Worker
 ```
 
-> 测试 Worker URL 已在 `env_defaults_dev.go` 中为占位符 `eqt-drm-api-test.<subdomain>.workers.dev`。按 [test-environment.md](./test-environment.md) §4.8 拿到实际子域后回填。
+> 测试 Worker URL 已回填为 `https://eqt-drm-api-test.leeyelon.workers.dev`(子域 `leeyelon`,2026-08-07 部署)。
 
 ### 3.2 打包测试版桌面端
 
@@ -55,7 +55,7 @@ wails build -clean -tags eqtdev -platform windows/amd64
 ### 3.3 临时覆盖(任何构建)
 
 ```bash
-export EQT_LICENSE_SERVER=https://eqt-drm-api-test.<subdomain>.workers.dev
+export EQT_LICENSE_SERVER=https://eqt-drm-api-test.leeyelon.workers.dev
 wails dev    # 或任意构建,环境变量优先于 build tag
 ```
 

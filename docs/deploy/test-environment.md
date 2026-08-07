@@ -58,16 +58,19 @@
 
 ## 3. wrangler `[env.test]` 安全要点
 
-wrangler 的 `vars` / `d1_databases` / `r2_buckets` 等 binding 是 **non-inheritable**,`[env.test]` 必须显式重声明;而 **`routes` 是 inheritable**——若不显式清空,测试 Worker 会**继承生产自定义域名路由并抢占生产**。因此:
+wrangler 的 `vars` / `d1_databases` / `r2_buckets` 等 binding 是 **non-inheritable**,`[env.test]` 必须显式重声明;而 **`routes` 是 inheritable**——若不显式清空,测试 Worker 会**继承生产自定义域名路由并抢占生产**。`logpush` 同样 inheritable,但测试账户通常无 Logpush 权限(`code 10023`,部署即报错),必须显式关闭。因此:
 
 ```toml
 [env.test]
 name = "eqt-drm-api-test"
 workers_dev = true   # 关键:启用 workers.dev 子域
 routes = []          # 关键:显式清空,绝不继承生产路由
+logpush = false      # 关键:测试账户无 Logpush 权限(code 10023),必须显式关闭
 ```
 
 已按此约定写入 `cloudflare/eqt-drm-api/wrangler.toml` 与 `cloudflare/eqt-feedback-api/wrangler.toml` 的 `[env.test]` 块。
+
+> 2026-08-07 已实际部署,子域为 **`leeyelon`**(`eqt-drm-api-test.leeyelon.workers.dev` / `eqt-feedback-api-test.leeyelon.workers.dev`),占位符已全部回填。
 
 ## 4. 一次性搭建步骤(P1)
 
