@@ -151,6 +151,7 @@ wrangler secret put MAIL_SENDER_PASSWORD
 - 删除 `wrangler.toml` 中 drm-api 的 `download.eqt.net.im` 路由，避免域名归属冲突导致后续 deploy 失败
 - 网站 `cloudflare/eqt-website/index.html` 的 `fetchLatestVersion()` 改为从 `lic.eqt.net.im/update-metadata.json` 拉取（下载 URL 仍指向 download 域名）
 - v1.12.0 构建产物（exe + sig + metadata）已上传到桶的 `downloads/v1.12.0/` 与 `downloads/latest/`
+- `release.yml` 不再把产物复制进 `cloudflare/eqt-website/downloads/`（www 保持纯产品页），产物只进 GitHub Release + R2；`_headers` 中失效的 `/update-metadata.json`、`/downloads/*` 规则已删除
 
 **验证结果（2026-08-07）**：
 ```bash
@@ -317,3 +318,4 @@ Step 6 ── 上线
 | 2026-08-07 | 审查更新：CORS 验证、URL 不匹配修复、SMTP/Paddle 密钥确认、TELEGRAM_BOT_TOKEN 缺失发现 | 审查员 + 开发实施 |
 | 2026-08-07 | 审查修复：修正 Portal i18n 声明、补充 CORS 验证、标注 update URL 不匹配、补充 DNS 验证命令、补充 webhook 幂等性和验证码限流确认 | 审查修复 |
 | 2026-08-07 | download 域名隔离实施：download.eqt.net.im 从 Pages 移到 R2 桶 eqt-downloads（只服务 /downloads/），网站 metadata 改拉 lic，drm-api 移除 download 路由；确认 drm-api Telegram 密钥就位 | 开发实施 |
+| 2026-08-07 | 强化隔离：release.yml 不再把产物复制进 website 静态目录（www 纯产品页），metadata 直接生成到 out/；删除 _headers 中失效的 /update-metadata.json、/downloads/* 规则 | 开发实施 |

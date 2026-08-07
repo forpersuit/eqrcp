@@ -372,7 +372,7 @@ git push --tags
 
 # 5. 验证
 #    - GitHub Release 页面有 .exe 文件
-#    - https://www.eqt.net.im/downloads/latest/ 可访问
+#    - https://download.eqt.net.im/downloads/latest/ 可访问
 #    - 桌面端检查更新可发现新版本
 ```
 

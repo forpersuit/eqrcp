@@ -67,16 +67,11 @@ jobs:
           mkdir -p out
           find temp-artifacts -type f -exec cp {} out/ \;
           ls -R out
-      - name: Generate static update-metadata.json
+      - name: Generate update-metadata.json
+        # 产物只进 GitHub Release + R2(download.eqt.net.im)。
+        # 不再复制进 cloudflare/eqt-website/ —— www 只放产品页,不托管安装包。
         run: |
-          go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out cloudflare/eqt-website/update-metadata.json
-          cp cloudflare/eqt-website/update-metadata.json out/update-metadata.json
-      - name: Copy download assets to website static folder
-        run: |
-          mkdir -p cloudflare/eqt-website/downloads/latest
-          mkdir -p cloudflare/eqt-website/downloads/${{ github.ref_name }}
-          cp -r out/* cloudflare/eqt-website/downloads/latest/
-          cp -r out/* cloudflare/eqt-website/downloads/${{ github.ref_name }}/
+          go run scripts/generate-update-metadata/main.go ${{ github.ref_name }} out out/update-metadata.json
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
