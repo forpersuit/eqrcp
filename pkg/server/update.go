@@ -24,8 +24,7 @@ import (
 // By default it is quiet.
 var Log = logger.New(true)
 
-// We default to reuse the defaultPublicKeyHex from license.go
-const defaultUpdatePublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
+// defaultUpdatePublicKeyHex 声明见 env_defaults.go(生产公钥)与 env_defaults_dev.go(eqtdev 测试公钥)。
 
 // UpdateAsset represents a release asset from the update server
 type UpdateAsset struct {

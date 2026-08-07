@@ -110,6 +110,7 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **安全不变式**：代码默认值恒为生产 `https://lic.eqt.net.im`；测试环境只能通过显式机制进入（wrangler `[env.test]` / Go `-tags eqtdev` / 环境变量）。"漏配"方向永远安全——release 忘加 tag 仍是生产。
 - **wrangler `[env.test]` 大坑**：`vars` / `d1_databases` / `r2_buckets` 是 **non-inheritable**，必须显式重声明；而 **`routes` 是 inheritable**——若测试环境不显式 `routes = []` + `workers_dev = true`，测试 Worker 会继承生产自定义域名并**抢占生产**。**`logpush` 同样 inheritable**，但测试账户无 Logpush 权限（`code 10023`），`[env.test]` 必须显式 `logpush = false` 否则部署报错。改动 `wrangler.toml` 的 `[env.test]` 后必跑 `wrangler deploy --env test --dry-run` 确认 resolved routes 为空。
 - **Go build tag 互斥机制**：环境默认值拆两个文件，`env_defaults.go`（`//go:build !eqtdev`）与 `env_defaults_dev.go`（`//go:build eqtdev`）**必须成对加 tag**——无 tag 的文件恒编译，与 tag 文件同包会 `redeclared` 冲突。
+- **验证公钥随 tag 切换**：`defaultPublicKeyHex` / `defaultUpdatePublicKeyHex` 也拆到上面两个文件。release 恒用生产公钥验证（激活证书+更新签名）；eqtdev 构建用测试专用公钥 `ce07f0...`（对应测试 worker 的 seed `2cf5baa8...`）。因此测试激活码只能被测试构建验证，生产构建不会误认测试码。**测试 worker 的 `ED25519_PRIVATE_KEY` 必须是 32-byte seed 的 hex** —— `hexToUint8Array` 只校验长度偶数、不校验字符合法性，误贴 base64 PKCS8 会静默产生垃圾私钥（签名不被任何公钥验证），排查「签名失败」时优先核对 secret 是否为纯 hex。
 - **Paddle sandbox 判据**：沙箱密钥以 `pdl_sdbx_` 开头，测试 Worker 据此将激活码 `source` 标为 `'test'`（生产 live 密钥标 `'purchase'`）；环境分离与 test 标记由密钥环境自动对齐，无需额外开关。
 - **Wails 支持 `-tags`**：`wails dev -tags eqtdev` / `wails build -tags eqtdev` 切测试 Worker；`release.yml` 的 build 严禁加任何 tag 注入（文件内已有注释防误改）。
 - 完整搭建步骤见 `docs/deploy/test-environment.md` 与 `docs/deploy/gui-environment.md`（测试资源创建由用户按文档执行，不在代码仓库内）。

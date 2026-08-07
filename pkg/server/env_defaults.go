@@ -9,3 +9,10 @@ package server
 //
 // release 构建不带 eqtdev tag 即为生产,漏配方向永远安全。
 var defaultLicenseServer = "https://lic.eqt.net.im"
+
+// defaultPublicKeyHex / defaultUpdatePublicKeyHex 是 Ed25519 验证公钥,
+// 与 Cloudflare Workers 私钥对应(激活证书签名、更新包签名验证)。
+// 生产恒用生产公钥;eqtdev 构建在 env_defaults_dev.go 覆盖为测试专用公钥,
+// 因此测试激活码/测试更新包只能被测试构建验证,release 恒验证生产。
+var defaultPublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
+var defaultUpdatePublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"

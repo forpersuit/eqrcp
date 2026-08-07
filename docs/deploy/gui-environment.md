@@ -30,8 +30,11 @@
 | 激活/验证服务器 | `pkg/server/env_defaults.go` → `https://lic.eqt.net.im` | `pkg/server/env_defaults_dev.go` → 测试 Worker |
 | 更新元数据 | `pkg/server/update.go` `getUpdateURL()` → 跟随 license server | 同左(一处注入,更新+激活同时切) |
 | 崩溃上报 | `desktop/crash/env_defaults.go` → `lic.eqt.net.im/api/v1/crash-report` | `desktop/crash/env_defaults_dev.go` → 测试 Worker |
+| Ed25519 验证公钥 | `pkg/server/env_defaults.go` → 生产公钥 `08443678...` | `pkg/server/env_defaults_dev.go` → 测试公钥 `ce07f0...` |
 
 两个默认值文件带互斥 build tag(`//go:build !eqtdev` 与 `//go:build eqtdev`),构建时二选一。
+
+验证公钥(`defaultPublicKeyHex` / `defaultUpdatePublicKeyHex`)同样按 tag 切换:release 恒用生产公钥验证,eqtdev 构建用测试专用公钥。因此测试激活码只能被测试构建验证,生产构建不会误认测试码(安全闭环,与「漏配方向安全」一致)。
 
 ## 3. 对接方式
 

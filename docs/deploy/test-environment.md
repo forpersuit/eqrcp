@@ -119,6 +119,10 @@ npx wrangler d1 execute eqt-feedback-db-test --remote --file=schema.sql
 cd ../eqt-drm-api
 echo "<sandbox-paddle-key>" | npx wrangler secret put PADDLE_API_KEY --env test
 #   ↑ 必须是 pdl_sdbx_ 开头的沙箱密钥 —— 这是测试环境识别与激活码 test 标记的判据
+echo "2cf5baa872e73d6bc25d69be0f9705adc3cffd00ec72ffdafbe494c3c3afa2e5" | npx wrangler secret put ED25519_PRIVATE_KEY --env test
+#   ↑ 测试专用密钥对的 32-byte seed(hex)。GUI 内置公钥已随 eqtdev tag 切换为对应公钥 ce07f0...,
+#     无需生产私钥。⚠️ 必须传 hex seed,不能贴 base64 PKCS8 —— hexToUint8Array 不校验字符合法性,
+#     base64 会被误解析成垃圾私钥(不报错但签名无法被任何公钥验证,排查时优先核对 secret 是纯 hex)。
 echo "<mail-password>"      | npx wrangler secret put MAIL_SENDER_PASSWORD --env test
 echo "<telegram-token>"     | npx wrangler secret put TELEGRAM_BOT_TOKEN --env test
 cd ../eqt-feedback-api
