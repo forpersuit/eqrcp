@@ -3,7 +3,7 @@ import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
-import { revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
+import { isPaddleSandbox, revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
 
 function detectBuyerLang(data: any): string {
@@ -124,6 +124,10 @@ export async function handlePaddleRoutes(
     try {
     if (eventType === "transaction.completed") {
       const nowMs = Date.now();
+      // 环境判据:本 Worker 绑定的 Paddle 密钥是沙箱(pdl_sdbx_) → 测试环境,
+      // 铸造的激活码 source 标 'test';生产 Worker 配 live 密钥标 'purchase'。
+      // 环境分离与 test 标记由密钥环境自动对齐,无需额外开关。
+      const isSandbox = isPaddleSandbox(env.PADDLE_API_KEY);
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
       let buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || data.custom_data?.buyer_email || data.custom_data?.buyerEmail || "";
@@ -131,7 +135,6 @@ export async function handlePaddleRoutes(
       const customerId = data.customer_id || (typeof data.customer === 'string' ? data.customer : null);
       if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
         try {
-          const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
           const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
           const custRes = await fetch(`${paddleBaseUrl}/customers/${customerId}`, {
             headers: { "Authorization": `Bearer ${env.PADDLE_API_KEY}` }
@@ -519,7 +522,8 @@ export async function handlePaddleRoutes(
       const licenseCode = `EQT-${tier}-${todayStr}-${randStr}-${checkHex}`;
       const nowIso = new Date().toISOString();
 
-      // Write to DB (paid fulfillment is always source=purchase)
+      // Write to DB。测试 Worker(沙箱密钥)铸造的码标 source='test',生产标 'purchase'。
+      const source = isSandbox ? "test" : "purchase";
       await env.DB.prepare(`
         INSERT INTO licenses (
           license_code, tier, status, max_devices, expires_at, duration_days,
@@ -537,7 +541,7 @@ export async function handlePaddleRoutes(
         buyerEmail || null,
         transactionId,
         subscriptionId,
-        "purchase",
+        source,
         nowIso,
         nowIso
       ).run();

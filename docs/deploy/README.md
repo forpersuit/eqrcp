@@ -1,9 +1,10 @@
 # EQT 部署流水线
 
 > 本文档说明 EQT 项目的部署架构、自动/手动部署流程及各项目的部署特点。
-> 最后更新：2026-08-06
+> 最后更新：2026-08-07
 >
 > 关联文档：[基础设施可观测性](../report/infrastructure-observability.md)（P2 #13 回滚策略）
+> 测试环境搭建：[test-environment.md](./test-environment.md)；GUI 环境开关：[gui-environment.md](./gui-environment.md)
 
 ---
 
@@ -19,6 +20,7 @@
 8. [环境配置指南](#8-环境配置指南)
 9. [验证清单](#9-验证清单)
 10. [故障排查](#10-故障排查)
+11. [测试环境](#11-测试环境)
 
 ---
 
@@ -33,6 +35,7 @@
 | `eqt-website` | Cloudflare Pages | `www.eqt.net.im` | 自动（审批后） |
 | `eqt-admin` | Cloudflare Pages + Functions | admin dashboard | 自动（审批后） |
 | `eqt-desktop` | Windows Wails GUI | — | 手动打 tag 发布 |
+| 测试环境 | Worker（workers.dev 子域）+ D1/R2（-test） | — | 自动（dev 分支，无审批） |
 
 ### 1.2 流水线总览
 
@@ -463,6 +466,13 @@ cd cloudflare/eqt-website
 npx wrangler pages dev ./
 ```
 
+### 8.4 测试环境（deploy-test.yml 与 dev 分支）
+
+- 测试环境通过 **`deploy-test.yml`** 部署到 workers.dev 子域，**无审批门禁**，push 到 `dev` 分支自动部署。
+- `ci.yml` 已覆盖 `dev` 分支（push 触发），并在每次 CI 运行 DRM API 离线测试（`npm run test:ci`）。
+- dev 分支首次部署前需：创建测试 D1/R2 资源、回填 `wrangler.toml` 占位符、启用 workers.dev 子域。完整步骤见 [test-environment.md](./test-environment.md)。
+- 测试环境的 GitHub Secrets 与生产共用（`CLOUDFLARE_API_TOKEN`、`CF_ACCOUNT_ID`、`TELEGRAM_BOT_TOKEN`）；通知群可用 `TEST_TELEGRAM_CHAT_ID` 单独指定（未设置时复用 `TELEGRAM_CHAT_ID`）。
+
 ---
 
 ## 9. 验证清单
@@ -541,3 +551,21 @@ ls dist/functions/  # 确认 functions 已复制
 **解决**：
 - 按 §7.1 配置 Environment
 - 确保 reviewer 不是 push 代码的人
+
+---
+
+## 11. 测试环境
+
+测试环境与生产完全隔离，用于激活码全链路 E2E 验证。详细文档：
+
+| 文档 | 内容 |
+|---|---|
+| [test-environment.md](./test-environment.md) | 测试环境架构、资源命名、一次性搭建步骤（创建 D1/R2 → 回填占位符 → secrets → 首次 deploy）、验证清单 |
+| [gui-environment.md](./gui-environment.md) | 桌面端环境开关（build tag / 环境变量 / 代码默认三层）、`wails dev -tags eqtdev`、release 绝不连测试的安全不变式 |
+
+关键约定（详见上述文档）：
+
+- 测试 Worker 走 **workers.dev 子域**（`*-test.<subdomain>.workers.dev`），不挂自定义域名；`[env.test]` 显式 `routes = []` + `workers_dev = true`，防止继承生产路由。
+- 测试资源一律 `-test` 后缀（`eqt-drm-db-test`、`eqt-crash-reports-test`…）。
+- 测试环境由 **`deploy-test.yml`** 部署（dev 分支自动、无审批）；生产仍走 `deploy.yml` 审批，互不干扰。
+- 沙箱 Paddle 密钥（`pdl_sdbx_`）即测试环境判据：测试 Worker 铸造的激活码 `source='test'`，生产 live 密钥标 `'purchase'`。

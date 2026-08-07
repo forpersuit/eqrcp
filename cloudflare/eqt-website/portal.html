@@ -228,6 +228,7 @@
     </div>
 
     <!-- Script -->
+    <script src="js/api-base.js"></script>
     <script>
         // Language dictionaries
         const translations = {
@@ -761,10 +762,8 @@
             }
         };
 
-        // Determine API Host
-        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname.startsWith('127.0.0.1')
-            ? 'http://localhost:8787'
-            : 'https://lic.eqt.net.im';
+        // Determine API Host(由 js/api-base.js 统一解析;测试环境自动切到测试 Worker)
+        const API_BASE = window.EQT_API_BASE || 'https://lic.eqt.net.im';
 
         // Global state
         let state = {

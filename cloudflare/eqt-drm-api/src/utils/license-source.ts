@@ -26,6 +26,15 @@ export function isSyntheticTestSubscriptionId(subscriptionId: string | null | un
   return !!subscriptionId && SYNTHETIC_SUB.test(subscriptionId);
 }
 
+/**
+ * Whether a Paddle API key is a sandbox key. Sandbox keys start with `pdl_sdbx_`.
+ * This is the authoritative environment signal: a Worker bound to a sandbox key is a
+ * test worker, so licenses it mints are tagged `source = 'test'`.
+ */
+export function isPaddleSandbox(apiKey: string | null | undefined): boolean {
+  return !!apiKey && apiKey.startsWith('pdl_sdbx_');
+}
+
 /** Portal self-service cancel (yearlies with a subscription id). Not a refund. */
 export function isLicenseCancellable(license: {
   status?: string | null;

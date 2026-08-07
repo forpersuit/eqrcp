@@ -23,8 +23,8 @@ import (
 // Default Ed25519 public key corresponding to our Cloudflare Workers private key
 const defaultPublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
 
-// Default DRM API Server, can be overridden by environment variable EQT_LICENSE_SERVER
-const defaultLicenseServer = "https://lic.eqt.net.im"
+// defaultLicenseServer 声明见 env_defaults.go(生产默认值)与 env_defaults_dev.go
+// (//go:build eqtdev 构建时覆盖为测试 Worker)。运行时仍可用 EQT_LICENSE_SERVER 覆盖。
 
 // LicenseCertificate matches the signed license JSON structure returned from the API
 type LicenseCertificate struct {

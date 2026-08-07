@@ -255,7 +255,7 @@
             }
 
             try {
-                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/send-code', {
+                const res = await fetch(`${window.EQT_API_BASE}/api/v1/checkout/send-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, lang: this.getLang() })
@@ -319,7 +319,7 @@
             }
 
             try {
-                const res = await fetch('https://lic.eqt.net.im/api/v1/checkout/verify-code', {
+                const res = await fetch(`${window.EQT_API_BASE}/api/v1/checkout/verify-code`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, code })

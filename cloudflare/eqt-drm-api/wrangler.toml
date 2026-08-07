@@ -28,3 +28,31 @@ routes = [
   # download.eqt.net.im 由 R2 桶 eqt-downloads 的 custom domain 直接接管（只服务 /downloads/），
   # 不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败。
 ]
+
+# ── 测试环境：wrangler deploy --env test ──────────────────────────
+# 测试 Worker 只走 workers.dev 子域（eqt-drm-api-test.<subdomain>.workers.dev），绝不挂自定义域名。
+# ⚠️ routes 是 inheritable 键：若不显式清空，测试 Worker 会继承顶层 lic.eqt.net.im 路由并抢占生产。
+#    必须 routes = [] + workers_dev = true，首次部署前用 --dry-run 确认。
+# ⚠️ 占位符 <TEST_DRM_DB_ID> / <test-subdomain> / <TEST_CHAT_ID>：
+#    按 docs/deploy/test-environment.md 的 P1 步骤创建资源后回填。
+[env.test]
+name = "eqt-drm-api-test"
+workers_dev = true
+routes = []
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db-test"
+database_id = "<TEST_DRM_DB_ID>"
+
+[[env.test.r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports-test"
+
+[env.test.vars]
+R2_PUBLIC_URL = "https://<test-subdomain>.workers.dev"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+TELEGRAM_CHAT_ID = "<TEST_CHAT_ID>"

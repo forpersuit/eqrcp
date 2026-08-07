@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// defaultCrashServer is the default endpoint for crash report submission.
-const defaultCrashServer = "https://lic.eqt.net.im/api/v1/crash-report"
+// defaultCrashServer 声明见 env_defaults.go(生产默认值)与 env_defaults_dev.go
+// (//go:build eqtdev 构建时覆盖为测试 Worker)。运行时仍可用 EQT_CRASH_SERVER 覆盖。
 
 // getCrashServer returns the crash report server URL, overridable via EQT_CRASH_SERVER env var.
 func getCrashServer() string {

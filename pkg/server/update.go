@@ -98,7 +98,9 @@ func getUpdateURL() string {
 	if envURL := os.Getenv("EQT_UPDATE_URL"); envURL != "" {
 		return envURL
 	}
-	return "https://lic.eqt.net.im/update-metadata.json"
+	// 默认跟随 license server:一处注入(env 变量 / eqtdev tag),更新与激活同时切环境。
+	// 生产默认值:https://lic.eqt.net.im/update-metadata.json(与改动前逐字节一致)。
+	return getLicenseServer() + "/update-metadata.json"
 }
 
 // CheckForUpdates queries the update server for a newer version matching the OS/Arch.

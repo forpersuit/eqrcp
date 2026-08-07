@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   pull_request:
     branches: [master]
 
@@ -103,3 +103,20 @@ jobs:
           version: latest
           install-mode: goinstall
           args: --timeout=5m
+
+  drm-api-test:
+    name: DRM API offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cloudflare/eqt-drm-api/package-lock.json
+      - name: Install dependencies
+        working-directory: cloudflare/eqt-drm-api
+        run: npm ci
+      - name: Run offline tests (esbuild bundles, no network)
+        working-directory: cloudflare/eqt-drm-api
+        run: npm run test:ci

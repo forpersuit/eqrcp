@@ -408,6 +408,7 @@
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/terms.html" data-i18n="comp_terms">Terms of Service</a>
 </div>
 </footer>
+<script src="js/api-base.js"></script>
 <script>
     const translations = {
     "en": {
@@ -1214,7 +1215,7 @@
 
     async function fetchLatestVersion() {
         try {
-            const res = await fetch('https://lic.eqt.net.im/update-metadata.json');
+            const res = await fetch(`${window.EQT_API_BASE}/update-metadata.json`);
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.version) {

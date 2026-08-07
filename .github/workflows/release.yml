@@ -31,6 +31,9 @@ jobs:
           npm run build
       - name: Build Wails (windows/amd64)
         working-directory: desktop/gui
+        # ⚠️ 安全不变式:release 二进制必须恒连生产环境。禁止在此添加任何
+        # -tags eqtdev / -X 测试 URL 注入。代码默认值已保证无注入即生产
+        # (见 docs/deploy/gui-environment.md 与 pkg/server/env_defaults*.go)。
         run: wails build -clean -platform windows/amd64
       - name: Stage artifacts
         shell: bash
