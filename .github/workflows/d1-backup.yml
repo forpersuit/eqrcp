@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   backup:
-    name: Create D1 database snapshots
+    name: Export D1 database snapshots
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,16 +34,17 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      # wrangler 4.x 已移除 `d1 backup create/restore/list`。
+      # 改用 `d1 export --remote --output` 导出完整 SQL 快照（schema + 数据），
+      # 并上传为 Artifact。恢复演练用 sqlite3 直接载入 SQL 文件核对行数。
       - name: Backup eqt-drm-db
         id: backup-drm
         working-directory: cloudflare/eqt-drm-api
         run: |
-          echo "=== Creating D1 backup for eqt-drm-db ==="
-          OUTPUT=$(wrangler d1 backup create eqt-drm-db --remote 2>&1)
-          echo "$OUTPUT"
-          # Extract backup ID from output for artifact naming
-          BACKUP_ID=$(echo "$OUTPUT" | grep -oP 'backup_id:\s*\K[a-f0-9-]+' || echo "unknown")
-          echo "backup_id=$BACKUP_ID" >> $GITHUB_OUTPUT
+          mkdir -p ../../backups
+          echo "=== Exporting D1 backup for eqt-drm-db ==="
+          wrangler d1 export eqt-drm-db --remote --output ../../backups/eqt-drm-db.sql
+          echo "drm_backup=backups/eqt-drm-db.sql" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -53,39 +54,43 @@ jobs:
         id: backup-feedback
         working-directory: cloudflare/eqt-feedback-api
         run: |
-          echo "=== Creating D1 backup for eqt-feedback-db ==="
-          OUTPUT=$(wrangler d1 backup create eqt-feedback-db --remote 2>&1)
-          echo "$OUTPUT"
-          BACKUP_ID=$(echo "$OUTPUT" | grep -oP 'backup_id:\s*\K[a-f0-9-]+' || echo "unknown")
-          echo "backup_id=$BACKUP_ID" >> $GITHUB_OUTPUT
+          mkdir -p ../../backups
+          echo "=== Exporting D1 backup for eqt-feedback-db ==="
+          wrangler d1 export eqt-feedback-db --remote --output ../../backups/eqt-feedback-db.sql
+          echo "feedback_backup=backups/eqt-feedback-db.sql" >> $GITHUB_OUTPUT
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backups-${{ steps.backup-drm.outputs.timestamp }}
+          path: backups/
+          retention-days: 30
+          if-no-files-found: error
+
       # ── Restore Drill ──────────────────────────────────────────────
       # Triggered manually via workflow_dispatch with restore_drill=true.
-      # Restores the latest backup to local SQLite and verifies row counts
-      # against production D1.  Quarterly recovery drill (§6.1).
+      # Loads the exported SQL into a local SQLite file and verifies row counts
+      # against production D1. Quarterly recovery drill (§6.1).
+      - name: Install sqlite3 (restore drill)
+        if: ${{ inputs.restore_drill }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sqlite3
+
       - name: Restore Drill — eqt-drm-db
         if: ${{ inputs.restore_drill }}
-        working-directory: cloudflare/eqt-drm-api
         run: |
           echo "=== Restore Drill: eqt-drm-db ==="
-          BACKUP_ID="${{ steps.backup-drm.outputs.backup_id }}"
-          if [ "$BACKUP_ID" = "unknown" ]; then
-            echo "❌ SKIP: no valid backup ID from previous step"
-            exit 1
-          fi
-          # Restore to local SQLite
-          wrangler d1 backup restore eqt-drm-db "$BACKUP_ID" --local --output ./restore-drill-drm.sqlite 2>&1
-          # Query row counts from local restore
+          sqlite3 /tmp/drill-drm.sqlite < backups/eqt-drm-db.sql
           echo "--- Local restore row counts ---"
-          sqlite3 ./restore-drill-drm.sqlite \
+          sqlite3 /tmp/drill-drm.sqlite \
             "SELECT 'device_registry', COUNT(*) FROM device_registry
              UNION ALL SELECT 'activations', COUNT(*) FROM activations
              UNION ALL SELECT 'licenses', COUNT(*) FROM licenses
              UNION ALL SELECT 'system_error_logs', COUNT(*) FROM system_error_logs;" 2>&1
-          # Query production row counts
           echo "--- Production D1 row counts ---"
           npx wrangler d1 execute eqt-drm-db --remote \
             --command "SELECT 'device_registry', COUNT(*) FROM device_registry
@@ -99,17 +104,12 @@ jobs:
 
       - name: Restore Drill — eqt-feedback-db
         if: ${{ inputs.restore_drill }}
-        working-directory: cloudflare/eqt-feedback-api
         run: |
           echo "=== Restore Drill: eqt-feedback-db ==="
-          BACKUP_ID="${{ steps.backup-feedback.outputs.backup_id }}"
-          if [ "$BACKUP_ID" = "unknown" ]; then
-            echo "❌ SKIP: no valid backup ID from previous step"
-            exit 1
-          fi
-          wrangler d1 backup restore eqt-feedback-db "$BACKUP_ID" --local --output ./restore-drill-feedback.sqlite 2>&1
-          echo "--- Local restore row counts ---"
-          sqlite3 ./restore-drill-feedback.sqlite ".tables" 2>&1
+          sqlite3 /tmp/drill-feedback.sqlite < backups/eqt-feedback-db.sql
+          echo "--- Local restore tables ---"
+          sqlite3 /tmp/drill-feedback.sqlite ".tables" 2>&1
+          sqlite3 /tmp/drill-feedback.sqlite "SELECT COUNT(*) FROM feedbacks;" 2>&1
           echo "✅ Restore drill complete"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -133,6 +133,6 @@ jobs:
         if: ${{ !failure() }}
         run: |
           echo "=== D1 Backup Summary ==="
-          echo "eqt-drm-db backup ID: ${{ steps.backup-drm.outputs.backup_id }}"
-          echo "eqt-feedback-db backup ID: ${{ steps.backup-feedback.outputs.backup_id }}"
+          echo "eqt-drm-db: ${{ steps.backup-drm.outputs.drm_backup }}"
+          echo "eqt-feedback-db: ${{ steps.backup-feedback.outputs.feedback_backup }}"
           echo "Timestamp: ${{ steps.backup-drm.outputs.timestamp }}"

@@ -6,6 +6,7 @@
 > 关联文档：[基础设施可观测性](../report/infrastructure-observability.md)（P2 #13 回滚策略）
 > 测试环境搭建：[test-environment.md](./test-environment.md)；GUI 环境开关：[gui-environment.md](./gui-environment.md)
 > **测试/生产对照执行手册（操作前必读）**：[environment-runbook.md](./environment-runbook.md)
+> **正式运营上线前工作清单**：[go-live-checklist.md](./go-live-checklist.md)
 
 ---
 
@@ -413,10 +414,13 @@ git push --tags
 # 触发带恢复演练的备份
 gh workflow run d1-backup.yml -f restore_drill=true
 
-# 或直接使用 wrangler CLI
-wrangler d1 backup create eqt-drm-db --remote
-wrangler d1 backup list eqt-drm-db --remote
-wrangler d1 backup restore eqt-drm-db <backup-id> --local
+# 或直接使用 wrangler CLI(wrangler 4.x 已移除 d1 backup create/restore/list)
+npx wrangler d1 export eqt-drm-db --remote --output=/tmp/eqt-drm-db.sql
+npx wrangler d1 export eqt-feedback-db --remote --output=/tmp/eqt-feedback-db.sql
+
+# 恢复演练:把 SQL 载入本地 sqlite3 核对行数
+sqlite3 /tmp/drill.sqlite < /tmp/eqt-drm-db.sql
+sqlite3 /tmp/drill.sqlite "SELECT 'licenses', COUNT(*) FROM licenses UNION ALL SELECT 'activations', COUNT(*) FROM activations;"
 ```
 
 ---

@@ -3,9 +3,9 @@
 > 本手册是**测试与生产执行的一站式对照**。所有操作先查 §2 与 §3,再动手。
 > 目的是让测试/生产的差别一眼看清,杜绝混淆、误操作、污染。
 >
-> 最后更新:2026-08-07
+> 最后更新:2026-08-08
 >
-> 关联文档:[部署流水线总览](./README.md)、[测试环境搭建](./test-environment.md)、[GUI 环境开关](./gui-environment.md)
+> 关联文档:[部署流水线总览](./README.md)、[测试环境搭建](./test-environment.md)、[GUI 环境开关](./gui-environment.md)、[正式运营上线前工作清单](./go-live-checklist.md)
 
 ---
 
@@ -53,7 +53,7 @@
 | 查看 secret 列表 | `npx wrangler secret list` | `npx wrangler secret list --env test` |
 | 执行 D1 SQL | `npx wrangler d1 execute eqt-drm-db --remote --command "..."` | `npx wrangler d1 execute eqt-drm-db-test --remote --command "..."` |
 | 初始化 D1 schema | `npx wrangler d1 execute eqt-drm-db --remote --file=schema.sql` | `npx wrangler d1 execute eqt-drm-db-test --remote --file=schema.sql` |
-| D1 备份 | 每日自动(`d1-backup.yml`);`wrangler d1 backup create eqt-drm-db --remote` | 无备份(可随时重建) |
+| D1 备份 | 每日自动(`d1-backup.yml`,2026-08-08 起用 `d1 export`);手动 `wrangler d1 export eqt-drm-db --remote --output=...` | 无备份(可随时重建) |
 | 健康检查 | `curl https://lic.eqt.net.im/api/v1/health` | `curl https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/health` |
 | 构建 GUI(开发连测试) | — | `cd desktop/gui && wails dev -tags eqtdev` |
 | 构建 GUI(打包测试版) | — | `cd desktop/gui && wails build -clean -tags eqtdev -platform windows/amd64` |
@@ -115,7 +115,7 @@ wails dev -tags eqtdev        # 连接测试 Worker(内置测试公钥 ce07f0...
 
 ## 5. 生产环境清理
 
-> 原则:清理前先备份(`d1-backup.yml` 每日自动;重要操作手动 `wrangler d1 backup create`)。**删除不可逆**。
+> 原则:清理前先备份(`d1-backup.yml` 每日自动;重要操作手动 `npx wrangler d1 export <db> --remote --output=...`,注意 wrangler 4.x 已无 `d1 backup` 子命令)。**删除不可逆**。
 
 ### 5.1 判断生产是否被测试数据污染
 
@@ -209,7 +209,7 @@ npx wrangler r2 bucket delete eqt-crash-reports-test
 | 4 | Paddle 密钥是 sandbox 还是 live? | 测试 → `pdl_sdbx_`;生产 → `pdl_live_` |
 | 5 | ED25519 secret 是纯 hex(64 字符)吗? | 是;贴 base64 PKCS8 会产生垃圾私钥(见 §7) |
 | 6 | GUI 构建带 `-tags eqtdev` 了吗? | 想连测试 → 必须带;**不带 = 生产** |
-| 7 | 生产库操作前备份了吗? | `wrangler d1 backup create eqt-drm-db --remote` |
+| 7 | 生产库操作前备份了吗? | `npx wrangler d1 export eqt-drm-db --remote --output=/tmp/eqt-drm-db.sql`(wrangler 4.x 已无 `d1 backup`) |
 
 ---
 
