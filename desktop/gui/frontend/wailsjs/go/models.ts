@@ -160,6 +160,7 @@ export namespace main {
 	    cliPath?: string;
 	    logPath?: string;
 	    uploadDirFreeSpace?: string;
+	    isTest: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -177,6 +178,7 @@ export namespace main {
 	        this.cliPath = source["cliPath"];
 	        this.logPath = source["logPath"];
 	        this.uploadDirFreeSpace = source["uploadDirFreeSpace"];
+	        this.isTest = source["isTest"];
 	    }
 	}
 	export class ChatAttachmentSaveResult {
