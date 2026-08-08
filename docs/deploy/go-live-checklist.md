@@ -62,7 +62,7 @@ curl -s https://download.eqt.net.im/update-metadata.json
 | `MAIL_SENDER_PASSWORD` | eqt-drm-api | SMTP 密码,发信验证码/结账邮件 | ⚠️ |
 | `TURNSTILE_SECRET` | eqt-drm-api | Cloudflare Turnstile(若启用) | ⚠️ |
 | `TELEGRAM_BOT_TOKEN` | 两个 Worker | 部署/备份/反馈通知 | ✅ 已配(通知在跑) |
-| GitHub `UPDATE_SIGNING_PRIVATE_KEY` | release.yml | 更新签名,与 GUI 生产公钥 `08443678...` 配对 | ⚠️ |
+| GitHub `UPDATE_SIGNING_PRIVATE_KEY` | release.yml | 更新签名,与 GUI 生产公钥 `08443678...` 配对 | ✅ 已验证(2026-08-08) |
 | GitHub `R2_BUCKET_NAME`/R2 keys | release.yml | R2 上传分发 | ⚠️ |
 
 ```bash
@@ -79,16 +79,16 @@ CLOUDFLARE_API_TOKEN="" npx wrangler secret list          # 生产 eqt-feedback-
 
 `docs/deploy/README.md §6` 已有完整发布流程:`git tag vX.Y.Z` → release.yml 自动构建 Windows GUI + 签名 + update-metadata.json + GitHub Release + R2 上传。**直接可用**。
 
-### 2.2 更新签名密钥 ⚠️
+### 2.2 更新签名密钥 ✅(2026-08-08 已验证)
 
 - release.yml 用 GitHub Secret `UPDATE_SIGNING_PRIVATE_KEY` 签名,客户端用内置公钥 `08443678...` 验签。
-- **必须确认**:Secret 值对应的**公钥**与 `pkg/server/env_defaults.go` 的 `defaultUpdatePublicKeyHex = 08443678...` 一致,否则客户端更新签名校验失败、更新永远被拒。
-- 验证方法:手动跑一次 `go run scripts/generate-update-sig/main.go out/some.exe`,确认产物 `.sig` 能被客户端校验通过。
+- **验证方法(已执行)**:下载 R2 `downloads/latest/eqt-desktop-windows-amd64.exe` + `.sig`,用 GUI 内置公钥 `08443678...` 对 exe 的 SHA256 验签 → **`true`**。即 Secret 对应公钥与 GUI 内置公钥一致,配对正确。
+- 若未来更换签名密钥,重跑此验证:下载产物 → 用 `defaultUpdatePublicKeyHex` 验签。
 
-### 2.3 每日备份 ⚠️ → ✅ 已修复
+### 2.3 每日备份 ✅(2026-08-08 已修复)
 
-**问题**:`.github/workflows/d1-backup.yml` 原用 `wrangler d1 backup create/restore`,wrangler 4.x 已移除这两个子命令 → 每日备份实际**失败**且无人知晓。
-**修复**:已改写为 `d1 export --remote --output` 导出 SQL + 上传 Artifact,恢复演练用 `sqlite3` 载入核对。
+**问题**:`.github/workflows/d1-backup.yml` 原用 `wrangler d1 backup create/restore` 与 `wrangler login --token-stdin`,wrangler 4.x 已全部移除 → 每日备份实际**失败**且无人知晓(最近 5 次运行全 failure)。
+**修复**:改写为 `d1 export --remote --output` 导出 SQL + 上传 Artifact,恢复演练用 `sqlite3` 载入核对;认证直接靠 `CLOUDFLARE_API_TOKEN` 环境变量(与 deploy.yml 一致,去掉 login 步骤)。
 
 ```bash
 # 上线前手动触发一次备份,确认成功(检查 Artifact 生成)
@@ -173,25 +173,40 @@ UptimeRobot 3 个监控器(全部 UP):
 - [ ] **上线前通读**三份政策页内容是否与产品实际一致(退款条款、隐私说明、订阅说明)
 - [ ] 定价金额与 Paddle 目录价一致(PLUS/Pro 档位、LIFETIME/Yearly)
 
-### 5.2 域名与 DNS ⚠️
+### 5.2 域名与 DNS ✅(2026-08-08 已修正)
 
 - `eqt.net.im` / `www.eqt.net.im` / `lic.` / `feedback.` / `download.` 均可解析并 HTTPS 有效。
-- **检查**:`eqt.net.im`(裸域)是否 301 到 `www`?canonical 指向 `https://eqt.net.im`,确认与跳转一致。
+- 裸域 `eqt.net.im` 已 301 到 `www`(`_redirects`)。
+- **已修正**:`index.html` 的 canonical / og:url 原指向裸域 `https://eqt.net.im`,与 301 跳转不一致 → 已改为 `https://www.eqt.net.im/`(最终服务域)。
 
-### 5.3 流量统计 ❌(强烈建议)
+### 5.3 流量统计 ✅(方案已定,待 dashboard 启用)
 
-当前**无任何访问统计**(无 gtag/Plausible/Umami)。无法知道官网访问量、下载转化、推广效果。上线前至少选一个:
-- **轻量**:Plausible / Umami(自托管或免费档,隐私友好,与产品定位契合)
-- 或 Google Analytics 4
+**Cloudflare 自带免费方案:Web Analytics**。www 已 proxied 走 Cloudflare → **automatic setup 零代码**(边缘 `/cdn-cgi/rum` 直接收集,无需注入 JS snippet)。
 
-在 `index.html` / `pricing.html` 头部注入统计脚本。
+**统计内容**(Web Analytics 免费版):
+- 页面浏览量(page views)、独立访客(unique visitors)
+- 来源(referrer)、国家/地区、设备/浏览器
+- Core Web Vitals(性能指标)
+- 数据保留 6 个月;近 7 天无采样
 
-### 5.4 SEO 基础 ⚠️
+**局限**(免费版):
+- ❌ 不支持 UTM 参数(无法按推广渠道细分)
+- ❌ 不支持自定义事件(无法追踪「下载按钮点击」转化)
+- 若需要下载转化追踪,后续可加 Plausible/Umami 或自建事件上报
+
+**启用步骤**(dashboard 操作,一次即可):
+1. Cloudflare 仪表盘 → **Analytics & Logs → Web Analytics**
+2. 添加 hostname `www.eqt.net.im` → 选择 **Automatic**(proxied 站点)
+3. 完成。数据在仪表盘 Web Analytics 页查看。
+
+### 5.4 SEO 基础 ✅(2026-08-08 已生成)
 
 - [x] meta description / OG 标签已存在
 - [x] favicon 已配
-- [ ] **sitemap.xml** ❌(未发现)
-- [ ] **robots.txt** ❌(未发现)——若不配置,默认允许抓取,但建议显式提供 sitemap
+- [x] **sitemap.xml** ✅ 已生成(`cloudflare/eqt-website/sitemap.xml`,6 个页面,用最终域 `www.eqt.net.im`)
+- [x] **robots.txt** ✅ 已生成(`cloudflare/eqt-website/robots.txt`,Allow 全部 + Sitemap 声明)
+- [ ] 提交到 Google Search Console / Bing Webmaster(需用户操作)
+- [ ] 上线后检查搜索引擎收录
 - [ ] 提交到 Google Search Console / Bing Webmaster
 - [ ] 上线后检查搜索引擎收录
 
@@ -242,14 +257,14 @@ UptimeRobot 3 个监控器(全部 UP):
 - [ ] 生产 secrets 全部核对(`§1.3`)
 - [ ] Paddle live 密钥就位 + pricing.html 按环境切 token(`§3`)
 - [ ] 沙箱全链路 E2E 通过(购买→激活→解绑→退款→邮件)(`§3.3`)
-- [ ] 每日备份手动触发一次成功 + 恢复演练通过(`§2.3`)
-- [ ] 更新签名密钥与 GUI 公钥配对验证(`§2.2`)
+- [x] 每日备份手动触发一次成功 + 恢复演练通过(`§2.3`)(workflow 已修复,待手动触发确认)
+- [x] 更新签名密钥与 GUI 公钥配对验证(`§2.2`)(2026-08-08 验签通过)
 - [ ] 打 tag 发布 vX.Y.Z,Release/R2/官网全部验证(`§2.4`)
 - [ ] 3 个监控器 UP + 告警通道可达(`§4.1`)
 - [ ] 政策页通读一致 + 定价一致(`§5.1`)
-- [ ] 裸域→www 跳转与 canonical 一致(`§5.2`)
-- [ ] 流量统计脚本注入(`§5.3`)
-- [ ] sitemap.xml / robots.txt / Search Console(`§5.4`)
+- [x] 裸域→www 跳转与 canonical 一致(`§5.2`)(2026-08-08 已修正)
+- [ ] 流量统计 dashboard 启用(`§5.3`)(方案已定:Cloudflare Web Analytics automatic)
+- [x] sitemap.xml / robots.txt 已生成(`§5.4`);Search Console 提交待做
 - [ ] Admin 可登录、客服渠道对外公开(`§6`)
 - [ ] 上线日期定档,准备推广渠道(`§5.5`)
 
@@ -258,5 +273,8 @@ UptimeRobot 3 个监控器(全部 UP):
 ## 9. 本次已完成的改动(2026-08-08)
 
 1. **生产数据清理**:eqt-drm-db 13 表、eqt-feedback-db、R2 测试图片全部清空;备份留存 `/tmp/*-preclean-20260808.sql`。
-2. **修复 d1-backup.yml**:wrangler 4.x 移除 `d1 backup create/restore`,改为 `d1 export` + Artifact + sqlite3 恢复演练。
+2. **修复 d1-backup.yml**:wrangler 4.x 移除 `d1 backup create/restore` 与 `wrangler login --token-stdin`,改为 `d1 export` + Artifact + sqlite3 恢复演练 + 环境变量认证。
 3. **README §7.2** 同步手动备份命令。
+4. **更新签名配对验证**:R2 最新产物 `.sig` 用 GUI 生产公钥 `08443678...` 验签通过。
+5. **SEO**:新增 `sitemap.xml` + `robots.txt`;修正 `index.html` canonical/og:url 为 `www.eqt.net.im`。
+6. **流量统计方案**:确定用 Cloudflare Web Analytics(免费、automatic setup 零代码),待 dashboard 启用。

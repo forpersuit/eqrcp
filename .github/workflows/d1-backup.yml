@@ -28,13 +28,9 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
-      - name: Authenticate Wrangler
-        run: |
-          echo "$CLOUDFLARE_API_TOKEN" | wrangler login --token-stdin
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      # wrangler 4.x 已移除 `d1 backup create/restore/list`。
+      # wrangler 4.x 已移除 `wrangler login --token-stdin`。
+      # 认证直接靠 CLOUDFLARE_API_TOKEN 环境变量（与 deploy.yml 一致），无需 login 步骤。
+      # wrangler 4.x 也已移除 `d1 backup create/restore/list`。
       # 改用 `d1 export --remote --output` 导出完整 SQL 快照（schema + 数据），
       # 并上传为 Artifact。恢复演练用 sqlite3 直接载入 SQL 文件核对行数。
       - name: Backup eqt-drm-db
