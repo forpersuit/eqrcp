@@ -83,6 +83,42 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Upgrade für unbegrenzten Chat',
     fr: 'Passez à un chat illimité'
   },
+  planIntroTitle: {
+    zh: '套餐介绍',
+    en: 'Plans',
+    ja: 'プラン紹介',
+    ko: '요금제 소개',
+    es: 'Planes',
+    de: 'Pläne',
+    fr: 'Forfaits'
+  },
+  planIntroFreeDesc: {
+    zh: '局域网极速传输与协作体验版,每日限时完整功能。',
+    en: 'LAN fast transfer & collaboration trial, daily limited full features.',
+    ja: 'LAN高速転送とコラボの体験版、毎日限定のフル機能。',
+    ko: 'LAN 고속 전송 및 협업 체험판, 매일 제한된 전체 기능.',
+    es: 'Prueba de transferencia y colaboración LAN rápida, funciones completas limitadas al día.',
+    de: 'LAN-Schnellübertragung & Kollaboration-Testversion, täglich begrenzte Vollfunktionen.',
+    fr: 'Essai de transfert et collaboration LAN rapide, fonctions complètes limitées par jour.'
+  },
+  planIntroPlusTitle: {
+    zh: 'PLUS 付费版',
+    en: 'PLUS',
+    ja: 'PLUS',
+    ko: 'PLUS',
+    es: 'PLUS',
+    de: 'PLUS',
+    fr: 'PLUS'
+  },
+  planIntroPlusDesc: {
+    zh: '解除 Chat 与文件传输的全部大小和频率限制。',
+    en: 'Unlock all size and frequency limits for Chat and file transfer.',
+    ja: 'チャットとファイル転送のサイズ・頻度制限をすべて解除。',
+    ko: '채팅 및 파일 전송의 모든 크기·빈도 제한 해제.',
+    es: 'Desbloquea todos los límites de tamaño y frecuencia para Chat y transferencia de archivos.',
+    de: 'Entfernt alle Größen- und Frequenzlimits für Chat und Dateiübertragung.',
+    fr: 'Débloque toutes les limites de taille et de fréquence pour le chat et le transfert de fichiers.'
+  },
   viewSubscription: {
     zh: '点击查看订阅详情',
     en: 'Click to view subscription details',

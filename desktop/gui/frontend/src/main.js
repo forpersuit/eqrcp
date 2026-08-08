@@ -564,7 +564,7 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat" title="${escapeHTML(getModeTitle('chat'))}">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    ${!hasPaidLicense() ? `
+                    ${!hasPaidLicense() && isOnline() ? `
                         <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
@@ -592,10 +592,12 @@ function render() {
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
                                     <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
                                 </button>
+                                ${isOnline() ? `
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback" style="position: relative;">
                                     <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
                                     ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                                 </button>
+                                ` : ''}
                                 <div class="topbar-menu-sep"></div>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="license">
                                     <span class="menu-icon">${diamondIcon()}</span><span>${t('plan_license_menu')}</span>
@@ -1951,7 +1953,7 @@ function renderPanel() {
                 <div class="modal-head">
                     <h2>${escapeHTML(title)}</h2>
                     <div class="modal-actions">
-                        ${state.activePanel === 'settings' ? `<button class="tool-button" id="open-redeem-inline" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">${giftIcon()}</button>` : ''}
+                        ${state.activePanel === 'settings' && isOnline() ? `<button class="tool-button" id="open-redeem-inline" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">${giftIcon()}</button>` : ''}
                         <button class="tool-button" id="close-panel" title="${t('close')}" aria-label="${t('close')}">x</button>
                     </div>
                 </div>
@@ -2541,9 +2543,11 @@ function renderLicensePlanBlock() {
             <div class="about-plan-header">
                 <div class="about-plan-tag">
                     <span>${t('plan_label')}</span>
+                    ${isOnline() ? `
                     <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || '立即同步并刷新授权状态与付费权益')}">
                         <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
                     </button>
+                    ` : ''}
                 </div>
             </div>
 
@@ -2566,7 +2570,7 @@ function renderLicensePlanBlock() {
 
             <div class="about-plan-footer">
                 <div class="about-plan-actions">
-                    ${license ? `
+                    ${isOnline() ? (license ? `
                         <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
                             ${licenseManagerIcon()}
                         </a>
@@ -2574,7 +2578,7 @@ function renderLicensePlanBlock() {
                         <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
                             ${cartUpgradeIcon()}
                         </a>
-                    `}
+                    `) : ''}
                     <button class="about-plan-icon-btn" id="toggle-plan-info" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}" aria-label="${escapeAttr(t('plan_desc_title'))}">
                         ${diamondIcon()}
                     </button>
@@ -2708,7 +2712,7 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <span>${t('plan_feature_offline_lease')}</span>
                         </li>
                     </ul>
-                    ${!hasPaidLicense() ? `
+                    ${!hasPaidLicense() && isOnline() ? `
                         <button class="primary" id="buy-license-btn" style="width: 100%; padding: 10px 14px; font-weight: 700; margin-top: 14px; font-size: 13.5px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.15); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                             ${t('buy_license_portal')}
                         </button>
@@ -2728,7 +2732,7 @@ function renderPlanComparisonPanel() {
             
             <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
                 <button class="ghost" id="plan-back-to-license" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_license') || '返回授权'}</button>
-                <button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>
+                ${isOnline() ? `<button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>` : ''}
             </div>
         </div>
     `;

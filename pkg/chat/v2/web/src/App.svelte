@@ -91,6 +91,13 @@
     isMobileLayout = typeof window !== 'undefined' && window.innerWidth <= 820;
   }
 
+  // 联网判定:免费额度/套餐 badge 只在联网时展示(离线为默认 free 降级态,额度无意义)。
+  // 沿用主 GUI 的 navigator.onLine 约定;离线时改为展示"套餐介绍"入口。
+  let isOnlineNow = true;
+  function updateOnlineStatus() {
+    isOnlineNow = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  }
+
   $: t = {
     viewSubscription: getTranslation('viewSubscription', currentLang),
     freeQuotaHint: getTranslation('freeQuotaHint', currentLang),
@@ -99,6 +106,10 @@
     freeQuotaAttachmentPolicy: getTranslation('freeQuotaAttachmentPolicy', currentLang),
     freeQuotaUpgrade: getTranslation('freeQuotaUpgrade', currentLang),
     freeQuotaDegraded: getTranslation('freeQuotaDegraded', currentLang),
+    planIntroTitle: getTranslation('planIntroTitle', currentLang),
+    planIntroFreeDesc: getTranslation('planIntroFreeDesc', currentLang),
+    planIntroPlusTitle: getTranslation('planIntroPlusTitle', currentLang),
+    planIntroPlusDesc: getTranslation('planIntroPlusDesc', currentLang),
     onlineDevices: getTranslation('onlineDevices', currentLang),
     self: getTranslation('self', currentLang),
     online: getTranslation('online', currentLang),
@@ -177,7 +188,8 @@
     : getTranslation('freeQuotaRemaining', currentLang).replace('{time}', formatQuotaClock(remainingSeconds));
   $: quotaPillUrgent = !isPaid && !freeDegraded && remainingSeconds > 0 && remainingSeconds <= 60;
   // Free countdown only on desktop/host session chrome — not on mobile browser title bar.
-  $: showQuotaPill = !isPaid && !isMobileLayout;
+  // 离线时额度无意义:隐藏额度 pill(改为展示"套餐介绍"入口)。
+  $: showQuotaPill = isOnlineNow && !isPaid && !isMobileLayout;
 
   // React to theme changes and inject CSS variables
   function hexToRgb(hex: string): string | null {
@@ -708,8 +720,11 @@
   onMount(() => {
     chatActions.setSessionStatus('active');
     checkScreenSize();
+    updateOnlineStatus();
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', checkScreenSize);
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
     }
     const updateEmbeddedState = () => {
       isEmbedded = window.parent !== window || document.documentElement.classList.contains('embedded-chat');
@@ -836,6 +851,8 @@
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', checkScreenSize);
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
     }
     document.removeEventListener('contextmenu', handleGlobalContextMenu);
     closeContextMenu();
@@ -1337,6 +1354,17 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
               <span>{quotaPillLabel}</span>
             </button>
+          {:else if !isPaid && !isMobileLayout && !isOnlineNow}
+            <!-- 离线:额度无意义,改为"套餐介绍"入口 -->
+            <button
+              class="quota-pill"
+              type="button"
+              title={t.planIntroTitle}
+              on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span>{t.planIntroTitle}</span>
+            </button>
           {:else if !isEmbedded && licenseTier}
             <!-- Paid: keep compact tier pill (non-embedded only) -->
             <button
@@ -1466,6 +1494,27 @@
                   <strong>{t.speedLimit}</strong>
                   <span>{t.unlimitedSpeed}</span>
                 </div>
+              {:else if freeDegraded}
+                <!-- 已降级:额度信息无意义,改为展示套餐介绍 -->
+                <div class="license-status-badge">{t.planIntroTitle}</div>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                  <div style="display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--bg-hover, #f5f5f5); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;">
+                    <strong style="font-size: 12px; color: var(--accent-strong);">{getTranslation('freeTier', currentLang)}</strong>
+                    <span style="font-size: 11px; line-height: 1.45; color: #666;">{t.planIntroFreeDesc}</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--bg-hover, #f5f5f5); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;">
+                    <strong style="font-size: 12px; color: var(--accent-strong);">{t.planIntroPlusTitle}</strong>
+                    <span style="font-size: 11px; line-height: 1.45; color: #666;">{t.planIntroPlusDesc}</span>
+                  </div>
+                </div>
+                {#if !isEmbedded}
+                  <a
+                    href="https://eqt.net.im/pricing.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="display: block; margin-top: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--accent-strong);"
+                  >{t.freeQuotaUpgrade}</a>
+                {/if}
               {:else}
                 <div class="license-status-badge" class:success={!freeDegraded}>{getTranslation('freeTier', currentLang)}</div>
                 <div class="license-info-row">
