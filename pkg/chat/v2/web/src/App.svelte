@@ -1354,16 +1354,20 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
               <span>{quotaPillLabel}</span>
             </button>
-          {:else if !isPaid && !isMobileLayout && !isOnlineNow}
-            <!-- 离线:额度无意义,改为"套餐介绍"入口 -->
+          {:else if !isOnlineNow && !isMobileLayout}
+            <!-- 离线状态: 标题栏 badge 显示当前生效的 Tier 级别(FREE / PLUS / PRO), 点击打开套餐详情面板(支持最长7天离线租约) -->
             <button
               class="quota-pill"
               type="button"
-              title={t.planIntroTitle}
+              title={isPaid ? t.viewSubscription : t.planIntroTitle}
               on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
-              <span>{t.planIntroTitle}</span>
+              {#if isPaid}
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              {:else}
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              {/if}
+              <span>{licenseTier || (isPaid ? 'PLUS' : 'FREE')}</span>
             </button>
           {:else if !isEmbedded && licenseTier}
             <!-- Paid: keep compact tier pill (non-embedded only) -->

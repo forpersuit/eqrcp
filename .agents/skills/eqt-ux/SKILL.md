@@ -128,12 +128,13 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 
 ## 8. 离线状态 UI 门控 (Offline UI Gating)
 
-- **联网判定约定**:统一使用 `navigator.onLine`(主 GUI `main.js` 的 `isOnline()` 与 chat v2 `App.svelte` 的 `isOnlineNow`)。离线时免费额度/套餐 badge 无意义(离线即默认 free 降级态,额度无意义),需隐藏。
+- **联网判定约定**: 统一使用 `navigator.onLine`（主 GUI `main.js` 的 `isOnline()` 与 chat v2 `App.svelte` 的 `isOnlineNow`）。离线时免费额度倒计时/消耗 pill 隐藏。
 - **主 GUI (Wails)**:
   - `isOnline()` 辅助函数 + `window.addEventListener('online'/'offline', () => render())` 全量重绘。
-  - 离线时隐藏:顶栏兑换按钮 `#open-redeem`、设置面板 `#open-redeem-inline`、授权面板刷新 `#refresh-license-btn`、购买/管理 `#buy-license-btn`/`#manage-license-portal-btn`、套餐对比 `#plan-go-redeem`、反馈菜单项。
-  - 保留:套餐对比入口 `#toggle-plan-info`(静态内容,无需联网)。
+  - 离线时隐藏: 顶栏兑换按钮 `#open-redeem`、设置面板 `#open-redeem-inline`、授权面板刷新 `#refresh-license-btn`、购买/管理 `#buy-license-btn`/`#manage-license-portal-btn`、套餐对比 `#plan-go-redeem`、反馈菜单项。
+  - 保留: 套餐对比入口 `#toggle-plan-info`（静态内容，无需联网）。
 - **Chat v2 (Svelte)**:
-  - `isOnlineNow` 状态 + `updateOnlineStatus()` + onMount/onDestroy 注册/移除 `online`/`offline` 监听。
-  - 离线时隐藏额度 pill(`showQuotaPill = isOnlineNow && !isPaid && !isMobileLayout`),改为展示"套餐介绍"入口 pill。
-  - 授权面板 `freeDegraded` 时展示套餐介绍(免费版/PLUS 对比 + 升级链接),替代降级额度详情。
+  - `isOnlineNow` 状态 + `updateOnlineStatus()` + `onMount`/`onDestroy` 注册/移除 `online`/`offline` 监听。
+  - 离线时额度倒计时隐藏，标题栏 badge 内容直接改为展示当前生效的 **Tier 级别**（`FREE` / `PLUS` / `PRO`），点击后打开套餐详情面板（付费购买用户在本地合法证书下支持最长 7 天离线使用）。
+  - 授权面板 `freeDegraded` 降级态时展示套餐介绍（免费版/PLUS 对比 + 升级链接），替代已失效的降级额度倒计时。
+
