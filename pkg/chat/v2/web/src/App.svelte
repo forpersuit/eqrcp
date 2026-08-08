@@ -1359,7 +1359,7 @@
             <button
               class="quota-pill"
               type="button"
-              title={isPaid ? t.viewSubscription : t.planIntroTitle}
+              title={isPaid ? t.viewSubscription : getTranslation('freeTier', currentLang)}
               on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
             >
               {#if isPaid}
@@ -1498,7 +1498,7 @@
                   <strong>{t.speedLimit}</strong>
                   <span>{t.unlimitedSpeed}</span>
                 </div>
-              {:else}
+              {:else if isOnlineNow}
                 <div class="license-status-badge" class:success={!freeDegraded}>{getTranslation('freeTier', currentLang)}</div>
                 <div class="license-info-row">
                   <strong>{t.freeQuotaDaily}</strong>
@@ -1517,6 +1517,9 @@
                     style="display: block; margin-top: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--accent-strong);"
                   >{t.freeQuotaUpgrade}</a>
                 {/if}
+              {:else}
+                <!-- 离线且免费: 每日免费额度是联网才有的信息, 离线隐藏每日免费额度、剩余时间与下方描述/外链区域 -->
+                <div class="license-status-badge">{getTranslation('freeTier', currentLang)}</div>
               {/if}
             </div>
           </div>

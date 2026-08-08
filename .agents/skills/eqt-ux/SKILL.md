@@ -134,5 +134,5 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 离线时隐藏: 顶栏兑换按钮 `#open-redeem`、设置面板 `#open-redeem-inline`、授权面板刷新 `#refresh-license-btn`、购买/管理 `#buy-license-btn`/`#manage-license-portal-btn`、套餐对比 `#plan-go-redeem`、反馈菜单项。
   - 保留: 套餐对比入口 `#toggle-plan-info`（静态内容，无需联网）。
 - **Chat v2 (Svelte)**:
-  - 离线时额度倒计时隐藏，标题栏 badge 内容直接改为展示当前生效的 **Tier 级别**（`FREE` / `PLUS` / `PRO`），点击后打开套餐详情面板，呈现**当前套餐在 Chat 模式下的具体限制与权益内容**（FREE 呈现每日畅聊额度/降级附件限速限大策略，PLUS/PRO 呈现无限制全速畅聊）。
+  - 离线时额度倒计时隐藏，标题栏 badge 内容直接改为展示当前生效的 **Tier 级别**（`FREE` / `PLUS` / `PRO`），点击后打开套餐详情面板，呈现**当前套餐在 Chat 模式下的具体限制与权益内容**；在断网/离线状态下，每日免费额度、剩余时间与下方描述区域（`freeQuotaHint`）及外链全部隐藏，仅保留基础状态徽章。
 
