@@ -36,6 +36,8 @@
 
 验证公钥(`defaultPublicKeyHex` / `defaultUpdatePublicKeyHex`)同样按 tag 切换:release 恒用生产公钥验证,eqtdev 构建用测试专用公钥。因此测试激活码只能被测试构建验证,生产构建不会误认测试码(安全闭环,与「漏配方向安全」一致)。
 
+**前端感知构建类型**:`AppInfo.isTest`(由 `server.IsTestBuild()` 按 build tag 注入)暴露给前端,用于测试/生产分支——例如「购买授权套餐」按钮:eqtdev 构建打开测试站 pricing(`eqt-test.pages.dev`),release 打开生产站 `www.eqt.net.im/pricing.html`。前端默认按生产处理,`isTest` 缺失时恒走生产(漏配方向安全)。
+
 ## 3. 对接方式
 
 ### 3.1 开发模式连测试(wails dev)
