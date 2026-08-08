@@ -7,6 +7,10 @@ package server
 // ⚠️ 占位符:搭建测试环境(文档 P1 步骤)后,把 <subdomain> 换成实际 workers.dev 子域。
 var defaultLicenseServer = "https://eqt-drm-api-test.leeyelon.workers.dev"
 
+// isTestBuild 在 eqtdev 构建下为 true,用于 GUI 前端区分测试/生产
+// (如购买按钮打开测试站 pricing)。release 构建不带 tag 恒为 false。
+var isTestBuild = true
+
 // eqtdev 构建下覆盖验证公钥为测试专用密钥对(测试 worker 的 ED25519_PRIVATE_KEY
 // = hex seed 2cf5baa8...,对应公钥 ce07f0...)。release 构建不带 tag 恒用生产公钥,
 // 测试激活码只能被测试构建验证,漏配方向永远安全。

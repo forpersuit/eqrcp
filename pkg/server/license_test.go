@@ -903,3 +903,11 @@ func TestCrossPlatformContractLock(t *testing.T) {
 		t.Errorf("Contract drift detected! HTTP Verify response deserialization failed to bind fingerprint, device_id or signature fields: %+v", verifyResp)
 	}
 }
+
+// TestIsTestBuildProductionDefault 锁定安全不变式:不带 eqtdev tag 的构建(含测试)恒为生产。
+// 若未来有人误把 isTestBuild 默认值改为 true,此测试会失败。
+func TestIsTestBuildProductionDefault(t *testing.T) {
+	if IsTestBuild() {
+		t.Errorf("production build (no eqtdev tag) must report IsTestBuild()=false")
+	}
+}

@@ -154,6 +154,7 @@ type AppInfo struct {
 	CLIPath            string `json:"cliPath,omitempty"`
 	LogPath            string `json:"logPath,omitempty"`
 	UploadDirFreeSpace string `json:"uploadDirFreeSpace,omitempty"`
+	IsTest             bool   `json:"isTest"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -1198,6 +1199,7 @@ func (a *App) AppInfo() AppInfo {
 		OS:          runtime.GOOS,
 		Arch:        runtime.GOARCH,
 		LogPath:     logPath,
+		IsTest:      server.IsTestBuild(),
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli

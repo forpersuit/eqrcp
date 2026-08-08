@@ -54,6 +54,12 @@ func getLicenseServer() string {
 	return defaultLicenseServer
 }
 
+// IsTestBuild 返回当前构建是否为测试(eqtdev)构建。
+// 生产构建(不带 tag)恒为 false,漏配方向永远安全。
+func IsTestBuild() bool {
+	return isTestBuild
+}
+
 // VerifyLicenseSignature checks the cryptographic signature of the certificate
 func VerifyLicenseSignature(cert LicenseCertificate) bool {
 	pubBytes, err := hex.DecodeString(defaultPublicKeyHex)

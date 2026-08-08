@@ -569,13 +569,13 @@ function render() {
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
                     ` : ''}
-                    ${(() => {
+                    ${isOnline() ? (() => {
                         const isPaid = hasPaidLicense();
                         const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
                         const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
                         const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? (t('plus_lifetime_plan') || 'PLUS Lifetime') : (tier === 'FREE' ? t('free_quota') : tier);
                         return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
-                    })()}
+                    })() : ''}
                     <div class="topbar-menu">
                         <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
                             <span class="menu-icon">${ellipsisIcon()}</span>
@@ -823,7 +823,7 @@ function renderShareTransfer(task) {
     const usedTransfers = state.status?.usedTransfers || 0;
     const remaining = Math.max(0, 5 - usedTransfers);
 
-    const countdownHtml = (!isPaid && remaining > 0) ? `
+    const countdownHtml = (isOnline() && !isPaid && remaining > 0) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
             ${escapeHTML(t('free_full_feature_countdown', { count: remaining }))}
         </div>
@@ -1041,7 +1041,7 @@ function updateShareTransferActiveUI(task) {
     const isPaid = state.status?.isPaid;
     const usedTransfers = state.status?.usedTransfers || 0;
     const remaining = Math.max(0, 5 - usedTransfers);
-    const shouldShowCountdown = (!isPaid && remaining > 0);
+    const shouldShowCountdown = (isOnline() && !isPaid && remaining > 0);
     
     if (shouldShowCountdown) {
         const text = t('free_full_feature_countdown', { count: remaining });
@@ -1112,7 +1112,7 @@ function renderReceiveTransfer(task) {
     const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
     const remaining = Math.max(0, 5 - usedReceiveTransfers);
 
-    const countdownHtml = (!isPaid && remaining > 0) ? `
+    const countdownHtml = (isOnline() && !isPaid && remaining > 0) ? `
         <div class="quota-countdown" style="font-size: 11px; color: var(--danger); font-weight: 800; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 6px; background: rgba(180, 35, 24, 0.05); text-transform: uppercase; letter-spacing: 0.05em; display: inline-block; white-space: nowrap; margin-top: 6px;">
             ${escapeHTML(t('free_full_feature_countdown', { count: remaining }))}
         </div>
@@ -1706,7 +1706,7 @@ function updateReceiveTransferActiveUI(task) {
     const isPaid = state.status?.isPaid;
     const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
     const remaining = Math.max(0, 5 - usedReceiveTransfers);
-    const shouldShowCountdown = (!isPaid && remaining > 0);
+    const shouldShowCountdown = (isOnline() && !isPaid && remaining > 0);
     
     if (shouldShowCountdown) {
         const text = t('free_full_feature_countdown', { count: remaining });
@@ -2499,8 +2499,8 @@ function computeLicensePlanState() {
         }
     } else if (isPaid) {
         redeemDetail = chatQuotaText();
-    } else {
-        // Free tier: show Chat remaining time + Share/Receive full-feature quotas.
+    } else if (isOnline()) {
+        // Free tier: show Chat remaining time + Share/Receive full-feature quotas (online only).
         freeQuotaPills = freeTierQuotaTexts();
     }
 
@@ -3696,7 +3696,12 @@ function bindPanelEvents() {
     });
     document.querySelector('#buy-license-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        window.runtime.BrowserOpenURL('https://www.eqt.net.im/');
+        // 测试构建(eqtdev)打开测试站 pricing,生产构建打开生产站 pricing。
+        // 测试站约定见 docs/deploy/test-environment.md(*.eqt-test.pages.dev)。
+        const pricingUrl = state.appInfo?.isTest
+            ? 'https://eqt-test.pages.dev/pricing.html'
+            : 'https://www.eqt.net.im/pricing.html';
+        window.runtime.BrowserOpenURL(pricingUrl);
     });
 
     document.querySelector('#plan-back-to-license')?.addEventListener('click', () => {
@@ -5708,6 +5713,12 @@ function syncLicenseFromStatus(status) {
     }
 }
 
+// 联网判定:免费额度/套餐 badge 只在联网时展示(离线为默认 free 降级态,额度无意义)。
+// 沿用 triggerManualRefresh 的 navigator.onLine 约定。
+function isOnline() {
+    return navigator.onLine;
+}
+
 function hasPaidLicense() {
     if (state.status) {
         return Boolean(state.status.isPaid && !state.status.clockTampered);
@@ -6739,6 +6750,10 @@ async function triggerDownloadUpdate() {
 loadChatUsage();
 render();
 checkPendingCrashReport();
+
+// 联网状态变化时重绘,确保免费额度/套餐 badge 随联网状态即时显隐。
+window.addEventListener('online', () => render());
+window.addEventListener('offline', () => render());
 loadSettings().then(() => {
     connectAgentEvents();
     window.setTimeout(() => runAutoUpdateCheck(true), 5000);
