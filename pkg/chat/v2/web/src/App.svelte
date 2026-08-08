@@ -1498,27 +1498,6 @@
                   <strong>{t.speedLimit}</strong>
                   <span>{t.unlimitedSpeed}</span>
                 </div>
-              {:else if freeDegraded}
-                <!-- 已降级:额度信息无意义,改为展示套餐介绍 -->
-                <div class="license-status-badge">{t.planIntroTitle}</div>
-                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                  <div style="display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--bg-hover, #f5f5f5); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;">
-                    <strong style="font-size: 12px; color: var(--accent-strong);">{getTranslation('freeTier', currentLang)}</strong>
-                    <span style="font-size: 11px; line-height: 1.45; color: #666;">{t.planIntroFreeDesc}</span>
-                  </div>
-                  <div style="display: flex; flex-direction: column; gap: 2px; text-align: left; background: var(--bg-hover, #f5f5f5); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;">
-                    <strong style="font-size: 12px; color: var(--accent-strong);">{t.planIntroPlusTitle}</strong>
-                    <span style="font-size: 11px; line-height: 1.45; color: #666;">{t.planIntroPlusDesc}</span>
-                  </div>
-                </div>
-                {#if !isEmbedded}
-                  <a
-                    href="https://eqt.net.im/pricing.html"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style="display: block; margin-top: 10px; text-align: center; font-size: 12px; font-weight: 700; color: var(--accent-strong);"
-                  >{t.freeQuotaUpgrade}</a>
-                {/if}
               {:else}
                 <div class="license-status-badge" class:success={!freeDegraded}>{getTranslation('freeTier', currentLang)}</div>
                 <div class="license-info-row">
