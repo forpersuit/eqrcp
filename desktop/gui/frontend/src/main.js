@@ -6082,10 +6082,22 @@ async function getMergedQRCodeDataURL(text, logoSrc) {
     canvas.height = size;
     const ctx = canvas.getContext('2d');
 
-    // 1. 载入高容错 (ecc=H) 二维码
+    // 1. 优先使用本地 Go 后端 100% 离线生成高容错 (ecc=H) 二维码 (零网络依赖, 断网毫秒级秒出)
+    let qrDataUrl = '';
+    if (window.go?.main?.App?.GenerateQRCodePNG) {
+        try {
+            qrDataUrl = await window.go.main.App.GenerateQRCodePNG(text, size);
+        } catch (e) {
+            console.warn('[EQT Share] Native QR code generation failed, fallback:', e);
+        }
+    }
+    if (!qrDataUrl) {
+        qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text)}`;
+    }
+
     const qrImg = new Image();
     qrImg.crossOrigin = 'anonymous';
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text)}`;
+    qrImg.src = qrDataUrl;
     await new Promise((res) => { qrImg.onload = res; qrImg.onerror = res; });
     ctx.drawImage(qrImg, 0, 0, size, size);
 
@@ -6191,7 +6203,7 @@ async function downloadSharePosterImage() {
         const featY = qrY + qrSize + gap;
 
         // 4. 绘制物理内嵌 Logo 的二维码 (8px 圆角与 DOM .share-qr-img 展示一致)
-        const qrDataUrl = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        const qrDataUrl = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
         const qrMergedImg = new Image();
         qrMergedImg.src = qrDataUrl;
         await new Promise((res) => { qrMergedImg.onload = res; qrMergedImg.onerror = res; });
@@ -6268,7 +6280,7 @@ async function prepareMergedQRCode() {
     isPreparingQR = true;
     console.log('[EQT Share] Starting async QR code pixel merge with center logo...');
     try {
-        cachedMergedQRDataURL = await getMergedQRCodeDataURL('https://eqt.net.im', faviconURL);
+        cachedMergedQRDataURL = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
         console.log('[EQT Share] QR code merged successfully, length:', cachedMergedQRDataURL.length);
         const imgEl = document.querySelector('#share-qr-img-element');
         if (imgEl && cachedMergedQRDataURL) {
@@ -6283,9 +6295,9 @@ async function prepareMergedQRCode() {
 }
 
 function renderSharePanel() {
-    const shareUrl = 'https://eqt.net.im';
+    const shareUrl = 'https://www.eqt.net.im';
     const scatteredHtml = generateRandomScatteredIcons();
-    const qrSrc = cachedMergedQRDataURL || 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=H&data=https%3A%2F%2Feqt.net.im';
+    const qrSrc = cachedMergedQRDataURL || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="%2316a34a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect></svg>';
 
     // 若尚未异步缓存好，立即触发后台异步合成并更新DOM
     if (!cachedMergedQRDataURL) {

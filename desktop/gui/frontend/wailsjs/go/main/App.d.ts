@@ -34,6 +34,8 @@ export function DownloadChatAttachment(arg1:string,arg2:string):Promise<string>;
 
 export function DownloadUpdate(arg1:main.GUIUpdateCheckResult):Promise<string>;
 
+export function GenerateQRCodePNG(arg1:string,arg2:number):Promise<string>;
+
 export function GetCrashReportDetail():Promise<main.CrashReportDetail>;
 
 export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>>;

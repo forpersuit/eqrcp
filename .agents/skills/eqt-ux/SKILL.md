@@ -117,12 +117,10 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 
 - **box-sizing 陷阱**：`.share-poster-card` 必须设 `box-sizing: border-box`（本项目其他组件均单独设置，唯独此卡曾遗漏）。若漏设，`min-height: 340px` 只约束内容盒，实际渲染高度 = 340 + 上下 padding + 边框 ≈ 412px，导致 logo 与底部边框间距空出 130px+。排查"卡片比预期高"类问题时优先用 `getComputedStyle(el).boxSizing` 验证。
 - **垂直居中**：内容块（二维码 175px + 20px 间距 + logo 48px ≈ 243px）在 340px 卡内用 `justify-content: center` 垂直居中，实测节奏 ≈ 48/20/50。固定高度卡片务必居中，否则内容被 flex-start 钉在顶部、底部空出一大块。
-- **下载图与 DOM 展示一致性**（`downloadSharePosterImage` Canvas 手动绘制）：
-  - logo 必须按 `object-fit: contain` 等比计算（在 175×48 盒内先按宽算高、超 48 再按高回算宽），禁止写死 `175×44`（会把 logo 水平拉长 1.25×）。
-  - 二维码绘制用 `ctx.roundRect(..., 8)` + `ctx.clip()` 复刻 DOM `.share-qr-img` 的 `border-radius: 8px`。
-  - 散落图标图标池必须与 DOM `generateRandomScatteredIcons` 的列表一致。
-  - 卡片尺寸用 `getBoundingClientRect()` 实时读取，修好 DOM 布局后下载图自动跟随；但下载函数的内部偏移需与最终布局方案（如居中）保持一致。
-- **验证路径**：在 `desktop/gui/frontend` 下起 `npm run dev -- --port 5199`，Chrome 打开后 hook `HTMLCanvasElement.prototype.toDataURL` 捕获真实下载 PNG，再解码采样像素比对二维码/logo 边界与间距。
+- **二维码网址与离线生成 (100% Offline QR Generation)**：
+  - 推广海报与官网链接统一为 `www.eqt.net.im`。
+  - 二维码生成优先调用 Wails 原生绑定的 Go 端 `GenerateQRCodePNG(content, size)`（基于 `github.com/skip2/go-qrcode` 高容错 `qrcode.Highest` 算法），直接返回 Base64 Data URL。
+  - **零外部网络依赖**：即使在完全断网/离线机房环境下，也能毫秒级本地合成带 Logo 徽章的高清海报二维码并保存，杜绝依赖第三方外部 QR API。
 
 ---
 

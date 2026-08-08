@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/skip2/go-qrcode"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -576,6 +577,21 @@ func (a *App) SaveSharePosterImage(base64Data string) (string, error) {
 	}
 
 	return target, nil
+}
+
+// GenerateQRCodePNG generates a high-resolution QR code PNG encoded as Base64 Data URL offline.
+func (a *App) GenerateQRCodePNG(content string, size int) (string, error) {
+	if content == "" {
+		content = "https://www.eqt.net.im"
+	}
+	if size <= 0 {
+		size = 360
+	}
+	pngBytes, err := qrcode.Encode(content, qrcode.Highest, size)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate qr code: %w", err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), nil
 }
 
 func chatAttachmentDownloadURL(rawURL string) (*url.URL, error) {
