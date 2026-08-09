@@ -270,6 +270,7 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
 }
 
 let shareNoticeTimeout = null;
+let lastShareNotice = '';
 
 function setShareNotice(state, msg, renderCallback) {
     if (shareNoticeTimeout) {
@@ -277,6 +278,7 @@ function setShareNotice(state, msg, renderCallback) {
         shareNoticeTimeout = null;
     }
     if (!state) return;
+    lastShareNotice = msg;
     state.notice = msg;
     if (typeof renderCallback === 'function') {
         renderCallback();
@@ -289,6 +291,7 @@ function setShareNotice(state, msg, renderCallback) {
             }
         }
         shareNoticeTimeout = null;
+        lastShareNotice = '';
     }, 3000);
 }
 
@@ -299,7 +302,10 @@ export function closeShareOverlay(state, renderCallback) {
             shareNoticeTimeout = null;
         }
         state.showShareOverlay = false;
-        state.notice = '';
+        if (state.notice && state.notice === lastShareNotice) {
+            state.notice = '';
+        }
+        lastShareNotice = '';
         if (typeof renderCallback === 'function') {
             renderCallback();
         }
