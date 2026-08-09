@@ -262,25 +262,7 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
             document.body.removeChild(link);
         }
 
-        // 7. 成功提示
-        const downloadBtn = document.querySelector('#download-share-poster-btn');
-        if (downloadBtn) {
-            downloadBtn.classList.add('success-saved');
-            downloadBtn.innerHTML = `
-                <span style="display: flex; align-items: center; justify-content: center;">✓</span>
-                <span>${escapeHTML(t('poster_saved_success') || '已成功保存')}</span>
-            `;
-            setTimeout(() => {
-                if (downloadBtn && downloadBtn.isConnected) {
-                    downloadBtn.classList.remove('success-saved');
-                    downloadBtn.innerHTML = `
-                        <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>
-                        <span>${escapeHTML(t('download_share_poster') || '保存推广海报')}</span>
-                    `;
-                }
-            }, 3000);
-        }
-
+        // 7. 成功提示 (统一使用应用内响应式通知机制)
         state.notice = t('poster_downloaded') || '推广海报图片已成功保存！';
         if (typeof renderCallback === 'function') {
             renderCallback();

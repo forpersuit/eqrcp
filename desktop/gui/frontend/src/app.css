@@ -322,8 +322,8 @@ h2 {
 }
 
 @keyframes gentleFloat {
-    0% { transform: translateY(0px) rotate(-10deg); }
-    100% { transform: translateY(-6px) rotate(10deg); }
+    0% { transform: translate(-50%, -50%) translateY(0px) rotate(-10deg); }
+    100% { transform: translate(-50%, -50%) translateY(-6px) rotate(10deg); }
 }
 
 .share-poster-content {
