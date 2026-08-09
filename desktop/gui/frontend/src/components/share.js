@@ -21,14 +21,14 @@ function getScatteredItems() {
     const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
     
     const zones = [
-        { top: 10 + Math.floor(Math.random() * 12), left: 10 + Math.floor(Math.random() * 18), xRatio: 0.09, yRatio: 0.08 },
-        { top: 12 + Math.floor(Math.random() * 12), right: 10 + Math.floor(Math.random() * 18), xRatio: 0.91, yRatio: 0.09 },
-        { top: 90 + Math.floor(Math.random() * 25), left: 8 + Math.floor(Math.random() * 12), xRatio: 0.07, yRatio: 0.42 },
-        { top: 95 + Math.floor(Math.random() * 25), right: 8 + Math.floor(Math.random() * 12), xRatio: 0.93, yRatio: 0.45 },
-        { top: 175 + Math.floor(Math.random() * 20), left: 12 + Math.floor(Math.random() * 15), xRatio: 0.10, yRatio: 0.75 },
-        { top: 180 + Math.floor(Math.random() * 20), right: 12 + Math.floor(Math.random() * 15), xRatio: 0.90, yRatio: 0.77 },
-        { bottom: 20 + Math.floor(Math.random() * 15), left: 10 + Math.floor(Math.random() * 20), xRatio: 0.15, yRatio: 0.93 },
-        { bottom: 18 + Math.floor(Math.random() * 15), right: 10 + Math.floor(Math.random() * 20), xRatio: 0.85, yRatio: 0.94 }
+        { xRatio: 0.09, yRatio: 0.08 },
+        { xRatio: 0.91, yRatio: 0.09 },
+        { xRatio: 0.07, yRatio: 0.42 },
+        { xRatio: 0.93, yRatio: 0.45 },
+        { xRatio: 0.10, yRatio: 0.75 },
+        { xRatio: 0.90, yRatio: 0.77 },
+        { xRatio: 0.15, yRatio: 0.93 },
+        { xRatio: 0.85, yRatio: 0.94 }
     ];
 
     cachedScatteredItems = shuffled.map((icon, idx) => {
@@ -53,13 +53,9 @@ function generateRandomScatteredIcons() {
     const items = getScatteredItems();
     return items.map((item) => {
         const { icon, zone, size, rotateDeg, opacity } = item;
-        let posStyle = '';
-        if (zone.top !== undefined) posStyle += `top: ${zone.top}px; `;
-        if (zone.bottom !== undefined) posStyle += `bottom: ${zone.bottom}px; `;
-        if (zone.left !== undefined) posStyle += `left: ${zone.left}px; `;
-        if (zone.right !== undefined) posStyle += `right: ${zone.right}px; `;
-
-        return `<span class="scattered-icon" style="${posStyle} font-size: ${size}px; transform: rotate(${rotateDeg}deg); opacity: ${opacity};">${icon}</span>`;
+        const leftPercent = (zone.xRatio * 100).toFixed(1);
+        const topPercent = (zone.yRatio * 100).toFixed(1);
+        return `<span class="scattered-icon" style="left: ${leftPercent}%; top: ${topPercent}%; font-size: ${size}px; transform: translate(-50%, -50%) rotate(${rotateDeg}deg); opacity: ${opacity};">${icon}</span>`;
     }).join('');
 }
 
@@ -200,7 +196,7 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
             const x = Math.round(width * item.zone.xRatio);
             const y = Math.round(height * item.zone.yRatio);
             ctx.save();
-            ctx.fillStyle = `rgba(5, 150, 105, ${item.opacity})`;
+            ctx.globalAlpha = item.opacity;
             ctx.translate(x, y);
             ctx.rotate(item.rotateRad);
             ctx.font = `${item.size}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
