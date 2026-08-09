@@ -4552,7 +4552,7 @@ function bindSettingsControls() {
                 if (!state.settings) state.settings = {};
                 state.settings.logDir = selected;
                 await saveSettingsData();
-                state.notice = t('log_dir_updated') || '日志保存路径已更新';
+                showToast(t('log_dir_updated') || '日志保存路径已更新');
                 state.appInfo = await AppInfo();
                 if (typeof GetLogFiles === 'function') {
                     state.logFiles = await GetLogFiles();
@@ -4602,7 +4602,7 @@ function bindSettingsControls() {
             } catch (e) {
                 state.shareLimitNotice = '';
             }
-            state.notice = t('dev_quota_reset_success') || '已重置每日计时为 0s';
+            showToast(t('dev_quota_reset_success') || '已重置每日计时为 0s');
             render();
             openPanel('settings');
         } catch (error) {
@@ -4619,7 +4619,7 @@ function bindSettingsControls() {
             } catch (e) {
                 state.shareLimitNotice = '';
             }
-            state.notice = t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)';
+            showToast(t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)');
             render();
             openPanel('settings');
         } catch (error) {
@@ -4631,13 +4631,13 @@ function bindSettingsControls() {
         try {
             state.status = await DevForceOnlineLicenseSync();
             syncLicenseFromStatus(state.status);
-            state.notice = t('dev_sync_success') || '在线对账完成，状态已同步';
+            showToast(t('dev_sync_success') || '在线对账完成，状态已同步');
             render();
             openPanel('settings');
         } catch (error) {
             // Wails rejects on (status, err) when err != nil — re-fetch authoritative snapshot.
             // Unbind/revoke paths still demote local .lic; UI must follow online result.
-            state.notice = '对账完成：' + (error?.message || error);
+            showToast('对账完成：' + (error?.message || error));
             try {
                 state.status = await RefreshLicenseStatus();
                 syncLicenseFromStatus(state.status);
@@ -4677,13 +4677,11 @@ function bindSettingsControls() {
             await loadStatusData();
             state.devInjectError = false;
             state.devInjectMsg = t('dev_inject_ok') + ': ' + code;
-            state.notice = state.devInjectMsg;
             render();
             openPanel('settings');
         } catch (error) {
             state.devInjectError = true;
             state.devInjectMsg = String(error?.message || error || 'inject failed');
-            state.error = state.devInjectMsg;
             render();
             openPanel('settings');
         }
@@ -4708,7 +4706,7 @@ function bindSettingsControls() {
         state.settings.debugLog = false;
         state.settings.viewportDebug = false;
         await saveSettingsData();
-        state.notice = t('dev_mode_disabled');
+        showToast(t('dev_mode_disabled') || '开发者模式已禁用');
         render();
         openPanel('settings');
     });
