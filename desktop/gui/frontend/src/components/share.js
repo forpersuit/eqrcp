@@ -11,41 +11,56 @@ let cachedMergedQRDataURL = '';
 let isPreparingQR = false;
 let qrPrepareFailed = false;
 
-let cachedScatteredHtml = '';
+let cachedScatteredItems = null;
 
-function generateRandomScatteredIcons() {
-    if (cachedScatteredHtml) {
-        return cachedScatteredHtml;
+function getScatteredItems() {
+    if (cachedScatteredItems) {
+        return cachedScatteredItems;
     }
     const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
     const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
     
     const zones = [
-        { top: 10 + Math.floor(Math.random() * 12), left: 10 + Math.floor(Math.random() * 18) },
-        { top: 12 + Math.floor(Math.random() * 12), right: 10 + Math.floor(Math.random() * 18) },
-        { top: 90 + Math.floor(Math.random() * 25), left: 8 + Math.floor(Math.random() * 12) },
-        { top: 95 + Math.floor(Math.random() * 25), right: 8 + Math.floor(Math.random() * 12) },
-        { top: 175 + Math.floor(Math.random() * 20), left: 12 + Math.floor(Math.random() * 15) },
-        { top: 180 + Math.floor(Math.random() * 20), right: 12 + Math.floor(Math.random() * 15) },
-        { bottom: 20 + Math.floor(Math.random() * 15), left: 10 + Math.floor(Math.random() * 20) },
-        { bottom: 18 + Math.floor(Math.random() * 15), right: 10 + Math.floor(Math.random() * 20) }
+        { top: 10 + Math.floor(Math.random() * 12), left: 10 + Math.floor(Math.random() * 18), xRatio: 0.09, yRatio: 0.08 },
+        { top: 12 + Math.floor(Math.random() * 12), right: 10 + Math.floor(Math.random() * 18), xRatio: 0.91, yRatio: 0.09 },
+        { top: 90 + Math.floor(Math.random() * 25), left: 8 + Math.floor(Math.random() * 12), xRatio: 0.07, yRatio: 0.42 },
+        { top: 95 + Math.floor(Math.random() * 25), right: 8 + Math.floor(Math.random() * 12), xRatio: 0.93, yRatio: 0.45 },
+        { top: 175 + Math.floor(Math.random() * 20), left: 12 + Math.floor(Math.random() * 15), xRatio: 0.10, yRatio: 0.75 },
+        { top: 180 + Math.floor(Math.random() * 20), right: 12 + Math.floor(Math.random() * 15), xRatio: 0.90, yRatio: 0.77 },
+        { bottom: 20 + Math.floor(Math.random() * 15), left: 10 + Math.floor(Math.random() * 20), xRatio: 0.15, yRatio: 0.93 },
+        { bottom: 18 + Math.floor(Math.random() * 15), right: 10 + Math.floor(Math.random() * 20), xRatio: 0.85, yRatio: 0.94 }
     ];
 
-    cachedScatteredHtml = shuffled.map((icon, idx) => {
+    cachedScatteredItems = shuffled.map((icon, idx) => {
         const zone = zones[idx];
         const size = 18 + Math.floor(Math.random() * 14);
-        const rotate = -30 + Math.floor(Math.random() * 60);
-        const opacity = (0.22 + Math.random() * 0.15).toFixed(2);
-        
+        const rotateDeg = -30 + Math.floor(Math.random() * 60);
+        const rotateRad = (rotateDeg * Math.PI) / 180;
+        const opacity = +(0.22 + Math.random() * 0.15).toFixed(2);
+        return {
+            icon,
+            zone,
+            size,
+            rotateDeg,
+            rotateRad,
+            opacity
+        };
+    });
+    return cachedScatteredItems;
+}
+
+function generateRandomScatteredIcons() {
+    const items = getScatteredItems();
+    return items.map((item) => {
+        const { icon, zone, size, rotateDeg, opacity } = item;
         let posStyle = '';
         if (zone.top !== undefined) posStyle += `top: ${zone.top}px; `;
         if (zone.bottom !== undefined) posStyle += `bottom: ${zone.bottom}px; `;
         if (zone.left !== undefined) posStyle += `left: ${zone.left}px; `;
         if (zone.right !== undefined) posStyle += `right: ${zone.right}px; `;
 
-        return `<span class="scattered-icon" style="${posStyle} font-size: ${size}px; transform: rotate(${rotate}deg); opacity: ${opacity};">${icon}</span>`;
+        return `<span class="scattered-icon" style="${posStyle} font-size: ${size}px; transform: rotate(${rotateDeg}deg); opacity: ${opacity};">${icon}</span>`;
     }).join('');
-    return cachedScatteredHtml;
 }
 
 function downloadIcon() {
@@ -179,30 +194,19 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // 2. 绘制散落文件图标
-        const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
-        const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
-        const coords = [
-            { x: Math.round(width * 0.09), y: Math.round(height * 0.08), size: 20, rot: -0.3 },
-            { x: Math.round(width * 0.91), y: Math.round(height * 0.09), size: 24, rot: 0.25 },
-            { x: Math.round(width * 0.07), y: Math.round(height * 0.42), size: 18, rot: 0.4 },
-            { x: Math.round(width * 0.93), y: Math.round(height * 0.45), size: 22, rot: -0.2 },
-            { x: Math.round(width * 0.10), y: Math.round(height * 0.75), size: 20, rot: -0.35 },
-            { x: Math.round(width * 0.90), y: Math.round(height * 0.77), size: 19, rot: 0.3 },
-            { x: Math.round(width * 0.15), y: Math.round(height * 0.93), size: 18, rot: -0.15 },
-            { x: Math.round(width * 0.85), y: Math.round(height * 0.94), size: 18, rot: 0.2 }
-        ];
-
-        ctx.fillStyle = 'rgba(5, 150, 105, 0.25)';
-        shuffled.forEach((icon, i) => {
-            const c = coords[i];
+        // 2. 绘制散落文件图标 (与 DOM 保持绝对一致，所见即所得)
+        const items = getScatteredItems();
+        items.forEach((item) => {
+            const x = Math.round(width * item.zone.xRatio);
+            const y = Math.round(height * item.zone.yRatio);
             ctx.save();
-            ctx.translate(c.x, c.y);
-            ctx.rotate(c.rot);
-            ctx.font = `${c.size}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+            ctx.fillStyle = `rgba(5, 150, 105, ${item.opacity})`;
+            ctx.translate(x, y);
+            ctx.rotate(item.rotateRad);
+            ctx.font = `${item.size}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(icon, 0, 0);
+            ctx.fillText(item.icon, 0, 0);
             ctx.restore();
         });
 
@@ -271,7 +275,7 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
                 <span>${escapeHTML(t('poster_saved_success') || '已成功保存')}</span>
             `;
             setTimeout(() => {
-                if (downloadBtn) {
+                if (downloadBtn && downloadBtn.isConnected) {
                     downloadBtn.classList.remove('success-saved');
                     downloadBtn.innerHTML = `
                         <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>

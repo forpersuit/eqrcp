@@ -3056,6 +3056,7 @@ function bindEvents() {
                     render(); // 重渲染顶栏，关闭下拉菜单
                 } else if (menuItem.dataset.openShare) {
                     state.topMenuOpen = false;
+                    state.activePanel = '';
                     state.showShareOverlay = true;
                     render();
                     prepareMergedQRCode(faviconURL, render).catch(() => {});
