@@ -519,8 +519,6 @@ function isTrustedChatURL(rawURL, origin) {
 }
 
 function render() {
-    console.log('[Antigravity Debug] render() called, activePanel:', state.activePanel, 'stack:', new Error().stack);
-    LogInfo('[Antigravity Debug] render() called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     ensureFavicon();
 
     // 记录旧各滚动区域的滚动位置，防止全局重绘时回退到顶部
@@ -2090,7 +2088,7 @@ function renderSettingsPanel() {
                     </div>
                     ${state.isEditingChatSender ? `
                         <div class="chat-sender-edit-wrapper">
-                            <input id="settings-chat-sender" type="text" maxlength="20" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
+                            <input id="settings-chat-sender" type="text" maxlength="40" value="${escapeAttr(chatSender)}" placeholder="Desktop" />
                             <button type="button" class="icon-button save-chat-sender" title="${t('btn_confirm')}">${checkIcon()}</button>
                             <button type="button" class="icon-button cancel-chat-sender" title="${t('btn_reset')}">${closeIcon()}</button>
                         </div>
@@ -3731,7 +3729,9 @@ function openPanel(panel) {
         if (typeof GetLogFiles === 'function') {
             GetLogFiles().then((files) => {
                 state.logFiles = files;
-                render();
+                if (state.activePanel === 'settings') {
+                    syncPanelSurface();
+                }
             }).catch(() => {});
         }
         ChatSaveDirectory().then((dir) => {
@@ -3884,8 +3884,6 @@ function syncManualUpdateCheckUI() {
 }
 
 function syncPanelSurface() {
-    console.log('[Antigravity Debug] syncPanelSurface called, activePanel:', state.activePanel, 'stack:', new Error().stack);
-    LogInfo('[Antigravity Debug] syncPanelSurface called, activePanel: ' + state.activePanel + ', stack: ' + new Error().stack);
     const existing = document.querySelector('.overlay');
     
     // 记录旧 modal 的滚动位置，防止重绘后面板回退到顶部
@@ -4119,7 +4117,10 @@ function recalculateUpdateTexts() {
     }
 }
 
+let lastAppliedLang = '';
+
 function applyLanguageChange(newLang) {
+    lastAppliedLang = newLang;
     recalculateUpdateTexts();
     const frame = document.querySelector('#chat-iframe');
     if (frame) {
@@ -4137,15 +4138,20 @@ function applyLanguageChange(newLang) {
 }
 
 async function handleAutoSaveSettings() {
+    const prevLang = lastAppliedLang || state.settings?.lang || 'zh';
     try {
         await saveSettingsData();
         if (state.error) {
             state.error = '';
         }
-        applyLanguageChange(state.settings?.lang || 'zh');
+        const currentLang = state.settings?.lang || 'zh';
+        if (currentLang !== prevLang) {
+            applyLanguageChange(currentLang);
+        }
     } catch (e) {
-        state.error = 'Failed to save settings: ' + (e.message || String(e));
-        render();
+        const errMsg = e.message || String(e);
+        const prefix = t('settings_save_failed') || 'Failed to save settings';
+        showToast(`${prefix}: ${errMsg}`);
     }
 }
 
@@ -4174,7 +4180,6 @@ function syncSettingsFromDOM() {
     const iface = document.querySelector('#settings-interface');
     const port = document.querySelector('#settings-port');
     const chatSender = document.querySelector('#settings-chat-sender');
-    const chatAvatar = document.querySelector('#settings-chat-avatar');
     const autoUpdateMode = document.querySelector('#settings-auto-update-mode');
     const updateInterval = document.querySelector('#settings-update-interval');
     const lang = document.querySelector('#settings-lang');
@@ -4190,9 +4195,16 @@ function syncSettingsFromDOM() {
     if (enableChatV2) state.settings.enableChatV2 = enableChatV2.checked;
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
     if (iface) state.settings.interface = iface.value;
-    if (port) state.settings.port = Number(port.value);
+    if (port) {
+        let p = parseInt(port.value, 10);
+        if (isNaN(p) || p < 0) {
+            p = 0;
+        } else if (p > 65535) {
+            p = 65535;
+        }
+        state.settings.port = p;
+    }
     if (chatSender) state.settings.chatSender = cleanChatProfileName(chatSender.value);
-    if (chatAvatar) state.settings.chatAvatar = cleanChatAvatar(chatAvatar.value);
     if (autoUpdateMode) state.settings.autoUpdateMode = autoUpdateMode.value;
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
     if (lang) state.settings.lang = lang.value;
@@ -4397,8 +4409,6 @@ function bindSettingsControls() {
                     const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                     
                     state.settings.chatAvatar = compressedBase64;
-                    const inputEl = document.querySelector('#settings-chat-avatar');
-                    if (inputEl) inputEl.value = compressedBase64;
                     event.target.value = '';
                     await handleAutoSaveSettings();
                     syncPanelSurface();
@@ -4412,32 +4422,10 @@ function bindSettingsControls() {
     document.querySelector('#btn-avatar-reset')?.addEventListener('click', async () => {
         if (state.settings) {
             state.settings.chatAvatar = '';
-            const inputEl = document.querySelector('#settings-chat-avatar');
-            if (inputEl) inputEl.value = '';
             await handleAutoSaveSettings();
             syncPanelSurface();
         }
     });
-
-    const avatarInput = document.querySelector('#settings-chat-avatar');
-    if (avatarInput) {
-        avatarInput.addEventListener('input', (event) => {
-            const cleaned = cleanChatAvatar(event.target.value);
-            const previewEl = document.querySelector('.avatar-preview');
-            if (previewEl) {
-                const sender = state.settings?.chatSender || '';
-                previewEl.innerHTML = renderAvatarMarkup(cleaned, (cleanChatProfileName(sender).charAt(0) || 'D').toUpperCase());
-            }
-        });
-        avatarInput.addEventListener('change', async (event) => {
-            if (state.settings) {
-                state.settings.chatAvatar = cleanChatAvatar(event.target.value);
-                await handleAutoSaveSettings();
-                syncPanelSurface();
-            }
-        });
-    }
-
 
     document.querySelector('#btn-emoji-more')?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -4451,8 +4439,6 @@ function bindSettingsControls() {
             const emojiVal = event.currentTarget.dataset.emoji;
             if (state.settings && emojiVal) {
                 state.settings.chatAvatar = emojiVal;
-                const inputEl = document.querySelector('#settings-chat-avatar');
-                if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
                 syncPanelSurface();
@@ -4485,14 +4471,21 @@ function bindSettingsControls() {
             const emojiVal = cleanChatAvatar(rawVal);
             if (emojiVal) {
                 state.settings.chatAvatar = emojiVal;
-                const inputEl = document.querySelector('#settings-chat-avatar');
-                if (inputEl) inputEl.value = emojiVal;
                 state.showEmojiPicker = false;
                 await handleAutoSaveSettings();
                 syncPanelSurface();
             }
         }
     });
+
+    const portEl = document.querySelector('#settings-port');
+    if (portEl) {
+        portEl.addEventListener('blur', () => {
+            if (state.settings && portEl.value !== String(state.settings.port || 0)) {
+                portEl.value = String(state.settings.port || 0);
+            }
+        });
+    }
 
     const inputs = [
         '#settings-interface',

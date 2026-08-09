@@ -274,7 +274,6 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	v.Set("enableTelemetry", settings.EnableTelemetry)
 	v.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	v.Set("logDir", strings.TrimSpace(settings.LogDir))
-	fmt.Printf("[Config Debug] WriteDesktopSettings: enableChatV2=%v, configFileUsed=%s\n", settings.EnableChatV2, v.ConfigFileUsed())
 	if err := v.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}

@@ -139,9 +139,10 @@ type DesktopSettings struct {
 }
 
 type InterfaceOption struct {
-	Name  string `json:"name"`
-	IP    string `json:"ip"`
-	Label string `json:"label"`
+	Name          string `json:"name"`
+	IP            string `json:"ip"`
+	Label         string `json:"label"`
+	IsRecommended bool   `json:"isRecommended"`
 }
 
 type AppInfo struct {

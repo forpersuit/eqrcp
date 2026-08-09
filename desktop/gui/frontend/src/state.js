@@ -49,6 +49,8 @@ export const state = {
     showEmojiPicker: false,
     showShareOverlay: false,
     topMenuOpen: false,
+    settingsAdvancedOpen: false,
+    settingsDevOpen: false,
     updateBackoffCount: 0,
     crashReport: null,
     pendingCrashDump: false,

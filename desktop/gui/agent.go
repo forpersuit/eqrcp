@@ -384,9 +384,10 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 	var opts []InterfaceOption
 	for _, opt := range s.InterfaceOptions {
 		opts = append(opts, InterfaceOption{
-			Name:  opt.Name,
-			IP:    opt.IP,
-			Label: opt.Label,
+			Name:          opt.Name,
+			IP:            opt.IP,
+			Label:         opt.Label,
+			IsRecommended: opt.IsRecommended,
 		})
 	}
 	return DesktopSettings{
@@ -421,9 +422,10 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 	var opts []config.DesktopInterfaceOption
 	for _, opt := range s.InterfaceOptions {
 		opts = append(opts, config.DesktopInterfaceOption{
-			Name:  opt.Name,
-			IP:    opt.IP,
-			Label: opt.Label,
+			Name:          opt.Name,
+			IP:            opt.IP,
+			Label:         opt.Label,
+			IsRecommended: opt.IsRecommended,
 		})
 	}
 	return config.DesktopSettings{
@@ -455,7 +457,6 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 }
 
 func (agent *desktopAgent) writeSettings(settings DesktopSettings) (DesktopSettings, error) {
-	agent.log.Infof("[Agent Debug] writeSettings settings.EnableChatV2 = %v", settings.EnableChatV2)
 	cfgSettings := convertAppSettings(settings)
 	saved, err := config.WriteDesktopSettings(agent.settingsApp(), cfgSettings)
 	if err != nil {
@@ -1001,7 +1002,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			return err
 		}
 	case "chat":
-		agent.log.Infof("[Agent Debug] runTask: chat action started. EnableChatV2 = %v", desktopSettings.EnableChatV2)
+		agent.log.Infof("runTask: chat action started. EnableChatV2 = %v", desktopSettings.EnableChatV2)
 		srv.EnableChatV2 = desktopSettings.EnableChatV2
 		chatPageURLBuilder := func() string {
 			return desktopChatPageURL(srv.ChatJoinURL(), srv.ChatHostToken(), desktopSettings.ChatSender, desktopSettings.ChatAvatar, desktopSettings.EnableChatV2)
