@@ -3261,19 +3261,6 @@ function refreshHistoryListInDOM() {
         button.addEventListener('click', refreshStatus);
     });
     document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
-        const url = 'https://eqt.net.im';
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(url);
-            }
-            state.notice = t('share_url_copied') || '官网链接已成功复制到剪贴板！';
-            render();
-        } catch (_) {
-            state.notice = url;
-            render();
-        }
-    });
     document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);
     document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
     document.querySelector('#clear-share')?.addEventListener('click', () => {
