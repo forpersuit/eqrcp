@@ -315,6 +315,8 @@ export function renderShareOverlay(state, t, escapeAttr, escapeHTML, horizontalL
                         </div>
                     </div>
 
+                    ${state.notice ? `<div class="notice success" style="margin: 12px 0 0; text-align: center; padding: 8px 12px; font-size: 13px; border-radius: 10px; animation: fadeIn 0.2s ease;">${escapeHTML(state.notice)}</div>` : ''}
+
                     <div class="share-actions-group">
                         <button type="button" class="share-action-btn primary" id="download-share-poster-btn" title="${escapeAttr(t('download_share_poster') || '保存推广海报')}">
                             <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>
