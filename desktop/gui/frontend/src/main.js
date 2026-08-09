@@ -4289,10 +4289,12 @@ async function toggleRightClickIntegration(event) {
         state.rightClickIntegration = await SetRightClickIntegrationEnabled(enabled);
         updateIntegrationRow('right-click');
     } catch (error) {
-        state.error = error?.message || String(error);
+        const errMsg = error?.message || String(error);
         event.currentTarget.checked = !enabled;
         event.currentTarget.disabled = false;
-        render();
+        updateIntegrationRow('right-click');
+        const prefix = t('integration_toggle_failed') || 'Failed to update system integration';
+        showToast(`${prefix}: ${errMsg}`);
     }
 }
 
@@ -4303,10 +4305,12 @@ async function toggleStartupIntegration(event) {
         state.startupIntegration = await SetStartupEnabled(enabled);
         updateIntegrationRow('startup');
     } catch (error) {
-        state.error = error?.message || String(error);
+        const errMsg = error?.message || String(error);
         event.currentTarget.checked = !enabled;
         event.currentTarget.disabled = false;
-        render();
+        updateIntegrationRow('startup');
+        const prefix = t('integration_toggle_failed') || 'Failed to update system integration';
+        showToast(`${prefix}: ${errMsg}`);
     }
 }
 
@@ -4570,9 +4574,7 @@ function bindSettingsControls() {
                 openPanel('settings');
             }
         } catch (error) {
-            state.error = 'Failed to select log directory: ' + error;
-            render();
-            openPanel('settings');
+            showToast('Failed to select log directory: ' + (error?.message || error));
         }
     });
 
@@ -4583,9 +4585,7 @@ function bindSettingsControls() {
                 try {
                     await OpenPath(targetPath);
                 } catch (error) {
-                    state.error = 'Failed to open log: ' + error;
-                    render();
-                    openPanel('settings');
+                    showToast('Failed to open log: ' + (error?.message || error));
                 }
             }
         });
@@ -4601,9 +4601,7 @@ function bindSettingsControls() {
                 const logDir = parts.join(separator);
                 await OpenPath(logDir);
             } catch (error) {
-                state.error = 'Failed to open log directory: ' + error;
-                render();
-                openPanel('settings');
+                showToast('Failed to open log directory: ' + (error?.message || error));
             }
         }
     });
@@ -4621,9 +4619,7 @@ function bindSettingsControls() {
             render();
             openPanel('settings');
         } catch (error) {
-            state.error = 'Failed to reset quota: ' + error;
-            render();
-            openPanel('settings');
+            showToast('Failed to reset quota: ' + (error?.message || error));
         }
     });
 
@@ -4640,9 +4636,7 @@ function bindSettingsControls() {
             render();
             openPanel('settings');
         } catch (error) {
-            state.error = 'Failed to max quota: ' + error;
-            render();
-            openPanel('settings');
+            showToast('Failed to max quota: ' + (error?.message || error));
         }
     });
 
