@@ -263,6 +263,7 @@ export namespace main {
 	    name: string;
 	    ip: string;
 	    label: string;
+	    isRecommended: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new InterfaceOption(source);
@@ -273,6 +274,7 @@ export namespace main {
 	        this.name = source["name"];
 	        this.ip = source["ip"];
 	        this.label = source["label"];
+	        this.isRecommended = source["isRecommended"];
 	    }
 	}
 	export class DesktopSettings {
