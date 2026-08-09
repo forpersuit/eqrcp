@@ -1,6 +1,8 @@
 // 推广分享海报与弹窗独立模块 (Share Poster & Share Overlay Component)
 
-import { isOnline } from '../i18n.js';
+function isOnline() {
+    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+}
 
 // 纯 Base64 编码的 SVG 占位图，杜绝未编码双引号破坏 HTML 属性
 export const placeholderQRSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzE2YTM0YSIgc3Ryb2tlLXdpZHRoPSIxLjUiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiPjwvcmVjdD48cmVjdCB4PSI3IiB5PSI3IiB3aWR0aD0iMyIgaGVpZ2h0PSIzIj48L3JlY3Q+PHJlY3QgeD0iMTQiIHk9IjciIHdpZHRoPSIzIiBoZWlnaHQ9IjMiPjwvcmVjdD48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjMiIGhlaWdodD0iMyI+PC9yZWN0Pjwvc3ZnPg==';
@@ -69,7 +71,7 @@ export async function getMergedQRCodeDataURL(text, logoSrc) {
     let qrDataUrl = '';
     if (window.go?.main?.App?.GenerateQRCodePNG) {
         try {
-            qrDataUrl = await window.go.main.App.GenerateQRCodePNG(text, size);
+            qrDataUrl = await window.go.main.App.GenerateQRCodePNG(text || 'https://www.eqt.net.im', size);
         } catch (e) {
             console.warn('[EQT Share] Native QR code generation failed:', e);
         }
@@ -79,7 +81,7 @@ export async function getMergedQRCodeDataURL(text, logoSrc) {
     }
     // 2. 本地生成不可用时, 仅在线降级到第三方在线 QR API
     if (!qrDataUrl && isOnline()) {
-        qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text)}`;
+        qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text || 'https://www.eqt.net.im')}`;
     }
 
     if (!qrDataUrl) {
@@ -124,7 +126,7 @@ export async function prepareMergedQRCode(faviconURL, renderCallback) {
     }
     isPreparingQR = true;
     try {
-        cachedMergedQRDataURL = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
+        cachedMergedQRDataURL = await getMergedQRCodeDataURL('https://www.eqt.net.im', faviconURL);
         if (cachedMergedQRDataURL) {
             qrPrepareFailed = false;
             const imgEl = document.querySelector('#share-qr-img-element');
@@ -218,7 +220,7 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
         const featY = qrY + qrSize + gap;
 
         // 4. 绘制二维码
-        const qrDataUrl = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
+        const qrDataUrl = await getMergedQRCodeDataURL('https://www.eqt.net.im', faviconURL);
         if (qrDataUrl) {
             cachedMergedQRDataURL = cachedMergedQRDataURL || qrDataUrl;
             qrPrepareFailed = false;
@@ -342,7 +344,11 @@ export function renderShareOverlay(state, t, escapeAttr, escapeHTML, horizontalL
 }
 
 export function bindShareEvents(state, t, escapeHTML, horizontalLogoURL, faviconURL, renderCallback) {
-    // 1. 关闭按钮点击
+    if (!state || !state.showShareOverlay) {
+        return;
+    }
+
+    // 1. 关闭按钮点击 (单向数据流受控触发 renderCallback，0ms 极速响应)
     document.querySelector('#close-share-overlay')?.addEventListener('click', (e) => {
         e.stopPropagation();
         closeShareOverlay(state, renderCallback);
