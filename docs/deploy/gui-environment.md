@@ -64,13 +64,29 @@ export EQT_LICENSE_SERVER=https://eqt-drm-api-test.leeyelon.workers.dev
 wails dev    # 或任意构建,环境变量优先于 build tag
 ```
 
-## 4. 安全不变式(release 绝不连测试)
+## 4. 测试版本与生产版本全维度对比
+
+除网络请求端点与密码学密钥对不同外，测试版本与生产版本的核心传输引擎、UI 界面与交互逻辑完全一致：
+
+| 维度 | 生产版本（Release，`!eqtdev`） | 测试版本（`-tags eqtdev`） | 相同/差异说明 |
+| :--- | :--- | :--- | :--- |
+| **1. 业务与传输引擎** | 局域网 Chat、文件传输、拖拽分享、多网卡切换、剪贴板等 | 局域网 Chat、文件传输、拖拽分享、多网卡切换、剪贴板等 | **100% 相同**（核心代码完全复用） |
+| **2. UI 界面与交互体验** | 主界面、设置面板、历史记录、多语言等 | 主界面、设置面板、历史记录、多语言等 | **100% 相同** |
+| **3. DRM 验签公钥** | 生产 Ed25519 公钥 (`08443678...`) | 测试专用 Ed25519 公钥 (`ce07f02c...`) | **不同**：测试公钥只认测试 Worker 签发的激活码，生产码在测试版报错，反之亦然 |
+| **4. DRM API 服务地址** | `https://lic.eqt.net.im/api/v1/*` | `https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/*` | **不同**：激活、在线对账、配额同步打向独立测试 Worker |
+| **5. 崩溃上报地址** | `https://lic.eqt.net.im/api/v1/crash-report` | `https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/crash-report` | **不同**：写入测试 R2 存储桶 |
+| **6. 自动更新检查端点** | `https://lic.eqt.net.im/update-metadata.json` | `https://eqt-drm-api-test.leeyelon.workers.dev/update-metadata.json` | **不同**：仅检查测试更新包且只认测试签名 |
+| **7. 购买/定价页面跳转** | `https://www.eqt.net.im/pricing.html` | `https://eqt-test.pages.dev/pricing.html` | **不同**：测试版打开沙箱测试支付页面（Paddle Sandbox） |
+| **8. 授权管理门户跳转** | `https://www.eqt.net.im/portal.html` | `https://eqt-test.pages.dev/portal.html` | **不同**：测试版打开测试客户门户 |
+| **9. 数据库物理隔离** | Cloudflare D1 `eqt-drm-db` | Cloudflare D1 `eqt-drm-db-test` | **不同**：测试数据完全隔离，绝不污染生产用户数据 |
+
+## 5. 安全不变式(release 绝不连测试)
 
 - `release.yml` 的 `wails build` **不得**添加 `-tags eqtdev` 或任何 `-X` 测试 URL 注入(文件内已加注释防误改)。
 - 发布二进制连测试的唯一途径是用户在自己机器上**手动**设置环境变量——这是用户主动行为,与"默认连测试"无关。
 - 部署流水线(`deploy.yml`)只部署 Cloudflare Worker,不构建桌面端,不涉及此开关。
 
-## 5. 回归检查点(改动默认值后必跑)
+## 6. 回归检查点(改动默认值后必跑)
 
 ```bash
 go test ./...                    # 全量测试(默认值生产断言在 pkg/server/update_test.go)
