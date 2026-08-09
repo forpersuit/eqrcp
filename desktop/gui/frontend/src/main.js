@@ -2560,7 +2560,7 @@ function renderLicensePlanBlock() {
                             ${licenseManagerIcon()}
                         </a>
                     ` : `
-                        <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
+                        <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight buy-license-btn" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
                             ${cartUpgradeIcon()}
                         </a>
                     `) : ''}
@@ -2698,7 +2698,7 @@ function renderPlanComparisonPanel() {
                         </li>
                     </ul>
                     ${!hasPaidLicense() && isOnline() ? `
-                        <button class="primary" id="buy-license-btn" style="width: 100%; padding: 10px 14px; font-weight: 700; margin-top: 14px; font-size: 13.5px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.15); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                        <button class="primary buy-license-btn" id="plan-buy-license-btn" style="width: 100%; padding: 10px 14px; font-weight: 700; margin-top: 14px; font-size: 13.5px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent) 0%, #34d399 100%); color: #fff; cursor: pointer; box-shadow: 0 4px 12px rgba(47, 158, 115, 0.15); transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                             ${t('buy_license_portal')}
                         </button>
                     ` : ''}
@@ -3658,7 +3658,7 @@ function bindPanelEvents() {
             }
         });
     });
-    document.querySelectorAll('#buy-license-btn, .buy-license-btn').forEach(btn => {
+    document.querySelectorAll('.buy-license-btn, #buy-license-btn, #plan-buy-license-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             // 测试构建(eqtdev)打开测试站 pricing,生产构建打开生产站 pricing。
