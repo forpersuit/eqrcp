@@ -4143,7 +4143,7 @@ async function handleAutoSaveSettings() {
         await saveSettingsData();
         if (state.error) {
             state.error = '';
-            render();
+            document.querySelector('.notice.error')?.remove();
         }
         const currentLang = state.settings?.lang || 'zh';
         if (currentLang !== prevLang) {
