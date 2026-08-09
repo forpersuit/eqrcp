@@ -11,7 +11,12 @@ let cachedMergedQRDataURL = '';
 let isPreparingQR = false;
 let qrPrepareFailed = false;
 
+let cachedScatteredHtml = '';
+
 function generateRandomScatteredIcons() {
+    if (cachedScatteredHtml) {
+        return cachedScatteredHtml;
+    }
     const iconList = ['📷', '🎥', '🎵', '📄', '💻', '⚡', '📱', '🖼️', '🎬', '🎧', '📁', '💬', '🚀'];
     const shuffled = [...iconList].sort(() => Math.random() - 0.5).slice(0, 8);
     
@@ -26,7 +31,7 @@ function generateRandomScatteredIcons() {
         { bottom: 18 + Math.floor(Math.random() * 15), right: 10 + Math.floor(Math.random() * 20) }
     ];
 
-    return shuffled.map((icon, idx) => {
+    cachedScatteredHtml = shuffled.map((icon, idx) => {
         const zone = zones[idx];
         const size = 18 + Math.floor(Math.random() * 14);
         const rotate = -30 + Math.floor(Math.random() * 60);
@@ -40,6 +45,7 @@ function generateRandomScatteredIcons() {
 
         return `<span class="scattered-icon" style="${posStyle} font-size: ${size}px; transform: rotate(${rotate}deg); opacity: ${opacity};">${icon}</span>`;
     }).join('');
+    return cachedScatteredHtml;
 }
 
 function downloadIcon() {

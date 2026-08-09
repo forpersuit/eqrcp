@@ -127,7 +127,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - 本地 `GenerateQRCodePNG` 不可用（返回非 string）且离线时，`getMergedQRCodeDataURL` **不 fallback 外部 API**（必然失败），返回 `null`。
     - `prepareMergedQRCode` 收到 `null` 置 `qrPrepareFailed=true` 并渲染失败提示（`qr_generate_failed_tip`，已在 7 语种 i18n），`renderSharePanel` 据 `!qrPrepareFailed` 防止重复触发。
     - `online` 事件重置 `qrPrepareFailed=false` 并 `render()`，面板自动重新生成二维码。
-    - `downloadSharePosterImage` 二维码生成失败时降级留白，海报仍可保存；成功时结果复用为 `cachedMergedQRDataURL`，避免保存后 `render()` 重绘回落占位。
+- **单权威模块与散落图标稳定性**：
+  - `desktop/gui/frontend/src/components/share.js` 为推广海报与分享弹窗的单一权威实现，严禁在 `main.js` 中复制或残留旧 Share 实现。
+  - 散落图标采用模块级变量 `cachedScatteredHtml` 缓存首次随机排布结果，杜绝在 `prepareMergedQRCode` 完成或状态重绘时因反复 `Math.random` 产生图标瞬移跳变。
 
 ---
 
