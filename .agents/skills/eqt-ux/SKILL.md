@@ -121,6 +121,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 推广海报与官网链接统一为 `www.eqt.net.im`。
   - 二维码生成优先调用 Wails 原生绑定的 Go 端 `GenerateQRCodePNG(content, size)`（基于 `github.com/skip2/go-qrcode` 高容错 `qrcode.Highest` 算法），直接返回 Base64 Data URL。
   - **零外部网络依赖**：即使在完全断网/离线机房环境下，也能毫秒级本地合成带 Logo 徽章的高清海报二维码并保存，杜绝依赖第三方外部 QR API。
+  - **占位图 Base64 化 (Placeholder SVG Must Be Base64-Encoded)**：面板占位二维码必须使用 `data:image/svg+xml;base64,<...>` 编码（内容与 `components/share.js` 的 `placeholderQRSvg` 一致），**严禁**在 HTML `src` 属性中内联 UTF-8 SVG——SVG 内含双引号会提前截断 `src` 属性值，浏览器会把 SVG 内 `<rect>` 等解析为散落 DOM 元素，并在二维码与横向 logo 之间渲染出 `alt="EQT Website QR Code" />` 裸文本；此损坏 DOM 会干扰分享卡片布局与关闭按钮命中区域（表现为"首次打开显示字符、二次打开关闭无响应"）。排查时用 `document.querySelector('.share-qr-wrapper').querySelectorAll('rect').length` 应恒为 0。
   - **失败降级约定**：
     - 图片一律经 `loadImageElement(src)` 加载，失败返回 `null` 而非让 `ctx.drawImage(broken)` 抛 `InvalidStateError`（离线时第三方 QR API 加载失败必然 broken，直接 drawImage 会让整个合成/下载失败）。
     - 本地 `GenerateQRCodePNG` 不可用（返回非 string）且离线时，`getMergedQRCodeDataURL` **不 fallback 外部 API**（必然失败），返回 `null`。

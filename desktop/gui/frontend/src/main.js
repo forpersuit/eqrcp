@@ -6333,7 +6333,8 @@ async function prepareMergedQRCode() {
 function renderSharePanel() {
     const shareUrl = 'https://www.eqt.net.im';
     const scatteredHtml = generateRandomScatteredIcons();
-    const qrSrc = cachedMergedQRDataURL || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="%2316a34a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect></svg>';
+    // 占位图为 Base64 编码的 SVG (内容同 components/share.js placeholderQRSvg): 内联 UTF-8 双引号会截断 src 属性, 使 img 标签残缺并将散落文本/元素渲染进 DOM
+    const qrSrc = cachedMergedQRDataURL || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzE2YTM0YSIgc3Ryb2tlLXdpZHRoPSIxLjUiPjxyZWN0IHg9IjMiIHk9IjMiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxOCIgcng9IjIiPjwvcmVjdD48cmVjdCB4PSI3IiB5PSI3IiB3aWR0aD0iMyIgaGVpZ2h0PSIzIj48L3JlY3Q+PHJlY3QgeD0iMTQiIHk9IjciIHdpZHRoPSIzIiBoZWlnaHQ9IjMiPjwvcmVjdD48cmVjdCB4PSI3IiB5PSIxNCIgd2lkdGg9IjMiIGhlaWdodD0iMyI+PC9yZWN0Pjwvc3ZnPg==';
 
     // 若尚未异步缓存好且未在合成中, 立即触发后台异步合成并更新DOM; 已失败则不自动重试, 避免重复触发
     if (!cachedMergedQRDataURL && !isPreparingQR && !qrPrepareFailed) {
