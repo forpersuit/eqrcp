@@ -262,50 +262,32 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
             document.body.removeChild(link);
         }
 
-        // 7. 成功提示 (统一使用应用内响应式通知机制, 3秒后自动淡出)
-        setShareNotice(state, t('poster_downloaded') || '推广海报图片已成功保存！', renderCallback);
+        // 7. 成功提示 (按钮内即时响应反馈，2秒后自动恢复)
+        const downloadBtn = document.querySelector('#download-share-poster-btn');
+        if (downloadBtn) {
+            downloadBtn.classList.add('success-saved');
+            downloadBtn.innerHTML = `
+                <span style="display: flex; align-items: center; justify-content: center;">✓</span>
+                <span>${escapeHTML(t('poster_saved_success') || '已成功保存')}</span>
+            `;
+            setTimeout(() => {
+                if (downloadBtn && downloadBtn.isConnected) {
+                    downloadBtn.classList.remove('success-saved');
+                    downloadBtn.innerHTML = `
+                        <span style="display: flex; align-items: center; justify-content: center;">${downloadIcon()}</span>
+                        <span>${escapeHTML(t('download_share_poster') || '保存推广海报')}</span>
+                    `;
+                }
+            }, 2000);
+        }
     } catch (e) {
         console.error('Failed to download share poster image:', e);
     }
 }
 
-let shareNoticeTimeout = null;
-let lastShareNotice = '';
-
-function setShareNotice(state, msg, renderCallback) {
-    if (shareNoticeTimeout) {
-        clearTimeout(shareNoticeTimeout);
-        shareNoticeTimeout = null;
-    }
-    if (!state) return;
-    lastShareNotice = msg;
-    state.notice = msg;
-    if (typeof renderCallback === 'function') {
-        renderCallback();
-    }
-    shareNoticeTimeout = setTimeout(() => {
-        if (state && state.notice === msg) {
-            state.notice = '';
-            if (typeof renderCallback === 'function') {
-                renderCallback();
-            }
-        }
-        shareNoticeTimeout = null;
-        lastShareNotice = '';
-    }, 3000);
-}
-
 export function closeShareOverlay(state, renderCallback) {
     if (state && state.showShareOverlay) {
-        if (shareNoticeTimeout) {
-            clearTimeout(shareNoticeTimeout);
-            shareNoticeTimeout = null;
-        }
         state.showShareOverlay = false;
-        if (state.notice && state.notice === lastShareNotice) {
-            state.notice = '';
-        }
-        lastShareNotice = '';
         if (typeof renderCallback === 'function') {
             renderCallback();
         }
@@ -345,8 +327,6 @@ export function renderShareOverlay(state, t, escapeAttr, escapeHTML, horizontalL
                             </div>
                         </div>
                     </div>
-
-                    ${state.notice ? `<div class="notice success" style="margin: 12px 0 0; text-align: center; padding: 8px 12px; font-size: 13px; border-radius: 10px; animation: fadeIn 0.2s ease;">${escapeHTML(state.notice)}</div>` : ''}
 
                     <div class="share-actions-group">
                         <button type="button" class="share-action-btn primary" id="download-share-poster-btn" title="${escapeAttr(t('download_share_poster') || '保存推广海报')}">
@@ -388,16 +368,32 @@ export function bindShareEvents(state, t, escapeHTML, horizontalLogoURL, favicon
         downloadSharePosterImage(horizontalLogoURL, faviconURL, state, t, renderCallback, escapeHTML);
     });
 
-    // 4. 复制官网链接按钮
+    // 4. 复制官网链接按钮 (仅在按钮上就地展示成功响应，2秒后恢复)
     document.querySelector('#copy-share-url-btn')?.addEventListener('click', async () => {
         const url = 'https://www.eqt.net.im';
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 await navigator.clipboard.writeText(url);
             }
-            setShareNotice(state, t('share_url_copied') || '官网链接已成功复制到剪贴板！', renderCallback);
         } catch (_) {
-            setShareNotice(state, url, renderCallback);
+            // ignore clipboard failure
+        }
+        const copyBtn = document.querySelector('#copy-share-url-btn');
+        if (copyBtn) {
+            copyBtn.classList.add('success-saved');
+            copyBtn.innerHTML = `
+                <span style="display: flex; align-items: center; justify-content: center;">✓</span>
+                <span>${escapeHTML(t('copied') || '已复制')}</span>
+            `;
+            setTimeout(() => {
+                if (copyBtn && copyBtn.isConnected) {
+                    copyBtn.classList.remove('success-saved');
+                    copyBtn.innerHTML = `
+                        <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
+                        <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
+                    `;
+                }
+            }, 2000);
         }
     });
 }
