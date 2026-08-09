@@ -6075,6 +6075,17 @@ function downloadIcon() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
 }
 
+// 加载图片: 失败返回 null 而非让 drawImage 对 broken 图抛 InvalidStateError
+function loadImageElement(src) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+}
+
 async function getMergedQRCodeDataURL(text, logoSrc) {
     const canvas = document.createElement('canvas');
     const size = 360;
@@ -6088,40 +6099,47 @@ async function getMergedQRCodeDataURL(text, logoSrc) {
         try {
             qrDataUrl = await window.go.main.App.GenerateQRCodePNG(text, size);
         } catch (e) {
-            console.warn('[EQT Share] Native QR code generation failed, fallback:', e);
+            console.warn('[EQT Share] Native QR code generation failed:', e);
         }
     }
-    if (!qrDataUrl) {
+    // Wails 绑定返回的必须是有效 Base64 Data URL 字符串, 否则视为本地生成不可用
+    if (typeof qrDataUrl !== 'string' || !qrDataUrl) {
+        qrDataUrl = '';
+    }
+    // 2. 本地生成不可用时, 仅在线降级到第三方 QR API; 离线无网络则直接判定失败 (调用方展示占位)
+    if (!qrDataUrl && isOnline()) {
         qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text)}`;
     }
 
-    const qrImg = new Image();
-    qrImg.crossOrigin = 'anonymous';
-    qrImg.src = qrDataUrl;
-    await new Promise((res) => { qrImg.onload = res; qrImg.onerror = res; });
+    // 3. 二维码图案: 无源或加载失败时返回 null, 明确告知二维码生成失败
+    if (!qrDataUrl) {
+        return null;
+    }
+    const qrImg = await loadImageElement(qrDataUrl);
+    if (!qrImg || qrImg.naturalWidth === 0) {
+        return null;
+    }
     ctx.drawImage(qrImg, 0, 0, size, size);
 
-    // 2. 在二维码正中间物理绘制品牌 Logo 徽章
+    // 4. 在二维码正中间物理绘制品牌 Logo 徽章 (logo 加载失败则跳过, 不影响二维码主体)
     if (logoSrc) {
-        const logoImg = new Image();
-        logoImg.crossOrigin = 'anonymous';
-        logoImg.src = logoSrc;
-        await new Promise((res) => { logoImg.onload = res; logoImg.onerror = res; });
+        const logoImg = await loadImageElement(logoSrc);
+        if (logoImg && logoImg.naturalWidth > 0) {
+            const logoSize = Math.floor(size * 0.22);
+            const x = (size - logoSize) / 2;
+            const y = (size - logoSize) / 2;
+            const pad = 6;
 
-        const logoSize = Math.floor(size * 0.22);
-        const x = (size - logoSize) / 2;
-        const y = (size - logoSize) / 2;
-        const pad = 6;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.roundRect(x - pad, y - pad, logoSize + pad * 2, logoSize + pad * 2, 12);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
 
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.roundRect(x - pad, y - pad, logoSize + pad * 2, logoSize + pad * 2, 12);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.drawImage(logoImg, x, y, logoSize, logoSize);
+            ctx.drawImage(logoImg, x, y, logoSize, logoSize);
+        }
     }
 
     return canvas.toDataURL('image/png');
@@ -6202,18 +6220,24 @@ async function downloadSharePosterImage() {
         const qrY = Math.max(Math.round((height - contentH) / 2), 8);
         const featY = qrY + qrSize + gap;
 
-        // 4. 绘制物理内嵌 Logo 的二维码 (8px 圆角与 DOM .share-qr-img 展示一致)
+        // 4. 绘制物理内嵌 Logo 的二维码 (8px 圆角与 DOM .share-qr-img 展示一致); 生成失败时降级留白, 海报仍可保存
         const qrDataUrl = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
-        const qrMergedImg = new Image();
-        qrMergedImg.src = qrDataUrl;
-        await new Promise((res) => { qrMergedImg.onload = res; qrMergedImg.onerror = res; });
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(qrX, qrY, qrSize, qrSize, 8);
-        ctx.clip();
-        ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
-        ctx.restore();
+        if (qrDataUrl) {
+            // 复用为面板渲染缓存, 避免保存后的 render() 重绘回落为占位图
+            cachedMergedQRDataURL = cachedMergedQRDataURL || qrDataUrl;
+            qrPrepareFailed = false;
+            const qrMergedImg = await loadImageElement(qrDataUrl);
+            if (qrMergedImg && qrMergedImg.naturalWidth > 0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(qrX, qrY, qrSize, qrSize, 8);
+                ctx.clip();
+                ctx.drawImage(qrMergedImg, qrX, qrY, qrSize, qrSize);
+                ctx.restore();
+            }
+        } else {
+            qrPrepareFailed = true;
+        }
 
         // 5. 绘制下方 About 横版品牌插图 (等比 contain, 与 DOM object-fit: contain 一致)
         ctx.drawImage(featImage, (width - featWidth) / 2, featY, featWidth, featHeight);
@@ -6267,6 +6291,7 @@ async function downloadSharePosterImage() {
 
 let cachedMergedQRDataURL = '';
 let isPreparingQR = false;
+let qrPrepareFailed = false; // 二维码合成失败(离线且本地生成不可用)时置真, 供面板展示提示
 
 async function prepareMergedQRCode() {
     if (cachedMergedQRDataURL) {
@@ -6281,12 +6306,23 @@ async function prepareMergedQRCode() {
     console.log('[EQT Share] Starting async QR code pixel merge with center logo...');
     try {
         cachedMergedQRDataURL = await getMergedQRCodeDataURL('www.eqt.net.im', faviconURL);
-        console.log('[EQT Share] QR code merged successfully, length:', cachedMergedQRDataURL.length);
-        const imgEl = document.querySelector('#share-qr-img-element');
-        if (imgEl && cachedMergedQRDataURL) {
-            imgEl.src = cachedMergedQRDataURL;
+        if (cachedMergedQRDataURL) {
+            qrPrepareFailed = false;
+            console.log('[EQT Share] QR code merged successfully, length:', cachedMergedQRDataURL.length);
+            const imgEl = document.querySelector('#share-qr-img-element');
+            if (imgEl) {
+                imgEl.src = cachedMergedQRDataURL;
+            }
+            // 移除先前失败时渲染的提示 (覆盖先失败后成功的场景)
+            document.querySelector('.share-qr-wrapper .qr-failed-tip')?.remove();
+        } else {
+            // 本地生成不可用且离线时, getMergedQRCodeDataURL 返回 null, 不写入缓存以允许联网后重试
+            qrPrepareFailed = true;
+            console.warn('[EQT Share] QR code generation failed (offline or native gen unavailable).');
+            render(); // 刷新面板以展示失败提示
         }
     } catch (e) {
+        qrPrepareFailed = true;
         console.error('[EQT Share] Failed to prepare merged QR code:', e);
     } finally {
         isPreparingQR = false;
@@ -6299,8 +6335,8 @@ function renderSharePanel() {
     const scatteredHtml = generateRandomScatteredIcons();
     const qrSrc = cachedMergedQRDataURL || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="%2316a34a" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect></svg>';
 
-    // 若尚未异步缓存好，立即触发后台异步合成并更新DOM
-    if (!cachedMergedQRDataURL) {
+    // 若尚未异步缓存好且未在合成中, 立即触发后台异步合成并更新DOM; 已失败则不自动重试, 避免重复触发
+    if (!cachedMergedQRDataURL && !isPreparingQR && !qrPrepareFailed) {
         setTimeout(prepareMergedQRCode, 0);
     }
 
@@ -6316,6 +6352,7 @@ function renderSharePanel() {
                     <!-- 上方: 真正的物理带Logo单张二维码图片 (没有任何DOM叠加Overlay) -->
                     <div class="share-qr-wrapper">
                         <img class="share-qr-img" id="share-qr-img-element" src="${qrSrc}" alt="EQT Website QR Code" />
+                        ${qrPrepareFailed ? `<div class="qr-failed-tip" style="margin-top: 8px; text-align: center; font-size: 11px; color: var(--danger, #b42318);">${escapeHTML(t('qr_generate_failed_tip') || '二维码生成失败（离线且本地生成不可用），请联网重试')}</div>` : ''}
                     </div>
 
                     <!-- 下方: About 界面的品牌横版插图（收窄对齐 175px 二维码宽度） -->
@@ -6768,7 +6805,11 @@ render();
 checkPendingCrashReport();
 
 // 联网状态变化时重绘,确保免费额度/套餐 badge 随联网状态即时显隐。
-window.addEventListener('online', () => render());
+// 恢复联网时重置二维码失败标志, 允许面板自动重新生成二维码。
+window.addEventListener('online', () => {
+    qrPrepareFailed = false;
+    render();
+});
 window.addEventListener('offline', () => render());
 loadSettings().then(() => {
     connectAgentEvents();

@@ -121,6 +121,12 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 推广海报与官网链接统一为 `www.eqt.net.im`。
   - 二维码生成优先调用 Wails 原生绑定的 Go 端 `GenerateQRCodePNG(content, size)`（基于 `github.com/skip2/go-qrcode` 高容错 `qrcode.Highest` 算法），直接返回 Base64 Data URL。
   - **零外部网络依赖**：即使在完全断网/离线机房环境下，也能毫秒级本地合成带 Logo 徽章的高清海报二维码并保存，杜绝依赖第三方外部 QR API。
+  - **失败降级约定**：
+    - 图片一律经 `loadImageElement(src)` 加载，失败返回 `null` 而非让 `ctx.drawImage(broken)` 抛 `InvalidStateError`（离线时第三方 QR API 加载失败必然 broken，直接 drawImage 会让整个合成/下载失败）。
+    - 本地 `GenerateQRCodePNG` 不可用（返回非 string）且离线时，`getMergedQRCodeDataURL` **不 fallback 外部 API**（必然失败），返回 `null`。
+    - `prepareMergedQRCode` 收到 `null` 置 `qrPrepareFailed=true` 并渲染失败提示（`qr_generate_failed_tip`，已在 7 语种 i18n），`renderSharePanel` 据 `!qrPrepareFailed` 防止重复触发。
+    - `online` 事件重置 `qrPrepareFailed=false` 并 `render()`，面板自动重新生成二维码。
+    - `downloadSharePosterImage` 二维码生成失败时降级留白，海报仍可保存；成功时结果复用为 `cachedMergedQRDataURL`，避免保存后 `render()` 重绘回落占位。
 
 ---
 
