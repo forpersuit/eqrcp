@@ -3057,6 +3057,7 @@ function bindEvents() {
                 } else if (menuItem.dataset.openShare) {
                     state.topMenuOpen = false;
                     state.activePanel = '';
+                    state.notice = '';
                     state.showShareOverlay = true;
                     render();
                     prepareMergedQRCode(faviconURL, render).catch(() => {});

@@ -262,19 +262,44 @@ export async function downloadSharePosterImage(horizontalLogoURL, faviconURL, st
             document.body.removeChild(link);
         }
 
-        // 7. 成功提示 (统一使用应用内响应式通知机制)
-        state.notice = t('poster_downloaded') || '推广海报图片已成功保存！';
-        if (typeof renderCallback === 'function') {
-            renderCallback();
-        }
+        // 7. 成功提示 (统一使用应用内响应式通知机制, 3秒后自动淡出)
+        setShareNotice(state, t('poster_downloaded') || '推广海报图片已成功保存！', renderCallback);
     } catch (e) {
         console.error('Failed to download share poster image:', e);
     }
 }
 
+let shareNoticeTimeout = null;
+
+function setShareNotice(state, msg, renderCallback) {
+    if (shareNoticeTimeout) {
+        clearTimeout(shareNoticeTimeout);
+        shareNoticeTimeout = null;
+    }
+    if (!state) return;
+    state.notice = msg;
+    if (typeof renderCallback === 'function') {
+        renderCallback();
+    }
+    shareNoticeTimeout = setTimeout(() => {
+        if (state && state.notice === msg) {
+            state.notice = '';
+            if (typeof renderCallback === 'function') {
+                renderCallback();
+            }
+        }
+        shareNoticeTimeout = null;
+    }, 3000);
+}
+
 export function closeShareOverlay(state, renderCallback) {
     if (state && state.showShareOverlay) {
+        if (shareNoticeTimeout) {
+            clearTimeout(shareNoticeTimeout);
+            shareNoticeTimeout = null;
+        }
         state.showShareOverlay = false;
+        state.notice = '';
         if (typeof renderCallback === 'function') {
             renderCallback();
         }
@@ -364,15 +389,9 @@ export function bindShareEvents(state, t, escapeHTML, horizontalLogoURL, favicon
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 await navigator.clipboard.writeText(url);
             }
-            state.notice = t('share_url_copied') || '官网链接已成功复制到剪贴板！';
-            if (typeof renderCallback === 'function') {
-                renderCallback();
-            }
+            setShareNotice(state, t('share_url_copied') || '官网链接已成功复制到剪贴板！', renderCallback);
         } catch (_) {
-            state.notice = url;
-            if (typeof renderCallback === 'function') {
-                renderCallback();
-            }
+            setShareNotice(state, url, renderCallback);
         }
     });
 }
