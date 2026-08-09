@@ -60,6 +60,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
+      # ── Pages (Test) ─────────────────────────────────────────
+
+      - name: Deploy eqt-website to Pages (test)
+        working-directory: cloudflare/eqt-website
+        run: npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
       - name: Notify via Telegram
         if: always()
         run: |

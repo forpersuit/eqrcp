@@ -52,9 +52,9 @@
 | R2 | `eqt-crash-reports` | `eqt-crash-reports-test` | 崩溃上报 |
 | R2 | `eqt-feedback-bucket` | `eqt-feedback-bucket-test` | 反馈图片 |
 | R2 | `eqt-downloads` | (可选) `eqt-downloads-test` | 更新包分发 |
-| Pages | `eqt` (www) | (可选) `eqt-test` | 测试门户/结账 |
+| Pages | `eqt` (www) | `eqt-test` (eqt-test.pages.dev) | 测试门户/沙箱购买/生成测试激活码 |
 
-> 可选资源(`eqt-downloads-test`、`eqt-test` Pages、admin 测试环境)测试阶段不需要,需要时再建。admin 面板保持直连生产(`DRM_API_UPSTREAM` 已支持覆盖),由运维自己看,不需要独立测试环境。
+> `eqt-test` Pages 是测试购买与发码链路的关键环节。测试版客户端点击购买跳转至 `https://eqt-test.pages.dev/pricing.html`，由 Paddle 沙箱支付触发测试 Worker 签发测试激活码。admin 面板保持直连生产(`DRM_API_UPSTREAM` 已支持覆盖)，不需要独立测试环境。
 
 ## 3. wrangler `[env.test]` 安全要点
 
@@ -160,19 +160,30 @@ curl -s https://eqt-drm-api-test.<subdomain>.workers.dev/api/v1/health
 curl -s https://eqt-feedback-api-test.<subdomain>.workers.dev/api/v1/health
 ```
 
+### 4.10 部署 Pages 测试站 (eqt-test)
+
+用于承载测试版客户端的沙箱购买页面 (`pricing.html`) 与测试客户门户 (`portal.html`)：
+
+```bash
+cd cloudflare/eqt-website
+npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
+```
+
+部署完成后，即可通过 `https://eqt-test.pages.dev/pricing.html` 访问测试价格页。
+
 ## 5. 测试 API 基地址速查
 
 | 客户端 | 测试基地址 | 切换方式 |
 |---|---|---|
 | GUI 桌面端 | `https://eqt-drm-api-test.<subdomain>.workers.dev` | `wails dev -tags eqtdev`(见 gui-environment.md) |
-| 网页(pricing/portal/index) | 同上 | `js/api-base.js` 自动:`*.eqt-test.pages.dev` 或 `test.eqt.net.im` → 测试,其余 → 生产 |
+| 网页(pricing/portal/index) | `https://eqt-test.pages.dev` | `js/api-base.js` 自动:`*.eqt-test.pages.dev` 或 `test.eqt.net.im` → 测试 Worker,其余 → 生产 |
 | admin 面板 | 生产(不变) | `DRM_API_UPSTREAM` 环境变量 |
 
 ## 6. 部署方式
 
-- **自动**:push 到 `dev` 分支 → `deploy-test.yml` 自动部署两个测试 Worker(`cancel-in-progress` 保证只留最新)。首次需资源建好(§4)。
+- **自动**:push 到 `dev` 分支 → `deploy-test.yml` 自动部署测试 Workers 与 `eqt-test` Pages 测试站。
 - **手动**:GitHub → Actions → **Deploy Test** → **Run workflow**(任意分支)。
-- **本地**:`npx wrangler deploy --env test`(需 `CLOUDFLARE_API_TOKEN` 或本机登录)。
+- **本地**:`npx wrangler deploy --env test` 以及 `npx wrangler pages deploy cloudflare/eqt-website --project-name=eqt-test --branch=dev`。
 
 ## 7. 验证清单
 
