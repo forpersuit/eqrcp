@@ -2652,6 +2652,10 @@ dd {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 9999;
     white-space: pre-line;
+    max-width: min(85vw, 560px);
+    word-break: break-word;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .toast-notification.show {

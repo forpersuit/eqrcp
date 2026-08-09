@@ -4143,6 +4143,7 @@ async function handleAutoSaveSettings() {
         await saveSettingsData();
         if (state.error) {
             state.error = '';
+            render();
         }
         const currentLang = state.settings?.lang || 'zh';
         if (currentLang !== prevLang) {
@@ -4196,11 +4197,13 @@ function syncSettingsFromDOM() {
     if (closeBehavior) state.settings.closeBehavior = closeBehavior.value;
     if (iface) state.settings.interface = iface.value;
     if (port) {
-        let p = parseInt(port.value, 10);
+        let p = Number(port.value);
         if (isNaN(p) || p < 0) {
             p = 0;
         } else if (p > 65535) {
             p = 65535;
+        } else {
+            p = Math.floor(p);
         }
         state.settings.port = p;
     }
