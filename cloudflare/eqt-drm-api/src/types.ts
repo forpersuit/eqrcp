@@ -86,7 +86,7 @@ export interface SystemErrorLog {
   created_at: string;
 }
 
-export const PRICE_LIFETIME_ID = "pri_01kxymyma34hgmndccwswheta3";
+export const PRICE_LIFETIME_ID = "pri_01kyhmkv4ppj10r4cdgw3sv48p";
 export const PRICE_YEARLY_ID = "pri_01kxymxqngex49tg65wb0701pc";
 
 // Business Logic Constants
