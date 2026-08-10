@@ -169,10 +169,12 @@ export async function handlePaddleRoutes(
 
       // Extract Price ID
       const items = data.items || [];
+      const effectiveLifetimeId = env.PRICE_LIFETIME_ID || PRICE_LIFETIME_ID;
+      const effectiveYearlyId = env.PRICE_YEARLY_ID || PRICE_YEARLY_ID;
       let matchedPriceId = "";
       for (const item of items) {
         const priceId = item.price?.id || item.price_id;
-        if (priceId === PRICE_LIFETIME_ID || priceId === PRICE_YEARLY_ID) {
+        if (priceId === effectiveLifetimeId || priceId === effectiveYearlyId) {
           matchedPriceId = priceId;
           break;
         }
@@ -261,7 +263,7 @@ export async function handlePaddleRoutes(
           const lastPurchaseTime = (targetLic.last_purchased_at || targetLic.created_at) ? new Date(targetLic.last_purchased_at || targetLic.created_at).getTime() : 0;
           const isInRefundWindow = lastPurchaseTime > 0 && (nowMs - lastPurchaseTime < REFUND_WINDOW_MS);
 
-          if (matchedPriceId === PRICE_LIFETIME_ID) {
+          if (matchedPriceId === effectiveLifetimeId) {
             if (isInRefundWindow) {
               return new Response(JSON.stringify({
                 error: "Target license is within the 14-day refund window of its latest payment. Please request a refund first before purchasing lifetime.",

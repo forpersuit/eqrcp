@@ -22,6 +22,9 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   /** Telegram chat ID for alert notifications */
   TELEGRAM_CHAT_ID?: string;
+  /** Paddle Price ID overrides */
+  PRICE_LIFETIME_ID?: string;
+  PRICE_YEARLY_ID?: string;
 }
 
 /** purchase | promo | admin | test — see docs/payment/license-source-and-refund-policy.md */

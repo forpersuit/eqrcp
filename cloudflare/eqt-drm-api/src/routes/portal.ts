@@ -700,7 +700,7 @@ export async function handlePortalRoutes(
 
     return new Response(JSON.stringify({
       success: true,
-      price_id: PRICE_LIFETIME_ID,
+      price_id: env.PRICE_LIFETIME_ID || PRICE_LIFETIME_ID,
       target_license_code: license_code,
       passthrough: JSON.stringify({ target_license_code: license_code })
     }), {

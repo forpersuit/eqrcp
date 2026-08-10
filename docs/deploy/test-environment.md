@@ -117,19 +117,38 @@ npx wrangler d1 execute eqt-feedback-db-test --remote --file=schema.sql
 
 ```bash
 cd ../eqt-drm-api
-echo "<sandbox-paddle-key>" | npx wrangler secret put PADDLE_API_KEY --env test
+echo "<sandbox-paddle-key>"    | npx wrangler secret put PADDLE_API_KEY --env test
 #   ↑ 必须是 pdl_sdbx_ 开头的沙箱密钥 —— 这是测试环境识别与激活码 test 标记的判据
+echo "<sandbox-webhook-secret>" | npx wrangler secret put PADDLE_WEBHOOK_SECRET --env test
+#   ↑ Paddle 沙箱后台创建 Webhook 时生成的 pdl_ntfset_... 密钥。若缺失，Webhook 验签会报 500 导致无法铸码！
 echo "2cf5baa872e73d6bc25d69be0f9705adc3cffd00ec72ffdafbe494c3c3afa2e5" | npx wrangler secret put ED25519_PRIVATE_KEY --env test
 #   ↑ 测试专用密钥对的 32-byte seed(hex)。GUI 内置公钥已随 eqtdev tag 切换为对应公钥 ce07f0...,
 #     无需生产私钥。⚠️ 必须传 hex seed,不能贴 base64 PKCS8 —— hexToUint8Array 不校验字符合法性,
 #     base64 会被误解析成垃圾私钥(不报错但签名无法被任何公钥验证,排查时优先核对 secret 是纯 hex)。
-echo "<mail-password>"      | npx wrangler secret put MAIL_SENDER_PASSWORD --env test
-echo "<telegram-token>"     | npx wrangler secret put TELEGRAM_BOT_TOKEN --env test
+echo "<mail-password>"         | npx wrangler secret put MAIL_SENDER_PASSWORD --env test
+echo "<telegram-token>"        | npx wrangler secret put TELEGRAM_BOT_TOKEN --env test
 cd ../eqt-feedback-api
-echo "<telegram-token>"     | npx wrangler secret put TELEGRAM_BOT_TOKEN --env test
+echo "<telegram-token>"        | npx wrangler secret put TELEGRAM_BOT_TOKEN --env test
 ```
 
-### 4.7 部署前安全验证(--dry-run)
+### 4.7 Paddle 沙箱 Webhook 目的地配置
+
+用于在沙箱结账成功后接收 `transaction.completed` 事件并自动铸造测试激活码：
+
+1. 登录 [Paddle Sandbox Dashboard](https://sandbox-vendors.paddle.com/)；
+2. 导航至 **Developer tools** ➜ **Notifications (Webhooks)** ➜ 点击 **New destination**；
+3. 配置端点参数：
+   - **URL**: `https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/paddle/webhook`
+   - **Description**: `EQT Test DRM Webhook`
+   - **Events 勾选**:
+     - `transaction.completed`（必选：沙箱支付成功触发测试激活码铸造）
+     - `subscription.created`（订阅创建）
+     - `subscription.updated`（订阅更新）
+     - `subscription.canceled`（订阅取消）
+     - `transaction.revoked` / `transaction.refunded`（退款/撤销）
+4. 保存后复制生成的 Webhook Secret (`pdl_ntfset_...`)，回填执行上文的 `PADDLE_WEBHOOK_SECRET` 密钥命令。
+
+### 4.8 部署前安全验证(--dry-run)
 
 ```bash
 cd ../eqt-drm-api
