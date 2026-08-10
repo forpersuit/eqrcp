@@ -57,21 +57,20 @@ export async function verifyPaddleSignature(
 ): Promise<boolean> {
   if (!signatureHeader || !secretKey) return false;
 
-  const parts = signatureHeader.split(";");
-  if (parts.length !== 2) return false;
+  const parts = signatureHeader.split(";").map(p => p.trim());
 
   const timestampPart = parts.find(p => p.startsWith("ts="));
   const signaturePart = parts.find(p => p.startsWith("h1="));
 
   if (!timestampPart || !signaturePart) return false;
 
-  const ts = timestampPart.split("=")[1];
-  const h1 = signaturePart.split("=")[1];
+  const ts = timestampPart.slice(3).trim();
+  const h1 = signaturePart.slice(3).trim();
 
   if (!ts || !h1) return false;
 
   // Validate timestamp drift (5 minutes / 300 seconds limit)
-  const timestampInt = parseInt(ts) * 1000;
+  const timestampInt = parseInt(ts, 10) * 1000;
   if (isNaN(timestampInt)) return false;
   const currentTime = Date.now();
   if (Math.abs(currentTime - timestampInt) > 300 * 1000) {
@@ -79,7 +78,7 @@ export async function verifyPaddleSignature(
   }
 
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(secretKey);
+  const keyData = encoder.encode(secretKey.trim());
   const messageData = encoder.encode(`${ts}:${rawBody}`);
 
   const key = await crypto.subtle.importKey(
@@ -96,5 +95,5 @@ export async function verifyPaddleSignature(
     (x: number) => ('00' + x.toString(16)).slice(-2)
   ).join('');
 
-  return signatureHex === h1;
+  return signatureHex.toLowerCase() === h1.toLowerCase();
 }
