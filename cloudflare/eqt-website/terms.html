@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html class="dark scroll-smooth" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <script>
+        (function() {
+            var h = window.location.hostname;
+            var isTestHost = (h === 'test.eqt.net.im' || h === 'eqt-test.pages.dev' || (h.length > 19 && h.slice(-19) === '.eqt-test.pages.dev') || h === 'localhost' || h.startsWith('127.0.0.1'));
+            if (!isTestHost && h !== 'www.eqt.net.im') {
+                window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+            }
+        })();
+    </script>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Terms of Service - EQT (Easy QR Transfer)</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png"/>
+
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#080e0c",
+                        "surface": "#080e0c",
+                        "surface-variant": "#17231f",
+                        "primary": "#39e5b6",
+                        "secondary": "#156f5a",
+                        "on-surface": "#dae7e3",
+                        "on-surface-variant": "#a5b9b2",
+                        "outline": "#677e74",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-md">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center">
+            <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
+                <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
+                <span>EQT</span>
+            </a>
+            <div class="flex items-center gap-4">
+                <select id="lang-select" class="bg-surface-variant text-on-surface text-xs rounded-lg px-2 py-1 border border-white/10 focus:outline-none cursor-pointer" onchange="setLanguage(this.value)">
+                    <option value="en">English (Baseline)</option>
+                    <option value="zh">简体中文</option>
+                    <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                    <option value="fr">Français</option>
+                </select>
+                <a class="flex items-center gap-1 text-sm text-secondary hover:underline" href="/">
+                    <span class="material-symbols-outlined text-base">arrow_back</span> <span data-i18n="back_home">Back to Home</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow max-w-4xl mx-auto px-6 py-12 w-full">
+        <div class="glass-panel rounded-2xl p-8 md:p-12 space-y-8">
+            <div class="border-b border-white/10 pb-6">
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-white mb-2" data-i18n="title">Terms of Service</h1>
+                <p class="text-on-surface-variant text-sm" data-i18n="last_updated">Last updated: July 15, 2026 (English baseline text governs legal terms)</p>
+            </div>
+
+            <!-- Content -->
+            <section class="space-y-6">
+                <div class="space-y-4 text-on-surface-variant text-sm leading-relaxed">
+                    <p data-i18n="p1">Welcome to EQT! These terms and conditions outline the rules and regulations for the use of EQT's Website and software client, located at eqt.net.im.</p>
+                    
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h1">Acceptance of Terms</h3>
+                    <p data-i18n="p2">By accessing this website and downloading our software client, we assume you accept these terms and conditions. Do not continue to use EQT if you do not agree to take all of the terms and conditions stated on this page.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h2">Software License</h3>
+                    <p data-i18n="p3">Unless otherwise stated, EQT owns the intellectual property rights for all material on EQT. You are granted a limited, non-exclusive license to use the software. You must not lease, sell, or decompile the software without authorization.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h3">Payments & Merchant of Record</h3>
+                    <p data-i18n="p4">All payments, order processing, and transaction billing on this website are handled and fulfilled by <strong>Paddle.com</strong>, our online reseller and Merchant of Record (MoR). Paddle is responsible for calculating transaction taxes (such as VAT or Sales Tax) and handles customer support queries regarding payments, invoices, and billing issues.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h4">Plus Subscriptions & Refund Policy</h3>
+                    <p data-i18n="p5">We provide a <strong>14-day money-back guarantee</strong> for <strong>paid</strong> Plus licenses purchased through Paddle. If you are unsatisfied with the Plus features, you may request a refund within 14 days of purchase via the Customer Portal, support email support@eqt.net.im, or Paddle customer service.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h5">Disclaimer of Liabilities</h3>
+                    <p data-i18n="p6">EQT functions purely as a local network data facilitator. In no event shall EQT be liable for any data loss, network corruption, or damages resulting from the use of the client.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h6">Governing Law & Jurisdiction</h3>
+                    <p data-i18n="p7">These terms and conditions shall be governed by and construed in accordance with the laws of <strong>England and Wales</strong>. Any legal actions or disputes related to orders and payments shall be subject to the exclusive jurisdiction of the English courts.</p>
+
+                    <h3 class="text-white font-medium text-base mt-4" data-i18n="h7">Contact Information</h3>
+                    <p data-i18n="p8">For any inquiries, clarifications, or support regarding our terms, please email us at <a href="mailto:support@eqt.net.im" class="text-secondary hover:underline">support@eqt.net.im</a>.</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-6 bg-background border-t border-white/10 text-center text-xs text-on-surface-variant">
+        <p>© <span id="copyright-year">2026</span> EQT (Easy QR Transfer). All rights reserved.</p>
+    </footer>
+
+    <script>
+        document.getElementById('copyright-year').textContent = new Date().getFullYear();
+
+        const translations = {
+            en: {
+                back_home: "Back to Home",
+                title: "Terms of Service",
+                last_updated: "Last updated: July 15, 2026 (English baseline text governs legal terms)",
+                p1: "Welcome to EQT! These terms and conditions outline the rules and regulations for the use of EQT's Website and software client, located at eqt.net.im.",
+                h1: "Acceptance of Terms",
+                p2: "By accessing this website and downloading our software client, we assume you accept these terms and conditions. Do not continue to use EQT if you do not agree to all terms.",
+                h2: "Software License",
+                p3: "Unless otherwise stated, EQT owns the intellectual property rights for all material on EQT. You are granted a limited, non-exclusive license to use the software.",
+                h3: "Payments & Merchant of Record",
+                p4: "All payments, order processing, and transaction billing on this website are handled and fulfilled by Paddle.com, our online reseller and Merchant of Record (MoR).",
+                h4: "Plus Subscriptions & Refund Policy",
+                p5: "We provide a 14-day money-back guarantee for paid Plus licenses purchased through Paddle. Request refunds via Customer Portal or support email.",
+                h5: "Disclaimer of Liabilities",
+                p6: "EQT functions purely as a local network data facilitator. In no event shall EQT be liable for any data loss resulting from the use of the client.",
+                h6: "Governing Law & Jurisdiction",
+                p7: "These terms and conditions shall be governed by and construed in accordance with the laws of England and Wales under Paddle's standard reseller policies.",
+                h7: "Contact Information",
+                p8: "For any inquiries regarding our terms, please email us at support@eqt.net.im."
+            },
+            zh: {
+                back_home: "返回首页",
+                title: "服务条款",
+                last_updated: "最近更新时间：2026年7月15日（法律条款以英文版本为准）",
+                p1: "欢迎使用 EQT！本服务条款规定了使用 EQT 官网及软件客户端（eqt.net.im）的相关规则与条款。",
+                h1: "条款的接受",
+                p2: "访问本网站或下载使用我们的客户端，即表示您接受并同意遵守本服务条款。如果您不同意，请勿继续使用 EQT。",
+                h2: "软件授权与知识产权",
+                p3: "除非另有说明，EQT 拥有本软件与网站的所有知识产权。您获得的是非排他性、受限制的软件使用许可，不得擅自转租、销售或逆向工程。",
+                h3: "支付与名义商家 (Merchant of Record)",
+                p4: "本网站的所有订单支付、发票开具和交易结算均由官方线上代理商 Paddle.com (Merchant of Record) 统筹处理与履约。",
+                h5: "免责声明",
+                p6: "EQT 仅作为局域网数据传输工具。在任何情况下，EQT 不对因使用客户端造成的任何数据丢失或网络中断承担连带责任。",
+                h6: "适用法律与管辖权",
+                p7: "本服务条款受英格兰和威尔士法律管辖。与订单和支付相关的纠纷受英格兰法院管辖（与 Paddle 商务条款保持一致）。",
+                h7: "联系方式",
+                p8: "如果您对本服务条款有任何疑问，请通过电子邮箱 support@eqt.net.im 联系我们。"
+            },
+            ja: {
+                back_home: "ホームに戻る",
+                title: "利用規約",
+                last_updated: "最終更新日：2026年7月15日（法的効力は英文版が優先されます）",
+                p1: "EQT へようこそ！本利用規約は、EQT ウェブサイトおよびソフトウェアクライアントのご利用に関する規約を定めたものです。",
+                h1: "規約の同意",
+                p2: "当サイトへのアクセスおよびアプリのダウンロードにより、本規約に同意したものとみなされます。",
+                h2: "ソフトウェアライセンス",
+                p3: "特に記載がない限り、EQT がすべての知的財産権を保有します。ユーザーには限定的な使用権が許諾されます。",
+                h3: "決済および販売代理店 (Paddle)",
+                p4: "すべての決済および注文処理は、正規販売代理店である Paddle.com (Merchant of Record) によって管理・履行されます。",
+                h5: "免責事項",
+                p6: "EQT はローカルネットワーク伝送ツールとして機能します。使用に伴うデータ損失等の損害について責任を負いません。",
+                h6: "準拠法および管轄裁判所",
+                p7: "本規約はイングランドおよびウェールズの法律に準拠します。",
+                h7: "お問い合わせ",
+                p8: "規約に関するご質問は support@eqt.net.im までご連絡ください。"
+            },
+            ko: {
+                back_home: "홈으로 돌아가기",
+                title: "서비스 이용약관",
+                last_updated: "최종 수정일: 2026년 7월 15일 (법적 효력은 영문 원본 기준)",
+                p1: "EQT 이용을 환영합니다! 본 이용약관은 EQT 웹사이트 및 소프트웨어 클라이언트 이용 규칙을 규정합니다.",
+                h1: "약관의 동의",
+                p2: "웹사이트 접속 및 앱 다운로드 시 본 약관에 동의하는 것으로 간주됩니다.",
+                h2: "소프트웨어 라이선스",
+                p3: "달리 명시되지 않는 한 EQT가 모든 지적 재산권을 소유합니다. 사용자에게는 한정된 사용 권한이 부여됩니다.",
+                h3: "결제 대행 (Paddle)",
+                p4: "모든 결제 및 주문 처리는 공식 판매 대행사인 Paddle.com(Merchant of Record)을 통해 이행됩니다.",
+                h5: "책임의 한계",
+                p6: "EQT는 로컬 네트워크 데이터 전송 도구입니다. 앱 사용으로 인한 데이터 손실에 대해 책임을 지지 않습니다.",
+                h6: "준거법 및 관할",
+                p7: "본 약관은 잉글랜드 및 웨일스 법률의 적용을 받습니다.",
+                h7: "문의처",
+                p8: "약관에 관한 문의 사항은 support@eqt.net.im으로 연락해 주세요."
+            },
+            es: {
+                back_home: "Volver al inicio",
+                title: "Términos de servicio",
+                last_updated: "Última actualización: 15 de julio de 2026 (El texto en inglés rige los términos legales)",
+                p1: "¡Bienvenido a EQT! Estos términos y condiciones rigen el uso del sitio web y el cliente de EQT.",
+                h1: "Aceptación de los términos",
+                p2: "Al acceder a este sitio web y descargar nuestro cliente, asumimos que acepta estos términos.",
+                h2: "Licencia de software",
+                p3: "EQT posee los derechos de propiedad intelectual. Se le concede una licencia de uso limitada y no exclusiva.",
+                h3: "Pagos y revendedor (Paddle)",
+                p4: "Todos los pagos y el procesamiento de pedidos son administrados por Paddle.com como comerciante de registro.",
+                h5: "Exención de responsabilidad",
+                p6: "EQT funciona como un facilitador de datos de red local. No nos hacemos responsables por la pérdida de datos.",
+                h6: "Ley aplicable",
+                p7: "Estos términos se regirán por las leyes de Inglaterra y Gales.",
+                h7: "Contacto",
+                p8: "Si tiene preguntas sobre nuestros términos, envíenos un correo a support@eqt.net.im."
+            },
+            de: {
+                back_home: "Zurück zur Startseite",
+                title: "Nutzungsbedingungen",
+                last_updated: "Zuletzt aktualisiert: 15. Juli 2026 (Die englische Fassung ist rechtlich maßgebend)",
+                p1: "Willkommen bei EQT! Diese Nutzungsbedingungen regeln die Nutzung der EQT-Website und der Software.",
+                h1: "Zustimmung zu den Bedingungen",
+                p2: "Durch den Zugriff auf diese Website und den Download der Software akzeptieren Sie diese Bedingungen.",
+                h2: "Softwarelizenz",
+                p3: "EQT besitzt die Rechte an der Software. Ihnen wird eine beschränkte Lizenz gewährt.",
+                h3: "Zahlungen & Händler (Paddle)",
+                p4: "Alle Zahlungen und Bestellungen werden von Paddle.com als Merchant of Record abgewickelt.",
+                h5: "Haftungsausschluss",
+                p6: "EQT dient als lokales Übertragungstool. EQT haftet nicht für Datenverluste.",
+                h6: "Anwendbares Recht",
+                p7: "Diese Bedingungen unterliegen den Gesetzen von England und Wales.",
+                h7: "Kontakt",
+                p8: "Bei Fragen wenden Sie sich bitte an support@eqt.net.im."
+            },
+            fr: {
+                back_home: "Retour à l'accueil",
+                title: "Conditions d'utilisation",
+                last_updated: "Dernière mise à jour : 15 juillet 2026 (Le texte anglais fait foi)",
+                p1: "Bienvenue sur EQT ! Ces conditions régissent l'utilisation du site web et du logiciel EQT.",
+                h1: "Acceptation des conditions",
+                p2: "En accédant à ce site et en téléchargeant le logiciel, vous acceptez ces conditions d'utilisation.",
+                h2: "Licence logicielle",
+                p3: "EQT détient les droits de propriété intellectuelle. Une licence d'utilisation limitée vous est accordée.",
+                h3: "Paiements et revendeur (Paddle)",
+                p4: "Tous les paiements sont gérés par Paddle.com en tant que revendeur agréé (MoR).",
+                h5: "Limitation de responsabilité",
+                p6: "EQT est un outil de transfert en réseau local. EQT n'est pas responsable des pertes de données.",
+                h6: "Loi applicable",
+                p7: "Ces conditions sont régies par les lois d'Angleterre et du Pays de Galles.",
+                h7: "Contact",
+                p8: "Pour toute question, contactez-nous à support@eqt.net.im."
+            }
+        };
+
+        function setLanguage(lang) {
+            const dict = translations[lang] || translations.en;
+            document.cookie = `eqt_lang=${lang};path=/;max-age=31536000`;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) {
+                    el.textContent = dict[key];
+                }
+            });
+            const sel = document.getElementById('lang-select');
+            if (sel) sel.value = lang;
+        }
+
+        (function initLang() {
+            const cookies = document.cookie.split(';');
+            let savedLang = '';
+            for (let c of cookies) {
+                const [k, v] = c.trim().split('=');
+                if (k === 'eqt_lang') savedLang = v;
+            }
+            if (!savedLang) {
+                const navLang = (navigator.language || 'en').toLowerCase().substring(0, 2);
+                savedLang = translations[navLang] ? navLang : 'en';
+            }
+            setLanguage(savedLang);
+        })();
+    </script>
+</body>
+</html>

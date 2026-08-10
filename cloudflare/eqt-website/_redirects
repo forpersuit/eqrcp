@@ -1,0 +1,4 @@
+# Cloudflare Pages _redirects
+# Redirect bare domain to www (301 Permanent)
+https://eqt.net.im/* https://www.eqt.net.im/:splat 301
+http://eqt.net.im/*  https://www.eqt.net.im/:splat 301

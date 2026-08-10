@@ -1,0 +1,284 @@
+import { get, writable } from 'svelte/store';
+import type { Message, Device, TransferEvent } from '../services/types';
+import { shouldSurfaceNotice, displayFileName } from './systemNotice';
+
+export { shouldSurfaceNotice, displayFileName } from './systemNotice';
+
+export const messages = writable<Message[]>([]);
+export const peers = writable<Device[]>([]);
+export const transfers = writable<Record<string, TransferEvent>>({});
+export const connState = writable<'connecting' | 'connected' | 'disconnected'>('disconnected');
+export const currentDevice = writable<Device | null>(null);
+export const systemMessages = writable<string[]>([]); // For in-app notifications (includes [App] debug lines)
+/** Dev Debug Mode: when true, [App] process logs also appear in the chat stream. Default off. */
+export const devDebugMode = writable(false);
+/** True after auto-reconnect attempts are exhausted; cleared on successful connect / manual resume. */
+export const reconnectExhausted = writable(false);
+/** active=normal; replaced=same peer took over in another tab; kicked/left=terminal offline */
+export const chatSessionStatus = writable<'active' | 'replaced' | 'kicked' | 'left'>('active');
+/** True when older message pages remain above the join boundary. */
+export const historyHasMore = writable(false);
+/** Exclusive cursor for load_history (oldest seq currently in the UI page window). */
+export const historyOldestSeq = writable(0);
+export const historyLoading = writable(false);
+
+function initDevDebugModeFromEnvironment(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debug') === '1' || params.get('dev') === '1') {
+      devDebugMode.set(true);
+      localStorage.setItem('chat_dev_debug', 'true');
+    } else if (localStorage.getItem('chat_dev_debug') === 'true') {
+      devDebugMode.set(true);
+    }
+  } catch {
+    // ignore storage / SSR edge cases
+  }
+}
+
+initDevDebugModeFromEnvironment();
+
+// Actions - Only update state through explicit actions
+export const chatActions = {
+  setSessionStatus(status: 'active' | 'replaced' | 'kicked' | 'left') {
+    chatSessionStatus.set(status);
+  },
+  setHistoryPage(hasMore: boolean, oldestSeq: number) {
+    historyHasMore.set(hasMore);
+    if (oldestSeq > 0) {
+      historyOldestSeq.set(oldestSeq);
+    } else if (!hasMore) {
+      historyOldestSeq.set(0);
+    }
+    historyLoading.set(false);
+  },
+  setHistoryLoading(loading: boolean) {
+    historyLoading.set(loading);
+  },
+  resetHistoryPager() {
+    historyHasMore.set(false);
+    historyOldestSeq.set(0);
+    historyLoading.set(false);
+  },
+  addMessage(msg: Message) {
+    if (msg.text) {
+      try {
+        const parsed = JSON.parse(msg.text);
+        if (parsed && parsed.type === 'file') {
+          msg.type = 'file';
+          msg.fileName = parsed.fileName;
+          msg.size = parsed.size;
+          msg.text = '';
+        }
+      } catch (e) {
+        // Leave as regular text message
+      }
+    }
+
+    messages.update(list => {
+      const idx = list.findIndex(m => m.id === msg.id);
+      if (idx !== -1) {
+        const updated = [...list];
+        updated[idx] = { ...updated[idx], ...msg };
+        return updated;
+      }
+      return [...list, msg].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+  },
+
+  recallMessage(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          recalled: true
+        };
+      }
+      return m;
+    }));
+  },
+
+  clearMessages() {
+    messages.set([]);
+  },
+
+  updatePresence(devices: Device[], clientPeer?: string) {
+    if (clientPeer) {
+      const sorted = [...devices].sort((a, b) => {
+        if (a.peer === clientPeer) return -1;
+        if (b.peer === clientPeer) return 1;
+        return 0; // Keep backend chronological sorting for other devices
+      });
+      peers.set(sorted);
+    } else {
+      peers.set(devices);
+    }
+  },
+
+  updateTransfer(event: TransferEvent) {
+    transfers.update(map => {
+      const existing = map[event.id];
+      const startTime = existing?.startTime || Date.now();
+      let speed = existing?.speed || 0;
+      if (event.state === 'running' && event.bytesDone > 0) {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        if (elapsedSec > 0.5) {
+          speed = event.bytesDone / elapsedSec;
+        }
+      } else if (event.state === 'completed' && event.bytesDone > 0) {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        if (elapsedSec > 0) {
+          speed = event.bytesDone / elapsedSec;
+        }
+      }
+      return {
+        ...map,
+        [event.id]: {
+          ...existing,
+          ...event,
+          startTime,
+          speed
+        }
+      };
+    });
+  },
+
+  setConnectionState(state: 'connecting' | 'connected' | 'disconnected') {
+    connState.set(state);
+  },
+
+  setReconnectExhausted(exhausted: boolean) {
+    reconnectExhausted.set(exhausted);
+  },
+
+  setCurrentDevice(device: Device | null) {
+    currentDevice.set(device);
+  },
+
+  setDevDebugMode(enabled: boolean) {
+    const on = !!enabled;
+    devDebugMode.set(on);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('chat_dev_debug', on ? 'true' : 'false');
+      } catch {
+        // ignore
+      }
+    }
+  },
+
+  /**
+   * User-facing notice only. Text must be plain-language (what happened / what to do).
+   * Prefer this for failures the user can act on.
+   */
+  addSystemMessage(msg: string) {
+    this.pushSystemNotice(msg, false);
+  },
+
+  /**
+   * Engineering / process log. Always stored for diagnostics; chat bubble only in Dev Debug Mode.
+   */
+  addDebugNotice(msg: string) {
+    this.pushSystemNotice(msg, true);
+  },
+
+  pushSystemNotice(msg: string, isDebug: boolean) {
+    if (!msg || !msg.trim()) return;
+    const stamped = `${new Date().toLocaleTimeString()}: ${msg}`;
+    systemMessages.update(list => [...list, stamped]);
+    const surface = shouldSurfaceNotice(isDebug, get(devDebugMode));
+    if (surface) {
+      const notice: Message = {
+        id: `sys-local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sender: 'system',
+        type: 'system',
+        text: msg,
+        createdAt: new Date().toISOString(),
+      };
+      messages.update(list => [...list, notice]);
+    }
+  },
+
+  clearSystemMessages() {
+    systemMessages.set([]);
+  },
+
+  updateMessageFilePath(messageId: string, filePath: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          filePath: filePath
+        };
+      }
+      return m;
+    }));
+  },
+
+  markMessageDownloaded(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          downloaded: true
+        };
+      }
+      return m;
+    }));
+  },
+
+  markMessageUploadComplete(messageId: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          uploading: false
+        };
+      }
+      return m;
+    }));
+  },
+
+  updateMessage(updated: Message) {
+    if (updated.text) {
+      try {
+        const parsed = JSON.parse(updated.text);
+        if (parsed && parsed.type === 'file') {
+          updated.type = 'file';
+          updated.fileName = parsed.fileName;
+          updated.size = parsed.size;
+          updated.text = '';
+        }
+      } catch (e) {
+        // Leave as regular text message
+      }
+    }
+
+    messages.update(list => {
+      const idx = list.findIndex(m => m.id === updated.id);
+      if (idx !== -1) {
+        const result = [...list];
+        result[idx] = {
+          ...result[idx],
+          ...updated
+        };
+        return result;
+      }
+      return [...list, updated].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+  },
+
+  clearTransfers() {
+    transfers.set({});
+  }
+};
+
+// DevTools / GUI bridge: window.__setChatDevDebug(true|false)
+if (typeof window !== 'undefined') {
+  (window as unknown as { __setChatDevDebug?: (enabled: boolean) => void }).__setChatDevDebug = (
+    enabled: boolean
+  ) => {
+    chatActions.setDevDebugMode(!!enabled);
+  };
+}

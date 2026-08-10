@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    name: Go test (root module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build Chat v2 frontend
+        working-directory: pkg/chat/v2/web
+        run: |
+          npm ci
+          npm run build
+      - run: go mod download
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build -o /tmp/eqt ./cmd/eqt
+
+  go-test-desktop:
+    name: Go test (desktop GUI module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+      - name: Install Wails system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
+      - name: Build frontend (required by go:embed)
+        working-directory: desktop/gui/frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build Chat v2 frontend
+        working-directory: pkg/chat/v2/web
+        run: |
+          npm ci
+          npm run build
+      - name: Test desktop module
+        working-directory: desktop/gui
+        run: |
+          go mod download
+          go vet ./...
+          go test ./...
+
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: desktop/gui/frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: desktop/gui/frontend
+        run: npm run build
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build Chat v2 frontend
+        working-directory: pkg/chat/v2/web
+        run: |
+          npm ci
+          npm run build
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          install-mode: goinstall
+          args: --timeout=5m
+
+  drm-api-test:
+    name: DRM API offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cloudflare/eqt-drm-api/package-lock.json
+      - name: Install dependencies
+        working-directory: cloudflare/eqt-drm-api
+        run: npm ci
+      - name: Run offline tests (esbuild bundles, no network)
+        working-directory: cloudflare/eqt-drm-api
+        run: npm run test:ci

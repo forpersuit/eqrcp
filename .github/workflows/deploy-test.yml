@@ -1,0 +1,89 @@
+# Deploy Test — 测试环境部署流水线
+#
+# 将 wrangler.toml 的 [env.test] 配置部署到测试 Worker(workers.dev 子域),
+# 与生产 deploy.yml(GitHub Environment production 审批)完全隔离。
+#
+# 触发:
+#   - push 到 dev 分支(长命分支,自动部署,快速迭代)
+#   - 手动触发(workflow_dispatch,任意分支)
+#
+# 前提:
+#   - 测试 D1/R2 资源已创建,并已回填 wrangler.toml 中的占位符
+#     (见 docs/deploy/test-environment.md P1 步骤)
+#   - dev 分支首次部署前,需在 Cloudflare 仪表盘启用 workers.dev 子域
+#
+# 安全:测试 Worker 的 [env.test] 显式 routes = [] + workers_dev = true,
+#       绝不继承生产自定义域名路由(否则会抢占生产)。
+
+name: Deploy Test
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+# 快速迭代:同一时间只保留最新一次测试部署
+concurrency:
+  group: deploy-test
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-test:
+    name: Deploy to Test (workers.dev)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy eqt-drm-api (test)
+        working-directory: cloudflare/eqt-drm-api
+        run: npx wrangler deploy --env test
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Deploy eqt-feedback-api (test)
+        working-directory: cloudflare/eqt-feedback-api
+        run: npx wrangler deploy --env test
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ── Pages (Test) ─────────────────────────────────────────
+
+      - name: Deploy eqt-website to Pages (test)
+        working-directory: cloudflare/eqt-website
+        run: npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Notify via Telegram
+        if: always()
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [[ "${{ job.status }}" == "success" ]]; then
+            MESSAGE="🧪 [Test Deploy Succeeded] (workers.dev)
+            Branch: ${{ github.ref_name }}
+            Workflow: ${RUN_URL}"
+          else
+            MESSAGE="🚨 [Test Deploy Failed] (workers.dev)
+            Branch: ${{ github.ref_name }}
+            Workflow: ${RUN_URL}"
+          fi
+          # 通知到测试群;若未单独配置 TEST_TELEGRAM_CHAT_ID,则复用生产群
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TEST_TELEGRAM_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown" || echo "⚠️ Telegram notification failed (token/chat_id may not be configured)"

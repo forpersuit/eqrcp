@@ -1,0 +1,76 @@
+# EQT Desktop GUI
+
+This is the Wails v2 desktop application for `EQT` (Easy QR Transfer). It uses
+the existing `eqt` CLI and desktop agent as the transfer core.
+
+The GUI is intentionally thin. It talks to the existing desktop agent at `127.0.0.1:48176` and does not reimplement transfer logic. If the agent is not running, the GUI tries to start `eqt desktop agent-start -B` by finding the CLI in this order:
+
+1. `EQT_CLI`
+2. An `eqt` or `eqt.exe` binary next to the GUI executable
+3. `eqt` on `PATH`
+
+## Development
+
+Install Wails v2:
+
+```sh
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+```
+
+Install frontend dependencies:
+
+```sh
+cd desktop/gui/frontend
+npm install
+```
+
+Run frontend checks:
+
+```sh
+cd desktop/gui/frontend
+npm run build
+```
+
+Run Go checks:
+
+```sh
+cd desktop/gui
+GOCACHE=/tmp/eqt-go-build go test ./...
+```
+
+Run the GUI in development mode:
+
+```sh
+cd desktop/gui
+EQT_CLI=/path/to/eqt wails dev
+```
+
+Linux development requires the Wails system dependencies reported by `wails doctor`, especially `pkg-config`, `libgtk-3-dev`, and WebKitGTK. On Ubuntu 24.04, install `libwebkit2gtk-4.1-dev` and build with:
+
+```sh
+GOCACHE=/tmp/eqt-go-build wails build -tags webkit2_41
+```
+
+## Current Scope
+
+- Share workspace with a drop-first flow, file/folder selection, Wails file-drop
+  support, delayed pending-list display, and locked QR/status state after start.
+- Receive workspace with output directory selection.
+- Agent status, current task, progress, and recent history display.
+- Stop-current action.
+- Settings save for receive output and browser fallback from a title-bar gear action.
+- About and feedback surfaces with local diagnostics preview.
+- Native tray menu using `fyne.io/systray`: open EQT, share, receive, open current
+  QR, stop current transfer, settings, About, feedback, and quit.
+- Closing the main window hides it to the tray; use the tray `Quit` action to
+  exit the GUI process.
+- Product naming is moving toward `EQT`; the binary and CLI remain `eqt` during
+  the packaging transition.
+
+## Deferred
+
+- Tray state refinements such as disabled menu items, progress text, and
+  per-platform icon variants.
+- Native QR rendering inside the GUI instead of linking through the existing task state.
+- Paid feature gating and license activation.
+- Native package metadata, signing, and installer polish.

@@ -1,0 +1,62 @@
+name = "eqt-drm-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+logpush = true
+
+# D1 Database binding. DB is bound in the code.
+[[d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db"
+database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
+
+# R2 Bucket for crash report storage
+[[r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports"
+
+[vars]
+R2_PUBLIC_URL = "https://download.eqt.net.im"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+# Non-sensitive notification target (token → wrangler secret TELEGRAM_BOT_TOKEN)
+TELEGRAM_CHAT_ID = "1880182104"
+
+routes = [
+  { pattern = "lic.eqt.net.im", custom_domain = true }
+  # download.eqt.net.im 由 R2 桶 eqt-downloads 的 custom domain 直接接管（只服务 /downloads/），
+  # 不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败。
+]
+
+# ── 测试环境：wrangler deploy --env test ──────────────────────────
+# 测试 Worker 只走 workers.dev 子域（eqt-drm-api-test.<subdomain>.workers.dev），绝不挂自定义域名。
+# ⚠️ routes 是 inheritable 键：若不显式清空，测试 Worker 会继承顶层 lic.eqt.net.im 路由并抢占生产。
+#    必须 routes = [] + workers_dev = true，首次部署前用 --dry-run 确认。
+# ⚠️ 占位符 <TEST_DRM_DB_ID> / <test-subdomain> / <TEST_CHAT_ID>：
+#    按 docs/deploy/test-environment.md 的 P1 步骤创建资源后回填。
+[env.test]
+name = "eqt-drm-api-test"
+workers_dev = true
+routes = []
+# logpush 也是 inheritable 键,但测试账户无 Logpush 权限(10023),必须显式关闭
+logpush = false
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db-test"
+database_id = "c4e4e57f-3b75-4198-8c60-3584758e9b47"
+
+[[env.test.r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports-test"
+
+[env.test.vars]
+# 测试桶 eqt-crash-reports-test 无公开域名,健康检查 HEAD 借生产 CDN 验证连通性(真实报告仍写测试桶)
+R2_PUBLIC_URL = "https://download.eqt.net.im"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+# 测试通知复用生产运维群(部署/错误通知)
+TELEGRAM_CHAT_ID = "1880182104"

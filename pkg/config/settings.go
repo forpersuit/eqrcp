@@ -1,0 +1,443 @@
+package config
+
+import (
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"eqt/pkg/application"
+	"eqt/pkg/util"
+)
+
+type DesktopSettings struct {
+	ConfigPath               string                   `json:"configPath"`
+	Interface                string                   `json:"interface"`
+	InterfaceOptions         []DesktopInterfaceOption `json:"interfaceOptions"`
+	Mode                     string                   `json:"mode,omitempty"`
+	Port                     int                      `json:"port"`
+	Output                   string                   `json:"output"`
+	Browser                  bool                     `json:"browser"`
+	ChatAutoSave             bool                     `json:"chatAutoSave"`
+	CloseBehavior            string                   `json:"closeBehavior"`
+	ChatSender               string                   `json:"chatSender"`
+	ChatAvatar               string                   `json:"chatAvatar"`
+	DevMode                  bool                     `json:"devMode"`
+	DebugLog                 bool                     `json:"debugLog"`
+	ViewportDebug            bool                     `json:"viewportDebug"`
+	AutoUpdateMode           string                   `json:"autoUpdateMode"`
+	UpdateChannel            string                   `json:"updateChannel"`
+	LastUpdateCheckTime      int64                    `json:"lastUpdateCheckTime"`
+	UpdateCheckIntervalHours int                      `json:"updateCheckIntervalHours"`
+	LastSuccessfulVersion    string                   `json:"lastSuccessfulVersion"`
+	Lang                     string                   `json:"lang"`
+	ShowHistory              bool                     `json:"showHistory"`
+	EnableChatV2             bool                     `json:"enableChatV2"`
+	EnableTelemetry          bool                     `json:"enableTelemetry"`
+	ChatDownloadDir          string                   `json:"chatDownloadDir"`
+	LogDir                   string                   `json:"logDir"`
+}
+
+const (
+	DesktopCloseBehaviorTray = "tray"
+	DesktopCloseBehaviorQuit = "quit"
+)
+
+// NormalizeLangCode converts locale strings like "zh-CN", "zh_CN.UTF-8", "en_US" into standard two-letter ISO language codes (e.g. "zh", "en").
+func NormalizeLangCode(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" || raw == "c" || raw == "posix" {
+		return "zh"
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.'
+	})
+	if len(parts) > 0 && len(parts[0]) == 2 {
+		return parts[0]
+	}
+	return "zh"
+}
+
+// GetConfiguredLang reads the configured language from viper config, defaulting to "zh" if unset or on error.
+func GetConfiguredLang() string {
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("lang") {
+			l := NormalizeLangCode(v.GetString("lang"))
+			if l != "" {
+				return l
+			}
+		}
+	}
+	return "zh"
+}
+
+type DesktopInterfaceOption struct {
+	Name          string `json:"name"`
+	IP            string `json:"ip"`
+	Label         string `json:"label"`
+	IsRecommended bool   `json:"isRecommended"`
+}
+
+func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
+	v := GetViperInstance(app)
+	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
+		return DesktopSettings{}, err
+	}
+	if err := v.ReadInConfig(); err != nil {
+		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
+	}
+	options, err := desktopInterfaceOptions(app.Flags.ListAllInterfaces)
+	if err != nil {
+		return DesktopSettings{}, err
+	}
+	browser := true
+	if v.IsSet("browser") {
+		browser = v.GetBool("browser")
+	}
+	chatAutoSave := true
+	if v.IsSet("chatAutoSave") {
+		chatAutoSave = v.GetBool("chatAutoSave")
+	}
+	closeBehavior := DesktopCloseBehaviorTray
+	if v.IsSet("closeBehavior") {
+		closeBehavior = normalizeDesktopCloseBehavior(v.GetString("closeBehavior"))
+		if closeBehavior == "" {
+			closeBehavior = DesktopCloseBehaviorTray
+		}
+	}
+	chatSender := strings.TrimSpace(v.GetString("chatSender"))
+	chatAvatar := strings.TrimSpace(v.GetString("chatAvatar"))
+	selectedInterface := v.GetString("interface")
+	if selectedInterface == "" {
+		selectedInterface = defaultDesktopInterface(options)
+	}
+	output := v.GetString("output")
+	if output == "" {
+		output = DefaultDesktopOutputDirectory()
+	}
+	devMode := false
+	if strings.TrimSpace(v.GetString("dev")) == "liyuelong" {
+		devMode = true
+	}
+	debugLog := false
+	if v.IsSet("debugLog") {
+		debugLog = v.GetBool("debugLog")
+	}
+	viewportDebug := false
+	if v.IsSet("viewportDebug") {
+		viewportDebug = v.GetBool("viewportDebug")
+	}
+	autoUpdateMode := "download"
+	if v.IsSet("autoUpdateMode") {
+		autoUpdateMode = v.GetString("autoUpdateMode")
+	}
+	updateChannel := "stable"
+	if v.IsSet("updateChannel") {
+		updateChannel = v.GetString("updateChannel")
+	}
+	var lastUpdateCheckTime int64
+	if v.IsSet("lastUpdateCheckTime") {
+		lastUpdateCheckTime = v.GetInt64("lastUpdateCheckTime")
+	}
+	updateCheckIntervalHours := 24
+	if v.IsSet("updateCheckIntervalHours") {
+		updateCheckIntervalHours = v.GetInt("updateCheckIntervalHours")
+	}
+	lastSuccessfulVersion := ""
+	if v.IsSet("lastSuccessfulVersion") {
+		lastSuccessfulVersion = v.GetString("lastSuccessfulVersion")
+	}
+	lang := "zh"
+	if v.IsSet("lang") {
+		lang = v.GetString("lang")
+	}
+	showHistory := true
+	if v.IsSet("showHistory") {
+		showHistory = v.GetBool("showHistory")
+	}
+	enableChatV2 := true
+	enableTelemetry := true
+	if v.IsSet("enableTelemetry") {
+		enableTelemetry = v.GetBool("enableTelemetry")
+	}
+	chatDownloadDir := v.GetString("chatDownloadDir")
+	logDir := v.GetString("logDir")
+	return DesktopSettings{
+		ConfigPath:               v.ConfigFileUsed(),
+		Interface:                selectedInterface,
+		InterfaceOptions:         options,
+		Mode:                     strings.ToLower(strings.TrimSpace(v.GetString("mode"))),
+		Port:                     v.GetInt("port"),
+		Output:                   output,
+		Browser:                  browser,
+		ChatAutoSave:             chatAutoSave,
+		CloseBehavior:            closeBehavior,
+		ChatSender:               chatSender,
+		ChatAvatar:               chatAvatar,
+		DevMode:                  devMode,
+		DebugLog:                 debugLog,
+		ViewportDebug:            viewportDebug,
+		AutoUpdateMode:           autoUpdateMode,
+		UpdateChannel:            updateChannel,
+		LastUpdateCheckTime:      lastUpdateCheckTime,
+		UpdateCheckIntervalHours: updateCheckIntervalHours,
+		LastSuccessfulVersion:    lastSuccessfulVersion,
+		Lang:                     lang,
+		ShowHistory:              showHistory,
+		EnableChatV2:             enableChatV2,
+		EnableTelemetry:          enableTelemetry,
+		ChatDownloadDir:          chatDownloadDir,
+		LogDir:                   logDir,
+	}, nil
+}
+
+// IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).
+func IsTelemetryEnabled() bool {
+	if raw := os.Getenv("EQT_ENABLE_TELEMETRY"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	if raw := os.Getenv("EQT_TELEMETRY"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("enableTelemetry") {
+			return v.GetBool("enableTelemetry")
+		}
+		if v.IsSet("telemetry") {
+			return v.GetBool("telemetry")
+		}
+	}
+	return true
+}
+
+func WriteDesktopSettings(app application.App, settings DesktopSettings) (DesktopSettings, error) {
+	if settings.Port < 0 || settings.Port > 65535 {
+		return DesktopSettings{}, fmt.Errorf("port must be between 0 and 65535")
+	}
+	closeBehavior := normalizeDesktopCloseBehavior(settings.CloseBehavior)
+	if closeBehavior == "" {
+		return DesktopSettings{}, fmt.Errorf("close behavior must be %q or %q", DesktopCloseBehaviorTray, DesktopCloseBehaviorQuit)
+	}
+	if err := validateDesktopInterface(app, settings.Interface); err != nil {
+		return DesktopSettings{}, err
+	}
+	output := settings.Output
+	if output == "" {
+		output = DefaultDesktopOutputDirectory()
+	}
+	output, err := filepath.Abs(output)
+	if err != nil {
+		return DesktopSettings{}, err
+	}
+	if err := validateDesktopOutput(output); err != nil {
+		return DesktopSettings{}, err
+	}
+	v := GetViperInstance(app)
+	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
+		return DesktopSettings{}, err
+	}
+	if err := v.ReadInConfig(); err != nil {
+		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
+	}
+	v.Set("interface", settings.Interface)
+	if mode := strings.ToLower(strings.TrimSpace(settings.Mode)); mode != "" {
+		v.Set("mode", mode)
+	}
+	v.Set("port", settings.Port)
+	v.Set("output", output)
+	v.Set("browser", settings.Browser)
+	v.Set("chatAutoSave", settings.ChatAutoSave)
+	v.Set("closeBehavior", closeBehavior)
+	v.Set("chatSender", strings.TrimSpace(settings.ChatSender))
+	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
+	if settings.DevMode {
+		v.Set("dev", "liyuelong")
+		v.Set("devMode", true)
+	} else {
+		v.Set("dev", "")
+		v.Set("devMode", false)
+	}
+	v.Set("debugLog", settings.DebugLog)
+	v.Set("viewportDebug", settings.ViewportDebug)
+	v.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))
+	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
+	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
+	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
+	v.Set("lastSuccessfulVersion", settings.LastSuccessfulVersion)
+	v.Set("lang", settings.Lang)
+	v.Set("showHistory", settings.ShowHistory)
+	v.Set("enableChatV2", settings.EnableChatV2)
+	v.Set("enableTelemetry", settings.EnableTelemetry)
+	v.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
+	v.Set("logDir", strings.TrimSpace(settings.LogDir))
+	if err := v.WriteConfig(); err != nil {
+		return DesktopSettings{}, err
+	}
+	return ReadDesktopSettings(app)
+}
+
+func normalizeDesktopCloseBehavior(value string) string {
+	switch value {
+	case "", DesktopCloseBehaviorTray:
+		return DesktopCloseBehaviorTray
+	case DesktopCloseBehaviorQuit:
+		return DesktopCloseBehaviorQuit
+	default:
+		return ""
+	}
+}
+
+func normalizeAutoUpdateMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "off":
+		return "off"
+	case "notify":
+		return "notify"
+	case "silent":
+		return "silent"
+	default:
+		return "download"
+	}
+}
+
+func normalizeUpdateChannel(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "beta":
+		return "beta"
+	case "nightly":
+		return "nightly"
+	default:
+		return "stable"
+	}
+}
+
+func DefaultDesktopOutputDirectory() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			return cwd
+		}
+		return "."
+	}
+	downloads := filepath.Join(home, "Downloads")
+	if info, err := os.Stat(downloads); err == nil && info.IsDir() {
+		return downloads
+	}
+	return home
+}
+
+func validateDesktopOutput(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if mkdirErr := os.MkdirAll(path, 0755); mkdirErr == nil {
+				return nil
+			}
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("output %q is not a directory", path)
+	}
+	return nil
+}
+
+func validateDesktopInterface(app application.App, name string) error {
+	// Allow saving any interface name to configuration, as the interface may be temporarily offline.
+	// Validation will happen when a server task is actually started.
+	return nil
+}
+
+func desktopInterfaceOptions(listAll bool) ([]DesktopInterfaceOption, error) {
+	interfaces, err := util.Interfaces(listAll)
+	if err != nil {
+		return nil, err
+	}
+	options := []DesktopInterfaceOption{{
+		Name:  "any",
+		IP:    "0.0.0.0",
+		Label: "any (0.0.0.0)",
+	}}
+	names := make([]string, 0, len(interfaces))
+	for name := range interfaces {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		leftScore := desktopInterfaceScore(names[i], interfaces[names[i]])
+		rightScore := desktopInterfaceScore(names[j], interfaces[names[j]])
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		return names[i] < names[j]
+	})
+	for _, name := range names {
+		ip := interfaces[name]
+		isRecommended := false
+		if desktopInterfaceScore(name, ip) > 0 {
+			isRecommended = true
+		}
+		options = append(options, DesktopInterfaceOption{
+			Name:          name,
+			IP:            ip,
+			Label:         fmt.Sprintf("%s (%s)", name, ip),
+			IsRecommended: isRecommended,
+		})
+	}
+	return options, nil
+}
+
+func desktopInterfaceScore(name string, ip string) int {
+	normalized := strings.ToLower(name)
+	if strings.Contains(normalized, "docker") ||
+		strings.Contains(normalized, "veth") ||
+		strings.Contains(normalized, "bridge") ||
+		strings.Contains(normalized, "wsl") ||
+		strings.Contains(normalized, "vpn") ||
+		strings.Contains(normalized, "tun") ||
+		strings.Contains(normalized, "tap") {
+		return -1
+	}
+	parsed := net.ParseIP(strings.Trim(ip, "[]"))
+	if parsed == nil {
+		return 0
+	}
+	if parsed.IsPrivate() {
+		return 2
+	}
+	if parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+		return -1
+	}
+	return 0
+}
+
+func defaultDesktopInterface(options []DesktopInterfaceOption) string {
+	for _, option := range options {
+		if option.Name != "any" {
+			return option.Name
+		}
+	}
+	if len(options) > 0 {
+		return options[0].Name
+	}
+	return ""
+}
+
+func ensureConfigFile(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), os.ModeDir|os.ModePerm); err != nil {
+			return err
+		}
+		file, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		return file.Close()
+	} else if err != nil {
+		return err
+	}
+	return nil
+}

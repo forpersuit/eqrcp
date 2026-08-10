@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "eqt-desktop",
+  "outputfilename": "eqt-desktop",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "forpersuit",
+    "email": "jinxpeeter@outlook.com"
+  },
+  "info": {
+    "productName": "EQT - Easy QR Transfer",
+    "productVersion": "0.1.1",
+    "companyName": "forpersuit",
+    "copyright": "Copyright © 2026 forpersuit",
+    "comments": "EQT (eqt) — Easy QR Transfer for files and chat"
+  }
+}

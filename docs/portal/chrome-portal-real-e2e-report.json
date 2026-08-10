@@ -1,0 +1,64 @@
+{
+  "email": "tmp@301098.xyz",
+  "steps": [
+    {
+      "step": "login",
+      "ok": true,
+      "loggedEmail": "tmp@301098.xyz"
+    },
+    {
+      "step": "licenses_visible",
+      "ok": true,
+      "hasTestLic": true,
+      "hasOtherLic": true
+    },
+    {
+      "step": "unbind_btn_present",
+      "ok": true,
+      "count": 3
+    },
+    {
+      "step": "unbind_effect",
+      "ok": true,
+      "remaining_activations": 1
+    },
+    {
+      "step": "refund_btn_count",
+      "ok": true,
+      "count": 3
+    },
+    {
+      "step": "refund_modal_open",
+      "ok": true,
+      "license": "EQT-PLUS-PORTAL-REAL-E2E-001"
+    },
+    {
+      "step": "refund_modal_cancel",
+      "ok": true
+    },
+    {
+      "step": "refund_api_response",
+      "ok": true,
+      "status": 500,
+      "error": "Failed to fetch transaction details from Paddle: {\"error\":{\"type\":\"request_error\",\"code\":\"invalid_url\",\"detail\":\"URL called is invalid.\",\"documentation_url\":\"https://developer.paddle.com/v1/errors/shared/invalid_url\"},\"meta\":{\"request_id\":\"7e2f9ed8-d342-4d17-8a01-7cdc9a6c42bf\"}}"
+    },
+    {
+      "step": "logout",
+      "ok": true
+    },
+    {
+      "step": "session_dead",
+      "ok": true,
+      "status": 401
+    }
+  ],
+  "otp": "178918",
+  "sandbox_refund": {
+    "license_code": "EQT-PLUS-20260721-37X60D-FB0D",
+    "txn": "txn_01ky1nwxe9eryx9d3hmps6vvsa",
+    "status": "success",
+    "adjustment_id": "adj_01ky85pj7dgexz8d72pyp1yydz",
+    "license_status_after": "revoked",
+    "message": "退款已提交，授权已被吊销"
+  }
+}
