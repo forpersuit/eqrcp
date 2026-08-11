@@ -112,7 +112,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **Go build tag 互斥机制**：环境默认值拆两个文件，`env_defaults.go`（`//go:build !eqtdev`）与 `env_defaults_dev.go`（`//go:build eqtdev`）**必须成对加 tag**——无 tag 的文件恒编译，与 tag 文件同包会 `redeclared` 冲突。
 - **验证公钥随 tag 切换**：`defaultPublicKeyHex` / `defaultUpdatePublicKeyHex` 也拆到上面两个文件。release 恒用生产公钥验证（激活证书+更新签名）；eqtdev 构建用测试专用公钥 `ce07f0...`（对应测试 worker 的 seed `2cf5baa8...`）。因此测试激活码只能被测试构建验证，生产构建不会误认测试码。**测试 worker 的 `ED25519_PRIVATE_KEY` 必须是 32-byte seed 的 hex** —— `hexToUint8Array` 只校验长度偶数、不校验字符合法性，误贴 base64 PKCS8 会静默产生垃圾私钥（签名不被任何公钥验证），排查「签名失败」时优先核对 secret 是否为纯 hex。
 - **环境操作 SSOT**：测试/生产对照、如何测试、生产清理见 `docs/deploy/environment-runbook.md`（操作前必读）；正式运营上线前待办见 `docs/deploy/go-live-checklist.md`。**wrangler 4.x 已移除 `d1 backup` 子命令**（`create`/`restore`/`list` 全没了），备份一律改用 `npx wrangler d1 export <db> --remote --output=...`；恢复演练用 `sqlite3 drill.sqlite < backup.sql` 载入核对行数。**`.github/workflows/d1-backup.yml` 已于 2026-08-08 从 `d1 backup create` 改写为 `d1 export`**（原写法在新 wrangler 下每日备份静默失败）。生产库任何 DELETE 前先导出备份，删除顺序：`activations` → `license_upgrades` → `unbind_records` → `licenses`（外键约束）。历史教训：2026-07-21 E2E MCP 测试码曾残留生产 D1，任何浏览器 E2E/探针测试只许写 `-test` 库。2026-08-08 已全清生产 D1/R2 测试残留（licenses 39 行等，无真实数据）。
-- **Paddle sandbox 判据**：沙箱密钥以 `pdl_sdbx_` 开头，测试 Worker 据此将激活码 `source` 标为 `'test'`（生产 live 密钥标 `'purchase'`）；环境分离与 test 标记由密钥环境自动对齐，无需额外开关。
+- **Paddle sandbox 判据与双向硬阻断 (`assertEnvironmentAlignment`)**：
+  - 沙箱密钥以 `pdl_sdbx_` 开头，测试 Worker 据此将激活码 `source` 标为 `'test'`（生产 live 密钥标 `'purchase'`）；
+  - **第一性原理 Fail-Fast 防御**：生产 Worker 严禁注入 `pdl_sdbx_*` 密钥或 Sandbox 测试价格 ID；测试 Worker（`ENVIRONMENT='test'`）严禁注入 `pdl_live_*` 密钥或 Live 生产价格 ID。入口处不匹配直接阻断并记录 CRITICAL 告警。
+- **测试套件统一加载 `.env.test` (SSOT)**：测试命令统一采用 Node 20+ 原生 `--env-file=../../.env.test` 驱动，杜绝孤儿配置与手工 shell 注入。
 - **Wails 支持 `-tags`**：`wails dev -tags eqtdev` / `wails build -tags eqtdev` 切测试 Worker；`release.yml` 的 build 严禁加任何 tag 注入（文件内已有注释防误改）。
 - 完整搭建步骤见 `docs/deploy/test-environment.md` 与 `docs/deploy/gui-environment.md`（测试资源创建由用户按文档执行，不在代码仓库内）。
 

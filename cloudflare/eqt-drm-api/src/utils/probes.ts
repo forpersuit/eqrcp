@@ -43,7 +43,8 @@ export async function probePaddle(env: Env, timeoutMs = 3500): Promise<ProbeResu
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch("https://api.paddle.com/event-types", {
+    const paddleBaseUrl = apiKey.startsWith("pdl_sdbx_") ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+    const res = await fetch(`${paddleBaseUrl}/event-types`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,

@@ -28,6 +28,8 @@ export interface Env {
   /** Paddle Price ID legacy overrides */
   PRICE_LIFETIME_ID?: string;
   PRICE_YEARLY_ID?: string;
+  /** Environment mode: 'production' | 'test' | 'development' */
+  ENVIRONMENT?: string;
 }
 
 /** purchase | promo | admin | test — see docs/payment/license-source-and-refund-policy.md */

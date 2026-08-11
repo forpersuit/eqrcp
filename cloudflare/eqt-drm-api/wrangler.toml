@@ -15,6 +15,7 @@ binding = "CRASH_BUCKET"
 bucket_name = "eqt-crash-reports"
 
 [vars]
+ENVIRONMENT = "production"
 R2_PUBLIC_URL = "https://download.eqt.net.im"
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
 MAIL_SENDER = "noreply@eqt.net.im"
@@ -52,6 +53,7 @@ binding = "CRASH_BUCKET"
 bucket_name = "eqt-crash-reports-test"
 
 [env.test.vars]
+ENVIRONMENT = "test"
 # 测试桶 eqt-crash-reports-test 无公开域名,健康检查 HEAD 借生产 CDN 验证连通性(真实报告仍写测试桶)
 R2_PUBLIC_URL = "https://download.eqt.net.im"
 CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"

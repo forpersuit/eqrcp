@@ -63,7 +63,17 @@
 - **年度订阅价格 ID**：`PADDLE_PRICE_ID_PLUS_YEARLY`
 - **终身买断价格 ID**：`PADDLE_PRICE_ID_PLUS_LIFETIME`
 
-代码内依据 `isPaddleSandbox` 进行安全拦截：生产 Worker（Live 模式）严禁使用 Sandbox 测试价格，防止出现生产用户支付后静默不铸码的高危隐患。
+### Fail-Fast 双向环境与密钥守卫 (`assertEnvironmentAlignment`)
+代码入口处实施第一性原理双向防御拦截：
+1. **生产 Worker**：严禁注入 Paddle Sandbox 测试密钥 (`pdl_sdbx_*`) 或配置 Sandbox 测试价格 ID。一旦发现，启动与路由入口直接抛出异常拒绝服务，防止线上误扣/对账混乱。
+2. **测试 Worker**：严禁注入 Paddle Live 生产密钥 (`pdl_live_*`) 或配置 Live 生产价格 ID，杜绝测试过程对生产账户造成资金扣费或脏数据污染。
+
+### 测试套件统一加载 `.env.test`
+测试脚本统一基于 Node.js 20+ 原生 `--env-file=../../.env.test` 驱动，杜绝孤儿配置与手工 export，确保单一可信源 (SSOT)。
+```bash
+npm run test:offline    # 离线单元测试与环境守卫断言
+npm run test:ci         # 包含编译打包的全量离线回归测试
+```
 
 ---
 

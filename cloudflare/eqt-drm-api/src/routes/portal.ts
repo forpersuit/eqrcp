@@ -13,6 +13,7 @@ import { checkEmailBlacklist } from '../utils/blacklist';
 import {
   isLicenseCancellable,
   isLicenseRefundable,
+  isPaddleSandbox,
   isRealPaddleSubscriptionId,
   isRealPaddleTransactionId,
   isSyntheticTestSubscriptionId,
@@ -704,7 +705,7 @@ export async function handlePortalRoutes(
       });
     }
 
-    const isSandbox = isPaddleSandbox(env);
+    const isSandbox = isPaddleSandbox(env.PADDLE_API_KEY);
     const defaultLifetimeId = isSandbox ? SANDBOX_PRICE_LIFETIME_ID : PROD_PRICE_LIFETIME_ID;
     const effectiveLifetimeId = env.PADDLE_PRICE_ID_PLUS_LIFETIME || env.PRICE_LIFETIME_ID || defaultLifetimeId;
 

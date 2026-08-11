@@ -9,6 +9,7 @@ import { handlePortalRoutes } from './routes/portal';
 import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
 import { handleCrashReport } from './routes/crash-report';
+import { assertEnvironmentAlignment } from './utils/env-guard';
 
 export type { Env };
 
@@ -36,6 +37,9 @@ export default {
     }
 
     try {
+      // Fail-Fast: bidirectional guard between environment and Paddle secrets/prices
+      assertEnvironmentAlignment(env, url);
+
       let response: Response | null = null;
 
       // 0. Public health check (no auth required — for UptimeRobot external monitoring)

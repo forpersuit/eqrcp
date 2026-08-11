@@ -192,7 +192,7 @@ export async function handlePaddleRoutes(
       const effectiveLifetimeId = env.PADDLE_PRICE_ID_PLUS_LIFETIME || env.PRICE_LIFETIME_ID || defaultLifetimeId;
       const effectiveYearlyId = env.PADDLE_PRICE_ID_PLUS_YEARLY || env.PRICE_YEARLY_ID || defaultYearlyId;
 
-      // Critical Safety Assertion: If running in Live production mode, strictly forbid Sandbox test prices and abort
+      // Critical Safety Assertion: Enforce bidirectional environment & price ID alignment
       if (!isSandbox) {
         if (effectiveLifetimeId === SANDBOX_PRICE_LIFETIME_ID || effectiveYearlyId === SANDBOX_PRICE_YEARLY_ID) {
           await logSystemError(env, 'PADDLE_PRICE_MISCONFIGURATION', 'CRITICAL',
@@ -201,6 +201,19 @@ export async function handlePaddleRoutes(
           return new Response(JSON.stringify({
             error: "CRITICAL_PRICE_MISCONFIGURATION",
             message: "Production Worker is misconfigured with Paddle Sandbox test prices. Fulfillment aborted."
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      } else {
+        if (effectiveLifetimeId === PROD_PRICE_LIFETIME_ID || effectiveYearlyId === PROD_PRICE_YEARLY_ID) {
+          await logSystemError(env, 'PADDLE_PRICE_MISCONFIGURATION', 'CRITICAL',
+            new Error("Test/Sandbox Worker is configured with Paddle Live production price IDs!"),
+            { transaction_id: transactionId, effectiveLifetimeId, effectiveYearlyId });
+          return new Response(JSON.stringify({
+            error: "CRITICAL_PRICE_MISCONFIGURATION",
+            message: "Test Worker is misconfigured with Paddle Live production prices. Fulfillment aborted."
           }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
