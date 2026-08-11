@@ -1,0 +1,134 @@
+name: D1 Backup
+
+on:
+  schedule:
+    # Daily at 00:00 UTC — RPO ≤ 24h (§6.1)
+    - cron: '7 0 * * *'
+  workflow_dispatch:
+    inputs:
+      restore_drill:
+        description: 'Run recovery drill after backup (restore + row count verify)'
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Export D1 database snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      # wrangler 4.x 已移除 `wrangler login --token-stdin`。
+      # 认证直接靠 CLOUDFLARE_API_TOKEN 环境变量（与 deploy.yml 一致），无需 login 步骤。
+      # wrangler 4.x 也已移除 `d1 backup create/restore/list`。
+      # 改用 `d1 export --remote --output` 导出完整 SQL 快照（schema + 数据），
+      # 并上传为 Artifact。恢复演练用 sqlite3 直接载入 SQL 文件核对行数。
+      - name: Backup eqt-drm-db
+        id: backup-drm
+        working-directory: cloudflare/eqt-drm-api
+        run: |
+          mkdir -p ../../backups
+          echo "=== Exporting D1 backup for eqt-drm-db ==="
+          wrangler d1 export eqt-drm-db --remote --output ../../backups/eqt-drm-db.sql
+          echo "drm_backup=backups/eqt-drm-db.sql" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Backup eqt-feedback-db
+        id: backup-feedback
+        working-directory: cloudflare/eqt-feedback-api
+        run: |
+          mkdir -p ../../backups
+          echo "=== Exporting D1 backup for eqt-feedback-db ==="
+          wrangler d1 export eqt-feedback-db --remote --output ../../backups/eqt-feedback-db.sql
+          echo "feedback_backup=backups/eqt-feedback-db.sql" >> $GITHUB_OUTPUT
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backups-${{ steps.backup-drm.outputs.timestamp }}
+          path: backups/
+          retention-days: 30
+          if-no-files-found: error
+
+      # ── Restore Drill ──────────────────────────────────────────────
+      # Triggered manually via workflow_dispatch with restore_drill=true.
+      # Loads the exported SQL into a local SQLite file and verifies row counts
+      # against production D1. Quarterly recovery drill (§6.1).
+      - name: Install sqlite3 (restore drill)
+        if: ${{ inputs.restore_drill }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sqlite3
+
+      - name: Restore Drill — eqt-drm-db
+        if: ${{ inputs.restore_drill }}
+        run: |
+          echo "=== Restore Drill: eqt-drm-db ==="
+          sqlite3 /tmp/drill-drm.sqlite < backups/eqt-drm-db.sql
+          echo "--- Local restore row counts ---"
+          sqlite3 /tmp/drill-drm.sqlite \
+            "SELECT 'device_registry', COUNT(*) FROM device_registry
+             UNION ALL SELECT 'activations', COUNT(*) FROM activations
+             UNION ALL SELECT 'licenses', COUNT(*) FROM licenses
+             UNION ALL SELECT 'system_error_logs', COUNT(*) FROM system_error_logs;" 2>&1
+          echo "--- Production D1 row counts ---"
+          npx wrangler d1 execute eqt-drm-db --remote \
+            --command "SELECT 'device_registry', COUNT(*) FROM device_registry
+                       UNION ALL SELECT 'activations', COUNT(*) FROM activations
+                       UNION ALL SELECT 'licenses', COUNT(*) FROM licenses
+                       UNION ALL SELECT 'system_error_logs', COUNT(*) FROM system_error_logs;" 2>&1
+          echo "✅ Restore drill complete — compare counts above"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      - name: Restore Drill — eqt-feedback-db
+        if: ${{ inputs.restore_drill }}
+        run: |
+          echo "=== Restore Drill: eqt-feedback-db ==="
+          sqlite3 /tmp/drill-feedback.sqlite < backups/eqt-feedback-db.sql
+          echo "--- Local restore tables ---"
+          sqlite3 /tmp/drill-feedback.sqlite ".tables" 2>&1
+          sqlite3 /tmp/drill-feedback.sqlite "SELECT COUNT(*) FROM feedbacks;" 2>&1
+          echo "✅ Restore drill complete"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+      # ── Failure Notification ───────────────────────────────────────
+      - name: Notify failure via Telegram
+        if: ${{ failure() }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          MESSAGE="🚨 [D1 Backup Failed]
+          Timestamp: $TIMESTAMP
+          Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Trigger: ${{ github.event_name }}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown" || echo "⚠️ Telegram notification failed (token/chat_id may not be configured)"
+
+      - name: Log backup result
+        if: ${{ !failure() }}
+        run: |
+          echo "=== D1 Backup Summary ==="
+          echo "eqt-drm-db: ${{ steps.backup-drm.outputs.drm_backup }}"
+          echo "eqt-feedback-db: ${{ steps.backup-feedback.outputs.feedback_backup }}"
+          echo "Timestamp: ${{ steps.backup-drm.outputs.timestamp }}"

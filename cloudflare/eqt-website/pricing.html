@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html class="dark scroll-smooth" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <script>
+        (function() {
+            var h = window.location.hostname;
+            var isTestHost = (h === 'test.eqt.net.im' || h === 'eqt-test.pages.dev' || (h.length > 19 && h.slice(-19) === '.eqt-test.pages.dev') || h === 'localhost' || h.startsWith('127.0.0.1'));
+            if (!isTestHost && h !== 'www.eqt.net.im') {
+                window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+            }
+        })();
+    </script>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Pricing Plans - EQT (Easy QR Transfer)</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png"/>
+
+    <!-- Google Fonts: Outfit -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Tailwind Configuration -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#a3e635",
+                        "surface-bright": "#22332e",
+                        "primary": "#39e5b6",
+                        "on-secondary-container": "#00515d",
+                        "on-surface-variant": "#a5b9b2",
+                        "surface-variant": "#17231f",
+                        "secondary": "#156f5a",
+                        "tertiary-fixed-dim": "#a3e635",
+                        "on-error": "#690005",
+                        "on-surface": "#dae7e3",
+                        "outline-variant": "#43544d",
+                        "on-tertiary-container": "#0d0096",
+                        "surface-dim": "#080e0c",
+                        "on-secondary-fixed": "#001f25",
+                        "secondary-fixed-dim": "#156f5a",
+                        "primary-fixed-dim": "#39e5b6",
+                        "on-primary-fixed-variant": "#00b369",
+                        "surface-container-low": "#0a110e",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#ffdad6",
+                        "outline": "#677e74",
+                        "secondary-container": "#156f5a",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "on-primary-fixed": "#00512c",
+                        "surface-container-highest": "#17231f",
+                        "on-secondary-fixed-variant": "#005a4e",
+                        "on-tertiary-fixed": "#07006c",
+                        "background": "#080e0c",
+                        "on-tertiary": "#1000a9",
+                        "tertiary-container": "#80ffc5",
+                        "surface-container": "#0d1613",
+                        "on-primary": "#008049",
+                        "on-primary-container": "#007140",
+                        "primary-container": "#b76dff",
+                        "secondary-fixed": "#a2eeff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "inverse-surface": "#dae2fd",
+                        "on-background": "#dae2fd",
+                        "primary-fixed": "#f0dbff",
+                        "error": "#ffb4ab",
+                        "inverse-on-surface": "#283044",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-lowest": "#060e20",
+                        "surface-container-high": "#222a3d",
+                        "surface-tint": "#ddb7ff",
+                        "surface": "#0b1326"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "container-max": "1280px",
+                        "xs": "4px",
+                        "unit": "4px",
+                        "xxl": "48px",
+                        "gutter": "24px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Outfit"],
+                        "body-lg": ["Outfit"],
+                        "body-md": ["Outfit"],
+                        "label-md": ["Outfit"],
+                        "display-lg": ["Outfit"],
+                        "headline-md": ["Outfit"],
+                        "headline-lg": ["Outfit"],
+                        "display-lg-mobile": ["Outfit"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "display-lg-mobile": ["36px", { "lineHeight": "42px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glow-primary {
+            box-shadow: 0 0 20px rgba(221, 183, 255, 0.2);
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+    </style>
+    <!-- Include Paddle.js SDK & Verification Component -->
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+    <script src="js/api-base.js"></script>
+    <script src="js/checkout-verify.js"></script>
+</head>
+<body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
+    <!-- Header -->
+    <header class="w-full bg-background/50 backdrop-blur-xl border-b border-white/10 py-md">
+        <div class="max-w-5xl mx-auto px-6 flex justify-between items-center">
+            <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
+                <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
+                <span>EQT</span>
+            </a>
+            
+            <div class="flex items-center gap-md">
+                <!-- Lang select dropdown -->
+                <div class="relative w-36" id="lang-dropdown-wrapper">
+                    <button id="lang-btn" class="w-full flex items-center justify-between gap-xs px-sm py-xs bg-white/5 border border-white/10 hover:bg-white/10 hover:border-primary/30 text-on-surface-variant hover:text-primary rounded-lg transition-all duration-300 outline-none focus:outline-none focus:ring-0">
+                        <div class="flex items-center gap-xs">
+                            <span class="material-symbols-outlined text-base">language</span>
+                            <span id="current-lang-txt" class="font-label-md text-label-md">English</span>
+                        </div>
+                        <span class="material-symbols-outlined text-xs opacity-50 transition-transform duration-300" id="lang-arrow">expand_more</span>
+                    </button>
+                    <!-- Custom Dropdown Panel -->
+                    <div id="lang-dropdown-panel" class="hidden absolute left-0 right-0 top-full mt-2 w-full py-xs bg-surface border border-white/10 rounded-lg shadow-2xl backdrop-blur-xl z-50 overflow-hidden">
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="en">English</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ja">日本語</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="ko">한국어</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="es">Español</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="de">Deutsch</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="fr">Français</button>
+                        <button class="w-full text-left px-md py-xs font-label-md text-label-md text-on-surface-variant hover:text-primary hover:bg-white/5 transition-colors outline-none" data-lang="zh">简体中文</button>
+                    </div>
+                    <!-- Hidden select for compatibility -->
+                    <select id="lang-select" style="display: none;">
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="ko">한국어</option>
+                        <option value="es">Español</option>
+                        <option value="de">Deutsch</option>
+                        <option value="fr">Français</option>
+                        <option value="zh">简体中文</option>
+                    </select>
+                </div>
+                
+                <a class="flex items-center gap-1 text-sm text-secondary hover:underline" href="/">
+                    <span class="material-symbols-outlined text-base">arrow_back</span> <span data-i18n="back_to_home">Back to Home</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow max-w-5xl mx-auto px-6 py-12 w-full flex flex-col gap-12">
+        <!-- Pricing Header -->
+        <section class="space-y-xl" id="pricing">
+            <div class="text-center space-y-sm">
+                <h1 class="font-headline-lg text-headline-lg text-3xl md:text-4xl font-bold tracking-tight text-white mb-2" data-i18n="pricing_title">Transparent Licensing</h1>
+                <p class="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto" data-i18n="pricing_subtitle">Choose the tier that fits your workflow.</p>
+            </div>
+            
+            <!-- Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-lg items-stretch pt-8">
+                <!-- Free Tier -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border-t border-t-white/5 bg-surface-container-low/20">
+                    <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_free_title">Free</h3>
+                    <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$0<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_free_period">/forever</span></div>
+                    <ul class="space-y-md mb-8 flex-grow">
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat1">Basic local transfer</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat2">10 minutes daily session limit</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_free_feat3">Max 5 files &amp; 50MB per file</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm opacity-50"><span class="material-symbols-outlined text-sm">close</span> <span data-i18n="price_free_feat4">Uncapped local full speed</span></li>
+                    </ul>
+                    <a href="/" class="w-full py-3 glass-panel text-on-surface text-center rounded-lg hover:bg-surface-bright transition-colors font-label-md text-label-md block font-medium" data-i18n="price_free_btn">Get Started</a>
+                </div>
+
+                <!-- Plus Lifetime (Highlighted) -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80 shadow-[0_0_30px_rgba(57,229,182,0.15)]">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-secondary font-bold px-3 py-1 rounded-full font-label-sm text-label-sm text-xs" data-i18n="price_lifetime_badge">BEST VALUE</div>
+                    <h3 class="font-headline-md text-headline-md text-primary mb-xs text-xl font-bold" data-i18n="price_lifetime_title">Plus Lifetime</h3>
+                    <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$29.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_lifetime_period">/one-time</span></div>
+                    <ul class="space-y-md mb-8 flex-grow">
+                        <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat1">All Plus features forever</span></li>
+                        <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat2">No recurring fees</span></li>
+                        <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
+                        <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat4">Uncapped speed &amp; unlimited size</span></li>
+                    </ul>
+                    <button id="buy-lifetime-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
+                </div>
+
+                <!-- Plus Yearly -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border-t border-t-white/5 bg-surface-container-low/20">
+                    <h3 class="font-headline-md text-headline-md text-on-surface mb-xs text-xl font-bold text-white" data-i18n="price_yearly_title">Plus</h3>
+                    <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$11.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_yearly_period">/year</span></div>
+                    <ul class="space-y-md mb-8 flex-grow">
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat1">Uncapped local full speed</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat2">Unlimited session time &amp; files</span></li>
+                        <li class="flex items-center gap-sm text-on-surface-variant text-sm"><span class="material-symbols-outlined text-secondary text-sm">check</span> <span data-i18n="price_yearly_feat3">Priority customer support</span></li>
+                    </ul>
+                    <button id="buy-yearly-btn" class="w-full py-3 glass-panel text-secondary border-secondary/30 hover:border-secondary transition-colors rounded-lg font-label-md text-label-md font-medium" data-i18n="price_yearly_btn">Subscribe Yearly</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Compliance Section (Simplified Bento/Grid) -->
+        <section class="pt-12 border-t border-white/5" id="compliance">
+            <h2 class="font-headline-lg text-headline-lg text-on-surface text-2xl font-bold text-white mb-6" data-i18n="compliance_title">Merchant Policy &amp; Compliance</h2>
+            <div class="space-y-md">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+                    <a href="/refund.html" class="glass-panel p-4 rounded-lg hover:bg-surface-bright/50 transition-colors block">
+                        <h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center text-sm font-medium"><span data-i18n="comp_refund">Refund Policy</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+                    </a>
+                    <a href="/privacy.html" class="glass-panel p-4 rounded-lg hover:bg-surface-bright/50 transition-colors block">
+                        <h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center text-sm font-medium"><span data-i18n="comp_privacy">Privacy Policy</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+                    </a>
+                    <a href="/terms.html" class="glass-panel p-4 rounded-lg hover:bg-surface-bright/50 transition-colors block">
+                        <h4 class="font-label-md text-label-md text-on-surface flex justify-between items-center text-sm font-medium"><span data-i18n="comp_terms">Terms of Service</span> <span class="material-symbols-outlined text-sm">arrow_forward</span></h4>
+                    </a>
+                </div>
+                <div class="pt-md border-t border-white/10">
+                    <p class="font-body-md text-body-md text-on-surface-variant text-xs leading-relaxed" data-i18n="paddle_disclosure">Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-8 bg-surface-container-lowest border-t border-outline-variant text-center text-xs text-on-surface-variant">
+        <div class="max-w-5xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p data-i18n="footer_copy">© {year} EQT (Easy QR Transfer). All rights reserved.</p>
+            <div class="flex gap-md">
+                <a class="text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.net.im" data-i18n="footer_support">Support: support@eqt.net.im</a>
+                <span>|</span>
+                <a class="text-on-surface-variant hover:text-secondary transition-colors" href="/refund.html" data-i18n="comp_refund">Refund Policy</a>
+                <span>|</span>
+                <a class="text-on-surface-variant hover:text-secondary transition-colors" href="/privacy.html" data-i18n="comp_privacy">Privacy Policy</a>
+                <span>|</span>
+                <a class="text-on-surface-variant hover:text-secondary transition-colors" href="/terms.html" data-i18n="comp_terms">Terms of Service</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Multi-Language Support Script -->
+    <script>
+        const translations = {
+            "en": {
+                "back_to_home": "Back to Home",
+                "pricing_title": "Transparent Licensing",
+                "pricing_subtitle": "Choose the tier that fits your workflow.",
+                "price_free_title": "Free",
+                "price_free_period": "/forever",
+                "price_free_feat1": "Basic local transfer",
+                "price_free_feat2": "10 minutes daily session limit",
+                "price_free_feat3": "Max 5 files &amp; 50MB per file",
+                "price_free_feat4": "Uncapped local full speed",
+                "price_free_btn": "Get Started",
+                "price_lifetime_badge": "BEST VALUE",
+                "price_lifetime_title": "Plus Lifetime",
+                "price_lifetime_period": "/one-time",
+                "price_lifetime_feat1": "All Plus features forever",
+                "price_lifetime_feat2": "No recurring fees",
+                "price_lifetime_feat3": "Lifetime updates",
+                "price_lifetime_feat4": "Uncapped speed &amp; unlimited size",
+                "price_lifetime_btn": "Buy Lifetime",
+                "price_yearly_title": "Plus",
+                "price_yearly_period": "/year",
+                "price_yearly_feat1": "Uncapped local full speed",
+                "price_yearly_feat2": "Unlimited session time &amp; files",
+                "price_yearly_feat3": "Priority customer support",
+                "price_yearly_btn": "Subscribe Yearly",
+                "compliance_title": "Merchant Policy &amp; Compliance",
+                "comp_feat1_title": "Fulfillment &amp; Delivery",
+                "comp_feat1_desc": "Digital licenses are delivered instantly via email upon successful payment confirmation.",
+                "comp_feat2_title": "Refund &amp; Cancellation",
+                "comp_feat2_desc": "14-day money-back guarantee for unused licenses. Subscriptions can be cancelled anytime.",
+                "comp_privacy": "Privacy Policy",
+                "comp_terms": "Terms of Service",
+                "comp_refund": "Refund Policy",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "Support: support@eqt.net.im",
+                "paddle_disclosure_title": "Payment Reseller &amp; MoR",
+                "paddle_disclosure": "Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders. Paddle provides all customer service inquiries and handles returns.",
+                "modal_loading_title": "Confirming Transaction...",
+                "modal_loading_desc": "We are verifying your payment and generating your license key. Please do not close this window.",
+                "modal_success_title": "Payment Successful!",
+                "modal_success_desc": "Your EQT Plus license key is ready.",
+                "modal_copy": "Copy",
+                "modal_copied": "Copied!",
+                "modal_how_to_use": "How to activate:",
+                "modal_step1": "Open EQT Desktop App",
+                "modal_step2": "Go to settings and click \"Upgrade/License\"",
+                "modal_step3": "Paste the code and click \"Activate\"",
+                "modal_ok": "Get Started",
+                "modal_error_title": "Fulfillment Delayed",
+                "modal_error_desc": "We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support.",
+                "verify_email_modal_step1": "Security Check",
+                "verify_email_modal_title": "Verify Email Before Checkout",
+                "verify_email_modal_desc": "Please verify your purchase email address to ensure your license code will be delivered safely and accurately.",
+                "email_address": "Email Address",
+                "code_label": "Verification Code (6-digit)",
+                "send_code_btn": "Send Code",
+                "sending_code": "Sending...",
+                "verify_and_pay_btn": "Verify & Proceed to Payment",
+                "checkout_policy_notice": "By proceeding to payment you agree to our <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Terms</a> and <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Refund Policy</a> (14-day paid refunds; rolling 365-day limit of 3 activated-license refund/chargeback revocations per email or device).",
+                "verifying_btn": "Verifying...",
+                "invalid_email_err": "Please enter a valid email address",
+                "invalid_code_err": "Please enter 6-digit verification code",
+                "code_sent_success": "Verification code sent to your email!",
+                "send_code_failed": "Failed to send verification code. Please try again later.",
+                "verify_failed": "Verification failed. Please check your code.",
+                "paddle_loading_err": "Billing component is loading or blocked by network."
+            },
+            "zh": {
+                "back_to_home": "返回主页",
+                "pricing_title": "透明授权",
+                "pricing_subtitle": "选择适合您工作流的方案。",
+                "price_free_title": "免费版",
+                "price_free_period": "/ 永久",
+                "price_free_feat1": "基础本地传输",
+                "price_free_feat2": "每日 10 分钟免费会话限额",
+                "price_free_feat3": "单次限 5 个文件且单文件最大 50MB",
+                "price_free_feat4": "解锁局域网物理满速",
+                "price_free_btn": "立即开始",
+                "price_lifetime_badge": "最划算",
+                "price_lifetime_title": "终身专业版",
+                "price_lifetime_period": "/ 一次性付款",
+                "price_lifetime_feat1": "永久享有所有专业版功能",
+                "price_lifetime_feat2": "无后续订阅费用",
+                "price_lifetime_feat3": "终身免费升级",
+                "price_lifetime_feat4": "无限制文件大小与传输速度",
+                "price_lifetime_btn": "购买终身版",
+                "price_yearly_title": "年付专业版",
+                "price_yearly_period": "/ 年",
+                "price_yearly_feat1": "解锁局域网物理满速",
+                "price_yearly_feat2": "无限传输时间与文件数量",
+                "price_yearly_feat3": "优先技术支持服务",
+                "price_yearly_btn": "按年订阅",
+                "compliance_title": "商家政策与合规性",
+                "comp_feat1_title": "交付服务",
+                "comp_feat1_desc": "付款成功确认后，数字许可证密钥将立即通过电子邮件发送给您。",
+                "comp_feat2_title": "退款与取消",
+                "comp_feat2_desc": "未使用的许可证享有 14 天无理由退款保证。订阅服务可随时取消。",
+                "comp_privacy": "隐私政策",
+                "comp_terms": "服务条款",
+                "comp_refund": "退款政策",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). 保留所有权利。",
+                "footer_support": "支持邮箱: support@eqt.net.im",
+                "paddle_disclosure_title": "官方授权支付代理",
+                "paddle_disclosure": "我们的订单支付服务由在线分销商 Paddle.com 提供。Paddle.com 是我们所有订单的官方记录商家 (Merchant of Record)。Paddle 负责处理相关的客户服务查询及退款事宜。",
+                "modal_loading_title": "正在确认交易...",
+                "modal_loading_desc": "我们正在验证您的支付并生成许可证激活码。请不要关闭此窗口。",
+                "modal_success_title": "支付成功！",
+                "modal_success_desc": "您的 EQT Plus 许可证激活码已生成完毕。",
+                "modal_copy": "复制",
+                "modal_copied": "已复制！",
+                "modal_how_to_use": "如何激活：",
+                "modal_step1": "打开 EQT 桌面端客户端",
+                "modal_step2": "进入设置页面，点击“升级/授权管理”",
+                "modal_step3": "粘贴您的激活码并点击“激活”",
+                "modal_ok": "开始使用",
+                "modal_error_title": "激活码生成延迟",
+                "modal_error_desc": "您的付款已确认，但授权码生成超时。激活码将在数分钟内自动发送至您的邮箱。如有疑问请联系支持邮箱。",
+                "verify_email_modal_step1": "安全验证",
+                "verify_email_modal_title": "结账前邮箱验证",
+                "verify_email_modal_desc": "请先验证您的接收邮箱，以确保付款成功后激活码能够准确无误地送达。",
+                "email_address": "购买电子邮箱",
+                "code_label": "6 位验证码",
+                "send_code_btn": "发送验证码",
+                "sending_code": "发送中...",
+                "verify_and_pay_btn": "验证邮箱并去支付",
+                "checkout_policy_notice": "继续支付即表示您同意我们的 <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">使用条款</a> 与 <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">退款政策</a>（付费订单 14 天退款；任意滚动 365 天内同一邮箱或设备对已激活授权退款/拒付达 3 次可限制后续购买与激活）。",
+                "verifying_btn": "验证中...",
+                "invalid_email_err": "请输入有效的电子邮箱地址",
+                "invalid_code_err": "请输入 6 位数字验证码",
+                "code_sent_success": "验证码已成功发送至您的邮箱！",
+                "send_code_failed": "验证码发送失败，请稍后重试。",
+                "verify_failed": "验证失败，请检查验证码是否正确。",
+                "paddle_loading_err": "支付组件加载中或网络被拦截。"
+            },
+            "ja": {
+                "back_to_home": "ホームに戻る",
+                "pricing_title": "透明性のあるライセンス",
+                "pricing_subtitle": "ワークフローに合ったプランをお選びください。",
+                "price_free_title": "無料版",
+                "price_free_period": "/ 永久",
+                "price_free_feat1": "基本的なローカル転送",
+                "price_free_feat2": "1日10分間のセッション制限",
+                "price_free_feat3": "最大5個 of 파일、단일 파일 최대 50MB",
+                "price_free_feat4": "制限なしのローカル速度",
+                "price_free_btn": "今すぐ開始",
+                "price_lifetime_badge": "最もお得",
+                "price_lifetime_title": "終身Plus版",
+                "price_lifetime_period": "/ 一回払い",
+                "price_lifetime_feat1": "永久にすべてのPlus機能を利用可能",
+                "price_lifetime_feat2": "追加料金なし",
+                "price_lifetime_feat3": "生涯アップデート無料",
+                "price_lifetime_feat4": "速度制限なし、容量制限なし",
+                "price_lifetime_btn": "終身版を購入",
+                "price_yearly_title": "年付Plus版",
+                "price_yearly_period": "/ 年",
+                "price_yearly_feat1": "制限なしのローカル速度",
+                "price_yearly_feat2": "無制限의 세션 시간과 파일 수",
+                "price_yearly_feat3": "優先サポートサービス",
+                "price_yearly_btn": "年間購読",
+                "send_code_btn": "コード送信",
+                "sending_code": "送信中...",
+                "code_sent_success": "認証コードをメールに送信しました！",
+                "send_code_failed": "認証コードの送信に失敗しました。後でもう一度お試しください。",
+                "verify_failed": "認証に失敗しました。コードを確認してください。",
+                "paddle_loading_err": "支払いコンポーネントを読み込み中、またはネットワークが遮断されています。",
+                "license_sent_to_notice": "ライセンスキーと領収書を送信しました：",
+                "compliance_title": "コンプライアンスと規約",
+                "comp_privacy": "プライバシーポリシー",
+                "comp_terms": "利用規約",
+                "comp_refund": "返金ポリシー",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "サポート: support@eqt.net.im",
+                "paddle_disclosure_title": "決済リセラーとMoR",
+                "paddle_disclosure": "注文プロセスは、当社のオンラインリセラーであるPaddle.comによって行われます。Paddle.comは、すべての注文のMerchant of Record（MoR）です。Paddleは、カスタマーサポートや返品対応を提供します。",
+                "verify_email_modal_step1": "セキュリティ確認",
+                "verify_email_modal_title": "購入メールアドレスの認証",
+                "verify_email_modal_desc": "ライセンスコードが正確に届くよう、購入前にメールアドレスを認証してください。",
+                "email_address": "メールアドレス",
+                "code_label": "認証コード (6桁)",
+                "send_code_btn": "コード送信",
+                "sending_code": "送信中...",
+                "verify_and_pay_btn": "認証して決済に進む",
+                "checkout_policy_notice": "お支払いに進むことで、<a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">利用規約</a>および<a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">返金ポリシー</a>に同意したものとみなされます。",
+                "verifying_btn": "検証中...",
+                "invalid_email_err": "有効なメールアドレスを入力してください",
+                "invalid_code_err": "6桁の認証コードを入力してください",
+                "code_sent_success": "認証コードをメールに送信しました！",
+                "send_code_failed": "認証コードの送信に失敗しました。後でもう一度お試しください。",
+                "verify_failed": "認証に失敗しました。コードを確認してください。",
+                "paddle_loading_err": "支払いコンポーネントを読み込み中、またはネットワークが遮断されています。",
+                "license_sent_to_notice": "ライセンスキーと領収書を送信しました："
+            },
+            "ko": {
+                "back_to_home": "홈으로 돌아가기",
+                "pricing_title": "투명한 라이선스 정책",
+                "pricing_subtitle": "워크플로우에 적합한 요금제를 선택하세요.",
+                "price_free_title": "무료",
+                "price_free_period": "/ 평생",
+                "price_free_feat1": "기본 로컬 전송",
+                "price_free_feat2": "일일 10분 세션 시간 제한",
+                "price_free_feat3": "최대 5개 파일, 파일당 최대 50MB 제한",
+                "price_free_feat4": "무제한 로컬 전송 속도",
+                "price_free_btn": "시작하기",
+                "price_lifetime_badge": "최고의 가치",
+                "price_lifetime_title": "플러스 평생권",
+                "price_lifetime_period": "/ 일회성 결제",
+                "price_lifetime_feat1": "모든 플러스 기능을 평생 사용",
+                "price_lifetime_feat2": "추가 결제 없음",
+                "price_lifetime_feat3": "평생 업데이트 제공",
+                "price_lifetime_feat4": "속도 및 파일 크기 무제한",
+                "price_lifetime_btn": "평생권 구매",
+                "price_yearly_title": "플러스 연간권",
+                "price_yearly_period": "/ 년",
+                "price_yearly_feat1": "무제한 로컬 전송 속도",
+                "price_yearly_feat2": "세션 시간 및 파일 개수 무제한",
+                "price_yearly_feat3": "우선 기술 지원 제공",
+                "price_yearly_btn": "연간 구독",
+                "compliance_title": "준수 정책 및 판매 조건",
+                "comp_privacy": "개인정보 처리방침",
+                "comp_terms": "서비스 이용약관",
+                "comp_refund": "환불 규정",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "고객지원: support@eqt.net.im",
+                "paddle_disclosure_title": "공식 결제 대행사 (MoR)",
+                "paddle_disclosure": "주문 및 결제 절차는 당사의 공식 리셀러인 Paddle.com에 의해 처리됩니다. Paddle.com은 모든 주문의 가맹점(Merchant of Record)으로, 결제 관련 고객 지원 및 환불을 직접 담당합니다.",
+                "verify_email_modal_step1": "보안 확인",
+                "verify_email_modal_title": "결제 전 이메일 인증",
+                "verify_email_modal_desc": "라이선스 키가 안전하고 정확하게 전달되도록 결제 전 이메일을 인증해 주세요.",
+                "email_address": "이메일 주소",
+                "code_label": "인증 코드 (6자리)",
+                "send_code_btn": "인증코드 발송",
+                "sending_code": "발송 중...",
+                "verify_and_pay_btn": "인증 후 결제 진행",
+                "checkout_policy_notice": "결제를 진행하면 <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">이용약관</a> 및 <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">환불 정책</a>에 동의한 것으로 간주됩니다.",
+                "verifying_btn": "인증 중...",
+                "invalid_email_err": "올바른 이메일 주소를 입력해 주세요",
+                "invalid_code_err": "6자리 인증 코드를 입력해 주세요",
+                "code_sent_success": "인증 코드가 이메일로 전송되었습니다!",
+                "send_code_failed": "인증 코드 전송에 실패했습니다. 나중에 다시 시도해 주세요.",
+                "verify_failed": "인증에 실패했습니다. 코드를 확인해 주세요.",
+                "paddle_loading_err": "결제 구성 요소를 로드 중이거나 네트워크가 차단되었습니다.",
+                "license_sent_to_notice": "라이선스 키와 영수증이 다음 주소로 발송되었습니다:"
+            },
+            "es": {
+                "back_to_home": "Volver al inicio",
+                "pricing_title": "Licencias transparentes",
+                "pricing_subtitle": "Elija el plan que mejor se adapte a su flujo de trabajo.",
+                "price_free_title": "Gratis",
+                "price_free_period": "/para siempre",
+                "price_free_feat1": "Transferencia local básica",
+                "price_free_feat2": "Límite de sesión de 10 minutos al día",
+                "price_free_feat3": "Máximo 5 archivos y 50 MB por archivo",
+                "price_free_feat4": "Velocidad local ilimitada sin límites",
+                "price_free_btn": "Empezar",
+                "price_lifetime_badge": "MEJOR VALOR",
+                "price_lifetime_title": "Plus Vitalicio",
+                "price_lifetime_period": "/pago único",
+                "price_lifetime_feat1": "Todas las funciones Plus para siempre",
+                "price_lifetime_feat2": "Sin tarifas recurrentes",
+                "price_lifetime_feat3": "Actualizaciones de por vida",
+                "price_lifetime_feat4": "Velocidad ilimitada y tamaño sin tope",
+                "price_lifetime_btn": "Comprar Vitalicio",
+                "price_yearly_title": "Plus Anual",
+                "price_yearly_period": "/año",
+                "price_yearly_feat1": "Velocidad local ilimitada sin límites",
+                "price_yearly_feat2": "Tiempo de sesión y archivos ilimitados",
+                "price_yearly_feat3": "Servicio de soporte prioritario",
+                "price_yearly_btn": "Suscribirse anualmente",
+                "compliance_title": "Cumplimiento y Políticas",
+                "comp_privacy": "Política de Privacidad",
+                "comp_terms": "Condiciones de Servicio",
+                "comp_refund": "Política de Reembolso",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "Soporte: support@eqt.net.im",
+                "paddle_disclosure_title": "Distribuidor y MoR oficial",
+                "paddle_disclosure": "El proceso de pedido es gestionado por nuestro distribuidor oficial Paddle.com, que actúa como el Merchant of Record de todas nuestras transacciones. Paddle se encarga del servicio de atención al cliente y devoluciones.",
+                "verify_email_modal_step1": "Verificación de Seguridad",
+                "verify_email_modal_title": "Verificar Correo Antes del Pago",
+                "verify_email_modal_desc": "Por favor verifique su correo para asegurar la entrega precisa de su clave de licencia.",
+                "email_address": "Correo Electrónico",
+                "code_label": "Código de Verificación (6 dígitos)",
+                "send_code_btn": "Enviar Código",
+                "sending_code": "Enviando...",
+                "verify_and_pay_btn": "Verificar y Proceder al Pago",
+                "checkout_policy_notice": "Al continuar con el pago acepta nuestros <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Términos</a> y la <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Política de reembolso</a>.",
+                "verifying_btn": "Verificando...",
+                "invalid_email_err": "Ingrese un correo electrónico válido",
+                "invalid_code_err": "Ingrese el código de 6 dígitos",
+                "code_sent_success": "¡Código de verificación enviado a su correo!",
+                "send_code_failed": "Error al enviar el código. Intente de nuevo más tarde.",
+                "verify_failed": "Verificación fallida. Verifique su código.",
+                "paddle_loading_err": "El componente de pago se está cargando o está bloqueado por la red.",
+                "license_sent_to_notice": "Clave de licencia y recibo enviados a:"
+            },
+            "de": {
+                "back_to_home": "Zurück zur Startseite",
+                "pricing_title": "Transparente Lizenzierung",
+                "pricing_subtitle": "Wählen Sie das Modell, das zu Ihrem Workflow passt.",
+                "price_free_title": "Kostenlos",
+                "price_free_period": "/dauerhaft",
+                "price_free_feat1": "Basis-Lokalübertragung",
+                "price_free_feat2": "Täglich 10 Minuten Sitzungslimit",
+                "price_free_feat3": "Max. 5 Dateien und 50 MB pro Datei",
+                "price_free_feat4": "Unbegrenzte lokale Geschwindigkeit",
+                "price_free_btn": "Loslegen",
+                "price_lifetime_badge": "BESTES ANGEBOT",
+                "price_lifetime_title": "Plus Lebenslang",
+                "price_lifetime_period": "/einmalig",
+                "price_lifetime_feat1": "Alle Plus-Funktionen für immer",
+                "price_lifetime_feat2": "Keine wiederkehrenden Gebühren",
+                "price_lifetime_feat3": "Lebenslange Updates",
+                "price_lifetime_feat4": "Unbegrenzte Geschwindigkeit &amp; Größe",
+                "price_lifetime_btn": "Lebenslang kaufen",
+                "price_yearly_title": "Plus Jährlich",
+                "price_yearly_period": "/Jahr",
+                "price_yearly_feat1": "Unbegrenzte lokale Geschwindigkeit",
+                "price_yearly_feat2": "Unbegrenzte Sitzungszeit &amp; Dateien",
+                "price_yearly_feat3": "Priorisierter Support-Service",
+                "price_yearly_btn": "Jährlich abonnieren",
+                "compliance_title": "Richtlinien &amp; Compliance",
+                "comp_privacy": "Datenschutzerklärung",
+                "comp_terms": "Nutzungsbedingungen",
+                "comp_refund": "Erstattungsrichtlinie",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "Support: support@eqt.net.im",
+                "paddle_disclosure_title": "Zahlungs-Reseller &amp; MoR",
+                "paddle_disclosure": "Unser Bestellprozess wird durch unseren Online-Reseller Paddle.com durchgeführt. Paddle.com is der Merchant of Record (MoR) für all unsere Bestellungen. Paddle bietet Kundensupport und Rückabwicklung an.",
+                "verify_email_modal_step1": "Sicherheitsprüfung",
+                "verify_email_modal_title": "E-Mail vor dem Kauf bestätigen",
+                "verify_email_modal_desc": "Bitte bestätigen Sie Ihre E-Mail-Adresse, um eine sichere Zustellung zu gewährleisten.",
+                "email_address": "E-Mail-Adresse",
+                "code_label": "Bestätigungscode (6-stellig)",
+                "send_code_btn": "Code Senden",
+                "sending_code": "Senden...",
+                "verify_and_pay_btn": "Bestätigen &amp; Zur Kasse",
+                "checkout_policy_notice": "Mit dem Fortfahren zur Zahlung stimmen Sie unseren <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">AGB</a> und der <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Erstattungsrichtlinie</a> zu.",
+                "verifying_btn": "Überprüfen...",
+                "invalid_email_err": "Bitte geben Sie eine gültige E-Mail ein",
+                "invalid_code_err": "Bitte 6-stelligen Code eingeben",
+                "code_sent_success": "Bestätigungscode an Ihre E-Mail gesendet!",
+                "send_code_failed": "Code konnte nicht gesendet werden. Bitte später erneut versuchen.",
+                "verify_failed": "Bestätigung fehlgeschlagen. Bitte überprüfen Sie Ihren Code.",
+                "paddle_loading_err": "Zahlungskomponente wird geladen oder durch Netzwerk blockiert.",
+                "license_sent_to_notice": "Lizenzschlüssel und Beleg gesendet an:"
+            },
+            "fr": {
+                "back_to_home": "Retour à l'accueil",
+                "pricing_title": "Tarifs transparents",
+                "pricing_subtitle": "Choisissez l'offre qui correspond à vos besoins.",
+                "price_free_title": "Gratuit",
+                "price_free_period": "/toujours",
+                "price_free_feat1": "Transfert local de base",
+                "price_free_feat2": "Limite de session de 10 minutes par jour",
+                "price_free_feat3": "Max 5 fichiers et 50 Mo par fichier",
+                "price_free_feat4": "Vitesse locale illimitée",
+                "price_free_btn": "Démarrer",
+                "price_lifetime_badge": "MEILLEUR CHOIX",
+                "price_lifetime_title": "Plus À vie",
+                "price_lifetime_period": "/paiement unique",
+                "price_lifetime_feat1": "Toutes les fonctions Plus à vie",
+                "price_lifetime_feat2": "Pas de frais récurrents",
+                "price_lifetime_feat3": "Mises à jour à vie",
+                "price_lifetime_feat4": "Vitesse illimitée et taille sans limite",
+                "price_lifetime_btn": "Acheter la version à vie",
+                "price_yearly_title": "Plus Annuel",
+                "price_yearly_period": "/an",
+                "price_yearly_feat1": "Vitesse locale illimitée",
+                "price_yearly_feat2": "Temps de session et fichiers illimités",
+                "price_yearly_feat3": "Support client prioritaire",
+                "price_yearly_btn": "S'abonner à l'année",
+                "compliance_title": "Conformité &amp; Politiques",
+                "comp_privacy": "Politique de Confidentialité",
+                "comp_terms": "Conditions d'Utilisation",
+                "comp_refund": "Politique de Remboursement",
+                "comp_feat1_title": "Livraison et Exécution",
+                "comp_feat1_desc": "Les licences numériques sont livrées instantanément par e-mail après confirmation réussie du paiement.",
+                "comp_feat2_title": "Remboursement et Annulation",
+                "comp_feat2_desc": "Garantie de remboursement de 14 jours pour les licences inutilisées. Les abonnements peuvent être annulés à tout moment.",
+                "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved.",
+                "footer_support": "Support: support@eqt.net.im",
+                "paddle_disclosure_title": "Distributeur &amp; MoR officiel",
+                "paddle_disclosure": "Notre processus de commande est géré par notre distributeur en ligne Paddle.com. Paddle.com est le Merchant of Record (MoR) pour toutes nos commandes. Paddle gère le service client et les retours.",
+                "verify_email_modal_step1": "Vérification de sécurité",
+                "verify_email_modal_title": "Vérifier l'e-mail avant le paiement",
+                "verify_email_modal_desc": "Veuillez vérifier votre e-mail pour garantir une livraison exacte de votre licence.",
+                "email_address": "Adresse E-mail",
+                "code_label": "Code de vérification (6 chiffres)",
+                "send_code_btn": "Envoyer le code",
+                "sending_code": "Envoi en cours...",
+                "verify_and_pay_btn": "Vérifier et procéder au paiement",
+                "checkout_policy_notice": "En poursuivant le paiement, vous acceptez nos <a href=\"/terms.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Conditions</a> et la <a href=\"/refund.html\" class=\"text-primary hover:underline\" target=\"_blank\" rel=\"noopener\">Politique de remboursement</a>.",
+                "verifying_btn": "Vérification...",
+                "invalid_email_err": "Veuillez entrer un e-mail valide",
+                "invalid_code_err": "Veuillez entrer le code à 6 chiffres",
+                "code_sent_success": "Code de vérification envoyé à votre e-mail !",
+                "send_code_failed": "Échec de l'envoi du code. Veuillez réessayer plus tard.",
+                "verify_failed": "Échec de la vérification. Veuillez vérifier votre code.",
+                "paddle_loading_err": "Le composant de paiement charge ou est bloqué par le réseau.",
+                "license_sent_to_notice": "Clé de licence et reçu envoyés à :"
+            }
+        };
+
+        window.translations = translations;
+
+        function getCookie(name) {
+            const value = "; " + document.cookie;
+            const parts = value.split("; " + name + "=");
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax";
+        }
+
+        function applyLang(lang) {
+            document.documentElement.lang = lang;
+            
+            const fallback = translations['en'];
+            const current = translations[lang] || {};
+            
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                let text = current[key];
+                if (text === undefined) {
+                    text = fallback[key];
+                }
+                if (text !== undefined) {
+                    text = text.replace('{year}', new Date().getFullYear());
+                    el.innerHTML = text;
+                }
+            });
+
+            // Update title
+            let pricingTitle = current["pricing_title"] || fallback["pricing_title"];
+            if (pricingTitle) {
+                document.title = pricingTitle + " - EQT (Easy QR Transfer)";
+            }
+
+            // Sync Dropdown Select element
+            const selectEl = document.getElementById('lang-select');
+            if (selectEl) {
+                selectEl.value = lang;
+            }
+            const langCurrentTxt = document.getElementById('current-lang-txt');
+            const langTextMap = {
+                'en': 'English',
+                'zh': '简体中文',
+                'ja': '日本語',
+                'ko': '한국어',
+                'es': 'Español',
+                'de': 'Deutsch',
+                'fr': 'Français'
+            };
+            if (langCurrentTxt && langTextMap[lang]) {
+                langCurrentTxt.textContent = langTextMap[lang];
+            }
+            window.currentLang = lang;
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.updateI18n();
+            }
+        }
+
+        function initLang() {
+            let lang = localStorage.getItem('eqt-lang');
+            if (!lang) {
+                lang = getCookie('eqt-lang');
+            }
+            if (!lang) {
+                const navLang = navigator.language || navigator.userLanguage;
+                lang = (navLang && navLang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
+            }
+            
+            const supported = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
+            if (!supported.includes(lang)) {
+                lang = 'en';
+            }
+
+            applyLang(lang);
+        }
+
+        // Custom dropdown interaction
+        const langDropdownBtn = document.getElementById('lang-btn');
+        const langDropdownPanel = document.getElementById('lang-dropdown-panel');
+        const langDropdownArrow = document.getElementById('lang-arrow');
+
+        if (langDropdownBtn && langDropdownPanel) {
+            langDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isHidden = langDropdownPanel.classList.contains('hidden');
+                if (isHidden) {
+                    langDropdownPanel.classList.remove('hidden');
+                    langDropdownArrow.classList.add('rotate-180');
+                } else {
+                    langDropdownPanel.classList.add('hidden');
+                    langDropdownArrow.classList.remove('rotate-180');
+                }
+            });
+
+            document.addEventListener('click', () => {
+                langDropdownPanel.classList.add('hidden');
+                langDropdownArrow.classList.remove('rotate-180');
+            });
+
+            langDropdownPanel.querySelectorAll('button[data-lang]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const lang = btn.getAttribute('data-lang');
+                    localStorage.setItem('eqt-lang', lang);
+                    setCookie('eqt-lang', lang, 365);
+                    applyLang(lang);
+                });
+            });
+        }
+
+        // ====== PADDLE BILLING INTEGRATION ======
+        // 环境自适应：根据 window.EQT_IS_TEST(来源于 js/api-base.js)动态切换 Sandbox 与 Production
+        const isTestEnv = Boolean(window.EQT_IS_TEST);
+        const PADDLE_ENV = isTestEnv ? "sandbox" : "production";
+        // Sandbox Client-Side Token vs Production Client-Side Token
+        const PADDLE_TOKEN = isTestEnv
+            ? "test_1be1e080418b8141d02936c5ee1"
+            : "live_44b75bb0843ad17927eb60e8e07";
+        // Lifetime & Yearly Price IDs
+        const PRICE_LIFETIME_ID = isTestEnv
+            ? "pri_01kyhmkv4ppj10r4cdgw3sv48p"
+            : "pri_01kyd2nbsmg44rjmvf4vbetgwj";
+        const PRICE_YEARLY_ID = isTestEnv
+            ? "pri_01kxymxqngex49tg65wb0701pc"
+            : "pri_01kydyzmn1pc29npe377dxtq96";
+
+        let pendingPriceId = null;
+        let verifiedEmail = null;
+
+        function initPaddle() {
+            if (typeof Paddle !== 'undefined') {
+                try {
+                    const expectedPrefix = isTestEnv ? "test_" : "live_";
+                    if (!PADDLE_TOKEN || !PADDLE_TOKEN.startsWith(expectedPrefix)) {
+                        console.error(`Invalid Paddle Client Token for ${PADDLE_ENV} environment: must start with '${expectedPrefix}'`);
+                        return;
+                    }
+                    Paddle.Environment.set(PADDLE_ENV);
+                    Paddle.Initialize({
+                        token: PADDLE_TOKEN,
+                        eventCallback: function(data) {
+                            console.log("Paddle Event:", data);
+                            if (data.name === "checkout.completed") {
+                                const transactionId = data.data.transaction_id || data.data.id;
+                                if (transactionId) {
+                                    openModalAndStartPoll(transactionId);
+                                }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Failed to initialize Paddle:", e);
+                }
+            }
+        }
+        window.initPaddle = initPaddle;
+
+        function initCheckoutButtons() {
+            const buyLifetimeBtn = document.getElementById('buy-lifetime-btn');
+            const buyYearlyBtn = document.getElementById('buy-yearly-btn');
+
+            if (buyLifetimeBtn) {
+                buyLifetimeBtn.addEventListener('click', () => {
+                    openVerifyModal(PRICE_LIFETIME_ID);
+                });
+            }
+
+            if (buyYearlyBtn) {
+                buyYearlyBtn.addEventListener('click', () => {
+                    openVerifyModal(PRICE_YEARLY_ID);
+                });
+            }
+        }
+
+        // Email Verification Modal Control (Delegated to checkout-verify.js component)
+        function openVerifyModal(priceId) {
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.open(priceId);
+            }
+        }
+
+        function closeVerifyModal() {
+            if (window.checkoutVerifyComp) {
+                window.checkoutVerifyComp.close();
+            }
+        }
+
+        // Modal elements control
+        const modalEl = document.getElementById('license-modal');
+        const loadingState = document.getElementById('modal-loading-state');
+        const successState = document.getElementById('modal-success-state');
+        const errorState = document.getElementById('modal-error-state');
+        const codeDisplay = document.getElementById('license-code-display');
+
+        function openModalAndStartPoll(transactionId) {
+            const modalEl = document.getElementById('license-modal');
+            const loadingState = document.getElementById('modal-loading-state');
+            const successState = document.getElementById('modal-success-state');
+            const errorState = document.getElementById('modal-error-state');
+            const codeDisplay = document.getElementById('license-code-display');
+
+            if (!modalEl) return;
+            
+            // Show modal with loading state
+            loadingState?.classList.remove('hidden');
+            successState?.classList.add('hidden');
+            errorState?.classList.add('hidden');
+            
+            modalEl.classList.remove('hidden');
+            // Trigger animation
+            setTimeout(() => {
+                modalEl.classList.remove('opacity-0');
+                modalEl.querySelector('.transform')?.classList.remove('scale-95');
+            }, 50);
+
+            // Start polling
+            let attempts = 0;
+            const maxAttempts = 30; // Poll for 30 seconds
+            const queryUrl = `${window.EQT_API_BASE}/api/v1/paddle/license-query?transaction_id=${transactionId}`;
+            
+            const interval = setInterval(() => {
+                attempts++;
+                fetch(queryUrl)
+                    .then(res => {
+                        if (res.ok) return res.json();
+                        throw new Error("Pending");
+                    })
+                    .then(data => {
+                        clearInterval(interval);
+                        // Show success state
+                        loadingState?.classList.add('hidden');
+                        errorState?.classList.add('hidden');
+                        successState?.classList.remove('hidden');
+                        if (codeDisplay) {
+                            codeDisplay.textContent = data.license_code;
+                        }
+                        const emailNotice = document.getElementById('modal-email-sent-notice');
+                        if (emailNotice && window.checkoutVerifyComp && window.checkoutVerifyComp.verifiedEmail) {
+                            emailNotice.textContent = window.checkoutVerifyComp.verifiedEmail;
+                        }
+                    })
+                    .catch(() => {
+                        if (attempts >= maxAttempts) {
+                            clearInterval(interval);
+                            // Show error/timeout state
+                            loadingState?.classList.add('hidden');
+                            successState?.classList.add('hidden');
+                            errorState?.classList.remove('hidden');
+                        }
+                    });
+            }, 1000);
+        }
+
+        function closeModal() {
+            const modalEl = document.getElementById('license-modal');
+            if (!modalEl) return;
+            modalEl.classList.add('opacity-0');
+            modalEl.querySelector('.transform')?.classList.add('scale-95');
+            setTimeout(() => {
+                modalEl.classList.add('hidden');
+            }, 300);
+        }
+
+        // Bind modal close buttons
+        const closeBtn = document.getElementById('close-modal-btn');
+        const okBtn = document.getElementById('modal-ok-btn');
+        const errOkBtn = document.getElementById('modal-err-ok-btn');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (okBtn) okBtn.addEventListener('click', closeModal);
+        if (errOkBtn) errOkBtn.addEventListener('click', closeModal);
+
+        // Copy license code functionality
+        const copyBtn = document.getElementById('copy-code-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                if (codeDisplay) {
+                    navigator.clipboard.writeText(codeDisplay.textContent).then(() => {
+                        const copyTxt = document.getElementById('copy-text');
+                        const copyIcon = document.getElementById('copy-icon');
+                        if (copyTxt) {
+                            const currentLang = localStorage.getItem('eqt-lang') || 'en';
+                            copyTxt.textContent = (currentLang === 'zh') ? '已复制！' : 'Copied!';
+                        }
+                        if (copyIcon) {
+                            copyIcon.textContent = 'check';
+                        }
+                        setTimeout(() => {
+                            if (copyTxt) {
+                                const currentLang = localStorage.getItem('eqt-lang') || 'en';
+                                copyTxt.textContent = (currentLang === 'zh') ? '复制' : 'Copy';
+                            }
+                            if (copyIcon) {
+                                copyIcon.textContent = 'content_copy';
+                            }
+                        }, 2000);
+                    });
+                }
+            });
+        }
+
+        window.openModalAndStartPoll = openModalAndStartPoll;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initLang();
+            initCheckoutButtons();
+            initPaddle();
+        });
+    </script>
+
+    <!-- Email Verification Before Checkout Modal -->
+    <div id="verify-email-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
+        <div class="glass-panel max-w-md w-full p-6 md:p-8 rounded-2xl border border-primary/40 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-5">
+            <button id="close-verify-modal-btn" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeVerifyModal()">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            
+            <div class="space-y-1">
+                <div class="inline-flex items-center gap-1.5 text-primary font-bold text-xs">
+                    <span class="material-symbols-outlined text-sm">mark_email_read</span>
+                    <span data-i18n="verify_email_modal_step1">Security Check</span>
+                </div>
+                <h3 class="font-headline-md text-headline-md text-white text-xl font-bold" data-i18n="verify_email_modal_title">Verify Email Before Checkout</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-xs leading-relaxed" data-i18n="verify_email_modal_desc">Please verify your purchase email address to ensure your license code will be delivered safely and accurately.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Email input & Send Code button -->
+                <div class="space-y-1 text-left">
+                    <label class="block text-xs font-medium text-on-surface-variant" data-i18n="email_address">Email Address</label>
+                    <div class="flex gap-2">
+                        <input type="email" id="checkout-email-input" class="flex-grow bg-black/40 border border-white/15 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-all" placeholder="user@example.com" />
+                        <button id="send-checkout-code-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]" data-i18n="send_code_btn">Send Code</button>
+                    </div>
+                    <p id="email-field-error-msg" class="text-[11px] text-red-400 hidden mt-1 text-left flex items-center gap-1"></p>
+                </div>
+                
+                <!-- Code input -->
+                <div class="space-y-1 text-left">
+                    <label class="block text-xs font-medium text-on-surface-variant" data-i18n="code_label">Verification Code (6-digit)</label>
+                    <input type="text" id="checkout-code-input" maxlength="6" class="w-full bg-black/40 border border-white/15 focus:border-primary text-white text-base font-mono font-bold tracking-widest text-center rounded-lg px-3 py-2 outline-none transition-colors" placeholder="123456" />
+                </div>
+                
+                <!-- Status / Error message -->
+                <div id="verify-modal-status-msg" class="text-xs min-h-[18px] font-medium hidden text-left"></div>
+
+                <!-- Payment policy notice (Terms + Refund + 365d abuse limit) -->
+                <p class="text-[11px] text-on-surface-variant/90 leading-relaxed text-left border border-white/10 rounded-lg px-3 py-2 bg-white/5" data-i18n="checkout_policy_notice">
+                    By proceeding to payment you agree to our
+                    <a href="/terms.html" class="text-primary hover:underline" target="_blank" rel="noopener">Terms</a>
+                    and
+                    <a href="/refund.html" class="text-primary hover:underline" target="_blank" rel="noopener">Refund Policy</a>
+                    (14-day paid refunds; rolling 365-day limit of 3 refund/chargeback revocations per email or device).
+                </p>
+                
+                <!-- Submit button -->
+                <button id="verify-and-pay-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 text-sm flex items-center justify-center gap-2">
+                    <span data-i18n="verify_and_pay_btn">Verify &amp; Proceed to Payment</span>
+                    <span class="material-symbols-outlined text-sm">lock_open</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- License Success / Loader Modal -->
+    <div id="license-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
+        <div class="glass-panel max-w-md w-full p-8 rounded-2xl border border-primary/30 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-6">
+            <button id="close-modal-btn-top" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeModal()">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            
+            <!-- State 1: Loading -->
+            <div id="modal-loading-state" class="text-center py-6 space-y-4">
+                <div class="inline-block w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <h3 class="font-headline-md text-headline-md text-white text-lg font-bold" data-i18n="modal_loading_title">Confirming Transaction...</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="modal_loading_desc">We are verifying your payment and generating your license key. Please do not close this window.</p>
+            </div>
+            
+            <!-- State 2: Success -->
+            <div id="modal-success-state" class="hidden space-y-5">
+                <div class="text-center space-y-2">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/20 text-primary mb-2 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                        <span class="material-symbols-outlined text-2xl font-bold">check_circle</span>
+                    </div>
+                    <h3 class="font-headline-md text-headline-md text-white text-xl font-bold" data-i18n="modal_success_title">Payment Successful!</h3>
+                    <p class="font-body-md text-body-md text-on-surface-variant text-xs" data-i18n="modal_success_desc">Your EQT Plus license key has been generated and fulfilled.</p>
+                </div>
+                
+                <div class="bg-black/40 border border-white/10 rounded-xl p-4 flex items-center justify-between gap-4">
+                    <code id="license-code-display" class="font-mono text-primary text-base font-bold select-all tracking-wider">EQT-PLUS-XXXXX</code>
+                    <button id="copy-code-btn" class="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs rounded transition-all">
+                        <span class="material-symbols-outlined text-sm" id="copy-icon">content_copy</span>
+                        <span id="copy-text" data-i18n="modal_copy">Copy</span>
+                    </button>
+                </div>
+
+                <div class="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 rounded-xl p-3 text-xs flex items-center gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                    <span class="material-symbols-outlined text-lg shrink-0">mark_email_read</span>
+                    <div class="text-left leading-relaxed">
+                        <span data-i18n="license_sent_to_notice">License key details sent to: </span>
+                        <strong id="modal-email-sent-notice" class="font-mono underline font-bold text-white ml-1"></strong>
+                    </div>
+                </div>
+                
+                <div class="space-y-sm text-xs text-on-surface-variant leading-relaxed">
+                    <p class="font-medium text-white/80" data-i18n="modal_how_to_use">How to activate:</p>
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li data-i18n="modal_step1">Open EQT Desktop App</li>
+                        <li data-i18n="modal_step2">Go to settings and click "Upgrade/License"</li>
+                        <li data-i18n="modal_step3">Paste the code and click "Activate"</li>
+                    </ol>
+                </div>
+                
+                <button id="modal-ok-btn" class="w-full py-2.5 bg-primary text-secondary hover:shadow-[0_0_15px_rgba(57,229,182,0.3)] font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Get Started</button>
+            </div>
+            
+            <!-- State 3: Error / Timeout -->
+            <div id="modal-error-state" class="hidden text-center py-4 space-y-4">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500/20 text-red-400">
+                    <span class="material-symbols-outlined text-2xl font-bold">warning</span>
+                </div>
+                <h3 class="font-headline-md text-headline-md text-white text-lg font-bold" data-i18n="modal_error_title">Fulfillment Delayed</h3>
+                <p class="font-body-md text-body-md text-on-surface-variant text-sm" data-i18n="modal_error_desc">We confirmed your payment but license generation is taking longer than expected. Your key will be emailed shortly. If you have questions, please contact support.</p>
+                <button id="modal-err-ok-btn" class="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Done</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

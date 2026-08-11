@@ -1,0 +1,231 @@
+# Desktop Platform Notes
+
+This document records platform-specific integration approaches for right-click sharing.
+
+## Windows
+
+Status: implemented for user-level registry entries, pending manual validation in Windows Explorer.
+
+### Minimal User-Level Registry Integration
+
+File share entry:
+
+```text
+HKCU\Software\Classes\*\shell\eqt-share
+HKCU\Software\Classes\*\shell\eqt-share\command
+```
+
+Command shape:
+
+```text
+"C:\Path\To\eqt.exe" desktop share "%1"
+```
+
+Directory share entry:
+
+```text
+HKCU\Software\Classes\Directory\shell\eqt-share
+HKCU\Software\Classes\Directory\shell\eqt-share\command
+```
+
+Command shape:
+
+```text
+"C:\Path\To\eqt.exe" desktop share "%1"
+```
+
+Receive here entry for folder background:
+
+```text
+HKCU\Software\Classes\Directory\Background\shell\eqt-receive
+HKCU\Software\Classes\Directory\Background\shell\eqt-receive\command
+```
+
+Command shape:
+
+```text
+"C:\Path\To\eqt.exe" desktop receive "%V"
+```
+
+Implemented entries:
+
+- `HKCU\Software\Classes\*\shell\eqt-share`
+- `HKCU\Software\Classes\Directory\shell\eqt-share`
+- `HKCU\Software\Classes\Directory\shell\eqt-receive`
+- `HKCU\Software\Classes\Directory\Background\shell\eqt-receive`
+- `%APPDATA%\Microsoft\Windows\SendTo\Share with eqt.vbs`
+
+Install:
+
+```powershell
+eqt.exe desktop install
+```
+
+Status:
+
+```powershell
+eqt.exe desktop status
+```
+
+Uninstall:
+
+```powershell
+eqt.exe desktop uninstall
+```
+
+The installer uses the current `eqt.exe` path returned by the operating system, so install from the final binary location rather than from a temporary download path.
+
+If `eqt-launcher.exe` is present next to `eqt.exe`, the installer registers context menu entries through the launcher. The launcher is a Windows GUI-subsystem binary, so it avoids the console window and then starts `eqt.exe desktop ...` in the background.
+
+The launcher waits for the hidden `eqt.exe` process to finish. It writes output to a log under the user cache directory and shows a Windows message box only when `eqt.exe` exits with an error. Successful transfers should not show a completion dialog.
+
+The installer passes the current main executable path to `eqt-launcher.exe`. This means the launcher can still find the main executable when the main file is not literally named `eqt.exe`, as long as `desktop install` was run from that renamed executable.
+
+The Explorer command is launched through hidden PowerShell:
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process ..."
+```
+
+This is the fallback when `eqt-launcher.exe` is not present. It avoids Explorer showing the console-program prompt when a context menu entry starts `eqt.exe`.
+
+After replacing `eqt.exe` or adding/removing `eqt-launcher.exe`, run `eqt.exe desktop install` again to refresh the registered command path and launch command.
+
+Multi-select support:
+
+- The top-level Explorer verbs are intended for single selected files and folders.
+- The installer also creates `Send to > Share with eqt`.
+- Use the Send To entry when sharing multiple selected files.
+- The Send To script receives all selected paths and starts `eqt desktop share` hidden through Windows Script Host.
+
+Pros:
+
+- Simple.
+- User-level install does not need administrator rights.
+- Good enough for single selected files, folders, and multi-select through Send To.
+
+Cons:
+
+- Full top-level multi-select behavior is limited with simple registry commands.
+- Native shell extensions are more powerful but much more expensive to build and maintain.
+
+Recommendation:
+
+- Use registry integration for the first Windows version.
+- Defer COM shell extension work until there is clear demand for polished multi-select behavior.
+
+## macOS
+
+Status: documented, not implemented.
+
+Recommended first approach:
+
+- Finder Quick Action or Services workflow.
+- The workflow receives selected files or folders and invokes `eqt desktop share`.
+- A separate workflow can receive into a selected folder.
+
+Command shape:
+
+```sh
+/usr/local/bin/eqt desktop share "$@"
+/usr/local/bin/eqt desktop receive "$1"
+```
+
+Pros:
+
+- Uses system-provided Finder automation.
+- No native extension needed for the first version.
+
+Cons:
+
+- Packaging, signing, Gatekeeper, and automation permissions affect user experience.
+- Needs real macOS validation.
+
+Recommendation:
+
+- Document manual Quick Action setup first.
+- Automate installation later if macOS testing is available.
+
+## Linux
+
+Status: documented, not implemented.
+
+Linux needs multiple integrations because file managers differ.
+
+### Nautilus
+
+Scripts live in:
+
+```text
+~/.local/share/nautilus/scripts/
+```
+
+Nautilus exposes selected paths through environment variables such as:
+
+```text
+NAUTILUS_SCRIPT_SELECTED_FILE_PATHS
+NAUTILUS_SCRIPT_CURRENT_URI
+```
+
+Share script command shape:
+
+```sh
+eqt desktop share "$@"
+```
+
+Receive script command shape:
+
+```sh
+eqt desktop receive "$PWD"
+```
+
+### KDE Dolphin
+
+Service menus live in:
+
+```text
+~/.local/share/kio/servicemenus/
+```
+
+Use a `.desktop` service menu that calls:
+
+```sh
+eqt desktop share %F
+eqt desktop receive %f
+```
+
+### Thunar
+
+Thunar custom actions are usually configured through the UI. The project can provide documentation first and automate later if needed.
+
+Recommendation:
+
+- Implement Nautilus first.
+- Add KDE service menu next.
+- Document Thunar setup.
+
+## Cross-Platform Install Command
+
+Future command:
+
+```sh
+eqt desktop install
+eqt desktop uninstall
+```
+
+Expected behavior:
+
+- Install only for the current user by default.
+- Print installed file or registry locations.
+- Do not overwrite unrelated user customizations.
+- Uninstall only entries created by `eqt`.
+
+## Cross-Platform Launch Concerns
+
+Desktop launches usually do not provide a useful terminal. Desktop commands should:
+
+- Open a QR view automatically.
+- Surface errors visibly.
+- Avoid blocking on interactive prompts.
+- Prefer already configured network settings.
+- Provide a clear failure if no usable network interface is found.

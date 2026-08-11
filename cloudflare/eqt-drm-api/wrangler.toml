@@ -1,0 +1,65 @@
+name = "eqt-drm-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+logpush = true
+
+# D1 Database binding. DB is bound in the code.
+[[d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db"
+database_id = "f77e30fd-6dee-4062-a916-e8f4f717036d"
+
+# R2 Bucket for crash report storage
+[[r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports"
+
+[vars]
+R2_PUBLIC_URL = "https://download.eqt.net.im"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+# Non-sensitive notification target (token → wrangler secret TELEGRAM_BOT_TOKEN)
+TELEGRAM_CHAT_ID = "1880182104"
+# Paddle Live 生产价格 ID (Live 环境)
+PADDLE_PRICE_ID_PLUS_YEARLY = "pri_01kydyzmn1pc29npe377dxtq96"
+PADDLE_PRICE_ID_PLUS_LIFETIME = "pri_01kyd2nbsmg44rjmvf4vbetgwj"
+
+routes = [
+  { pattern = "lic.eqt.net.im", custom_domain = true }
+  # download.eqt.net.im 由 R2 桶 eqt-downloads 的 custom domain 直接接管（只服务 /downloads/），
+  # 不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败。
+]
+
+# ── 测试环境：wrangler deploy --env test ──────────────────────────
+# 测试 Worker 绑定专属测试子域名 lic-test.eqt.net.im，享受 Cloudflare CDN 稳定网络与生产隔离。
+[env.test]
+name = "eqt-drm-api-test"
+routes = [
+  { pattern = "lic-test.eqt.net.im", custom_domain = true }
+]
+# logpush 也是 inheritable 键,但测试账户无 Logpush 权限(10023),必须显式关闭
+logpush = false
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "eqt-drm-db-test"
+database_id = "c4e4e57f-3b75-4198-8c60-3584758e9b47"
+
+[[env.test.r2_buckets]]
+binding = "CRASH_BUCKET"
+bucket_name = "eqt-crash-reports-test"
+
+[env.test.vars]
+# 测试桶 eqt-crash-reports-test 无公开域名,健康检查 HEAD 借生产 CDN 验证连通性(真实报告仍写测试桶)
+R2_PUBLIC_URL = "https://download.eqt.net.im"
+CF_ACCESS_ALLOWED_EMAILS = "admin@eqt.net.im"
+MAIL_SENDER = "noreply@eqt.net.im"
+MAIL_SEND_SERVER = "smtpserver.301098.xyz"
+MAIL_SEND_SAFE_PORT = "465"
+# 测试通知复用生产运维群(部署/错误通知)
+TELEGRAM_CHAT_ID = "1880182104"
+# Paddle Sandbox 测试价格 ID (Sandbox 环境)
+PADDLE_PRICE_ID_PLUS_YEARLY = "pri_01kxymxqngex49tg65wb0701pc"
+PADDLE_PRICE_ID_PLUS_LIFETIME = "pri_01kyhmkv4ppj10r4cdgw3sv48p"

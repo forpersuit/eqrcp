@@ -1,0 +1,52 @@
+name = "eqt-feedback-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-29"
+logpush = true
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "eqt-feedback-db"
+# Replace with actual D1 database ID after create
+database_id = "a58d4980-8ea3-4c30-8368-b1ba871d9acd"
+
+# R2 Bucket binding
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "eqt-feedback-bucket"
+
+[vars]
+# Non-sensitive notification target (token → wrangler secret TELEGRAM_BOT_TOKEN)
+TELEGRAM_CHAT_ID = "1880182104"
+# Future email path (plan): From sendfeedback@ / To support@ via secrets
+# MAIL_SENDER, MAIL_SEND_SERVER, MAIL_SEND_SAFE_PORT as vars when enabled
+# MAIL_SENDER_PASSWORD, FEEDBACK_MAIL_TO as secrets when enabled
+
+routes = [
+  { pattern = "feedback.eqt.net.im/goal", custom_domain = true },
+  { pattern = "feedback.eqt.net.im/image/*", custom_domain = true },
+  { pattern = "feedback.eqt.net.im/api/v1/health", custom_domain = true }
+]
+
+# ── 测试环境：wrangler deploy --env test ──────────────────────────
+# 测试 Worker 绑定专属测试子域名 feedback-test.eqt.net.im，享受 Cloudflare CDN 稳定网络与生产隔离。
+[env.test]
+name = "eqt-feedback-api-test"
+routes = [
+  { pattern = "feedback-test.eqt.net.im", custom_domain = true }
+]
+# logpush 也是 inheritable 键,但测试账户无 Logpush 权限(10023),必须显式关闭
+logpush = false
+
+[[env.test.d1_databases]]
+binding = "DB"
+database_name = "eqt-feedback-db-test"
+database_id = "9f2705cc-eec3-48cc-a691-8670475d4770"
+
+[[env.test.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "eqt-feedback-bucket-test"
+
+[env.test.vars]
+# 测试通知复用生产运维群(部署/错误通知)
+TELEGRAM_CHAT_ID = "1880182104"

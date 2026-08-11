@@ -1,0 +1,383 @@
+package chathttp
+
+import (
+	"crypto/rand"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math/big"
+	"mime"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
+	"eqt/pkg/chat/v2/bandwidth"
+	"eqt/pkg/chat/v2/diag"
+	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/chat/v2/session"
+	"eqt/pkg/chat/v2/transfer"
+)
+
+// freeChatMaxAttachmentBytes references bandwidth.DefaultFreeChatMaxAttachmentBytes for free over-quota uploads.
+const freeChatMaxAttachmentBytes int64 = bandwidth.DefaultFreeChatMaxAttachmentBytes
+
+// handleLocalAttachmentRegister registers a local file attachment from the GUI host.
+func (h *Handler) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodPost {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
+	}
+
+	// Verify hostToken
+	actualHostToken := ""
+	if h.hostToken != nil {
+		actualHostToken = h.hostToken()
+	}
+	reqHostToken := r.URL.Query().Get("hostToken")
+	if actualHostToken == "" || reqHostToken != actualHostToken {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusForbidden, "forbidden"), fields...)
+		return
+	}
+
+	var req struct {
+		Path   string `json:"path"`
+		Sender string `json:"sender"`
+		Avatar string `json:"avatar"`
+		Token  string `json:"token"`
+		Peer   string `json:"peer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "invalid request body"), fields...)
+		return
+	}
+
+	if req.Path == "" {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "path is required"), fields...)
+		return
+	}
+
+	info, err := os.Stat(req.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusNotFound, "file does not exist"), fields...)
+			return
+		}
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusInternalServerError, err.Error()), fields...)
+		return
+	}
+	if info.IsDir() {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "path is a directory, not a file"), fields...)
+		return
+	}
+
+	fileName := filepath.Base(req.Path)
+	size := info.Size()
+	if !h.attachmentUnrestricted() && size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
+		return
+	}
+	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
+
+	// Generate unique message ID
+	msgID := generateAttachmentMsgID()
+
+	// Register mapping in session
+	sess := h.sessions.GetOrCreate(token)
+	sess.AddAttachment(msgID, req.Path)
+
+	senderID := req.Peer
+	if senderID == "" {
+		senderID = "desktop"
+	}
+
+	msg := &protocol.Message{
+		ID:         msgID,
+		SenderID:   senderID,
+		Sender:     req.Sender,
+		Avatar:     req.Avatar,
+		Theme:      sess.GetClientTheme(senderID),
+		Type:       protocol.MessageFile,
+		FileName:   fileName,
+		Size:       size,
+		MimeType:   mimeType,
+		FilePath:   req.Path,
+		URL:        fmt.Sprintf("/chat-v2/%s/files/%s", token, msgID),
+		Downloaded: true,
+		CreatedAt:  time.Now(),
+	}
+
+	event := protocol.EventEnvelope{
+		Type:    protocol.EventMessageAdded,
+		Message: msg,
+		Time:    time.Now(),
+	}
+
+	sess.Broadcast(event)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(msg); err != nil {
+		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "failed to encode register response", err, fields...)
+	}
+}
+
+func generateAttachmentMsgID() string {
+	maxSeed := int64(1<<31 - 1)
+	seed, err := rand.Int(rand.Reader, big.NewInt(maxSeed))
+	if err != nil {
+		return fmt.Sprintf("msg-%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("msg-%d", seed.Int64()+1)
+}
+
+// handleUploadInit handles pre-registering a file upload message to get a message ID and allocate placeholder cards.
+func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodPost {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
+	}
+
+	var req struct {
+		FileName string `json:"fileName"`
+		Size     int64  `json:"size"`
+		Sender   string `json:"sender"`
+		Avatar   string `json:"avatar"`
+		Peer     string `json:"peer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "invalid request body"), fields...)
+		return
+	}
+
+	if !h.attachmentUnrestricted() && req.Size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
+		return
+	}
+
+	msgID := generateAttachmentMsgID()
+
+	sess := h.sessions.GetOrCreate(token)
+	senderID := req.Peer
+	if senderID == "" {
+		senderID = "web-upload"
+	}
+
+	msg := &protocol.Message{
+		ID:        msgID,
+		SenderID:  senderID,
+		Sender:    req.Sender,
+		Avatar:    req.Avatar,
+		Theme:     sess.GetClientTheme(senderID),
+		Type:      protocol.MessageFile,
+		FileName:  req.FileName,
+		Size:      req.Size,
+		MimeType:  mime.TypeByExtension(filepath.Ext(req.FileName)),
+		Uploading: true, // Marked as uploading state
+		CreatedAt: time.Now(),
+	}
+
+	event := protocol.EventEnvelope{
+		Type:    protocol.EventMessageAdded,
+		Message: msg,
+		Time:    time.Now(),
+	}
+	// Pre-create and start the upload job so clients can report progress immediately
+	h.transfer.CreateJob(token, "ul-"+msgID, msgID, senderID, req.FileName, req.Size)
+	_ = h.transfer.StartJob("ul-" + msgID)
+
+	sess.Broadcast(event)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(msg)
+}
+
+// handleUpload handles file upload from web clients, writing the data to a temporary file.
+func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
+	if r.Method != http.MethodPost {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
+		return
+	}
+
+	// Parse multipart form up to 32MB in RAM, rest goes to disk
+	err := r.ParseMultipartForm(32 * 1024 * 1024)
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "failed to parse multipart form: "+err.Error()), fields...)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "file parameter is required: "+err.Error()), fields...)
+		return
+	}
+	defer file.Close()
+
+	sender := r.FormValue("sender")
+	avatar := r.FormValue("avatar")
+	peer := r.FormValue("peer")
+	messageID := r.FormValue("messageId")
+
+	if sender == "" {
+		sender = "Anonymous"
+	}
+
+	unrestricted := h.attachmentUnrestricted()
+	if !unrestricted && header.Size > freeChatMaxAttachmentBytes {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
+		return
+	}
+
+	// Create temp file inside dedicated uploads root directory
+	uploadRoot, err := session.UploadRoot()
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to resolve upload root: "+err.Error()), fields...)
+		return
+	}
+	tempFile, err := os.CreateTemp(uploadRoot, "eqt-chat-upload-*")
+	if err != nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to create temp file: "+err.Error()), fields...)
+		return
+	}
+	defer tempFile.Close()
+
+	// Wrap copy stream to report progress; throttle attachment data plane when free quota is exhausted.
+	var pr io.Reader = file
+	jobID := ""
+	if messageID != "" {
+		jobID = "ul-" + messageID
+		h.transfer.CreateJob(token, jobID, messageID, peer, header.Filename, header.Size)
+		_ = h.transfer.StartJob(jobID)
+		pr = &progressReader{
+			reader:   file,
+			transfer: h.transfer,
+			jobID:    jobID,
+		}
+	}
+	if !unrestricted {
+		if jobID == "" {
+			jobID = "ul-direct-" + generateAttachmentMsgID()
+		}
+		h.scheduler.RegisterJob(jobID, false)
+		defer h.scheduler.UnregisterJob(jobID)
+		pr = &throttledUploadReader{
+			reader:    pr,
+			scheduler: h.scheduler,
+			jobID:     jobID,
+			startTime: time.Now(),
+		}
+	}
+
+	// Stream copy
+	size, err := io.Copy(tempFile, pr)
+	if err != nil {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+		if messageID != "" {
+			_ = h.transfer.FailJob("ul-"+messageID, err)
+		}
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to save upload: "+err.Error()), fields...)
+		return
+	}
+
+	// 显式关闭临时文件以确保数据落盘且释放文件句柄
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempFile.Name())
+		if messageID != "" {
+			_ = h.transfer.FailJob("ul-"+messageID, err)
+		}
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to flush upload temp file: "+err.Error()), fields...)
+		return
+	}
+
+	fileName := header.Filename
+	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
+	sess := h.sessions.GetOrCreate(token)
+
+	if messageID != "" {
+		// Update physical path and complete job
+		sess.AddAttachment(messageID, tempFile.Name())
+		// Mark as downloaded instantly when caching finishes to enable instant broadcast distribution to peer clients
+		_ = sess.MessageStore.MarkDownloaded(messageID)
+		if msg := sess.MessageStore.MarkUploadComplete(messageID); msg != nil {
+			event := protocol.EventEnvelope{
+				Type:    protocol.EventMessageUpdated,
+				Time:    time.Now(),
+				Message: msg,
+			}
+			sess.Broadcast(event)
+		}
+		_ = h.transfer.CompleteJob("ul-" + messageID)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "messageId": messageID})
+	} else {
+		// Fallback direct upload mode
+		msgID := generateAttachmentMsgID()
+		sess.AddAttachment(msgID, tempFile.Name())
+
+		senderID := peer
+		if senderID == "" {
+			senderID = "web-upload"
+		}
+
+		msg := &protocol.Message{
+			ID:         msgID,
+			SenderID:   senderID,
+			Sender:     sender,
+			Avatar:     avatar,
+			Theme:      sess.GetClientTheme(senderID),
+			Type:       protocol.MessageFile,
+			FileName:   fileName,
+			Size:       size,
+			MimeType:   mimeType,
+			URL:        fmt.Sprintf("/chat-v2/%s/files/%s", token, msgID),
+			Downloaded: true, // Auto-mark downloaded when fallback direct upload caches successfully
+			CreatedAt:  time.Now(),
+		}
+
+		event := protocol.EventEnvelope{
+			Type:    protocol.EventMessageAdded,
+			Message: msg,
+			Time:    time.Now(),
+		}
+		sess.Broadcast(event)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(msg)
+	}
+}
+
+type progressReader struct {
+	reader   io.Reader
+	transfer *transfer.Manager
+	jobID    string
+	written  int64
+}
+
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.reader.Read(p)
+	if n > 0 {
+		pr.written += int64(n)
+		_ = pr.transfer.UpdateProgress(pr.jobID, pr.written)
+	}
+	return n, err
+}
+
+// throttledUploadReader applies attachment data-plane bandwidth limits on upload.
+// WebSocket control traffic never flows through this reader.
+type throttledUploadReader struct {
+	reader    io.Reader
+	scheduler *bandwidth.Scheduler
+	jobID     string
+	startTime time.Time
+	written   int64
+}
+
+func (tr *throttledUploadReader) Read(p []byte) (int, error) {
+	n, err := tr.reader.Read(p)
+	if n > 0 && tr.scheduler != nil {
+		tr.written += int64(n)
+		tr.scheduler.Throttle(tr.jobID, tr.written, tr.startTime)
+	}
+	return n, err
+}
