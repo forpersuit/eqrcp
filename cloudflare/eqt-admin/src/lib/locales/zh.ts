@@ -8,7 +8,10 @@ export const zh = {
     opsAudit: "审计日志",
     errorAudit: "异常跟踪",
     metrics: "业务指标",
-    logout: "退出登录"
+    logout: "退出登录",
+    production: "生产环境",
+    sandbox: "测试沙箱",
+    envBanner: "⚠️ 当前处于测试沙箱环境 (lic-test.eqt.net.im / eqt-drm-db-test)，数据与生产物理隔离"
   },
   common: {
     confirm: "确认",

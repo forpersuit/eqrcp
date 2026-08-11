@@ -1,8 +1,9 @@
 import { clearAccessSession, isAuthenticated } from './auth';
+import { getAdminEnvironment } from './env';
 
 /**
  * Base URL:
- * - Production Access: empty → same-origin /api via Pages Function → lic.eqt.net.im
+ * - Production Access: empty → same-origin /api via Pages Function → lic.eqt.net.im / lic-test.eqt.net.im
  * - Local override: VITE_API_BASE=http://127.0.0.1:8787 (still needs Access JWT header from CF edge
  *   or local.dev test JWT; browser Access cookies only work on admin.eqt.net.im)
  */
@@ -21,6 +22,7 @@ export interface ApiOptions extends RequestInit {
 export async function adminFetch<T = any>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   const { params, headers: optHeaders, ...fetchInit } = options;
   const API_BASE = resolveApiBase();
+  const currentEnv = getAdminEnvironment();
 
   let urlStr = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
   if (params) {
@@ -30,6 +32,7 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-EQT-Environment': currentEnv,
     ...((optHeaders as Record<string, string>) || {})
   };
 

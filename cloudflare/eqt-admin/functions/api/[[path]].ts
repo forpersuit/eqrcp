@@ -9,16 +9,27 @@
  * Local Vite dev does not use this file; it talks to VITE_API_BASE directly with secret.
  */
 
-const DEFAULT_UPSTREAM = "https://lic.eqt.net.im";
+const DEFAULT_PROD_UPSTREAM = "https://lic.eqt.net.im";
+const DEFAULT_TEST_UPSTREAM = "https://lic-test.eqt.net.im";
 
 interface PagesContext {
   request: Request;
   params: { path?: string | string[] };
-  env?: { DRM_API_UPSTREAM?: string };
+  env?: {
+    DRM_API_UPSTREAM?: string;
+    DRM_API_TEST_UPSTREAM?: string;
+  };
 }
 
 export async function onRequest(context: PagesContext): Promise<Response> {
-  const upstreamBase = (context.env?.DRM_API_UPSTREAM || DEFAULT_UPSTREAM).replace(/\/$/, "");
+  const envHeader = (context.request.headers.get("X-EQT-Environment") || context.request.headers.get("x-eqt-environment") || "").toLowerCase().trim();
+  const isTest = (envHeader === "test" || envHeader === "sandbox");
+
+  let upstreamBase = isTest
+    ? (context.env?.DRM_API_TEST_UPSTREAM || DEFAULT_TEST_UPSTREAM)
+    : (context.env?.DRM_API_UPSTREAM || DEFAULT_PROD_UPSTREAM);
+  upstreamBase = upstreamBase.replace(/\/$/, "");
+
   const reqUrl = new URL(context.request.url);
 
   const pathParam = context.params.path;
@@ -61,6 +72,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   }
   if (jwt) {
     headers.set("Cf-Access-Jwt-Assertion", jwt);
+    headers.set("Authorization", `Bearer ${jwt}`);
   }
 
   const init: RequestInit = {

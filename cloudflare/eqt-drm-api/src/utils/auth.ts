@@ -276,6 +276,13 @@ export async function requireAdminAuth(
     request.headers.get("cf-access-jwt-assertion");
 
   if (!jwt) {
+    const authHeader = request.headers.get("Authorization") || request.headers.get("authorization");
+    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+      jwt = authHeader.slice(7).trim();
+    }
+  }
+
+  if (!jwt) {
     const cookieHeader = request.headers.get("cookie") || request.headers.get("Cookie");
     if (cookieHeader) {
       const match = cookieHeader.match(/CF_Authorization=([^;]+)/);

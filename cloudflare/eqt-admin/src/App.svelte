@@ -1,6 +1,7 @@
 <script lang="ts">
   import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
   import { t } from './lib/i18n';
+  import { getAdminEnvironment, setAdminEnvironment, subscribeAdminEnvironment, type AdminEnvironment } from './lib/env';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
@@ -13,6 +14,15 @@
 
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
+  let env = $state<AdminEnvironment>(getAdminEnvironment());
+  let renderKey = $state(0);
+
+  $effect(() => {
+    return subscribeAdminEnvironment((newEnv) => {
+      env = newEnv;
+      renderKey++;
+    });
+  });
 
   function handleLogout() {
     clearAccessSession();
@@ -27,15 +37,42 @@
   function navigateTo(tab: AdminTab) {
     currentTab = tab;
   }
+
+  function switchEnv(target: AdminEnvironment) {
+    setAdminEnvironment(target);
+  }
 </script>
 
 {#if !authed}
   <Login />
 {:else}
-  <div class="admin-layout">
+  <div class="admin-layout" class:sandbox-mode={env === 'test'}>
     <aside class="sidebar card">
       <div class="brand">
         <span class="brand-logo">EQT</span> {$t('nav.title')}
+      </div>
+
+      <div class="env-toggle-wrapper">
+        <div class="env-toggle-group">
+          <button
+            type="button"
+            class="env-pill-btn"
+            class:selected={env === 'production'}
+            onclick={() => switchEnv('production')}
+          >
+            <span class="env-indicator prod-indicator"></span>
+            <span>{$t('nav.production')}</span>
+          </button>
+          <button
+            type="button"
+            class="env-pill-btn"
+            class:selected={env === 'test'}
+            onclick={() => switchEnv('test')}
+          >
+            <span class="env-indicator test-indicator"></span>
+            <span>{$t('nav.sandbox')}</span>
+          </button>
+        </div>
       </div>
 
       <nav class="nav-menu">
@@ -104,21 +141,30 @@
     </aside>
 
     <main class="main-content">
-      {#if currentTab === 'overview'}
-        <Overview onNavigate={navigateTo} />
-      {:else if currentTab === 'audit'}
-        <ErrorAudit />
-      {:else if currentTab === 'ops'}
-        <OpsAudit />
-      {:else if currentTab === 'licenses'}
-        <Licenses />
-      {:else if currentTab === 'blacklist'}
-        <Blacklist />
-      {:else if currentTab === 'health'}
-        <SystemHealth />
-      {:else if currentTab === 'metrics'}
-        <Metrics />
+      {#if env === 'test'}
+        <div class="sandbox-banner">
+          <span class="sandbox-badge">TEST SANDBOX</span>
+          <span>{$t('nav.envBanner')}</span>
+        </div>
       {/if}
+
+      {#key renderKey}
+        {#if currentTab === 'overview'}
+          <Overview onNavigate={navigateTo} />
+        {:else if currentTab === 'audit'}
+          <ErrorAudit />
+        {:else if currentTab === 'ops'}
+          <OpsAudit />
+        {:else if currentTab === 'licenses'}
+          <Licenses />
+        {:else if currentTab === 'blacklist'}
+          <Blacklist />
+        {:else if currentTab === 'health'}
+          <SystemHealth />
+        {:else if currentTab === 'metrics'}
+          <Metrics />
+        {/if}
+      {/key}
     </main>
   </div>
 {/if}
@@ -154,13 +200,101 @@
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
     padding-left: 0.5rem;
   }
 
   .brand-logo {
     color: var(--accent-primary);
     font-weight: 900;
+  }
+
+  .env-toggle-wrapper {
+    margin-bottom: 1.5rem;
+    padding: 0 0.25rem;
+  }
+
+  .env-toggle-group {
+    display: flex;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 8px);
+    padding: 3px;
+    gap: 3px;
+  }
+
+  .env-pill-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .env-pill-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .env-pill-btn.selected {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .env-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .prod-indicator {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  }
+
+  .test-indicator {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  }
+
+  .sandbox-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: var(--radius-md, 8px);
+    color: #fbbf24;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.08);
+  }
+
+  .sandbox-badge {
+    background: #f59e0b;
+    color: #000;
+    font-weight: 800;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .admin-layout.sandbox-mode .sidebar {
+    border-right-color: rgba(245, 158, 11, 0.25);
   }
 
   .nav-menu {
