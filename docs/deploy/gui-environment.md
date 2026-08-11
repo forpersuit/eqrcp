@@ -73,11 +73,11 @@ wails dev    # 或任意构建,环境变量优先于 build tag
 | **1. 业务与传输引擎** | 局域网 Chat、文件传输、拖拽分享、多网卡切换、剪贴板等 | 局域网 Chat、文件传输、拖拽分享、多网卡切换、剪贴板等 | **100% 相同**（核心代码完全复用） |
 | **2. UI 界面与交互体验** | 主界面、设置面板、历史记录、多语言等 | 主界面、设置面板、历史记录、多语言等 | **100% 相同** |
 | **3. DRM 验签公钥** | 生产 Ed25519 公钥 (`08443678...`) | 测试专用 Ed25519 公钥 (`ce07f02c...`) | **不同**：测试公钥只认测试 Worker 签发的激活码，生产码在测试版报错，反之亦然 |
-| **4. DRM API 服务地址** | `https://lic.eqt.net.im/api/v1/*` | `https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/*` | **不同**：激活、在线对账、配额同步打向独立测试 Worker |
-| **5. 崩溃上报地址** | `https://lic.eqt.net.im/api/v1/crash-report` | `https://eqt-drm-api-test.leeyelon.workers.dev/api/v1/crash-report` | **不同**：写入测试 R2 存储桶 |
-| **6. 自动更新检查端点** | `https://lic.eqt.net.im/update-metadata.json` | `https://eqt-drm-api-test.leeyelon.workers.dev/update-metadata.json` | **不同**：仅检查测试更新包且只认测试签名 |
-| **7. 购买/定价页面跳转** | `https://www.eqt.net.im/pricing.html` | `https://eqt-test.pages.dev/pricing.html` | **不同**：测试版打开沙箱测试支付页面（Paddle Sandbox） |
-| **8. 授权管理门户跳转** | `https://www.eqt.net.im/portal.html` | `https://eqt-test.pages.dev/portal.html` | **不同**：测试版打开测试客户门户 |
+| **4. DRM API 服务地址** | `https://lic.eqt.net.im/api/v1/*` | `https://lic-test.eqt.net.im/api/v1/*` | **不同**：激活、在线对账、配额同步打向独立测试 Worker |
+| **5. 崩溃上报地址** | `https://lic.eqt.net.im/api/v1/crash-report` | `https://lic-test.eqt.net.im/api/v1/crash-report` | **不同**：写入测试 R2 存储桶 |
+| **6. 自动更新检查端点** | `https://lic.eqt.net.im/update-metadata.json` | `https://lic-test.eqt.net.im/update-metadata.json` | **不同**：仅检查测试更新包且只认测试签名 |
+| **7. 购买/定价页面跳转** | `https://www.eqt.net.im/pricing.html` | `https://test.eqt.net.im/pricing.html` | **不同**：测试版打开沙箱测试支付页面（Paddle Sandbox） |
+| **8. 授权管理门户跳转** | `https://www.eqt.net.im/portal.html` | `https://test.eqt.net.im/portal.html` | **不同**：测试版打开测试客户门户 |
 | **9. 数据库物理隔离** | Cloudflare D1 `eqt-drm-db` | Cloudflare D1 `eqt-drm-db-test` | **不同**：测试数据完全隔离，绝不污染生产用户数据 |
 
 ## 5. 安全不变式(release 绝不连测试)

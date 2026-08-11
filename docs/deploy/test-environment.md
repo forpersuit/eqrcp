@@ -37,9 +37,9 @@
  └──────────────────┘     └─────────────────────────────┘
 ```
 
-- 测试环境绑定**专属测试自定义域名**（`*-test.eqt.net.im`），拥有独立的 DNS 解析与 SSL 证书，享受 Cloudflare CDN 稳定网络直连。
+- 测试环境绑定**专属测试自定义域名**（`*-test.eqt.net.im` 与 `test.eqt.net.im`），拥有独立的 DNS 解析与 SSL 证书，享受 Cloudflare CDN 稳定网络直连。
 - 测试环境**不设审批门禁**（`deploy-test.yml`），push 到 `dev` 分支自动部署；master 仍走 `deploy.yml` 的生产审批，互不干扰。
-- GUI 开发模式对接测试见 [gui-environment.md](./gui-environment.md)；网页侧通过 `js/api-base.js` 自动识别 `test.eqt.net.im` 与 `*.eqt-test.pages.dev` 切换。
+- GUI 开发模式对接测试见 [gui-environment.md](./gui-environment.md)；网页侧通过 `js/api-base.js` 自动识别 `test.eqt.net.im` 切换。
 
 ---
 
@@ -196,7 +196,7 @@ npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
 | 客户端 | 测试基地址 | 切换方式 |
 |---|---|---|
 | **GUI 桌面端** | `https://lic-test.eqt.net.im` | `wails dev -tags eqtdev` 或 `go build -tags eqtdev` (见 [gui-environment.md](./gui-environment.md)) |
-| **网页(pricing/portal/index)** | `https://test.eqt.net.im` / `https://eqt-test.pages.dev` | `js/api-base.js` 自动识别：访问测试域名自动路由至 `lic-test.eqt.net.im`，其余走生产 |
+| **网页(pricing/portal/index)** | `https://test.eqt.net.im` | `js/api-base.js` 自动识别：访问测试域名自动路由至 `lic-test.eqt.net.im`，其余走生产 |
 | **admin 面板** | 生产 (不变) | `DRM_API_UPSTREAM` 环境变量可覆盖 |
 
 ---
@@ -222,7 +222,7 @@ npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
 | 测试 DRM 健康检查 | `curl https://lic-test.eqt.net.im/api/v1/health` | `{"status":"healthy",...}` |
 | 测试 Feedback 健康检查 | `curl https://feedback-test.eqt.net.im/api/v1/health` | `{"status":"healthy",...}` |
 | 测试激活码激活 | `wails dev -tags eqtdev` 激活测试码 | 秒级直连 `lic-test.eqt.net.im`，激活成功 |
-| 网页自适应识别 | 打开 `https://eqt-test.pages.dev/pricing.html` 查看 Network | API 发往 `lic-test.eqt.net.im` |
+| 网页自适应识别 | 打开 `https://test.eqt.net.im/pricing.html` 查看 Network | API 发往 `lic-test.eqt.net.im` |
 | dev 分支自动部署 | push dev ➜ Actions Deploy Test | 自动部署 + Telegram 通知 |
 
 ---

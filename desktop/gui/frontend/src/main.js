@@ -3625,7 +3625,7 @@ function bindPanelEvents() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             let portalUrl = state.appInfo?.isTest
-                ? 'https://eqt-test.pages.dev/portal.html'
+                ? 'https://test.eqt.net.im/portal.html'
                 : 'https://www.eqt.net.im/portal.html';
             if (state.status?.buyerEmail) {
                 portalUrl += '?email=' + encodeURIComponent(state.status.buyerEmail);
@@ -3662,9 +3662,9 @@ function bindPanelEvents() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             // 测试构建(eqtdev)打开测试站 pricing,生产构建打开生产站 pricing。
-            // 测试站约定见 docs/deploy/test-environment.md(*.eqt-test.pages.dev)。
+            // 测试站约定见 docs/deploy/test-environment.md(test.eqt.net.im)。
             const pricingUrl = state.appInfo?.isTest
-                ? 'https://eqt-test.pages.dev/pricing.html'
+                ? 'https://test.eqt.net.im/pricing.html'
                 : 'https://www.eqt.net.im/pricing.html';
             window.runtime.BrowserOpenURL(pricingUrl);
         });
