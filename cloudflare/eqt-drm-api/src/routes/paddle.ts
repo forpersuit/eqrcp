@@ -261,7 +261,7 @@ export async function handlePaddleRoutes(
       const YEARLY_MS = 365 * 86400 * 1000;
 
       if (matchedPriceId === effectiveYearlyId) {
-        durationDays = 365;
+        durationDays = null;
         expiresAt = new Date(Date.now() + YEARLY_MS).toISOString();
       }
 

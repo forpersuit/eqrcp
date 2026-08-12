@@ -367,7 +367,7 @@ export async function handleDrmRoutes(
     let baseExpiresAt = license.expires_at || "LIFETIME";
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
 
-    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
+    if (usesRedeemWindow && license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
       baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
     } else if (baseExpiresAt && baseExpiresAt !== "LIFETIME") {
       const expires = new Date(baseExpiresAt);
@@ -688,7 +688,16 @@ export async function handleDrmRoutes(
     let baseExpiresAt = license.expires_at || "LIFETIME";
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
 
-    if (license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
+    const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+    const usesRedeemWindow =
+      licenseSource === "promo" ||
+      (licenseSource === "admin" &&
+        license.duration_days !== null &&
+        license.duration_days !== undefined &&
+        license.expires_at &&
+        license.expires_at !== "LIFETIME");
+
+    if (usesRedeemWindow && license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
       baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
     }
 
