@@ -10,6 +10,7 @@ import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
 import { handleCrashReport } from './routes/crash-report';
 import { assertEnvironmentAlignment } from './utils/env-guard';
+import { wrapD1WithRetry } from './utils/d1-retry';
 
 export type { Env };
 
@@ -20,6 +21,11 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const startMs = Date.now();
     const url = new URL(request.url);
+
+    // Transparently equip D1 with lightweight exponential backoff retry for transient storage timeouts
+    if (env?.DB) {
+      env = { ...env, DB: wrapD1WithRetry(env.DB) };
+    }
 
     // Generate trace_id (UUID v4) for request-level tracing (§7.1)
     const traceId = crypto.randomUUID();

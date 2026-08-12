@@ -1,6 +1,6 @@
 {
   "name": "eqt-drm-api",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "description": "Serverless Licensing & DRM Backend for EQT on Cloudflare",
   "main": "src/index.ts",
   "scripts": {
@@ -21,12 +21,13 @@
     "test:env-guard": "node --env-file=../../.env.test tests/env-guard-offline.js",
     "test:abuse:offline": "npx esbuild src/utils/abuse-detection.ts --bundle --outfile=tests/compiled/abuse-detection.js --platform=node --format=cjs && node --env-file=../../.env.test tests/abuse-detection-offline.js",
     "test:utils:offline": "npx esbuild src/utils/error-logger.ts --bundle --outfile=tests/compiled/error-logger.js --platform=node --format=cjs && npx esbuild src/utils/rate-limit.ts --bundle --outfile=tests/compiled/rate-limit.js --platform=node --format=cjs && node --env-file=../../.env.test tests/unit-utils-offline.js",
+    "test:d1-retry:offline": "npx esbuild src/utils/d1-retry.ts --bundle --outfile=tests/compiled/d1-retry.js --platform=node --format=cjs && node tests/d1-retry-offline.js",
     "test:admin:metrics:offline": "npx esbuild src/routes/admin.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/admin-metrics.js --platform=node --format=cjs && node --env-file=../../.env.test tests/admin-metrics-offline.js",
     "test:health:offline": "node --env-file=../../.env.test tests/health-check-offline.js",
     "test:schema-cache:offline": "npx esbuild src/utils/auth.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/auth.js --platform=node --format=cjs && npx esbuild src/utils/blacklist.ts --bundle --outfile=tests/compiled/blacklist.js --platform=node --format=cjs && npx esbuild src/utils/error-logger.ts --bundle --outfile=tests/compiled/error-logger.js --platform=node --format=cjs && npx esbuild src/utils/rate-limit.ts --bundle --outfile=tests/compiled/rate-limit.js --platform=node --format=cjs && node tests/schema-cache-offline.js",
     "test:subscription:offline": "npx esbuild src/routes/paddle.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outdir=tests/compiled --platform=node --format=cjs && node --env-file=../../.env.test tests/verify-subscription-cancel.js",
-    "test:offline": "npm run test:env-guard && npm run test:schema-cache:offline && npm run test:abuse:offline && npm run test:utils:offline && npm run test:admin:metrics:offline && npm run test:health:offline && npm run test:subscription:offline",
-    "test:ci": "npm run test:admin:live && npm run test:device-reg:offline:live && npm run test:upgrade:offline && npm run test:offline"
+    "test:offline": "npm run test:env-guard && npm run test:schema-cache:offline && npm run test:abuse:offline && npm run test:utils:offline && npm run test:d1-retry:offline && npm run test:admin:metrics:offline && npm run test:health:offline && npm run test:subscription:offline",
+    "test:ci": "npm run test:admin:live && npm run test:device-reg:offline:live && npm run test:upgrade:offline && npm run test:d1-retry:offline && npm run test:offline"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240101.0",

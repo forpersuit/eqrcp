@@ -208,3 +208,17 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **Portal 测试环境自适应标识**：
   - 页面通过 `window.EQT_IS_TEST`（`js/api-base.js` 解析）判断测试环境。
   - 当为测试环境时，Header Logo 旁动态渲染高亮 `TEST` 徽章，页面主区域顶部展示测试环境提示横幅，支持 7 种语言实时国际化切换。
+
+---
+
+## 10. Cloudflare D1 瞬态超时容灾与指数退避重试 (D1 Exponential Backoff Retry)
+
+- **边缘存储瞬态超时挑战**：Cloudflare D1 底层 Durable Object 存储操作在特定物理节点网络拥塞或负载抖动时，可能抛出 `D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.`（操作超过 30s 阈值重置）。
+- **透明代理重试机制 (`wrapD1WithRetry`)**：
+  - 在 `src/index.ts` 顶层 `fetch()` 入口处通过 `wrapD1WithRetry(env.DB)` 实施透明代理包装。
+  - 对 `.prepare().bind().first()`, `.all()`, `.run()`, `.raw()`, `.batch()`, `.exec()` 实施统一轻量级指数退避重试（默认最大重试 2 次，总计 3 次尝试，基准间隔 150ms 并附带抖动 jitter）。
+  - **错误分类鉴别 (`isRetryableD1Error`)**：
+    - **瞬态可重试**：`exceeded timeout`, `object to be reset`, `storage reset`, `D1_RESET`, `database is locked`, `sqlite_busy`, `network connection lost`, `connection reset`, `fetch failed`。
+    - **立即终止 (Fail-Fast)**：`UNIQUE constraint failed`, `FOREIGN KEY constraint failed`, `NOT NULL constraint failed`, `CHECK constraint failed`, `syntax error`。
+  - **单例与无状态缓存**：使用 `WeakMap` 缓存包装后的 proxy 实例，确保同请求同实例内幂等无开销。
+
