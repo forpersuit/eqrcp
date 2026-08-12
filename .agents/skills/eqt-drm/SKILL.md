@@ -201,6 +201,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
     - `promo`（活动兑换）：带兑换窗口与天数的限时活动码。
     - `test`（测试夹具）：仅用于自动化测试夹具/合成测试单据（`txn_test_*`、`sub_test_*`）。
   - **`normalizeLicenseSource` 归一化**：服务端与 Portal 遇到 `txn_01...` 格式交易单号时，即使历史数据被写入过 `test`，也自动规整为 `purchase`，保证测试沙箱购买的激活码在用户中心与管理后台均正确显示为购买途径。
+- **沙箱与生产真实订单 Refund / Cancel 策略（沙箱走沙箱，生产走生产）**：
+  - **真实订单全真模拟**：只要交易号/订阅号符合 Paddle 真实格式（`txn_01...` / `sub_01...`），Portal 上的退款 (`/api/v1/user/refund`) 与取消订阅 (`/api/v1/user/cancel-subscription`) **必须打向对应的真实 Paddle API**（沙箱环境使用 `sandbox-api.paddle.com` 创建 Adjustment 或取消订阅，生产环境使用 `api.paddle.com`）。
+  - **严禁对沙箱真实订单执行本地假吊销 (No Local Revoke Bypass for Sandbox Txns)**：确保沙箱环境能够 100% 模拟生产全链路，并由 Paddle 沙箱正常触发 `adjustment.updated` / `subscription.canceled` 等 Webhook 事件实现闭环。
+  - **合成夹具专用通道**：本地 `local_only` 瞬时吊销通道仅保留给离线自动化单测的合成 ID（`txn_test_*`、`sub_test_*`），与真实业务解耦。
 - **Portal 测试环境自适应标识**：
   - 页面通过 `window.EQT_IS_TEST`（`js/api-base.js` 解析）判断测试环境。
   - 当为测试环境时，Header Logo 旁动态渲染高亮 `TEST` 徽章，页面主区域顶部展示测试环境提示横幅，支持 7 种语言实时国际化切换。
