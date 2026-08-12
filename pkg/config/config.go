@@ -175,6 +175,9 @@ func GetViperInstance(app application.App) *viper.Viper {
 }
 
 func DefaultConfigDir() string {
+	if envDir := os.Getenv("EQT_CONFIG_DIR"); envDir != "" {
+		return envDir
+	}
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {
 		return filepath.Join(home, ".local", "eqt")

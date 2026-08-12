@@ -978,10 +978,12 @@ func TestSetClockTamperedTriggersCallback(t *testing.T) {
 }
 
 func TestSetClockTamperedDiskPersistence(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	t.Cleanup(resetPaidStatusCallbacksForTest)
+
+	// Step 1: Set clock tampered to true and verify both ClockTampered=true and IsPaid=false persist to disk
 	SetClockTampered(true)
 
-	// Verify disk file chat_usage.json contains clockTampered: true
 	path := getChatUsageFilePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -994,6 +996,19 @@ func TestSetClockTamperedDiskPersistence(t *testing.T) {
 	if !usage.ClockTampered {
 		t.Errorf("expected disk chat_usage.json to have ClockTampered=true, got false")
 	}
+	if usage.IsPaid {
+		t.Errorf("expected disk chat_usage.json to have IsPaid=false when tampered, got true")
+	}
 
+	// Step 2: Set clock tampered back to false and verify disk update
 	SetClockTampered(false)
+	dataAfter, err := os.ReadFile(path)
+	if err == nil {
+		var usageAfter ChatUsage
+		if err := json.Unmarshal(dataAfter, &usageAfter); err == nil {
+			if usageAfter.ClockTampered {
+				t.Errorf("expected disk chat_usage.json to have ClockTampered=false after reset, got true")
+			}
+		}
+	}
 }
