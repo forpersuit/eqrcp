@@ -9,6 +9,66 @@ import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
 import { checkAbuseAfterActivation } from '../utils/abuse-detection';
 
+export function evaluateLicenseExpiration(
+  license: {
+    source?: string | null;
+    paddle_transaction_id?: string | null;
+    duration_days?: number | null;
+    expires_at?: string | null;
+  },
+  baseExpiresAtInput?: string | null
+): {
+  usesRedeemWindow: boolean;
+  effectiveExpiresAt: string;
+  isRedeemExpired: boolean;
+  isExpired: boolean;
+} {
+  const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+  const usesRedeemWindow =
+    licenseSource === "promo" ||
+    (licenseSource === "admin" &&
+      license.duration_days !== null &&
+      license.duration_days !== undefined &&
+      license.expires_at &&
+      license.expires_at !== "LIFETIME");
+
+  let isRedeemExpired = false;
+  if (usesRedeemWindow && license.expires_at && license.expires_at !== "LIFETIME") {
+    const redeemBy = new Date(license.expires_at).getTime();
+    if (!Number.isNaN(redeemBy) && redeemBy < Date.now()) {
+      isRedeemExpired = true;
+    }
+  }
+
+  let effectiveExpiresAt = baseExpiresAtInput || license.expires_at || "LIFETIME";
+
+  if (
+    usesRedeemWindow &&
+    license.duration_days !== null &&
+    license.duration_days !== undefined &&
+    Number(license.duration_days) >= 0 &&
+    effectiveExpiresAt !== "LIFETIME"
+  ) {
+    effectiveExpiresAt = new Date(Date.now() + Number(license.duration_days) * 86400 * 1000).toISOString();
+  }
+
+  let isExpired = false;
+  if (effectiveExpiresAt && effectiveExpiresAt !== "LIFETIME") {
+    const expiresMs = new Date(effectiveExpiresAt).getTime();
+    if (!Number.isNaN(expiresMs) && expiresMs < Date.now()) {
+      isExpired = true;
+    }
+  }
+
+  return {
+    usesRedeemWindow,
+    effectiveExpiresAt,
+    isRedeemExpired,
+    isExpired,
+  };
+}
+
+
 
 function activationClientMeta(request: Request): {
   client_ip: string | null;
@@ -343,41 +403,28 @@ export async function handleDrmRoutes(
       });
     }
 
-    // Promo (and admin codes that use dual-expiration): expires_at is redeem-by deadline
-    const usesRedeemWindow =
-      licenseSource === "promo" ||
-      (licenseSource === "admin" &&
-        license.duration_days !== null &&
-        license.duration_days !== undefined &&
-        license.expires_at &&
-        license.expires_at !== "LIFETIME");
-
-    if (usesRedeemWindow && license.expires_at && license.expires_at !== "LIFETIME") {
-      const redeemBy = new Date(license.expires_at).getTime();
-      if (!Number.isNaN(redeemBy) && redeemBy < Date.now()) {
-        return new Response(JSON.stringify({
-          error: getApiTranslation("license_redeem_expired", reqLang)
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    }
-
     let baseExpiresAt = license.expires_at || "LIFETIME";
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
 
-    if (usesRedeemWindow && license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
-      baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
-    } else if (baseExpiresAt && baseExpiresAt !== "LIFETIME") {
-      const expires = new Date(baseExpiresAt);
-      if (expires.getTime() < Date.now()) {
-        return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
+    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
+
+    if (evalResult.isRedeemExpired) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("license_redeem_expired", reqLang)
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
+
+    if (evalResult.isExpired) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    baseExpiresAt = evalResult.effectiveExpiresAt;
 
     // Fetch existing activations for THIS license code
     const { results: activations } = await env.DB.prepare(
@@ -688,18 +735,16 @@ export async function handleDrmRoutes(
     let baseExpiresAt = license.expires_at || "LIFETIME";
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
 
-    const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
-    const usesRedeemWindow =
-      licenseSource === "promo" ||
-      (licenseSource === "admin" &&
-        license.duration_days !== null &&
-        license.duration_days !== undefined &&
-        license.expires_at &&
-        license.expires_at !== "LIFETIME");
+    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
 
-    if (usesRedeemWindow && license.duration_days !== null && license.duration_days !== undefined && Number(license.duration_days) >= 0 && baseExpiresAt !== "LIFETIME") {
-      baseExpiresAt = new Date(Date.now() + (Number(license.duration_days) * 86400 * 1000)).toISOString();
+    if (evalResult.isExpired) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
+
+    baseExpiresAt = evalResult.effectiveExpiresAt;
 
     const net = activationClientMeta(request);
     const regResult = await registerOrRefreshDevice(env, {

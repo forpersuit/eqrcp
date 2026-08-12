@@ -839,6 +839,38 @@ async function runTests() {
   assert(res18.status === 200, 'register 200 OK after activate/verify rate limit tests');
   await flushCtx();
 
+  // ============================================================
+  // T19: Verify endpoint rejects expired purchase licenses (403 license_expired)
+  // ============================================================
+  console.log('\nTest 19: Verify endpoint rejects expired purchase licenses (403 license_expired)...');
+  const db19 = new SqliteD1Mock();
+  ensureAllTables(db19);
+  env.DB = db19;
+  const expiredCode = 'EQT-PLUS-EXPIRED-TEST-001';
+  const pastExpires = new Date(Date.now() - 86400 * 1000).toISOString(); // Expired yesterday
+  db19.prepare(
+    "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email, paddle_transaction_id, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(expiredCode, 'PLUS', 'active', 2, pastExpires, null, 'tester@example.com', 'txn_exp_01', 'purchase', new Date().toISOString()).run();
+  db19.prepare(
+    "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, activated_at) VALUES (?, ?, ?, ?, ?)"
+  ).bind(expiredCode, 'uuid-exp-19', 'cpu-exp-19', 'disk-exp-19', new Date().toISOString()).run();
+
+  const res19 = await handleDrmRoutes(new Request('https://lic.eqt.net.im/api/v1/verify', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      license_code: expiredCode,
+      uuid_hash: 'uuid-exp-19',
+      cpu_hash: 'cpu-exp-19',
+      disk_hash: 'disk-exp-19'
+    })
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/verify'), {});
+
+  assert(res19.status === 403, 'verify endpoint returns 403 for expired purchase license');
+  const j19 = await res19.json();
+  assert(j19.error !== undefined, 'response contains error message');
+  await flushCtx();
+
   console.log('\n🎉🎉 ALL DEVICE REGISTRY WRITE PATH TESTS PASSED! 🎉🎉');
 }
 
