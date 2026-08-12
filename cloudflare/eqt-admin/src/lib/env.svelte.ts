@@ -15,6 +15,16 @@ function loadInitialEnv(): AdminEnvironment {
 class AdminEnvState {
   current = $state<AdminEnvironment>(loadInitialEnv());
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event: StorageEvent) => {
+        if (event.key === STORAGE_KEY && (event.newValue === 'test' || event.newValue === 'production')) {
+          this.current = event.newValue;
+        }
+      });
+    }
+  }
+
   set(target: AdminEnvironment) {
     if (this.current === target) return;
     this.current = target;

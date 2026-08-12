@@ -31,8 +31,13 @@
 | Header | 要求 |
 | :--- | :--- |
 | `Access-Control-Allow-Origin` | 至少覆盖 admin 源；现状 `*` 可暂用 |
-| `Access-Control-Allow-Headers` | 含 `Content-Type`, `X-Admin-Secret` |
+| `Access-Control-Allow-Headers` | 含 `Content-Type`, `X-Admin-Secret`, `X-EQT-Environment` |
 | `Access-Control-Allow-Methods` | 至少 `GET, POST, DELETE, OPTIONS` |
+
+### 0.4 多环境同源反代路由标头 (`X-EQT-Environment`)
+
+- **用途**：仅供 Cloudflare Pages 同源 Function (`functions/api/[[path]].ts`) 读取，用于将管理台请求动态分发路由至生产 Worker (`https://lic.eqt.net.im`) 或测试 Worker (`https://lic-test.eqt.net.im`)。
+- **安全与鉴权机制**：`X-EQT-Environment` 标头**仅作反代路由选择，不作为任何鉴权凭证**。所有管理端 API 的访问权限恒由 Cloudflare Access Zero Trust JWT / `X-Admin-Secret` 强制鉴权校验。
 
 ---
 

@@ -1,5 +1,5 @@
 import { clearAccessSession, isAuthenticated } from './auth';
-import { getAdminEnvironment } from './env';
+import { getAdminEnvironment } from './env.svelte';
 
 /**
  * Base URL:
