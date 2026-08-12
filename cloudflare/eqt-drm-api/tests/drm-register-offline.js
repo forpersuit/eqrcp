@@ -432,16 +432,10 @@ async function runTests() {
   const row6b = queryRegistryById(db6, devId6);
   assert(row6b.last_seen_at === firstSeen,
     `last_seen_at unchanged by debounce (${row6b.last_seen_at} === ${firstSeen})`);
-  // Audit: debounce_skip entry written to system_error_logs
+  // Audit: debounce_skip no longer pollutes system_error_logs with false-positive warnings
   await waitForPending();
   const audit6 = queryAuditLogs(db6, 'debounce_skip');
-  assert(audit6.length === 1, 'audit log has 1 debounce_skip entry for T6');
-  assert(audit6[0].level === 'WARN', 'debounce_skip audit level = WARN');
-  assert(audit6[0].category === 'DEVICE_REGISTRY', 'debounce_skip audit category = DEVICE_REGISTRY');
-  const ctx6 = JSON.parse(audit6[0].context_json);
-  assert(ctx6.device_id === devId6, 'debounce_skip audit context has device_id');
-  assert(typeof ctx6.age_seconds === 'number', 'debounce_skip audit context has age_seconds');
-  assert(ctx6.tier === 'free', 'debounce_skip audit context tier = free');
+  assert(audit6.length === 0, 'system_error_logs remains clean (0 debounce_skip entries for T6)');
   await flushCtx();
 
   // ============================================================

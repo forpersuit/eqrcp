@@ -153,15 +153,8 @@ export async function registerOrRefreshDevice(
         params.appVersion || null,
         deviceId
       ).run();
-    } else {
-      // Debounce skip: last_seen within 5 min and same tier — no write needed
-      const ageSec = lastSeen ? Math.floor((Date.now() - lastSeen) / 1000) : 0;
-      logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('debounce_skip'), {
-        device_id: deviceId,
-        age_seconds: ageSec,
-        tier: newTier
-      });
     }
+    // Debounce skip: last_seen within 5 min and same tier — no DB write needed
 
     return { device_id: deviceId, tier_label: newTier };
   }
