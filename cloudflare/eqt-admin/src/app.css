@@ -161,3 +161,44 @@ body {
   padding: 1.75rem;
   box-shadow: var(--shadow-card);
 }
+
+/* Search Input Wrap & Icon Button */
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  width: 100%;
+}
+
+.search-input-wrap .input {
+  padding-right: 2.75rem;
+}
+
+.search-icon-btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-icon-btn:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  color: var(--accent-primary);
+}
+
+.search-icon-btn:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.95);
+}

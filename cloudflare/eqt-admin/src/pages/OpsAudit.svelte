@@ -145,15 +145,22 @@
     </div>
     <div class="filter-group search-group">
       <label for="ops-q">关键词:</label>
-      <input
-        id="ops-q"
-        type="text"
-        class="input"
-        placeholder="license_code / IP / details..."
-        bind:value={searchKeyword}
-        onkeydown={(e) => e.key === 'Enter' && handleFilterChange()}
-      />
-      <button class="btn btn-secondary btn-sm" onclick={handleFilterChange}>搜索</button>
+      <div class="search-input-wrap">
+        <input
+          id="ops-q"
+          type="text"
+          class="input"
+          placeholder="license_code / IP / details..."
+          bind:value={searchKeyword}
+          onkeydown={(e) => e.key === 'Enter' && handleFilterChange()}
+        />
+        <button class="search-icon-btn" onclick={handleFilterChange} title="搜索" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 

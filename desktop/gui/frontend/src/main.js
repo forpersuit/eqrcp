@@ -2593,7 +2593,10 @@ function renderAboutPanel() {
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('product') || 'Product'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}">${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}${info.isTest ? ` (${escapeAttr(t('test_version_badge') || '测试版')})` : ''}">
+                        <span style="overflow: hidden; text-overflow: ellipsis;">${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</span>
+                        ${info.isTest ? `<span class="test-version-tag" style="font-size: 10px; font-weight: 800; color: #d97706; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; line-height: 1.2; flex-shrink: 0;">${escapeHTML(t('test_version_badge') || '测试版')}</span>` : ''}
+                    </span>
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('version') || 'Version'}</span>

@@ -272,19 +272,24 @@
   </div>
 
   <div class="filter-bar card">
-    <div class="search-group">
-      <input
-        type="text"
-        class="input"
-        placeholder="输入 Email、License Code 或 Paddle Transaction ID 回车检索..."
-        bind:value={searchQuery}
-        onkeydown={(e) => e.key === 'Enter' && loadLicenses()}
-      />
-      <button class="btn btn-secondary" onclick={() => loadLicenses()} disabled={loading}>
-        搜索
-      </button>
+    <div class="search-group" style="display: flex; align-items: center; gap: 1rem; width: 100%;">
+      <div class="search-input-wrap">
+        <input
+          type="text"
+          class="input"
+          placeholder="输入 Email、License Code 或 Paddle Transaction ID 回车检索..."
+          bind:value={searchQuery}
+          onkeydown={(e) => e.key === 'Enter' && loadLicenses()}
+        />
+        <button class="search-icon-btn" onclick={() => loadLicenses()} disabled={loading} title="搜索" aria-label="搜索">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+      </div>
       {#if lastRefreshedAt}
-        <span class="refresh-meta">上次更新 {lastRefreshedAt}{refreshing ? ' · 同步中' : ''}</span>
+        <span class="refresh-meta" style="white-space: nowrap;">上次更新 {lastRefreshedAt}{refreshing ? ' · 同步中' : ''}</span>
       {/if}
     </div>
   </div>

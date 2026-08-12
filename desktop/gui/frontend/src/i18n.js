@@ -4,6 +4,7 @@ const translations = {
     "zh": {
         "about": "关于 EQT",
         "about_title": "关于 EQT",
+        "test_version_badge": "测试版",
         "active": "活跃",
         "adv_settings": "高级设置",
         "agent_idle": "服务处于空闲状态。",
@@ -420,6 +421,7 @@ const translations = {
     "en": {
         "about": "About EQT",
         "about_title": "About EQT",
+        "test_version_badge": "Test Build",
         "active": "Active",
         "adv_settings": "Advanced Settings",
         "agent_idle": "Agent is idle.",
@@ -836,6 +838,7 @@ const translations = {
     "ja": {
         "about": "EQTについて",
         "about_title": "EQTについて",
+        "test_version_badge": "テスト版",
         "active": "アクティブ",
         "adv_settings": "詳細設定",
         "agent_idle": "サービスは待機中です。",
@@ -1240,6 +1243,7 @@ const translations = {
     "ko": {
         "about": "EQT 정보",
         "about_title": "EQT 정보",
+        "test_version_badge": "테스트 버전",
         "active": "활성",
         "adv_settings": "고급 설정",
         "agent_idle": "서비스가 대기 중입니다.",
@@ -1644,6 +1648,7 @@ const translations = {
     "es": {
         "about": "Acerca de EQT",
         "about_title": "Acerca de EQT",
+        "test_version_badge": "Versión de prueba",
         "active": "Activo",
         "adv_settings": "Ajustes avanzados",
         "agent_idle": "El servicio está inactivo.",
@@ -2048,6 +2053,7 @@ const translations = {
     "de": {
         "about": "Über EQT",
         "about_title": "Über EQT",
+        "test_version_badge": "Testversion",
         "active": "Aktiv",
         "adv_settings": "Erweiterte Einstellungen",
         "agent_idle": "Der Dienst ist inaktiv.",
@@ -2452,6 +2458,7 @@ const translations = {
     "fr": {
         "about": "À propos de EQT",
         "about_title": "À propos de EQT",
+        "test_version_badge": "Version de test",
         "active": "Actif",
         "adv_settings": "Paramètres avancés",
         "agent_idle": "Le service est en veille.",
