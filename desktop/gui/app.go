@@ -189,6 +189,9 @@ func (a *App) startup(ctx context.Context) {
 		wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
 	}
 
+	// 启动时在主线程同步进行微秒级离线证书校验，确保首屏 AgentStatus() 即刻包含真实 Tier，消除视觉跳变
+	server.VerifyLocalLicense()
+
 	// 注册授权状态变更监听，当后台指纹预计算与本地/在线证书校验完成时，即刻向前端发射 agent-status 事件
 	server.RegisterPaidStatusCallback(func(paid bool, tier string) {
 		if a.agent != nil {

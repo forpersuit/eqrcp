@@ -3149,8 +3149,6 @@ dd {
 }
 
 .topbar-tier-badge {
-    background: var(--accent);
-    color: #ffffff;
     font-size: 11px;
     font-weight: var(--font-weight-title, 700);
     padding: 0 12px;
@@ -3164,8 +3162,35 @@ dd {
     vertical-align: middle;
     text-transform: uppercase;
     flex-shrink: 0;
+    transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.topbar-tier-badge.tier-free {
+    background: var(--bg2, #f3f4f6);
+    color: var(--ink-light, #6b7280);
+    border: 1px solid var(--border, #e5e7eb);
+    box-shadow: none;
+}
+
+.topbar-tier-badge.tier-plus {
+    background: var(--accent, #156f5a);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), inset 0 0.5px 0px rgba(255,255,255,0.2);
-    border: 1px solid rgba(255,255,255,0.15);
+}
+
+.topbar-tier-badge.tier-plus-lifetime {
+    background: linear-gradient(135deg, #6b21a8 0%, #4c1d95 100%);
+    color: #ffffff;
+    border: 1px solid rgba(216, 180, 254, 0.35);
+    box-shadow: 0 1px 4px rgba(107, 33, 168, 0.3), inset 0 0.5px 0px rgba(255,255,255,0.25);
+}
+
+.topbar-tier-badge.tier-pro {
+    background: linear-gradient(135deg, #b45309 0%, #78350f 100%);
+    color: #fffbeb;
+    border: 1px solid rgba(253, 230, 138, 0.4);
+    box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35), inset 0 0.5px 0px rgba(255,255,255,0.3);
 }
 
 

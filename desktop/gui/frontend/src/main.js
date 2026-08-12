@@ -572,8 +572,12 @@ function render() {
                         const isPaid = hasPaidLicense();
                         const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
                         const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
-                        const tierText = (tier === 'PLUS' && expires === 'LIFETIME') ? (t('plus_lifetime_plan') || 'PLUS Lifetime') : (tier === 'FREE' ? t('free_quota') : tier);
-                        return `<span class="topbar-tier-badge">${escapeHTML(tierText)}</span>`;
+                        const isLifetime = tier === 'PLUS' && expires === 'LIFETIME';
+                        const tierClass = isPaid
+                            ? (isLifetime ? 'tier-plus-lifetime' : (tier === 'PRO' ? 'tier-pro' : 'tier-plus'))
+                            : 'tier-free';
+                        const tierText = isLifetime ? (t('plus_lifetime_plan') || 'PLUS Lifetime') : (tier === 'FREE' ? t('free_quota') : tier);
+                        return `<span class="topbar-tier-badge ${tierClass}">${escapeHTML(tierText)}</span>`;
                     })() : ''}
                     <div class="topbar-menu">
                         <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
