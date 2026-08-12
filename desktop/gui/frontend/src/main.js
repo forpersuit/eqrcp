@@ -5230,8 +5230,13 @@ async function loadIntegrationStatusData() {
 }
 
 async function loadStatusData() {
-    applyStatusData(await AgentStatus());
-    syncLicenseFromStatus(state.status);
+    try {
+        applyStatusData(await AgentStatus());
+        syncLicenseFromStatus(state.status);
+    } catch (err) {
+        state.statusLoaded = true;
+        render();
+    }
 }
 
 function applyStatusData(nextStatus) {

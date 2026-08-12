@@ -28,11 +28,11 @@ flowchart TD
 
 | 逻辑模块 | 实际代码符号名 | 代码位置 | 职责说明 |
 | :--- | :--- | :--- | :--- |
-| **离线校验** | `server.VerifyLocalLicense()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L170) | 读取本地 `.lic` 证书，进行 Ed25519 验签、指纹匹配、到期/租约/时钟回拨检测 |
-| **查询 Tier** | `server.GetLicenseTier()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L588) | 读取内存锁保护的当前授权等级（`"PLUS"`, `"PRO"`, `""`） |
-| **状态变更监听**| `server.RegisterPaidStatusCallback()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L605) | 注册授权状态改变时的回调函数（供 GUI 触发桌面事件推送） |
-| **快照查询** | `App.AgentStatus()` | [`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L316) | Wails 暴露给 GUI 前端的代理状态快照 API，底层调用 `snapshotLocked()` |
-| **在线 SSOT 对账**| `server.ForceOnlineLicenseSync()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L358) | 连网时向 Cloudflare `/api/v1/verify` 发起对账，在线结果为绝对权威真相 |
+| **离线校验** | `server.VerifyLocalLicense()` | [`pkg/server/license.go#L170`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L170) | 读取本地 `.lic` 证书，进行 Ed25519 验签、指纹匹配、到期/租约/时钟回拨检测 |
+| **查询 Tier** | `server.GetLicenseTier()` | [`pkg/server/license.go#L645`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L645) | 读取内存锁保护的当前授权等级（`"PLUS"`, `"PRO"`, `""`） |
+| **状态变更监听**| `server.RegisterPaidStatusCallback()` | [`pkg/server/license.go#L566`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L566) | 注册授权状态改变时的回调函数（供 GUI 触发桌面事件推送） |
+| **快照查询** | `App.AgentStatus()` | [`desktop/gui/app.go#L319`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L319) | Wails 暴露给 GUI 前端的代理状态快照 API，底层调用 `snapshotLocked()` |
+| **在线 SSOT 对账**| `server.ForceOnlineLicenseSync()` | [`pkg/server/license.go#L374`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L374) | 连网时向 Cloudflare `/api/v1/verify` 发起对账，在线结果为绝对权威真相 |
 
 ### 2. 精确 7 步校验顺序（与 `license.go:170-267` 严格一致）
 
@@ -72,9 +72,9 @@ flowchart TD
 
 1. **后端首屏同步加载 (后端方案一落地)**：
    GUI `startup()` 主线程同步执行 `server.VerifyLocalLicense()`，确保首帧 `AgentStatus()` 快照直接包含真实 Tier。
-2. **前端状态标志与骨架占位 (前端方案二落地)**：
+2. **前端状态标志与骨架占位 + 异常兜底 (前端方案二落地)**：
    * 在 [`state.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/state.js#L7) 中新增 `statusLoaded: false` 标志。
-   * 在 [`main.js:5246`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js#L5246) 的 `applyStatusData()` 中将 `state.statusLoaded` 置为 `true`，并自动通过 `syncLicenseFromStatus()` 回写 `localStorage`。
+   * 在 [`main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js) 的 `loadStatusData()` 中引入 `try...catch` 兜底；当 `AgentStatus()` 正常返回时由 `applyStatusData()` 将 `state.statusLoaded` 置为 `true` 并回写 `localStorage`；当出现 IPC/网络异常抛错时，在 `catch` 块强置 `state.statusLoaded = true` 并触发 `render()` 退出骨架态，防死锁卡住。
    * 在首帧渲染顶栏 Badge 时，若 `!state.statusLoaded && !state.license && !state.status`（未完成加载且无缓存），渲染带有微光呼吸动画的占位骨架屏 `<span class="topbar-tier-badge tier-loading"></span>`；加载完成后平滑淡入呈现对应的 Tier Badge，**彻底消除跳变硬切换**。
 
 ---
@@ -92,4 +92,4 @@ flowchart TD
 | **Loading** (初始化中) | (无文字，骨架呼吸) | `.tier-loading` | **淡灰闪烁 / 呼吸微光**<br>消除无缓存首次启动时的视觉硬跳变 | `background: var(--bg2);`<br>`animation: tierBadgePulse 1.2s infinite;` |
 
 ---
-*版本说明：本机制与规范适用于 EQT v1.8.5+ 架构体系。*
+*版本说明：本机制与规范适用于 EQT v1.30.15+ (Cloudflare Worker API v1.8.5+) 架构体系。*
