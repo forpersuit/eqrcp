@@ -31,7 +31,8 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **骨架重构**：仅在设备连接状态变化（`clientID` 集合增减）或文件条目数等结构化元数据改变时，才执行一次性 `innerHTML` 骨架重写。
   - **就地更新**：结构未改变时，通过预埋带唯一标识（如 `clientID`）的 HTML `id`，使用 `document.getElementById` 直接定位节点，更新其 `textContent` 或 `style.cssText`。
 - **活动输入框焦点保护 (Active Input Protection)**：
-  - 收到后台推送（`agent-status`）、心跳同步（`applyStatusData`）时，若 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 为正在编辑的输入框/文本域，挂起全屏 DOM 重绘，将状态暂留内存。
+  - 收到后台推送（`agent-status`）、心跳同步（`applyStatusData`）时，即便是包含付费/篡改状态变更（`paidChanged`），若 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 为正在编辑的输入框/文本域，必须挂起全屏 DOM 重绘，保护输入焦点与光标。
+  - 所有带有未提交暂存状态的输入框（如 `#redeem-code`）必须绑定 `input` 事件实时同步当前输入至全局 `state` 内存（如 `state.tempRedeemCode`），形成 DOM 与 Memory 的双保险。
 - **红点与阶段文本就地补丁 (Incremental Badges)**：
   - 自动更新检测阶段变化（后台完成下载变为 `ready`）时，不触发全屏重绘，直接通过 `updateSettingsBadgeUI()` 为 `#open-settings` 增量 append/remove `.badge-dot` 节点。
 
