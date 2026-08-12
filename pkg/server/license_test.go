@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -909,5 +910,34 @@ func TestCrossPlatformContractLock(t *testing.T) {
 func TestIsTestBuildProductionDefault(t *testing.T) {
 	if IsTestBuild() {
 		t.Errorf("production build (no eqtdev tag) must report IsTestBuild()=false")
+	}
+}
+
+func TestRegisterPaidStatusCallback(t *testing.T) {
+	var mu sync.Mutex
+	called := false
+	gotPaid := false
+	gotTier := ""
+
+	RegisterPaidStatusCallback(func(paid bool, tier string) {
+		mu.Lock()
+		called = true
+		gotPaid = paid
+		gotTier = tier
+		mu.Unlock()
+	})
+
+	SetPaidStatus(true, time.Now().UTC().Format(time.RFC3339), "LIFETIME", "PRO")
+
+	// Allow goroutine to execute callback
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !called {
+		t.Error("expected registered callback to be called on SetPaidStatus")
+	}
+	if !gotPaid || gotTier != "PRO" {
+		t.Errorf("expected paid=true tier=PRO, got paid=%t tier=%s", gotPaid, gotTier)
 	}
 }

@@ -5229,8 +5229,14 @@ function applyStatusData(nextStatus) {
     const prevBusy = state.busy;
     const prevMode = state.mode;
     const prevStatusState = state.status?.state || 'idle';
+    const prevPaid = state.status?.isPaid;
+    const prevTier = state.status?.licenseTier;
+    const prevExpiresAt = state.status?.licenseExpiresAt;
+    const prevClockTampered = state.status?.clockTampered;
 
     state.status = nextStatus;
+    syncLicenseFromStatus(nextStatus);
+
     if (!nextStatus?.current && !nextStatus?.chat) {
         state.qrExpandedTasks = {};
     }
@@ -5241,6 +5247,10 @@ function applyStatusData(nextStatus) {
     const nextBusy = state.busy;
     const nextMode = state.mode;
     const nextStatusState = nextStatus?.state || 'idle';
+    const nextPaid = nextStatus?.isPaid;
+    const nextTier = nextStatus?.licenseTier;
+    const nextExpiresAt = nextStatus?.licenseExpiresAt;
+    const nextClockTampered = nextStatus?.clockTampered;
 
     if (prevStatusState === 'busy' && nextStatusState !== 'busy') {
         const updateMode = state.settings?.autoUpdateMode || 'download';
@@ -5252,8 +5262,10 @@ function applyStatusData(nextStatus) {
         }
     }
 
-    if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode) {
-        if (state.activePanel || shouldProtectActiveInput()) {
+    const paidChanged = (prevPaid !== nextPaid || prevTier !== nextTier || prevExpiresAt !== nextExpiresAt || prevClockTampered !== nextClockTampered);
+
+    if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode || paidChanged) {
+        if (!paidChanged && (state.activePanel || shouldProtectActiveInput())) {
             return;
         }
         render();

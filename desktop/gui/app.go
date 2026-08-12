@@ -189,6 +189,15 @@ func (a *App) startup(ctx context.Context) {
 		wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
 	}
 
+	// 注册授权状态变更监听，当后台指纹预计算与本地/在线证书校验完成时，即刻向前端发射 agent-status 事件
+	server.RegisterPaidStatusCallback(func(paid bool, tier string) {
+		if a.agent != nil {
+			a.agent.mu.Lock()
+			a.agent.touchLocked()
+			a.agent.mu.Unlock()
+		}
+	})
+
 	// 检查是否有未上传的崩溃转储，通知前端弹窗
 	if crash.HasPendingDump() {
 		wailsruntime.LogInfo(ctx, "[CrashReport] Pending crash dump found, notifying frontend")

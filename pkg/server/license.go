@@ -553,12 +553,24 @@ func GetLocalLicenseInfo() (LicenseCertificate, bool) {
 }
 
 var (
-	paidStateMu      sync.RWMutex
-	cachedIsPaid     bool
-	cachedTier       string
-	cachedCodeDate   string
-	cachedIsTampered bool
+	paidStateMu          sync.RWMutex
+	cachedIsPaid         bool
+	cachedTier           string
+	cachedCodeDate       string
+	cachedIsTampered     bool
+	paidStatusCallbackMu sync.RWMutex
+	paidStatusCallbacks  []func(paid bool, tier string)
 )
+
+// RegisterPaidStatusCallback registers a callback invoked whenever paid status changes.
+func RegisterPaidStatusCallback(cb func(paid bool, tier string)) {
+	if cb == nil {
+		return
+	}
+	paidStatusCallbackMu.Lock()
+	paidStatusCallbacks = append(paidStatusCallbacks, cb)
+	paidStatusCallbackMu.Unlock()
+}
 
 // SetPaidStatus updates the payment status globally.
 func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
@@ -575,6 +587,20 @@ func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 	// Notify limiterInstance as well to trigger event broadcast
 	if limiterInstance != nil {
 		limiterInstance.SetPaidDetails(paid, redeemedAt, codeDate, tier)
+	}
+
+	// Notify registered desktop GUI listeners
+	paidStatusCallbackMu.RLock()
+	var cbs []func(paid bool, tier string)
+	if len(paidStatusCallbacks) > 0 {
+		cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
+		copy(cbs, paidStatusCallbacks)
+	}
+	paidStatusCallbackMu.RUnlock()
+	for _, cb := range cbs {
+		if cb != nil {
+			go cb(paid, tier)
+		}
 	}
 }
 
