@@ -3603,6 +3603,10 @@ function bindPanelEvents() {
         state.feedbackError = null;
         state.feedbackNotice = null;
     });
+    const redeemInput = document.querySelector('#redeem-code');
+    redeemInput?.addEventListener('input', (e) => {
+        state.tempRedeemCode = e.target.value;
+    });
     document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
     document.querySelector('#reset-license')?.addEventListener('click', () => {
         state.confirmResetPending = true;
@@ -5265,7 +5269,10 @@ function applyStatusData(nextStatus) {
     const paidChanged = (prevPaid !== nextPaid || prevTier !== nextTier || prevExpiresAt !== nextExpiresAt || prevClockTampered !== nextClockTampered);
 
     if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode || paidChanged) {
-        if (!paidChanged && (state.activePanel || shouldProtectActiveInput())) {
+        if (shouldProtectActiveInput()) {
+            return;
+        }
+        if (!paidChanged && state.activePanel) {
             return;
         }
         render();

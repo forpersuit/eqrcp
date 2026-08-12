@@ -607,11 +607,40 @@ func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 // SetClockTampered sets the clock tampered status.
 func SetClockTampered(tampered bool) {
 	paidStateMu.Lock()
+	oldTampered := cachedIsTampered
 	cachedIsTampered = tampered
 	if tampered {
 		cachedIsPaid = false
 	}
+	paid := cachedIsPaid && !cachedIsTampered
+	tier := cachedTier
 	paidStateMu.Unlock()
+
+	if limiterInstance != nil {
+		limiterInstance.mu.Lock()
+		if limiterInstance.hasCached {
+			limiterInstance.cachedUsage.ClockTampered = tampered
+			if tampered {
+				limiterInstance.cachedUsage.IsPaid = false
+			}
+		}
+		limiterInstance.mu.Unlock()
+	}
+
+	if oldTampered != tampered || tampered {
+		paidStatusCallbackMu.RLock()
+		var cbs []func(paid bool, tier string)
+		if len(paidStatusCallbacks) > 0 {
+			cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
+			copy(cbs, paidStatusCallbacks)
+		}
+		paidStatusCallbackMu.RUnlock()
+		for _, cb := range cbs {
+			if cb != nil {
+				go cb(paid, tier)
+			}
+		}
+	}
 }
 
 // GetPaidStatus returns whether the premium status is activated.

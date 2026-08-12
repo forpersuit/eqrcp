@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -914,30 +913,54 @@ func TestIsTestBuildProductionDefault(t *testing.T) {
 }
 
 func TestRegisterPaidStatusCallback(t *testing.T) {
-	var mu sync.Mutex
-	called := false
-	gotPaid := false
-	gotTier := ""
+	ch := make(chan struct {
+		paid bool
+		tier string
+	}, 10)
 
 	RegisterPaidStatusCallback(func(paid bool, tier string) {
-		mu.Lock()
-		called = true
-		gotPaid = paid
-		gotTier = tier
-		mu.Unlock()
+		ch <- struct {
+			paid bool
+			tier string
+		}{paid, tier}
 	})
 
 	SetPaidStatus(true, time.Now().UTC().Format(time.RFC3339), "LIFETIME", "PRO")
 
-	// Allow goroutine to execute callback
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case res := <-ch:
+		if !res.paid || res.tier != "PRO" {
+			t.Errorf("expected paid=true tier=PRO, got paid=%t tier=%s", res.paid, res.tier)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("expected registered callback to be called on SetPaidStatus within timeout")
+	}
+}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if !called {
-		t.Error("expected registered callback to be called on SetPaidStatus")
+func TestSetClockTamperedTriggersCallback(t *testing.T) {
+	SetClockTampered(false)
+	ch := make(chan struct {
+		paid bool
+		tier string
+	}, 10)
+
+	RegisterPaidStatusCallback(func(paid bool, tier string) {
+		ch <- struct {
+			paid bool
+			tier string
+		}{paid, tier}
+	})
+
+	SetClockTampered(true)
+
+	select {
+	case res := <-ch:
+		if res.paid {
+			t.Errorf("expected paid=false when clock tampered, got paid=%t", res.paid)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("expected registered callback to be called on SetClockTampered within timeout")
 	}
-	if !gotPaid || gotTier != "PRO" {
-		t.Errorf("expected paid=true tier=PRO, got paid=%t tier=%s", gotPaid, gotTier)
-	}
+
+	SetClockTampered(false)
 }
