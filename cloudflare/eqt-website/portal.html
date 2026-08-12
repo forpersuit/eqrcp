@@ -1224,7 +1224,7 @@
                 const actionBtns = [];
                 const canInvoice = lic.invoiceable === true && !!lic.paddle_transaction_id;
                 const canRefund = lic.status === 'active' && lic.refundable === true;
-                const canToggleAutoRenew = lic.status === 'active' && Boolean(lic.paddle_subscription_id);
+                const canToggleAutoRenew = lic.status === 'active' && lic.auto_renew_toggleable === true;
                 // Upgrade feature is parked (后续推进项, 2026-08-04): hidden from UI, backend kept for future.
                 const canUpgrade = false;
 

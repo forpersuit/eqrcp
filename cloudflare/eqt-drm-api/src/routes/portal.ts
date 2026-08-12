@@ -279,11 +279,11 @@ export async function handlePortalRoutes(
         ...lic,
         source,
         auto_renew: lic.auto_renew === 0 ? 0 : 1,
-        auto_renew_toggleable: lic.status === 'active' && Boolean(lic.paddle_subscription_id),
+        auto_renew_toggleable: source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id),
         refundable: isLicenseRefundable({ ...lic, source }),
         cancellable: isLicenseCancellable({ ...lic, source }),
         // Real Paddle purchase txn → can open invoice/receipt via Paddle API
-        invoiceable: isRealPaddleTransactionId(lic.paddle_transaction_id),
+        invoiceable: source === 'purchase' && isRealPaddleTransactionId(lic.paddle_transaction_id),
         activations: activations,
         used_unbinds: unbindCount,
         remaining_unbinds: remainingUnbinds,
