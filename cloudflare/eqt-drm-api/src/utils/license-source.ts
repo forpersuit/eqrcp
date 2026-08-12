@@ -28,8 +28,7 @@ export function isSyntheticTestSubscriptionId(subscriptionId: string | null | un
 
 /**
  * Whether a Paddle API key is a sandbox key. Sandbox keys start with `pdl_sdbx_`.
- * This is the authoritative environment signal: a Worker bound to a sandbox key is a
- * test worker, so licenses it mints are tagged `source = 'test'`.
+ * This indicates whether Paddle API calls should target sandbox-api.paddle.com or api.paddle.com.
  */
 export function isPaddleSandbox(apiKey: string | null | undefined): boolean {
   return !!apiKey && apiKey.startsWith('pdl_sdbx_');
@@ -53,19 +52,25 @@ export function isLicenseCancellable(license: {
 }
 
 /**
- * Normalize stored or missing source. Legacy rows without `source` are inferred
- * from paddle_transaction_id so production data keeps working without a backfill job.
+ * Normalize stored or missing source.
+ * Real Paddle transactions (live or sandbox) always belong to 'purchase'.
+ * Fixtures with synthetic test txn IDs belong to 'test'.
+ * Admin/promo generated codes keep their respective sources.
  */
 export function normalizeLicenseSource(
   raw: string | null | undefined,
   paddleTransactionId?: string | null
 ): LicenseSource {
   const s = (raw || '').trim().toLowerCase();
-  if (s === 'purchase' || s === 'promo' || s === 'admin' || s === 'test') {
+  if (isRealPaddleTransactionId(paddleTransactionId || null)) {
+    return 'purchase';
+  }
+  if (s === 'purchase' || s === 'promo' || s === 'admin') {
     return s;
   }
-  if (isRealPaddleTransactionId(paddleTransactionId || null)) return 'purchase';
-  if (isSyntheticTestTransactionId(paddleTransactionId || null)) return 'test';
+  if (s === 'test' || isSyntheticTestTransactionId(paddleTransactionId || null)) {
+    return 'test';
+  }
   return 'admin';
 }
 

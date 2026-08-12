@@ -52,6 +52,7 @@
             <a class="flex items-center gap-2 text-primary font-bold text-2xl tracking-tighter" href="/">
                 <img src="assets/favicon.png" alt="EQT Logo" class="w-8 h-8 rounded-lg" />
                 <span>EQT</span>
+                <span id="test-env-badge" class="hidden text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 tracking-wider"></span>
             </a>
             
             <div class="flex items-center gap-4">
@@ -84,7 +85,13 @@
     </header>
 
     <!-- Main Content Container -->
-    <main class="flex-grow max-w-4xl mx-auto px-6 py-12 w-full flex items-center justify-center">
+    <main class="flex-grow max-w-4xl mx-auto px-6 py-10 w-full flex flex-col items-center justify-start">
+        
+        <!-- Test Environment Banner -->
+        <div id="test-env-banner" class="hidden w-full max-w-4xl mb-6 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl p-3.5 text-xs flex items-center justify-center gap-2 shadow-sm text-center">
+            <span class="material-symbols-outlined text-base shrink-0">science</span>
+            <span id="test-env-banner-text"></span>
+        </div>
         
         <!-- Login Card -->
         <div id="login-section" class="w-full max-w-md glass-panel rounded-2xl p-8 space-y-6 shadow-2xl">
@@ -233,6 +240,8 @@
         // Language dictionaries
         const translations = {
             "en": {
+                "test_env_badge": "Test Environment",
+                "test_env_banner": "You are currently in the Test Environment (Sandbox). Data is segregated from production.",
                 "device_id_hint": "Find your Device ID at the bottom of the About panel in EQT client",
                 "back_to_home": "Back to Home",
                 "login_title": "Customer License Portal",
@@ -312,6 +321,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved."
             },
             "zh": {
+                "test_env_badge": "测试环境",
+                "test_env_banner": "当前为测试环境 (Sandbox)，数据与正式生产环境相互隔离，支付走沙箱通道。",
                 "device_id_hint": "可在 EQT 客户端「关于」界面底部找到本机的 Device ID",
                 "back_to_home": "返回主页",
                 "login_title": "客户权益与授权管理中心",
@@ -333,9 +344,9 @@
                 "status_refunded": "已退款解约",
                 "status_revoked": "授权终止",
                 "source_label": "来源",
-                "source_purchase": "官网正版订阅",
-                "source_promo": "限时活动赠送",
-                "source_admin": "官方 VIP 赠予",
+                "source_purchase": "官网购买",
+                "source_promo": "活动兑换",
+                "source_admin": "官方生成",
                 "source_test": "开发者测试",
                 "entitlement_lifetime": "终身买断",
                 "entitlement_term": "年度订阅",
@@ -391,6 +402,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). 保留所有权利。"
             },
             "ja": {
+                "test_env_badge": "テスト環境",
+                "test_env_banner": "現在テスト環境（Sandbox）です。データは本番環境から分離されています。",
                 "device_id_hint": "EQT クライアントの「バージョン情報」パネル下部でデバイス ID を確認できます",
                 "back_to_home": "ホームに戻る",
                 "login_title": "ライセンス管理ポータル",
@@ -414,7 +427,7 @@
                 "source_label": "ソース",
                 "source_purchase": "公式購入",
                 "source_promo": "プロモ贈呈",
-                "source_admin": "VIP贈呈",
+                "source_admin": "管理者発行",
                 "source_test": "テスト用",
                 "entitlement_lifetime": "永久ライセンス",
                 "entitlement_term": "年間サブスク",
@@ -465,6 +478,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved."
             },
             "ko": {
+                "test_env_badge": "테스트 환경",
+                "test_env_banner": "현재 테스트 환경(Sandbox)입니다. 데이터는 운영 환경과 분리되어 있습니다.",
                 "device_id_hint": "EQT 클라이언트 '정보' 패널 하단에서 기기 ID를 확인할 수 있습니다",
                 "back_to_home": "홈으로 돌아가기",
                 "login_title": "고객 라이선스 포털",
@@ -488,7 +503,7 @@
                 "source_label": "출처",
                 "source_purchase": "정품 구매",
                 "source_promo": "이벤트 증정",
-                "source_admin": "VIP 증정",
+                "source_admin": "관리자 발급",
                 "source_test": "테스트용",
                 "entitlement_lifetime": "평생 라이선스",
                 "entitlement_term": "연간 구독",
@@ -539,6 +554,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). All rights reserved."
             },
             "es": {
+                "test_env_badge": "Entorno de prueba",
+                "test_env_banner": "Actualmente se encuentra en el entorno de prueba (Sandbox). Los datos están aislados de producción.",
                 "device_id_hint": "Encuentre el ID del dispositivo en la parte inferior del panel 'Acerca de' en EQT",
                 "back_to_home": "Volver al inicio",
                 "login_title": "Portal de Licencias",
@@ -562,7 +579,7 @@
                 "source_label": "Origen",
                 "source_purchase": "Compra oficial",
                 "source_promo": "Promoción",
-                "source_admin": "Concesión VIP",
+                "source_admin": "Concesión oficial",
                 "source_test": "Prueba",
                 "entitlement_lifetime": "Licencia de por vida",
                 "entitlement_term": "Suscripción anual",
@@ -613,6 +630,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). Todos los derechos reservados."
             },
             "de": {
+                "test_env_badge": "Testumgebung",
+                "test_env_banner": "Sie befinden sich in der Testumgebung (Sandbox). Daten sind von der Produktion isoliert.",
                 "device_id_hint": "Sie finden die Geräte-ID unten im 'Über'-Feld des EQT-Clients",
                 "back_to_home": "Zurück zur Startseite",
                 "login_title": "Kunden-Lizenzportal",
@@ -636,7 +655,7 @@
                 "source_label": "Quelle",
                 "source_purchase": "Offizieller Kauf",
                 "source_promo": "Aktion",
-                "source_admin": "VIP-Geschenk",
+                "source_admin": "Offiziell ausgestellt",
                 "source_test": "Test",
                 "entitlement_lifetime": "Lebenslange Lizenz",
                 "entitlement_term": "Jahresabonnement",
@@ -687,6 +706,8 @@
                 "footer_copy": "© {year} EQT (Easy QR Transfer). Alle Rechte vorbehalten."
             },
             "fr": {
+                "test_env_badge": "Environnement de test",
+                "test_env_banner": "Vous êtes actuellement dans l'environnement de test (Sandbox). Les données sont isolées de la production.",
                 "device_id_hint": "Retrouvez l'ID de l'appareil au bas du panneau 'À propos' du client EQT",
                 "back_to_home": "Retour à l'accueil",
                 "login_title": "Portail Client Licences",
@@ -710,7 +731,7 @@
                 "source_label": "Source",
                 "source_purchase": "Achat officiel",
                 "source_promo": "Offre spéciale",
-                "source_admin": "Offert VIP",
+                "source_admin": "Généré par l'admin",
                 "source_test": "Test",
                 "entitlement_lifetime": "Licence à vie",
                 "entitlement_term": "Abonnement annuel",
@@ -832,6 +853,21 @@
             const currentLangTxt = document.getElementById('current-lang-txt');
             if (currentLangTxt) {
                 currentLangTxt.textContent = langNames[lang] || 'English';
+            }
+
+            // Update test environment badge and banner if in test mode
+            if (window.EQT_IS_TEST) {
+                const testBadge = document.getElementById('test-env-badge');
+                if (testBadge) {
+                    testBadge.textContent = dict.test_env_badge || 'TEST';
+                    testBadge.classList.remove('hidden');
+                }
+                const testBanner = document.getElementById('test-env-banner');
+                const testBannerText = document.getElementById('test-env-banner-text');
+                if (testBanner && testBannerText) {
+                    testBannerText.textContent = dict.test_env_banner || 'You are currently in the Test Environment (Sandbox).';
+                    testBanner.classList.remove('hidden');
+                }
             }
             
             // Re-render licences list to update labels dynamically

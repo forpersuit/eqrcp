@@ -328,7 +328,7 @@
               </td>
               <td><span class="badge badge-active">{lic.tier}</span></td>
               <td>
-                <span class="badge badge-active" title="purchase=付费 promo=活动 admin=人工 test=夹具">
+                <span class={`badge badge-${lic.source || 'admin'}`} title="purchase=官网购买 promo=活动兑换 admin=官方生成 test=测试夹具">
                   {lic.source || '—'}
                 </span>
               </td>

@@ -11,6 +11,7 @@ import {
   type ManualBlacklistKind
 } from '../utils/blacklist';
 import { rateLimitStatus } from '../utils/rate-limit';
+import { normalizeLicenseSource } from '../utils/license-source';
 
 export async function handleAdminRoutes(
   request: Request,
@@ -628,8 +629,10 @@ export async function handleAdminRoutes(
 
       licensesWithDevices = rawLicenses.map((lic) => {
         const acts = activationsMap.get(lic.license_code) || [];
+        const source = normalizeLicenseSource(lic.source, lic.paddle_transaction_id);
         return {
           ...lic,
+          source,
           active_devices_count: acts.length,
           activations: acts
         };

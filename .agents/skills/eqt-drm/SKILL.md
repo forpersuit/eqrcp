@@ -189,3 +189,18 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **365 天滚轮解绑额度 (Rolling Unbind Limit)**：每张授权码过去 365 天内最多允许解绑设备 4 次 (`MAX_YEARLY_UNBINDS = 4`)。解绑记录持久化在 D1 `unbind_records` 表，满 365 天后额度自动恢复。
 - **设备恢复机制**：解绑仅释放 1 台设备名额，重新在目标设备上输入授权码激活即可恢复。
 - **7 语言邮件国际化**：所有系统邮件（验证码、结账、设备通知）支持 7 种语言 (`zh`, `en`, `ja`, `ko`, `es`, `de`, `fr`)，并自动对齐 Portal 界面语种。
+
+---
+
+## 9. 授权来源渠道 (Source) 与运行环境 (Environment) 解耦规范
+
+- **环境与渠道正交分离 (Orthogonal Separation)**：
+  - **`source`（来源渠道）**：表达激活码获取的商业途径，取值包括：
+    - `purchase`（官网购买）：由 Paddle Webhook 履约创建或包含真实 Paddle 交易号（`txn_01...`，包含 Sandbox 沙箱测试购买与 Live 生产购买）。
+    - `admin`（官方生成 / VIP 赠予）：由管理后台手动或客服接口生成。
+    - `promo`（活动兑换）：带兑换窗口与天数的限时活动码。
+    - `test`（测试夹具）：仅用于自动化测试夹具/合成测试单据（`txn_test_*`、`sub_test_*`）。
+  - **`normalizeLicenseSource` 归一化**：服务端与 Portal 遇到 `txn_01...` 格式交易单号时，即使历史数据被写入过 `test`，也自动规整为 `purchase`，保证测试沙箱购买的激活码在用户中心与管理后台均正确显示为购买途径。
+- **Portal 测试环境自适应标识**：
+  - 页面通过 `window.EQT_IS_TEST`（`js/api-base.js` 解析）判断测试环境。
+  - 当为测试环境时，Header Logo 旁动态渲染高亮 `TEST` 徽章，页面主区域顶部展示测试环境提示横幅，支持 7 种语言实时国际化切换。
