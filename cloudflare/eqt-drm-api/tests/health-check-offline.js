@@ -235,6 +235,34 @@ console.log('\n=== GET /api/v1/admin/health ===');
     }
   }
 
+  // Test 5: Quick health check (probe=0) skips live network probes
+  {
+    const db = new MockD1([
+      { sqlMatch: 'SELECT count(*) as count FROM licenses', first: { count: 12 } },
+      { sqlMatch: "WHERE status = 'active'", first: { count: 10 } },
+      { sqlMatch: 'FROM activations WHERE activated_at', first: { count: 2 } },
+      { sqlMatch: 'SELECT count(*) as count FROM system_error_logs', first: { count: 3 } },
+      { sqlMatch: 'WHERE created_at >=', first: { count: 1 } },
+    ]);
+    const env = makeEnv(db);
+    const request = new Request('https://lic.eqt.net.im/api/v1/admin/health?probe=0', {
+      method: 'GET',
+      headers: { ...AUTH_HEADERS },
+    });
+    const url = new URL(request.url);
+    const response = await handleAdminRoutes(request, env, mockCtx(), url, {});
+    assert(!!response, 'Response is not null on probe=0');
+    if (response) {
+      const data = JSON.parse(await response.text());
+      assert(data.success, 'success is true on probe=0');
+      assertEqual(data.status, 'healthy', 'status is healthy on probe=0');
+      assertEqual(data.metrics.total_licenses, 12, 'total_licenses = 12');
+      assert(data.probes.smtp.skipped, 'smtp probe is skipped on probe=0');
+      assert(data.probes.paddle.skipped, 'paddle probe is skipped on probe=0');
+      assertEqual(data.probes.db.mode, 'quick', 'db probe mode is quick on probe=0');
+    }
+  }
+
   // ============================================================
   // Summary
   // ============================================================

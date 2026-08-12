@@ -343,8 +343,14 @@ Content-Type: application/json
 ### 2.7 系统健康
 
 ```
-GET /api/v1/admin/health
+GET /api/v1/admin/health?probe=1&fresh=0
 ```
+
+| Query | 说明 |
+| :--- | :--- |
+| `probe` | 可选。`0` 或 `false`：快速指标模式（跳过外部 SMTP/Paddle 阻塞探测，毫秒级返回）；默认 `1` 执行全量探针 |
+| `quick` | 可选。`1` 等价于 `probe=0` |
+| `fresh` | 可选。`1` 强行穿透 Worker 内存探针缓存执行最新探测 |
 
 ```json
 {

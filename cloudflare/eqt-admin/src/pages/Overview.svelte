@@ -30,7 +30,7 @@
 
   async function loadStats() {
     try {
-      const data = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
+      const data = await adminFetch<AdminHealthResponse>('/api/v1/admin/health?probe=0');
       stats = {
         total_licenses: data.metrics?.total_licenses || 0,
         active_licenses: data.metrics?.active_licenses || 0,

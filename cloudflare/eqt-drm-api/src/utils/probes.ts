@@ -83,7 +83,10 @@ export async function probePaddle(env: Env, timeoutMs = 3500): Promise<ProbeResu
   }
 }
 
-export async function runHealthProbes(env: Env): Promise<HealthProbes> {
+let cachedExtProbes: { smtp: SmtpProbeResult; paddle: ProbeResult; timestamp: number } | null = null;
+const PROBE_CACHE_TTL_MS = 15_000;
+
+export async function runHealthProbes(env: Env, forceFresh = false): Promise<HealthProbes> {
   const dbStarted = Date.now();
   let db: ProbeResult;
   try {
@@ -98,6 +101,16 @@ export async function runHealthProbes(env: Env): Promise<HealthProbes> {
     };
   }
 
-  const [smtp, paddle] = await Promise.all([probeSmtp(env), probePaddle(env)]);
+  let smtp: SmtpProbeResult;
+  let paddle: ProbeResult;
+
+  if (!forceFresh && cachedExtProbes && (Date.now() - cachedExtProbes.timestamp < PROBE_CACHE_TTL_MS)) {
+    smtp = cachedExtProbes.smtp;
+    paddle = cachedExtProbes.paddle;
+  } else {
+    [smtp, paddle] = await Promise.all([probeSmtp(env), probePaddle(env)]);
+    cachedExtProbes = { smtp, paddle, timestamp: Date.now() };
+  }
+
   return { smtp, paddle, db };
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
   import { t } from './lib/i18n';
-  import { getAdminEnvironment, setAdminEnvironment, subscribeAdminEnvironment, type AdminEnvironment } from './lib/env';
+  import { adminEnv, setAdminEnvironment, type AdminEnvironment } from './lib/env.svelte';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
@@ -14,15 +14,6 @@
 
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
-  let env = $state<AdminEnvironment>(getAdminEnvironment());
-  let renderKey = $state(0);
-
-  $effect(() => {
-    return subscribeAdminEnvironment((newEnv) => {
-      env = newEnv;
-      renderKey++;
-    });
-  });
 
   function handleLogout() {
     clearAccessSession();
@@ -46,7 +37,7 @@
 {#if !authed}
   <Login />
 {:else}
-  <div class="admin-layout" class:sandbox-mode={env === 'test'}>
+  <div class="admin-layout" class:sandbox-mode={adminEnv.current === 'test'}>
     <aside class="sidebar card">
       <div class="brand">
         <span class="brand-logo">EQT</span> {$t('nav.title')}
@@ -57,7 +48,7 @@
           <button
             type="button"
             class="env-pill-btn"
-            class:selected={env === 'production'}
+            class:selected={adminEnv.current === 'production'}
             onclick={() => switchEnv('production')}
           >
             <span class="env-indicator prod-indicator"></span>
@@ -66,7 +57,7 @@
           <button
             type="button"
             class="env-pill-btn"
-            class:selected={env === 'test'}
+            class:selected={adminEnv.current === 'test'}
             onclick={() => switchEnv('test')}
           >
             <span class="env-indicator test-indicator"></span>
@@ -141,14 +132,14 @@
     </aside>
 
     <main class="main-content">
-      {#if env === 'test'}
+      {#if adminEnv.current === 'test'}
         <div class="sandbox-banner">
           <span class="sandbox-badge">TEST SANDBOX</span>
           <span>{$t('nav.envBanner')}</span>
         </div>
       {/if}
 
-      {#key renderKey}
+      {#key `${adminEnv.current}-${currentTab}`}
         {#if currentTab === 'overview'}
           <Overview onNavigate={navigateTo} />
         {:else if currentTab === 'audit'}

@@ -99,10 +99,12 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 提供 `GET /api/v1/admin/audit-logs` 供检索，支持按 `action` 过滤及关键词模糊检索与分页。
 - **Health 探针与 Overview 实时 KPI 架构**：
   - 在 `GET /api/v1/admin/health` 中提供运营指标：`total_licenses`, `active_licenses`, `today_activations`, `total_error_logs`, `errors_24h`。
+  - **快速指标查询 (`?probe=0` / `?quick=1`)**：Overview 概览页默认带 `?probe=0`，直接返回 D1 统计指标并跳过阻塞式外部 SMTP/Paddle 网络探测，使仪表盘在毫秒级秒开；Worker 内部对全量探针实施 15s 内存缓存，防止连续刷新压垮外部 SMTP/API。
   - 在 `schema.sql` 中为 `buyer_email_hash`, `created_at`, `admin_audit_logs(created_at)` 显式创建 B-Tree 索引。
 
 ### 3.7 Admin 后台与 Cloudflare Access SPA 同源反代坑点
 - **生产 API Base 配置规则**：`cloudflare/eqt-admin/.env` 中的 `VITE_API_BASE` 在生产部署时**必须留空** (`VITE_API_BASE=`)。生产环境中 SPA 必须发起同源 `/api/v1/admin/*` 请求，由 Pages 同源 Function (`functions/api/[[path]].ts`) 代理并注入 `Cf-Access-Jwt-Assertion` 标头到后端 `lic.eqt.net.im` Worker。
+- **Svelte 5 全局环境响应式状态 (`env.svelte.ts`)**：Admin 环境切换（生产/沙箱）使用 Svelte 5 `$state` 模块（`adminEnv.current`）驱动，主视口通过 `{#key \`${adminEnv.current}-\${currentTab}\`}` 驱动子组件重新挂载与拉取，禁止在 `$effect` 内部同步修改普通 `$state` 导致响应式追踪断裂。
 - **禁止硬编码后端跨域域名**：若误设为 `VITE_API_BASE=https://lic.eqt.net.im`，打包出的静态 JavaScript 会跨域绕过 Pages 反代，导致无法携带 `admin.eqt.net.im` 的 Access Cookie 或 Header，触发 401 `ACCESS_JWT_REQUIRED` 甚至陷入前端刷新死循环。
 - **401 防刷新死循环**：`adminFetch` 捕获 401 严禁强行 `window.location.reload()` 或变更 `location.href`；必须在 UI 暴露出具体 error payload 便于定位诊断。
 

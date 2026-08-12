@@ -852,7 +852,20 @@ export async function handleAdminRoutes(
     const r2Configured = Boolean(env.R2_PUBLIC_URL);
 
     // Live probes (bounded timeouts) + recent Paddle/SMTP related error rows as webhook timeline proxy
-    const probes = await runHealthProbes(env);
+    const probeQuery = url.searchParams.get("probe");
+    const skipProbes = probeQuery === "0" || probeQuery === "false" || url.searchParams.get("quick") === "1";
+    const forceFresh = url.searchParams.get("fresh") === "1" || url.searchParams.get("fresh") === "true";
+
+    let probes;
+    if (skipProbes) {
+      probes = {
+        db: { ok: dbStatus === "ok", latency_ms: 0, error: dbStatus === "ok" ? null : "D1 query error", mode: "quick" },
+        smtp: { ok: smtpConfigured, latency_ms: 0, error: null, skipped: true },
+        paddle: { ok: paddleConfigured, latency_ms: 0, error: null, skipped: true }
+      };
+    } else {
+      probes = await runHealthProbes(env, forceFresh);
+    }
 
     let recentEvents: any[] = [];
     try {
