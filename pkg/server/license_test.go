@@ -912,8 +912,20 @@ func TestIsTestBuildProductionDefault(t *testing.T) {
 	}
 }
 
+func resetPaidStatusCallbacksForTest() {
+	paidStatusCallbackMu.Lock()
+	paidStatusCallbacks = nil
+	paidStatusCallbackMu.Unlock()
+	paidStateMu.Lock()
+	cachedIsPaid = false
+	cachedIsTampered = false
+	cachedTier = ""
+	cachedCodeDate = ""
+	paidStateMu.Unlock()
+}
+
 func TestRegisterPaidStatusCallback(t *testing.T) {
-	t.Cleanup(ResetPaidStatusCallbacksForTest)
+	t.Cleanup(resetPaidStatusCallbacksForTest)
 	ch := make(chan struct {
 		paid bool
 		tier string
@@ -939,7 +951,7 @@ func TestRegisterPaidStatusCallback(t *testing.T) {
 }
 
 func TestSetClockTamperedTriggersCallback(t *testing.T) {
-	t.Cleanup(ResetPaidStatusCallbacksForTest)
+	t.Cleanup(resetPaidStatusCallbacksForTest)
 	SetClockTampered(false)
 	ch := make(chan struct {
 		paid bool
@@ -962,6 +974,25 @@ func TestSetClockTamperedTriggersCallback(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("expected registered callback to be called on SetClockTampered within timeout")
+	}
+}
+
+func TestSetClockTamperedDiskPersistence(t *testing.T) {
+	t.Cleanup(resetPaidStatusCallbacksForTest)
+	SetClockTampered(true)
+
+	// Verify disk file chat_usage.json contains clockTampered: true
+	path := getChatUsageFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read chat usage file: %v", err)
+	}
+	var usage ChatUsage
+	if err := json.Unmarshal(data, &usage); err != nil {
+		t.Fatalf("failed to unmarshal chat usage file: %v", err)
+	}
+	if !usage.ClockTampered {
+		t.Errorf("expected disk chat_usage.json to have ClockTampered=true, got false")
 	}
 
 	SetClockTampered(false)

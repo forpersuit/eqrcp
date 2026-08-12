@@ -572,13 +572,6 @@ func RegisterPaidStatusCallback(cb func(paid bool, tier string)) {
 	paidStatusCallbackMu.Unlock()
 }
 
-// ResetPaidStatusCallbacksForTest clears registered callbacks for test isolation.
-func ResetPaidStatusCallbacksForTest() {
-	paidStatusCallbackMu.Lock()
-	paidStatusCallbacks = nil
-	paidStatusCallbackMu.Unlock()
-}
-
 // SetPaidStatus updates the payment status globally.
 func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 	paidStateMu.Lock()
@@ -618,7 +611,7 @@ func SetClockTampered(tampered bool) {
 		limiterInstance.SetClockTampered(tampered)
 	}
 
-	if oldTampered != tampered || tampered {
+	if oldTampered != tampered {
 		notifyPaidStatusCallbacks(paid, tier)
 	}
 }
