@@ -569,6 +569,9 @@ function render() {
                         </button>
                     ` : ''}
                     ${isOnline() ? (() => {
+                        if (!state.statusLoaded && !state.license && !state.status) {
+                            return `<span class="topbar-tier-badge tier-loading" aria-label="Loading tier status"></span>`;
+                        }
                         const isPaid = hasPaidLicense();
                         const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
                         const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
@@ -5243,6 +5246,7 @@ function applyStatusData(nextStatus) {
     const prevClockTampered = state.status?.clockTampered;
 
     state.status = nextStatus;
+    state.statusLoaded = true;
     syncLicenseFromStatus(nextStatus);
 
     if (!nextStatus?.current && !nextStatus?.chat) {

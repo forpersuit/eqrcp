@@ -6,67 +6,76 @@
 
 ## 一、 EQT 启动 Tier 识别应用机制分析
 
-EQT 的授权与 Tier 识别采用了**“硬件防篡改 + 零信任 Ed25519 密码学验签 + 渐进式离线/在线双重对账”**的高性能架构，保证启动时在微秒级完成本地识别，同时兼顾安全性与无网可用的离线体验。
+EQT 的授权与 Tier 识别采用了**“硬件防篡改 + 零信任 Ed25519 密码学验签 + 在线 SSOT 权威对账 / 离线 7 天租约兜底”**的高性能架构，保证启动时在微秒级完成本地识别，同时兼顾安全性与无网可用的离线体验。
 
 ```mermaid
 flowchart TD
-    A["1. EQT 桌面端启动"] --> B["2. 异步预计算硬件指纹 (UUID/CPU/Disk)\n(hardware.go)"]
-    B --> C["3. 离线硬校验 VerifyLocalLicense()\n(license.go)"]
+    A["1. EQT 桌面端启动 (app.go)"] --> B["2. 离线同步微秒级预校验 VerifyLocalLicense()\n(license.go)"]
+    B --> C["3. 异步预计算硬件指纹 (UUID/CPU/Disk)\n(hardware.go)"]
     
-    C -- "无 .lic / 验签失败 / 7天到期 / 时钟回拨" --> D["SetPaidStatus(false)\n内存设为 Free 免费版"]
+    C -- "无 .lic / 验签失败 / 到期 / 租约过期 / 时钟回拨" --> D["SetPaidStatus(false)\n内存设为 Free 免费版"]
     C -- "验签成功 & 7天租约合法" --> E["SetPaidStatus(true, cert.Tier)\n内存设为 PLUS / PRO"]
     
-    E --> F["4. 异步发起云端对账 ForceOnlineLicenseSync()\n(GET/POST /api/v1/verify)"]
-    F -- "HTTP 403 (退款/撤销/到期)" --> G["ResetLicense()\n抹除本地证书，降级为 Free"]
+    E --> F["4. 异步在线 SSOT 权威对账 ForceOnlineLicenseSync()\n(GET/POST /api/v1/verify)"]
+    F -- "HTTP 403 (退款/解绑/撤销/到期)" --> G["ResetLicense()\n抹除本地证书，降级为 Free"]
     F -- "HTTP 200 OK" --> H["刷盘最新证书，维持/更新内存 Tier"]
     
     E --> I["5. 全局应用层生效\n(突破传输限速 / GUI 顶栏响应)"]
     H --> I
 ```
 
-### 1. 渐进式 4 阶段识别流程
+### 1. 核心方法与代码符号对齐
 
-#### 阶段 1：硬件指纹异步预计算（`hardware.go`）
-在后台协程中拉取主板 UUID、CPU 序列号、磁盘 Serial 并建立内存缓存。此过程完全隔离磁盘与系统原生查询的高时延 I/O，确保 GUI 秒开不卡顿。
+| 逻辑模块 | 实际代码符号名 | 代码位置 | 职责说明 |
+| :--- | :--- | :--- | :--- |
+| **离线校验** | `server.VerifyLocalLicense()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L170) | 读取本地 `.lic` 证书，进行 Ed25519 验签、指纹匹配、到期/租约/时钟回拨检测 |
+| **查询 Tier** | `server.GetLicenseTier()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L588) | 读取内存锁保护的当前授权等级（`"PLUS"`, `"PRO"`, `""`） |
+| **状态变更监听**| `server.RegisterPaidStatusCallback()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L605) | 注册授权状态改变时的回调函数（供 GUI 触发桌面事件推送） |
+| **快照查询** | `App.AgentStatus()` | [`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L316) | Wails 暴露给 GUI 前端的代理状态快照 API，底层调用 `snapshotLocked()` |
+| **在线 SSOT 对账**| `server.ForceOnlineLicenseSync()` | [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go#L358) | 连网时向 Cloudflare `/api/v1/verify` 发起对账，在线结果为绝对权威真相 |
 
-#### 阶段 2：零信任数字证书离线验签（`VerifyLocalLicense()`）
-读取本地数字证书（`~/.config/eqt/license.lic` 或 `%APPDATA%\eqt\license.lic`），顺次执行：
-1. **文件与反序列化检查**：不存在或损坏时直接调用 `SetPaidStatus(false)`。
-2. **Ed25519 密码学公钥验签 (`VerifyLicenseSignature`)**：使用内置的 Cloudflare Worker 对应公钥进行签名验证，杜绝篡改 `Tier` 或到期时间。
-3. **硬件指纹二合一匹配 (`VerifyFingerprint`)**：比对本机指纹与证书记载的指纹。
-4. **在线同步 7 天租约校验 (`VerifySyncSignature`)**：断网 7 天内允许离线继续使用；超期自动降级。
-5. **防时钟回拨检查 (`LastSeenLocalTime`)**：防止倒改系统时间防过期。
-6. **刷新内存付费态**：通过后调用 `SetPaidStatus(true, ..., cert.Tier)`，写锁赋值全局内存变量。
+### 2. 精确 7 步校验顺序（与 `license.go:170-267` 严格一致）
 
-#### 阶段 3：权威在线对账与反哺（`ForceOnlineLicenseSync()`）
-若处于连网状态，后台并发请求云端 Worker `/api/v1/verify`：
-* **HTTP 403 (撤销/退款/解绑)**：调用 `ResetLicense()` 抹除本地 `.lic` 文件并重置内存 Tier 为 Free。
-* **HTTP 200 OK**：刷盘最新证书并维持 Tier。
-* **无网/超时**：静默维持第二阶段通过的离线 Tier 授权。
+`VerifyLocalLicense()` 在解构本地 `.lic` 文件时，严格执行以下 7 步链条：
 
-#### 阶段 4：全局功能与配额应用（Tier Application）
-* **传输与配额控制**：`chat_limiter.go` 调用 `GetPaidTier()`，为 PLUS/PRO 突破限制，Free 则应用每日配额。
-* **GUI 顶栏与面板响应**：GUI 收到 `OnPaidStatusChanged` 回调，刷新顶栏 Badge 与面板权限。
+1. **文件读取与 JSON 反序列化** (`os.ReadFile` & `json.Unmarshal`)：
+   若 `.lic` 不存在或损坏，立即调用 `SetPaidStatus(false, "", "", "")` 并返回 `false`。
+2. **密码学 Ed25519 签名验证** (`VerifyLicenseSignature`)：
+   使用内置的 Cloudflare Worker 对应公钥，对证书明文串进行验签，防止修改 `Tier` 或 `ExpiresAt`。
+3. **证书到期时间检查** (`ExpiresAt`)：
+   非 `LIFETIME` 证书解析 `ExpiresAt` RFC3339 时间；若当前时间晚于到期时间，调用 `SetPaidStatus(false)`。
+4. **硬件指纹二合一匹配** (`VerifyFingerprint`)：
+   校验 UUID、CPU 序列号、Disk 序列号，必须满足至少 2 项非空匹配。
+5. **在线同步签名与 7 天租约校验** (`VerifySyncSignature` & `LastOnlineSyncTime`)：
+   （非测试环境下）校验 sync 签名；断网 7 天内允许离线继续使用；若断网超 7 天（168 小时），租约过期降级为 Free。
+6. **防系统时钟回拨校验** (`LastSeenLocalTime`)：
+   校验当前系统时间是否早于历史记录 `LastSeenLocalTime` 超过 10 分钟；若回拨，触发 `SetClockTampered(true)` 并降级。
+7. **刷新全局内存状态** (`SetPaidStatus`)：
+   若前 6 步全部通过，更新本地 `.lic` 的 `LastSeenLocalTime` 刷盘（1分钟防抖），并调用 `SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)`。
+
+### 3. 在线 SSOT 权威真相机制
+* **在线绝对权威（Single Source of Truth）**：
+  只要设备处于连网状态，启动时及定时器均会触发 `ForceOnlineLicenseSync()`。如果用户在 Customer Portal 上执行了**解绑设备**、**申请退款**、**后台撤销**或**订阅逾期**，云端 Worker 会返回 `HTTP 403`。客户端接收后会**立即强制执行 `ResetLicense()` 删除本地磁盘 `.lic` 并降级为 Free**。
+* **离线租约仅兜底**：
+  只有在网络请求超时或无网时，系统才降级允许离线 7 天租约放行。
 
 ---
 
-## 二、 启动跳变体验（Free 闪烁为 PLUS）根因分析与优化方案
+## 二、 启动跳变体验（Free 闪烁为 PLUS）根因分析与完整解决方案
 
-### 1. 现象与根因
-* **视觉现象**：启动 EQT 后，顶栏省略号旁的 Tier Badge 一开始显示为 `FREE`（或灰块），约 0.5 ~ 2 秒后才切为 `PLUS` 或 `PLUS Lifetime`。
-* **技术根因**：
-  GUI 前端启动时，JavaScript `state.status` 初始默认值为未激活的空数据（`paidStatus: false`）。GUI 渲染首帧时直接拉取默认状态，呈现为 `FREE`。直到 Go 后端在协程里跑完 `VerifyLocalLicense()` / `GetAppStatus()` 并推送 `OnPaidStatusChanged` 事件后，前端重新 render 界面才切为 `PLUS`。
+### 1. 现象与残余跳变窗口分析
+* **后端同步优化**：`App.startup()` ([`app.go:193`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L193)) 已加入同步 `server.VerifyLocalLicense()`，使得后端在 WebView2 载入前即可准备好正确的 snapshot 快照。
+* **残余跳变窗口（已修补）**：
+  前端 JavaScript 在首帧调用 `render()` 时（`main.js`），由于 `loadStatusData()` 异步 Promise 尚未完成，`state.status` 处于 `null` 状态。此时 `hasPaidLicense()` 回退去读 `localStorage`。对于**首次安装或刚刚清理过缓存**的用户，`localStorage` 为空，首帧仍可能短暂显示 `FREE` 硬字，直到几毫秒后 Promise `then` 回调解决才切为 `PLUS`。
 
-### 2. 优化方案设计
+### 2. 方案一 + 方案二联合落地
 
-#### 方案一：启动首屏“同步微秒级离线状态加载”（推荐）
-在 Wails 启动创建 `App` 结构体及响应前端初始 `GetAppStatus()` 请求时，**无需等待异步网络对账**，直接同步调用一次微秒级的 `VerifyLocalLicense()`（直接读本地磁盘 `.lic` 缓存验签）。
-* **效果**：前端从拿到首帧 `GetAppStatus()` 的第一毫秒起，就已经包含真实的 `licenseTier`（如 `PLUS`），首屏直接一次性渲染正确的 Badge，彻底消除“免费 -> 付费”的跳变。
-
-#### 方案二：状态确认前的占位与 CSS 平滑淡入
-在前端 `state.status` 未完成首次初始化验证时（添加 `state.isStatusLoaded = false` 状态标志）：
-* **初始渲染**：不显示文字（或以骨架占位 / 离线暗淡展示），等待首个 `status` 事件完成。
-* **过渡动画**：当后台状态变更时，通过 CSS `transition: background-color 0.3s ease, opacity 0.2s ease` 进行平滑渐变过度，避免硬切割跳变。
+1. **后端首屏同步加载 (后端方案一落地)**：
+   GUI `startup()` 主线程同步执行 `server.VerifyLocalLicense()`，确保首帧 `AgentStatus()` 快照直接包含真实 Tier。
+2. **前端状态标志与骨架占位 (前端方案二落地)**：
+   * 在 [`state.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/state.js#L7) 中新增 `statusLoaded: false` 标志。
+   * 在 [`main.js:5246`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js#L5246) 的 `applyStatusData()` 中将 `state.statusLoaded` 置为 `true`，并自动通过 `syncLicenseFromStatus()` 回写 `localStorage`。
+   * 在首帧渲染顶栏 Badge 时，若 `!state.statusLoaded && !state.license && !state.status`（未完成加载且无缓存），渲染带有微光呼吸动画的占位骨架屏 `<span class="topbar-tier-badge tier-loading"></span>`；加载完成后平滑淡入呈现对应的 Tier Badge，**彻底消除跳变硬切换**。
 
 ---
 
@@ -74,12 +83,13 @@ flowchart TD
 
 为提高产品辨识度与尊贵感，针对不同授权等级建立清晰、优雅且互相隔离的视觉色彩规范：
 
-| 授权等级 (Tier) | Badge 文字标识 | 视觉风格描述 | CSS 颜色值设计方案 |
-| :--- | :--- | :--- | :--- |
-| **FREE** (免费版) | `FREE` / `Free 体验版` | **低调哑灰 / 柔和微暖灰**<br>不抢眼，提示体验状态 | `background: var(--bg2, #e5e7eb);`<br>`color: var(--ink-light, #6b7280);`<br>`border: 1px solid var(--border);` |
-| **PLUS** (标准订阅版) | `PLUS` | **主题原色 / 翡翠青绿 (Theme Accent)**<br>经典标准色，融入默认 UI 品牌色 | `background: var(--accent, #156f5a);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(255,255,255,0.2);` |
-| **PLUS Lifetime** (终身版) | `PLUS Lifetime` | **星空尊贵紫 / 皇家紫罗兰 (Royal Purple)**<br>体现终身无忧、尊贵感与高价值区别 | `background: linear-gradient(135deg, #6b21a8, #4c1d95);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(216, 180, 254, 0.35);`<br>`box-shadow: 0 1px 4px rgba(107, 33, 168, 0.25);` |
-| **PRO** (专业旗舰版) | `PRO` | **璀璨黑金 / 曜石金色 (Obsidian Gold)**<br>顶级旗舰性能、无限算力象征 | `background: linear-gradient(135deg, #b45309, #78350f);`<br>`color: #fffbeb;`<br>`border: 1px solid rgba(253, 230, 138, 0.4);`<br>`box-shadow: 0 1px 4px rgba(180, 83, 9, 0.3);` |
+| 授权等级 (Tier) | Badge 文字标识 | CSS 类名 | 视觉风格描述 | CSS 颜色值设计方案 |
+| :--- | :--- | :--- | :--- | :--- |
+| **FREE** (免费版) | `FREE` / `Free 体验版` | `.tier-free` | **低调哑灰 / 柔和微暖灰**<br>不抢眼，提示体验状态 | `background: var(--bg2, #f3f4f6);`<br>`color: var(--ink-light, #6b7280);`<br>`border: 1px solid var(--border);` |
+| **PLUS** (标准订阅版) | `PLUS` | `.tier-plus` | **主题原色 / 翡翠青绿 (Theme Accent)**<br>经典标准色，融入默认 UI 品牌色 | `background: var(--accent, #156f5a);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(255,255,255,0.2);` |
+| **PLUS Lifetime** (终身版) | `PLUS Lifetime` | `.tier-plus-lifetime` | **星空尊贵紫 / 皇家紫罗兰 (Royal Purple)**<br>体现终身无忧、尊贵感与高价值区别 | `background: linear-gradient(135deg, #6b21a8, #4c1d95);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(216, 180, 254, 0.35);`<br>`box-shadow: 0 1px 4px rgba(107, 33, 168, 0.3);` |
+| **PRO** (专业旗舰版) | `PRO` | `.tier-pro` | **璀璨黑金 / 曜石金色 (Obsidian Gold)**<br>顶级旗舰性能、无限算力象征 | `background: linear-gradient(135deg, #b45309, #78350f);`<br>`color: #fffbeb;`<br>`border: 1px solid rgba(253, 230, 138, 0.4);`<br>`box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35);` |
+| **Loading** (初始化中) | (无文字，骨架呼吸) | `.tier-loading` | **淡灰闪烁 / 呼吸微光**<br>消除无缓存首次启动时的视觉硬跳变 | `background: var(--bg2);`<br>`animation: tierBadgePulse 1.2s infinite;` |
 
 ---
 *版本说明：本机制与规范适用于 EQT v1.8.5+ 架构体系。*

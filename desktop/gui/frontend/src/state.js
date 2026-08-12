@@ -5,6 +5,7 @@ export const state = {
     receiveDir: '',
     chatSaveDir: '',
     status: null,
+    statusLoaded: false,
     settings: null,
     rightClickIntegration: null,
     startupIntegration: null,
