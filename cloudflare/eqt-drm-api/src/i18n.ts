@@ -415,6 +415,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Automatische Verlängerung aktiviert. Ihr Abonnement wird am Ablaufdatum automatisch verlängert.",
     fr: "Renouvellement automatique activé. Votre abonnement se renouveltera automatiquement à la date d'expiration."
   },
+  auto_renew_not_allowed: {
+    zh: "非付费购买的授权码不支持设置或切换自动续费。",
+    en: "Auto-renew management is only available for paid purchase licenses.",
+    ja: "購入によるライセンスのみ自動更新の切り替えが可能です。",
+    ko: "유료 구매 라이선스만 자동 갱신을 설정할 수 있습니다.",
+    es: "La gestión de renovación automática solo está disponible para licencias de compra de pago.",
+    de: "Die Verwaltung der automatischen Verlängerung ist nur für kostenpflichtige Kauf-Lizenzen verfügbar.",
+    fr: "La gestion du renouvellement automatique n'est disponible que pour les licences d'achat payantes."
+  },
   toast_code_sent: {
     zh: "验证码已发送至您的邮箱，请注意查收。",
     en: "Verification code sent to your email.",

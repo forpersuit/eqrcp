@@ -131,7 +131,16 @@ async function main() {
   }
   assert(!!testRow, 'found testRow in licenses list');
   assert(testRow.refundable === false, 'test code refundable=false in list');
+  assert(testRow.auto_renew === 0, 'test code auto_renew normalized to 0 for non-purchase in list');
+  assert(testRow.auto_renew_toggleable === false, 'test code auto_renew_toggleable=false in list');
   assert(testRow.source === 'test', 'test code source=test in list');
+
+  // 3b) toggle-auto-renew endpoint enforces 403 guard for non-purchase
+  const rToggle = await request('POST', '/api/v1/user/toggle-auto-renew', {
+    license_code: testCode,
+    auto_renew: false
+  }, { Authorization: `Bearer ${token}` });
+  assert(rToggle.status === 403, 'toggle-auto-renew endpoint rejects test code with 403');
 
   // 4) cancel-subscription local path for synthetic sub id
   wranglerSql(
