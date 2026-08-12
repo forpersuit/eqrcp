@@ -221,4 +221,5 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
     - **瞬态可重试**：`exceeded timeout`, `object to be reset`, `storage reset`, `D1_RESET`, `database is locked`, `sqlite_busy`, `network connection lost`, `connection reset`, `fetch failed`。
     - **立即终止 (Fail-Fast)**：`UNIQUE constraint failed`, `FOREIGN KEY constraint failed`, `NOT NULL constraint failed`, `CHECK constraint failed`, `syntax error`。
   - **单例与无状态缓存**：使用 `WeakMap` 缓存包装后的 proxy 实例，确保同请求同实例内幂等无开销。
+  - **写操作幂等性约束 (Write Idempotency Constraint)**：重试机制对写操作 (`run`, `exec`, `batch`) 生效时，要求底层 SQL 语句必须具备幂等性（如使用 `INSERT OR REPLACE` / `UPSERT` / 条件 `UPDATE`），避免在网络超时抖动重试时发生重复插入或非预期的写污染。
 

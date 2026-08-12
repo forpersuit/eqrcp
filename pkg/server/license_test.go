@@ -913,6 +913,7 @@ func TestIsTestBuildProductionDefault(t *testing.T) {
 }
 
 func TestRegisterPaidStatusCallback(t *testing.T) {
+	t.Cleanup(ResetPaidStatusCallbacksForTest)
 	ch := make(chan struct {
 		paid bool
 		tier string
@@ -938,6 +939,7 @@ func TestRegisterPaidStatusCallback(t *testing.T) {
 }
 
 func TestSetClockTamperedTriggersCallback(t *testing.T) {
+	t.Cleanup(ResetPaidStatusCallbacksForTest)
 	SetClockTampered(false)
 	ch := make(chan struct {
 		paid bool

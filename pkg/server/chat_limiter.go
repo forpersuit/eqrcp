@@ -285,7 +285,12 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		diff := time.Since(netTime)
 		if diff < -10*time.Minute || diff > 10*time.Minute {
 			usage.ClockTampered = true
-			SetClockTampered(true)
+			usage.IsPaid = false
+			paidStateMu.Lock()
+			cachedIsTampered = true
+			cachedIsPaid = false
+			paidStateMu.Unlock()
+			defer notifyPaidStatusCallbacks(false, "")
 		}
 	}
 
@@ -340,6 +345,22 @@ func (l *ChatLimiter) GetStatus() ChatUsage {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.loadUsageLocked()
+}
+
+// SetClockTampered updates clock tampered status and persists it to disk.
+func (l *ChatLimiter) SetClockTampered(tampered bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	usage := l.loadUsageLocked()
+	if usage.ClockTampered == tampered && (!tampered || !usage.IsPaid) {
+		return
+	}
+	usage.ClockTampered = tampered
+	if tampered {
+		usage.IsPaid = false
+	}
+	l.saveUsageLocked(usage)
 }
 
 // SetPaidDetails updates the payment status and license metadata.

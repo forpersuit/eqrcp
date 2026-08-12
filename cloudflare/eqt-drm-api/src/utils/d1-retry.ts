@@ -98,6 +98,9 @@ function wrapPreparedStatement(stmt: any, options?: D1RetryOptions): any {
 /**
  * Transparently wraps a D1Database instance with automatic exponential backoff retry.
  * Returns the identical proxy instance on repeated calls (WeakMap cached).
+ * 
+ * Note: Retry on write operations (run/exec/batch) requires queries to be idempotent
+ * (e.g. UPSERT, INSERT OR IGNORE, or conditional UPDATE) to prevent duplicate execution on transient timeouts.
  */
 export function wrapD1WithRetry(db: any, options?: D1RetryOptions): any {
   if (!db || typeof db !== 'object') return db;

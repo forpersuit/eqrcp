@@ -572,6 +572,13 @@ func RegisterPaidStatusCallback(cb func(paid bool, tier string)) {
 	paidStatusCallbackMu.Unlock()
 }
 
+// ResetPaidStatusCallbacksForTest clears registered callbacks for test isolation.
+func ResetPaidStatusCallbacksForTest() {
+	paidStatusCallbackMu.Lock()
+	paidStatusCallbacks = nil
+	paidStatusCallbackMu.Unlock()
+}
+
 // SetPaidStatus updates the payment status globally.
 func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 	paidStateMu.Lock()
@@ -590,21 +597,12 @@ func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 	}
 
 	// Notify registered desktop GUI listeners
-	paidStatusCallbackMu.RLock()
-	var cbs []func(paid bool, tier string)
-	if len(paidStatusCallbacks) > 0 {
-		cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
-		copy(cbs, paidStatusCallbacks)
-	}
-	paidStatusCallbackMu.RUnlock()
-	for _, cb := range cbs {
-		if cb != nil {
-			go cb(paid, tier)
-		}
-	}
+	notifyPaidStatusCallbacks(paid, tier)
 }
 
 // SetClockTampered sets the clock tampered status.
+// It updates memory paid state, persists updated usage to disk via limiterInstance,
+// and notifies registered callbacks without lock order reversal.
 func SetClockTampered(tampered bool) {
 	paidStateMu.Lock()
 	oldTampered := cachedIsTampered
@@ -617,28 +615,25 @@ func SetClockTampered(tampered bool) {
 	paidStateMu.Unlock()
 
 	if limiterInstance != nil {
-		limiterInstance.mu.Lock()
-		if limiterInstance.hasCached {
-			limiterInstance.cachedUsage.ClockTampered = tampered
-			if tampered {
-				limiterInstance.cachedUsage.IsPaid = false
-			}
-		}
-		limiterInstance.mu.Unlock()
+		limiterInstance.SetClockTampered(tampered)
 	}
 
 	if oldTampered != tampered || tampered {
-		paidStatusCallbackMu.RLock()
-		var cbs []func(paid bool, tier string)
-		if len(paidStatusCallbacks) > 0 {
-			cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
-			copy(cbs, paidStatusCallbacks)
-		}
-		paidStatusCallbackMu.RUnlock()
-		for _, cb := range cbs {
-			if cb != nil {
-				go cb(paid, tier)
-			}
+		notifyPaidStatusCallbacks(paid, tier)
+	}
+}
+
+func notifyPaidStatusCallbacks(paid bool, tier string) {
+	paidStatusCallbackMu.RLock()
+	var cbs []func(paid bool, tier string)
+	if len(paidStatusCallbacks) > 0 {
+		cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
+		copy(cbs, paidStatusCallbacks)
+	}
+	paidStatusCallbackMu.RUnlock()
+	for _, cb := range cbs {
+		if cb != nil {
+			go cb(paid, tier)
 		}
 	}
 }
