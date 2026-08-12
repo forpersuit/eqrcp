@@ -70,11 +70,14 @@ async function revokeLicenseAndNotify(
   }
 }
 
+let autoRenewColumnEnsured = false;
 async function ensureAutoRenewColumn(env: Env) {
+  if (autoRenewColumnEnsured) return;
   try {
     await env.DB.prepare("ALTER TABLE licenses ADD COLUMN auto_renew INTEGER DEFAULT 1").run();
+    autoRenewColumnEnsured = true;
   } catch (_) {
-    // Column already exists
+    autoRenewColumnEnsured = true;
   }
 }
 

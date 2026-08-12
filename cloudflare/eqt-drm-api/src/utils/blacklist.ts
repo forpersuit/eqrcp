@@ -53,7 +53,10 @@ export interface ManualBlacklistRow {
   active: number;
 }
 
+let manualBlacklistTableEnsured = false;
+
 export async function ensureManualBlacklistTable(env: Env): Promise<void> {
+  if (manualBlacklistTableEnsured) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS manual_blacklist (
@@ -80,6 +83,7 @@ export async function ensureManualBlacklistTable(env: Env): Promise<void> {
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_manual_bl_active ON manual_blacklist(active)`
     ).run();
+    manualBlacklistTableEnsured = true;
   } catch (err) {
     console.error('Failed to ensure manual_blacklist table:', err);
   }

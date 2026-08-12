@@ -1,7 +1,10 @@
 import { Env } from '../types';
 
+let auditLogTableEnsured = false;
+
 // System error audit log helper (Stores full technical stacktrace into D1)
 export async function ensureAuditLogTable(env: Env): Promise<void> {
+  if (auditLogTableEnsured) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS system_error_logs (
@@ -14,6 +17,7 @@ export async function ensureAuditLogTable(env: Env): Promise<void> {
         trace_id TEXT
       )
     `).run();
+    auditLogTableEnsured = true;
   } catch (err) {
     console.error("Failed to ensure audit log table:", err);
   }

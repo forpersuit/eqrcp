@@ -22,22 +22,34 @@ export function getCorsHeaders(request: Request): Record<string, string> {
   };
 }
 
+let deviceIdColumnEnsured = false;
+let activationNetworkColumnsEnsured = false;
+let verificationCodesCreatedAtEnsured = false;
+let deviceRegistryTableEnsured = false;
+let licenseUpgradesTableEnsured = false;
+let licensePaddleTxnIndexEnsured = false;
+let drmTablesEnsured = false;
+let licenseSourceColumnsEnsured = false;
+
 /**
  * Ensure the activations table has the device_id column.
  * Safe to call repeatedly (ignores "duplicate column" errors).
  */
 export async function ensureDeviceIdColumn(env: Env): Promise<void> {
+  if (deviceIdColumnEnsured) return;
   try {
     await env.DB.prepare(
       "ALTER TABLE activations ADD COLUMN device_id TEXT DEFAULT NULL"
     ).run();
+    deviceIdColumnEnsured = true;
   } catch (err) {
-    // Column already exists — ignore
+    deviceIdColumnEnsured = true;
   }
 }
 
 /** Ensure activations has network meta columns (ip / country / ua). Idempotent. */
 export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
+  if (activationNetworkColumnsEnsured) return;
   const alters = [
     "ALTER TABLE activations ADD COLUMN client_ip TEXT DEFAULT NULL",
     "ALTER TABLE activations ADD COLUMN ip_country TEXT DEFAULT NULL",
@@ -54,20 +66,24 @@ export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
       // Column already exists; ignore
     }
   }
+  activationNetworkColumnsEnsured = true;
 }
 
 /** Ensure verification_codes.created_at exists for 60s send-code rate limiting. */
 export async function ensureVerificationCodesCreatedAt(env: Env): Promise<void> {
+  if (verificationCodesCreatedAtEnsured) return;
   try {
     await env.DB.prepare(
       "ALTER TABLE verification_codes ADD COLUMN created_at TEXT"
     ).run();
+    verificationCodesCreatedAtEnsured = true;
   } catch {
-    // column already exists
+    verificationCodesCreatedAtEnsured = true;
   }
 }
 
 export async function ensureDeviceRegistryTable(env: Env): Promise<void> {
+  if (deviceRegistryTableEnsured) return;
   try {
     await env.DB.batch([
       env.DB.prepare(`
@@ -96,12 +112,14 @@ export async function ensureDeviceRegistryTable(env: Env): Promise<void> {
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_cpu ON device_registry(cpu_hash)`),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_registry_disk ON device_registry(disk_hash)`)
     ]);
+    deviceRegistryTableEnsured = true;
   } catch (err) {
     console.error("Failed to ensure device_registry table:", err);
   }
 }
 
 export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
+  if (licenseUpgradesTableEnsured) return;
   try {
     await env.DB.batch([
       env.DB.prepare(`
@@ -120,6 +138,7 @@ export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
       env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code) WHERE status = 'pending'`),
       env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id)`)
     ]);
+    licenseUpgradesTableEnsured = true;
   } catch (err) {
     console.error("Failed to ensure license_upgrades table:", err);
   }
@@ -133,6 +152,7 @@ export async function ensureLicenseUpgradesTable(env: Env): Promise<void> {
  * WARN so the gap stays visible until duplicates are cleaned manually.
  */
 export async function ensureLicensePaddleTxnIndex(env: Env): Promise<void> {
+  if (licensePaddleTxnIndexEnsured) return;
   try {
     const dup = await env.DB.prepare(
       "SELECT paddle_transaction_id FROM licenses WHERE paddle_transaction_id IS NOT NULL GROUP BY paddle_transaction_id HAVING COUNT(*) > 1 LIMIT 1"
@@ -146,12 +166,14 @@ export async function ensureLicensePaddleTxnIndex(env: Env): Promise<void> {
     await env.DB.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_licenses_paddle_txn ON licenses(paddle_transaction_id)"
     ).run();
+    licensePaddleTxnIndexEnsured = true;
   } catch (err) {
     console.error("Failed to ensure paddle_transaction_id unique index:", err);
   }
 }
 
 export async function ensureDrmTables(env: Env): Promise<void> {
+  if (drmTablesEnsured) return;
   try {
     await env.DB.batch([
       env.DB.prepare(`
@@ -194,6 +216,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
         )
       `)
     ]);
+    drmTablesEnsured = true;
   } catch (err) {
     console.error("Failed to ensure DRM D1 tables:", err);
   }
@@ -208,6 +231,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */
 export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
+  if (licenseSourceColumnsEnsured) return;
   const alters = [
     "ALTER TABLE licenses ADD COLUMN source TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoked_at TEXT DEFAULT NULL",
@@ -221,6 +245,7 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
       // Column already exists
     }
   }
+  licenseSourceColumnsEnsured = true;
 }
 
 function accessConfigured(env: Env): boolean {

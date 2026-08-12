@@ -1,6 +1,9 @@
 import { Env } from '../types';
 
+let adminAuditLogTableEnsured = false;
+
 export async function ensureAdminAuditLogTable(env: Env): Promise<void> {
+  if (adminAuditLogTableEnsured) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS admin_audit_logs (
@@ -13,6 +16,7 @@ export async function ensureAdminAuditLogTable(env: Env): Promise<void> {
         created_at TEXT NOT NULL
       )
     `).run();
+    adminAuditLogTableEnsured = true;
   } catch (err) {
     console.error("Failed to ensure admin_audit_logs table:", err);
   }
