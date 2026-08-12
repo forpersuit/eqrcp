@@ -456,7 +456,7 @@ export async function handlePaddleRoutes(
               UPDATE licenses SET
                 status = 'active',
                 expires_at = ?,
-                duration_days = ?,
+                duration_days = NULL,
                 paddle_transaction_id = ?,
                 last_purchased_at = ?,
                 revoked_at = NULL,
@@ -466,7 +466,6 @@ export async function handlePaddleRoutes(
               WHERE license_code = ?
             `).bind(
               newExpires,
-              targetLic.duration_days ?? null,
               transactionId,
               new Date(nowMs).toISOString(),
               buyerEmail || null,
@@ -518,7 +517,7 @@ export async function handlePaddleRoutes(
             UPDATE licenses SET
               status = 'active',
               expires_at = ?,
-              duration_days = COALESCE(duration_days, ?),
+              duration_days = NULL,
               paddle_transaction_id = ?,
               last_purchased_at = ?,
               revoked_at = NULL,
@@ -528,7 +527,6 @@ export async function handlePaddleRoutes(
             WHERE license_code = ?
           `).bind(
             newExpires,
-            durationDays,
             transactionId,
             new Date().toISOString(),
             buyerEmail || null,
