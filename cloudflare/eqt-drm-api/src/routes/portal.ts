@@ -278,7 +278,7 @@ export async function handlePortalRoutes(
       list.push({
         ...lic,
         source,
-        auto_renew: (source === 'purchase' && isRealPaddleSubscriptionId(lic.paddle_subscription_id)) ? (lic.auto_renew === 0 ? 0 : 1) : 0,
+        auto_renew: (source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id)) ? (lic.auto_renew === 0 ? 0 : 1) : 0,
         auto_renew_toggleable: source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id),
         refundable: isLicenseRefundable({ ...lic, source }),
         cancellable: isLicenseCancellable({ ...lic, source }),
@@ -785,7 +785,7 @@ export async function handlePortalRoutes(
     const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
     const subscriptionId = license.paddle_subscription_id as string | null;
 
-    if (source !== "purchase" || !subscriptionId || !isRealPaddleSubscriptionId(subscriptionId)) {
+    if (source !== "purchase" || license.status !== "active" || !subscriptionId || !isRealPaddleSubscriptionId(subscriptionId)) {
       return new Response(JSON.stringify({ error: getApiTranslation("auto_renew_not_allowed", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
