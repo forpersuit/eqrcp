@@ -70,14 +70,19 @@ async function revokeLicenseAndNotify(
   }
 }
 
-let autoRenewColumnEnsured = false;
+const autoRenewColumnEnsured = new WeakSet<object>();
 async function ensureAutoRenewColumn(env: Env) {
-  if (autoRenewColumnEnsured) return;
+  if (!env?.DB || autoRenewColumnEnsured.has(env.DB)) return;
   try {
     await env.DB.prepare("ALTER TABLE licenses ADD COLUMN auto_renew INTEGER DEFAULT 1").run();
-    autoRenewColumnEnsured = true;
-  } catch (_) {
-    autoRenewColumnEnsured = true;
+    autoRenewColumnEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/duplicate column|already exists/i.test(msg)) {
+      autoRenewColumnEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure auto_renew column:", err);
+    }
   }
 }
 

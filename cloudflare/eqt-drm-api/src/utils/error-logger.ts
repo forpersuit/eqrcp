@@ -1,10 +1,10 @@
 import { Env } from '../types';
 
-let auditLogTableEnsured = false;
+const auditLogTableEnsured = new WeakSet<object>();
 
 // System error audit log helper (Stores full technical stacktrace into D1)
 export async function ensureAuditLogTable(env: Env): Promise<void> {
-  if (auditLogTableEnsured) return;
+  if (!env?.DB || auditLogTableEnsured.has(env.DB)) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS system_error_logs (
@@ -17,9 +17,14 @@ export async function ensureAuditLogTable(env: Env): Promise<void> {
         trace_id TEXT
       )
     `).run();
-    auditLogTableEnsured = true;
-  } catch (err) {
-    console.error("Failed to ensure audit log table:", err);
+    auditLogTableEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/already exists/i.test(msg)) {
+      auditLogTableEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure audit log table:", err);
+    }
   }
 }
 

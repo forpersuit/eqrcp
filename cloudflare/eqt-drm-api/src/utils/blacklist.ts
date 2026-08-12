@@ -53,10 +53,10 @@ export interface ManualBlacklistRow {
   active: number;
 }
 
-let manualBlacklistTableEnsured = false;
+const manualBlacklistTableEnsured = new WeakSet<object>();
 
 export async function ensureManualBlacklistTable(env: Env): Promise<void> {
-  if (manualBlacklistTableEnsured) return;
+  if (!env?.DB || manualBlacklistTableEnsured.has(env.DB)) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS manual_blacklist (
@@ -83,9 +83,14 @@ export async function ensureManualBlacklistTable(env: Env): Promise<void> {
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_manual_bl_active ON manual_blacklist(active)`
     ).run();
-    manualBlacklistTableEnsured = true;
-  } catch (err) {
-    console.error('Failed to ensure manual_blacklist table:', err);
+    manualBlacklistTableEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/already exists/i.test(msg)) {
+      manualBlacklistTableEnsured.add(env.DB);
+    } else {
+      console.error('Failed to ensure manual_blacklist table:', err);
+    }
   }
 }
 

@@ -1,9 +1,9 @@
 import { Env } from '../types';
 
-let adminAuditLogTableEnsured = false;
+const adminAuditLogTableEnsured = new WeakSet<object>();
 
 export async function ensureAdminAuditLogTable(env: Env): Promise<void> {
-  if (adminAuditLogTableEnsured) return;
+  if (!env?.DB || adminAuditLogTableEnsured.has(env.DB)) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS admin_audit_logs (
@@ -16,9 +16,14 @@ export async function ensureAdminAuditLogTable(env: Env): Promise<void> {
         created_at TEXT NOT NULL
       )
     `).run();
-    adminAuditLogTableEnsured = true;
-  } catch (err) {
-    console.error("Failed to ensure admin_audit_logs table:", err);
+    adminAuditLogTableEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/already exists/i.test(msg)) {
+      adminAuditLogTableEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure admin_audit_logs table:", err);
+    }
   }
 }
 

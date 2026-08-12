@@ -171,10 +171,10 @@ export function recordDeviceRegisterRequest(ip: string, uuidHash: string, cpuHas
 // Uses read-then-write (race acceptable for soft rate limiting — worst case a few extra
 // requests slip through before the count catches up).
 
-let _rateLimitsTableEnsured = false;
+const _rateLimitsTableEnsured = new WeakSet<object>();
 
 export async function ensureRateLimitsTable(env: Env): Promise<void> {
-  if (_rateLimitsTableEnsured) return;
+  if (!env?.DB || _rateLimitsTableEnsured.has(env.DB)) return;
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS rate_limits (
@@ -183,9 +183,14 @@ export async function ensureRateLimitsTable(env: Env): Promise<void> {
         window_start TEXT NOT NULL
       )
     `).run();
-    _rateLimitsTableEnsured = true;
-  } catch (err) {
-    console.error("Failed to ensure rate_limits table:", err);
+    _rateLimitsTableEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/already exists/i.test(msg)) {
+      _rateLimitsTableEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure rate_limits table:", err);
+    }
   }
 }
 
