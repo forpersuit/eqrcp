@@ -24,13 +24,16 @@ export function evaluateLicenseExpiration(
   isExpired: boolean;
 } {
   const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
-  const usesRedeemWindow =
+  const usesRedeemWindow = Boolean(
     licenseSource === "promo" ||
     (licenseSource === "admin" &&
       license.duration_days !== null &&
       license.duration_days !== undefined &&
-      license.expires_at &&
-      license.expires_at !== "LIFETIME");
+      license.expires_at !== null &&
+      license.expires_at !== undefined &&
+      license.expires_at !== "" &&
+      license.expires_at !== "LIFETIME")
+  );
 
   let isRedeemExpired = false;
   if (usesRedeemWindow && license.expires_at && license.expires_at !== "LIFETIME") {
