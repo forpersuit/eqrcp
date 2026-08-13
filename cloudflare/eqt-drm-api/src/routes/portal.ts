@@ -624,9 +624,11 @@ export async function handlePortalRoutes(
   }
 
   // 0.4.4 Server-side precheck endpoint for lifetime upgrade checkout (§6.7 Issue 7)
+  // 订阅制升级为终生制暂不开放(2026-08-13): 保留端点与 license_upgrades 架构,
+  // 仅硬编码拒绝。将来恢复时删除此守卫即可。
   if (url.pathname === "/api/v1/user/upgrade-checkout" && request.method === "POST") {
-    // 订阅制升级为终生制暂不开放(2026-08-13): 保留端点与 license_upgrades 架构,
-    // 仅硬编码拒绝。将来恢复时删除此守卫即可。
+    // 保留表创建(幂等): refund 分支依赖 license_upgrades 处理历史 pending 记录
+    await ensureLicenseUpgradesTable(env);
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
     return new Response(JSON.stringify({
@@ -636,6 +638,564 @@ export async function handlePortalRoutes(
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
+  }
+
+  // 0.4.5 Toggle Auto-Renew (Auto-Renew Off keeps license active until expires_at!)
+  if (url.pathname === "/api/v1/user/toggle-auto-renew" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    await ensureAutoRenewColumn(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code, auto_renew } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+    const subscriptionId = license.paddle_subscription_id as string | null;
+
+    if (source !== "purchase" || license.status !== "active" || !subscriptionId || !isRealPaddleSubscriptionId(subscriptionId)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("auto_renew_not_allowed", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const targetAutoRenew = auto_renew === false || auto_renew === 0 ? 0 : 1;
+
+    // Next billing period cancel on Paddle if turning off auto-renew
+    if (targetAutoRenew === 0 && subscriptionId && isRealPaddleSubscriptionId(subscriptionId)) {
+      const paddleApiKey = env.PADDLE_API_KEY;
+      if (paddleApiKey) {
+        const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+        const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+        try {
+          await fetch(`${paddleBaseUrl}/subscriptions/${subscriptionId}/cancel`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${paddleApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              effective_from: "next_billing_period"
+            })
+          });
+        } catch (e) {
+          console.error("Paddle next_billing_period cancel warning:", e);
+        }
+      }
+    }
+
+    // Update D1 database (KEEP license.status = 'active' so current paid period remains usable!)
+    await env.DB.prepare(
+      "UPDATE licenses SET auto_renew = ? WHERE license_code = ?"
+    ).bind(targetAutoRenew, license_code).run();
+
+    const msgKey = targetAutoRenew === 1 ? "auto_renew_on_success" : "auto_renew_off_success";
+    return new Response(JSON.stringify({
+      success: true,
+      auto_renew: targetAutoRenew,
+      message: getApiTranslation(msgKey, reqLang)
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.5 Cancel subscription (immediate revoke — not a refund)
+  if (url.pathname === "/api/v1/user/cancel-subscription" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status === "revoked") {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_already_revoked", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
+    const subscriptionId = license.paddle_subscription_id as string | null;
+
+    if (!isLicenseCancellable({ ...license, source })) {
+      return new Response(JSON.stringify({ error: getApiTranslation("cancel_not_allowed", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // E2E / fixture: synthetic sub id → local revoke only (no Paddle)
+    if (
+      source === "test" ||
+      isSyntheticTestSubscriptionId(subscriptionId || "") ||
+      isSyntheticTestTransactionId(license.paddle_transaction_id || "")
+    ) {
+      try {
+        await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang, "subscription");
+        return new Response(JSON.stringify({
+          success: true,
+          message: getApiTranslation("cancel_test_local_success", reqLang),
+          local_only: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err: any) {
+        console.error("Local test cancel error:", err);
+        return new Response(JSON.stringify({
+          error: getApiTranslation("cancel_failed", reqLang)
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    if (!subscriptionId || !isRealPaddleSubscriptionId(subscriptionId)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("no_paddle_subscription", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const paddleApiKey = env.PADDLE_API_KEY;
+    if (!paddleApiKey) {
+      return new Response(JSON.stringify({ error: getApiTranslation("paddle_not_configured", reqLang) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+    const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+
+    try {
+      // Product decision (2026-07-25): cancel → effective immediately + local revoke now
+      const cancelRes = await fetch(`${paddleBaseUrl}/subscriptions/${subscriptionId}/cancel`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${paddleApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          effective_from: "immediately"
+        })
+      });
+
+      if (!cancelRes.ok) {
+        const errBody = await cancelRes.text();
+        // Already canceled on Paddle: still revoke local so Portal matches
+        const already =
+          /already.?cancel|subscription_?canceled|canceled|cancelled/i.test(errBody) ||
+          cancelRes.status === 409;
+        if (!already) {
+          throw new Error(`Paddle subscription cancel failed: ${errBody}`);
+        }
+      }
+
+      let paddleCancel: unknown = null;
+      try {
+        paddleCancel = await cancelRes.json();
+      } catch {
+        paddleCancel = null;
+      }
+
+      await revokeLicenseAndNotify(env, ctx, license, license_code, session.email, reqLang, "subscription");
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: getApiTranslation("cancel_success", reqLang),
+        paddle: paddleCancel
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      console.error("Cancel subscription error:", err);
+      ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'ERROR', err, {
+        path: url.pathname,
+        action: 'portal_cancel_subscription',
+        subscription_id: subscriptionId || null
+      }));
+      return new Response(JSON.stringify({
+        error: getApiTranslation("cancel_failed", reqLang)
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+  }
+
+  // 0.55 Payment-driven renewal checkout parameters (§6.6 User Portal renewal)
+  if (url.pathname === "/api/v1/user/renew-checkout" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license_code = (body.license_code || "").trim();
+
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const sessionEmailHash = await sha256Hex(session.email.trim().toLowerCase());
+    if (!licenseOwnedByEmail(license, session.email, sessionEmailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Reject lifetime renewal (§6.6 Requirement: LIFETIME licenses cannot be renewed)
+    if (license.expires_at === "LIFETIME") {
+      return new Response(JSON.stringify({ error: getApiTranslation("lifetime_cannot_renew", reqLang) || "Lifetime licenses cannot be renewed" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (license.status !== "active") {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_suspended_or_revoked", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Reject renewal while a lifetime upgrade is pending (§6.7 V3)
+    const pendingUpgrade = await env.DB.prepare(
+      "SELECT id FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
+    ).bind(license_code).first<any>();
+    if (pendingUpgrade) {
+      return new Response(JSON.stringify({ error: getApiTranslation("upgrade_pending_cannot_renew", reqLang) || "A lifetime upgrade is pending. Renewal is not available until it takes effect." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Construct payment checkout passthrough payload for Paddle webhook handler
+    const passthroughObj = {
+      target_license_code: license_code,
+      buyer_email: session.email,
+      tier: license.tier,
+      action: "renewal"
+    };
+
+    return new Response(JSON.stringify({
+      success: true,
+      license_code: license_code,
+      tier: license.tier,
+      current_expires_at: license.expires_at,
+      passthrough: JSON.stringify(passthroughObj),
+      checkout_custom_data: passthroughObj
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 0.6 Invoice / receipt link (Paddle MoR — temporary PDF or customer portal URL)
+  if (url.pathname === "/api/v1/user/invoice-link" && request.method === "POST") {
+    await ensureLicenseSourceColumns(env);
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const token = authHeader.substring(7);
+    const session = await env.DB.prepare(
+      "SELECT * FROM user_sessions WHERE session_token = ?"
+    ).bind(token).first<any>();
+    if (!session || new Date(session.expires_at).getTime() < Date.now()) {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { license_code } = body;
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const license = await env.DB.prepare(
+      "SELECT * FROM licenses WHERE license_code = ?"
+    ).bind(license_code).first<any>();
+    if (!license) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const emailHash = await sha256Hex(session.email);
+    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const transactionId = license.paddle_transaction_id as string | null;
+    if (!transactionId || !isRealPaddleTransactionId(transactionId)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_not_available", reqLang),
+        support_email: "support@eqt.net.im"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const paddleApiKey = env.PADDLE_API_KEY;
+    if (!paddleApiKey) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_paddle_unavailable", reqLang),
+        support_email: "support@eqt.net.im",
+        transaction_id: transactionId
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+    const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+    const authHeaders = { Authorization: `Bearer ${paddleApiKey}` };
+
+    try {
+      // Prefer official invoice PDF URL for this transaction (Paddle Billing)
+      const invRes = await fetch(`${paddleBaseUrl}/transactions/${transactionId}/invoice`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      if (invRes.ok) {
+        const invJson: any = await invRes.json().catch(() => ({}));
+        const pdfUrl = invJson?.data?.url || invJson?.url || null;
+        if (pdfUrl && typeof pdfUrl === "string") {
+          return new Response(JSON.stringify({
+            success: true,
+            type: "invoice_pdf",
+            url: pdfUrl,
+            transaction_id: transactionId,
+            sandbox: isSandbox
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      // Fallback: open Paddle customer portal session (manage bills / receipts)
+      const txRes = await fetch(`${paddleBaseUrl}/transactions/${transactionId}`, {
+        method: "GET",
+        headers: authHeaders
+      });
+      if (!txRes.ok) {
+        const errBody = await txRes.text();
+        throw new Error(`Paddle transaction fetch failed: ${errBody}`);
+      }
+      const txJson: any = await txRes.json();
+      const customerId =
+        txJson?.data?.customer_id ||
+        (typeof txJson?.data?.customer === "string" ? txJson.data.customer : null) ||
+        txJson?.data?.customer?.id ||
+        null;
+
+      if (customerId) {
+        const portalBody: Record<string, unknown> = {};
+        if (license.paddle_subscription_id) {
+          portalBody.subscription_ids = [license.paddle_subscription_id];
+        }
+        const portalRes = await fetch(`${paddleBaseUrl}/customers/${customerId}/portal-sessions`, {
+          method: "POST",
+          headers: {
+            ...authHeaders,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(portalBody)
+        });
+        if (portalRes.ok) {
+          const portalJson: any = await portalRes.json().catch(() => ({}));
+          const portalUrl =
+            portalJson?.data?.urls?.general?.overview ||
+            portalJson?.data?.urls?.overview ||
+            portalJson?.data?.url ||
+            null;
+          if (portalUrl && typeof portalUrl === "string") {
+            return new Response(JSON.stringify({
+              success: true,
+              type: "customer_portal",
+              url: portalUrl,
+              transaction_id: transactionId,
+              sandbox: isSandbox
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+      }
+
+      // Soft fallback: user can still copy txn id and mail support
+      return new Response(JSON.stringify({
+        success: true,
+        type: "manual",
+        transaction_id: transactionId,
+        support_email: "support@eqt.net.im",
+        message: getApiTranslation("invoice_manual_help", reqLang),
+        sandbox: isSandbox
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      console.error("Invoice link error:", err);
+      ctx.waitUntil(logSystemError(env, "PADDLE_API_ERROR", "ERROR", err, {
+        path: url.pathname,
+        action: "portal_invoice_link",
+        transaction_id: transactionId
+      }));
+      return new Response(JSON.stringify({
+        error: getApiTranslation("invoice_failed", reqLang),
+        support_email: "support@eqt.net.im",
+        transaction_id: transactionId
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
   }
 
   return null;
