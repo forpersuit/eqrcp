@@ -302,9 +302,12 @@ export async function handleDrmRoutes(
 
     let tierLabel: 'free' | 'paid' = 'free';
     if (license_code) {
-      const lic = await env.DB.prepare("SELECT status FROM licenses WHERE license_code = ?").bind(license_code).first<any>();
+      const lic = await env.DB.prepare("SELECT * FROM licenses WHERE license_code = ?").bind(license_code).first<any>();
       if (lic && lic.status === 'active') {
-        tierLabel = 'paid';
+        const evalRes = evaluateLicenseExpiration(lic, lic.expires_at || "LIFETIME");
+        if (!evalRes.isExpired && !evalRes.isRedeemExpired) {
+          tierLabel = 'paid';
+        }
       }
     }
 
@@ -714,6 +717,25 @@ export async function handleDrmRoutes(
       });
     }
 
+    let baseExpiresAt = license.expires_at || "LIFETIME";
+
+    // Initial expiration check before checking device activation or DB mutations
+    const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);
+    if (initialEval.isRedeemExpired) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("license_redeem_expired", reqLang)
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    if (initialEval.isExpired) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const { results: activations } = await env.DB.prepare(
       "SELECT * FROM activations WHERE license_code = ?"
     ).bind(license_code).all<any>();
@@ -736,18 +758,8 @@ export async function handleDrmRoutes(
       });
     }
 
-    let baseExpiresAt = license.expires_at || "LIFETIME";
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
-
     const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
-
-    if (evalResult.isExpired) {
-      return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
     baseExpiresAt = evalResult.effectiveExpiresAt;
 
     const net = activationClientMeta(request);

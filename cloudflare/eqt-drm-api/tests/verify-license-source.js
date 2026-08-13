@@ -164,10 +164,21 @@ async function main() {
     licCancel.status === 'revoked' && licCancel.revoke_reason === 'subscription',
     'cancel revoke_reason=subscription'
   );
-  // 5) Verify expired license rejection on /register and /verify
+  // 5) Verify expired license rejection across endpoints (/activate, /verify, /device/register)
   wranglerSql(
     `UPDATE licenses SET status='active', expires_at='2020-01-01T00:00:00Z', source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
   );
+
+  // 5.1) /activate with expired license code -> 403 license_expired
+  const rExpAct = await request('POST', '/api/v1/activate', {
+    license_code: testCode,
+    uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
+    cpu_hash: 'c11111111111111111111111111111111111111111111111111111111111111',
+    disk_hash: 'd11111111111111111111111111111111111111111111111111111111111111'
+  });
+  assert(rExpAct.status === 403 && rExpAct.json.error.includes('expired'), 'expired code returns 403 on /activate');
+
+  // 5.2) /verify with expired license code -> 403 license_expired
   const rExpVerify = await request('POST', '/api/v1/verify', {
     license_code: testCode,
     uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
@@ -176,13 +187,14 @@ async function main() {
   });
   assert(rExpVerify.status === 403 && rExpVerify.json.error.includes('expired'), 'expired code returns 403 on /verify');
 
-  const rExpRegister = await request('POST', '/api/v1/register', {
+  // 5.3) /device/register with expired license code -> 200 with tier: "free" (NOT "paid")
+  const rExpDevReg = await request('POST', '/api/v1/device/register', {
     license_code: testCode,
     uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
     cpu_hash: 'c11111111111111111111111111111111111111111111111111111111111111',
     disk_hash: 'd11111111111111111111111111111111111111111111111111111111111111'
   });
-  assert(rExpRegister.status === 403 && rExpRegister.json.error.includes('expired'), 'expired code returns 403 on /register');
+  assert(rExpDevReg.status === 200 && rExpDevReg.json.tier === 'free', 'expired code returns tier:free on /device/register');
 
   wranglerSql(
     `UPDATE licenses SET status='active', expires_at=NULL, source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
