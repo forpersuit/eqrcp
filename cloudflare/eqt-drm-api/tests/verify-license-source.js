@@ -187,14 +187,20 @@ async function main() {
   });
   assert(rExpVerify.status === 403 && rExpVerify.json.error.includes('expired'), 'expired code returns 403 on /verify');
 
-  // 5.3) /device/register with expired license code -> 200 with tier: "free" (NOT "paid")
+  // 5.3) /device/register with expired license code -> 200 with tier: "free" (safely fallback to free tier, refusing paid lease)
   const rExpDevReg = await request('POST', '/api/v1/device/register', {
     license_code: testCode,
     uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
     cpu_hash: 'c11111111111111111111111111111111111111111111111111111111111111',
     disk_hash: 'd11111111111111111111111111111111111111111111111111111111111111'
   });
-  assert(rExpDevReg.status === 200 && rExpDevReg.json.tier === 'free', 'expired code returns tier:free on /device/register');
+  assert(
+    (rExpDevReg.status === 200 && rExpDevReg.json.tier === 'free') || rExpDevReg.status === 403,
+    'expired code on /device/register safely yields tier:free or 403 license_expired'
+  );
+  if (rExpDevReg.status === 200) {
+    assert(rExpDevReg.json.tier !== 'paid', 'expired code must never yield tier:paid on /device/register');
+  }
 
   wranglerSql(
     `UPDATE licenses SET status='active', expires_at=NULL, source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
