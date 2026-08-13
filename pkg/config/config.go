@@ -174,6 +174,12 @@ func GetViperInstance(app application.App) *viper.Viper {
 	return v
 }
 
+// DefaultConfigDir returns the configuration directory.
+// Priority order:
+// 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
+// 2. User home directory (~/.local/eqt)
+// 3. Current directory fallback (./.local/eqt)
+// Note: EQT_CONFIG_DIR is intended for testing or explicit custom deployment overrides.
 func DefaultConfigDir() string {
 	if envDir := os.Getenv("EQT_CONFIG_DIR"); envDir != "" {
 		return envDir

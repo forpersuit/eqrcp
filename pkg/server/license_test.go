@@ -912,20 +912,9 @@ func TestIsTestBuildProductionDefault(t *testing.T) {
 	}
 }
 
-func resetPaidStatusCallbacksForTest() {
-	paidStatusCallbackMu.Lock()
-	paidStatusCallbacks = nil
-	paidStatusCallbackMu.Unlock()
-	paidStateMu.Lock()
-	cachedIsPaid = false
-	cachedIsTampered = false
-	cachedTier = ""
-	cachedCodeDate = ""
-	paidStateMu.Unlock()
-}
-
 func TestRegisterPaidStatusCallback(t *testing.T) {
-	t.Cleanup(resetPaidStatusCallbacksForTest)
+	ResetPaidStatusCallbacksForTest()
+	t.Cleanup(ResetPaidStatusCallbacksForTest)
 	ch := make(chan struct {
 		paid bool
 		tier string
@@ -951,7 +940,8 @@ func TestRegisterPaidStatusCallback(t *testing.T) {
 }
 
 func TestSetClockTamperedTriggersCallback(t *testing.T) {
-	t.Cleanup(resetPaidStatusCallbacksForTest)
+	ResetPaidStatusCallbacksForTest()
+	t.Cleanup(ResetPaidStatusCallbacksForTest)
 	SetClockTampered(false)
 	ch := make(chan struct {
 		paid bool
@@ -979,7 +969,8 @@ func TestSetClockTamperedTriggersCallback(t *testing.T) {
 
 func TestSetClockTamperedDiskPersistence(t *testing.T) {
 	t.Setenv("EQT_TESTING", "true")
-	t.Cleanup(resetPaidStatusCallbacksForTest)
+	ResetPaidStatusCallbacksForTest()
+	t.Cleanup(ResetPaidStatusCallbacksForTest)
 
 	// Step 1: Set clock tampered to true and verify both ClockTampered=true and IsPaid=false persist to disk
 	SetClockTampered(true)

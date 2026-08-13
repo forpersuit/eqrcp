@@ -616,19 +616,71 @@ func SetClockTampered(tampered bool) {
 	}
 }
 
+type paidStatusEvent struct {
+	paid bool
+	tier string
+}
+
+var (
+	paidStatusChanOnce sync.Once
+	paidStatusChan     chan paidStatusEvent
+)
+
+func initPaidStatusWorker() {
+	paidStatusChanOnce.Do(func() {
+		paidStatusChan = make(chan paidStatusEvent, 100)
+		go func() {
+			for ev := range paidStatusChan {
+				paidStatusCallbackMu.RLock()
+				var cbs []func(paid bool, tier string)
+				if len(paidStatusCallbacks) > 0 {
+					cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
+					copy(cbs, paidStatusCallbacks)
+				}
+				paidStatusCallbackMu.RUnlock()
+
+				for _, cb := range cbs {
+					if cb != nil {
+						cb(ev.paid, ev.tier)
+					}
+				}
+			}
+		}()
+	})
+}
+
 func notifyPaidStatusCallbacks(paid bool, tier string) {
-	paidStatusCallbackMu.RLock()
-	var cbs []func(paid bool, tier string)
-	if len(paidStatusCallbacks) > 0 {
-		cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
-		copy(cbs, paidStatusCallbacks)
-	}
-	paidStatusCallbackMu.RUnlock()
-	for _, cb := range cbs {
-		if cb != nil {
-			go cb(paid, tier)
+	initPaidStatusWorker()
+	select {
+	case paidStatusChan <- paidStatusEvent{paid: paid, tier: tier}:
+	default:
+		paidStatusCallbackMu.RLock()
+		var cbs []func(paid bool, tier string)
+		if len(paidStatusCallbacks) > 0 {
+			cbs = make([]func(paid bool, tier string), len(paidStatusCallbacks))
+			copy(cbs, paidStatusCallbacks)
+		}
+		paidStatusCallbackMu.RUnlock()
+		for _, cb := range cbs {
+			if cb != nil {
+				go cb(paid, tier)
+			}
 		}
 	}
+}
+
+// ResetPaidStatusCallbacksForTest resets callbacks and paid state for unit testing.
+func ResetPaidStatusCallbacksForTest() {
+	paidStatusCallbackMu.Lock()
+	paidStatusCallbacks = nil
+	paidStatusCallbackMu.Unlock()
+
+	paidStateMu.Lock()
+	cachedIsPaid = false
+	cachedIsTampered = false
+	cachedTier = ""
+	cachedCodeDate = ""
+	paidStateMu.Unlock()
 }
 
 // GetPaidStatus returns whether the premium status is activated.

@@ -509,6 +509,16 @@ export async function handleDrmRoutes(
         )
         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (SELECT COUNT(*) FROM activations WHERE license_code = ?) < ?
+          AND NOT EXISTS (
+            SELECT 1 FROM activations WHERE license_code = ? AND (
+              (device_id IS NOT NULL AND device_id != '' AND device_id = ?)
+              OR (
+                (uuid_hash != '' AND uuid_hash = ?)
+                OR (cpu_hash != '' AND cpu_hash = ?)
+                OR (disk_hash != '' AND disk_hash = ?)
+              )
+            )
+          )
       `).bind(
         license_code,
         uuid_hash || "",
@@ -525,15 +535,39 @@ export async function handleDrmRoutes(
         net.longitude,
         traceId,
         license_code,
-        license.max_devices
+        license.max_devices,
+        license_code,
+        authoritativeDeviceId,
+        uuid_hash || "",
+        cpu_hash || "",
+        disk_hash || ""
       ).run();
 
-      // If changes === 0, race condition hit max_devices limit -> Block overselling
+      // If changes === 0, either max_devices was reached or device was already inserted (e.g. D1 retry timeout)
       if (!insRes.meta || insRes.meta.changes === 0) {
-        return new Response(JSON.stringify({ error: getApiTranslation("max_devices_reached", reqLang) }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        const alreadyActivated = await env.DB.prepare(`
+          SELECT 1 FROM activations WHERE license_code = ? AND (
+            (device_id IS NOT NULL AND device_id != '' AND device_id = ?)
+            OR (
+              (uuid_hash != '' AND uuid_hash = ?)
+              OR (cpu_hash != '' AND cpu_hash = ?)
+              OR (disk_hash != '' AND disk_hash = ?)
+            )
+          ) LIMIT 1
+        `).bind(
+          license_code,
+          authoritativeDeviceId,
+          uuid_hash || "",
+          cpu_hash || "",
+          disk_hash || ""
+        ).first<any>();
+
+        if (!alreadyActivated) {
+          return new Response(JSON.stringify({ error: getApiTranslation("max_devices_reached", reqLang) }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
 
       // Send activation notification email to the buyer asynchronously

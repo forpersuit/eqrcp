@@ -162,7 +162,7 @@ export async function registerOrRefreshDevice(
   // 3. No match found -> Assign pure random device_id
   const newDeviceId = generateRandomDeviceId();
   await env.DB.prepare(`
-    INSERT INTO device_registry (
+    INSERT OR IGNORE INTO device_registry (
       device_id, uuid_hash, cpu_hash, disk_hash, tier_label, license_code, email,
       registered_at, last_seen_at, last_ip, ip_country, city, region, latitude, longitude, app_version
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

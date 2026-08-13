@@ -287,11 +287,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 			usage.ClockTampered = true
 			usage.IsPaid = false
 			if !oldTampered {
-				paidStateMu.Lock()
-				cachedIsTampered = true
-				cachedIsPaid = false
-				paidStateMu.Unlock()
-				defer notifyPaidStatusCallbacks(false, "")
+				go SetClockTampered(true)
 			}
 		}
 	}

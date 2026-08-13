@@ -57,7 +57,7 @@ export async function withD1Retry<T>(
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
-  throw lastError;
+  throw lastError || new Error("D1 operation failed after max retries");
 }
 
 const IS_D1_WRAPPED = Symbol('IS_D1_WRAPPED');
