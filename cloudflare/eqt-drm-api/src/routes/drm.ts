@@ -407,11 +407,10 @@ export async function handleDrmRoutes(
     }
 
     let baseExpiresAt = license.expires_at || "LIFETIME";
-    baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
 
-    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
-
-    if (evalResult.isRedeemExpired) {
+    // Initial expiration check before DB mutations
+    const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);
+    if (initialEval.isRedeemExpired) {
       return new Response(JSON.stringify({
         error: getApiTranslation("license_redeem_expired", reqLang)
       }), {
@@ -419,14 +418,16 @@ export async function handleDrmRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-
-    if (evalResult.isExpired) {
+    if (initialEval.isExpired) {
       return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
+    // Apply pending upgrade if license is valid
+    baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
+    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
     baseExpiresAt = evalResult.effectiveExpiresAt;
 
     // Fetch existing activations for THIS license code

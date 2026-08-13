@@ -5232,8 +5232,8 @@ async function loadIntegrationStatusData() {
 async function loadStatusData() {
     try {
         applyStatusData(await AgentStatus());
-        syncLicenseFromStatus(state.status);
     } catch (err) {
+        console.warn('[EQT] loadStatusData failed:', err);
         state.statusLoaded = true;
         render();
     }

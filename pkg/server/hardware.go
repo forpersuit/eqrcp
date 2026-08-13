@@ -201,6 +201,8 @@ var (
 	cachedDisk        string
 	hasCached         bool
 	precomputeStarted bool
+	precomputeDone    = make(chan struct{})
+	precomputeOnce    sync.Once
 )
 
 // PrecomputeDeviceFingerprints concurrently fetches and caches the motherboard, CPU, and disk fingerprints in background
@@ -250,6 +252,9 @@ func PrecomputeDeviceFingerprints() {
 		cachedDisk = disk
 		hasCached = true
 		fingerprintMu.Unlock()
+		precomputeOnce.Do(func() {
+			close(precomputeDone)
+		})
 
 		log.Printf("[DRM] Device hardware fingerprints cached successfully in %v.", time.Since(startTime))
 
@@ -290,20 +295,31 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 
 	if !hasCached {
 		if precomputeStarted {
-			// If background precomputation is started, return immediately with empty values
-			// to avoid blocking the main thread during startup window loading.
-			// Verification will trigger again asynchronously once background compute completes.
-			log.Println("[DRM] Fingerprints not ready yet. Returning empty hashes to avoid blocking caller thread...")
-			return "", "", ""
+			// If background precomputation is started, wait up to 300ms for it to complete.
+			// Precomputation takes ~4-6ms, so this brief wait ensures synchronous callers (like startup VerifyLocalLicense)
+			// receive valid hardware hashes rather than empty fallback values.
+			fingerprintMu.Unlock()
+			select {
+			case <-precomputeDone:
+				fingerprintMu.Lock()
+				uuid = cachedUUID
+				cpu = cachedCPU
+				disk = cachedDisk
+			case <-time.After(300 * time.Millisecond):
+				log.Println("[DRM] Precomputation wait timed out (300ms). Returning empty hashes...")
+				fingerprintMu.Lock()
+				return "", "", ""
+			}
+		} else {
+			log.Println("[DRM] Warning: Sync retrieve fingerprints (precompute not started). Block waiting...")
+			uuid = GetBoardUUID()
+			cpu = GetCPUSerial()
+			disk = GetSystemDiskSerial()
+			cachedUUID = uuid
+			cachedCPU = cpu
+			cachedDisk = disk
+			hasCached = true
 		}
-		log.Println("[DRM] Warning: Sync retrieve fingerprints (precompute not started). Block waiting...")
-		uuid = GetBoardUUID()
-		cpu = GetCPUSerial()
-		disk = GetSystemDiskSerial()
-		cachedUUID = uuid
-		cachedCPU = cpu
-		cachedDisk = disk
-		hasCached = true
 	}
 
 	if testBoardUUID != "" {

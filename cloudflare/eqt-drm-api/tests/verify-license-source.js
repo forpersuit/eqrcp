@@ -164,8 +164,28 @@ async function main() {
     licCancel.status === 'revoked' && licCancel.revoke_reason === 'subscription',
     'cancel revoke_reason=subscription'
   );
+  // 5) Verify expired license rejection on /register and /verify
   wranglerSql(
-    `UPDATE licenses SET status='active', revoked_at=NULL, revoke_reason=NULL, source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
+    `UPDATE licenses SET status='active', expires_at='2020-01-01T00:00:00Z', source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
+  );
+  const rExpVerify = await request('POST', '/api/v1/verify', {
+    license_code: testCode,
+    uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
+    cpu_hash: 'c11111111111111111111111111111111111111111111111111111111111111',
+    disk_hash: 'd11111111111111111111111111111111111111111111111111111111111111'
+  });
+  assert(rExpVerify.status === 403 && rExpVerify.json.error.includes('expired'), 'expired code returns 403 on /verify');
+
+  const rExpRegister = await request('POST', '/api/v1/register', {
+    license_code: testCode,
+    uuid_hash: 'u111111111111111111111111111111111111111111111111111111111111111',
+    cpu_hash: 'c11111111111111111111111111111111111111111111111111111111111111',
+    disk_hash: 'd11111111111111111111111111111111111111111111111111111111111111'
+  });
+  assert(rExpRegister.status === 403 && rExpRegister.json.error.includes('expired'), 'expired code returns 403 on /register');
+
+  wranglerSql(
+    `UPDATE licenses SET status='active', expires_at=NULL, source='test', paddle_subscription_id=NULL WHERE license_code='${testCode}'`
   );
 
   wranglerSql(`DELETE FROM user_sessions WHERE session_token='${token}'`);
