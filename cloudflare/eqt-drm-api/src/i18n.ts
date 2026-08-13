@@ -36,6 +36,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Ein Lifetime-Upgrade steht aus. Die Verlängerung ist erst verfügbar, wenn es wirksam wird.",
     fr: "Une mise à niveau à vie est en attente. Le renouvellement n'est disponible qu'après sa prise d'effet."
   },
+  upgrade_unavailable: {
+    zh: "订阅制升级为终生制暂未开放，请直接购买新的终生版授权码。",
+    en: "Lifetime upgrade is currently unavailable. Please purchase a new Lifetime license instead.",
+    ja: "無期限版へのアップグレードは現在ご利用いただけません。新しい無期限ライセンスをご購入ください。",
+    ko: "평생 라이선스로의 업그레이드는 현재 이용할 수 없습니다. 새 평생 라이선스를 구매해 주세요.",
+    es: "La actualización a la versión de por vida no está disponible actualmente. Compre una nueva licencia de por vida.",
+    de: "Das Upgrade auf die Lifetime-Version ist derzeit nicht verfügbar. Bitte erwerben Sie eine neue Lifetime-Lizenz.",
+    fr: "La mise à niveau vers la version à vie n'est actuellement pas disponible. Veuillez acheter une nouvelle licence à vie."
+  },
   unbind_success: {
     zh: "设备已成功解绑",
     en: "Device unbound successfully",

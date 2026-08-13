@@ -344,8 +344,8 @@ async function runTests() {
     paddle_subscription_id: 'sub_yearly_orig_200'
   });
 
-  // Test 1: Real Webhook Request for Lifetime Upgrade (Pending)
-  console.log('Test 1: REAL handlePaddleRoutes Webhook invocation with HMAC signature (Pending Upgrade)...');
+  // Test 1: Real Webhook Request for Lifetime Purchase with target_license_code → FALLBACK new-key mint (upgrade disabled)
+  console.log('Test 1: REAL handlePaddleRoutes Webhook invocation with HMAC signature (Lifetime upgrade disabled → new-key mint fallback)...');
   const upgTxnId = 'txn_lifetime_upg_888';
   const webhookBodyObj = {
     event_type: 'transaction.completed',
@@ -368,17 +368,26 @@ async function runTests() {
   const res1 = await handlePaddleRoutes(req1, env, ctx, new URL(req1.url), corsHeaders);
   assert(res1.status === 200, 'REAL handlePaddleRoutes returned 200 OK');
   const res1Json = await res1.json();
-  assert(res1Json.status === 'pending_upgrade', 'REAL handler returned status pending_upgrade');
+  assert(res1Json.message === 'License generated and fulfilled', 'REAL handler minted a NEW lifetime key (fallback, not pending upgrade): ' + res1Json.message);
+  assert(!!res1Json.license_code && res1Json.license_code !== targetCode, 'REAL handler minted a new license_code distinct from target_license_code');
 
+  // New key is LIFETIME and tied to the upgrade payment txn (source=purchase)
+  const mintedLic = db.tables.licenses.get(res1Json.license_code);
+  assert(!!mintedLic && mintedLic.expires_at === 'LIFETIME', 'New minted key is LIFETIME');
+  assert(mintedLic.paddle_transaction_id === upgTxnId, 'New minted key linked to the LIFETIME payment txn');
+  assert(mintedLic.source === 'purchase', 'New minted key source = purchase');
+
+  // Original yearly subscription license is untouched (no upgrade applied, no auto_renew flip)
   const licAfterUpg = db.tables.licenses.get(targetCode);
-  assert(licAfterUpg.paddle_transaction_id === 'txn_yearly_orig_100', 'REAL handler preserved original yearly paddle_transaction_id (No overwrite!)');
-  assert(licAfterUpg.auto_renew === 0, 'REAL handler updated auto_renew = 0');
-  assert(db.tables.license_upgrades.size === 1, 'REAL handler created row in license_upgrades table');
+  assert(licAfterUpg.paddle_transaction_id === 'txn_yearly_orig_100', 'REAL handler preserved original yearly paddle_transaction_id (no upgrade)');
+  assert(licAfterUpg.auto_renew === 1, 'REAL handler left auto_renew = 1 (upgrade disabled)');
+  assert(licAfterUpg.expires_at === futureExpiresIso, 'REAL handler left expires_at unchanged (upgrade disabled)');
+  assert(db.tables.license_upgrades.size === 0, 'REAL handler created NO license_upgrades row (upgrade disabled)');
 
-  // Test 2: REAL Duplicate Upgrade Prevention (V1 & V2 & N1)
-  console.log('\nTest 2: REAL handlePaddleRoutes idempotent redelivery + duplicate purchase rejection...');
+  // Test 2: REAL idempotent redelivery (N1) + distinct-txn LIFETIME purchase mints its own key
+  console.log('\nTest 2: REAL handlePaddleRoutes idempotent redelivery + distinct-txn fallback mint...');
 
-  // 2a: Same transaction re-delivered → idempotent 200 (N1 Fix)
+  // 2a: Same transaction re-delivered → idempotent 200 "already processed" (N1 Fix, now via paddle_transaction_id dedupe)
   const req2Idem = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'paddle-signature': sig1 },
@@ -387,9 +396,10 @@ async function runTests() {
   const res2Idem = await handlePaddleRoutes(req2Idem, env, ctx, new URL(req2Idem.url), corsHeaders);
   assert(res2Idem.status === 200, 'Same txn redelivery idempotently returns 200 (N1 Fix)');
   const res2IdemJson = await res2Idem.json();
-  assert(res2IdemJson.status === 'pending_upgrade', 'Same txn redelivery returns pending_upgrade status');
+  assert(res2IdemJson.message === 'Transaction already processed', 'Same txn redelivery returns already-processed (no double mint)');
+  assert(res2IdemJson.license_code === res1Json.license_code, 'Redelivery returns the SAME minted key (idempotent)');
 
-  // 2b: Different transaction for the same license → 400 UPGRADE_ALREADY_PENDING (V1 Fix)
+  // 2b: A DIFFERENT transaction carrying the same target code → each LIFETIME payment mints its own new key (upgrade disabled, no pending block)
   const dupWebhookObj = {
     event_type: 'transaction.completed',
     data: { ...webhookBodyObj.data, id: 'txn_lifetime_upg_889' }
@@ -402,13 +412,14 @@ async function runTests() {
     body: rawBodyDup
   });
   const resDup = await handlePaddleRoutes(reqDup, env, ctx, new URL(reqDup.url), corsHeaders);
-  assert(resDup.status === 400, 'Duplicate purchase (different txn) correctly rejected with 400 Bad Request (V1 Fix)');
+  assert(resDup.status === 200, 'Distinct-txn LIFETIME purchase also fulfills via new-key mint (200)');
   const resDupJson = await resDup.json();
-  assert(resDupJson.code === 'UPGRADE_ALREADY_PENDING', 'REAL handler returned UPGRADE_ALREADY_PENDING code');
-  assert(db.tables.license_upgrades.size === 1, 'No extra license_upgrades row inserted for duplicate purchase');
+  assert(!!resDupJson.license_code && resDupJson.license_code !== res1Json.license_code, 'Second LIFETIME purchase minted a DISTINCT new key');
+  assert(db.tables.license_upgrades.size === 0, 'No license_upgrades row created for either LIFETIME purchase');
+  assert(db.tables.licenses.size === 3, 'Three licenses total: yearly + 2 minted LIFETIME keys');
 
-  // Test 3: REAL Refund Window Block (< 14 days) (Issue 4)
-  console.log('\nTest 3: REAL handlePaddleRoutes 14-day refund window block...');
+  // Test 3: REAL in-refund-window license + LIFETIME purchase → falls back to new-key mint (upgrade disabled; refund-window guard no longer blocks)
+  console.log('\nTest 3: REAL handlePaddleRoutes — LIFETIME purchase targeting in-refund-window license falls back to new-key mint...');
   const freshCode = 'EQT-PLUS-FRESH-999';
   const fiveDaysAgoIso = new Date(nowMs - 5 * 86400 * 1000).toISOString();
   db.tables.licenses.set(freshCode, {
@@ -439,13 +450,28 @@ async function runTests() {
     body: rawBodyFresh
   });
   const resFresh = await handlePaddleRoutes(reqFresh, env, ctx, new URL(reqFresh.url), corsHeaders);
-  assert(resFresh.status === 400, 'REAL handler rejected upgrade for license in 14-day refund window with 400 Bad Request');
+  assert(resFresh.status === 200, 'REAL handler minted a new key for the in-refund-window license (200)');
   const resFreshJson = await resFresh.json();
-  assert(resFreshJson.code === 'UPGRADE_BLOCKED_REFUND_WINDOW', 'REAL handler returned UPGRADE_BLOCKED_REFUND_WINDOW code');
+  assert(resFreshJson.message === 'License generated and fulfilled' && !!resFreshJson.license_code, 'REAL handler fell back to new-key mint (window no longer blocks)');
+  assert(db.tables.license_upgrades.size === 0, 'No license_upgrades row created for in-window purchase');
+  const freshAfter = db.tables.licenses.get(freshCode);
+  assert(freshAfter.status === 'active' && freshAfter.expires_at === futureExpiresIso, 'In-window target license untouched (stays active, no upgrade applied)');
 
-  // Test 4: REAL Refund PENDING Upgrade (Upgrade cancelled, Yearly license remains active)
-  console.log('\nTest 4: REAL handlePaddleRoutes refund on PENDING lifetime upgrade...');
-  const pendingRefundObj = { event_type: 'transaction.refunded', data: { id: upgTxnId } };
+  // Test 4: REAL Refund PENDING Upgrade (retained historical-path capability) — cancel only, license stays active
+  console.log('\nTest 4: REAL handlePaddleRoutes refund on PENDING lifetime upgrade (retained historical-path capability)...');
+  // Seed a historical pending upgrade row directly (as if created before the upgrade was disabled)
+  const histPendTxn = 'txn_hist_pending_777';
+  db.tables.license_upgrades.set(1, {
+    id: 1,
+    user_email: 'user@example.com',
+    target_license_code: targetCode,
+    lifetime_txn_id: histPendTxn,
+    purchased_at: thirtyDaysAgoIso,
+    effective_at: futureExpiresIso,
+    status: 'pending',
+    created_at: thirtyDaysAgoIso
+  });
+  const pendingRefundObj = { event_type: 'transaction.refunded', data: { id: histPendTxn } };
   const rawBodyPendingRefund = JSON.stringify(pendingRefundObj);
   const sigPendingRefund = await createPaddleSignature(rawBodyPendingRefund, SECRET_KEY);
   const reqPendingRefund = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
@@ -456,28 +482,42 @@ async function runTests() {
   const resPendingRefund = await handlePaddleRoutes(reqPendingRefund, env, ctx, new URL(reqPendingRefund.url), corsHeaders);
   assert(resPendingRefund.status === 200, 'Pending refund webhook returned 200 OK');
   const resPendingRefundJson = await resPendingRefund.json();
-  assert(resPendingRefundJson.status === 'cancelled', 'REAL handler cancelled pending upgrade on refund');
+  assert(resPendingRefundJson.status === 'cancelled', 'REAL handler cancelled historical pending upgrade on refund');
 
   const licAfterPendingRefund = db.tables.licenses.get(targetCode);
   assert(licAfterPendingRefund.status === 'active', 'Yearly license remains ACTIVE after pending upgrade refund');
+  assert(db.tables.license_upgrades.get(1).status === 'cancelled', 'Historical pending row marked cancelled');
 
-  // Test 5: REAL Lazy Flip Handler
-  console.log('\nTest 5: REAL checkAndApplyPendingUpgrade before & after effective date...');
-  // Restore upgrade row to pending for lazy flip test
-  const upgRow = Array.from(db.tables.license_upgrades.values())[0];
-  upgRow.status = 'pending';
-  upgRow.effective_at = new Date(nowMs - 1000).toISOString();
+  // Test 5: REAL Lazy Flip Handler (retained historical-path capability)
+  console.log('\nTest 5: REAL checkAndApplyPendingUpgrade lazy flip (retained historical-path capability)...');
+  // Seed a second historical pending row whose effective_at is already past (due) → lazy flip should apply it
+  const histFlipTxn = 'txn_hist_pending_888';
+  db.tables.license_upgrades.set(2, {
+    id: 2,
+    user_email: 'user@example.com',
+    target_license_code: targetCode,
+    lifetime_txn_id: histFlipTxn,
+    purchased_at: thirtyDaysAgoIso,
+    effective_at: new Date(nowMs - 1000).toISOString(),
+    status: 'pending',
+    created_at: thirtyDaysAgoIso
+  });
+  const upgRow = db.tables.license_upgrades.get(2);
 
   const afterResult = await checkAndApplyPendingUpgrade(env, targetCode, futureExpiresIso);
   assert(afterResult === 'LIFETIME', 'REAL checkAndApplyPendingUpgrade lazy flipped status to LIFETIME!');
   assert(upgRow.status === 'applied', 'REAL checkAndApplyPendingUpgrade set upgrade status = applied');
+  assert(db.tables.licenses.get(targetCode).expires_at === 'LIFETIME', 'Target license expires_at flipped to LIFETIME');
 
-  // Test 6: REAL handlePaddleRoutes Refund on APPLIED Upgrade (Revokes Target License)
-  console.log('\nTest 6: REAL handlePaddleRoutes refund on APPLIED lifetime upgrade...');
+  // Test 6: REAL handlePaddleRoutes Refund on APPLIED Upgrade (Revokes Target License) — retained historical-path capability
+  console.log('\nTest 6: REAL handlePaddleRoutes refund on APPLIED lifetime upgrade (retained historical-path capability)...');
+  const appliedRefundObj = { event_type: 'transaction.refunded', data: { id: histFlipTxn } };
+  const rawBodyAppliedRefund = JSON.stringify(appliedRefundObj);
+  const sigAppliedRefund = await createPaddleSignature(rawBodyAppliedRefund, SECRET_KEY);
   const reqAppliedRefund = new Request('https://lic.eqt.net.im/api/v1/paddle/webhook', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigPendingRefund },
-    body: rawBodyPendingRefund
+    headers: { 'Content-Type': 'application/json', 'paddle-signature': sigAppliedRefund },
+    body: rawBodyAppliedRefund
   });
   const resAppliedRefund = await handlePaddleRoutes(reqAppliedRefund, env, ctx, new URL(reqAppliedRefund.url), corsHeaders);
   assert(resAppliedRefund.status === 200, 'Applied refund webhook returned 200 OK');
@@ -487,9 +527,10 @@ async function runTests() {
   const licAfterAppliedRefund = db.tables.licenses.get(targetCode);
   assert(licAfterAppliedRefund.status === 'revoked', 'REAL handler successfully revoked target license in DB by target_license_code!');
   assert(licAfterAppliedRefund.revoke_reason === 'refund', 'REAL handler set revoke_reason = refund');
+  assert(db.tables.license_upgrades.get(2).status === 'cancelled', 'Applied upgrade row marked cancelled after refund');
 
-  // Test 7: REAL concurrent same-code atomicity — partial unique index prevents orphan rows (N3 blind spot)
-  console.log('\nTest 7: REAL concurrent different-txn inserts for same code → partial unique index prevents orphan...');
+  // Test 7: REAL concurrent same-code LIFETIME purchases → each mints its own key, no pending rows (upgrade disabled)
+  console.log('\nTest 7: REAL concurrent different-txn LIFETIME purchases for same code → each mints independently, no pending rows...');
   const dbConc = new RealWorkerD1Mock();
   const envConc = { DB: dbConc, PADDLE_WEBHOOK_SECRET: SECRET_KEY, PADDLE_PRICE_ID_PLUS_LIFETIME: PRICE_LIFETIME_ID };
   const concCode = 'EQT-PLUS-CONC-777';
@@ -503,9 +544,6 @@ async function runTests() {
     last_purchased_at: concCreatedAt,
     buyer_email: 'conc@example.com'
   });
-
-  // Simulate both transactions completing at the same instant: each request reads "no pending" before either commits
-  dbConc.concurrencyWindow = true;
 
   const mkUpgradeReq = async (txnId) => {
     const obj = {
@@ -530,26 +568,18 @@ async function runTests() {
   const reqConc = new URL('https://lic.eqt.net.im/api/v1/paddle/webhook');
   const resConcA = await handlePaddleRoutes(await mkUpgradeReq('txn_conc_A'), envConc, ctx, reqConc, corsHeaders);
   assert(resConcA.status === 200, 'Concurrent txn A returned 200');
+  const resConcAJson = await resConcA.json();
   const resConcB = await handlePaddleRoutes(await mkUpgradeReq('txn_conc_B'), envConc, ctx, reqConc, corsHeaders);
-  assert(resConcB.status === 200, 'Concurrent txn B returned 200 (INSERT OR IGNORE silently swallowed, no 400 needed)');
+  assert(resConcB.status === 200, 'Concurrent txn B returned 200');
+  const resConcBJson = await resConcB.json();
 
-  // WARN audit for the swallowed concurrent duplicate (observability aligned with sequential-path WARN)
-  await new Promise(resolve => setTimeout(resolve, 10));
-  const swallowAudit = Array.from(dbConc.tables.system_error_logs.values())
-    .filter(r => r.args && r.args.includes('DUPLICATE_UPGRADE_ATTEMPT'));
-  assert(swallowAudit.length === 1, 'Swallowed concurrent duplicate produced a DUPLICATE_UPGRADE_ATTEMPT WARN audit row');
-
-  const concPending = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
-  assert(concPending.length === 1, 'Partial unique index kept exactly ONE pending row for the same code (no orphan!)');
-  assert(concPending[0].lifetime_txn_id === 'txn_conc_A', 'The surviving pending row is the first transaction (id ASC order)');
-
-  // Lazy flip consumes the single row; nothing left pending afterward
-  dbConc.concurrencyWindow = false; // concurrency window closed: subsequent reads see committed state
-  concPending[0].effective_at = new Date(nowMs - 1000).toISOString();
-  const concFlip = await checkAndApplyPendingUpgrade(envConc, concCode, futureExpiresIso);
-  assert(concFlip === 'LIFETIME', 'Lazy flip applied LIFETIME from the single pending row');
-  const concPendingAfter = Array.from(dbConc.tables.license_upgrades.values()).filter(r => r.status === 'pending');
-  assert(concPendingAfter.length === 0, 'No orphan pending row remains after lazy flip');
+  // Both LIFETIME purchases minted DISTINCT new keys (fallback semantics); upgrade rows never created → no orphan risk
+  assert(!!resConcAJson.license_code && !!resConcBJson.license_code, 'Both concurrent purchases minted a license_code');
+  assert(resConcAJson.license_code !== resConcBJson.license_code, 'Concurrent purchases minted DISTINCT keys');
+  assert(dbConc.tables.licenses.size === 3, 'Three licenses: yearly + 2 minted LIFETIME keys');
+  assert(dbConc.tables.license_upgrades.size === 0, 'No license_upgrades row created under concurrency (upgrade disabled)');
+  const concLic = dbConc.tables.licenses.get(concCode);
+  assert(concLic.expires_at === futureExpiresIso && concLic.status === 'active', 'Original code untouched by concurrent fallback mints');
 
   // Test 8: REAL amount validation (A1) — $0 / quantity-0 transaction must NOT fulfill a license
   console.log('\nTest 8: REAL handlePaddleRoutes rejects $0 and quantity-0 transactions (A1)...');

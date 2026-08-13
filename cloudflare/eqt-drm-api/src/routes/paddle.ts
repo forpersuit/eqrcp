@@ -313,137 +313,15 @@ export async function handlePaddleRoutes(
           const isInRefundWindow = lastPurchaseTime > 0 && (nowMs - lastPurchaseTime < REFUND_WINDOW_MS);
 
           if (matchedPriceId === effectiveLifetimeId) {
-            if (isInRefundWindow) {
-              return new Response(JSON.stringify({
-                error: "Target license is within the 14-day refund window of its latest payment. Please request a refund first before purchasing lifetime.",
-                code: "UPGRADE_BLOCKED_REFUND_WINDOW"
-              }), {
-                status: 400,
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-              });
-            }
-
-            // Prevent duplicate pending upgrade for the same license (V1 & V2 & N1)
-            const existingPending = await env.DB.prepare(
-              "SELECT id, lifetime_txn_id, effective_at FROM license_upgrades WHERE target_license_code = ? AND status = 'pending' LIMIT 1"
-            ).bind(targetLic.license_code).first<any>();
-
-            if (existingPending) {
-              // Same transaction re-delivered (Paddle webhook retry) → idempotent 200, no error log
-              if (existingPending.lifetime_txn_id === transactionId) {
-                return new Response(JSON.stringify({
-                  message: "Upgrade already processed",
-                  status: "pending_upgrade",
-                  license_code: targetLic.license_code,
-                  effective_at: existingPending.effective_at
-                }), {
-                  status: 200,
-                  headers: { ...corsHeaders, "Content-Type": "application/json" }
-                });
-              }
-
-              // A genuinely different transaction → reject + audit for manual review
-              ctx.waitUntil(logSystemError(env, 'DUPLICATE_UPGRADE_ATTEMPT', 'WARN',
-                new Error(`Duplicate lifetime upgrade attempted for license ${targetLic.license_code}`),
-                { target_license_code: targetLic.license_code, duplicate_txn_id: transactionId, existing_effective_at: existingPending.effective_at }));
-
-              return new Response(JSON.stringify({
-                error: "Target license already has a pending lifetime upgrade scheduled",
-                code: "UPGRADE_ALREADY_PENDING",
-                license_code: targetLic.license_code,
-                effective_at: existingPending.effective_at
-              }), {
-                status: 400,
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-              });
-            }
-
-            // §6.7 Pending Lifetime Upgrade (State Isolation)
-            // Effective time is the snapshot of the current yearly expires_at
-            let effectiveAt = targetLic.expires_at;
-            if (!effectiveAt || isNaN(new Date(effectiveAt).getTime()) || new Date(effectiveAt).getTime() < nowMs) {
-              effectiveAt = new Date(nowMs).toISOString();
-            }
-
-            const nowIso = new Date(nowMs).toISOString();
-            const insertResult = await env.DB.prepare(`
-              INSERT OR IGNORE INTO license_upgrades (
-                user_email, target_license_code, lifetime_txn_id, purchased_at, effective_at, status, created_at
-              ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
-            `).bind(
-              buyerEmail || targetLic.buyer_email || "",
-              targetLic.license_code,
-              transactionId,
-              nowIso,
-              effectiveAt,
-              nowIso
-            ).run();
-
-            // Concurrent duplicate swallowed by the partial unique index → audit for manual review (matches sequential-path WARN)
-            if (insertResult && insertResult.meta && insertResult.meta.changes === 0) {
-              ctx.waitUntil(logSystemError(env, 'DUPLICATE_UPGRADE_ATTEMPT', 'WARN',
-                new Error(`Lifetime upgrade for license ${targetLic.license_code} swallowed by unique index (concurrent duplicate, txn ${transactionId})`),
-                { target_license_code: targetLic.license_code, swallowed_txn_id: transactionId }));
-            }
-
-            // Cancel auto-renewal ONLY; DO NOT OVERWRITE paddle_transaction_id to protect yearly refund checks! (Issue 5)
-            await env.DB.prepare(`
-              UPDATE licenses SET
-                auto_renew = 0,
-                buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
-                buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
-              WHERE license_code = ?
-            `).bind(
-              buyerEmail || null,
-              emailHash || null,
-              targetLic.license_code
-            ).run();
-
-            // Turn off Paddle auto-renew with proper error logging (Issue 8)
-            const subId = targetLic.paddle_subscription_id;
-            if (subId && env.PADDLE_API_KEY) {
-              const isSandbox = env.PADDLE_API_KEY.startsWith("pdl_sdbx_");
-              const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
-              ctx.waitUntil((async () => {
-                try {
-                  const res = await fetch(`${paddleBaseUrl}/subscriptions/${subId}/cancel`, {
-                    method: "POST",
-                    headers: {
-                      "Authorization": `Bearer ${env.PADDLE_API_KEY}`,
-                      "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ effective_from: "next_billing_period" })
-                  });
-                  if (!res.ok) {
-                    const errText = await res.text().catch(() => '');
-                    await logSystemError(env, 'PADDLE_API_ERROR', 'WARN',
-                      new Error(`Paddle cancel subscription HTTP ${res.status}`),
-                      { subscription_id: subId, license_code: targetLic.license_code, response: errText.slice(0, 300) });
-                  }
-                } catch (e) {
-                  await logSystemError(env, 'PADDLE_API_ERROR', 'WARN', e,
-                    { subscription_id: subId, license_code: targetLic.license_code, action: 'cancel_subscription' });
-                }
-              })());
-            }
-
-            if (buyerEmail) {
-              const buyerLang = detectBuyerLang(data);
-              const expiresStr = new Date(effectiveAt).toLocaleDateString();
-              const tmpl = getRenewalEmailTemplate(buyerLang);
-              const emailHtml = renderEmailWrapper(tmpl.title, tmpl.body(targetLic.license_code, `Pending Lifetime (Effective ${expiresStr})`));
-              ctx.waitUntil(sendDRMEmail(env, buyerEmail, tmpl.subject, emailHtml));
-            }
-
-            return new Response(JSON.stringify({
-              message: "Lifetime upgrade purchased and scheduled (pending effective date)",
-              license_code: targetLic.license_code,
-              effective_at: effectiveAt,
-              status: "pending_upgrade"
-            }), {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
+            // 订阅制升级为终生制暂不开放(2026-08-13): 保留 license_upgrades 架构与
+            // checkAndApplyPendingUpgrade 兑现逻辑(兼容历史 pending 记录),但不再创建
+            // 新的 pending upgrade。若付款人仍携带 target_license_code 购买 LIFETIME,
+            // 回退为发新 key(彻底换 key 语义),旧订阅不受影响。
+            ctx.waitUntil(logSystemError(env, 'UPGRADE_DISABLED_FALLBACK', 'WARN',
+              new Error(`Lifetime upgrade disabled; falling back to new-key mint for license ${targetLic.license_code}`),
+              { target_license_code: targetLic.license_code, transaction_id: transactionId }));
+            // 清空 targetCode,让控制流落到下方 mint 新 key 流程
+            targetCode = "";
           } else if (matchedPriceId === effectiveYearlyId) {
             let newExpires = expiresAt;
             if (targetLic.expires_at) {
