@@ -2470,8 +2470,13 @@ function computeLicensePlanState() {
     let redeemDetail = '';
     let expiryDetail = '';
     let freeQuotaPills = [];
-    if (isPaid && license?.redeemedAt && isParseableLicenseDate(license.redeemedAt)) {
-        redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
+    if (isPaid) {
+        if (license?.redeemedAt && isParseableLicenseDate(license.redeemedAt)) {
+            redeemDetail = `${t('redeemed_at', { date: new Date(license.redeemedAt).toLocaleDateString() })}`;
+        } else {
+            redeemDetail = chatQuotaText();
+        }
+
         let expVal = '';
         if (expiresAt === 'LIFETIME') {
             expVal = t('lifetime') || '永久';
@@ -2484,8 +2489,6 @@ function computeLicensePlanState() {
                 expiryDetail += ` (${expiryText})`;
             }
         }
-    } else if (isPaid) {
-        redeemDetail = chatQuotaText();
     } else if (isOnline()) {
         // Free tier: show Chat remaining time + Share/Receive full-feature quotas (online only).
         freeQuotaPills = freeTierQuotaTexts();

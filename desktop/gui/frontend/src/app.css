@@ -3193,18 +3193,3 @@ dd {
     box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35), inset 0 0.5px 0px rgba(255,255,255,0.3);
 }
 
-.topbar-tier-badge.tier-loading {
-    background: var(--bg2, #f3f4f6);
-    border: 1px solid var(--border, #e5e7eb);
-    min-width: 50px;
-    height: 38px;
-    opacity: 0.5;
-    animation: tierBadgePulse 1.2s infinite ease-in-out;
-}
-
-@keyframes tierBadgePulse {
-    0%, 100% { opacity: 0.35; }
-    50% { opacity: 0.75; }
-}
-
-

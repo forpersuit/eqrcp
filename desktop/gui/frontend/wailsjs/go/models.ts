@@ -95,6 +95,7 @@ export namespace main {
 	    clockTampered: boolean;
 	    isPaid: boolean;
 	    licenseTier: string;
+	    licenseReady: boolean;
 	    maxDevices: number;
 	    activatedDevices: number;
 	    usedSeconds: number;
@@ -121,6 +122,7 @@ export namespace main {
 	        this.clockTampered = source["clockTampered"];
 	        this.isPaid = source["isPaid"];
 	        this.licenseTier = source["licenseTier"];
+	        this.licenseReady = source["licenseReady"];
 	        this.maxDevices = source["maxDevices"];
 	        this.activatedDevices = source["activatedDevices"];
 	        this.usedSeconds = source["usedSeconds"];
