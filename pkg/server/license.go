@@ -638,6 +638,7 @@ var (
 	cachedTier           string
 	cachedCodeDate       string
 	cachedIsTampered     bool
+	cachedLicenseReady   bool
 	paidStatusCallbackMu sync.RWMutex
 	paidStatusCallbacks  []func(paid bool, tier string)
 )
@@ -663,6 +664,7 @@ func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 		cachedCodeDate = ""
 	} else {
 		cachedIsTampered = false
+		cachedLicenseReady = true
 	}
 	paidStateMu.Unlock()
 
@@ -760,9 +762,28 @@ func ResetPaidStatusCallbacksForTest() {
 	paidStateMu.Lock()
 	cachedIsPaid = false
 	cachedIsTampered = false
+	cachedLicenseReady = false
 	cachedTier = ""
 	cachedCodeDate = ""
 	paidStateMu.Unlock()
+}
+
+// SetLicenseReady sets whether the initial license verification has completed.
+func SetLicenseReady(ready bool) {
+	paidStateMu.Lock()
+	cachedLicenseReady = ready
+	paid := cachedIsPaid && !cachedIsTampered
+	tier := cachedTier
+	paidStateMu.Unlock()
+
+	notifyPaidStatusCallbacks(paid, tier)
+}
+
+// IsLicenseReady returns whether the initial license verification has completed.
+func IsLicenseReady() bool {
+	paidStateMu.RLock()
+	defer paidStateMu.RUnlock()
+	return cachedLicenseReady
 }
 
 // GetPaidStatus returns whether the premium status is activated.

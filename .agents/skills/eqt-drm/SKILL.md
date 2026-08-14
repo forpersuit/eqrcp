@@ -35,6 +35,10 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - 对账网络超时失败不影响使用。客户端支持 7 天内静默免网脱机运行：`time.Now() - LastOnlineSyncTime <= 7 * 24 * time.Hour`。若超时则自动强行降级。
   - 对账返回 403/404（授权被吊销或设备解绑）则立即执行 `ResetLicense()` 擦除证书并降级为 Unpaid 免费版。
   - `VerifyLocalLicense()` 任意失败路径（含无 `.lic` 文件）必须 `SetPaidStatus(false)`，防止内存付费态与磁盘不一致。
+  - **启动生命周期与 LicenseReady 标志**：
+    - 后端启动时提供 `IsLicenseReady()` / `SetLicenseReady(bool)`，初始为 `false`；当指纹预计算与本地证书校验完成时置为 `true` 并推送状态事件。
+    - 前端顶栏 Tier Badge 必须在 `status.licenseReady === true` 时才渲染（未就绪时不显示任何 Badge，杜绝启动时从虚假 FREE 跳变到 PLUS/PRO 的视觉闪烁）。
+    - `syncLicenseFromStatus()` 必须在 `status.licenseReady === true` 且 `!status.isPaid` 时才清空本地缓存，避免启动未就绪时误删 localStorage。
   - 前端 `localStorage` 仅缓存 UI 元数据（如 redeemedAt 展示），**禁止**在启动时用 localStorage 向 Go 端 `SetPaidStatus(true)` 抢权。
 - **极简单向时钟防回拨与网络时间防篡改**：
   - 证书内元数据字段 `LastSeenLocalTime` 记录最后一次运行时间。每次成功校验后（若距离上次写入超过 1 分钟，以减少磁盘 IO），客户端自动更新并原子性落盘。

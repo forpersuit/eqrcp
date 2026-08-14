@@ -68,14 +68,16 @@ flowchart TD
 * **残余跳变窗口（已修补）**：
   前端 JavaScript 在首帧调用 `render()` 时（`main.js`），由于 `loadStatusData()` 异步 Promise 尚未完成，`state.status` 处于 `null` 状态。此时 `hasPaidLicense()` 回退去读 `localStorage`。对于**首次安装或刚刚清理过缓存**的用户，`localStorage` 为空，首帧仍可能短暂显示 `FREE` 硬字，直到几毫秒后 Promise `then` 回调解决才切为 `PLUS`。
 
-### 2. 方案一 + 方案二联合落地
+### 2. 方案落地：后端权威 `LicenseReady` 标志 + 前端未最终确认不显示（0 闪烁 0 跳变）
 
-1. **后端首屏同步加载 (后端方案一落地)**：
-   GUI `startup()` 主线程同步执行 `server.VerifyLocalLicense()`，确保首帧 `AgentStatus()` 快照直接包含真实 Tier。
-2. **前端状态标志与骨架占位 + 异常兜底 (前端方案二落地)**：
-   * 在 [`state.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/state.js#L7) 中新增 `statusLoaded: false` 标志。
-   * 在 [`main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js) 的 `loadStatusData()` 中引入 `try...catch` 兜底；当 `AgentStatus()` 正常返回时由 `applyStatusData()` 将 `state.statusLoaded` 置为 `true` 并回写 `localStorage`；当出现 IPC/网络异常抛错时，在 `catch` 块强置 `state.statusLoaded = true` 并触发 `render()` 退出骨架态，防死锁卡住。
-   * 在首帧渲染顶栏 Badge 时，若 `!state.statusLoaded && !state.license && !state.status`（未完成加载且无缓存），渲染带有微光呼吸动画的占位骨架屏 `<span class="topbar-tier-badge tier-loading"></span>`；加载完成后平滑淡入呈现对应的 Tier Badge，**彻底消除跳变硬切换**。
+1. **后端状态权威指示 (`server.IsLicenseReady()`)**：
+   * 在 [`pkg/server/license.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/license.go) 中新增 `IsLicenseReady()` 与 `SetLicenseReady(bool)`，且在 [`AgentStatus`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go) 快照中暴露 `licenseReady` 字段。
+   * 启动时，无论同步校验通过还是异步后台指纹与证书校验完成，均显式调用 `SetLicenseReady(true)` 并向前端广播状态变更事件。
+2. **前端顶栏 Tier Badge 精准展示**：
+   * 在顶栏渲染 Tier Badge 时，若 `!state.statusLoaded || !state.status || !state.status.licenseReady`（未最终确认），**直接返回空字符串 `''`，不显示任何占位或虚假 FREE 标签**。
+   * 只有当后端最终确认就绪（`state.statusLoaded && state.status && state.status.licenseReady`）且处于连网状态时，才按确认后的真实 Tier（FREE / PLUS / PLUS Lifetime / PRO）渲染。
+3. **缓存防误删保护**：
+   * 在 [`main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js) 的 `syncLicenseFromStatus()` 中，仅当 `status.licenseReady && !status.isPaid` 时才执行在线解绑/降级清空本地缓存，避免启动初始化期间将用户的有效证书误当做降级删除。
 
 ---
 
@@ -89,7 +91,6 @@ flowchart TD
 | **PLUS** (标准订阅版) | `PLUS` | `.tier-plus` | **主题原色 / 翡翠青绿 (Theme Accent)**<br>经典标准色，融入默认 UI 品牌色 | `background: var(--accent, #156f5a);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(255,255,255,0.2);` |
 | **PLUS Lifetime** (终身版) | `PLUS Lifetime` | `.tier-plus-lifetime` | **星空尊贵紫 / 皇家紫罗兰 (Royal Purple)**<br>体现终身无忧、尊贵感与高价值区别 | `background: linear-gradient(135deg, #6b21a8, #4c1d95);`<br>`color: #ffffff;`<br>`border: 1px solid rgba(216, 180, 254, 0.35);`<br>`box-shadow: 0 1px 4px rgba(107, 33, 168, 0.3);` |
 | **PRO** (专业旗舰版) | `PRO` | `.tier-pro` | **璀璨黑金 / 曜石金色 (Obsidian Gold)**<br>顶级旗舰性能、无限算力象征 | `background: linear-gradient(135deg, #b45309, #78350f);`<br>`color: #fffbeb;`<br>`border: 1px solid rgba(253, 230, 138, 0.4);`<br>`box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35);` |
-| **Loading** (初始化中) | (无文字，骨架呼吸) | `.tier-loading` | **淡灰闪烁 / 呼吸微光**<br>消除无缓存首次启动时的视觉硬跳变 | `background: var(--bg2);`<br>`animation: tierBadgePulse 1.2s infinite;` |
 
 ---
-*版本说明：本机制与规范适用于 EQT v1.30.15+ (Cloudflare Worker API v1.8.5+) 架构体系。*
+*版本说明：本机制与规范适用于 EQT v1.31.1+ (Cloudflare Worker API v1.8.5+) 架构体系。*

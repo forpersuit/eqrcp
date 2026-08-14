@@ -1055,3 +1055,27 @@ func TestSetPaidDetailsPreservesClockTampered(t *testing.T) {
 	SetClockTampered(false)
 	SetPaidStatus(false, "", "", "")
 }
+
+func TestLicenseReadyStateManagement(t *testing.T) {
+	ResetPaidStatusCallbacksForTest()
+	if IsLicenseReady() {
+		t.Fatalf("expected IsLicenseReady() to be false after reset, got true")
+	}
+
+	SetLicenseReady(true)
+	if !IsLicenseReady() {
+		t.Fatalf("expected IsLicenseReady() to be true after SetLicenseReady(true)")
+	}
+
+	ResetPaidStatusCallbacksForTest()
+	if IsLicenseReady() {
+		t.Fatalf("expected IsLicenseReady() to be false after second reset")
+	}
+
+	SetPaidStatus(true, time.Now().Format(time.RFC3339), "2099-01-01T00:00:00Z", "PLUS")
+	if !IsLicenseReady() {
+		t.Fatalf("expected IsLicenseReady() to be true after SetPaidStatus(true, ...)")
+	}
+
+	ResetPaidStatusCallbacksForTest()
+}

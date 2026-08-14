@@ -262,6 +262,7 @@ func PrecomputeDeviceFingerprints() {
 		// 默默在后台触发本地证书校验，完全避免主线程阻塞
 		log.Println("[DRM] Background local license verification started...")
 		verified := VerifyLocalLicense()
+		SetLicenseReady(true)
 		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
 		// Process start: always force one online reconciliation when a local certificate exists.
 		// Online status is authoritative for unbind/revoke; the 12h throttle only applies to later background syncs.

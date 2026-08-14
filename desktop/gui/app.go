@@ -101,6 +101,7 @@ type AgentStatus struct {
 	ClockTampered        bool         `json:"clockTampered"`
 	IsPaid               bool         `json:"isPaid"`
 	LicenseTier          string       `json:"licenseTier"`
+	LicenseReady         bool         `json:"licenseReady"`
 	MaxDevices           int          `json:"maxDevices"`
 	ActivatedDevices     int          `json:"activatedDevices"`
 	UsedSeconds          int          `json:"usedSeconds"`
@@ -189,8 +190,10 @@ func (a *App) startup(ctx context.Context) {
 		wailsruntime.LogError(ctx, fmt.Sprintf("[GUI] Failed to load agent history: %v", err))
 	}
 
-	// 启动时主线程尽最大努力（300ms 通道等待）同步校验本地证书，结合前端骨架屏消除 Tier 状态跳变
-	server.VerifyLocalLicense()
+	// 启动时主线程尽最大努力（300ms 通道等待）同步校验本地证书，消除 Tier 状态跳变
+	if server.VerifyLocalLicense() {
+		server.SetLicenseReady(true)
+	}
 
 	// 注册授权状态变更监听，当后台指纹预计算与本地/在线证书校验完成时，即刻向前端发射 agent-status 事件
 	server.RegisterPaidStatusCallback(func(paid bool, tier string) {

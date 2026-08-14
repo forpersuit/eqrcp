@@ -559,18 +559,15 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat" title="${escapeHTML(getModeTitle('chat'))}">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
-                    ${!hasPaidLicense() && isOnline() ? `
+                    ${isOnline() && (!state.status || state.status.licenseReady ? !hasPaidLicense() : false) ? `
                         <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
                             <span class="menu-icon">${giftIcon()}</span>
                         </button>
                     ` : ''}
-                    ${isOnline() ? (() => {
-                        if (!state.statusLoaded && !state.license && !state.status) {
-                            return `<span class="topbar-tier-badge tier-loading" aria-label="Loading tier status"></span>`;
-                        }
+                    ${isOnline() && state.statusLoaded && state.status && state.status.licenseReady ? (() => {
                         const isPaid = hasPaidLicense();
-                        const tier = isPaid ? (state.status?.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
-                        const expires = state.status?.licenseExpiresAt || state.license?.codeDate;
+                        const tier = isPaid ? (state.status.licenseTier || state.license?.tier || 'PLUS') : 'FREE';
+                        const expires = state.status.licenseExpiresAt || state.license?.codeDate;
                         const isLifetime = tier === 'PLUS' && expires === 'LIFETIME';
                         const tierClass = isPaid
                             ? (isLifetime ? 'tier-plus-lifetime' : (tier === 'PRO' ? 'tier-pro' : 'tier-plus'))
@@ -1857,7 +1854,7 @@ function renderChatPanel(task) {
                 <div class="panel-head">
                     <div>
                         <div class="panel-title-inline">
-                            ${hasPaidLicense() ? `<span class="license-badge sidebar-badge">${escapeHTML(state.license.tier)}</span>` : ''}
+                            ${hasPaidLicense() ? `<span class="license-badge sidebar-badge">${escapeHTML(state.status?.licenseTier || state.license?.tier || '')}</span>` : ''}
                             <h2>${t('chat_status')}</h2>
                         </div>
                         <p class="side-note tight">${escapeHTML(chatStateLabel(chatState))}</p>
@@ -5252,6 +5249,7 @@ function applyStatusData(nextStatus) {
     const prevTier = state.status?.licenseTier;
     const prevExpiresAt = state.status?.licenseExpiresAt;
     const prevClockTampered = state.status?.clockTampered;
+    const prevLicenseReady = state.status?.licenseReady;
 
     state.status = nextStatus;
     state.statusLoaded = true;
@@ -5271,6 +5269,7 @@ function applyStatusData(nextStatus) {
     const nextTier = nextStatus?.licenseTier;
     const nextExpiresAt = nextStatus?.licenseExpiresAt;
     const nextClockTampered = nextStatus?.clockTampered;
+    const nextLicenseReady = nextStatus?.licenseReady;
 
     if (prevStatusState === 'busy' && nextStatusState !== 'busy') {
         const updateMode = state.settings?.autoUpdateMode || 'download';
@@ -5282,7 +5281,7 @@ function applyStatusData(nextStatus) {
         }
     }
 
-    const paidChanged = (prevPaid !== nextPaid || prevTier !== nextTier || prevExpiresAt !== nextExpiresAt || prevClockTampered !== nextClockTampered);
+    const paidChanged = (prevPaid !== nextPaid || prevTier !== nextTier || prevExpiresAt !== nextExpiresAt || prevClockTampered !== nextClockTampered || prevLicenseReady !== nextLicenseReady);
 
     if (prevChatUrl !== nextChatUrl || prevCurrentUrl !== nextCurrentUrl || prevBusy !== nextBusy || prevMode !== nextMode || paidChanged) {
         if (shouldProtectActiveInput()) {
@@ -5704,8 +5703,8 @@ function syncLicenseFromStatus(status) {
             }
         }
         saveLicense(state.license);
-    } else if (!status.isPaid) {
-        // Online demotion (unbind/revoke/lease) must clear UI cache immediately.
+    } else if (status.licenseReady && !status.isPaid) {
+        // Online demotion (unbind/revoke/lease) must clear UI cache immediately only after status is confirmed ready.
         state.license = null;
         try {
             window.localStorage.removeItem(licenseStorageKey);
@@ -5720,7 +5719,7 @@ function isOnline() {
 }
 
 function hasPaidLicense() {
-    if (state.status) {
+    if (state.status && state.status.licenseReady) {
         return Boolean(state.status.isPaid && !state.status.clockTampered);
     }
     const license = state.license || loadLicense();

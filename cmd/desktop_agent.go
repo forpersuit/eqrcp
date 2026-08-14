@@ -94,6 +94,7 @@ type desktopAgentResponse struct {
 	ClockTampered    bool                     `json:"clockTampered"`
 	IsPaid           bool                     `json:"isPaid"`
 	LicenseTier      string                   `json:"licenseTier"`
+	LicenseReady     bool                     `json:"licenseReady"`
 	MaxDevices       int                      `json:"maxDevices"`
 	ActivatedDevices int                      `json:"activatedDevices"`
 }
@@ -1694,6 +1695,7 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 		ClockTampered:    server.GetClockTamperedStatus(),
 		IsPaid:           server.GetPaidStatus(),
 		LicenseTier:      server.GetLicenseTier(),
+		LicenseReady:     server.IsLicenseReady(),
 		MaxDevices:       maxDev,
 		ActivatedDevices: actDev,
 	}
