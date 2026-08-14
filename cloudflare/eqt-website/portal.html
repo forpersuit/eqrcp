@@ -2,6 +2,15 @@
 <html class="dark scroll-smooth" lang="en">
 <head>
     <meta charset="utf-8"/>
+    <script>
+        (function() {
+            var h = window.location.hostname;
+            var isTestHost = (h === 'test.eqt.net.im' || h === 'localhost' || h.startsWith('127.0.0.1'));
+            if (!isTestHost && h !== 'www.eqt.net.im') {
+                window.location.replace('https://www.eqt.net.im' + window.location.pathname + window.location.search + window.location.hash);
+            }
+        })();
+    </script>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Customer Portal - EQT (Easy QR Transfer)</title>
     <link rel="icon" href="assets/favicon.png" type="image/png"/>
@@ -471,6 +480,9 @@
                 "auto_renew_on_btn": "自動更新：オン",
                 "auto_renew_off_btn": "自動更新：オフ",
                 "auto_renew_disabled_pending": "無期限アップグレードが予定されているため、自動更新は無効です。",
+                "pending_upgrade_banner": "終身アップグレード購入済み。{date} に有効化されます",
+                "upgrade_to_lifetime": "終身版にアップグレード",
+                "upgrade_blocked_refund_window": "購入後14日間の返金期間中はアップグレードできません。変更をご希望の場合は先に返金を申請し、改めて終身版をご購入ください。",
                 "toast_code_sent": "認証コードをメールに送信しました。",
                 "toast_login_success": "ログインに成功しました！",
                 "toast_refund_success": "返金申請が完了しました。",
@@ -547,6 +559,9 @@
                 "auto_renew_on_btn": "자동 갱신: 켜짐",
                 "auto_renew_off_btn": "자동 갱신: 꺼짐",
                 "auto_renew_disabled_pending": "평생 업그레이드가 예정되어 있어 자동 갱신이 비활성화되었습니다.",
+                "pending_upgrade_banner": "평생 플랜 업그레이드 구매 완료, {date}부터 적용됩니다",
+                "upgrade_to_lifetime": "평생 플랜으로 업그레이드",
+                "upgrade_blocked_refund_window": "구매 후 14일 환불 기간 동안에는 업그레이드할 수 없습니다. 변경을 원하시면 먼저 환불 후 평생 플랜을 구매해 주세요.",
                 "toast_code_sent": "이메일로 인증 코드가 전송되었습니다.",
                 "toast_login_success": "로그인 성공!",
                 "toast_refund_success": "환불 신청이 완료되었습니다.",
@@ -623,6 +638,9 @@
                 "auto_renew_on_btn": "Renovación aut.: ACTIVADA",
                 "auto_renew_off_btn": "Renovación aut.: DESACTIVADA",
                 "auto_renew_disabled_pending": "La renovación automática está desactivada porque hay una actualización de por vida programada.",
+                "pending_upgrade_banner": "Pase vitalicio comprado, efectivo el {date}",
+                "upgrade_to_lifetime": "Actualizar a Lifetime",
+                "upgrade_blocked_refund_window": "No disponible durante el periodo de reembolso de 14 días. Solicite un reembolso primero y luego compre Lifetime.",
                 "toast_code_sent": "Código enviado a tu correo.",
                 "toast_login_success": "¡Sesión iniciada con éxito!",
                 "toast_refund_success": "Reembolso procesado correctamente.",
@@ -699,6 +717,9 @@
                 "auto_renew_on_btn": "Auto-Verlängerung: AN",
                 "auto_renew_off_btn": "Auto-Verlängerung: AUS",
                 "auto_renew_disabled_pending": "Automatische Verlängerung ist deaktiviert, da ein Lifetime-Upgrade geplant ist.",
+                "pending_upgrade_banner": "Lifetime-Upgrade erworben, gültig ab {date}",
+                "upgrade_to_lifetime": "Auf Lifetime upgraden",
+                "upgrade_blocked_refund_window": "Upgrade innerhalb der 14-tägigen Rückgabefrist nicht möglich. Bitte erst Rückerstattung anfordern und dann Lifetime kaufen.",
                 "toast_code_sent": "Bestätigungscode an Ihre E-Mail gesendet.",
                 "toast_login_success": "Erfolgreich angemeldet!",
                 "toast_refund_success": "Rückerstattung erfolgreich erstellt.",
@@ -775,6 +796,9 @@
                 "auto_renew_on_btn": "Renouv. auto : ACTIVÉ",
                 "auto_renew_off_btn": "Renouv. auto : DÉSACTIVÉ",
                 "auto_renew_disabled_pending": "Le renouvellement automatique est désactivé car une mise à niveau à vie est planifiée.",
+                "pending_upgrade_banner": "Pass à vie acheté, effectif le {date}",
+                "upgrade_to_lifetime": "Passer à la version à vie",
+                "upgrade_blocked_refund_window": "Mise à niveau indisponible pendant la période de remboursement de 14 jours. Veuillez d'abord demander un remboursement puis acheter la version à vie.",
                 "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
                 "toast_login_success": "Connexion réussie !",
                 "toast_refund_success": "Remboursement traité avec succès.",
@@ -811,9 +835,20 @@
             fr: 'Français'
         };
 
+        // Security: Escape HTML strings to prevent DOM XSS injection
+        function escapeHtml(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Setup i18n
         function initLanguage() {
-            let userLang = localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
+            let userLang = localStorage.getItem('eqt-lang') || localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
             if (!userLang) {
                 const match = document.cookie.match(/eqt-lang=([^;]+)/);
                 if (match) userLang = match[1];
@@ -827,6 +862,7 @@
 
         function setLanguage(lang) {
             state.lang = lang;
+            localStorage.setItem('eqt-lang', lang);
             localStorage.setItem('eqt_lang', lang);
             localStorage.setItem('eqt-page-lang', lang);
             document.cookie = `eqt-lang=${lang}; max-age=${365 * 24 * 3600}; path=/`;
@@ -997,8 +1033,14 @@
                     body: JSON.stringify({ email, lang: state.lang })
                 });
                 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+                if (!res.ok) {
+                    const err = new Error(data.error || 'Failed to send verification code');
+                    err.status = res.status;
+                    err.error_code = data.error_code;
+                    throw err;
+                }
 
                 const successMsg = `${dict.toast_code_sent || 'Verification code sent to your email.'} (${email})`;
                 setSendCodeStatus(successMsg, 'success');
@@ -1021,7 +1063,7 @@
 
             } catch (err) {
                 const errMsg = err.message || '';
-                const isRateLimited = errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
+                const isRateLimited = err.status === 429 || err.error_code === 'RATE_LIMITED' || errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
 
                 if (emailInput) {
                     emailInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
@@ -1062,8 +1104,14 @@
                     body: JSON.stringify({ email, code })
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+                if (!res.ok) {
+                    const err = new Error(data.error || 'Failed to login');
+                    err.status = res.status;
+                    err.error_code = data.error_code;
+                    throw err;
+                }
 
                 showToast(translations[state.lang].toast_login_success);
                 
@@ -1097,15 +1145,21 @@
                     }
                 });
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error);
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
+                if (!res.ok) {
+                    const err = new Error(data.error || 'Failed to load licenses');
+                    err.status = res.status;
+                    err.error_code = data.error_code;
+                    throw err;
+                }
 
                 state.licenses = data.licenses || [];
                 renderLicenses();
 
             } catch (err) {
                 showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
-                if (err.message.includes('Session')) {
+                if (err.status === 401 || err.error_code === 'SESSION_EXPIRED' || err.error_code === 'UNAUTHORIZED' || err.message.includes('Session')) {
                     handleLogout();
                 }
             }
@@ -1168,31 +1222,47 @@
                     .replace('{remaining}', remainingUnbinds)
                     .replace('{max}', maxUnbinds);
 
+                // Safe escaped fields for innerHTML injection
+                const escCode = escapeHtml(lic.license_code);
+                const escStatusLabel = escapeHtml(statusLabel);
+                const escTier = escapeHtml(lic.tier);
+                const escSourceLabel = escapeHtml(sourceLabel);
+                const escEntitlementLabel = escapeHtml(entitlementLabel);
+                const escCreatedDate = escapeHtml(createdDate);
+                const escExpiresLabel = escapeHtml(expiresLabel);
+                const escTxn = escapeHtml(lic.paddle_transaction_id || 'N/A');
+                const escSub = escapeHtml(lic.paddle_subscription_id || '');
+                const escRevokeReason = lic.revoke_reason ? ` · ${escapeHtml(lic.revoke_reason)}` : '';
+                const escQuotaLabel = escapeHtml(quotaLabel);
+
                 // Render activations
                 let activationsHtml = '';
                 if (lic.activations && lic.activations.length > 0) {
                     activationsHtml = `
                         <div class="mt-3 pt-3 border-t border-white/5 space-y-2">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
-                                <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${translations[state.lang].activations} (${lic.activations.length}/${lic.max_devices})</h4>
+                                <h4 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">${escapeHtml(translations[state.lang].activations)} (${lic.activations.length}/${lic.max_devices})</h4>
                                 <span class="text-[11px] text-on-surface-variant/70 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-[13px]">info</span>
-                                    <span>${translations[state.lang].device_id_hint || ''}</span>
+                                    <span>${escapeHtml(translations[state.lang].device_id_hint || '')}</span>
                                 </span>
                             </div>
                             <div class="grid gap-2 text-xs">
                                 ${lic.activations.map(act => {
                                     const devKey = act.device_id || (act.uuid_hash ? act.uuid_hash.slice(0, 12) : '------');
+                                    const escDevKey = escapeHtml(devKey);
+                                    const escActDate = escapeHtml(new Date(act.activated_at).toLocaleDateString());
+                                    const escActId = escapeHtml(act.id);
                                     return `
                                     <div class="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5 gap-2">
                                         <div class="flex flex-col gap-0.5">
-                                            <span class="font-mono text-white font-semibold tracking-widest text-[13px]">${devKey}</span>
-                                            <span class="text-on-surface-variant text-[10px]">${translations[state.lang].activated_on}: ${new Date(act.activated_at).toLocaleDateString()}</span>
+                                            <span class="font-mono text-white font-semibold tracking-widest text-[13px]">${escDevKey}</span>
+                                            <span class="text-on-surface-variant text-[10px]">${escapeHtml(translations[state.lang].activated_on)}: ${escActDate}</span>
                                         </div>
                                         ${lic.status === 'active' ? `
-                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${lic.license_code}" data-activation="${act.id}" data-device-id="${devKey}" data-remaining-unbinds="${remainingUnbinds}" data-max-unbinds="${maxUnbinds}">
+                                            <button class="unbind-device-btn bg-white/5 hover:bg-red-500/20 text-on-surface-variant hover:text-red-400 border border-white/10 hover:border-red-500/30 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all duration-200 active:scale-95 flex items-center gap-1" data-license="${escCode}" data-activation="${escActId}" data-device-id="${escDevKey}" data-remaining-unbinds="${remainingUnbinds}" data-max-unbinds="${maxUnbinds}">
                                                 <span class="material-symbols-outlined text-xs">link_off</span>
-                                                <span>${translations[state.lang].unbind_btn || 'Unbind'}</span>
+                                                <span>${escapeHtml(translations[state.lang].unbind_btn || 'Unbind')}</span>
                                             </button>
                                         ` : ''}
                                     </div>
@@ -1210,11 +1280,12 @@
                         year: 'numeric', month: 'long', day: 'numeric'
                     });
                     const bannerText = (dict.pending_upgrade_banner || "Lifetime pass purchased, effective on {date}").replace('{date}', effDateStr);
+                    const escBannerText = escapeHtml(bannerText);
                     pendingUpgradeHtml = `
                         <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs flex items-center justify-between text-amber-300">
                             <span class="flex items-center gap-1.5 font-semibold">
                                 <span class="material-symbols-outlined text-sm">schedule</span>
-                                <span>${bannerText}</span>
+                                <span>${escBannerText}</span>
                             </span>
                         </div>
                     `;
@@ -1231,16 +1302,16 @@
                 if (canUpgrade) {
                     if (lic.is_in_refund_window) {
                         actionBtns.push(`
-                            <button class="flex items-center gap-1 bg-white/5 text-white/40 border border-white/10 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${dict.upgrade_blocked_refund_window || 'Upgrades unavailable during 14-day refund window. Please refund first then purchase Lifetime.'}">
+                            <button class="flex items-center gap-1 bg-white/5 text-white/40 border border-white/10 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${escapeHtml(dict.upgrade_blocked_refund_window || 'Upgrades unavailable during 14-day refund window. Please refund first then purchase Lifetime.')}">
                                 <span class="material-symbols-outlined text-sm">workspace_premium</span>
-                                <span>${dict.upgrade_to_lifetime || 'Upgrade to Lifetime'}</span>
+                                <span>${escapeHtml(dict.upgrade_to_lifetime || 'Upgrade to Lifetime')}</span>
                             </button>
                         `);
                     } else {
                         actionBtns.push(`
-                            <button class="upgrade-trigger-btn flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                            <button class="upgrade-trigger-btn flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/40 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
                                 <span class="material-symbols-outlined text-sm">workspace_premium</span>
-                                <span>${dict.upgrade_to_lifetime || 'Upgrade to Lifetime'}</span>
+                                <span>${escapeHtml(dict.upgrade_to_lifetime || 'Upgrade to Lifetime')}</span>
                             </button>
                         `);
                     }
@@ -1250,42 +1321,42 @@
                     const isAutoRenewOn = lic.auto_renew !== 0;
                     if (lic.pending_upgrade) {
                         actionBtns.push(`
-                            <button class="flex items-center gap-1.5 bg-slate-800/40 text-slate-400 border border-slate-700/40 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${dict.auto_renew_disabled_pending || 'Auto-renew is disabled because a lifetime upgrade is scheduled.'}">
+                            <button class="flex items-center gap-1.5 bg-slate-800/40 text-slate-400 border border-slate-700/40 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-not-allowed opacity-60" disabled title="${escapeHtml(dict.auto_renew_disabled_pending || 'Auto-renew is disabled because a lifetime upgrade is scheduled.')}">
                                 <span class="material-symbols-outlined text-sm">sync_disabled</span>
-                                <span>${dict.auto_renew_off_btn || 'Auto-renew: OFF'}</span>
+                                <span>${escapeHtml(dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
                             </button>
                         `);
                     } else {
                         actionBtns.push(`
-                            <button class="toggle-auto-renew-btn flex items-center gap-1.5 ${isAutoRenewOn ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/40'} border px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-current-renew="${isAutoRenewOn ? '1' : '0'}">
+                            <button class="toggle-auto-renew-btn flex items-center gap-1.5 ${isAutoRenewOn ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/40 hover:bg-slate-700/60 text-slate-300 border-slate-600/40'} border px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}" data-current-renew="${isAutoRenewOn ? '1' : '0'}">
                                 <span class="material-symbols-outlined text-sm">${isAutoRenewOn ? 'sync' : 'sync_disabled'}</span>
-                                <span>${isAutoRenewOn ? (dict.auto_renew_on_btn || 'Auto-renew: ON') : (dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
+                                <span>${isAutoRenewOn ? escapeHtml(dict.auto_renew_on_btn || 'Auto-renew: ON') : escapeHtml(dict.auto_renew_off_btn || 'Auto-renew: OFF')}</span>
                             </button>
                         `);
                     }
                 }
                 if (canInvoice) {
                     actionBtns.push(`
-                        <button class="invoice-trigger-btn flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white border border-sky-500/30 hover:border-sky-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}" data-txn="${lic.paddle_transaction_id || ''}">
+                        <button class="invoice-trigger-btn flex items-center gap-1 bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white border border-sky-500/30 hover:border-sky-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}" data-txn="${escapeHtml(lic.paddle_transaction_id || '')}">
                             <span class="material-symbols-outlined text-sm">receipt_long</span>
-                            <span>${dict.invoice_btn || 'Invoice / receipt'}</span>
+                            <span>${escapeHtml(dict.invoice_btn || 'Invoice / receipt')}</span>
                         </button>
                     `);
                 }
                 if (canRefund) {
                     actionBtns.push(`
-                        <button class="refund-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                        <button class="refund-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
                             <span class="material-symbols-outlined text-sm">history_toggle_off</span>
-                            <span>${translations[state.lang].request_refund}</span>
+                            <span>${escapeHtml(translations[state.lang].request_refund)}</span>
                         </button>
                     `);
                 }
                 const canCancel = lic.cancellable === true;
                 if (canCancel) {
                     actionBtns.push(`
-                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${lic.license_code}">
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
                             <span class="material-symbols-outlined text-sm">cancel_schedule_send</span>
-                            <span>${dict.cancel_subscription || 'Cancel subscription'}</span>
+                            <span>${escapeHtml(dict.cancel_subscription || 'Cancel subscription')}</span>
                         </button>
                     `);
                 }
@@ -1296,25 +1367,25 @@
                 card.innerHTML = `
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div class="flex items-center gap-2">
-                            <span class="text-white font-bold font-mono tracking-wide select-all">${lic.license_code}</span>
-                            <button class="copy-license-btn text-on-surface-variant hover:text-primary transition-colors outline-none focus:outline-none" data-code="${lic.license_code}">
+                            <span class="text-white font-bold font-mono tracking-wide select-all">${escCode}</span>
+                            <button class="copy-license-btn text-on-surface-variant hover:text-primary transition-colors outline-none focus:outline-none" data-code="${escCode}">
                                 <span class="material-symbols-outlined text-base">content_copy</span>
                             </button>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap justify-end">
-                            <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${statusLabel}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">${lic.tier}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold border ${sourceColor}" title="${dict.source_label || 'Source'}">${sourceLabel}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 text-on-surface-variant border border-white/10">${entitlementLabel}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-bold border ${statusColor}">${escStatusLabel}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">${escTier}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-semibold border ${sourceColor}" title="${escapeHtml(dict.source_label || 'Source')}">${escSourceLabel}</span>
+                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-white/5 text-on-surface-variant border border-white/10">${escEntitlementLabel}</span>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-6 text-xs text-on-surface-variant">
-                        <div><span class="font-medium text-white/50">${dict.source_label || 'Source'}:</span> ${sourceLabel}${lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}</div>
-                        <div><span class="font-medium text-white/50">${dict.created_at}:</span> ${createdDate}</div>
-                        <div><span class="font-medium text-white/50">${dict.expires_at || 'Valid until'}:</span> <span class="text-white/90">${expiresLabel}</span></div>
-                        <div><span class="font-medium text-white/50">${dict.paddle_transaction}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_transaction_id || 'N/A'}</span></div>
-                        ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${dict.paddle_subscription}:</span> <span class="font-mono text-white/80 select-all">${lic.paddle_subscription_id}</span></div>` : ''}
+                        <div><span class="font-medium text-white/50">${escapeHtml(dict.source_label || 'Source')}:</span> ${escSourceLabel}${escRevokeReason}</div>
+                        <div><span class="font-medium text-white/50">${escapeHtml(dict.created_at)}:</span> ${escCreatedDate}</div>
+                        <div><span class="font-medium text-white/50">${escapeHtml(dict.expires_at || 'Valid until')}:</span> <span class="text-white/90">${escExpiresLabel}</span></div>
+                        <div><span class="font-medium text-white/50">${escapeHtml(dict.paddle_transaction)}:</span> <span class="font-mono text-white/80 select-all">${escTxn}</span></div>
+                        ${lic.paddle_subscription_id ? `<div><span class="font-medium text-white/50">${escapeHtml(dict.paddle_subscription)}:</span> <span class="font-mono text-white/80 select-all">${escSub}</span></div>` : ''}
                     </div>
 
                     ${pendingUpgradeHtml}
@@ -1323,11 +1394,11 @@
                     <div class="bg-white/5 border border-white/10 rounded-xl p-3 text-xs flex items-center justify-between text-on-surface-variant">
                         <span class="flex items-center gap-1.5 text-primary font-medium">
                             <span class="material-symbols-outlined text-sm">history_toggle_off</span>
-                            <span>${quotaLabel}</span>
+                            <span>${escQuotaLabel}</span>
                         </span>
                         <span class="text-[11px] text-on-surface-variant/70 flex items-center gap-1">
                             <span class="material-symbols-outlined text-xs">restore</span>
-                            <span data-i18n="unbind_quota_reset_note">${translations[state.lang].unbind_quota_reset_note || '365-day rolling window recovery'}</span>
+                            <span data-i18n="unbind_quota_reset_note">${escapeHtml(translations[state.lang].unbind_quota_reset_note || '365-day rolling window recovery')}</span>
                         </span>
                     </div>
 
@@ -1414,8 +1485,12 @@
                     body: JSON.stringify({ license_code: licenseCode, lang: state.lang })
                 });
 
-                const data = await res.json();
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
                 if (!res.ok) {
+                    if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                        handleLogout();
+                    }
                     throw new Error(data.error || 'Upgrade not available for this license');
                 }
 
@@ -1432,6 +1507,9 @@
             } catch (err) {
                 const prefix = dict.toast_error || 'Error:';
                 showToast(`${prefix} ${err.message || err}`, 'error');
+                if (err.status === 401 || err.error_code === 'SESSION_EXPIRED' || err.error_code === 'UNAUTHORIZED') {
+                    handleLogout();
+                }
             }
         }
 
@@ -1455,6 +1533,9 @@
                 let data = {};
                 try { data = await res.json(); } catch (_) { data = {}; }
                 if (!res.ok) {
+                    if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                        handleLogout();
+                    }
                     throw new Error(data.error || dict.toast_error || 'Invoice failed');
                 }
                 if (data.url) {
@@ -1537,11 +1618,15 @@
                         lang: state.lang
                     })
                 });
-                const data = await res.json();
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
                 if (res.ok) {
                     showToast(data.message || translations[state.lang].unbind_success || 'Device unbound successfully!', 'success');
                     await loadLicenses();
                 } else {
+                    if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                        handleLogout();
+                    }
                     showToast(data.error || 'Failed to unbind device', 'error');
                 }
             } catch (err) {
@@ -1609,6 +1694,9 @@
                     data = {};
                 }
                 if (!res.ok) {
+                    if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                        handleLogout();
+                    }
                     throw new Error(data.error || dict.toast_error || 'Refund failed');
                 }
 
@@ -1681,6 +1769,9 @@
                     data = {};
                 }
                 if (!res.ok) {
+                    if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                        handleLogout();
+                    }
                     throw new Error(data.error || dict.toast_error || 'Cancel failed');
                 }
 
@@ -1809,11 +1900,15 @@
                                 lang: state.lang
                             })
                         });
-                        const data = await res.json();
+                        let data = {};
+                        try { data = await res.json(); } catch (_) { data = {}; }
                         if (res.ok) {
                             showToast(data.message || 'Auto-renewal status updated', 'success');
                             await loadLicenses();
                         } else {
+                            if (res.status === 401 || data.error_code === 'SESSION_EXPIRED' || data.error_code === 'UNAUTHORIZED') {
+                                handleLogout();
+                            }
                             showToast(data.error || 'Failed to update auto-renewal status', 'error');
                         }
                     } catch (err) {

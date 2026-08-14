@@ -116,7 +116,10 @@ export async function handleAuthRoutes(
 
     // Rate limit: check if a code was sent in the last 60 seconds
     if (await isSendCodeRateLimited(env, storageKey)) {
-      return new Response(JSON.stringify({ error: "Please wait 60 seconds before requesting another code" }), {
+      return new Response(JSON.stringify({
+        error: "Please wait 60 seconds before requesting another code",
+        error_code: "RATE_LIMITED"
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -160,7 +163,10 @@ export async function handleAuthRoutes(
     const failKey = otpFailStorageKey(request, "checkout", email);
 
     if (await isOtpVerifyBlocked(env, failKey)) {
-      return new Response(JSON.stringify({ error: getApiTranslation("too_many_verify_attempts", reqLang) }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("too_many_verify_attempts", reqLang),
+        error_code: "TOO_MANY_ATTEMPTS"
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -244,7 +250,8 @@ export async function handleAuthRoutes(
     // 2. 60s rate limit (aligned with checkout)
     if (await isSendCodeRateLimited(env, storageKey)) {
       return new Response(JSON.stringify({
-        error: getApiTranslation("rate_limited", reqLang)
+        error: getApiTranslation("rate_limited", reqLang),
+        error_code: "RATE_LIMITED"
       }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -331,7 +338,10 @@ export async function handleAuthRoutes(
     const failKey = otpFailStorageKey(request, "portal", email);
 
     if (await isOtpVerifyBlocked(env, failKey)) {
-      return new Response(JSON.stringify({ error: getApiTranslation("too_many_verify_attempts", reqLang) }), {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("too_many_verify_attempts", reqLang),
+        error_code: "TOO_MANY_ATTEMPTS"
+      }), {
         status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

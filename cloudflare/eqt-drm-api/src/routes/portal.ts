@@ -84,7 +84,7 @@ export async function handlePortalRoutes(
     const reqLang = extractRequestLang(request);
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -96,7 +96,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -173,7 +173,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -185,7 +185,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -316,7 +316,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -328,7 +328,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -526,7 +526,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -538,7 +538,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -630,7 +630,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -642,7 +642,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -801,7 +801,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -813,7 +813,7 @@ export async function handlePortalRoutes(
     ).bind(token).first<any>();
 
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -902,7 +902,7 @@ export async function handlePortalRoutes(
 
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("unauthorized", reqLang), error_code: "UNAUTHORIZED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -912,7 +912,7 @@ export async function handlePortalRoutes(
       "SELECT * FROM user_sessions WHERE session_token = ?"
     ).bind(token).first<any>();
     if (!session || new Date(session.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
+      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang), error_code: "SESSION_EXPIRED" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

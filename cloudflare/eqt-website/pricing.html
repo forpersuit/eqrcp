@@ -425,7 +425,7 @@
                 "price_free_period": "/ 永久",
                 "price_free_feat1": "基本的なローカル転送",
                 "price_free_feat2": "1日10分間のセッション制限",
-                "price_free_feat3": "最大5個 of 파일、단일 파일 최대 50MB",
+                "price_free_feat3": "最大5個のファイル、単一ファイル最大50MB",
                 "price_free_feat4": "制限なしのローカル速度",
                 "price_free_btn": "今すぐ開始",
                 "price_lifetime_badge": "最もお得",
@@ -439,7 +439,7 @@
                 "price_yearly_title": "年付Plus版",
                 "price_yearly_period": "/ 年",
                 "price_yearly_feat1": "制限なしのローカル速度",
-                "price_yearly_feat2": "無制限의 세션 시간과 파일 수",
+                "price_yearly_feat2": "無制限のセッション時間とファイル数",
                 "price_yearly_feat3": "優先サポートサービス",
                 "price_yearly_btn": "年間購読",
                 "send_code_btn": "コード送信",
@@ -818,9 +818,6 @@
             ? "pri_01kxymxqngex49tg65wb0701pc"
             : "pri_01kydyzmn1pc29npe377dxtq96";
 
-        let pendingPriceId = null;
-        let verifiedEmail = null;
-
         function initPaddle() {
             if (typeof Paddle !== 'undefined') {
                 try {
@@ -870,12 +867,6 @@
         function openVerifyModal(priceId) {
             if (window.checkoutVerifyComp) {
                 window.checkoutVerifyComp.open(priceId);
-            }
-        }
-
-        function closeVerifyModal() {
-            if (window.checkoutVerifyComp) {
-                window.checkoutVerifyComp.close();
             }
         }
 
@@ -957,10 +948,12 @@
 
         // Bind modal close buttons
         const closeBtn = document.getElementById('close-modal-btn');
+        const closeTopBtn = document.getElementById('close-modal-btn-top');
         const okBtn = document.getElementById('modal-ok-btn');
         const errOkBtn = document.getElementById('modal-err-ok-btn');
 
         if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (closeTopBtn) closeTopBtn.addEventListener('click', closeModal);
         if (okBtn) okBtn.addEventListener('click', closeModal);
         if (errOkBtn) errOkBtn.addEventListener('click', closeModal);
 
@@ -1005,7 +998,7 @@
     <!-- Email Verification Before Checkout Modal -->
     <div id="verify-email-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
         <div class="glass-panel max-w-md w-full p-6 md:p-8 rounded-2xl border border-primary/40 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-5">
-            <button id="close-verify-modal-btn" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeVerifyModal()">
+            <button id="close-verify-modal-btn" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
                 <span class="material-symbols-outlined">close</span>
             </button>
             
@@ -1059,7 +1052,7 @@
     <!-- License Success / Loader Modal -->
     <div id="license-modal" class="hidden fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-[100] p-4 transition-all duration-300 opacity-0">
         <div class="glass-panel max-w-md w-full p-8 rounded-2xl border border-primary/30 glow-primary bg-surface-container-low/95 shadow-2xl relative transform scale-95 transition-all duration-300 space-y-6">
-            <button id="close-modal-btn-top" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors" onclick="closeModal()">
+            <button id="close-modal-btn-top" class="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
                 <span class="material-symbols-outlined">close</span>
             </button>
             

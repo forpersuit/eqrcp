@@ -18,6 +18,7 @@
             this.isInitialized = false;
             this.autoVerifyDebounce = null;
             this.isSending = false;
+            this.isVerifying = false;
             this.lastClickTime = 0;
         }
 
@@ -297,6 +298,12 @@
         }
 
         async verifyAndPay() {
+            if (this.isVerifying) return;
+            if (this.autoVerifyDebounce) {
+                clearTimeout(this.autoVerifyDebounce);
+                this.autoVerifyDebounce = null;
+            }
+
             const dom = this.getDom();
             if (!this.validateEmail()) {
                 this.triggerShake(dom.emailInput);
@@ -306,12 +313,14 @@
             const email = dom.emailInput.value.trim();
             const code = dom.codeInput ? dom.codeInput.value.trim() : '';
 
-            if (!code || code.length !== 6) {
+            if (!code || !/^\d{6}$/.test(code)) {
                 this.showCodeFieldError(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'));
                 this.triggerShake(dom.codeInput);
                 this.showStatusCard(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'), true);
                 return;
             }
+
+            this.isVerifying = true;
 
             if (dom.payBtn) {
                 dom.payBtn.disabled = true;
@@ -359,6 +368,7 @@
                 this.triggerShake(dom.codeInput);
                 this.showStatusCard(safeMsg, true);
             } finally {
+                this.isVerifying = false;
                 if (dom.payBtn) {
                     dom.payBtn.disabled = false;
                     dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
@@ -395,6 +405,11 @@
         }
 
         close() {
+            if (this.autoVerifyDebounce) {
+                clearTimeout(this.autoVerifyDebounce);
+                this.autoVerifyDebounce = null;
+            }
+            this.isVerifying = false;
             const dom = this.getDom();
             if (!dom.modal) return;
             dom.modal.classList.add('opacity-0');

@@ -223,6 +223,21 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 
 ---
 
+## 11. 官网与客户门户前后端契约规范 (Website & Portal Contract Guidelines)
+
+- **结构化错误码解耦 (Structured Error Codes)**：
+  - **401 Unauthorized / Session Expired**：后端在用户端与管理端 401 响应中必须附带 `error_code: "UNAUTHORIZED"` 或 `error_code: "SESSION_EXPIRED"`。前端必须优先依据 `res.status === 401` 或 `data.error_code` 进行会话失效拦截和清理登出，严禁依赖多语言错误文案（如 `includes("Session")`）进行业务分支判定。
+  - **429 Rate Limiting**：后端 429 响应统一携带 `error_code: "RATE_LIMITED"` 或 `error_code: "TOO_MANY_ATTEMPTS"`。前端依据状态码或错误码启动冷却倒计时，防止字符串多语言不匹配导致冷却定时器异常复位。
+- **XSS 纵深防御 (`escapeHtml`)**：
+  - 静态页面中通过模板字符串向 `innerHTML` 插入由后端返回的动态字段（如 `license_code`, `device_id`, `paddle_transaction_id`, `paddle_subscription_id`, `revoke_reason` 等）前，必须经由 `escapeHtml()` 函数进行字符实体转义，防止潜在的 DOM 级 XSS。
+- **结账与操作防重入单飞锁 (Single-Flight Mutex)**：
+  - 在发起异步结账（如 `verifyAndPay`）、退款、取消订阅等不可逆外部交互时，前端组件必须维护 `isVerifying` 或 `inFlight` 互斥锁，并在入口处主动清除防抖计时器，避免并发双击引发多次结账或重复请求。
+- **全站语言偏好存储规范 (SSOT Language Key)**：
+  - 全站静态页面统一使用 `eqt-lang` 作为 `localStorage` 与 Cookie 的标准键名，读取时向下兼容历史键名 `eqt_lang` 与 `eqt-page-lang`。
+
+
+---
+
 ## 10. Cloudflare D1 瞬态超时容灾与指数退避重试 (D1 Exponential Backoff Retry)
 
 - **边缘存储瞬态超时挑战**：Cloudflare D1 底层 Durable Object 存储操作在特定物理节点网络拥塞或负载抖动时，可能抛出 `D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.`（操作超过 30s 阈值重置）。
