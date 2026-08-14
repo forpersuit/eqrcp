@@ -12,7 +12,7 @@ import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
-import { renderShareOverlay, bindShareEvents, closeShareOverlay, prepareMergedQRCode } from './components/share.js';
+import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -3507,6 +3507,36 @@ function bindEvents() {
                 closeShareOverlay(state, render);
                 return;
             }
+            if (e.target.closest('#download-share-poster-btn')) {
+                downloadSharePosterImage(horizontalLogoURL, faviconURL, state, t, render, escapeHTML);
+                return;
+            }
+            if (e.target.closest('#copy-share-url-btn')) {
+                const url = 'https://www.eqt.net.im';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url);
+                    }
+                } catch (_) {}
+                const copyBtn = document.querySelector('#copy-share-url-btn');
+                if (copyBtn) {
+                    copyBtn.classList.add('success-saved');
+                    copyBtn.innerHTML = `
+                        <span style="display: flex; align-items: center; justify-content: center;">✓</span>
+                        <span>${escapeHTML(t('copied') || '已复制')}</span>
+                    `;
+                    setTimeout(() => {
+                        if (copyBtn && copyBtn.isConnected) {
+                            copyBtn.classList.remove('success-saved');
+                            copyBtn.innerHTML = `
+                                <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
+                                <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
+                            `;
+                        }
+                    }, 2000);
+                }
+                return;
+            }
 
             // Settings Panel Controls
             if (e.target.closest('#open-chat-save')) {
@@ -4072,6 +4102,14 @@ function bindEvents() {
                 closeChatQROnOutside(e);
             }
         });
+
+        document.addEventListener('focusout', (e) => {
+            if (e.target.id === 'settings-port') {
+                if (state.settings && e.target.value !== String(state.settings.port || 0)) {
+                    e.target.value = String(state.settings.port || 0);
+                }
+            }
+        });
     }
 
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
@@ -4097,10 +4135,6 @@ function bindPanelEvents() {
     if (state.confirmResetPending) {
         document.getElementById('cancel-reset-license')?.focus();
     }
-}
-
-function bindChatQRPanelEvents() {
-    // Handled via static delegation in bindEvents
 }
 
 function syncAndSaveSettingsInBackground() {
@@ -4464,11 +4498,6 @@ function updateChatQRPanel() {
         return;
     }
     existing.closest('.side')?.replaceWith(nextSide);
-    bindChatQRPanelEvents();
-    document.removeEventListener('pointerdown', closeChatQROnOutside);
-    if (state.chatQROpen) {
-        document.addEventListener('pointerdown', closeChatQROnOutside);
-    }
 }
 
 function showToast(message) {
