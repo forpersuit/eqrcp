@@ -8,7 +8,7 @@ import {
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate, getLicenseRevokeEmailTemplate, AUTH_CODE_EMAIL_I18N } from '../i18n';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { sha256Hex, licenseOwnedByEmail } from '../utils/crypto';
+import { emailHash, licenseOwnedByEmail } from '../utils/crypto';
 import { checkEmailBlacklist } from '../utils/blacklist';
 import {
   isLicenseCancellable,
@@ -103,11 +103,11 @@ export async function handlePortalRoutes(
     }
 
     const email = session.email;
-    const emailHash = await sha256Hex(email);
+    const userEmailHash = await emailHash(email);
 
     const { results: licenses } = await env.DB.prepare(
       "SELECT * FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ? ORDER BY created_at DESC"
-    ).bind(email, emailHash).all<any>();
+    ).bind(email, userEmailHash).all<any>();
 
     const oneYearAgoIso = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
 
@@ -210,8 +210,8 @@ export async function handlePortalRoutes(
       });
     }
 
-    const emailHash = await sha256Hex(session.email);
-    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+    const userEmailHash = await emailHash(session.email);
+    if (!licenseOwnedByEmail(license, session.email, userEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -353,8 +353,8 @@ export async function handlePortalRoutes(
       });
     }
 
-    const emailHash = await sha256Hex(session.email);
-    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+    const userEmailHash = await emailHash(session.email);
+    if (!licenseOwnedByEmail(license, session.email, userEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -563,8 +563,8 @@ export async function handlePortalRoutes(
       });
     }
 
-    const emailHash = await sha256Hex(session.email);
-    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+    const userEmailHash = await emailHash(session.email);
+    if (!licenseOwnedByEmail(license, session.email, userEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -667,8 +667,8 @@ export async function handlePortalRoutes(
       });
     }
 
-    const emailHash = await sha256Hex(session.email);
-    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+    const userEmailHash = await emailHash(session.email);
+    if (!licenseOwnedByEmail(license, session.email, userEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -839,7 +839,7 @@ export async function handlePortalRoutes(
       });
     }
 
-    const sessionEmailHash = await sha256Hex(session.email.trim().toLowerCase());
+    const sessionEmailHash = await emailHash(session.email);
     if (!licenseOwnedByEmail(license, session.email, sessionEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("license_not_found", reqLang) }), {
         status: 403,
@@ -936,8 +936,8 @@ export async function handlePortalRoutes(
       });
     }
 
-    const emailHash = await sha256Hex(session.email);
-    if (!licenseOwnedByEmail(license, session.email, emailHash)) {
+    const userEmailHash = await emailHash(session.email);
+    if (!licenseOwnedByEmail(license, session.email, userEmailHash)) {
       return new Response(JSON.stringify({ error: getApiTranslation("not_license_owner", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }

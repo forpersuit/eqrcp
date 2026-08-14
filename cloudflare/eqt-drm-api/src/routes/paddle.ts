@@ -5,7 +5,7 @@ import {
   SANDBOX_PRICE_LIFETIME_ID,
   SANDBOX_PRICE_YEARLY_ID
 } from '../types';
-import { verifyPaddleSignature } from '../utils/crypto';
+import { emailHash, verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { ensureAutoRenewColumn, ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
@@ -284,12 +284,7 @@ export async function handlePaddleRoutes(
       }
 
       // Hash email for buyer_email_hash
-      let emailHash = "";
-      if (buyerEmail) {
-        const te = new TextEncoder();
-        const emailHashBuf = await crypto.subtle.digest("SHA-256", te.encode(buyerEmail.trim().toLowerCase()));
-        emailHash = Array.prototype.map.call(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
-      }
+      const buyerEmailHash = buyerEmail ? await emailHash(buyerEmail) : "";
 
       // --- Manual/Subscription Renewal via passthrough target_license_code (§6.6) ---
       let targetCode = "";
@@ -318,7 +313,7 @@ export async function handlePaddleRoutes(
         if (targetLic && buyerEmail) {
           const targetEmail = (targetLic.buyer_email || "").trim().toLowerCase();
           const currentEmail = buyerEmail.trim().toLowerCase();
-          if (!targetEmail || targetEmail === currentEmail || (targetLic.buyer_email_hash && targetLic.buyer_email_hash === emailHash)) {
+          if (!targetEmail || targetEmail === currentEmail || (targetLic.buyer_email_hash && targetLic.buyer_email_hash === buyerEmailHash)) {
             isOwner = true;
           }
         }
@@ -366,7 +361,7 @@ export async function handlePaddleRoutes(
                 transactionId,
                 new Date(nowMs).toISOString(),
                 buyerEmail || null,
-                emailHash || null,
+                buyerEmailHash || null,
                 targetLic.license_code
               ),
               env.DB.prepare(`
@@ -445,7 +440,7 @@ export async function handlePaddleRoutes(
               transactionId,
               new Date().toISOString(),
               buyerEmail || null,
-              emailHash || null,
+              buyerEmailHash || null,
               subLicense.license_code
             ),
             env.DB.prepare(`
@@ -507,7 +502,7 @@ export async function handlePaddleRoutes(
           2,
           expiresAt,
           durationDays,
-          emailHash || null,
+          buyerEmailHash || null,
           buyerEmail || null,
           transactionId,
           subscriptionId,
@@ -756,10 +751,9 @@ export async function handlePaddleRoutes(
             "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
           ).bind(subscriptionId).first<any>();
 
-          await env.DB.prepare(
-            "UPDATE licenses SET status = 'revoked', revoked_at = ?, revoke_reason = 'subscription', auto_renew = 0 WHERE paddle_subscription_id = ?"
-          ).bind(
+          await env.DB.prepare(revokeByPaddleSubSql()).bind(
             new Date().toISOString(),
+            'subscription',
             subscriptionId
           ).run();
 

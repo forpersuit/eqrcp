@@ -1,6 +1,6 @@
 import { Env, ONE_YEAR_MS, MAX_YEARLY_ABUSIVE_REFUNDS } from '../types';
 import { isPurchaseLikeRevocation } from './license-source';
-import { sha256Hex } from './crypto';
+import { emailHash } from './crypto';
 
 // Count matching non-empty fingerprint fields between client hashes and stored record
 export function countMatchingFingerprints(
@@ -318,7 +318,7 @@ export async function checkEmailBlacklist(
   env: Env,
   email: string
 ): Promise<BlacklistCheckResult> {
-  const hash = await sha256Hex(email.trim().toLowerCase());
+  const hash = await emailHash(email);
   return checkAbusiveRefundBlacklist(env, hash, '', '', '', {
     checkEmail: true,
     checkDevice: false
@@ -391,17 +391,17 @@ export async function addManualBlacklist(
     if (!email || !email.includes('@')) {
       return { ok: false, error: 'Valid email required for kind=email' };
     }
-    const emailHash = await sha256Hex(email);
+    const userEmailHash = await emailHash(email);
     const existing = await env.DB.prepare(
       `SELECT id FROM manual_blacklist WHERE active = 1 AND kind = 'email' AND email_hash = ? LIMIT 1`
-    ).bind(emailHash).first<{ id: number }>();
+    ).bind(userEmailHash).first<{ id: number }>();
     if (existing) {
       return { ok: false, error: `Email already banned (id=${existing.id})` };
     }
     const ins = await env.DB.prepare(
       `INSERT INTO manual_blacklist (kind, email, email_hash, reason, created_by, created_at, active)
        VALUES ('email', ?, ?, ?, ?, ?, 1)`
-    ).bind(email, emailHash, reason, createdBy, createdAt).run();
+    ).bind(email, userEmailHash, reason, createdBy, createdAt).run();
     const id = Number(ins.meta?.last_row_id || 0);
     const row = await env.DB.prepare(`SELECT * FROM manual_blacklist WHERE id = ?`).bind(id).first<ManualBlacklistRow>();
     return { ok: true, row: row! };

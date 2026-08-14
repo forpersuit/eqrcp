@@ -2,7 +2,7 @@ import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
 import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { sha256Hex, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
+import { emailHash, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
 import { ensureVerificationCodesCreatedAt } from '../utils/auth';
 import { clientIpFromRequest } from '../utils/rate-limit';
 import { checkEmailBlacklist } from '../utils/blacklist';
@@ -11,6 +11,17 @@ const SEND_CODE_COOLDOWN_MS = 60_000;
 const OTP_VERIFY_WINDOW_MS = 15 * 60 * 1000;
 const OTP_VERIFY_MAX_FAILS = 8;
 
+/**
+ * Storage semantics for `verification_codes` table:
+ * 1. Regular OTP rows: `email` column stores `{purpose}:{normalized_email}` (e.g. `portal:user@example.com`),
+ *    `code` stores the 6-digit PIN, and `expires_at` is 10-minute TTL.
+ * 2. OTP verify fail counter rows: `email` column stores `fail:{purpose}:{client_ip}:{normalized_email}`,
+ *    `code` stores stringified attempt failure count, `expires_at` is window expiry (15m), and `created_at`
+ *    marks sliding window start.
+ *
+ * The strict `fail:` namespace prefix guarantees complete logical isolation between verification codes
+ * and brute-force attempt counters without requiring an additional table migration.
+ */
 async function isSendCodeRateLimited(env: Env, storageKey: string): Promise<boolean> {
   await ensureVerificationCodesCreatedAt(env);
   const recentCode = await env.DB.prepare(
@@ -214,11 +225,11 @@ export async function handleAuthRoutes(
     const storageKey = verificationStorageKey("portal", email);
 
     // 1. Check if email has purchase history in licenses table
-    const emailHash = await sha256Hex(email);
+    const userEmailHash = await emailHash(email);
 
     const checkPurchase = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
-    ).bind(emailHash, email).first<any>();
+    ).bind(userEmailHash, email).first<any>();
 
     const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
     if (!hasPurchased) {

@@ -139,6 +139,7 @@ export function revokeByPaddleSubSql(): string {
   return `UPDATE licenses
     SET status = 'revoked',
         revoked_at = COALESCE(revoked_at, ?),
-        revoke_reason = COALESCE(revoke_reason, ?)
+        revoke_reason = COALESCE(revoke_reason, ?),
+        auto_renew = 0
     WHERE paddle_subscription_id = ?`;
 }
