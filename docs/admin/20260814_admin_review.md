@@ -74,7 +74,7 @@
 
 - **位置**：`src/lib/i18n.ts`、`src/lib/locales/zh.ts`、`src/lib/locales/en.ts` 以及全站所有业务页面与组件
 - **处理结果**：
-  1. **全站真接线**：全面替换 `Licenses`、`ErrorAudit`、`SystemHealth`、`OpsAudit`、`Blacklist`、`Overview`、`Login`、`App`、`Pagination` 等页面的硬编码字符串为 `$t()`。
+  1. **全站真接线**：全面替换 `Licenses`、`ErrorAudit`、`SystemHealth`、`OpsAudit`、`Blacklist`、`Overview`、`Login`、`Metrics`、`App`、`Pagination` 等页面的硬编码字符串与动态运行中文提示（包括 promo 校验、IP 未记录、邮件发送状态、Access 说明与故障排查等）为 `$t()`。
   2. **中英双语字典补齐**：`en.ts` 与 `zh.ts` 完整覆盖所有业务字段、弹窗标题、表格列头、操作按钮与状态提示。
   3. **语言切换与持久化**：侧边栏增加「中文 / EN」切换按钮，并在 `localStorage` 中自动持久化。
   4. **双层回退机制**：目标语言缺失时自动降级到中文，全缺失时返回 key 自身。

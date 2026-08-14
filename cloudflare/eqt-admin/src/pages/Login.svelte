@@ -41,8 +41,7 @@
 
     <div class="access-panel">
       <p class="access-desc">
-        通过 <strong>Cloudflare Access</strong> 鉴权（仅
-        <code>admin@eqt.net.im</code>）。边缘登录成功后将自动校验 API JWT。
+        {$t('login.accessDesc')}
       </p>
       <button
         type="button"
@@ -53,9 +52,7 @@
         {probing ? $t('common.loading') : $t('login.submit')}
       </button>
       <p class="hint">
-        若反复失败：检查 Zero Trust Application / AUD、Worker
-        <code>CF_ACCESS_TEAM_DOMAIN</code> + <code>CF_ACCESS_AUD</code>，以及 Pages 同源
-        <code>/api</code> 反代是否部署。
+        {$t('login.hintText')}
       </p>
     </div>
   </div>
@@ -124,11 +121,5 @@
     font-size: 0.75rem;
     color: var(--text-muted);
     line-height: 1.45;
-  }
-
-  .hint code,
-  .access-desc code {
-    font-size: 0.7rem;
-    color: #c4b5fd;
   }
 </style>

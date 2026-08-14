@@ -45,6 +45,7 @@ export const zh = {
     ip: "IP",
     summary: "摘要",
     reason: "原因",
+    unknown: "未知",
     test_fallback_key: "仅中文测试回退键"
   },
   pagination: {
@@ -60,7 +61,9 @@ export const zh = {
     tokenLabel: "Admin Secret Token",
     tokenPlaceholder: "请输入后台管理 Token",
     submit: "登录系统",
-    invalidToken: "Token 验证失败，请检查输入。"
+    invalidToken: "Token 验证失败，请检查输入。",
+    accessDesc: "通过 Cloudflare Access 鉴权（仅 admin@eqt.net.im）。边缘登录成功后将自动校验 API JWT。",
+    hintText: "若反复失败：检查 Zero Trust Application / AUD、Worker CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD，以及 Pages 同源 /api 反代是否部署。"
   },
   overview: {
     title: "系统概览",
@@ -122,7 +125,12 @@ export const zh = {
     unbindAllSuccess: "已解绑全部设备",
     activatedAt: "激活于",
     network: "网络",
-    emptyState: "未找到符合条件的授权记录"
+    emptyState: "未找到符合条件的授权记录",
+    noIpRecorded: "IP 未记录",
+    errPromoRedeemDays: "promo 活动码必须指定兑换截止天数（>0）",
+    errPromoDurationDays: "promo 活动码必须指定兑换后有效天数（>0）",
+    emailSent: "已发送通知邮件",
+    emailNotSent: "邮件未发送"
   },
   blacklist: {
     title: "风控黑名单管理",
@@ -209,7 +217,12 @@ export const zh = {
     last7d: "过去 7 天",
     last30d: "过去 30 天",
     noData: "暂无数据",
-    refreshes: "数据每小时自动刷新"
+    refreshes: "数据每小时自动刷新",
+    loadFailed: "指标数据请求失败",
+    refreshData: "刷新数据",
+    tableDate: "日期",
+    tableCrashes: "崩溃次数",
+    tableTrend: "趋势"
   }
 };
 

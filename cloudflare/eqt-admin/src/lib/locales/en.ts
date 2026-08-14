@@ -44,7 +44,8 @@ export const en = {
     targetId: "Target ID",
     ip: "IP",
     summary: "Summary",
-    reason: "Reason"
+    reason: "Reason",
+    unknown: "Unknown"
   },
   pagination: {
     prev: "← Previous",
@@ -59,7 +60,9 @@ export const en = {
     tokenLabel: "Admin Secret Token",
     tokenPlaceholder: "Enter Admin Token",
     submit: "Sign In",
-    invalidToken: "Token validation failed. Please check your input."
+    invalidToken: "Token validation failed. Please check your input.",
+    accessDesc: "Authenticated via Cloudflare Access (admin@eqt.net.im only). Edge login will automatically validate the API JWT.",
+    hintText: "If issues persist: Check Zero Trust Application / AUD, Worker CF_ACCESS_TEAM_DOMAIN + CF_ACCESS_AUD, and Pages same-origin /api proxy deployment."
   },
   overview: {
     title: "System Overview",
@@ -121,7 +124,12 @@ export const en = {
     unbindAllSuccess: "All devices unbound successfully",
     activatedAt: "Activated at",
     network: "Network",
-    emptyState: "No matching license records found"
+    emptyState: "No matching license records found",
+    noIpRecorded: "No IP recorded",
+    errPromoRedeemDays: "Promo license must specify redeem-by days (>0)",
+    errPromoDurationDays: "Promo license must specify duration days (>0)",
+    emailSent: "Notification email sent",
+    emailNotSent: "Email not sent"
   },
   blacklist: {
     title: "Risk Blacklist",
@@ -208,6 +216,11 @@ export const en = {
     last7d: "Last 7 days",
     last30d: "Last 30 days",
     noData: "No data available",
-    refreshes: "Data refreshes hourly"
+    refreshes: "Data refreshes hourly",
+    loadFailed: "Failed to load metrics data",
+    refreshData: "Refresh Data",
+    tableDate: "Date",
+    tableCrashes: "Crashes",
+    tableTrend: "Trend"
   }
 };

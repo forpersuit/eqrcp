@@ -14,7 +14,7 @@
     try {
       metrics = await adminFetch<AdminMetricsResponse>('/api/v1/admin/metrics');
     } catch (err: any) {
-      errorMsg = err.message || '指标数据请求失败';
+      errorMsg = err.message || $t('metrics.loadFailed');
     } finally {
       loading = false;
     }
@@ -50,7 +50,7 @@
     </div>
     <div class="actions">
       <button class="btn btn-secondary" onclick={loadMetrics} disabled={loading}>
-        {loading ? '刷新中…' : '刷新数据'}
+        {loading ? $t('common.loading') : $t('metrics.refreshData')}
       </button>
     </div>
   </div>
@@ -94,7 +94,7 @@
         <div class="bar-chart">
           {#each metrics.metrics.tier_distribution as item}
             <div class="bar-row">
-              <span class="bar-label">{item.tier || '未知'}</span>
+              <span class="bar-label">{item.tier || $t('common.unknown')}</span>
               <div class="bar-track">
                 <div
                   class="bar-fill"
@@ -118,9 +118,9 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>日期</th>
-                <th>崩溃次数</th>
-                <th>趋势</th>
+                <th>{$t('metrics.tableDate')}</th>
+                <th>{$t('metrics.tableCrashes')}</th>
+                <th>{$t('metrics.tableTrend')}</th>
               </tr>
             </thead>
             <tbody>

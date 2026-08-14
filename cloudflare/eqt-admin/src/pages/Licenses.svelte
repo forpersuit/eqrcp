@@ -59,7 +59,7 @@
     const parts: string[] = [];
     if (act.ip_country) parts.push(act.ip_country);
     if (act.client_ip) parts.push(act.client_ip);
-    return parts.length ? parts.join(' · ') : 'IP 未记录';
+    return parts.length ? parts.join(' · ') : $t('licenses.noIpRecorded');
   }
 
   function latestActivationHint(lic: License): string {
@@ -140,12 +140,12 @@
       const expDays = parseInt(genExpiresInDays.trim(), 10);
       const durDays = parseInt(genDurationDays.trim(), 10);
       if (isNaN(expDays) || expDays <= 0) {
-        errorMsg = 'promo 活动码必须指定兑换截止天数（>0）';
+        errorMsg = $t('licenses.errPromoRedeemDays');
         generating = false;
         return;
       }
       if (isNaN(durDays) || durDays <= 0) {
-        errorMsg = 'promo 活动码必须指定兑换后有效天数（>0）';
+        errorMsg = $t('licenses.errPromoDurationDays');
         generating = false;
         return;
       }
@@ -177,7 +177,7 @@
       lastGeneratedCode = res.license_code;
       let okText = `${$t('licenses.generateTitle')} ${$t('common.success')}: ${res.license_code} (${res.tier})`;
       if (res.email_sent !== undefined) {
-        okText += res.email_sent ? ' · 已发送通知邮件' : ' · 邮件未发送';
+        okText += res.email_sent ? ` · ${$t('licenses.emailSent')}` : ` · ${$t('licenses.emailNotSent')}`;
       }
       actionMsg = okText;
       await loadLicenses();
