@@ -1,8 +1,8 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { markAccessAuthenticated } from '../lib/auth';
   import { adminFetch } from '../lib/api';
 
-  let loading = $state(false);
   let errorMessage = $state('');
   let probing = $state(true);
 
@@ -20,11 +20,10 @@
         '未能通过 Cloudflare Access 鉴权。请确认已用 admin@eqt.net.im 登录 Access，且 Worker 已配置 CF_ACCESS_*。';
     } finally {
       probing = false;
-      loading = false;
     }
   }
 
-  queueMicrotask(() => {
+  onMount(() => {
     probeAccess();
   });
 </script>
@@ -51,7 +50,7 @@
       <button
         type="button"
         class="btn btn-primary login-btn"
-        disabled={probing || loading}
+        disabled={probing}
         onclick={() => probeAccess()}
       >
         {probing ? '正在校验 Access 身份…' : '继续进入控制台'}

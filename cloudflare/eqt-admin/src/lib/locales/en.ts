@@ -1,0 +1,100 @@
+export const en = {
+  nav: {
+    title: "EQT DRM Admin",
+    overview: "Overview",
+    licenses: "Licenses",
+    blacklist: "Blacklist",
+    health: "System Health",
+    opsAudit: "Ops Audit",
+    errorAudit: "Error Tracking",
+    metrics: "Business Metrics",
+    logout: "Sign Out",
+    production: "Production",
+    sandbox: "Sandbox",
+    envBanner: "⚠️ Currently connected to test sandbox (lic-test.eqt.net.im / eqt-drm-db-test)"
+  },
+  common: {
+    confirm: "Confirm",
+    cancel: "Cancel",
+    save: "Save",
+    delete: "Delete",
+    search: "Search",
+    filter: "Filter",
+    loading: "Loading...",
+    actions: "Actions",
+    status: "Status",
+    created_at: "Created At",
+    updated_at: "Updated At",
+    copy: "Copy",
+    copied: "Copied",
+    success: "Success",
+    failed: "Failed"
+  },
+  login: {
+    title: "EQT DRM Admin Console",
+    subtitle: "Admin Authentication & Access",
+    tokenLabel: "Admin Secret Token",
+    tokenPlaceholder: "Enter Admin Token",
+    submit: "Sign In",
+    invalidToken: "Token validation failed. Please check your input."
+  },
+  overview: {
+    title: "System Overview",
+    totalLicenses: "Total Licenses",
+    activeDevices: "Active Devices",
+    totalRevenue: "Estimated Revenue",
+    recentActivations: "24h Activations",
+    tierDistribution: "Tier Distribution",
+    systemHealth: "System Health"
+  },
+  licenses: {
+    title: "License Management",
+    generateTitle: "Generate License",
+    tier: "Tier",
+    duration: "Validity (Days)",
+    durationPlaceholder: "e.g. 365, leave empty for lifetime",
+    buyerEmail: "Buyer Email",
+    notes: "Notes",
+    generateBtn: "Generate",
+    generating: "Generating...",
+    tableHeaderCode: "License Code",
+    tableHeaderTier: "Tier",
+    tableHeaderBuyer: "Buyer",
+    tableHeaderStatus: "Status",
+    tableHeaderExpires: "Expires At",
+    tableHeaderDevices: "Active Devices",
+    revokeBtn: "Revoke",
+    revokeConfirm: "Are you sure you want to revoke this license?"
+  },
+  blacklist: {
+    title: "Risk Blacklist",
+    addBtn: "Add to Blacklist",
+    type: "Type",
+    target: "Target Identifier",
+    reason: "Reason",
+    tableHeaderTarget: "Target",
+    tableHeaderKind: "Kind",
+    tableHeaderReason: "Reason",
+    unblockBtn: "Unblock"
+  },
+  health: {
+    title: "System Health Monitor",
+    dbStatus: "D1 Database",
+    workerStatus: "Cloudflare Worker",
+    syncRate: "Sync Success Rate",
+    avgLatency: "Avg Latency"
+  },
+  metrics: {
+    title: "Business Metrics",
+    dailyActiveDevices: "Daily Active Devices",
+    activationSuccessRate: "Activation Success Rate (7d)",
+    tierDistribution: "License Tier Distribution",
+    crashTrend: "Crash Trend (30d)",
+    rateLimitHits: "Rate Limit Hits (24h)",
+    last24h: "Last 24 hours",
+    last7d: "Last 7 days",
+    last30d: "Last 30 days",
+    noData: "No data available",
+    refreshes: "Data refreshes hourly"
+  }
+};

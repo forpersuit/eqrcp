@@ -27,16 +27,12 @@ npm run dev                  # 默认 http://localhost:3001
 
 | 变量 | 说明 |
 | :--- | :--- |
-| `VITE_API_BASE` | 生产 Access：**留空**（同源 `/api`）。本地可指向 `http://127.0.0.1:8787`。 |
+| `VITE_API_BASE` | 生产 Access：**留空**（同源 `/api`）。本地开发可指向 `http://127.0.0.1:8787`。 |
 | `VITE_CF_ACCESS_TEAM_DOMAIN` | Access 登出用 team domain（如 `persuit.cloudflareaccess.com`）。 |
-| `VITE_CF_ACCESS_TEAM_DOMAIN` | 如 `xxxx.cloudflareaccess.com`，用于 Access 登出。 |
-
-**不要**把真实 secret 写入仓库；secret 仅 secret 模式下存 `sessionStorage`。
 
 ## 生产部署
 
 ```sh
-VITE_ADMIN_AUTH_MODE=access \
 VITE_API_BASE= \
 VITE_CF_ACCESS_TEAM_DOMAIN=yourteam.cloudflareaccess.com \
 npm run build
@@ -61,7 +57,7 @@ CLOUDFLARE_API_TOKEN="" npx wrangler pages deploy dist --project-name eqt-admin
 functions/api/[[path]].ts  # Access JWT 同源反代 → lic.eqt.net.im
 src/
   App.svelte
-  lib/api.ts               # adminFetch（secret 或 access）
+  lib/api.ts               # adminFetch（同源反代 /api 调用）
   lib/auth.ts
   pages/
   app.css

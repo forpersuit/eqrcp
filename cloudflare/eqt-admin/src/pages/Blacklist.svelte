@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
   import type { ManualBlacklistEntry } from '../lib/types';
+  import Modal from '../components/Modal.svelte';
+  import Banner from '../components/Banner.svelte';
 
   let entries = $state<ManualBlacklistEntry[]>([]);
   let total = $state(0);
@@ -128,12 +130,8 @@
     </div>
   </div>
 
-  {#if errorMsg}
-    <div class="banner error">{errorMsg}</div>
-  {/if}
-  {#if actionMsg}
-    <div class="banner ok">{actionMsg}</div>
-  {/if}
+  <Banner type="error" message={errorMsg} />
+  <Banner type="ok" message={actionMsg} />
 
   <div class="card form-card">
     <h3>添加封禁</h3>
@@ -253,22 +251,18 @@
 </div>
 
 {#if unbanTarget}
-  <div class="modal-overlay" onclick={() => (unbanTarget = null)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content modal-confirm" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <h3 class="danger-title">确认解除封禁</h3>
-      <p class="confirm-text">
-        确定要解除条目 <strong>#{unbanTarget.id}</strong>（{identityLine(unbanTarget)}）的封禁吗？<br />
-        解除后该目标将恢复正常的授权验证与 API 访问。
-      </p>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick={() => (unbanTarget = null)} disabled={busy}>取消</button>
-        <button type="button" class="btn btn-danger" onclick={executeUnban} disabled={busy}>
-          {busy ? '处理中...' : '确认解除'}
-        </button>
-      </div>
-    </div>
-  </div>
+  <Modal open={true} title="确认解除封禁" maxWidth="480px" onclose={() => (unbanTarget = null)}>
+    <p class="confirm-text">
+      确定要解除条目 <strong>#{unbanTarget.id}</strong>（{identityLine(unbanTarget)}）的封禁吗？<br />
+      解除后该目标将恢复正常的授权验证与 API 访问。
+    </p>
+    {#snippet footer()}
+      <button type="button" class="btn btn-secondary" onclick={() => (unbanTarget = null)} disabled={busy}>取消</button>
+      <button type="button" class="btn btn-danger" onclick={executeUnban} disabled={busy}>
+        {busy ? '处理中...' : '确认解除'}
+      </button>
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>
@@ -279,22 +273,6 @@
     color: var(--text-muted);
     font-size: 0.9rem;
     margin-top: 0.35rem;
-  }
-  .banner {
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-sm);
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-  }
-  .banner.error {
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.35);
-    color: #fca5a5;
-  }
-  .banner.ok {
-    background: rgba(34, 197, 94, 0.12);
-    border: 1px solid rgba(34, 197, 94, 0.35);
-    color: #86efac;
   }
   .form-card,
   .list-card {
@@ -412,11 +390,6 @@
     font-size: 0.75rem;
     padding: 0.3rem 0.6rem;
   }
-  .danger-title {
-    color: var(--accent-danger);
-    font-size: 1.1rem;
-    margin-bottom: 0.75rem;
-  }
   .confirm-text {
     font-size: 0.9rem;
     color: var(--text-secondary);
@@ -425,15 +398,6 @@
   }
   .confirm-text strong {
     color: var(--text-primary);
-  }
-  .modal-confirm {
-    max-width: 480px;
-  }
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
   }
   @media (max-width: 900px) {
     .fp-grid {

@@ -1,10 +1,11 @@
 # EQT Admin API 契约
 
 > **SSOT**：实现与前端必须以本文为准。  
-> Base URL：生产 `https://lic.eqt.net.im`；开发可用 Worker URL，由前端 `VITE_API_BASE` 指定。  
-> 鉴权：所有 `/api/v1/admin/*` 必须带 Header  
-> `X-Admin-Secret: <ADMIN_SECRET>`  
-> **禁止**依赖 query `?secret=`（实现中若仍兼容，契约视为 deprecated）。
+> Base URL：生产由 Pages 同源 `/api` 反代至 `https://lic.eqt.net.im`；本地直连由前端 `VITE_API_BASE` 指定。  
+> 鉴权：  
+> - **生产环境（推荐）**：Cloudflare Access Zero Trust JWT（经同源反代自动附加 `Cf-Access-Jwt-Assertion` / `Authorization: Bearer <jwt>`）。  
+> - **开发与自动化运维**：Header `X-Admin-Secret: <ADMIN_SECRET>`。  
+> **禁止**依赖 query `?secret=`。
 
 相关表结构见 `cloudflare/eqt-drm-api/schema.sql`。
 
@@ -14,11 +15,12 @@
 
 ### 0.1 鉴权
 
-| 条件 | 响应 |
-| :--- | :--- |
-| `ADMIN_SECRET` 环境变量未配置 | **401** 或 **503**（阶段 1 起 fail-closed，推荐 503 + 明确 error） |
-| Header 缺失或与 secret 不一致 | **401** `{ "error": "Unauthorized" }` |
-| 通过 | 进入业务逻辑 |
+| 鉴权模式 | 条件 | 响应 |
+| :--- | :--- | :--- |
+| **Cloudflare Access (生产)** | 未登录 / JWT 签名无效 / AUD 不匹配 | **401** `{ "error": "Unauthorized" }` |
+| **Secret (开发/脚本)** | `ADMIN_SECRET` 未配置 | **503** `{ "error": "Admin API 未配置" }` |
+| **Secret (开发/脚本)** | Header 缺失或与 secret 不一致 | **401** `{ "error": "Unauthorized" }` |
+| **通用** | 鉴权通过 | 进入业务逻辑 |
 
 ### 0.2 响应形状
 

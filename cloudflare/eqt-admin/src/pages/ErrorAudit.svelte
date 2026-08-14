@@ -2,6 +2,9 @@
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
   import type { SystemErrorLog } from '../lib/types';
+  import Modal from '../components/Modal.svelte';
+  import Pagination from '../components/Pagination.svelte';
+  import Banner from '../components/Banner.svelte';
 
   let logs = $state<SystemErrorLog[]>([]);
   let total = $state(0);
@@ -150,12 +153,8 @@
     </div>
   </div>
 
-  {#if errorMsg}
-    <div class="error-banner">{errorMsg}</div>
-  {/if}
-  {#if actionMsg}
-    <div class="ok-banner">{actionMsg}</div>
-  {/if}
+  <Banner type="error" message={errorMsg} />
+  <Banner type="ok" message={actionMsg} />
 
   {#if loading}
     <div class="loading-state">正在拉取 D1 审计日志...</div>
@@ -190,74 +189,57 @@
     </div>
 
     <!-- Pagination Bar -->
-    <div class="pagination-bar card">
-      <button class="btn btn-secondary btn-sm" disabled={page <= 1 || loading} onclick={prevPage}>
-        上一页
-      </button>
-      <span class="page-info">
-        第 {page} 页 / 共 {Math.ceil(total / pageSize) || 1} 页 (第 {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} 条，共 {total} 条)
-      </span>
-      <button class="btn btn-secondary btn-sm" disabled={page * pageSize >= total || loading} onclick={nextPage}>
-        下一页
-      </button>
-    </div>
+    <Pagination {page} {pageSize} {total} onprev={prevPage} onnext={nextPage} />
   {/if}
 </div>
 
 {#if selectedLog}
-  <div class="modal-overlay" onclick={() => (selectedLog = null)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <div class="modal-header">
-        <h3>错误日志详情 #{selectedLog.id}</h3>
-        <span class={`badge badge-${selectedLog.level.toLowerCase()}`}>{selectedLog.level}</span>
-      </div>
-      
-      <div class="detail-section">
-        <span class="detail-label">发生时间:</span>
-        <div>{new Date(selectedLog.created_at).toLocaleString()}</div>
-      </div>
-
-      <div class="detail-section">
-        <span class="detail-label">分类 (Category):</span>
-        <div>{selectedLog.category}</div>
-      </div>
-
-      <div class="detail-section">
-        <span class="detail-label">异常信息:</span>
-        <pre class="code-block">{selectedLog.error_message}</pre>
-      </div>
-
-      {#if selectedLog.context_json}
-        <div class="detail-section">
-          <span class="detail-label">上下文 JSON (Context):</span>
-          <pre class="code-block json-block">{selectedLog.context_json}</pre>
-        </div>
-      {/if}
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick={() => (selectedLog = null)}>关闭</button>
-      </div>
+  <Modal open={true} title={`错误日志详情 #${selectedLog.id}`} maxWidth="650px" onclose={() => (selectedLog = null)}>
+    <div class="detail-section">
+      <span class="detail-label">级别:</span>
+      <div><span class={`badge badge-${selectedLog.level.toLowerCase()}`}>{selectedLog.level}</span></div>
     </div>
-  </div>
+    
+    <div class="detail-section">
+      <span class="detail-label">发生时间:</span>
+      <div>{new Date(selectedLog.created_at).toLocaleString()}</div>
+    </div>
+
+    <div class="detail-section">
+      <span class="detail-label">分类 (Category):</span>
+      <div>{selectedLog.category}</div>
+    </div>
+
+    <div class="detail-section">
+      <span class="detail-label">异常信息:</span>
+      <pre class="code-block">{selectedLog.error_message}</pre>
+    </div>
+
+    {#if selectedLog.context_json}
+      <div class="detail-section">
+        <span class="detail-label">上下文 JSON (Context):</span>
+        <pre class="code-block json-block">{selectedLog.context_json}</pre>
+      </div>
+    {/if}
+
+    {#snippet footer()}
+      <button class="btn btn-secondary" onclick={() => (selectedLog = null)}>关闭</button>
+    {/snippet}
+  </Modal>
 {/if}
 
 {#if showClearConfirm}
-  <div class="modal-overlay" onclick={() => (showClearConfirm = false)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <h3 style="color: var(--accent-danger);">确认清空错误日志</h3>
-      <p class="confirm-text">
-        确定要清空 <strong>全部</strong> system_error_logs 吗？此操作无法撤销。
-      </p>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick={() => (showClearConfirm = false)} disabled={clearing}>取消</button>
-        <button class="btn btn-danger" onclick={clearLogs} disabled={clearing}>
-          {clearing ? '清空中...' : '确认清空'}
-        </button>
-      </div>
-    </div>
-  </div>
+  <Modal open={true} title="确认清空错误日志" maxWidth="480px" onclose={() => (showClearConfirm = false)}>
+    <p class="confirm-text">
+      确定要清空 <strong>全部</strong> system_error_logs 吗？此操作无法撤销。
+    </p>
+    {#snippet footer()}
+      <button class="btn btn-secondary" onclick={() => (showClearConfirm = false)} disabled={clearing}>取消</button>
+      <button class="btn btn-danger" onclick={clearLogs} disabled={clearing}>
+        {clearing ? '清空中...' : '确认清空'}
+      </button>
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>
