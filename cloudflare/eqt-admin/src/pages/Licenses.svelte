@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import { t } from '../lib/i18n';
+  import Modal from '../components/Modal.svelte';
+  import Banner from '../components/Banner.svelte';
   import type {
     Activation,
     GenerateLicenseResponse,
@@ -56,7 +59,7 @@
     const parts: string[] = [];
     if (act.ip_country) parts.push(act.ip_country);
     if (act.client_ip) parts.push(act.client_ip);
-    return parts.length ? parts.join(' · ') : 'IP 未记录（旧激活）';
+    return parts.length ? parts.join(' · ') : 'IP 未记录';
   }
 
   function latestActivationHint(lic: License): string {
@@ -86,7 +89,6 @@
       if (searchQuery.trim()) params.q = searchQuery.trim();
       const data = await adminFetch<{ licenses: License[] }>('/api/v1/admin/licenses', { params });
       licenses = data.licenses || [];
-      // Keep unbind modal selection in sync when silent refresh brings new activations
       if (selectedLicense) {
         const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
         if (refreshed) selectedLicense = refreshed;
@@ -94,7 +96,7 @@
       lastRefreshedAt = new Date().toLocaleTimeString();
     } catch (err: any) {
       if (!silent) {
-        errorMsg = err.message || '加载授权列表失败';
+        errorMsg = err.message || $t('common.failed');
         licenses = [];
       }
     } finally {
@@ -105,10 +107,11 @@
 
   function startAutoRefresh() {
     stopAutoRefresh();
-    if (!autoRefresh) return;
     refreshTimer = setInterval(() => {
-      if (actionBusy || generating || showGenerateModal) return;
-      loadLicenses({ silent: true });
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (!showGenerateModal && !showRevokeConfirm && !showUnbindConfirm) {
+        loadLicenses({ silent: true });
+      }
     }, AUTO_REFRESH_MS);
   }
 
@@ -119,50 +122,67 @@
     }
   }
 
-  async function handleGenerate(e: SubmitEvent) {
+  async function handleGenerate(e: Event) {
     e.preventDefault();
     generating = true;
     errorMsg = '';
     actionMsg = '';
     lastGeneratedCode = null;
     copyHint = '';
-    try {
-      const body: Record<string, unknown> = {
-        tier: genTier,
-        max_devices: Number(genMaxDevices) || 2,
-        source: genSource
-      };
-      const redeemDays = genExpiresInDays.trim() ? Number(genExpiresInDays) : null;
-      if (redeemDays && redeemDays > 0) {
-        body.expires_in_days = redeemDays;
-      }
-      const useDays = genDurationDays.trim() ? Number(genDurationDays) : null;
-      if (useDays !== null && !Number.isNaN(useDays) && useDays >= 0) {
-        body.duration_days = useDays;
-      }
-      if (genSource === 'promo') {
-        if (!redeemDays || redeemDays <= 0) {
-          throw new Error('活动码必须填写兑换截止天数（redeem-by）');
-        }
-        if (useDays === null || Number.isNaN(useDays) || useDays < 0) {
-          throw new Error('活动码必须填写兑换后使用天数（duration_days，0 表示即刻过期不推荐）');
-        }
-      }
-      if (genBuyerEmail.trim()) {
-        body.buyer_email = genBuyerEmail.trim();
-        body.send_email = genSendEmail;
-      }
 
-      const res = await adminFetch<GenerateLicenseResponse & { email_sent?: boolean }>('/api/v1/admin/generate', {
+    const body: Record<string, any> = {
+      tier: genTier,
+      max_devices: genMaxDevices,
+      source: genSource
+    };
+
+    if (genSource === 'promo') {
+      const expDays = parseInt(genExpiresInDays.trim(), 10);
+      const durDays = parseInt(genDurationDays.trim(), 10);
+      if (isNaN(expDays) || expDays <= 0) {
+        errorMsg = 'promo 活动码必须指定兑换截止天数（>0）';
+        generating = false;
+        return;
+      }
+      if (isNaN(durDays) || durDays <= 0) {
+        errorMsg = 'promo 活动码必须指定兑换后有效天数（>0）';
+        generating = false;
+        return;
+      }
+      body.expires_in_days = expDays;
+      body.duration_days = durDays;
+    } else {
+      if (genExpiresInDays.trim()) {
+        const d = parseInt(genExpiresInDays.trim(), 10);
+        if (!isNaN(d) && d > 0) body.expires_in_days = d;
+      }
+      if (genDurationDays.trim()) {
+        const d = parseInt(genDurationDays.trim(), 10);
+        if (!isNaN(d) && d > 0) body.duration_days = d;
+      }
+    }
+
+    if (genBuyerEmail.trim()) {
+      body.buyer_email = genBuyerEmail.trim();
+      if (genSendEmail) {
+        body.send_email = true;
+      }
+    }
+
+    try {
+      const res = await adminFetch<GenerateLicenseResponse>('/api/v1/admin/generate-license', {
         method: 'POST',
         body: JSON.stringify(body)
       });
       lastGeneratedCode = res.license_code;
-      const srcLabel = res.source || genSource;
-      actionMsg = `已生成授权码 ${res.license_code}（source=${srcLabel}）${res.email_sent ? '（通知邮件已并发投递）' : ''}`;
+      let okText = `${$t('licenses.generateTitle')} ${$t('common.success')}: ${res.license_code} (${res.tier})`;
+      if (res.email_sent !== undefined) {
+        okText += res.email_sent ? ' · 已发送通知邮件' : ' · 邮件未发送';
+      }
+      actionMsg = okText;
       await loadLicenses();
     } catch (err: any) {
-      errorMsg = '生成授权码失败: ' + (err.message || String(err));
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       generating = false;
     }
@@ -172,9 +192,12 @@
     if (!lastGeneratedCode) return;
     try {
       await navigator.clipboard.writeText(lastGeneratedCode);
-      copyHint = '已复制到剪贴板';
+      copyHint = $t('common.copied');
+      setTimeout(() => {
+        copyHint = '';
+      }, 2000);
     } catch {
-      copyHint = '复制失败，请手动选择授权码';
+      copyHint = $t('common.failed');
     }
   }
 
@@ -187,12 +210,12 @@
         method: 'POST',
         body: JSON.stringify({ license_code: selectedLicense.license_code })
       });
-      actionMsg = `已吊销 ${selectedLicense.license_code}`;
+      actionMsg = `${$t('licenses.revokeSuccess')}: ${selectedLicense.license_code}`;
       showRevokeConfirm = false;
       selectedLicense = null;
       await loadLicenses();
     } catch (err: any) {
-      errorMsg = '吊销授权失败: ' + (err.message || String(err));
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       actionBusy = false;
     }
@@ -215,9 +238,8 @@
       });
       actionMsg =
         activationId !== undefined
-          ? `已解绑 activation #${activationId}`
-          : `已清空 ${selectedLicense.license_code} 下全部设备`;
-      // refresh selected license devices without closing modal if single unbind
+          ? `${$t('licenses.unbindSuccess')} (activation #${activationId})`
+          : `${$t('licenses.unbindAllSuccess')} (${selectedLicense.license_code})`;
       await loadLicenses();
       const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
       if (refreshed) {
@@ -231,7 +253,7 @@
         selectedLicense = null;
       }
     } catch (err: any) {
-      errorMsg = '设备解绑失败: ' + (err.message || String(err));
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       actionBusy = false;
     }
@@ -250,38 +272,38 @@
 <div class="page-container">
   <div class="header-row">
     <div>
-      <h2>授权码与订单管控</h2>
-      <p class="subtitle">全库授权检索、手动发码、吊销与设备解绑 · 列表 {AUTO_REFRESH_MS / 1000}s 近实时刷新</p>
+      <h2>{$t('licenses.title')}</h2>
+      <p class="subtitle">{$t('licenses.subtitle')}</p>
     </div>
     <div class="actions">
-      <label class="auto-refresh-toggle" title="静默轮询授权与设备绑定状态">
+      <label class="auto-refresh-toggle" title={$t('licenses.autoRefresh')}>
         <input
           type="checkbox"
           bind:checked={autoRefresh}
           onchange={() => (autoRefresh ? startAutoRefresh() : stopAutoRefresh())}
         />
-        自动刷新
+        {$t('licenses.autoRefresh')}
       </label>
-      <button class="btn btn-secondary" onclick={() => loadLicenses()} disabled={loading || refreshing}>
-        {refreshing ? '刷新中…' : '立即刷新'}
+      <button class="btn btn-secondary btn-sm" onclick={() => loadLicenses()} disabled={loading || refreshing}>
+        {refreshing ? $t('common.loading') : $t('licenses.manualRefresh')}
       </button>
-      <button class="btn btn-primary" onclick={() => { showGenerateModal = true; lastGeneratedCode = null; copyHint = ''; }}>
-        + 手动生成授权码
+      <button class="btn btn-primary btn-sm" onclick={() => { showGenerateModal = true; lastGeneratedCode = null; copyHint = ''; }}>
+        + {$t('licenses.generateTitle')}
       </button>
     </div>
   </div>
 
   <div class="filter-bar card">
-    <div class="search-group" style="display: flex; align-items: center; gap: 1rem; width: 100%;">
+    <div class="search-group">
       <div class="search-input-wrap">
         <input
           type="text"
           class="input"
-          placeholder="输入 Email、License Code 或 Paddle Transaction ID 回车检索..."
+          placeholder={$t('licenses.searchPlaceholder')}
           bind:value={searchQuery}
           onkeydown={(e) => e.key === 'Enter' && loadLicenses()}
         />
-        <button class="search-icon-btn" onclick={() => loadLicenses()} disabled={loading} title="搜索" aria-label="搜索">
+        <button class="search-icon-btn" onclick={() => loadLicenses()} disabled={loading} title={$t('common.search')} aria-label={$t('common.search')}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -289,35 +311,31 @@
         </button>
       </div>
       {#if lastRefreshedAt}
-        <span class="refresh-meta" style="white-space: nowrap;">上次更新 {lastRefreshedAt}{refreshing ? ' · 同步中' : ''}</span>
+        <span class="refresh-meta">{$t('licenses.lastUpdated')} {lastRefreshedAt}{refreshing ? ' · ...' : ''}</span>
       {/if}
     </div>
   </div>
 
-  {#if errorMsg}
-    <div class="error-banner">{errorMsg}</div>
-  {/if}
-  {#if actionMsg}
-    <div class="ok-banner">{actionMsg}</div>
-  {/if}
+  <Banner type="error" message={errorMsg} />
+  <Banner type="ok" message={actionMsg} />
 
   {#if loading}
-    <div class="loading-state">正在查询全库授权数据...</div>
+    <div class="loading-state">{$t('common.loading')}</div>
   {:else if licenses.length === 0}
-    <div class="empty-state card">未找到符合条件的授权记录</div>
+    <div class="empty-state card">{$t('licenses.emptyState')}</div>
   {:else}
     <div class="table-container card">
       <table class="data-table">
         <thead>
           <tr>
-            <th>授权码 (License Code)</th>
-            <th>类型</th>
-            <th>来源</th>
-            <th>状态</th>
-            <th>设备配额</th>
-            <th>买家 Email</th>
-            <th>生成时间</th>
-            <th>操作</th>
+            <th>{$t('licenses.tableHeaderCode')}</th>
+            <th>{$t('licenses.tableHeaderTier')}</th>
+            <th>{$t('licenses.source')}</th>
+            <th>{$t('licenses.tableHeaderStatus')}</th>
+            <th>{$t('licenses.tableHeaderDevices')}</th>
+            <th>{$t('licenses.tableHeaderBuyer')}</th>
+            <th>{$t('common.created_at')}</th>
+            <th>{$t('licenses.tableHeaderActions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -328,13 +346,13 @@
               </td>
               <td><span class="badge badge-active">{lic.tier}</span></td>
               <td>
-                <span class={`badge badge-${lic.source || 'admin'}`} title="purchase=官网购买 promo=活动兑换 admin=官方生成 test=测试夹具">
+                <span class={`badge badge-${lic.source || 'admin'}`} title="purchase=Paddle promo=Promo admin=Manual">
                   {lic.source || '—'}
                 </span>
               </td>
               <td>
                 <span class={`badge badge-${lic.status === 'active' ? 'active' : 'revoked'}`}>
-                  {lic.status}{lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}
+                  {lic.status === 'active' ? $t('common.active') : $t('common.revoked')}{lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}
                 </span>
               </td>
               <td>
@@ -342,7 +360,7 @@
                   {lic.active_devices_count} / {lic.max_devices}
                 </span>
                 {#if latestActivationHint(lic)}
-                  <div class="device-geo-hint" title="最近一次激活的 IP / 国家">
+                  <div class="device-geo-hint">
                     {latestActivationHint(lic)}
                   </div>
                 {/if}
@@ -361,7 +379,7 @@
                       showUnbindConfirm = true;
                     }}
                   >
-                    解绑设备
+                    {$t('licenses.unbindBtn')}
                   </button>
                   {#if lic.status === 'active'}
                     <button
@@ -371,7 +389,7 @@
                         showRevokeConfirm = true;
                       }}
                     >
-                      吊销
+                      {$t('licenses.revokeBtn')}
                     </button>
                   {/if}
                 </div>
@@ -385,149 +403,135 @@
 </div>
 
 {#if showGenerateModal}
-  <div class="modal-overlay" onclick={() => (showGenerateModal = false)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <h3>手动生成授权码</h3>
-      <form onsubmit={handleGenerate} class="gen-form">
-        <div class="form-group">
-          <label for="source-select">来源 (source):</label>
-          <select id="source-select" class="input" bind:value={genSource}>
-            <option value="admin">admin — 客服补发 / 内测（不可 Portal 退款）</option>
-            <option value="promo">promo — 活动分享码（有兑换窗，不可退款，不累加）</option>
-          </select>
-          <p class="field-hint">付费购买码只能由 Paddle 履约自动写入 source=purchase，此处不可选。</p>
-        </div>
-
-        <div class="form-group">
-          <label for="tier-select">订阅类型 (Tier):</label>
-          <select id="tier-select" class="input" bind:value={genTier}>
-            <option value="PLUS">PLUS</option>
-            <option value="PRO">PRO</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="max-dev">最大绑定设备数:</label>
-          <input id="max-dev" type="number" class="input" bind:value={genMaxDevices} min="1" max="50" required />
-        </div>
-
-        <div class="form-group">
-          <label for="exp-days">
-            {genSource === 'promo' ? '兑换截止天数 redeem-by（必填）' : '绝对过期天数 expires_in_days（留空 = LIFETIME）'}
-          </label>
-          <input id="exp-days" type="number" class="input" placeholder={genSource === 'promo' ? '例如 30（天内必须兑换）' : '例如 365'} bind:value={genExpiresInDays} min="1" />
-        </div>
-
-        <div class="form-group">
-          <label for="dur-days">
-            {genSource === 'promo' ? '兑换后使用天数 duration_days（必填）' : '兑换后使用天数 duration_days（选填，与双重过期配合）'}
-          </label>
-          <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' ? '例如 14' : '留空则不用相对时长'} bind:value={genDurationDays} min="0" />
-        </div>
-
-        <div class="form-group">
-          <label for="buyer-email">买家邮箱 (选填，用于绑定与开通通知):</label>
-          <input id="buyer-email" type="email" class="input" placeholder="例如 buyer@example.com" bind:value={genBuyerEmail} />
-        </div>
-
-        {#if genBuyerEmail.trim()}
-          <div class="form-group checkbox-group">
-            <label for="send-email-check" class="checkbox-label">
-              <input id="send-email-check" type="checkbox" bind:checked={genSendEmail} />
-              自动向买家发送授权码通知邮件
-            </label>
-          </div>
-        {/if}
-
-        {#if lastGeneratedCode}
-          <div class="generated-box">
-            <div class="gen-label">新授权码（请立即复制保存）</div>
-            <div class="gen-code-row">
-              <code class="gen-code">{lastGeneratedCode}</code>
-              <button type="button" class="btn btn-secondary btn-sm" onclick={copyGeneratedCode}>复制</button>
-            </div>
-            {#if copyHint}
-              <div class="copy-hint">{copyHint}</div>
-            {/if}
-          </div>
-        {/if}
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick={() => (showGenerateModal = false)}>关闭</button>
-          <button type="submit" class="btn btn-primary" disabled={generating}>
-            {generating ? '生成中...' : '立即生成'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-{/if}
-
-{#if showRevokeConfirm && selectedLicense}
-  <div class="modal-overlay" onclick={() => (showRevokeConfirm = false)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <h3 class="danger-title">高危操作确认：吊销授权</h3>
-      <p class="confirm-text">
-        确定要吊销授权码 <strong>{selectedLicense.license_code}</strong> 吗？<br />
-        吊销后客户端下次同步时将强制作废并擦除本地 <code>.lic</code> 凭证。
-      </p>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick={() => (showRevokeConfirm = false)} disabled={actionBusy}>取消</button>
-        <button class="btn btn-danger" onclick={handleRevoke} disabled={actionBusy}>
-          {actionBusy ? '处理中...' : '确认吊销'}
-        </button>
+  <Modal open={true} title={$t('licenses.generateTitle')} maxWidth="600px" onclose={() => (showGenerateModal = false)}>
+    <form onsubmit={handleGenerate} class="gen-form">
+      <div class="form-group">
+        <label for="source-select">{$t('licenses.source')}:</label>
+        <select id="source-select" class="input" bind:value={genSource}>
+          <option value="admin">{$t('licenses.sourceAdmin')}</option>
+          <option value="promo">{$t('licenses.sourcePromo')}</option>
+        </select>
+        <p class="field-hint">{$t('licenses.sourceHint')}</p>
       </div>
-    </div>
-  </div>
-{/if}
 
-{#if showUnbindConfirm && selectedLicense}
-  <div class="modal-overlay" onclick={() => (showUnbindConfirm = false)} role="presentation">
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
-      <h3>设备解绑管理</h3>
-      <p class="subtitle">授权码: {selectedLicense.license_code}</p>
+      <div class="form-group">
+        <label for="tier-select">{$t('licenses.tier')}:</label>
+        <select id="tier-select" class="input" bind:value={genTier}>
+          <option value="PLUS">PLUS</option>
+          <option value="PRO">PRO</option>
+        </select>
+      </div>
 
-      {#if !selectedLicense.activations?.length}
-        <div class="empty-state">目前该授权码下未绑定任何硬件设备。</div>
-      {:else}
-        <div class="device-list">
-          {#each selectedLicense.activations as act (act.id)}
-            <div class="device-item card">
-              <div>
-                <div class="dev-name">{deviceTitle(act)}</div>
-                <div class="dev-fp">{deviceSubtitle(act)}</div>
-                <div class="dev-time">
-                  激活于: {act.activated_at ? new Date(act.activated_at).toLocaleString() : '-'}
-                </div>
-                <div class="dev-net" title={act.user_agent || ''}>
-                  网络: {deviceNetworkLine(act)}
-                </div>
-              </div>
-              <button
-                class="btn btn-danger btn-sm"
-                disabled={actionBusy}
-                onclick={() => handleUnbind(act.id)}
-              >
-                解绑此设备
-              </button>
-            </div>
-          {/each}
+      <div class="form-group">
+        <label for="max-dev">{$t('licenses.maxDevices')}:</label>
+        <input id="max-dev" type="number" class="input" bind:value={genMaxDevices} min="1" max="50" required />
+      </div>
+
+      <div class="form-group">
+        <label for="exp-days">
+          {genSource === 'promo' ? $t('licenses.redeemDays') : $t('licenses.expiresDays')}
+        </label>
+        <input id="exp-days" type="number" class="input" placeholder={genSource === 'promo' ? $t('licenses.redeemPlaceholder') : $t('licenses.expiresPlaceholder')} bind:value={genExpiresInDays} min="1" />
+      </div>
+
+      <div class="form-group">
+        <label for="dur-days">
+          {genSource === 'promo' ? $t('licenses.durationDaysPromo') : $t('licenses.durationDaysAdmin')}
+        </label>
+        <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' ? $t('licenses.durationPromoPlaceholder') : $t('licenses.durationAdminPlaceholder')} bind:value={genDurationDays} min="0" />
+      </div>
+
+      <div class="form-group">
+        <label for="buyer-email">{$t('licenses.buyerEmail')}:</label>
+        <input id="buyer-email" type="email" class="input" placeholder={$t('licenses.buyerEmailPlaceholder')} bind:value={genBuyerEmail} />
+      </div>
+
+      {#if genBuyerEmail.trim()}
+        <div class="form-group checkbox-group">
+          <label for="send-email-check" class="checkbox-label">
+            <input id="send-email-check" type="checkbox" bind:checked={genSendEmail} />
+            {$t('licenses.sendEmailCheck')}
+          </label>
         </div>
       {/if}
 
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick={() => (showUnbindConfirm = false)} disabled={actionBusy}>关闭</button>
-        {#if selectedLicense.activations?.length}
-          <button class="btn btn-danger" disabled={actionBusy} onclick={() => handleUnbind()}>
-            一键清空所有设备
-          </button>
-        {/if}
+      {#if lastGeneratedCode}
+        <div class="generated-box">
+          <div class="gen-label">{$t('licenses.newLicenseAlert')}</div>
+          <div class="gen-code-row">
+            <code class="gen-code">{lastGeneratedCode}</code>
+            <button type="button" class="btn btn-secondary btn-sm" onclick={copyGeneratedCode}>{$t('common.copy')}</button>
+          </div>
+          {#if copyHint}
+            <div class="copy-hint">{copyHint}</div>
+          {/if}
+        </div>
+      {/if}
+    </form>
+    {#snippet footer()}
+      <button type="button" class="btn btn-secondary" onclick={() => (showGenerateModal = false)}>{$t('common.close')}</button>
+      <button type="button" class="btn btn-primary" disabled={generating} onclick={handleGenerate}>
+        {generating ? $t('licenses.generating') : $t('licenses.generateBtn')}
+      </button>
+    {/snippet}
+  </Modal>
+{/if}
+
+{#if showRevokeConfirm && selectedLicense}
+  <Modal open={true} title={$t('licenses.revokeTitle')} maxWidth="480px" onclose={() => (showRevokeConfirm = false)}>
+    <p class="confirm-text">
+      {$t('licenses.revokeConfirmText', { code: selectedLicense.license_code })}
+    </p>
+    {#snippet footer()}
+      <button class="btn btn-secondary" onclick={() => (showRevokeConfirm = false)} disabled={actionBusy}>{$t('common.cancel')}</button>
+      <button class="btn btn-danger" onclick={handleRevoke} disabled={actionBusy}>
+        {actionBusy ? $t('common.loading') : $t('licenses.revokeBtn')}
+      </button>
+    {/snippet}
+  </Modal>
+{/if}
+
+{#if showUnbindConfirm && selectedLicense}
+  <Modal open={true} title={$t('licenses.unbindTitle')} maxWidth="580px" onclose={() => (showUnbindConfirm = false)}>
+    <p class="subtitle">{$t('licenses.unbindSubtitle', { code: selectedLicense.license_code })}</p>
+
+    {#if !selectedLicense.activations?.length}
+      <div class="empty-state">{$t('licenses.noDevices')}</div>
+    {:else}
+      <div class="device-list">
+        {#each selectedLicense.activations as act (act.id)}
+          <div class="device-item card">
+            <div>
+              <div class="dev-name">{deviceTitle(act)}</div>
+              <div class="dev-fp">{deviceSubtitle(act)}</div>
+              <div class="dev-time">
+                {$t('licenses.activatedAt')}: {act.activated_at ? new Date(act.activated_at).toLocaleString() : '-'}
+              </div>
+              <div class="dev-net" title={act.user_agent || ''}>
+                {$t('licenses.network')}: {deviceNetworkLine(act)}
+              </div>
+            </div>
+            <button
+              class="btn btn-danger btn-sm"
+              disabled={actionBusy}
+              onclick={() => handleUnbind(act.id)}
+            >
+              {$t('licenses.unbindSingle')}
+            </button>
+          </div>
+        {/each}
       </div>
-    </div>
-  </div>
+    {/if}
+
+    {#snippet footer()}
+      <button class="btn btn-secondary" onclick={() => (showUnbindConfirm = false)} disabled={actionBusy}>{$t('common.close')}</button>
+      {#if selectedLicense?.activations?.length}
+        <button class="btn btn-danger" disabled={actionBusy} onclick={() => handleUnbind()}>
+          {$t('licenses.unbindAllBtn')}
+        </button>
+      {/if}
+    {/snippet}
+  </Modal>
 {/if}
 
 <style>
@@ -576,7 +580,6 @@
   .field-hint { margin: 0.35rem 0 0; font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
   .form-group label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
   .confirm-text { margin: 1rem 0; color: var(--text-secondary); line-height: 1.6; }
-  .danger-title { color: var(--accent-danger); }
 
   .generated-box {
     background: rgba(16, 185, 129, 0.1);
@@ -601,20 +604,5 @@
   .dev-fp { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
   .dev-time { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
 
-  .modal-footer { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
   .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
-  .error-banner {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
-    padding: 0.75rem;
-    border-radius: var(--radius-sm);
-  }
-  .ok-banner {
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
-    padding: 0.75rem;
-    border-radius: var(--radius-sm);
-  }
 </style>

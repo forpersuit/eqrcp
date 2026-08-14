@@ -12,9 +12,65 @@
 
   let { open, title = '', maxWidth = '650px', onclose, children, footer }: Props = $props();
 
+  let modalEl: HTMLDivElement | null = $state(null);
+  let previouslyFocused: HTMLElement | null = null;
+
+  const FOCUSABLE_SELECTOR =
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
+
+  $effect(() => {
+    if (open) {
+      if (typeof document !== 'undefined') {
+        previouslyFocused = document.activeElement as HTMLElement | null;
+        requestAnimationFrame(() => {
+          if (!modalEl) return;
+          const focusables = modalEl.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+          if (focusables.length > 0) {
+            focusables[0].focus();
+          } else {
+            modalEl.focus();
+          }
+        });
+      }
+    } else if (previouslyFocused) {
+      previouslyFocused.focus();
+      previouslyFocused = null;
+    }
+  });
+
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && open) {
+    if (!open) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
       onclose();
+      return;
+    }
+
+    if (e.key === 'Tab' && modalEl) {
+      const focusables = Array.from(
+        modalEl.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((el) => el.offsetParent !== null);
+
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first || document.activeElement === modalEl) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     }
   }
 </script>
@@ -25,6 +81,7 @@
   <div class="modal-overlay" onclick={onclose} role="presentation">
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
+      bind:this={modalEl}
       class="modal-content"
       style:max-width={maxWidth}
       onclick={(e) => e.stopPropagation()}

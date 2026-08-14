@@ -10,9 +10,9 @@
 | **类型安全** | 消除假联合类型（`'A' \| string`），`adminFetch` 默认泛型修正为 `unknown` 强制调用方收窄 | ✅ 已全面严格化 |
 | **反代健壮性** | 反代增加 502/503 结构化 JSON 返回，前端 `adminFetch` 防御性 JSON 解析杜绝崩溃 | ✅ 已修复健壮化 |
 | **弹窗交互** | Blacklist 原生 `confirm()` 迁移为内建模态确认框，全站彻底杜绝 alert/confirm | ✅ 已完全合规 |
-| **架构一致性** | 精简 i18n 空字典骨架，提供完整 `en.ts` 与 `zh.ts` 翻译，修复回退逻辑 | ✅ 已重构落地 |
-| **自动化测试** | 引入 `vitest` 并为 `i18n` 翻译插值与 `audit` 审计日志解析等纯函数建立 100% 单测覆盖 | ✅ 10/10 测试通过 |
-| **组件化重构** | 抽离复用 `Modal.svelte`（支持 ESC 键关闭与焦点无障碍）、`Pagination.svelte`、`Banner.svelte` | ✅ 消除跨页面重复样板 |
+| **全站 i18n 落地** | 全站 8 个页面与公共组件全面接线 `$t()`，中英文双语字典完整，侧边栏支持语言切换与本地持久化 | ✅ 真实全面接线 |
+| **组件化重构** | 抽离复用 `Modal.svelte`（支持真实焦点陷阱、自动对焦、关闭恢复焦点与 ESC 监听）、`Pagination.svelte`（带 loading 防抖守卫与完整条目区间）、`Banner.svelte`，覆盖全部业务页面（包括 `Licenses.svelte`） | ✅ 全页面统一迁移 |
+| **自动化测试** | 引入 `vitest` 为 `i18n` 翻译插值/真实回退 与 `audit` 审计日志解析等纯函数建立 100% 单测覆盖 | ✅ 10/10 测试通过 |
 | **契约与文档** | 同步 `api-contract.md`、`README.md` 与代码实现，彻底消除 SSOT 漂移与死配置 | ✅ 已全面对齐 |
 
 ---
@@ -68,37 +68,44 @@
 
 ---
 
-## 四、中危：架构、测试与一致性全面整改
+## 四、架构、测试与一致性全面整改
 
-### 🟡 6. i18n 规范化与真实英文字典落地（已修复）
+### 🟡 6. i18n 全站接线与中英文双语完整落地（已修复）
 
-- **位置**：`src/lib/i18n.ts`、`src/lib/locales/zh.ts`、`src/lib/locales/en.ts`
+- **位置**：`src/lib/i18n.ts`、`src/lib/locales/zh.ts`、`src/lib/locales/en.ts` 以及全站所有业务页面与组件
 - **处理结果**：
-  1. 移除空字典架子（`ja/ko/es/de/fr`），遵循 Rule 2 Simplicity First，仅保留当前维护的 `zh` 与 `en`。
-  2. 新增真实的 `en.ts` 翻译字典，补全导航、概览、授权、黑名单、健康度与业务指标各模块英文对照。
-  3. 重构 `translate` 函数，实现严密、清晰的双层回退逻辑（目标语言字典 → 中文主字典 → 原始键名）。
+  1. **全站真接线**：全面替换 `Licenses`、`ErrorAudit`、`SystemHealth`、`OpsAudit`、`Blacklist`、`Overview`、`Login`、`App`、`Pagination` 等页面的硬编码字符串为 `$t()`。
+  2. **中英双语字典补齐**：`en.ts` 与 `zh.ts` 完整覆盖所有业务字段、弹窗标题、表格列头、操作按钮与状态提示。
+  3. **语言切换与持久化**：侧边栏增加「中文 / EN」切换按钮，并在 `localStorage` 中自动持久化。
+  4. **双层回退机制**：目标语言缺失时自动降级到中文，全缺失时返回 key 自身。
 
 ---
 
-### 🟡 7. 引入 Vitest 自动化单元测试（已修复）
+### 🟡 7. 引入 Vitest 自动化单元测试并修复回退测试（已修复）
 
 - **位置**：`package.json`、`src/lib/i18n.test.ts`、`src/lib/audit.test.ts`
 - **处理结果**：
   1. 在 `devDependencies` 中配置 `vitest` 并增加 `npm test` 脚本。
-  2. 为 `i18n.ts` 的翻译查找、插值替换及降级回退编写 5 组针对性单测。
+  2. 为 `i18n.ts` 编写 5 组针对性单测，包括多语言翻译、参数模板插值（`{page}`, `{maxPage}`）、真实缺失 key 触发的 `zh` 降级回退机制，以及不存在 key 的原始路径兜底。
   3. 提取 `src/lib/audit.ts` 纯函数模块，为审计详情解析（`parseDetails`）与各类动作摘要（`summarizeDetails`）编写 5 组单测。
   4. 运行 `npm test`，全部 10 项测试 100% 通过。
 
 ---
 
-### 🟡 8. 抽离共享 UI 组件（已修复）
+### 🟡 8. 抽离共享 UI 组件并在全页面应用（已修复）
 
-- **位置**：`src/components/Modal.svelte`、`src/components/Pagination.svelte`、`src/components/Banner.svelte`
+- **位置**：`src/components/Modal.svelte`、`src/components/Pagination.svelte`、`src/components/Banner.svelte` 以及所有引用页面
 - **处理结果**：
-  1. **`Modal.svelte`**：统一弹窗遮罩与卡片，支持 `Escape` 快捷键关闭与 ARIA 无障碍属性，支持 Svelte 5 snippets。
-  2. **`Pagination.svelte`**：统一分页控制条、页码计算与边界防呆。
-  3. **`Banner.svelte`**：统一 success / error / info 各状态提示条，替代分散在各页面的重复 HTML 与 CSS。
-  4. 在 `ErrorAudit`、`OpsAudit`、`Blacklist` 等页面全面应用共享组件，并清理了所有未使用的冗余 CSS 规则，`svelte-check` 0 警告 0 错误。
+  1. **`Modal.svelte`（完整焦点管理）**：
+     - 内置真正的**焦点陷阱 (Focus Trap)**：打开时使用 `requestAnimationFrame` 自动聚焦第一个可聚焦元素，并拦截 `Tab` / `Shift+Tab` 循环锁定在模态框内部。
+     - **焦点恢复**：关闭时自动将焦点归还给触发元素（`previouslyFocused.focus()`）。
+     - 支持 `Escape` 快捷键全局监听关闭与 ARIA 无障碍属性。
+  2. **`Pagination.svelte`（防竞态与区间展示）**：
+     - 增加 `loading` 防抖守卫：`disabled={page <= 1 || loading}` / `disabled={page >= maxPage || loading}`，防止加载中重复点击引发竞态。
+     - 完整区间信息：显示当前分页条目区间 `(第 {start} - {end} 条，共 {total} 条)`。
+     - 完整接入 `$t()` 本地化。
+  3. **`Banner.svelte`**：统一 success / error / info 各状态提示条。
+  4. **全页面迁移**：包括体量最大的 `Licenses.svelte`（生成授权码、吊销确认、设备解绑 3 个模态框及状态栏）在内的全部页面已 100% 迁移至共享组件，`svelte-check` 0 错误 0 警告。
 
 ---
 
@@ -119,7 +126,7 @@
 | 11 | `Login.svelte` | 移除未使用的 `loading` 变量，将初始化副作用由 `queueMicrotask` 统一为规范的 `onMount` | ✅ 已修复 |
 | 12 | `lib/env.ts` | 移除仅有一行转发的冗余中间层文件，各组件直接引用 `env.svelte` | ✅ 已清理 |
 | 13 | `i18n.ts` | 重写字典判定与回退链路，消除 truthy 空对象引发的隐晦逻辑 | ✅ 已修复 |
-| 14 | 各 Modal | 统一迁移至 `Modal.svelte`，内置全局 `Escape` 键盘监听与标准 `role="dialog"` 属性 | ✅ 已修复 |
+| 14 | 各 Modal | 统一迁移至 `Modal.svelte`，内置焦点陷阱、焦点归还、全局 `Escape` 监听与标准 `role="dialog"` 属性 | ✅ 已修复 |
 
 ---
 
@@ -129,7 +136,7 @@
    ```bash
    npm test (vitest) -> 2 test files, 10 tests passed (100%)
    ```
-2. **TypeScript & Svelte 诊断**：
+2. **TypeScript & Svelte 严格诊断**：
    ```bash
    npm run check (svelte-check) -> 0 errors, 0 warnings
    ```

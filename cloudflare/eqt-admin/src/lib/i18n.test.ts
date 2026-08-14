@@ -13,14 +13,13 @@ describe('i18n translate function', () => {
   });
 
   it('should interpolate template parameters', () => {
-    // translate handles parameters like {count}
-    const res = translate('common.actions', { count: 5 }, 'zh');
-    expect(res).toBe('操作');
+    expect(translate('pagination.page', { page: 2, maxPage: 10 }, 'zh')).toBe('第 2 / 10 页');
+    expect(translate('pagination.page', { page: 2, maxPage: 10 }, 'en')).toBe('Page 2 / 10');
   });
 
   it('should gracefully fallback to zh if key missing in en', () => {
-    // If a key doesn't exist in en, it falls back to zh
-    expect(translate('nav.title', undefined, 'en')).toBe('EQT DRM Admin');
+    // common.test_fallback_key is intentionally present only in zh.ts, not in en.ts
+    expect(translate('common.test_fallback_key', undefined, 'en')).toBe('仅中文测试回退键');
   });
 
   it('should return raw key path if key is not found in any dictionary', () => {

@@ -9,9 +9,17 @@ const dictionaries: Record<SupportedLocale, Record<string, any>> = {
   en,
 };
 
-const INITIAL_LOCALE: SupportedLocale = 'zh';
+function getStoredLocale(): SupportedLocale {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('eqt_admin_lang') as SupportedLocale;
+      if (saved === 'zh' || saved === 'en') return saved;
+    } catch {}
+  }
+  return 'zh';
+}
 
-export const currentLocale = writable<SupportedLocale>(INITIAL_LOCALE);
+export const currentLocale = writable<SupportedLocale>(getStoredLocale());
 
 export function setLocale(locale: SupportedLocale): void {
   if (dictionaries[locale]) {

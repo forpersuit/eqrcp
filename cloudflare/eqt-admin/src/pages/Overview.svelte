@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import { t } from '../lib/i18n';
   import type { AdminHealthResponse, AdminTab } from '../lib/types';
   import LicenseGlobeCard from '../components/LicenseGlobeCard.svelte';
 
@@ -58,8 +59,8 @@
 <div class="page-container">
   <div class="header-row">
     <div>
-      <h2>控制台全局概览</h2>
-      <p class="subtitle">欢迎来到 EQT 运维管理系统，快速监控全站运营状态与实时 3D 全球激活分布视界</p>
+      <h2>{$t('overview.title')}</h2>
+      <p class="subtitle">{$t('overview.subtitle')}</p>
     </div>
   </div>
 
@@ -68,7 +69,7 @@
       <div class="stat-icon">🔑</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.total_licenses}</div>
-        <div class="stat-label">全库授权总数（生效中: {stats.active_licenses}）</div>
+        <div class="stat-label">{$t('overview.totalLicenses')} ({$t('common.active')}: {stats.active_licenses})</div>
       </div>
     </div>
 
@@ -76,7 +77,7 @@
       <div class="stat-icon">💻</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.today_activations}</div>
-        <div class="stat-label">今日新增客户端设备激活数</div>
+        <div class="stat-label">{$t('overview.recentActivations')}</div>
       </div>
     </div>
 
@@ -84,7 +85,7 @@
       <div class="stat-icon">⚠️</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.total_error_logs}</div>
-        <div class="stat-label">待排查异常日志（24h内: {stats.errors_24h}）</div>
+        <div class="stat-label">{$t('errorAudit.title')} (24h: {stats.errors_24h})</div>
       </div>
     </div>
 
@@ -92,12 +93,11 @@
       <div class="stat-icon">⚡</div>
       <div>
         <div class="stat-num">{stats.db_status.toUpperCase()}</div>
-        <div class="stat-label">Cloudflare D1 数据库状态</div>
+        <div class="stat-label">{$t('health.dbStatus')}</div>
       </div>
     </div>
   </div>
 
-  <!-- Replace quick-links card with LicenseGlobeCard -->
   <div class="globe-section">
     <LicenseGlobeCard />
   </div>

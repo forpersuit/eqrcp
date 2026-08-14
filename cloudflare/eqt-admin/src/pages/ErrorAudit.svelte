@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import { t } from '../lib/i18n';
   import type { SystemErrorLog } from '../lib/types';
   import Modal from '../components/Modal.svelte';
   import Pagination from '../components/Pagination.svelte';
@@ -37,7 +38,7 @@
       logs = data.logs || [];
       total = data.total || logs.length;
     } catch (err: any) {
-      errorMsg = err.message || '加载日志失败';
+      errorMsg = err.message || $t('common.failed');
     } finally {
       loading = false;
     }
@@ -69,11 +70,11 @@
     try {
       await adminFetch('/api/v1/admin/error-logs', { method: 'DELETE' });
       showClearConfirm = false;
-      actionMsg = '系统错误日志已清空';
+      actionMsg = `${$t('errorAudit.clearTitle')} ${$t('common.success')}`;
       page = 1;
       await loadLogs();
     } catch (err: any) {
-      errorMsg = '清空日志失败: ' + (err.message || String(err));
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       clearing = false;
     }
@@ -97,53 +98,53 @@
 <div class="page-container">
   <div class="header-row">
     <div>
-      <h2>错误审计中心</h2>
-      <p class="subtitle">Cloudflare D1 system_error_logs 实时控制台 (共 {total} 条)</p>
+      <h2>{$t('errorAudit.title')}</h2>
+      <p class="subtitle">{$t('errorAudit.subtitle', { total })}</p>
     </div>
     <div class="actions">
-      <button class="btn btn-secondary" onclick={loadLogs} disabled={loading}>
-        刷新日志
+      <button class="btn btn-secondary btn-sm" onclick={loadLogs} disabled={loading}>
+        {$t('errorAudit.refreshBtn')}
       </button>
       <button
-        class="btn btn-danger"
+        class="btn btn-danger btn-sm"
         onclick={() => (showClearConfirm = true)}
         disabled={loading || total === 0}
       >
-        清空旧日志
+        {$t('errorAudit.clearBtn')}
       </button>
     </div>
   </div>
 
   <div class="filter-bar card">
     <div class="filter-group">
-      <label for="level-select">级别筛选:</label>
+      <label for="level-select">{$t('errorAudit.levelFilter')}</label>
       <select id="level-select" class="input select-input" bind:value={filterLevel} onchange={handleFilterChange}>
-        <option value="ALL">全部 (ALL)</option>
+        <option value="ALL">{$t('common.all')} (ALL)</option>
         <option value="ERROR">ERROR</option>
         <option value="WARN">WARN</option>
         <option value="CRITICAL">CRITICAL</option>
       </select>
     </div>
     <div class="filter-group">
-      <label for="cat-select">分类筛选:</label>
+      <label for="cat-select">{$t('errorAudit.categoryFilter')}</label>
       <select id="cat-select" class="input select-input" bind:value={filterCategory} onchange={handleFilterChange}>
         {#each categories as cat}
-          <option value={cat}>{cat}</option>
+          <option value={cat}>{cat === 'ALL' ? $t('common.all') : cat}</option>
         {/each}
       </select>
     </div>
     <div class="filter-group search-group">
-      <label for="kw-input">搜索关键词:</label>
+      <label for="kw-input">{$t('opsAudit.filterKeyword')}</label>
       <div class="search-input-wrap">
         <input
           id="kw-input"
           type="text"
           class="input"
-          placeholder="输入关键词按回车搜索..."
+          placeholder={$t('errorAudit.searchPlaceholder')}
           bind:value={searchKeyword}
           onkeydown={(e) => e.key === 'Enter' && handleFilterChange()}
         />
-        <button class="search-icon-btn" onclick={handleFilterChange} title="搜索" aria-label="搜索">
+        <button class="search-icon-btn" onclick={handleFilterChange} title={$t('common.search')} aria-label={$t('common.search')}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -157,9 +158,9 @@
   <Banner type="ok" message={actionMsg} />
 
   {#if loading}
-    <div class="loading-state">正在拉取 D1 审计日志...</div>
+    <div class="loading-state">{$t('common.loading')}</div>
   {:else if logs.length === 0}
-    <div class="empty-state card">暂无符合条件的错误审计日志</div>
+    <div class="empty-state card">{$t('errorAudit.emptyState')}</div>
   {:else}
     <div class="logs-list">
       {#each logs as log (log.id)}
@@ -181,7 +182,7 @@
           </div>
           {#if log.context_json}
             <div class="log-footer">
-              <span class="context-hint">包含 JSON 上下文信息 (点击查看详情)</span>
+              <span class="context-hint">{$t('errorAudit.hasContext')}</span>
             </div>
           {/if}
         </div>
@@ -189,54 +190,54 @@
     </div>
 
     <!-- Pagination Bar -->
-    <Pagination {page} {pageSize} {total} onprev={prevPage} onnext={nextPage} />
+    <Pagination {page} {pageSize} {total} {loading} onprev={prevPage} onnext={nextPage} />
   {/if}
 </div>
 
 {#if selectedLog}
-  <Modal open={true} title={`错误日志详情 #${selectedLog.id}`} maxWidth="650px" onclose={() => (selectedLog = null)}>
+  <Modal open={true} title={$t('errorAudit.detailTitle', { id: selectedLog.id })} maxWidth="650px" onclose={() => (selectedLog = null)}>
     <div class="detail-section">
-      <span class="detail-label">级别:</span>
+      <span class="detail-label">{$t('common.status')}:</span>
       <div><span class={`badge badge-${selectedLog.level.toLowerCase()}`}>{selectedLog.level}</span></div>
     </div>
     
     <div class="detail-section">
-      <span class="detail-label">发生时间:</span>
+      <span class="detail-label">{$t('common.time')}:</span>
       <div>{new Date(selectedLog.created_at).toLocaleString()}</div>
     </div>
 
     <div class="detail-section">
-      <span class="detail-label">分类 (Category):</span>
+      <span class="detail-label">{$t('common.summary')}:</span>
       <div>{selectedLog.category}</div>
     </div>
 
     <div class="detail-section">
-      <span class="detail-label">异常信息:</span>
+      <span class="detail-label">{$t('common.details')}:</span>
       <pre class="code-block">{selectedLog.error_message}</pre>
     </div>
 
     {#if selectedLog.context_json}
       <div class="detail-section">
-        <span class="detail-label">上下文 JSON (Context):</span>
+        <span class="detail-label">{$t('errorAudit.contextJson')}</span>
         <pre class="code-block json-block">{selectedLog.context_json}</pre>
       </div>
     {/if}
 
     {#snippet footer()}
-      <button class="btn btn-secondary" onclick={() => (selectedLog = null)}>关闭</button>
+      <button class="btn btn-secondary" onclick={() => (selectedLog = null)}>{$t('common.close')}</button>
     {/snippet}
   </Modal>
 {/if}
 
 {#if showClearConfirm}
-  <Modal open={true} title="确认清空错误日志" maxWidth="480px" onclose={() => (showClearConfirm = false)}>
+  <Modal open={true} title={$t('errorAudit.clearTitle')} maxWidth="480px" onclose={() => (showClearConfirm = false)}>
     <p class="confirm-text">
-      确定要清空 <strong>全部</strong> system_error_logs 吗？此操作无法撤销。
+      {$t('errorAudit.clearConfirmText')}
     </p>
     {#snippet footer()}
-      <button class="btn btn-secondary" onclick={() => (showClearConfirm = false)} disabled={clearing}>取消</button>
+      <button class="btn btn-secondary" onclick={() => (showClearConfirm = false)} disabled={clearing}>{$t('common.cancel')}</button>
       <button class="btn btn-danger" onclick={clearLogs} disabled={clearing}>
-        {clearing ? '清空中...' : '确认清空'}
+        {clearing ? $t('common.loading') : $t('common.confirm')}
       </button>
     {/snippet}
   </Modal>
@@ -265,6 +266,7 @@
     gap: 1.5rem;
     align-items: center;
     padding: 1rem 1.5rem;
+    flex-wrap: wrap;
   }
 
   .filter-group {
@@ -279,10 +281,10 @@
     white-space: nowrap;
   }
 
-  .search-group { flex: 1; }
+  .search-group { flex: 1; min-width: 220px; }
 
   .select-input {
-    width: 200px;
+    width: 180px;
     background: var(--bg-surface);
   }
 
@@ -347,13 +349,6 @@
     color: var(--text-muted);
   }
 
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.25rem;
-  }
-
   .detail-section {
     margin-bottom: 1rem;
   }
@@ -375,28 +370,6 @@
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
-  }
-
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 1.5rem;
-  }
-
-  .error-banner {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
-    padding: 0.75rem;
-    border-radius: var(--radius-sm);
-  }
-
-  .ok-banner {
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
-    padding: 0.75rem;
-    border-radius: var(--radius-sm);
   }
 
   .confirm-text {

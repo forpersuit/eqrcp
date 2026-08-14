@@ -1,6 +1,6 @@
 <script lang="ts">
   import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
-  import { t } from './lib/i18n';
+  import { t, setLocale, currentLocale } from './lib/i18n';
   import { adminEnv, setAdminEnvironment, type AdminEnvironment } from './lib/env.svelte';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
@@ -125,6 +125,24 @@
       </nav>
 
       <div class="sidebar-footer">
+        <div class="lang-switch-row">
+          <button
+            type="button"
+            class="lang-pill-btn"
+            class:selected={$currentLocale === 'zh'}
+            onclick={() => setLocale('zh')}
+          >
+            中文
+          </button>
+          <button
+            type="button"
+            class="lang-pill-btn"
+            class:selected={$currentLocale === 'en'}
+            onclick={() => setLocale('en')}
+          >
+            EN
+          </button>
+        </div>
         <button class="btn btn-secondary btn-block logout-btn" onclick={handleLogout}>
           {$t('nav.logout')}
         </button>
@@ -331,6 +349,39 @@
   .sidebar-footer {
     padding-top: 1rem;
     border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .lang-switch-row {
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .lang-pill-btn {
+    flex: 1;
+    padding: 0.3rem;
+    font-size: 0.75rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .lang-pill-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .lang-pill-btn.selected {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-weight: 600;
   }
 
   .logout-btn {

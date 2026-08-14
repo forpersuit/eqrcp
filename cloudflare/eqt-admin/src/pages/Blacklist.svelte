@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import { t } from '../lib/i18n';
   import type { ManualBlacklistEntry } from '../lib/types';
   import Modal from '../components/Modal.svelte';
   import Banner from '../components/Banner.svelte';
@@ -39,7 +40,7 @@
       entries = data.entries || [];
       total = data.total || 0;
     } catch (err: any) {
-      errorMsg = err.message || '加载黑名单失败';
+      errorMsg = err.message || $t('common.failed');
       entries = [];
       total = 0;
     } finally {
@@ -69,7 +70,7 @@
         method: 'POST',
         body: JSON.stringify(body)
       });
-      actionMsg = '已添加封禁条目';
+      actionMsg = `${$t('blacklist.addTitle')} ${$t('common.success')}`;
       formEmail = '';
       formDeviceId = '';
       formUuid = '';
@@ -78,7 +79,7 @@
       formReason = '';
       await loadList();
     } catch (err: any) {
-      errorMsg = err.message || '添加失败';
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       busy = false;
     }
@@ -93,11 +94,11 @@
     errorMsg = '';
     try {
       await adminFetch(`/api/v1/admin/blacklist/${targetId}`, { method: 'DELETE' });
-      actionMsg = `已解除 #${targetId}`;
+      actionMsg = `${$t('blacklist.unbanBtn')} ${$t('common.success')}: #${targetId}`;
       unbanTarget = null;
       await loadList();
     } catch (err: any) {
-      errorMsg = err.message || '解封失败';
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     } finally {
       busy = false;
     }
@@ -123,10 +124,8 @@
 <div class="page-container">
   <div class="header-row">
     <div>
-      <h2>黑名单管理</h2>
-      <p class="subtitle">
-        手工封禁邮箱与设备码。自动滥用黑名单（365 天 ≥3 次已激活 purchase 退款/拒付）仍并行生效。
-      </p>
+      <h2>{$t('blacklist.title')}</h2>
+      <p class="subtitle">{$t('blacklist.subtitle')}</p>
     </div>
   </div>
 
@@ -134,94 +133,95 @@
   <Banner type="ok" message={actionMsg} />
 
   <div class="card form-card">
-    <h3>添加封禁</h3>
+    <h3>{$t('blacklist.addTitle')}</h3>
     <form onsubmit={handleAdd} class="add-form">
       <div class="kind-row">
         <label class="radio">
-          <input type="radio" bind:group={formKind} value="email" /> 邮箱
+          <input type="radio" bind:group={formKind} value="email" /> {$t('blacklist.kindEmail')}
         </label>
         <label class="radio">
-          <input type="radio" bind:group={formKind} value="device" /> 设备
+          <input type="radio" bind:group={formKind} value="device" /> {$t('blacklist.kindDevice')}
         </label>
       </div>
 
       {#if formKind === 'email'}
         <div class="form-group">
-          <label for="bl-email">邮箱</label>
-          <input id="bl-email" class="input" type="email" bind:value={formEmail} required placeholder="user@example.com" />
+          <label for="bl-email">{$t('blacklist.emailLabel')}</label>
+          <input id="bl-email" class="input" type="email" bind:value={formEmail} required placeholder={$t('blacklist.emailPlaceholder')} />
         </div>
       {:else}
         <div class="form-group">
-          <label for="bl-dev">设备码 device_id（推荐）</label>
+          <label for="bl-dev">{$t('blacklist.deviceIdLabel')}</label>
           <input id="bl-dev" class="input" bind:value={formDeviceId} placeholder="DEV-..." />
         </div>
         <div class="fp-grid">
           <div class="form-group">
-            <label for="bl-uuid">uuid_hash（可选）</label>
+            <label for="bl-uuid">{$t('blacklist.uuidHash')}</label>
             <input id="bl-uuid" class="input" bind:value={formUuid} />
           </div>
           <div class="form-group">
-            <label for="bl-cpu">cpu_hash（可选）</label>
+            <label for="bl-cpu">{$t('blacklist.cpuHash')}</label>
             <input id="bl-cpu" class="input" bind:value={formCpu} />
           </div>
           <div class="form-group">
-            <label for="bl-disk">disk_hash（可选）</label>
+            <label for="bl-disk">{$t('blacklist.diskHash')}</label>
             <input id="bl-disk" class="input" bind:value={formDisk} />
           </div>
         </div>
-        <p class="hint">至少填写 device_id 或一项指纹；指纹按 3 选 2 匹配。</p>
+        <p class="hint">{$t('blacklist.deviceFpLabel')}</p>
       {/if}
 
       <div class="form-group">
-        <label for="bl-reason">原因（可选）</label>
-        <input id="bl-reason" class="input" bind:value={formReason} placeholder="滥用 / 拒付 / 客服备注…" />
+        <label for="bl-reason">{$t('blacklist.reasonLabel')}</label>
+        <input id="bl-reason" class="input" bind:value={formReason} placeholder={$t('blacklist.reasonPlaceholder')} required />
       </div>
 
-      <button type="submit" class="btn btn-primary" disabled={busy}>添加封禁</button>
+      <button type="submit" class="btn btn-primary" disabled={busy}>
+        {busy ? $t('blacklist.submitting') : $t('blacklist.submitBtn')}
+      </button>
     </form>
   </div>
 
   <div class="card list-card">
     <div class="toolbar">
       <select class="input select" bind:value={filterKind} onchange={() => loadList()}>
-        <option value="all">全部类型</option>
-        <option value="email">仅邮箱</option>
-        <option value="device">仅设备</option>
+        <option value="all">{$t('blacklist.filterAll')}</option>
+        <option value="email">{$t('blacklist.filterEmail')}</option>
+        <option value="device">{$t('blacklist.filterDevice')}</option>
       </select>
       <input
         class="input search"
-        placeholder="搜索邮箱 / 设备码 / 原因…"
+        placeholder={$t('blacklist.searchPlaceholder')}
         bind:value={searchQuery}
         onkeydown={(e) => e.key === 'Enter' && loadList()}
       />
       <label class="check">
         <input type="checkbox" bind:checked={includeInactive} onchange={() => loadList()} />
-        含已解封
+        {$t('blacklist.includeInactive')}
       </label>
-      <button type="button" class="btn btn-secondary" onclick={() => loadList()} disabled={loading}>
-        刷新
+      <button type="button" class="btn btn-secondary btn-sm" onclick={() => loadList()} disabled={loading}>
+        {$t('common.refresh')}
       </button>
     </div>
 
-    <p class="meta">共 {total} 条</p>
+    <p class="meta">{$t('pagination.total', { total })}</p>
 
     {#if loading}
-      <div class="empty">加载中…</div>
+      <div class="empty">{$t('common.loading')}</div>
     {:else if !entries.length}
-      <div class="empty">暂无手工黑名单条目</div>
+      <div class="empty">{$t('blacklist.emptyList')}</div>
     {:else}
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>类型</th>
-              <th>标识</th>
-              <th>原因</th>
-              <th>操作人</th>
-              <th>时间</th>
-              <th>状态</th>
-              <th></th>
+              <th>{$t('blacklist.tableHeaderId')}</th>
+              <th>{$t('blacklist.tableHeaderKind')}</th>
+              <th>{$t('blacklist.tableHeaderTarget')}</th>
+              <th>{$t('blacklist.tableHeaderReason')}</th>
+              <th>{$t('blacklist.tableHeaderCreated')}</th>
+              <th>{$t('common.status')}</th>
+              <th>{$t('blacklist.tableHeaderActions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -231,13 +231,12 @@
                 <td><span class="badge">{row.kind}</span></td>
                 <td class="mono">{identityLine(row)}</td>
                 <td>{row.reason || '—'}</td>
-                <td class="muted">{row.created_by || '—'}</td>
                 <td class="muted">{row.created_at?.slice(0, 19)?.replace('T', ' ') || '—'}</td>
-                <td>{row.active ? '生效' : '已解封'}</td>
+                <td>{row.active ? $t('common.active') : $t('common.revoked')}</td>
                 <td>
                   {#if row.active}
                     <button type="button" class="btn btn-secondary btn-sm" disabled={busy} onclick={() => (unbanTarget = row)}>
-                      解封
+                      {$t('blacklist.unbanBtn')}
                     </button>
                   {/if}
                 </td>
@@ -251,15 +250,14 @@
 </div>
 
 {#if unbanTarget}
-  <Modal open={true} title="确认解除封禁" maxWidth="480px" onclose={() => (unbanTarget = null)}>
+  <Modal open={true} title={$t('blacklist.unbanTitle')} maxWidth="480px" onclose={() => (unbanTarget = null)}>
     <p class="confirm-text">
-      确定要解除条目 <strong>#{unbanTarget.id}</strong>（{identityLine(unbanTarget)}）的封禁吗？<br />
-      解除后该目标将恢复正常的授权验证与 API 访问。
+      {$t('blacklist.unbanConfirmText', { id: unbanTarget.id, identity: identityLine(unbanTarget) })}
     </p>
     {#snippet footer()}
-      <button type="button" class="btn btn-secondary" onclick={() => (unbanTarget = null)} disabled={busy}>取消</button>
+      <button type="button" class="btn btn-secondary" onclick={() => (unbanTarget = null)} disabled={busy}>{$t('common.cancel')}</button>
       <button type="button" class="btn btn-danger" onclick={executeUnban} disabled={busy}>
-        {busy ? '处理中...' : '确认解除'}
+        {busy ? $t('common.loading') : $t('blacklist.unbanConfirmBtn')}
       </button>
     {/snippet}
   </Modal>
@@ -292,17 +290,17 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    color: var(--text-secondary);
+    cursor: pointer;
     font-size: 0.9rem;
   }
   .form-group {
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.9rem;
   }
   .form-group label {
     display: block;
     font-size: 0.8rem;
     color: var(--text-muted);
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.3rem;
   }
   .fp-grid {
     display: grid;
@@ -312,20 +310,19 @@
   .hint {
     font-size: 0.75rem;
     color: var(--text-muted);
-    margin: -0.25rem 0 0.75rem;
+    margin: -0.4rem 0 0.8rem;
   }
   .toolbar {
     display: flex;
-    flex-wrap: wrap;
     gap: 0.75rem;
     align-items: center;
+    flex-wrap: wrap;
     margin-bottom: 0.75rem;
   }
-  .select {
-    width: auto;
-    min-width: 120px;
+  .toolbar .select {
+    width: 120px;
   }
-  .search {
+  .toolbar .search {
     flex: 1;
     min-width: 180px;
   }
@@ -334,7 +331,9 @@
     align-items: center;
     gap: 0.35rem;
     font-size: 0.85rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
   }
   .meta {
     font-size: 0.8rem;
@@ -342,9 +341,10 @@
     margin-bottom: 0.75rem;
   }
   .empty {
-    padding: 2rem;
     text-align: center;
     color: var(--text-muted);
+    padding: 2rem 0;
+    font-size: 0.9rem;
   }
   .table-wrap {
     overflow-x: auto;
@@ -356,21 +356,23 @@
   }
   th,
   td {
+    padding: 0.6rem 0.75rem;
     text-align: left;
-    padding: 0.6rem 0.5rem;
     border-bottom: 1px solid var(--border-color);
-    vertical-align: top;
   }
   th {
     color: var(--text-muted);
     font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
   }
   tr.inactive {
-    opacity: 0.55;
+    opacity: 0.5;
   }
   .mono {
-    font-family: ui-monospace, monospace;
-    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    max-width: 320px;
     word-break: break-all;
   }
   .muted {
@@ -380,7 +382,7 @@
   .badge {
     display: inline-block;
     padding: 0.15rem 0.45rem;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: rgba(99, 102, 241, 0.15);
     color: var(--accent-primary);
     font-size: 0.75rem;
@@ -395,9 +397,6 @@
     color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 1.25rem;
-  }
-  .confirm-text strong {
-    color: var(--text-primary);
   }
   @media (max-width: 900px) {
     .fp-grid {

@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { markAccessAuthenticated } from '../lib/auth';
   import { adminFetch } from '../lib/api';
+  import { t } from '../lib/i18n';
+  import Banner from '../components/Banner.svelte';
 
   let errorMessage = $state('');
   let probing = $state(true);
@@ -10,14 +12,13 @@
     probing = true;
     errorMessage = '';
     try {
-      // Same-origin /api → Pages proxy → Worker JWT validation
       await adminFetch('/api/v1/admin/error-logs?limit=1');
       markAccessAuthenticated();
       window.location.reload();
     } catch (err: any) {
       errorMessage =
         err.message ||
-        '未能通过 Cloudflare Access 鉴权。请确认已用 admin@eqt.net.im 登录 Access，且 Worker 已配置 CF_ACCESS_*。';
+        $t('login.invalidToken');
     } finally {
       probing = false;
     }
@@ -32,15 +33,11 @@
   <div class="card login-card">
     <div class="login-header">
       <div class="logo">EQT Admin</div>
-      <h2>管理后台控制台</h2>
-      <p class="subtitle">授权管控 • 黑名单 • 错误审计 • 系统监控</p>
+      <h2>{$t('login.title')}</h2>
+      <p class="subtitle">{$t('login.subtitle')}</p>
     </div>
 
-    {#if errorMessage}
-      <div class="error-banner">
-        {errorMessage}
-      </div>
-    {/if}
+    <Banner type="error" message={errorMessage} />
 
     <div class="access-panel">
       <p class="access-desc">
@@ -53,7 +50,7 @@
         disabled={probing}
         onclick={() => probeAccess()}
       >
-        {probing ? '正在校验 Access 身份…' : '继续进入控制台'}
+        {probing ? $t('common.loading') : $t('login.submit')}
       </button>
       <p class="hint">
         若反复失败：检查 Zero Trust Application / AUD、Worker
@@ -112,17 +109,6 @@
     width: 100%;
     padding: 0.75rem;
     font-size: 0.95rem;
-  }
-
-  .error-banner {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
-    padding: 0.75rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    margin-bottom: 1.25rem;
-    text-align: center;
   }
 
   .access-desc {
