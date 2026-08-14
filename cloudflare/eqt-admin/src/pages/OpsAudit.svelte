@@ -18,7 +18,18 @@
   let searchKeyword = $state('');
   let selected = $state<AdminAuditLog | null>(null);
 
-  const actions = ['ALL', 'GENERATE', 'REVOKE', 'UNBIND', 'CLEAR_LOGS'];
+  const actions = [
+    'ALL',
+    'GENERATE',
+    'REVOKE',
+    'UNBIND',
+    'CLEAR_LOGS',
+    'QUERY_ACTIVATION_LOCATIONS',
+    'QUERY_LIVE_DEVICES',
+    'PRUNE',
+    'BLACKLIST_ADD',
+    'BLACKLIST_REMOVE'
+  ];
 
   async function loadLogs() {
     loading = true;
@@ -85,7 +96,7 @@
       <label for="action-select">{$t('opsAudit.filterAction')}</label>
       <select id="action-select" class="input select-input" bind:value={filterAction} onchange={handleFilterChange}>
         {#each actions as a}
-          <option value={a}>{a === 'ALL' ? $t('common.all') : a}</option>
+          <option value={a}>{$t('audit.actions.' + a) || (a === 'ALL' ? $t('common.all') : a)}</option>
         {/each}
       </select>
     </div>
@@ -137,7 +148,7 @@
               <td><span class="badge badge-active">{row.action}</span></td>
               <td>{row.target_type || '—'}</td>
               <td class="mono">{row.target_id || '—'}</td>
-              <td class="summary-cell" title={summarizeDetails(row)}>{summarizeDetails(row)}</td>
+              <td class="summary-cell" title={summarizeDetails(row, $t)}>{summarizeDetails(row, $t)}</td>
               <td class="mono">{row.operator_ip || '—'}</td>
               <td>
                 <button class="btn btn-secondary btn-sm" onclick={() => (selected = row)}>{$t('common.details')}</button>
@@ -157,6 +168,10 @@
     <div class="detail-section">
       <span class="detail-label">{$t('common.actions')}</span>
       <div><span class="badge badge-active">{selected.action}</span></div>
+    </div>
+    <div class="detail-section">
+      <span class="detail-label">{$t('common.summary')}</span>
+      <div>{summarizeDetails(selected, $t)}</div>
     </div>
     <div class="detail-section">
       <span class="detail-label">{$t('common.time')}</span>

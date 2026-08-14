@@ -13,6 +13,13 @@ import {
 import { rateLimitStatus } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
 
+function parseBoundedInt(val: string | null | undefined, defaultVal: number, min: number, max: number): number {
+  if (val === null || val === undefined || val === '') return defaultVal;
+  const n = parseInt(val, 10);
+  if (!Number.isFinite(n) || isNaN(n)) return defaultVal;
+  return Math.max(min, Math.min(n, max));
+}
+
 export async function handleAdminRoutes(
   request: Request,
   env: Env,
@@ -31,8 +38,8 @@ export async function handleAdminRoutes(
     const level = (url.searchParams.get("level") || "").trim();
     const category = (url.searchParams.get("category") || "").trim();
     const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
-    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+    const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200);
+    const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -100,8 +107,8 @@ export async function handleAdminRoutes(
 
     const action = (url.searchParams.get("action") || "").trim();
     const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
-    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+    const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200);
+    const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
     const conditions: string[] = [];
     const params: any[] = [];
@@ -168,7 +175,17 @@ export async function handleAdminRoutes(
       expiresAt = expDate.toISOString();
     }
 
-    const maxDev = max_devices ? Number(max_devices) : 2;
+    let maxDev = 2;
+    if (max_devices !== undefined && max_devices !== null && max_devices !== "") {
+      const parsedMax = Number(max_devices);
+      if (!Number.isFinite(parsedMax) || isNaN(parsedMax) || parsedMax < 1 || parsedMax > 100) {
+        return new Response(JSON.stringify({ error: "max_devices must be an integer between 1 and 100" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      maxDev = Math.floor(parsedMax);
+    }
     const durDays = duration_days !== undefined && duration_days !== null && duration_days !== ""
       ? Number(duration_days)
       : null;
@@ -588,8 +605,8 @@ export async function handleAdminRoutes(
     if (denied) return denied;
 
     const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10) || 50, 200);
-    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+    const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200);
+    const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
     let sql = "SELECT * FROM licenses";
     let params: any[] = [];
@@ -1078,8 +1095,8 @@ export async function handleAdminRoutes(
     const kind = (url.searchParams.get("kind") || "").trim();
     const q = (url.searchParams.get("q") || "").trim();
     const includeInactive = url.searchParams.get("include_inactive") === "1";
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 200);
-    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+    const limit = parseBoundedInt(url.searchParams.get("limit"), 100, 1, 200);
+    const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
     const { rows, total } = await listManualBlacklist(env, {
       kind: kind || undefined,

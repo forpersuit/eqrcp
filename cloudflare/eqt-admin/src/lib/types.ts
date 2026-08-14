@@ -10,7 +10,16 @@ export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' |
 export type BlacklistKind = 'email' | 'device';
 export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
 export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired';
-export type AdminAuditAction = 'GENERATE' | 'REVOKE' | 'UNBIND' | 'CLEAR_LOGS' | 'BLACKLIST_ADD' | 'BLACKLIST_REMOVE';
+export type AdminAuditAction =
+  | 'GENERATE'
+  | 'REVOKE'
+  | 'UNBIND'
+  | 'CLEAR_LOGS'
+  | 'QUERY_ACTIVATION_LOCATIONS'
+  | 'QUERY_LIVE_DEVICES'
+  | 'PRUNE'
+  | 'BLACKLIST_ADD'
+  | 'BLACKLIST_REMOVE';
 export type AdminAuditTargetType = 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | 'BLACKLIST';
 
 /** GET/POST /api/v1/admin/blacklist */

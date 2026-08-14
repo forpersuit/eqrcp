@@ -35,7 +35,10 @@ export function activationAuditSnapshot(act: any): Record<string, unknown> {
     uuid_hash: act?.uuid_hash ?? null,
     cpu_hash: act?.cpu_hash ?? null,
     disk_hash: act?.disk_hash ?? null,
-    activated_at: act?.activated_at ?? null
+    activated_at: act?.activated_at ?? null,
+    client_ip: act?.client_ip ?? null,
+    ip_country: act?.ip_country ?? null,
+    user_agent: act?.user_agent ?? null
   };
 }
 

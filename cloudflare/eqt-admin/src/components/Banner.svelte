@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../lib/i18n';
+
   interface Props {
     type?: 'error' | 'ok' | 'info';
     message: string;
@@ -12,7 +14,7 @@
   <div class="banner {type}" role="alert">
     <span>{message}</span>
     {#if onclose}
-      <button type="button" class="btn-close" onclick={onclose} aria-label="关闭">×</button>
+      <button type="button" class="btn-close" onclick={onclose} aria-label={$t('common.close')}>×</button>
     {/if}
   </div>
 {/if}

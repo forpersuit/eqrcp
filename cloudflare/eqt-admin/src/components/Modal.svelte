@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { onDestroy, type Snippet } from 'svelte';
+  import { t } from '../lib/i18n';
 
   interface Props {
     open: boolean;
@@ -18,6 +19,15 @@
   const FOCUSABLE_SELECTOR =
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
 
+  function restoreFocus() {
+    if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+      try {
+        previouslyFocused.focus();
+      } catch {}
+      previouslyFocused = null;
+    }
+  }
+
   $effect(() => {
     if (open) {
       if (typeof document !== 'undefined') {
@@ -32,10 +42,17 @@
           }
         });
       }
-    } else if (previouslyFocused) {
-      previouslyFocused.focus();
-      previouslyFocused = null;
+    } else {
+      restoreFocus();
     }
+
+    return () => {
+      restoreFocus();
+    };
+  });
+
+  onDestroy(() => {
+    restoreFocus();
   });
 
   function handleKeydown(e: KeyboardEvent) {
@@ -92,7 +109,7 @@
       {#if title}
         <div class="modal-header">
           <h3>{title}</h3>
-          <button type="button" class="btn-close" onclick={onclose} aria-label="关闭">×</button>
+          <button type="button" class="btn-close" onclick={onclose} aria-label={$t('common.close')}>×</button>
         </div>
       {/if}
       <div class="modal-body">

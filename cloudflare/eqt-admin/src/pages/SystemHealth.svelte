@@ -10,15 +10,15 @@
   let errorMsg = $state('');
 
   function cfgBadge(ok: boolean | undefined): { cls: string; label: string } {
-    if (ok) return { cls: 'active', label: 'CONFIGURED' };
-    return { cls: 'warn', label: 'NOT CONFIGURED' };
+    if (ok) return { cls: 'active', label: $t('health.configured') };
+    return { cls: 'warn', label: $t('health.notConfigured') };
   }
 
   function probeBadge(p?: HealthProbeResult): { cls: string; label: string } {
     if (!p) return { cls: 'warn', label: '—' };
-    if (p.skipped) return { cls: 'warn', label: `Skipped (${p.error || 'env'})` };
-    if (p.ok) return { cls: 'active', label: `OK (${p.latency_ms}ms)` };
-    return { cls: 'error', label: `Failed (${p.latency_ms}ms)` };
+    if (p.skipped) return { cls: 'warn', label: $t('health.probeSkipped', { reason: p.error || 'env' }) };
+    if (p.ok) return { cls: 'active', label: $t('health.probeOk', { ms: p.latency_ms }) };
+    return { cls: 'error', label: $t('health.probeFailed', { ms: p.latency_ms }) };
   }
 
   function paddleOk(h: AdminHealthResponse): boolean {
@@ -81,21 +81,21 @@
         <div class="metric-title">{$t('health.serviceStatus')}</div>
         <div class="metric-value status-text">
           <span class={`badge badge-${health.status === 'healthy' ? 'active' : 'warn'}`}>
-            {(health.status || 'unknown').toUpperCase()}
+            {health.status === 'healthy' ? $t('health.overallHealthy') : (health.status || 'unknown').toUpperCase()}
           </span>
         </div>
-        <div class="metric-desc">D1: {health.config.db_status}</div>
+        <div class="metric-desc">{$t('health.dbStatus')}: {health.config.db_status}</div>
       </div>
     </div>
 
     <div class="card health-section">
-      <h3>Probes</h3>
+      <h3>{$t('health.probesTitle')}</h3>
       <div class="probe-list">
         <div class="probe-item">
           <div>
-            <div class="probe-name">SMTP TLS + AUTH</div>
+            <div class="probe-name">{$t('health.probeSmtpTitle')}</div>
             <div class="probe-desc">
-              465 TLS · EHLO · AUTH LOGIN · QUIT
+              {$t('health.probeSmtpDesc')}
               {#if health.probes?.smtp?.error && !health.probes.smtp.ok}
                 <span class="err-inline"> — {health.probes.smtp.error}</span>
               {/if}
@@ -107,9 +107,9 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">Paddle</div>
+            <div class="probe-name">{$t('health.probePaddleTitle')}</div>
             <div class="probe-desc">
-              mode: {health.probes?.paddle?.mode || '—'}
+              {$t('health.probePaddleDesc', { mode: health.probes?.paddle?.mode || '—' })}
               {#if health.probes?.paddle?.error && !health.probes.paddle.ok}
                 <span class="err-inline"> — {health.probes.paddle.error}</span>
               {/if}
@@ -121,7 +121,7 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">D1 SELECT 1</div>
+            <div class="probe-name">{$t('health.probeDbTitle')}</div>
             <div class="probe-desc">
               {#if health.probes?.db?.error && !health.probes.db.ok}
                 <span class="err-inline">{health.probes.db.error}</span>
@@ -138,12 +138,12 @@
     </div>
 
     <div class="card health-section">
-      <h3>Configuration</h3>
+      <h3>{$t('health.configTitle')}</h3>
       <div class="probe-list">
         <div class="probe-item">
           <div>
-            <div class="probe-name">SMTP env</div>
-            <div class="probe-desc">MAIL_SENDER / SERVER / PASSWORD</div>
+            <div class="probe-name">{$t('health.cfgSmtpTitle')}</div>
+            <div class="probe-desc">{$t('health.cfgSmtpDesc')}</div>
           </div>
           <span class={`badge badge-${cfgBadge(health.config.smtp_configured).cls}`}>
             {cfgBadge(health.config.smtp_configured).label}
@@ -151,8 +151,8 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">Paddle Webhook Secret</div>
-            <div class="probe-desc">PADDLE_WEBHOOK_SECRET</div>
+            <div class="probe-name">{$t('health.cfgPaddleTitle')}</div>
+            <div class="probe-desc">{$t('health.cfgPaddleDesc')}</div>
           </div>
           <span class={`badge badge-${cfgBadge(paddleOk(health)).cls}`}>
             {cfgBadge(paddleOk(health)).label}
@@ -160,8 +160,8 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">R2_PUBLIC_URL</div>
-            <div class="probe-desc">Updates storage endpoint</div>
+            <div class="probe-name">{$t('health.cfgR2Title')}</div>
+            <div class="probe-desc">{$t('health.cfgR2Desc')}</div>
           </div>
           <span class={`badge badge-${cfgBadge(health.config.r2_configured).cls}`}>
             {cfgBadge(health.config.r2_configured).label}
@@ -169,8 +169,8 @@
         </div>
         <div class="probe-item">
           <div>
-            <div class="probe-name">Ed25519 / Cloudflare Access</div>
-            <div class="probe-desc">Ed25519 signing key & Access JWT</div>
+            <div class="probe-name">{$t('health.cfgSecurityTitle')}</div>
+            <div class="probe-desc">{$t('health.cfgSecurityDesc')}</div>
           </div>
           <span class={`badge badge-${cfgBadge(!!health.config.ed25519_key_configured && !!health.config.access_configured).cls}`}>
             Ed25519: {health.config.ed25519_key_configured ? 'OK' : 'NO'} · Access: {health.config.access_configured ? 'OK' : 'NO'}
@@ -180,9 +180,9 @@
     </div>
 
     <div class="card health-section">
-      <h3>Recent Events</h3>
+      <h3>{$t('health.recentEventsTitle')}</h3>
       <p class="section-hint">
-        system_error_logs (PADDLE_* / SMTP_*)
+        {$t('health.recentEventsHint')}
       </p>
       {#if !health.recent_events?.length}
         <div class="empty-inline">{$t('common.none')}</div>

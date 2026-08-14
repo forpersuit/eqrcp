@@ -141,12 +141,9 @@ export async function verifyCloudflareAccessJwt(
   }
 
   const domain = teamDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const iss = String(payload.iss || '');
-  if (iss && !iss.includes(domain) && !iss.endsWith(domain)) {
-    // iss is typically https://<team>.cloudflareaccess.com
-    if (!iss.includes(domain.split('.')[0])) {
-      return { ok: false, error: 'Access JWT issuer mismatch' };
-    }
+  const iss = String(payload.iss || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (iss && iss !== domain && !iss.endsWith(`.${domain}`)) {
+    return { ok: false, error: 'Access JWT issuer mismatch' };
   }
 
   let keyset: { keys: CryptoKey[]; kids: Map<string, CryptoKey> };

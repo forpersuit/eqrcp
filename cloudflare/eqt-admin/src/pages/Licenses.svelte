@@ -346,8 +346,8 @@
               </td>
               <td><span class="badge badge-active">{lic.tier}</span></td>
               <td>
-                <span class={`badge badge-${lic.source || 'admin'}`} title="purchase=Paddle promo=Promo admin=Manual">
-                  {lic.source || '—'}
+                <span class={`badge badge-${lic.source || 'admin'}`} title={$t('licenses.sourceHintTooltip')}>
+                  {lic.source ? ($t('licenses.sourceBadge.' + lic.source) || lic.source) : '—'}
                 </span>
               </td>
               <td>

@@ -129,7 +129,14 @@ export const en = {
     errPromoRedeemDays: "Promo license must specify redeem-by days (>0)",
     errPromoDurationDays: "Promo license must specify duration days (>0)",
     emailSent: "Notification email sent",
-    emailNotSent: "Email not sent"
+    emailNotSent: "Email not sent",
+    sourceHintTooltip: "purchase=Paddle purchase / promo=Campaign promo / admin=CS reissue or internal",
+    sourceBadge: {
+      purchase: "purchase",
+      promo: "promo",
+      admin: "admin",
+      test: "test"
+    }
   },
   blacklist: {
     title: "Risk Blacklist",
@@ -166,10 +173,36 @@ export const en = {
     unbanConfirmBtn: "Confirm Unban",
     emptyList: "No blacklist records found"
   },
+  globe: {
+    title: "Global Active Device Distribution",
+    subtitle: "City markers & 3D column heights represent active devices; paid/free dual-color differentiation; multi-device licenses form glowing cross-region arcs",
+    timeWindow: "Time Window",
+    arcs: "Arcs",
+    arcsToggleTitle: "Toggle cross-region arcs",
+    crossRegionLinks: "⚡ Cross-Region Links: {count}",
+    crossRegionTooltip: "Same license bound to multiple devices across different cities/countries",
+    activeStatus: "Active: {total} (Paid {paid} / Free {free})",
+    refreshPoints: "🔄 Refresh Points",
+    fetchFailed: "Failed to fetch active device distribution",
+    empty: "No active device records in this period",
+    units: {
+      devices: "devices",
+      devicesShort: "devs",
+      paid: "Paid",
+      free: "Free",
+      recentActive: "Last Active"
+    },
+    time: {
+      unknown: "Unknown",
+      minutesAgo: "{mins}m ago",
+      hoursAgo: "{hours}h ago"
+    },
+    other: "Other"
+  },
   health: {
     title: "System Health & Runtime Diagnostics",
-    subtitle: "View Edge Worker connectivity, D1 latency, and key readiness",
-    serviceStatus: "Service Status",
+    subtitle: "Monitor Edge Worker connectivity, D1 database latency, cryptographic readiness, and service states",
+    serviceStatus: "Service Health Status",
     overallHealthy: "All Core Services Healthy",
     overallDegraded: "Some Services Degraded",
     dbStatus: "D1 Database",
@@ -178,7 +211,68 @@ export const en = {
     avgLatency: "Avg Latency",
     kvStatus: "KV Cache Status",
     emailStatus: "Email Service (SMTP/Resend)",
-    lastCheck: "Last Checked"
+    lastCheck: "Last Checked",
+    probesTitle: "Probes",
+    configTitle: "Configuration Readiness",
+    recentEventsTitle: "Recent Events",
+    recentEventsHint: "system_error_logs (PADDLE_* / SMTP_*)",
+    configured: "CONFIGURED",
+    notConfigured: "NOT CONFIGURED",
+    probeSkipped: "Skipped ({reason})",
+    probeOk: "OK ({ms}ms)",
+    probeFailed: "Failed ({ms}ms)",
+    probeSmtpTitle: "SMTP TLS + AUTH",
+    probeSmtpDesc: "465 TLS · EHLO · AUTH LOGIN · QUIT",
+    probePaddleTitle: "Paddle Gateway",
+    probePaddleDesc: "Mode: {mode}",
+    probeDbTitle: "D1 SELECT 1 Heartbeat",
+    cfgSmtpTitle: "SMTP env",
+    cfgSmtpDesc: "MAIL_SENDER / SERVER / PASSWORD",
+    cfgPaddleTitle: "Paddle Webhook Secret",
+    cfgPaddleDesc: "PADDLE_WEBHOOK_SECRET signature verification",
+    cfgR2Title: "R2_PUBLIC_URL",
+    cfgR2Desc: "Updates storage endpoint",
+    cfgSecurityTitle: "Ed25519 / Cloudflare Access",
+    cfgSecurityDesc: "Ed25519 signing key & Access JWT"
+  },
+  audit: {
+    actions: {
+      ALL: "All Actions",
+      GENERATE: "Generate License (GENERATE)",
+      REVOKE: "Revoke License (REVOKE)",
+      UNBIND: "Unbind Devices (UNBIND)",
+      CLEAR_LOGS: "Clear Error Logs (CLEAR_LOGS)",
+      QUERY_ACTIVATION_LOCATIONS: "Query Locations (QUERY_LOCATIONS)",
+      QUERY_LIVE_DEVICES: "Query Live Devices (QUERY_LIVE)",
+      PRUNE: "Prune Logs (PRUNE)",
+      BLACKLIST_ADD: "Add Blacklist (BLACKLIST_ADD)",
+      BLACKLIST_REMOVE: "Remove Blacklist (BLACKLIST_REMOVE)"
+    },
+    summary: {
+      maxDevices: "Max Devices {count}",
+      lifetime: "Lifetime",
+      expiresAt: "Expires {date}",
+      email: "Email {email}",
+      emailSent: "Email Sent",
+      emailNotSent: "Email Not Sent",
+      revokedFrom: "{from}→revoked",
+      revokedTo: "→revoked",
+      activeDevicesCount: "Devices at Revoke {count}",
+      modeAll: "All Devices",
+      modeSingle: "Single Device",
+      unboundCount: "Unbound {count} dev(s)",
+      noUserQuotaDeduction: "No user quota deduction",
+      clearedErrorLogs: "Cleared {count} error log(s)",
+      clearLogsDefault: "Clear Error Logs",
+      blacklistBanKind: "Ban {kind}",
+      blacklistAddDefault: "Add Blacklist",
+      blacklistUnbanEntry: "Unban Entry #{id}",
+      blacklistRemoveDefault: "Remove Blacklist",
+      queryLocations: "Locations ({devices} devs / {countries} countries / {arcs} arcs)",
+      queryLiveDevices: "Live Devices [{window}] ({devices} total / Paid {paid} / Free {free})",
+      pruneSummary: "Pruned Logs ({errorLogs} error logs / {auditLogs} audit logs)",
+      reasonPrefix: "Reason: {reason}"
+    }
   },
   opsAudit: {
     title: "Operations Audit Trail",

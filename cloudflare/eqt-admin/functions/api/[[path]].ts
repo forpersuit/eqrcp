@@ -92,8 +92,14 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const safeSegments = pathSegments.filter((seg) => seg && seg !== "." && seg !== "..");
     const subPath = safeSegments.join("/");
 
-    // Restrict proxy scope: only allow admin endpoints (/v1/admin/*, /v1/health)
-    if (subPath && !subPath.startsWith("v1/admin") && !subPath.startsWith("v1/health")) {
+    // Restrict proxy scope: only allow admin endpoints (/v1/admin, /v1/admin/*, /v1/health, /v1/health/*)
+    const isAllowedPath =
+      subPath === "v1/admin" ||
+      subPath.startsWith("v1/admin/") ||
+      subPath === "v1/health" ||
+      subPath.startsWith("v1/health/");
+
+    if (subPath && !isAllowedPath) {
       return new Response(
         JSON.stringify({
           success: false,

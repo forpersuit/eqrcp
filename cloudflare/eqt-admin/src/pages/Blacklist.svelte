@@ -4,10 +4,13 @@
   import { t } from '../lib/i18n';
   import type { ManualBlacklistEntry } from '../lib/types';
   import Modal from '../components/Modal.svelte';
+  import Pagination from '../components/Pagination.svelte';
   import Banner from '../components/Banner.svelte';
 
   let entries = $state<ManualBlacklistEntry[]>([]);
   let total = $state(0);
+  let page = $state(1);
+  const pageSize = 50;
   let loading = $state(true);
   let errorMsg = $state('');
   let actionMsg = $state('');
@@ -28,8 +31,12 @@
   async function loadList() {
     loading = true;
     errorMsg = '';
+    const offset = (page - 1) * pageSize;
     try {
-      const params: Record<string, string> = { limit: '100' };
+      const params: Record<string, string> = {
+        limit: String(pageSize),
+        offset: String(offset)
+      };
       if (filterKind !== 'all') params.kind = filterKind;
       if (searchQuery.trim()) params.q = searchQuery.trim();
       if (includeInactive) params.include_inactive = '1';
@@ -45,6 +52,25 @@
       total = 0;
     } finally {
       loading = false;
+    }
+  }
+
+  function handleFilterChange() {
+    page = 1;
+    loadList();
+  }
+
+  function prevPage() {
+    if (page > 1) {
+      page--;
+      loadList();
+    }
+  }
+
+  function nextPage() {
+    if (page * pageSize < total) {
+      page++;
+      loadList();
     }
   }
 
@@ -184,7 +210,7 @@
 
   <div class="card list-card">
     <div class="toolbar">
-      <select class="input select" bind:value={filterKind} onchange={() => loadList()}>
+      <select class="input select" bind:value={filterKind} onchange={handleFilterChange}>
         <option value="all">{$t('blacklist.filterAll')}</option>
         <option value="email">{$t('blacklist.filterEmail')}</option>
         <option value="device">{$t('blacklist.filterDevice')}</option>
@@ -193,13 +219,13 @@
         class="input search"
         placeholder={$t('blacklist.searchPlaceholder')}
         bind:value={searchQuery}
-        onkeydown={(e) => e.key === 'Enter' && loadList()}
+        onkeydown={(e) => e.key === 'Enter' && handleFilterChange()}
       />
       <label class="check">
-        <input type="checkbox" bind:checked={includeInactive} onchange={() => loadList()} />
+        <input type="checkbox" bind:checked={includeInactive} onchange={handleFilterChange} />
         {$t('blacklist.includeInactive')}
       </label>
-      <button type="button" class="btn btn-secondary btn-sm" onclick={() => loadList()} disabled={loading}>
+      <button type="button" class="btn btn-secondary btn-sm" onclick={loadList} disabled={loading}>
         {$t('common.refresh')}
       </button>
     </div>
@@ -245,6 +271,8 @@
           </tbody>
         </table>
       </div>
+
+      <Pagination {page} {pageSize} {total} {loading} onprev={prevPage} onnext={nextPage} />
     {/if}
   </div>
 </div>

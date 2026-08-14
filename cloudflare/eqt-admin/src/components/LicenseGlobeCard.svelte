@@ -1,28 +1,37 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
+  import { t, currentLocale } from '../lib/i18n';
   import type { LiveDeviceLocation, LiveDeviceArc, LiveDevicesResponse } from '../lib/types';
 
-  const COUNTRY_COORDS: Record<string, { lat: number; lng: number; name: string }> = {
-    'CN': { lat: 35.8617, lng: 104.1954, name: '中国' },
-    'US': { lat: 37.0902, lng: -95.7129, name: '美国' },
-    'JP': { lat: 36.2048, lng: 138.2529, name: '日本' },
-    'SG': { lat: 1.3521, lng: 103.8198, name: '新加坡' },
-    'HK': { lat: 22.3193, lng: 114.1694, name: '香港' },
-    'TW': { lat: 23.6978, lng: 120.9605, name: '中国台湾' },
-    'DE': { lat: 51.1657, lng: 10.4515, name: '德国' },
-    'GB': { lat: 55.3781, lng: -3.4360, name: '英国' },
-    'FR': { lat: 46.2276, lng: 2.2137, name: '法国' },
-    'AU': { lat: -25.2744, lng: 133.7751, name: '澳大利亚' },
-    'CA': { lat: 56.1304, lng: -106.3468, name: '加拿大' },
-    'KR': { lat: 35.9078, lng: 127.7669, name: '韩国' },
-    'IN': { lat: 20.5937, lng: 78.9629, name: '印度' },
-    'BR': { lat: -14.2350, lng: -51.9253, name: '巴西' },
-    'RU': { lat: 61.5240, lng: 105.3188, name: '俄罗斯' },
-    'NL': { lat: 52.1326, lng: 5.2913, name: '荷兰' },
-    'SE': { lat: 60.1282, lng: 18.6435, name: '瑞典' },
-    'CH': { lat: 46.8182, lng: 8.2275, name: '瑞士' }
+  const COUNTRY_COORDS: Record<string, { lat: number; lng: number; zh: string; en: string }> = {
+    'CN': { lat: 35.8617, lng: 104.1954, zh: '中国', en: 'China' },
+    'US': { lat: 37.0902, lng: -95.7129, zh: '美国', en: 'United States' },
+    'JP': { lat: 36.2048, lng: 138.2529, zh: '日本', en: 'Japan' },
+    'SG': { lat: 1.3521, lng: 103.8198, zh: '新加坡', en: 'Singapore' },
+    'HK': { lat: 22.3193, lng: 114.1694, zh: '中国香港', en: 'Hong Kong' },
+    'TW': { lat: 23.6978, lng: 120.9605, zh: '中国台湾', en: 'Taiwan' },
+    'DE': { lat: 51.1657, lng: 10.4515, zh: '德国', en: 'Germany' },
+    'GB': { lat: 55.3781, lng: -3.4360, zh: '英国', en: 'United Kingdom' },
+    'FR': { lat: 46.2276, lng: 2.2137, zh: '法国', en: 'France' },
+    'AU': { lat: -25.2744, lng: 133.7751, zh: '澳大利亚', en: 'Australia' },
+    'CA': { lat: 56.1304, lng: -106.3468, zh: '加拿大', en: 'Canada' },
+    'KR': { lat: 35.9078, lng: 127.7669, zh: '韩国', en: 'South Korea' },
+    'IN': { lat: 20.5937, lng: 78.9629, zh: '印度', en: 'India' },
+    'BR': { lat: -14.2350, lng: -51.9253, zh: '巴西', en: 'Brazil' },
+    'RU': { lat: 61.5240, lng: 105.3188, zh: '俄罗斯', en: 'Russia' },
+    'NL': { lat: 52.1326, lng: 5.2913, zh: '荷兰', en: 'Netherlands' },
+    'SE': { lat: 60.1282, lng: 18.6435, zh: '瑞典', en: 'Sweden' },
+    'CH': { lat: 46.8182, lng: 8.2275, zh: '瑞士', en: 'Switzerland' }
   };
+
+  function getCountryDisplayName(countryCode: string | undefined): string {
+    if (!countryCode) return '';
+    const code = countryCode.toUpperCase();
+    const c = COUNTRY_COORDS[code];
+    if (!c) return countryCode;
+    return $currentLocale === 'zh' ? c.zh : c.en;
+  }
 
   let globeContainerRef: HTMLDivElement | null = $state(null);
   let locations = $state<LiveDeviceLocation[]>([]);
@@ -50,16 +59,16 @@
 
   function minutesSince(iso: string | null | undefined): number | null {
     if (!iso) return null;
-    const t = new Date(iso).getTime();
-    if (Number.isNaN(t)) return null;
-    return Math.floor((Date.now() - t) / 60000);
+    const timeMs = new Date(iso).getTime();
+    if (Number.isNaN(timeMs)) return null;
+    return Math.floor((Date.now() - timeMs) / 60000);
   }
 
   function recentLabel(item: LiveDeviceLocation): string {
     const mins = minutesSince(item.latest_seen_at);
-    if (mins === null) return '未知';
-    if (mins < 60) return `${mins} 分钟前`;
-    return `${Math.floor(mins / 60)} 小时前`;
+    if (mins === null) return $t('globe.time.unknown');
+    if (mins < 60) return $t('globe.time.minutesAgo', { mins });
+    return $t('globe.time.hoursAgo', { hours: Math.floor(mins / 60) });
   }
 
   function isRecentlyActive(item: LiveDeviceLocation): boolean {
@@ -94,7 +103,7 @@
         renderGlobeData(locations, crossRegionArcs);
       }
     } catch (err: any) {
-      if (seq === loadSeq) errorMsg = err.message || '获取活跃设备分布失败';
+      if (seq === loadSeq) errorMsg = err.message || $t('globe.fetchFailed');
     } finally {
       if (seq === loadSeq) loading = false;
     }
@@ -115,12 +124,17 @@
   }
 
   function getCoordForItem(item: LiveDeviceLocation): { lat: number; lng: number; name: string } {
-    if (typeof item.latitude === 'number' && typeof item.longitude === 'number') {
-      const label = item.city ? `${item.city}` : (COUNTRY_COORDS[item.country?.toUpperCase()]?.name || item.country);
-      return { lat: item.latitude, lng: item.longitude, name: label };
-    }
     const countryCode = (item.country || '').toUpperCase();
-    return COUNTRY_COORDS[countryCode] || { lat: 35.86, lng: 104.19, name: item.city || countryCode || '其他' };
+    const countryName = getCountryDisplayName(countryCode);
+    if (typeof item.latitude === 'number' && typeof item.longitude === 'number') {
+      const label = item.city ? (countryName ? `${countryName} · ${item.city}` : item.city) : (countryName || item.country);
+      return { lat: item.latitude, lng: item.longitude, name: label || $t('globe.other') };
+    }
+    const c = COUNTRY_COORDS[countryCode];
+    if (c) {
+      return { lat: c.lat, lng: c.lng, name: item.city ? `${countryName} · ${item.city}` : countryName };
+    }
+    return { lat: 35.86, lng: 104.19, name: item.city || countryName || countryCode || $t('globe.other') };
   }
 
   async function initGlobeEngine() {
@@ -153,9 +167,9 @@
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.05)
           .pointRadius((d: any) => d.radius || 0.6)
-          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} 台设备<br/>💛 付费: ${d.paidCount} 台<br/>🩶 免费: ${d.freeCount} 台<br/>⏱ 最近活跃: ${d.recentLabel}</div>`)
+          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} ${$t('globe.units.devices')}<br/>💛 ${$t('globe.units.paid')}: ${d.paidCount} ${$t('globe.units.devicesShort')}<br/>🩶 ${$t('globe.units.free')}: ${d.freeCount} ${$t('globe.units.devicesShort')}<br/>⏱ ${$t('globe.units.recentActive')}: ${d.recentLabel}</div>`)
           .ringsData([])
-          .ringColor(() => (t: number) => `rgba(56,189,248,${1 - t})`)
+          .ringColor(() => (rT: number) => `rgba(56,189,248,${1 - rT})`)
           .ringMaxRadius(3.5)
           .ringPropagationSpeed(2)
           .ringRepeatPeriod(1200)
@@ -369,7 +383,7 @@
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
           ctx.font = '11px sans-serif';
-          ctx.fillText(`${coord.name} (${item.total_count}台, 付费${item.paid_count})`, p.x + 8, p.y - colHeight + 4);
+          ctx.fillText(`${coord.name} (${item.total_count}${$t('globe.units.devicesShort')}, ${$t('globe.units.paid')}${item.paid_count})`, p.x + 8, p.y - colHeight + 4);
         }
       });
 
@@ -449,12 +463,12 @@
     <div class="header-title">
       <span class="icon">🌍</span>
       <div>
-        <h3>全球城市级活跃设备分布视界</h3>
-        <p class="subtitle">城市打点与 3D 柱体高度表征活跃设备量；付费/免费双色区分；同一激活码的多台设备跨城/跨国绘制紫粉流光弧线</p>
+        <h3>{$t('globe.title')}</h3>
+        <p class="subtitle">{$t('globe.subtitle')}</p>
       </div>
     </div>
     <div class="header-right">
-      <div class="window-selector" role="group" aria-label="时间窗口">
+      <div class="window-selector" role="group" aria-label={$t('globe.timeWindow')}>
         {#each ['1h', '12h', '24h', '7d'] as w}
           <button
             class="btn btn-xs window-btn"
@@ -465,17 +479,17 @@
         {/each}
       </div>
 
-      <label class="arcs-toggle" title="显示/隐藏跨区域弧线">
+      <label class="arcs-toggle" title={$t('globe.arcsToggleTitle')}>
         <input type="checkbox" checked={showArcs} onchange={handleArcsToggle} />
-        <span class="toggle-label">弧线</span>
+        <span class="toggle-label">{$t('globe.arcs')}</span>
       </label>
 
       {#if crossRegionArcs.length > 0}
-        <span class="badge badge-purple" title="同一激活码绑定在多台设备上，且这些设备位于不同城市/国家">⚡ 跨城流光链路: {crossRegionArcs.length} 条</span>
+        <span class="badge badge-purple" title={$t('globe.crossRegionTooltip')}>{$t('globe.crossRegionLinks', { count: crossRegionArcs.length })}</span>
       {/if}
-      <span class="badge badge-info">活跃: {totalActiveDevices} 台 (付费 {totalPaidDevices} / 免费 {totalFreeDevices})</span>
+      <span class="badge badge-info">{$t('globe.activeStatus', { total: totalActiveDevices, paid: totalPaidDevices, free: totalFreeDevices })}</span>
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>
-        🔄 刷新点位
+        {$t('globe.refreshPoints')}
       </button>
     </div>
   </div>
@@ -489,18 +503,18 @@
   {#if locations.length > 0}
     <div class="locations-bar">
       {#each locations as loc}
-        {@const countryName = COUNTRY_COORDS[loc.country?.toUpperCase()]?.name || loc.country}
+        {@const countryName = getCountryDisplayName(loc.country)}
         <div class="loc-chip">
           <span class="flag">{loc.country}</span>
-          <span class="name">{loc.city ? `${countryName} · ${loc.city}` : countryName}</span>
-          <span class="count-badge">{loc.total_count} 台</span>
-          <span class="paid-badge">{loc.paid_count} 付费</span>
-          <span class="free-badge">{loc.free_count} 免费</span>
+          <span class="name">{loc.city ? `${countryName} · ${loc.city}` : (countryName || loc.country)}</span>
+          <span class="count-badge">{loc.total_count} {$t('globe.units.devicesShort')}</span>
+          <span class="paid-badge">{loc.paid_count} {$t('globe.units.paid')}</span>
+          <span class="free-badge">{loc.free_count} {$t('globe.units.free')}</span>
         </div>
       {/each}
     </div>
   {:else if !loading}
-    <div class="empty-bar">尚无区间内活跃设备记录</div>
+    <div class="empty-bar">{$t('globe.empty')}</div>
   {/if}
 </div>
 

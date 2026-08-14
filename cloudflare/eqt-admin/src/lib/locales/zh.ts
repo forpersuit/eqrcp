@@ -130,7 +130,14 @@ export const zh = {
     errPromoRedeemDays: "promo 活动码必须指定兑换截止天数（>0）",
     errPromoDurationDays: "promo 活动码必须指定兑换后有效天数（>0）",
     emailSent: "已发送通知邮件",
-    emailNotSent: "邮件未发送"
+    emailNotSent: "邮件未发送",
+    sourceHintTooltip: "purchase=Paddle 付费购买 / promo=活动分享码 / admin=客服补发或内测",
+    sourceBadge: {
+      purchase: "purchase",
+      promo: "promo",
+      admin: "admin",
+      test: "test"
+    }
   },
   blacklist: {
     title: "风控黑名单管理",
@@ -167,6 +174,32 @@ export const zh = {
     unbanConfirmBtn: "确认解除",
     emptyList: "暂无封禁记录"
   },
+  globe: {
+    title: "全球城市级活跃设备分布视界",
+    subtitle: "城市打点与 3D 柱体高度表征活跃设备量；付费/免费双色区分；同一激活码的多台设备跨城/跨国绘制紫粉流光弧线",
+    timeWindow: "时间窗口",
+    arcs: "弧线",
+    arcsToggleTitle: "显示/隐藏跨区域弧线",
+    crossRegionLinks: "⚡ 跨城流光链路: {count} 条",
+    crossRegionTooltip: "同一激活码绑定在多台设备上，且这些设备位于不同城市/国家",
+    activeStatus: "活跃: {total} 台 (付费 {paid} / 免费 {free})",
+    refreshPoints: "🔄 刷新点位",
+    fetchFailed: "获取活跃设备分布失败",
+    empty: "尚无区间内活跃设备记录",
+    units: {
+      devices: "台设备",
+      devicesShort: "台",
+      paid: "付费",
+      free: "免费",
+      recentActive: "最近活跃"
+    },
+    time: {
+      unknown: "未知",
+      minutesAgo: "{mins} 分钟前",
+      hoursAgo: "{hours} 小时前"
+    },
+    other: "其他"
+  },
   health: {
     title: "系统健康度与运行时诊断",
     subtitle: "查看边缘 Worker 连通性、D1 数据库延迟、密钥就绪状态及各项服务健康度",
@@ -179,7 +212,68 @@ export const zh = {
     avgLatency: "平均 API 时延",
     kvStatus: "KV 缓存状态",
     emailStatus: "邮件服务 (SMTP/Resend)",
-    lastCheck: "最近检测时间"
+    lastCheck: "最近检测时间",
+    probesTitle: "探针诊断 (Probes)",
+    configTitle: "核心配置就绪度 (Configuration)",
+    recentEventsTitle: "近期核心事件 (Recent Events)",
+    recentEventsHint: "system_error_logs (PADDLE_* / SMTP_*)",
+    configured: "已配置",
+    notConfigured: "未配置",
+    probeSkipped: "已跳过 ({reason})",
+    probeOk: "正常 ({ms}ms)",
+    probeFailed: "异常 ({ms}ms)",
+    probeSmtpTitle: "SMTP TLS + AUTH 连通性",
+    probeSmtpDesc: "465 TLS · EHLO · AUTH LOGIN · QUIT",
+    probePaddleTitle: "Paddle 支付网关",
+    probePaddleDesc: "模式: {mode}",
+    probeDbTitle: "D1 SELECT 1 心跳",
+    cfgSmtpTitle: "SMTP 邮件环境",
+    cfgSmtpDesc: "MAIL_SENDER / SERVER / PASSWORD 发信配置",
+    cfgPaddleTitle: "Paddle Webhook Secret",
+    cfgPaddleDesc: "PADDLE_WEBHOOK_SECRET 验签密钥",
+    cfgR2Title: "R2 存储桶终端",
+    cfgR2Desc: "R2_PUBLIC_URL 更新与静态资源存储",
+    cfgSecurityTitle: "Ed25519 签名 / Cloudflare Access",
+    cfgSecurityDesc: "Ed25519 授权签名密钥与 Access JWT 鉴权"
+  },
+  audit: {
+    actions: {
+      ALL: "全部动作",
+      GENERATE: "生成授权码 (GENERATE)",
+      REVOKE: "吊销授权 (REVOKE)",
+      UNBIND: "解绑设备 (UNBIND)",
+      CLEAR_LOGS: "清空错误日志 (CLEAR_LOGS)",
+      QUERY_ACTIVATION_LOCATIONS: "查询点位分布 (QUERY_LOCATIONS)",
+      QUERY_LIVE_DEVICES: "查询活跃设备 (QUERY_LIVE)",
+      PRUNE: "日志自动裁剪 (PRUNE)",
+      BLACKLIST_ADD: "添加黑名单 (BLACKLIST_ADD)",
+      BLACKLIST_REMOVE: "解除黑名单 (BLACKLIST_REMOVE)"
+    },
+    summary: {
+      maxDevices: "设备上限 {count}",
+      lifetime: "永久",
+      expiresAt: "到期 {date}",
+      email: "邮箱 {email}",
+      emailSent: "已发信",
+      emailNotSent: "未发信",
+      revokedFrom: "{from}→已吊销",
+      revokedTo: "→已吊销",
+      activeDevicesCount: "当时设备 {count}",
+      modeAll: "全清",
+      modeSingle: "单台",
+      unboundCount: "解绑 {count} 台",
+      noUserQuotaDeduction: "不计用户配额",
+      clearedErrorLogs: "清空错误日志 {count} 条",
+      clearLogsDefault: "清空错误日志",
+      blacklistBanKind: "封禁 {kind}",
+      blacklistAddDefault: "添加黑名单",
+      blacklistUnbanEntry: "解封条目 #{id}",
+      blacklistRemoveDefault: "解除黑名单",
+      queryLocations: "点位分布 ({devices} 台 / {countries} 国 / {arcs} 弧线)",
+      queryLiveDevices: "活跃设备 [{window}] ({devices} 台 / 付费 {paid} / 免费 {free})",
+      pruneSummary: "裁剪日志 (错误日志 {errorLogs} 条 / 审计日志 {auditLogs} 条)",
+      reasonPrefix: "原因: {reason}"
+    }
   },
   opsAudit: {
     title: "操作审计轨迹",
