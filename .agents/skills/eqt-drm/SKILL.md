@@ -136,7 +136,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 ./scripts/generate-license.sh -t PRO -m 1 -e "2027-06-25T12:00:00Z" --local
 ```
 
-生成格式为 `EQT-TIER-YYYYMMDD-RANDOM-CHECK`（`CHECK` 为前 3 项拼接后取 MD5 前 4 位大写字符校验）。
+生成格式为 `EQT-TIER-YYYYMMDD-RANDOM-CHECK`（`CHECK` 为前 3 项拼接后取 SHA-256 前 4 位大写字符校验）。
+
+- **设备解绑闭环**：支持 `/api/v1/device/unbind` (POST) 端点，客户端重置激活时携带硬件指纹自动静默释放服务端 activations 席位并回退 device_registry 状态。
+- **固化有效期计算**：带 `duration_days` 的激活码（如 promo / admin 活动码）在首次激活时基于 `activated_at` 固化到期时间，后续 verify 在线对账严格继承该固化值，杜绝动态滚动续期。
 
 ---
 

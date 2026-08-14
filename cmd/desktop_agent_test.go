@@ -480,7 +480,7 @@ func TestDesktopAgentRejectsCrossOriginControlRequests(t *testing.T) {
 }
 
 func TestDesktopAgentAllowsLocalAndWailsOrigins(t *testing.T) {
-	for _, origin := range []string{"http://127.0.0.1:19000", "http://localhost:19000", "http://192.168.1.40:19000", "wails://wails.localhost"} {
+	for _, origin := range []string{"http://127.0.0.1:19000", "http://localhost:19000", "http://[::1]:19000", "wails://wails.localhost"} {
 		t.Run(origin, func(t *testing.T) {
 			agent := newDesktopAgent(application.Flags{})
 			server := httptest.NewServer(agent.routes())
@@ -504,6 +504,27 @@ func TestDesktopAgentAllowsLocalAndWailsOrigins(t *testing.T) {
 			}
 		})
 	}
+
+	// Verify private LAN IPs are rejected
+	t.Run("reject_private_lan", func(t *testing.T) {
+		agent := newDesktopAgent(application.Flags{})
+		server := httptest.NewServer(agent.routes())
+		defer server.Close()
+
+		request, err := http.NewRequest(http.MethodGet, server.URL+"/status", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Origin", "http://192.168.1.40:19000")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatalf("private LAN origin status = %d, want %d", response.StatusCode, http.StatusForbidden)
+		}
+	})
 }
 
 func TestDesktopAgentHandlesTrustedPreflight(t *testing.T) {

@@ -261,7 +261,8 @@ func VerifyLocalLicense() bool {
 		}
 	}
 
-	// Verified successfully, update payment state
+	// Verified successfully, reset clock tampered state and update payment state
+	SetClockTampered(false)
 	SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
 	return true
 }
@@ -512,7 +513,10 @@ var (
 )
 
 // ResetLicense deletes the local license file and updates state back to free.
+// It also asynchronously attempts a best-effort server unbind to release the hardware activation slot.
 func ResetLicense() {
+	info, hasInfo := GetLocalLicenseInfo()
+
 	licenseCacheMu.Lock()
 	cachedLicense = nil
 	hasCachedLicense = true
@@ -521,6 +525,32 @@ func ResetLicense() {
 	path := getLicenseFilePath()
 	_ = os.Remove(path)
 	SetPaidStatus(false, "", "", "")
+
+	if hasInfo && info.LicenseCode != "" {
+		go func(cert LicenseCertificate) {
+			apiBase := getLicenseServer()
+			if apiBase == "" {
+				return
+			}
+			reqBody, _ := json.Marshal(map[string]string{
+				"license_code": cert.LicenseCode,
+				"device_id":    cert.DeviceID,
+				"uuid_hash":    cert.UUIDHash,
+				"cpu_hash":     cert.CPUHash,
+				"disk_hash":    cert.DiskHash,
+			})
+			req, err := http.NewRequest("POST", apiBase+"/api/v1/device/unbind", bytes.NewReader(reqBody))
+			if err != nil {
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err == nil && resp != nil {
+				_ = resp.Body.Close()
+			}
+		}(info)
+	}
 }
 
 // GetLocalLicenseInfo retrieves active license info, if any.

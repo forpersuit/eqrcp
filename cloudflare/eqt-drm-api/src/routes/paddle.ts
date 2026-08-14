@@ -381,6 +381,18 @@ export async function handlePaddleRoutes(
         ).bind(subscriptionId).first<any>();
 
         if (subLicense?.license_code) {
+          if (subLicense.paddle_transaction_id === transactionId) {
+            return new Response(JSON.stringify({
+              message: "Subscription renewed; existing license extended (idempotent)",
+              license_code: subLicense.license_code,
+              renewed: true,
+              expires_at: subLicense.expires_at
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+
           let newExpires = expiresAt;
           if (subLicense.expires_at && subLicense.expires_at !== "LIFETIME") {
             const prev = new Date(subLicense.expires_at).getTime();
@@ -444,7 +456,7 @@ export async function handlePaddleRoutes(
 
       const checkSumPayload = `${tier}-${todayStr}-${randStr}`;
       const encoder = new TextEncoder();
-      const checkHashBuf = await crypto.subtle.digest("MD5", encoder.encode(checkSumPayload));
+      const checkHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(checkSumPayload));
       const checkHex = Array.prototype.map.call(new Uint8Array(checkHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('').slice(0, 4).toUpperCase();
       const licenseCode = `EQT-${tier}-${todayStr}-${randStr}-${checkHex}`;
       const nowIso = new Date().toISOString();
@@ -735,7 +747,8 @@ export async function handlePaddleRoutes(
           "SELECT license_code, buyer_email, tier, status, revoke_reason FROM licenses WHERE paddle_subscription_id = ?"
         ).bind(subscriptionId).first<any>();
 
-        if (license && (license.status === "revoked" || license.status === "suspended")) {
+        const recoverableReasons = ['past_due', 'paused', 'subscription', null, undefined, ''];
+        if (license && (license.status === "revoked" || license.status === "suspended") && recoverableReasons.includes(license.revoke_reason)) {
           const nextExpiry = data.current_billing_period?.ends_at || data.next_billed_at;
           const updateSql = nextExpiry
             ? "UPDATE licenses SET status = 'active', revoked_at = NULL, revoke_reason = NULL, auto_renew = 1, expires_at = ? WHERE paddle_subscription_id = ?"
@@ -812,6 +825,13 @@ export async function handlePaddleRoutes(
     if (!transactionId) {
       return new Response(JSON.stringify({ error: "Missing transaction_id" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (await isD1RateLimited(env, `query:${transactionId}`, 30, 60000)) {
+      return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+        status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }

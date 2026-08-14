@@ -16,7 +16,8 @@ export function evaluateLicenseExpiration(
     duration_days?: number | null;
     expires_at?: string | null;
   },
-  baseExpiresAtInput?: string | null
+  baseExpiresAtInput?: string | null,
+  activatedAt?: string | null
 ): {
   usesRedeemWindow: boolean;
   effectiveExpiresAt: string;
@@ -52,7 +53,8 @@ export function evaluateLicenseExpiration(
     Number(license.duration_days) >= 0 &&
     effectiveExpiresAt !== "LIFETIME"
   ) {
-    effectiveExpiresAt = new Date(Date.now() + Number(license.duration_days) * 86400 * 1000).toISOString();
+    const baseTimeMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
+    effectiveExpiresAt = new Date(baseTimeMs + Number(license.duration_days) * 86400 * 1000).toISOString();
   }
 
   let isExpired = false;
@@ -348,8 +350,11 @@ export async function handleDrmRoutes(
     const uHash = (uuid_hash || "").trim();
     const cHash = (cpu_hash || "").trim();
     const dHash = (disk_hash || "").trim();
-    if (!uHash && !cHash && !dHash) {
-      return new Response(JSON.stringify({ error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (cannot read hardware fingerprints)" }), {
+    const nonEmptyFpCount = (uHash ? 1 : 0) + (cHash ? 1 : 0) + (dHash ? 1 : 0);
+    if (nonEmptyFpCount < 2) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (requires at least 2 valid hardware fingerprints)"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -439,19 +444,26 @@ export async function handleDrmRoutes(
     ).bind(license_code).all<any>();
 
     let isAlreadyActivated = false;
+    let matchedActivation: any = null;
     for (const act of activations) {
       if (matchFingerprint(
-        uuid_hash || "", cpu_hash || "", disk_hash || "",
+        uHash, cHash, dHash,
         act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
       )) {
         isAlreadyActivated = true;
+        matchedActivation = act;
         break;
       }
       // Also treat same device_id as already activated on this code
       if (device_id && act.device_id && act.device_id === device_id) {
         isAlreadyActivated = true;
+        matchedActivation = act;
         break;
       }
+    }
+
+    if (isAlreadyActivated && matchedActivation?.activated_at) {
+      baseExpiresAt = evaluateLicenseExpiration(license, baseExpiresAt, matchedActivation.activated_at).effectiveExpiresAt;
     }
 
     // Peer licenses on this device — stacking decision BEFORE writing a new activation row
@@ -509,21 +521,11 @@ export async function handleDrmRoutes(
         )
         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (SELECT COUNT(*) FROM activations WHERE license_code = ?) < ?
-          AND NOT EXISTS (
-            SELECT 1 FROM activations WHERE license_code = ? AND (
-              (device_id IS NOT NULL AND device_id != '' AND device_id = ?)
-              OR (
-                (uuid_hash != '' AND uuid_hash = ?)
-                OR (cpu_hash != '' AND cpu_hash = ?)
-                OR (disk_hash != '' AND disk_hash = ?)
-              )
-            )
-          )
       `).bind(
         license_code,
-        uuid_hash || "",
-        cpu_hash || "",
-        disk_hash || "",
+        uHash,
+        cHash,
+        dHash,
         authoritativeDeviceId,
         new Date().toISOString(),
         net.client_ip,
@@ -535,34 +537,28 @@ export async function handleDrmRoutes(
         net.longitude,
         traceId,
         license_code,
-        license.max_devices,
-        license_code,
-        authoritativeDeviceId,
-        uuid_hash || "",
-        cpu_hash || "",
-        disk_hash || ""
+        license.max_devices
       ).run();
 
       // If changes === 0, either max_devices was reached or device was already inserted (e.g. D1 retry timeout)
       if (!insRes.meta || insRes.meta.changes === 0) {
-        const alreadyActivated = await env.DB.prepare(`
-          SELECT 1 FROM activations WHERE license_code = ? AND (
-            (device_id IS NOT NULL AND device_id != '' AND device_id = ?)
-            OR (
-              (uuid_hash != '' AND uuid_hash = ?)
-              OR (cpu_hash != '' AND cpu_hash = ?)
-              OR (disk_hash != '' AND disk_hash = ?)
-            )
-          ) LIMIT 1
-        `).bind(
-          license_code,
-          authoritativeDeviceId,
-          uuid_hash || "",
-          cpu_hash || "",
-          disk_hash || ""
-        ).first<any>();
+        const { results: currentActs } = await env.DB.prepare(
+          "SELECT * FROM activations WHERE license_code = ?"
+        ).bind(license_code).all<any>();
 
-        if (!alreadyActivated) {
+        let concurrentMatch = false;
+        for (const act of currentActs) {
+          if (matchFingerprint(
+            uHash, cHash, dHash,
+            act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
+          ) || (authoritativeDeviceId && act.device_id === authoritativeDeviceId)) {
+            concurrentMatch = true;
+            matchedActivation = act;
+            break;
+          }
+        }
+
+        if (!concurrentMatch) {
           return new Response(JSON.stringify({ error: getApiTranslation("max_devices_reached", reqLang) }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -770,22 +766,39 @@ export async function handleDrmRoutes(
       });
     }
 
+    const uHash = (uuid_hash || "").trim();
+    const cHash = (cpu_hash || "").trim();
+    const dHash = (disk_hash || "").trim();
+    const nonEmptyFpCount = (uHash ? 1 : 0) + (cHash ? 1 : 0) + (dHash ? 1 : 0);
+    if (nonEmptyFpCount < 2) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware permissions (requires at least 2 valid hardware fingerprints)"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const { results: activations } = await env.DB.prepare(
       "SELECT * FROM activations WHERE license_code = ?"
     ).bind(license_code).all<any>();
 
-    let isActivatedDevice = false;
+    let matchedActivation: any = null;
     for (const act of activations) {
       if (matchFingerprint(
-        uuid_hash || "", cpu_hash || "", disk_hash || "",
+        uHash, cHash, dHash,
         act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
       )) {
-        isActivatedDevice = true;
+        matchedActivation = act;
+        break;
+      }
+      if ((body as any).device_id && act.device_id && act.device_id === (body as any).device_id) {
+        matchedActivation = act;
         break;
       }
     }
 
-    if (!isActivatedDevice) {
+    if (!matchedActivation) {
       return new Response(JSON.stringify({ error: getApiTranslation("device_not_activated", reqLang) }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -793,7 +806,13 @@ export async function handleDrmRoutes(
     }
 
     baseExpiresAt = await checkAndApplyPendingUpgrade(env, license_code, baseExpiresAt);
-    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt);
+    const evalResult = evaluateLicenseExpiration(license, baseExpiresAt, matchedActivation.activated_at);
+    if (evalResult.isExpired) {
+      return new Response(JSON.stringify({ error: getApiTranslation("license_expired", reqLang) }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     baseExpiresAt = evalResult.effectiveExpiresAt;
 
     const net = activationClientMeta(request);
@@ -855,6 +874,92 @@ export async function handleDrmRoutes(
       certificate_signature: certificateSignatureHex,
       current_time: currentTime,
       signature: verifySignatureHex
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 1.8 Unbind device from client (self-deactivation with valid fingerprints or device_id)
+  if (url.pathname === "/api/v1/device/unbind" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const reqLang = extractRequestLang(request, body);
+    const { license_code, device_id, uuid_hash, cpu_hash, disk_hash } = body;
+
+    if (!license_code) {
+      return new Response(JSON.stringify({ error: getApiTranslation("missing_license_code", reqLang) }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const uHash = (uuid_hash || "").trim();
+    const cHash = (cpu_hash || "").trim();
+    const dHash = (disk_hash || "").trim();
+    const dId = (device_id || "").trim();
+
+    if (!dId && ((uHash ? 1 : 0) + (cHash ? 1 : 0) + (dHash ? 1 : 0) < 2)) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("insufficient_hardware_permissions", reqLang) || "Insufficient hardware identifiers"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (await isD1RateLimited(env, `unbind:${license_code}`, 10, 60000)) {
+      return new Response(JSON.stringify({ error: getApiTranslation("rate_limit_exceeded", reqLang) }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { results: activations } = await env.DB.prepare(
+      "SELECT id, device_id, uuid_hash, cpu_hash, disk_hash FROM activations WHERE license_code = ?"
+    ).bind(license_code).all<any>();
+
+    let matchedAct: any = null;
+    for (const act of activations) {
+      if (matchFingerprint(
+        uHash, cHash, dHash,
+        act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
+      )) {
+        matchedAct = act;
+        break;
+      }
+      if (dId && act.device_id && act.device_id === dId) {
+        matchedAct = act;
+        break;
+      }
+    }
+
+    if (!matchedAct) {
+      return new Response(JSON.stringify({ success: true, message: "Device was not active on this license" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Delete activation
+    await env.DB.prepare(
+      "DELETE FROM activations WHERE id = ? AND license_code = ?"
+    ).bind(matchedAct.id, license_code).run();
+
+    // Record unbind log
+    await env.DB.prepare(
+      "INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)"
+    ).bind(license_code, matchedAct.id, new Date().toISOString()).run();
+
+    // Downgrade device_registry if linked
+    if (matchedAct.device_id) {
+      await env.DB.prepare(
+        "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?"
+      ).bind(matchedAct.device_id).run();
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: getApiTranslation("toast_unbind_success", reqLang) || "Device unbound successfully"
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

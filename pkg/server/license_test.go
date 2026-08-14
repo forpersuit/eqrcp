@@ -594,6 +594,10 @@ func TestActivateLicenseOnlineWithLang(t *testing.T) {
 	var receivedAcceptLang string
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/device/unbind" {
+			_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+			return
+		}
 		var req map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		receivedLang = req["lang"]

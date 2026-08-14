@@ -93,132 +93,6 @@ export async function handlePortalRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
-  // 0.1 Send login verification code
-  if (url.pathname === "/api/v1/user/send-code" && request.method === "POST") {
-    await ensureLicenseSourceColumns(env);
-    await ensureAutoRenewColumn(env);
-    const body: any = await request.json().catch(() => ({}));
-    const reqLang = extractRequestLang(request, body);
-    const email = (body.email || "").trim().toLowerCase();
-
-    if (!email || !email.includes("@")) {
-      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    const emailHash = await sha256Hex(email);
-
-    // Gate A: Check email-based refund blacklist gate
-    const emailBlacklist = await checkEmailBlacklist(env, email);
-    if (emailBlacklist.isAbusive) {
-      return new Response(JSON.stringify({
-        error: getApiTranslation("blacklist_email", reqLang) || emailBlacklist.reason,
-        reason_key: "blacklist_email"
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    // Purchase check: Email must exist in licenses table as buyer_email OR buyer_email_hash
-    const countRow = await env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ?"
-    ).bind(email, emailHash).first<any>();
-
-    if (!countRow || Number(countRow.cnt) <= 0) {
-      return new Response(JSON.stringify({ error: getApiTranslation("no_purchase_history", reqLang) }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    const { results: recent } = await env.DB.prepare(
-      "SELECT created_at FROM auth_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1"
-    ).bind(email).all<any>();
-
-    if (recent && recent.length > 0) {
-      const lastTime = new Date(recent[0].created_at).getTime();
-      if (Date.now() - lastTime < 60 * 1000) {
-        return new Response(JSON.stringify({ error: getApiTranslation("rate_limited", reqLang) }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    }
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-    await env.DB.prepare(
-      "INSERT INTO auth_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(email, code, expiresAt, new Date().toISOString()).run();
-
-    const template = AUTH_CODE_EMAIL_I18N[reqLang] || AUTH_CODE_EMAIL_I18N['zh'] || AUTH_CODE_EMAIL_I18N['en'];
-    const emailHtml = renderEmailWrapper(template.title, `
-      <p style="color: #475569; font-size: 14px;">${template.bodyText}</p>
-      <div style="background: #f1f5f9; padding: 16px; border-radius: 8px; font-size: 28px; font-weight: bold; letter-spacing: 4px; text-align: center; color: #0f172a; margin: 16px 0;">
-        ${code}
-      </div>
-      <p style="color: #64748b; font-size: 13px;">${template.validityText}</p>
-    `);
-
-    ctx.waitUntil(sendDRMEmail(env, email, template.subject, emailHtml));
-
-    return new Response(JSON.stringify({ success: true, message: getApiTranslation("toast_code_sent", reqLang) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-
-  // 0.2 Verify code & Login
-  if (url.pathname === "/api/v1/user/verify-code" && request.method === "POST") {
-    await ensureLicenseSourceColumns(env);
-    await ensureAutoRenewColumn(env);
-    const body: any = await request.json().catch(() => ({}));
-    const reqLang = extractRequestLang(request, body);
-    const email = (body.email || "").trim().toLowerCase();
-    const code = (body.code || "").trim();
-
-    if (!email || !code) {
-      return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    const record = await env.DB.prepare(
-      "SELECT * FROM auth_codes WHERE email = ? AND code = ? ORDER BY created_at DESC LIMIT 1"
-    ).bind(email, code).first<any>();
-
-    if (!record || new Date(record.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: getApiTranslation("session_expired", reqLang) }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    await env.DB.prepare("DELETE FROM auth_codes WHERE email = ?").bind(email).run();
-
-    const token = crypto.randomUUID();
-    const sessionExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-
-    await env.DB.prepare(
-      "INSERT INTO user_sessions (email, session_token, expires_at, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(email, token, sessionExpires, new Date().toISOString()).run();
-
-    return new Response(JSON.stringify({
-      success: true,
-      token,
-      email,
-      expires_at: sessionExpires
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-
   // 0.3 Fetch User Licenses & Activations
   if (url.pathname === "/api/v1/user/licenses" && request.method === "GET") {
     await ensureLicenseSourceColumns(env);
@@ -275,9 +149,14 @@ export async function handlePortalRoutes(
       const lastPurchaseTime = lastPurchasedStr ? new Date(lastPurchasedStr).getTime() : 0;
       const isInRefundWindow = lastPurchaseTime > 0 && (Date.now() - lastPurchaseTime < REFUND_WINDOW_MS);
 
+      const isExpired = Boolean(lic.expires_at && lic.expires_at !== 'LIFETIME' && new Date(lic.expires_at).getTime() < Date.now());
+      const isRefunded = Boolean(lic.status === 'revoked' && (lic.revoke_reason === 'refund' || lic.revoke_reason === 'chargeback'));
+
       list.push({
         ...lic,
         source,
+        is_expired: isExpired,
+        is_refunded: isRefunded,
         auto_renew: (source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id)) ? (lic.auto_renew === 0 ? 0 : 1) : 0,
         auto_renew_toggleable: source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id),
         refundable: isLicenseRefundable({ ...lic, source }),

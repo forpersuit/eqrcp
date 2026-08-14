@@ -57,7 +57,7 @@ export function matchRegistryFingerprint(
     if (reqD !== dbD) return false;
     compareCount++;
   }
-  return compareCount > 0;
+  return compareCount >= 2;
 }
 
 const WRITE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes

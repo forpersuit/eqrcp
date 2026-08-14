@@ -174,12 +174,10 @@ window.addEventListener('unhandledrejection', (event) => {
 
 initDragDrop(state, handleFileDrop);
 
-const agentEventsURL = 'http://127.0.0.1:48176/events';
 // Free chat daily allowance (seconds) — must match server.FreeChatDailySeconds.
 const chatDailyFreeSeconds = 300;
 const chatDailyFreeMs = chatDailyFreeSeconds * 1000;
 const licenseStorageKey = 'eqt.license.activation';
-const redeemSecret = 'EQT-LOCAL-2026-V1';
 const licenseTiers = {
     PLUS: 'EQT Plus',
     PRO: 'EQT Pro',
@@ -191,7 +189,6 @@ function getLicenseDisplayName(license) {
     }
     return licenseTiers[license.tier] || license.tier;
 }
-let agentEvents = null;
 let confirmSwitchResolve = null;
 let _staticDelegationBound = false;
 
@@ -203,7 +200,6 @@ function showConfirmSwitchDialog() {
     });
 }
 
-let agentEventsRetry = null;
 let chatQRPulseTimer = null;
 let chatUsageTimer = null;
 const autoSavedAttachments = new Set();
@@ -5759,18 +5755,17 @@ function confirmRedeem() {
 
     ActivateLicense(code).then(async function() {
         const redeemedAt = new Date().toISOString();
-        // result.codeDate is the redeem-code date token (YYYYMMDD), not certificate expiry.
-        // loadStatusData/syncLicenseFromStatus overwrites codeDate with server licenseExpiresAt.
+        await loadStatusData();
+        const effectiveExpires = state.status?.licenseExpiresAt || result.codeDate || '';
         saveLicense({
-            tier: result.tier,
+            tier: state.status?.tier || result.tier,
             codeHash: checksum(`${code}:stored`, 10),
             redeemedAt: redeemedAt,
-            codeDate: 'LIFETIME',
+            codeDate: effectiveExpires,
         });
         state.redeemMessage = t('activation_success', { tier: licenseTiers[result.tier] || result.tier }) || `${licenseTiers[result.tier]} activated successfully.`;
         state.tempRedeemCode = ''; // Clear on success
         stopChatUsage();
-        await loadStatusData();
     }).catch(function(e) {
         state.redeemMessage = '';
         state.redeemError = formatActivationError(e);
@@ -5811,7 +5806,7 @@ function resetLicense() {
         await loadStatusData();
         render();
     }).catch(function(e) {
-        state.redeemError = e || t('activation_reset_failed') || 'Failed to reset activation.';
+        state.redeemError = String(e?.message || e || t('activation_reset_failed') || 'Failed to reset activation.');
         render();
     }).finally(function() {
         if (button) button.disabled = false;

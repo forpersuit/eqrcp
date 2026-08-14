@@ -55,7 +55,7 @@ if [ -z "${RAND_STR}" ]; then
 fi
 
 # 计算简易校验码保证格式端正
-CHECK_SUM=$(echo -n "${TIER}-${DATE_STR}-${RAND_STR}" | md5sum | head -c 4 | tr 'a-z' 'A-Z')
+CHECK_SUM=$(echo -n "${TIER}-${DATE_STR}-${RAND_STR}" | sha256sum | head -c 4 | tr 'a-z' 'A-Z')
 
 LICENSE_CODE="EQT-${TIER}-${DATE_STR}-${RAND_STR}-${CHECK_SUM}"
 CREATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
