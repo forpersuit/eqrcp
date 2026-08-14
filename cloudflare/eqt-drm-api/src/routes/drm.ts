@@ -1,4 +1,4 @@
-import { Env } from '../types';
+import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
@@ -521,6 +521,18 @@ export async function handleDrmRoutes(
         )
         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE (SELECT COUNT(*) FROM activations WHERE license_code = ?) < ?
+          AND NOT EXISTS (
+            SELECT 1 FROM activations
+            WHERE license_code = ?
+              AND (
+                (? != '' AND device_id = ?)
+                OR (
+                  ((CASE WHEN ? != '' AND uuid_hash = ? THEN 1 ELSE 0 END) +
+                   (CASE WHEN ? != '' AND cpu_hash = ? THEN 1 ELSE 0 END) +
+                   (CASE WHEN ? != '' AND disk_hash = ? THEN 1 ELSE 0 END)) >= 2
+                )
+              )
+          )
       `).bind(
         license_code,
         uHash,
@@ -537,7 +549,16 @@ export async function handleDrmRoutes(
         net.longitude,
         traceId,
         license_code,
-        license.max_devices
+        license.max_devices,
+        license_code,
+        authoritativeDeviceId,
+        authoritativeDeviceId,
+        uHash,
+        uHash,
+        cHash,
+        cHash,
+        dHash,
+        dHash
       ).run();
 
       // If changes === 0, either max_devices was reached or device was already inserted (e.g. D1 retry timeout)
@@ -914,6 +935,22 @@ export async function handleDrmRoutes(
       });
     }
 
+    // Check 1-year rolling window unbind limit
+    const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
+    const unbindCheck = await env.DB.prepare(
+      "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
+    ).bind(license_code, oneYearAgoISO).first<any>();
+
+    const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
+    if (unbindCount >= MAX_YEARLY_UNBINDS) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("unbind_limit_reached", reqLang) || "Annual unbind quota reached"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const { results: activations } = await env.DB.prepare(
       "SELECT id, device_id, uuid_hash, cpu_hash, disk_hash FROM activations WHERE license_code = ?"
     ).bind(license_code).all<any>();
@@ -940,26 +977,26 @@ export async function handleDrmRoutes(
       });
     }
 
-    // Delete activation
-    await env.DB.prepare(
-      "DELETE FROM activations WHERE id = ? AND license_code = ?"
-    ).bind(matchedAct.id, license_code).run();
+    // Atomic unbind batch: delete activation, record unbind history, and downgrade device_registry
+    const nowIso = new Date().toISOString();
+    const batchStatements = [
+      env.DB.prepare("DELETE FROM activations WHERE id = ? AND license_code = ?").bind(matchedAct.id, license_code),
+      env.DB.prepare("INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)").bind(license_code, matchedAct.id, nowIso)
+    ];
 
-    // Record unbind log
-    await env.DB.prepare(
-      "INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)"
-    ).bind(license_code, matchedAct.id, new Date().toISOString()).run();
-
-    // Downgrade device_registry if linked
     if (matchedAct.device_id) {
-      await env.DB.prepare(
-        "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?"
-      ).bind(matchedAct.device_id).run();
+      batchStatements.push(
+        env.DB.prepare("UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?").bind(matchedAct.device_id)
+      );
     }
 
+    await env.DB.batch(batchStatements);
+
+    const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - (unbindCount + 1));
     return new Response(JSON.stringify({
       success: true,
-      message: getApiTranslation("toast_unbind_success", reqLang) || "Device unbound successfully"
+      message: getApiTranslation("unbind_success", reqLang) || "Device unbound successfully",
+      remaining_unbinds: remainingUnbinds
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

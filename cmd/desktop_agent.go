@@ -576,14 +576,26 @@ func handleDesktopAgentCORS(w http.ResponseWriter, r *http.Request, methods ...s
 
 func rejectCrossOriginDesktopAgent(w http.ResponseWriter, r *http.Request) bool {
 	origin := r.Header.Get("Origin")
-	if origin == "" {
+	if origin != "" {
+		if !trustedDesktopAgentOrigin(origin, r.Host) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return true
+		}
 		return false
 	}
-	if trustedDesktopAgentOrigin(origin, r.Host) {
-		return false
+	// Defend against browser cross-site requests that omit Origin header
+	secFetch := r.Header.Get("Sec-Fetch-Site")
+	if secFetch == "cross-site" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return true
 	}
-	http.Error(w, "forbidden", http.StatusForbidden)
-	return true
+	if referer := r.Header.Get("Referer"); referer != "" {
+		if !trustedDesktopAgentOrigin(referer, r.Host) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return true
+		}
+	}
+	return false
 }
 
 func trustedDesktopAgentOrigin(origin string, requestHost string) bool {

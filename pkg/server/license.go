@@ -169,7 +169,9 @@ func VerifyFingerprint(cert LicenseCertificate) bool {
 // Any failure path clears paid status so memory never outlives a missing/invalid certificate.
 func VerifyLocalLicense() bool {
 	path := getLicenseFilePath()
+	licenseFileMu.RLock()
 	data, err := os.ReadFile(path)
+	licenseFileMu.RUnlock()
 	if err != nil {
 		// No license file found — memory must match disk (SSOT).
 		SetPaidStatus(false, "", "", "")
@@ -257,7 +259,9 @@ func VerifyLocalLicense() bool {
 	if shouldWrite {
 		cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
 		if certBytes, err := json.Marshal(cert); err == nil {
+			licenseFileMu.Lock()
 			_ = os.WriteFile(path, certBytes, 0644)
+			licenseFileMu.Unlock()
 		}
 	}
 
@@ -357,9 +361,12 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	if err != nil {
 		return fmt.Errorf("failed to serialize license: %w", err)
 	}
+	licenseFileMu.Lock()
 	if err := os.WriteFile(path, certBytes, 0644); err != nil {
+		licenseFileMu.Unlock()
 		return fmt.Errorf("failed to write license file: %w", err)
 	}
+	licenseFileMu.Unlock()
 
 	licenseCacheMu.Lock()
 	cachedLicense = &cert
@@ -367,6 +374,7 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	licenseCacheMu.Unlock()
 
 	// Apply activation status immediately using server verification sync time
+	SetClockTampered(false)
 	SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
 	return nil
 }
@@ -402,7 +410,12 @@ type VerifyAPIResponse struct {
 	SyncSignature        string `json:"signature"`
 }
 
+var syncInFlightMu sync.Mutex
+
 func doOnlineLicenseSync(force bool) error {
+	syncInFlightMu.Lock()
+	defer syncInFlightMu.Unlock()
+
 	// 1. Get local license
 	cert, ok := GetLocalLicenseInfo()
 	if !ok {
@@ -493,7 +506,9 @@ func doOnlineLicenseSync(force bool) error {
 
 	path := getLicenseFilePath()
 	if certBytes, err := json.Marshal(cert); err == nil {
+		licenseFileMu.Lock()
 		_ = os.WriteFile(path, certBytes, 0644)
+		licenseFileMu.Unlock()
 	}
 
 	licenseCacheMu.Lock()
@@ -507,6 +522,7 @@ func doOnlineLicenseSync(force bool) error {
 }
 
 var (
+	licenseFileMu    sync.RWMutex
 	licenseCacheMu   sync.Mutex
 	cachedLicense    *LicenseCertificate
 	hasCachedLicense bool
@@ -523,7 +539,9 @@ func ResetLicense() {
 	licenseCacheMu.Unlock()
 
 	path := getLicenseFilePath()
+	licenseFileMu.Lock()
 	_ = os.Remove(path)
+	licenseFileMu.Unlock()
 	SetPaidStatus(false, "", "", "")
 
 	if hasInfo && info.LicenseCode != "" {
@@ -565,7 +583,9 @@ func GetLocalLicenseInfo() (LicenseCertificate, bool) {
 	}
 
 	path := getLicenseFilePath()
+	licenseFileMu.RLock()
 	data, err := os.ReadFile(path)
+	licenseFileMu.RUnlock()
 	if err != nil {
 		cachedLicense = nil
 		hasCachedLicense = true

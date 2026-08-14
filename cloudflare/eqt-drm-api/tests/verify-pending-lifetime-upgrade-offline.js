@@ -93,6 +93,18 @@ class RealWorkerD1Mock {
     };
   }
 
+  async batch(statements) {
+    const results = [];
+    for (const stmt of statements) {
+      if (stmt && typeof stmt.run === 'function') {
+        results.push(await stmt.run());
+      } else {
+        results.push({ meta: { changes: 1 } });
+      }
+    }
+    return results;
+  }
+
   executeSqlFirst(sql, args) {
     const s = sql.replace(/\s+/g, ' ').trim();
 

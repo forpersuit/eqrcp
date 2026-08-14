@@ -32,6 +32,29 @@ func TestNew(t *testing.T) {
 	if err := os.WriteFile(partialconfig.Name(), []byte(`port: 9090`), os.ModePerm); err != nil {
 		panic(err)
 	}
+	eqtData, _ := os.ReadFile(filepath.Join(testdir, "eqt.yml"))
+	eqtTemp, err := os.CreateTemp("", "eqt*eqt.yml")
+	if err != nil {
+		t.Skip()
+	}
+	defer os.Remove(eqtTemp.Name())
+	_ = os.WriteFile(eqtTemp.Name(), eqtData, os.ModePerm)
+
+	fullData, _ := os.ReadFile(filepath.Join(testdir, "full.yml"))
+	fullTemp, err := os.CreateTemp("", "eqt*full.yml")
+	if err != nil {
+		t.Skip()
+	}
+	defer os.Remove(fullTemp.Name())
+	_ = os.WriteFile(fullTemp.Name(), fullData, os.ModePerm)
+
+	fullOverridesTemp, err := os.CreateTemp("", "eqt*full_overrides.yml")
+	if err != nil {
+		t.Skip()
+	}
+	defer os.Remove(fullOverridesTemp.Name())
+	_ = os.WriteFile(fullOverridesTemp.Name(), fullData, os.ModePerm)
+
 	type args struct {
 		app application.App
 	}
@@ -69,7 +92,7 @@ func TestNew(t *testing.T) {
 			"#2", args{
 				app: application.App{
 					Flags: application.Flags{
-						Config: filepath.Join(testdir, "eqt.yml"),
+						Config: eqtTemp.Name(),
 					},
 				},
 			},
@@ -81,7 +104,7 @@ func TestNew(t *testing.T) {
 			"#2", args{
 				app: application.App{
 					Flags: application.Flags{
-						Config: filepath.Join(testdir, "full.yml"),
+						Config: fullTemp.Name(),
 					},
 				},
 			},
@@ -103,7 +126,7 @@ func TestNew(t *testing.T) {
 			"overrides", args{
 				app: application.App{
 					Flags: application.Flags{
-						Config: filepath.Join(testdir, "full.yml"),
+						Config: fullOverridesTemp.Name(),
 						Port:   99999,
 					},
 				},

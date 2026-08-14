@@ -40,8 +40,9 @@ CREATE TABLE IF NOT EXISTS activations (
     FOREIGN KEY (license_code) REFERENCES licenses(license_code)
 );
 
--- Indexing for speed
+-- Indexing for speed and device activation uniqueness
 CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_activations_license_device ON activations(license_code, device_id) WHERE device_id IS NOT NULL AND device_id != '';
 CREATE INDEX IF NOT EXISTS idx_licenses_email_hash ON licenses(buyer_email_hash);
 CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
 
@@ -176,6 +177,16 @@ CREATE TABLE IF NOT EXISTS license_upgrades (
 -- INSERT OR IGNORE + this index make concurrent same-code purchases atomic (no orphan rows).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_target ON license_upgrades(target_license_code) WHERE status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrades_lifetime_txn ON license_upgrades(lifetime_txn_id);
+
+-- Processed Paddle transactions history for strict idempotency across renewals and initial purchases
+CREATE TABLE IF NOT EXISTS paddle_processed_transactions (
+    transaction_id TEXT PRIMARY KEY,
+    license_code TEXT NOT NULL,
+    action TEXT NOT NULL,                  -- 'initial' | 'renewal' | 'upgrade'
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_txns_license ON paddle_processed_transactions(license_code);
 
 
 

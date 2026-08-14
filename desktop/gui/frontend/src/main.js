@@ -5756,9 +5756,9 @@ function confirmRedeem() {
     ActivateLicense(code).then(async function() {
         const redeemedAt = new Date().toISOString();
         await loadStatusData();
-        const effectiveExpires = state.status?.licenseExpiresAt || result.codeDate || '';
+        const effectiveExpires = state.status?.licenseExpiresAt || '';
         saveLicense({
-            tier: state.status?.tier || result.tier,
+            tier: state.status?.licenseTier || result.tier,
             codeHash: checksum(`${code}:stored`, 10),
             redeemedAt: redeemedAt,
             codeDate: effectiveExpires,

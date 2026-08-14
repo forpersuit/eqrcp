@@ -11,6 +11,7 @@ import { logSystemError } from '../utils/error-logger';
 import { ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
 import { isPaddleSandbox, revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
+import { isD1RateLimited } from '../utils/rate-limit';
 
 function detectBuyerLang(data: any): string {
   const country = String(
@@ -172,13 +173,28 @@ export async function handlePaddleRoutes(
         }
       }
 
-      // Check if already processed
+      // Check if already processed (check licenses and historical processed transactions)
       const existing = await env.DB.prepare(
         "SELECT license_code FROM licenses WHERE paddle_transaction_id = ?"
       ).bind(transactionId).first<any>();
 
       if (existing) {
         return new Response(JSON.stringify({ message: "Transaction already processed", license_code: existing.license_code }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const processedHistory = await env.DB.prepare(
+        "SELECT license_code, action FROM paddle_processed_transactions WHERE transaction_id = ?"
+      ).bind(transactionId).first<any>();
+
+      if (processedHistory) {
+        return new Response(JSON.stringify({
+          message: "Transaction already processed",
+          license_code: processedHistory.license_code,
+          action: processedHistory.action
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -330,26 +346,32 @@ export async function handlePaddleRoutes(
               newExpires = new Date(base + YEARLY_MS).toISOString();
             }
 
-            await env.DB.prepare(`
-              UPDATE licenses SET
-                status = 'active',
-                expires_at = ?,
-                duration_days = NULL,
-                paddle_transaction_id = ?,
-                last_purchased_at = ?,
-                revoked_at = NULL,
-                revoke_reason = NULL,
-                buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
-                buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
-              WHERE license_code = ?
-            `).bind(
-              newExpires,
-              transactionId,
-              new Date(nowMs).toISOString(),
-              buyerEmail || null,
-              emailHash || null,
-              targetLic.license_code
-            ).run();
+            await env.DB.batch([
+              env.DB.prepare(`
+                UPDATE licenses SET
+                  status = 'active',
+                  expires_at = ?,
+                  duration_days = NULL,
+                  paddle_transaction_id = ?,
+                  last_purchased_at = ?,
+                  revoked_at = NULL,
+                  revoke_reason = NULL,
+                  buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+                  buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+                WHERE license_code = ?
+              `).bind(
+                newExpires,
+                transactionId,
+                new Date(nowMs).toISOString(),
+                buyerEmail || null,
+                emailHash || null,
+                targetLic.license_code
+              ),
+              env.DB.prepare(`
+                INSERT OR IGNORE INTO paddle_processed_transactions (transaction_id, license_code, action, created_at)
+                VALUES (?, ?, 'target_renewal', ?)
+              `).bind(transactionId, targetLic.license_code, new Date(nowMs).toISOString())
+            ]);
 
             if (buyerEmail) {
               const buyerLang = detectBuyerLang(data);
@@ -403,26 +425,32 @@ export async function handlePaddleRoutes(
           }
 
           // Point paddle_transaction_id at latest paid txn (idempotency + refund of current period)
-          await env.DB.prepare(`
-            UPDATE licenses SET
-              status = 'active',
-              expires_at = ?,
-              duration_days = NULL,
-              paddle_transaction_id = ?,
-              last_purchased_at = ?,
-              revoked_at = NULL,
-              revoke_reason = NULL,
-              buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
-              buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
-            WHERE license_code = ?
-          `).bind(
-            newExpires,
-            transactionId,
-            new Date().toISOString(),
-            buyerEmail || null,
-            emailHash || null,
-            subLicense.license_code
-          ).run();
+          await env.DB.batch([
+            env.DB.prepare(`
+              UPDATE licenses SET
+                status = 'active',
+                expires_at = ?,
+                duration_days = NULL,
+                paddle_transaction_id = ?,
+                last_purchased_at = ?,
+                revoked_at = NULL,
+                revoke_reason = NULL,
+                buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
+                buyer_email_hash = COALESCE(NULLIF(buyer_email_hash, ''), ?)
+              WHERE license_code = ?
+            `).bind(
+              newExpires,
+              transactionId,
+              new Date().toISOString(),
+              buyerEmail || null,
+              emailHash || null,
+              subLicense.license_code
+            ),
+            env.DB.prepare(`
+              INSERT OR IGNORE INTO paddle_processed_transactions (transaction_id, license_code, action, created_at)
+              VALUES (?, ?, 'renewal', ?)
+            `).bind(transactionId, subLicense.license_code, new Date().toISOString())
+          ]);
 
           if (buyerEmail) {
             const buyerLang = detectBuyerLang(data);
@@ -463,27 +491,33 @@ export async function handlePaddleRoutes(
 
       // Write to DB。Paddle 履约生成的激活码来源一律为 purchase (购买渠道)。
       const source = "purchase";
-      await env.DB.prepare(`
-        INSERT INTO licenses (
-          license_code, tier, status, max_devices, expires_at, duration_days,
-          buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id,
-          source, created_at, last_purchased_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        licenseCode,
-        tier,
-        "active",
-        2,
-        expiresAt,
-        durationDays,
-        emailHash || null,
-        buyerEmail || null,
-        transactionId,
-        subscriptionId,
-        source,
-        nowIso,
-        nowIso
-      ).run();
+      await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO licenses (
+            license_code, tier, status, max_devices, expires_at, duration_days,
+            buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id,
+            source, created_at, last_purchased_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          licenseCode,
+          tier,
+          "active",
+          2,
+          expiresAt,
+          durationDays,
+          emailHash || null,
+          buyerEmail || null,
+          transactionId,
+          subscriptionId,
+          source,
+          nowIso,
+          nowIso
+        ),
+        env.DB.prepare(`
+          INSERT OR IGNORE INTO paddle_processed_transactions (transaction_id, license_code, action, created_at)
+          VALUES (?, ?, 'initial', ?)
+        `).bind(transactionId, licenseCode, nowIso)
+      ]);
 
       // Send confirmation email to the buyer asynchronously
       if (buyerEmail) {
@@ -548,13 +582,20 @@ export async function handlePaddleRoutes(
         }
       }
 
-      // Query the license: exact txn match first, then subscription fallback (B1).
-      // Yearly renewal overwrites paddle_transaction_id with the latest txn, so refunding an
-      // OLDER billing period's txn would otherwise miss the license and silently revoke nothing.
+      // Query the license: exact txn match first, then history txn, then subscription fallback (B1).
       const subId = data.subscription_id || data.subscription?.id || null;
       let license = await env.DB.prepare(
         "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
       ).bind(transactionId).first<any>();
+
+      if (!license) {
+        const hist = await env.DB.prepare(
+          "SELECT l.license_code, l.buyer_email, l.tier FROM licenses l JOIN paddle_processed_transactions p ON l.license_code = p.license_code WHERE p.transaction_id = ? LIMIT 1"
+        ).bind(transactionId).first<any>();
+        if (hist) {
+          license = hist;
+        }
+      }
 
       if (!license && subId) {
         license = await env.DB.prepare(
@@ -636,11 +677,20 @@ export async function handlePaddleRoutes(
         }
 
         const reason = action === "chargeback" ? "chargeback" : "refund";
-        // B1: exact txn match first, then subscription fallback (see transaction.refunded above)
+        // B1: exact txn match first, then history match, then subscription fallback
         const adjSubId = data.subscription_id || data.subscription?.id || null;
         let license = await env.DB.prepare(
           "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_transaction_id = ?"
         ).bind(transactionId).first<any>();
+
+        if (!license) {
+          const hist = await env.DB.prepare(
+            "SELECT l.license_code, l.buyer_email, l.tier FROM licenses l JOIN paddle_processed_transactions p ON l.license_code = p.license_code WHERE p.transaction_id = ? LIMIT 1"
+          ).bind(transactionId).first<any>();
+          if (hist) {
+            license = hist;
+          }
+        }
 
         if (!license && adjSubId) {
           license = await env.DB.prepare(

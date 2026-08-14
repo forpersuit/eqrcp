@@ -266,6 +266,43 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   await ensureDeviceRegistryTable(env);
   await ensureLicenseUpgradesTable(env);
   await ensureLicensePaddleTxnIndex(env);
+  await ensurePaddleProcessedTxnTable(env);
+  await ensureActivationDeviceIndex(env);
+}
+
+export async function ensurePaddleProcessedTxnTable(env: Env): Promise<void> {
+  if (!env?.DB) return;
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS paddle_processed_transactions (
+          transaction_id TEXT PRIMARY KEY,
+          license_code TEXT NOT NULL,
+          action TEXT NOT NULL,
+          created_at TEXT NOT NULL
+      )
+    `).run();
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (!/already exists/i.test(msg)) {
+      console.error("Failed to ensure paddle_processed_transactions table:", err);
+    }
+  }
+}
+
+export async function ensureActivationDeviceIndex(env: Env): Promise<void> {
+  if (!env?.DB) return;
+  try {
+    await env.DB.prepare(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_activations_license_device
+      ON activations(license_code, device_id)
+      WHERE device_id IS NOT NULL AND device_id != ''
+    `).run();
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (!/already exists/i.test(msg)) {
+      console.error("Failed to ensure idx_activations_license_device index:", err);
+    }
+  }
 }
 
 /** Idempotent ALTERs for license origin + abuse-window timestamps. */
