@@ -742,8 +742,8 @@ func TestRegisterDeviceOnlineTelemetryDisabled(t *testing.T) {
 	if called {
 		t.Error("expected RegisterDeviceOnline to skip network request when telemetry is disabled")
 	}
-	if id := GetAuthorityDeviceID(); id != "未注册" {
-		t.Errorf("expected device_id to remain '未注册', got '%s'", id)
+	if id := GetAuthorityDeviceID(); id != "" {
+		t.Errorf("expected device_id to remain empty '', got '%s'", id)
 	}
 }
 
@@ -1006,4 +1006,52 @@ func TestSetClockTamperedDiskPersistence(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestActivateInsufficientFingerprintRejection(t *testing.T) {
+	testFingerprintOverride = true
+	defer func() { testFingerprintOverride = false }()
+
+	// Case 1: 0 fingerprints
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+	err := ActivateLicenseOnline("EQT-TEST-INS-0001")
+	if err == nil || !strings.Contains(err.Error(), "insufficient hardware permissions") {
+		t.Errorf("expected insufficient hardware permissions error with 0 fingerprints, got %v", err)
+	}
+
+	// Case 2: Only 1 fingerprint (e.g. only UUID on restricted environment)
+	testBoardUUID = "only_one_uuid_hash"
+	testCPUSerial = ""
+	testDiskSerial = ""
+	err1 := ActivateLicenseOnline("EQT-TEST-INS-0002")
+	if err1 == nil || !strings.Contains(err1.Error(), "insufficient hardware permissions") {
+		t.Errorf("expected insufficient hardware permissions error with only 1 fingerprint, got %v", err1)
+	}
+	testBoardUUID = ""
+}
+
+func TestSetPaidDetailsPreservesClockTampered(t *testing.T) {
+	// Step 1: Set clock tampered via global API
+	SetClockTampered(true)
+	if !GetClockTamperedStatus() {
+		t.Fatal("expected ClockTampered to be true")
+	}
+
+	// Step 2: Call SetPaidStatus with paid=false (e.g. VerifyLocalLicense failing on clock rollback)
+	SetPaidStatus(false, "", "", "")
+	if !GetClockTamperedStatus() {
+		t.Errorf("expected ClockTampered to remain true after SetPaidStatus(false), but was reset to false")
+	}
+
+	// Step 3: Call SetPaidStatus with paid=true (legitimate activation)
+	SetPaidStatus(true, time.Now().Format(time.RFC3339), "2099-01-01T00:00:00Z", "PRO")
+	if GetClockTamperedStatus() {
+		t.Errorf("expected ClockTampered to be reset to false after valid paid activation, but remained true")
+	}
+
+	// Clean up
+	SetClockTampered(false)
+	SetPaidStatus(false, "", "", "")
 }

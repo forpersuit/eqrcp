@@ -380,8 +380,10 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 	usage.RedeemedAt = redeemedAt
 	usage.CodeDate = codeDate
 	usage.LicenseTier = tier
-	// Reset clock tampering lock on explicit activation or reset
-	usage.ClockTampered = false
+	if paid {
+		// Reset clock tampering lock only on valid paid activation
+		usage.ClockTampered = false
+	}
 	l.saveUsageLocked(usage)
 
 	if l.activeSession != nil {

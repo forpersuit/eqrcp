@@ -191,9 +191,10 @@ func GetSystemDiskSerial() string {
 }
 
 var (
-	testBoardUUID  string
-	testCPUSerial  string
-	testDiskSerial string
+	testBoardUUID           string
+	testCPUSerial           string
+	testDiskSerial          string
+	testFingerprintOverride bool
 
 	fingerprintMu     sync.Mutex
 	cachedUUID        string
@@ -282,7 +283,7 @@ func PrecomputeDeviceFingerprints() {
 
 // GetDeviceFingerprintHashes returns the current motherboard, CPU, and disk SHA-256 hashes.
 func GetDeviceFingerprintHashes() (string, string, string) {
-	if testBoardUUID != "" || testCPUSerial != "" || testDiskSerial != "" {
+	if testFingerprintOverride || testBoardUUID != "" || testCPUSerial != "" || testDiskSerial != "" {
 		return testBoardUUID, testCPUSerial, testDiskSerial
 	}
 
@@ -348,7 +349,7 @@ func SetAuthorityDeviceID(id string) {
 
 // GetAuthorityDeviceID returns the server-assigned authoritative device_id.
 // It prioritizes local certificate device_id when available, otherwise falls back to
-// memory cached device_id from anonymous registration, or "未注册" if unassigned.
+// memory cached device_id from anonymous registration, or "" if unassigned.
 func GetAuthorityDeviceID() string {
 	if cert, ok := GetLocalLicenseInfo(); ok && cert.DeviceID != "" {
 		return cert.DeviceID
@@ -358,7 +359,7 @@ func GetAuthorityDeviceID() string {
 	if authorityDeviceId != "" {
 		return authorityDeviceId
 	}
-	return "未注册"
+	return ""
 }
 
 // GetDeviceStableID is retained for backward compatibility, now delegating directly to GetAuthorityDeviceID.

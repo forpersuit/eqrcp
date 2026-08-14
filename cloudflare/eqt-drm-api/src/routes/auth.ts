@@ -252,9 +252,20 @@ export async function handleAuthRoutes(
 
     // Send mail via SMTPS with localized i18n template
     const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
-    const mailSenderPassword = env.MAIL_SENDER_PASSWORD || "q4W62}bWtR";
-    const mailSendServer = env.MAIL_SEND_SERVER || "smtpserver.301098.xyz";
+    const mailSenderPassword = env.MAIL_SENDER_PASSWORD;
+    const mailSendServer = env.MAIL_SEND_SERVER;
     const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
+
+    if (!mailSenderPassword || !mailSendServer) {
+      console.error("Mail credentials missing: MAIL_SENDER_PASSWORD or MAIL_SEND_SERVER not configured");
+      ctx.waitUntil(logSystemError(env, 'SMTP_CONFIG_MISSING', 'ERROR', new Error("Mail sender credentials not configured in environment")));
+      return new Response(JSON.stringify({
+        error: "Email service is not configured on this server"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     const targetEmail = env.TEST_MAIL_RECEIVER || email;
     const mailObj = buildAuthCodeEmailHtml(reqLang, code);

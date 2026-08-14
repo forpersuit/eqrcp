@@ -257,12 +257,25 @@ func VerifyLocalLicense() bool {
 		}
 	}
 	if shouldWrite {
+		path := getLicenseFilePath()
+		licenseFileMu.Lock()
+		// If disk certificate was updated concurrently by online sync, merge with latest fields
+		if diskBytes, err := os.ReadFile(path); err == nil {
+			var diskCert LicenseCertificate
+			if err := json.Unmarshal(diskBytes, &diskCert); err == nil && diskCert.LicenseCode == cert.LicenseCode {
+				cert = diskCert
+			}
+		}
 		cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
 		if certBytes, err := json.Marshal(cert); err == nil {
-			licenseFileMu.Lock()
 			_ = os.WriteFile(path, certBytes, 0644)
-			licenseFileMu.Unlock()
 		}
+		licenseFileMu.Unlock()
+
+		licenseCacheMu.Lock()
+		cachedLicense = &cert
+		hasCachedLicense = true
+		licenseCacheMu.Unlock()
 	}
 
 	// Verified successfully, reset clock tampered state and update payment state
@@ -284,8 +297,18 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	}
 
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	if uuid == "" && cpu == "" && disk == "" {
-		return errors.New("insufficient hardware permissions: cannot retrieve hardware fingerprints")
+	validCount := 0
+	if uuid != "" {
+		validCount++
+	}
+	if cpu != "" {
+		validCount++
+	}
+	if disk != "" {
+		validCount++
+	}
+	if validCount < 2 {
+		return errors.New("insufficient hardware permissions: at least 2 valid hardware identifiers required")
 	}
 
 	reqMap := map[string]string{
@@ -349,6 +372,10 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 
 	if !VerifyFingerprint(cert) {
 		return errors.New("fingerprint check failed on newly received license")
+	}
+
+	if cert.VerifySignature != "" && !VerifySyncSignature(cert) {
+		return errors.New("sync verification signature invalid on newly received license")
 	}
 
 	// Save to disk with local last seen time metadata initialized
@@ -634,6 +661,8 @@ func SetPaidStatus(paid bool, redeemedAt string, codeDate string, tier string) {
 	if !paid {
 		cachedTier = ""
 		cachedCodeDate = ""
+	} else {
+		cachedIsTampered = false
 	}
 	paidStateMu.Unlock()
 

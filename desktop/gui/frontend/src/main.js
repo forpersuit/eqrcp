@@ -2782,8 +2782,8 @@ function renderRedeemPanel() {
                         </div>
                     </div>
                     <div class="reset-confirm-actions">
-                        <button type="button" class="btn-mini primary" id="cancel-reset-license" ${state.isActivating ? 'disabled' : ''}>${escapeHTML(t('btn_cancel'))}</button>
-                        <button type="button" class="btn-mini danger-light" id="confirm-reset-license" ${state.isActivating ? 'disabled' : ''}>${escapeHTML(t('btn_confirm_reset'))}</button>
+                        <button type="button" class="btn-mini primary" id="cancel-reset-license" ${(state.isActivating || state.isResettingLicense) ? 'disabled' : ''}>${escapeHTML(t('btn_cancel'))}</button>
+                        <button type="button" class="btn-mini danger-light" id="confirm-reset-license" ${(state.isActivating || state.isResettingLicense) ? 'disabled' : ''}>${state.isResettingLicense ? escapeHTML(t('btn_resetting') || 'Resetting...') : escapeHTML(t('btn_confirm_reset'))}</button>
                     </div>
                 </div>
             `;
@@ -2791,7 +2791,7 @@ function renderRedeemPanel() {
             resetSection = `
                 <div class="reset-entry-row">
                     <span>${escapeHTML(t('redeem_reset_hint'))}</span>
-                    <button type="button" class="btn-link-mini" id="reset-license">${escapeHTML(t('btn_reset'))}</button>
+                    <button type="button" class="btn-link-mini" id="reset-license" ${(state.isActivating || state.isResettingLicense) ? 'disabled' : ''}>${escapeHTML(t('btn_reset'))}</button>
                 </div>
             `;
         }
@@ -2807,17 +2807,17 @@ function renderRedeemPanel() {
             </div>
             <label>
                 ${t('redeem_title')}
-                <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${state.isActivating ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
+                <input id="redeem-code" autocomplete="off" spellcheck="false" placeholder="EQT-PLUS-20260523-XXXX-CHECK" ${(state.isActivating || state.isResettingLicense) ? 'disabled' : ''} value="${escapeHTML(state.tempRedeemCode || '')}" />
             </label>
             <div class="redeem-actions">
-                <button class="primary" id="confirm-redeem" ${state.isActivating ? 'disabled' : ''}>
+                <button class="primary" id="confirm-redeem" ${(state.isActivating || state.isResettingLicense) ? 'disabled' : ''}>
                     <span class="btn-gift-icon" style="margin-right: 6px; display: inline-flex; align-items: center;">${giftIcon()}</span>
                     ${state.isActivating ? t('btn_activating') : t('btn_confirm')}
                 </button>
             </div>
             ${resetSection}
-            ${!state.isActivating && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
-            ${!state.isActivating && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
+            ${!state.isActivating && !state.isResettingLicense && state.redeemMessage ? `<div class="notice success compact">${escapeHTML(state.redeemMessage)}</div>` : ''}
+            ${!state.isActivating && !state.isResettingLicense && state.redeemError ? `<div class="notice error compact">${escapeHTML(state.redeemError)}</div>` : ''}
         </div>
     `;
 }
@@ -3075,6 +3075,60 @@ function bindEvents() {
                 state.topMenuOpen = false;
                 render();
                 return;
+            }
+
+            // Panel buttons via static delegation (prevents duplicate listeners on re-render)
+            const confirmRedeemBtn = e.target.closest('#confirm-redeem');
+            if (confirmRedeemBtn) {
+                confirmRedeem();
+                return;
+            }
+            const resetLicBtn = e.target.closest('#reset-license');
+            if (resetLicBtn) {
+                state.confirmResetPending = true;
+                syncPanelSurface();
+                return;
+            }
+            const cancelResetLicBtn = e.target.closest('#cancel-reset-license');
+            if (cancelResetLicBtn) {
+                state.confirmResetPending = false;
+                syncPanelSurface();
+                return;
+            }
+            const confirmResetLicBtn = e.target.closest('#confirm-reset-license');
+            if (confirmResetLicBtn) {
+                state.confirmResetPending = false;
+                resetLicense();
+                return;
+            }
+            const togglePlanBtn = e.target.closest('#toggle-plan-info');
+            if (togglePlanBtn) {
+                state.activePanel = 'plan-comparison';
+                render();
+                return;
+            }
+            const refreshLicBtn = e.target.closest('#refresh-license-btn');
+            if (refreshLicBtn) {
+                triggerManualRefresh();
+                return;
+            }
+            const portalBtn = e.target.closest('#manage-license-portal-btn, .manage-license-portal-btn');
+            if (portalBtn) {
+                e.preventDefault();
+                let portalUrl = state.appInfo?.isTest
+                    ? 'https://test.eqt.net.im/portal.html'
+                    : 'https://www.eqt.net.im/portal.html';
+                if (state.status?.buyerEmail) {
+                    portalUrl += '?email=' + encodeURIComponent(state.status.buyerEmail);
+                }
+                window.runtime.BrowserOpenURL(portalUrl);
+                return;
+            }
+        });
+
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'redeem-code') {
+                state.tempRedeemCode = e.target.value;
             }
         });
 
@@ -3606,43 +3660,9 @@ function bindPanelEvents() {
         state.feedbackError = null;
         state.feedbackNotice = null;
     });
-    const redeemInput = document.querySelector('#redeem-code');
-    redeemInput?.addEventListener('input', (e) => {
-        state.tempRedeemCode = e.target.value;
-    });
-    document.querySelector('#confirm-redeem')?.addEventListener('click', confirmRedeem);
-    document.querySelector('#reset-license')?.addEventListener('click', () => {
-        state.confirmResetPending = true;
-        syncPanelSurface();
-    });
-    document.querySelector('#cancel-reset-license')?.addEventListener('click', () => {
-        state.confirmResetPending = false;
-        syncPanelSurface();
-    });
-    document.querySelector('#confirm-reset-license')?.addEventListener('click', () => {
-        state.confirmResetPending = false;
-        resetLicense();
-    });
     if (state.confirmResetPending) {
         document.getElementById('cancel-reset-license')?.focus();
     }
-    document.querySelector('#toggle-plan-info')?.addEventListener('click', () => {
-        state.activePanel = 'plan-comparison';
-        render();
-    });
-    document.querySelector('#refresh-license-btn')?.addEventListener('click', triggerManualRefresh);
-    document.querySelectorAll('#manage-license-portal-btn, .manage-license-portal-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            let portalUrl = state.appInfo?.isTest
-                ? 'https://test.eqt.net.im/portal.html'
-                : 'https://www.eqt.net.im/portal.html';
-            if (state.status?.buyerEmail) {
-                portalUrl += '?email=' + encodeURIComponent(state.status.buyerEmail);
-            }
-            window.runtime.BrowserOpenURL(portalUrl);
-        });
-    });
 
     document.querySelectorAll('.email-copy-wrapper').forEach(wrapper => {
         wrapper.addEventListener('click', (e) => {
@@ -5734,10 +5754,15 @@ function loadLicense() {
 
 function saveLicense(license) {
     state.license = license;
-    window.localStorage.setItem(licenseStorageKey, JSON.stringify(license));
+    try {
+        window.localStorage.setItem(licenseStorageKey, JSON.stringify(license));
+    } catch (err) {
+        console.warn('[Storage] Failed to save license to localStorage:', err);
+    }
 }
 
 function confirmRedeem() {
+    if (state.isActivating) return;
     const input = document.querySelector('#redeem-code');
     const code = String(input?.value || '').trim().toUpperCase();
     state.tempRedeemCode = code; // Save current input value so it's not cleared on re-render
@@ -5793,10 +5818,16 @@ function formatActivationError(err) {
 }
 
 function resetLicense() {
-    const button = document.querySelector('#reset-license');
-    if (button) button.disabled = true;
+    if (state.isResettingLicense) return;
+    state.isResettingLicense = true;
+    render();
+
     ResetLicense().then(async function() {
-        window.localStorage.removeItem(licenseStorageKey);
+        try {
+            window.localStorage.removeItem(licenseStorageKey);
+        } catch (err) {
+            console.warn('[Storage] Failed to remove license from localStorage:', err);
+        }
         state.license = null;
         state.redeemMessage = t('activation_reset_success') || 'Activation reset on this device.';
         state.redeemError = '';
@@ -5809,12 +5840,14 @@ function resetLicense() {
         state.redeemError = String(e?.message || e || t('activation_reset_failed') || 'Failed to reset activation.');
         render();
     }).finally(function() {
-        if (button) button.disabled = false;
+        state.isResettingLicense = false;
+        render();
     });
 }
 
 let lastRefreshTime = 0;
 function triggerManualRefresh() {
+    if (state.isRefreshingLicense) return;
     const now = Date.now();
     const isOnline = navigator.onLine;
     const minInterval = isOnline ? 30000 : 3000;

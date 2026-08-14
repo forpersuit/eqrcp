@@ -15,6 +15,8 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - 若运行权限原因导致某项硬件特征提取返回空字符串 `""`，此字段**绝对不能**在比对时判定为“相等”，必须直接跳过。
   - 只有两边非空且完全相等时，匹配项才能计入。
   - 至少有 2 项有效的非空指纹相匹配，才允许判定设备合法。
+  - **客户端激活前置守卫**：在向服务端发送激活请求前，客户端必须先校验当前提取到的非空硬件指纹数量。若有效指纹项 < 2，直接返回友好错误拦截请求，防止向服务端占用了席位但本地无法通过 `VerifyFingerprint` 落盘。
+  - **服务端权威设备 ID 空值规范**：`GetAuthorityDeviceID()` 在未分配时必须返回 `""`（空字符串），严禁返回 `"未注册"` 等中文字面量作为设备标识符污染服务端数据。
 - **测试覆盖**：确保针对 Windows 和 Linux 的测试覆盖，并运行 [license_test.go](file:///home/yelon/develop/me/eqrcp/pkg/server/license_test.go) 中的加权模型边界案例。
 
 ---
@@ -36,8 +38,9 @@ description: Guides EQT licensing architecture, offline cryptographic activation
   - 前端 `localStorage` 仅缓存 UI 元数据（如 redeemedAt 展示），**禁止**在启动时用 localStorage 向 Go 端 `SetPaidStatus(true)` 抢权。
 - **极简单向时钟防回拨与网络时间防篡改**：
   - 证书内元数据字段 `LastSeenLocalTime` 记录最后一次运行时间。每次成功校验后（若距离上次写入超过 1 分钟，以减少磁盘 IO），客户端自动更新并原子性落盘。
-  - 本地校验时，若判定当前系统时间倒流（`time.Now() < LastSeenLocalTime - 10 minutes`），立刻判定为篡改并调用 `SetClockTampered(true)` 降级并永久锁死高级付费功能。
+  - 本地校验时，若判定当前系统时间倒流（`time.Now() < LastSeenLocalTime - 10 minutes`），立刻判定为篡改并调用 `SetClockTampered(true)` 降级并永久锁死高级付费功能。`SetPaidDetails` 在 `paid=false` 时严禁重置 `ClockTampered` 状态，仅在合法有效付费激活时才允许解除。
   - **联网配额与防篡改对齐**：未激活免费版用户在脱机断网状态下只提供基础 Free 传输功能（不授予每日 10 分钟高级限额全功能）；在线状态下系统自动通过 `getNetworkTimeOrStartFetch()` 获取准确网络时间 Date 标头。若检测到本地系统时间与网络时间偏差超过 10 分钟，自动判定为 `ClockTampered` 并锁死。
+  - **解绑设备同步降级**：所有端（Portal、设备自主解绑、Admin 管理后台）在解绑设备时，必须在单次原子事务（`DB.batch`）中同步将 `device_registry` 对应设备降级为 `free` 并清除 `license_code` / `email`。
   - **废弃暗记清理**：保持 `.lic` 作为离线授权唯一可信源 (SSOT)，不再引入额外的私有暗记文件。
 - **测试兼容模式**：单元测试或 mock 状态下（`os.Getenv("EQT_TESTING") == "true"`），若本地无 `.lic`，自动降级到传统模式支持模拟付费判定，在测试环境中自动豁免 7 天租约及防时钟回拨强制检查，以免破坏 CI。
 - **Share/Receive 模式防规避与防呆拦截机制**：

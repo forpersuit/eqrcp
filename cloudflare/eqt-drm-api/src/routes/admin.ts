@@ -759,9 +759,15 @@ export async function handleAdminRoutes(
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
-      await env.DB.prepare(
-        "DELETE FROM activations WHERE id = ? AND license_code = ?"
-      ).bind(actId, license_code).run();
+      const cleanupBatch = [
+        env.DB.prepare("DELETE FROM activations WHERE id = ? AND license_code = ?").bind(actId, license_code)
+      ];
+      if (act.device_id) {
+        cleanupBatch.push(
+          env.DB.prepare("UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?").bind(act.device_id)
+        );
+      }
+      await env.DB.batch(cleanupBatch);
       unboundActivationId = actId;
       auditDetails = {
         mode: 'single',
@@ -781,7 +787,16 @@ export async function handleAdminRoutes(
       const acts = actRes.results || [];
       const snaps = acts.map(activationAuditSnapshot);
       const ids = acts.map((a: any) => a.id);
-      await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code).run();
+      const deviceIds = acts.map((a: any) => a.device_id).filter(Boolean);
+      const batchStmts = [
+        env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(license_code)
+      ];
+      for (const dId of deviceIds) {
+        batchStmts.push(
+          env.DB.prepare("UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?").bind(dId)
+        );
+      }
+      await env.DB.batch(batchStmts);
       auditDetails = {
         mode: 'clear_all',
         license_code,

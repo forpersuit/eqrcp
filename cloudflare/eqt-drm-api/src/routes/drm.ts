@@ -499,15 +499,13 @@ export async function handleDrmRoutes(
         });
       }
 
-      // Insert new activation record (capture network meta for admin visibility / future geo)
+      // Get or assign device_id without pre-promoting to paid before activation check succeeds
       const net = activationClientMeta(request);
       const regRes = await registerOrRefreshDevice(env, {
         uuidHash: uuid_hash || "",
         cpuHash: cpu_hash || "",
         diskHash: disk_hash || "",
-        tierLabel: 'paid',
-        licenseCode: license_code,
-        email: license.buyer_email || null,
+        tierLabel: 'free',
         appVersion: body.app_version || null
       }, net);
       const authoritativeDeviceId = regRes.device_id || (device_id || "");
