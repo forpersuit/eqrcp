@@ -413,7 +413,10 @@ type VerifyAPIResponse struct {
 var syncInFlightMu sync.Mutex
 
 func doOnlineLicenseSync(force bool) error {
-	syncInFlightMu.Lock()
+	if !syncInFlightMu.TryLock() {
+		// Sync is already in progress; return immediately to prevent blocking caller/GUI thread.
+		return nil
+	}
 	defer syncInFlightMu.Unlock()
 
 	// 1. Get local license

@@ -292,6 +292,22 @@ export async function ensurePaddleProcessedTxnTable(env: Env): Promise<void> {
 export async function ensureActivationDeviceIndex(env: Env): Promise<void> {
   if (!env?.DB) return;
   try {
+    const dup = await env.DB.prepare(
+      `SELECT license_code, device_id, COUNT(*) as cnt
+       FROM activations
+       WHERE device_id IS NOT NULL AND device_id != ''
+       GROUP BY license_code, device_id
+       HAVING cnt > 1
+       LIMIT 1`
+    ).first<{ license_code: string; device_id: string; cnt: number }>();
+
+    if (dup) {
+      await logSystemError(env, 'ACTIVATION_DEVICE_UNIQUE_INDEX', 'WARN',
+        new Error(`Cannot create unique index idx_activations_license_device: duplicate (license_code="${dup.license_code}", device_id="${dup.device_id}") found (${dup.cnt} rows). Clean duplicates first.`),
+        { duplicate_license: dup.license_code, duplicate_device: dup.device_id, count: dup.cnt });
+      return;
+    }
+
     await env.DB.prepare(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_activations_license_device
       ON activations(license_code, device_id)

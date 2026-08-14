@@ -117,15 +117,39 @@ class RealPaddleD1Mock {
       return null;
     }
 
-    if (s.includes('SELECT license_code, buyer_email, tier, status, revoke_reason FROM licenses WHERE paddle_subscription_id =')) {
+    if (s.includes('FROM licenses WHERE paddle_subscription_id =')) {
       const subId = args[0];
       for (const lic of this.tables.licenses.values()) {
         if (lic.paddle_subscription_id === subId) {
           return {
+            id: lic.id || 1,
             license_code: lic.license_code,
-            buyer_email: lic.buyer_email,
             tier: lic.tier,
             status: lic.status,
+            expires_at: lic.expires_at,
+            max_devices: lic.max_devices || 2,
+            buyer_email: lic.buyer_email,
+            auto_renew: lic.auto_renew,
+            revoke_reason: lic.revoke_reason
+          };
+        }
+      }
+      return null;
+    }
+
+    if (s.includes('FROM licenses WHERE buyer_email =') || s.includes('FROM licenses WHERE buyer_email_hash =')) {
+      const email = args[0];
+      for (const lic of this.tables.licenses.values()) {
+        if (lic.buyer_email === email || lic.buyer_email_hash === email) {
+          return {
+            id: lic.id || 1,
+            license_code: lic.license_code,
+            tier: lic.tier,
+            status: lic.status,
+            expires_at: lic.expires_at,
+            max_devices: lic.max_devices || 2,
+            buyer_email: lic.buyer_email,
+            auto_renew: lic.auto_renew,
             revoke_reason: lic.revoke_reason
           };
         }
@@ -174,8 +198,32 @@ class RealPaddleD1Mock {
     if (s.includes('INSERT') && s.includes('INTO paddle_processed_transactions')) {
       const txnId = args[0];
       const licCode = args[1];
-      const action = args[2];
+      let action = 'initial';
+      if (s.includes("'renewal'")) action = 'renewal';
+      else if (s.includes("'upgrade'")) action = 'upgrade';
+      else if (args.length >= 3 && typeof args[2] === 'string' && !args[2].includes('T')) action = args[2];
       this.tables.paddle_processed_transactions.set(txnId, { transaction_id: txnId, license_code: licCode, action });
+      return { meta: { changes: 1 } };
+    }
+
+    if (s.includes('INSERT INTO licenses')) {
+      const lic = {
+        license_code: args[0],
+        tier: args[1],
+        status: args[2],
+        max_devices: args[3],
+        expires_at: args[4],
+        duration_days: args[5],
+        buyer_email_hash: args[6],
+        buyer_email: args[7],
+        paddle_transaction_id: args[8],
+        paddle_subscription_id: args[9],
+        source: args[10],
+        created_at: args[11],
+        last_purchased_at: args[12],
+        auto_renew: args[9] ? 1 : 0
+      };
+      this.tables.licenses.set(args[0], lic);
       return { meta: { changes: 1 } };
     }
 
@@ -340,6 +388,7 @@ async function main() {
   const env = {
     DB: mockDb,
     PADDLE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    PADDLE_API_KEY: 'pdl_sdbx_mock_test_key_123',
     TELEGRAM_CHAT_ID: '12345',
     TELEGRAM_BOT_TOKEN: 'mock_token'
   };
@@ -467,38 +516,94 @@ async function main() {
   assert(createJson.message.includes('acknowledged'), 'subscription.created response says acknowledged');
 
   // -------------------------------------------------------------
-  // Test Case 5: transaction.completed Replay (Idempotency)
+  // Test Case 5: transaction.completed Replay (Fast Path: licenses table hit)
   // -------------------------------------------------------------
-  console.log('\n[Case 5] Handling transaction.completed replay for existing txn...');
-  const initTxnId = 'txn_offline_init_001';
-  mockDb.tables.licenses.set('EQT-PLUS-ORIG', {
-    license_code: 'EQT-PLUS-ORIG',
-    paddle_transaction_id: initTxnId,
-    paddle_subscription_id: 'sub_orig',
+  console.log('\n[Case 5] Handling transaction.completed replay (licenses fast path)...');
+  const fastTxnId = 'txn_fast_path_001';
+  mockDb.tables.licenses.set('EQT-FAST-001', {
+    license_code: 'EQT-FAST-001',
+    paddle_transaction_id: fastTxnId,
+    buyer_email: 'fast@test.com',
+    tier: 'plus',
     status: 'active'
   });
-  mockDb.tables.paddle_processed_transactions.set(initTxnId, {
-    transaction_id: initTxnId,
-    license_code: 'EQT-PLUS-ORIG',
-    action: 'initial'
-  });
 
-  const replayPayload = {
-    event_id: 'evt_replay_001',
+  const replayFastPayload = {
+    event_id: 'evt_replay_fast_001',
     event_type: 'transaction.completed',
     data: {
-      id: initTxnId,
+      id: fastTxnId,
       customer_id: 'ctm_123',
-      items: [{ price_id: 'pri_01kxymyma34hgmndccwswheta3', quantity: 1 }]
+      items: [{ price_id: 'pri_01kyhmkv4ppj10r4cdgw3sv48p', quantity: 1 }]
     }
   };
-  const resReplay = await sendWebhook(replayPayload);
-  assert(resReplay.status === 200, 'Replayed transaction returns 200 OK');
-  const replayJson = await resReplay.json();
-  assert(replayJson.message.includes('already processed'), 'Replayed transaction returns already processed message');
-  assert(replayJson.license_code === 'EQT-PLUS-ORIG', 'Replayed transaction returns matching license_code');
+  const resFast = await sendWebhook(replayFastPayload);
+  assert(resFast.status === 200, 'Fast path replayed transaction returns 200 OK');
+  const fastJson = await resFast.json();
+  assert(fastJson.message.includes('already processed'), 'Fast path replayed transaction returns already processed message');
+  assert(fastJson.license_code === 'EQT-FAST-001', 'Fast path returns matching license_code');
 
-  console.log('\n=== All Subscription Lifecycle & Recovery Tests Passed 100% ===');
+  // -------------------------------------------------------------
+  // Test Case 6: transaction.completed Replay (Fallback: paddle_processed_transactions hit)
+  // -------------------------------------------------------------
+  console.log('\n[Case 6] Handling transaction.completed replay (paddle_processed_transactions table fallback)...');
+  const historyTxnId = 'txn_history_fallback_002';
+  // Note: licenses table deliberately has NO license with paddle_transaction_id === historyTxnId
+  mockDb.tables.paddle_processed_transactions.set(historyTxnId, {
+    transaction_id: historyTxnId,
+    license_code: 'EQT-HIST-002',
+    action: 'renewal'
+  });
+
+  const replayHistoryPayload = {
+    event_id: 'evt_replay_hist_002',
+    event_type: 'transaction.completed',
+    data: {
+      id: historyTxnId,
+      customer_id: 'ctm_123',
+      items: [{ price_id: 'pri_01kyhmkv4ppj10r4cdgw3sv48p', quantity: 1 }]
+    }
+  };
+  const resHistory = await sendWebhook(replayHistoryPayload);
+  assert(resHistory.status === 200, 'History table replayed transaction returns 200 OK');
+  const historyJson = await resHistory.json();
+  assert(historyJson.message.includes('already processed'), 'History table replay returns already processed message');
+  assert(historyJson.license_code === 'EQT-HIST-002', 'History table replay returns matching license_code');
+  assert(historyJson.action === 'renewal', 'History table replay returns action: renewal');
+
+  // -------------------------------------------------------------
+  // Test Case 7: Fresh Purchase Minting with Batch write to paddle_processed_transactions
+  // -------------------------------------------------------------
+  console.log('\n[Case 7] Handling fresh purchase minting and verify paddle_processed_transactions batch write...');
+  const freshTxnId = 'txn_fresh_mint_003';
+  const freshPayload = {
+    event_id: 'evt_fresh_003',
+    event_type: 'transaction.completed',
+    data: {
+      id: freshTxnId,
+      customer_id: 'ctm_fresh_buyer',
+      customer: {
+        email: 'fresh_buyer@example.com'
+      },
+      items: [{ price_id: 'pri_01kyhmkv4ppj10r4cdgw3sv48p', quantity: 1 }]
+    }
+  };
+  const resFresh = await sendWebhook(freshPayload);
+  assert(resFresh.status === 200, 'Fresh purchase minting returns 200 OK');
+  const freshJson = await resFresh.json();
+  assert(freshJson.message && freshJson.message.includes('License generated and fulfilled'), 'Fresh purchase returns fulfillment message');
+  assert(freshJson.license_code && freshJson.license_code.startsWith('EQT-PLUS-'), 'Fresh purchase generates valid license_code');
+
+  const processedEntry = mockDb.tables.paddle_processed_transactions.get(freshTxnId);
+  assert(processedEntry !== undefined, 'paddle_processed_transactions entry was written via batch');
+  assert(processedEntry && processedEntry.action === 'initial', 'paddle_processed_transactions action is initial');
+  assert(processedEntry && processedEntry.license_code === freshJson.license_code, 'paddle_processed_transactions license_code matches');
+
+  const mintedLicense = mockDb.tables.licenses.get(freshJson.license_code);
+  assert(mintedLicense !== undefined, 'New license was written to licenses table');
+  assert(mintedLicense && mintedLicense.status === 'active', 'Minted license is active');
+
+  console.log('\n=== All Subscription Lifecycle, Idempotency & Recovery Tests Passed 100% ===');
 }
 
 main().catch(err => {

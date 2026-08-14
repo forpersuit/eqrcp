@@ -935,22 +935,6 @@ export async function handleDrmRoutes(
       });
     }
 
-    // Check 1-year rolling window unbind limit
-    const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
-    const unbindCheck = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
-    ).bind(license_code, oneYearAgoISO).first<any>();
-
-    const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : 0;
-    if (unbindCount >= MAX_YEARLY_UNBINDS) {
-      return new Response(JSON.stringify({
-        error: getApiTranslation("unbind_limit_reached", reqLang) || "Annual unbind quota reached"
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
     const { results: activations } = await env.DB.prepare(
       "SELECT id, device_id, uuid_hash, cpu_hash, disk_hash FROM activations WHERE license_code = ?"
     ).bind(license_code).all<any>();
@@ -977,22 +961,45 @@ export async function handleDrmRoutes(
       });
     }
 
-    // Atomic unbind batch: delete activation, record unbind history, and downgrade device_registry
+    // Atomic unbind: INSERT unbind_records ONLY IF quota not reached (eliminates TOCTOU)
+    const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
     const nowIso = new Date().toISOString();
-    const batchStatements = [
-      env.DB.prepare("DELETE FROM activations WHERE id = ? AND license_code = ?").bind(matchedAct.id, license_code),
-      env.DB.prepare("INSERT INTO unbind_records (license_code, activation_id, unbound_at) VALUES (?, ?, ?)").bind(license_code, matchedAct.id, nowIso)
-    ];
 
+    const insertResult = await env.DB.prepare(`
+      INSERT INTO unbind_records (license_code, activation_id, unbound_at)
+      SELECT ?, ?, ?
+      WHERE (
+        SELECT COUNT(*) FROM unbind_records
+        WHERE license_code = ? AND unbound_at >= ?
+      ) < ?
+    `).bind(license_code, matchedAct.id, nowIso, license_code, oneYearAgoISO, MAX_YEARLY_UNBINDS).run();
+
+    if (!insertResult.meta || insertResult.meta.changes === 0) {
+      return new Response(JSON.stringify({
+        error: getApiTranslation("unbind_limit_reached", reqLang) || "Annual unbind quota reached"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Quota slot claimed atomically: delete activation and update device_registry in batch
+    const cleanupBatch = [
+      env.DB.prepare("DELETE FROM activations WHERE id = ? AND license_code = ?").bind(matchedAct.id, license_code)
+    ];
     if (matchedAct.device_id) {
-      batchStatements.push(
+      cleanupBatch.push(
         env.DB.prepare("UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE device_id = ?").bind(matchedAct.device_id)
       );
     }
+    await env.DB.batch(cleanupBatch);
 
-    await env.DB.batch(batchStatements);
+    const unbindCheck = await env.DB.prepare(
+      "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
+    ).bind(license_code, oneYearAgoISO).first<any>();
+    const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : MAX_YEARLY_UNBINDS;
+    const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
 
-    const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - (unbindCount + 1));
     return new Response(JSON.stringify({
       success: true,
       message: getApiTranslation("unbind_success", reqLang) || "Device unbound successfully",
