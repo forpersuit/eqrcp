@@ -10,10 +10,20 @@ export function verificationStorageKey(purpose: VerificationPurpose, email: stri
   return `${purpose}:${norm}`;
 }
 
+/** Normalize email address to lowercase and trimmed string. */
+export function normalizeEmail(email: string): string {
+  return (email || "").trim().toLowerCase();
+}
+
 /** SHA-256 hex digest of a UTF-8 string (buyer email hashing). */
 export async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return bufToHex(buf);
+}
+
+/** Standardized email hash computation with automatic normalization. */
+export async function emailHash(email: string): Promise<string> {
+  return sha256Hex(normalizeEmail(email));
 }
 
 /**

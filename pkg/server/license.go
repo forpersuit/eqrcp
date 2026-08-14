@@ -464,13 +464,21 @@ func doOnlineLicenseSync(force bool) error {
 	// 3. Make HTTP verify request
 	apiURL := fmt.Sprintf("%s/api/v1/verify", getLicenseServer())
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	reqBody, _ := json.Marshal(map[string]string{
+	deviceID := cert.DeviceID
+	if deviceID == "" {
+		deviceID = GetAuthorityDeviceID()
+	}
+	reqMap := map[string]string{
 		"license_code": cert.LicenseCode,
 		"uuid_hash":    uuid,
 		"cpu_hash":     cpu,
 		"disk_hash":    disk,
 		"app_version":  version.Version(),
-	})
+	}
+	if deviceID != "" {
+		reqMap["device_id"] = deviceID
+	}
+	reqBody, _ := json.Marshal(reqMap)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post(apiURL, "application/json", bytes.NewBuffer(reqBody))

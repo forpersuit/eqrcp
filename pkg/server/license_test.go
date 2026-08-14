@@ -758,10 +758,12 @@ func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 	}()
 
 	mockServerDeviceID := "dev_server_authoritative_9999"
+	var receivedReqDeviceID string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/verify" && r.Method == "POST" {
 			var req map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&req)
+			receivedReqDeviceID = req["device_id"]
 			nowStr := time.Now().UTC().Format(time.RFC3339)
 
 			dummyCert := LicenseCertificate{
@@ -843,6 +845,9 @@ func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 	updatedCert, ok := GetLocalLicenseInfo()
 	if !ok {
 		t.Fatal("failed to get local license info after sync")
+	}
+	if receivedReqDeviceID != "dev_old_local_id" {
+		t.Errorf("expected verify request to transmit device_id 'dev_old_local_id', got '%s'", receivedReqDeviceID)
 	}
 	if updatedCert.DeviceID != mockServerDeviceID {
 		t.Errorf("expected updated certificate DeviceID '%s', got '%s'", mockServerDeviceID, updatedCert.DeviceID)

@@ -161,8 +161,10 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   4. **惰性生效 (Lazy Flip)**：客户端在 `verify` / `activate` 时触发 `checkAndApplyPendingUpgrade`，当 `now >= effective_at` 时翻转 `expires_at = 'LIFETIME'` 且更新 `license_upgrades.status = 'applied'`，无须 cron 任务；
   5. **退款撤回**：若待生效期间终身升级交易被退款，`license_upgrades.status` 改为 `'cancelled'`，目标年付激活码保持原年付期效与功能。
 - **路由设计**：
-  1. `/api/v1/paddle/webhook` (POST)：接收 `Paddle-Signature` 利用 HMAC-SHA256 验签。履约 `transaction.completed` 时判断 Lifetime/Yearly 或 `target_license_code` 升级参数。捕获 `transaction.refunded` 或 `subscription.canceled` 时更新状态。
+  1. `/api/v1/paddle/webhook` (POST)：接收 `Paddle-Signature` 利用 HMAC-SHA256 验签。履约 `transaction.completed` 时判断 Lifetime/Yearly 或 `target_license_code` 升级参数。捕获 `transaction.refunded` 或 `subscription.canceled` 时更新状态：
+     - **取消订阅语义区分**：`data.effective_from === 'immediately'` 时立即吊销授权并同步将 `device_registry` 降级为 `free`；`next_billing_period`（或默认停续）仅置 `auto_renew = 0` 并保留本期权益至 `expires_at`。
   2. `/api/v1/paddle/license-query` (GET)：接收 `transaction_id`，供前端支付完成（`checkout.completed`）时轮询弹出新授权码。
+  3. `/api/v1/verify` (POST)：客户端对账时透传 `device_id`，与云端硬件漂移容忍机制（`device_id` 匹配 + 至少 1 项非空指纹匹配）闭环对接。
 
 ---
 

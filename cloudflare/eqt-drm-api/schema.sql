@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     paddle_transaction_id TEXT DEFAULT NULL,
     paddle_subscription_id TEXT DEFAULT NULL,
     source TEXT DEFAULT NULL,    -- 'purchase' | 'promo' | 'admin' | 'test'
+    auto_renew INTEGER DEFAULT 1, -- 1 = auto-renewal on, 0 = canceled / off
     revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
     revoke_reason TEXT DEFAULT NULL, -- 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | …
     last_purchased_at TEXT DEFAULT NULL, -- ISO time of initial purchase or latest renewal

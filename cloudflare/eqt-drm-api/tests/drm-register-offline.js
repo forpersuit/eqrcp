@@ -711,6 +711,17 @@ async function runTests() {
   assert(res14b.status === 200, '200 OK');
   const j14b = await res14b.json();
   assert(j14b.device_id === devId14, `same device_id with partial match (${j14b.device_id} === ${devId14})`);
+
+  // Re-register with uuid + cpu + changed disk — should still match under 3-of-2 model
+  const res14c = await handleDrmRoutes(registerReq({
+    uuid_hash: 'uuid-part-14',
+    cpu_hash: 'cpu-part-14',
+    disk_hash: 'disk-replaced-14',
+    app_version: '1.0.0'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/device/register'), {});
+  assert(res14c.status === 200, '200 OK');
+  const j14c = await res14c.json();
+  assert(j14c.device_id === devId14, `same device_id with replaced component (${j14c.device_id} === ${devId14})`);
   await flushCtx();
 
   // ============================================================

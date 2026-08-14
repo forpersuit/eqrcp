@@ -25,6 +25,7 @@ export function getCorsHeaders(request: Request): Record<string, string> {
 // In-memory caching guards keyed by D1 binding instance (WeakSet) to ensure idempotent schema setup
 // per database instance without leaking memory or cross-environment isolation assumptions.
 const deviceIdColumnEnsured = new WeakSet<object>();
+const autoRenewColumnEnsured = new WeakSet<object>();
 const activationNetworkColumnsEnsured = new WeakSet<object>();
 const verificationCodesCreatedAtEnsured = new WeakSet<object>();
 const deviceRegistryTableEnsured = new WeakSet<object>();
@@ -54,7 +55,25 @@ export async function ensureDeviceIdColumn(env: Env): Promise<void> {
   }
 }
 
-/** Ensure activations has network meta columns (ip / country / ua). Idempotent. */
+/** Ensure licenses table has auto_renew column. Safe to call repeatedly. */
+export async function ensureAutoRenewColumn(env: Env): Promise<void> {
+  if (!env?.DB || autoRenewColumnEnsured.has(env.DB)) return;
+  try {
+    await env.DB.prepare(
+      "ALTER TABLE licenses ADD COLUMN auto_renew INTEGER DEFAULT 1"
+    ).run();
+    autoRenewColumnEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/duplicate column|already exists/i.test(msg)) {
+      autoRenewColumnEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure auto_renew column:", err);
+    }
+  }
+}
+
+/** Ensure activations has network meta columns (ip / country / ua / trace_id). Idempotent. */
 export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
   if (!env?.DB || activationNetworkColumnsEnsured.has(env.DB)) return;
   const alters = [
@@ -65,6 +84,7 @@ export async function ensureActivationNetworkColumns(env: Env): Promise<void> {
     "ALTER TABLE activations ADD COLUMN region TEXT DEFAULT NULL",
     "ALTER TABLE activations ADD COLUMN latitude REAL DEFAULT NULL",
     "ALTER TABLE activations ADD COLUMN longitude REAL DEFAULT NULL",
+    "ALTER TABLE activations ADD COLUMN trace_id TEXT DEFAULT NULL",
   ];
   let allOk = true;
   for (const sql of alters) {
@@ -223,8 +243,10 @@ export async function ensureDrmTables(env: Env): Promise<void> {
             paddle_transaction_id TEXT DEFAULT NULL,
             paddle_subscription_id TEXT DEFAULT NULL,
             source TEXT DEFAULT NULL,
+            auto_renew INTEGER DEFAULT 1,
             revoked_at TEXT DEFAULT NULL,
             revoke_reason TEXT DEFAULT NULL,
+            last_purchased_at TEXT DEFAULT NULL,
             created_at TEXT NOT NULL
         )
       `),
@@ -236,7 +258,15 @@ export async function ensureDrmTables(env: Env): Promise<void> {
             cpu_hash TEXT,
             disk_hash TEXT,
             device_id TEXT DEFAULT NULL,
-            activated_at TEXT NOT NULL
+            activated_at TEXT NOT NULL,
+            client_ip TEXT DEFAULT NULL,
+            ip_country TEXT DEFAULT NULL,
+            user_agent TEXT DEFAULT NULL,
+            city TEXT DEFAULT NULL,
+            region TEXT DEFAULT NULL,
+            latitude REAL DEFAULT NULL,
+            longitude REAL DEFAULT NULL,
+            trace_id TEXT DEFAULT NULL
         )
       `),
       env.DB.prepare(`

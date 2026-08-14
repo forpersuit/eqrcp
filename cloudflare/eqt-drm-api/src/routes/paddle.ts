@@ -8,7 +8,7 @@ import {
 import { verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
+import { ensureAutoRenewColumn, ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
 import { isPaddleSandbox, revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
 import { isD1RateLimited } from '../utils/rate-limit';
@@ -25,7 +25,7 @@ function detectBuyerLang(data: any): string {
   if (country === 'KR') return 'ko';
   if (['ES', 'MX', 'AR', 'CO', 'CL'].includes(country)) return 'es';
   if (['DE', 'AT', 'CH'].includes(country)) return 'de';
-  if (['FR', 'BE', 'CA'].includes(country)) return 'fr';
+  if (['FR', 'BE'].includes(country)) return 'fr';
   return 'en'; // Baseline is English for all other countries and missing country data
 }
 
@@ -87,6 +87,7 @@ export async function handlePaddleRoutes(
   if (url.pathname === "/api/v1/paddle/webhook" && request.method === "POST") {
     await ensureLicenseSourceColumns(env);
     await ensureLicensePaddleTxnIndex(env);
+    await ensureAutoRenewColumn(env);
     const rawBody = await request.text();
     let signature = request.headers.get("paddle-signature") || request.headers.get("Paddle-Signature");
     if (!signature) {
@@ -149,6 +150,7 @@ export async function handlePaddleRoutes(
       const transactionId = data.id;
       const subscriptionId = data.subscription_id || null;
       let buyerEmail = data.customer?.email || data.billing_details?.email_address || data.customer_email || data.user?.email || data.custom_data?.email || data.custom_data?.buyer_email || data.custom_data?.buyerEmail || "";
+      buyerEmail = buyerEmail ? buyerEmail.trim().toLowerCase() : "";
 
       const customerId = data.customer_id || (typeof data.customer === 'string' ? data.customer : null);
       if (!buyerEmail && customerId && env.PADDLE_API_KEY) {
@@ -159,7 +161,7 @@ export async function handlePaddleRoutes(
           });
           if (custRes.ok) {
             const custData: any = await custRes.json();
-            buyerEmail = custData.data?.email || "";
+            buyerEmail = custData.data?.email ? custData.data.email.trim().toLowerCase() : "";
           } else {
             const errBody = await custRes.text().catch(() => '');
             ctx.waitUntil(logSystemError(env, 'PADDLE_API_ERROR', 'WARN',
@@ -744,8 +746,44 @@ export async function handlePaddleRoutes(
       const subscriptionId = data.id;
       const status = data.status;
 
-      // 1. Just turning off auto-renewal: DO NOT revoke active period, set auto_renew = 0
+      // 1. Subscription canceled
       if (eventType === "subscription.canceled" || status === "canceled") {
+        const effectiveFrom = String(data.effective_from || "").toLowerCase();
+
+        // Immediate cancellation: revoke license, downgrade device_registry, send notification
+        if (effectiveFrom === "immediately") {
+          const license = await env.DB.prepare(
+            "SELECT license_code, buyer_email, tier FROM licenses WHERE paddle_subscription_id = ?"
+          ).bind(subscriptionId).first<any>();
+
+          await env.DB.prepare(
+            "UPDATE licenses SET status = 'revoked', revoked_at = ?, revoke_reason = 'subscription', auto_renew = 0 WHERE paddle_subscription_id = ?"
+          ).bind(
+            new Date().toISOString(),
+            subscriptionId
+          ).run();
+
+          if (license) {
+            await env.DB.prepare(
+              "UPDATE device_registry SET tier_label = 'free', license_code = NULL, email = NULL WHERE license_code = ?"
+            ).bind(license.license_code).run();
+          }
+
+          if (license && license.buyer_email) {
+            const buyerLang = detectBuyerLang(data);
+            const planName = license.tier === "PLUS" ? "EQT Plus" : (license.tier === "PRO" ? "EQT Pro" : license.tier);
+            const t = getLicenseRevokeEmailTemplate(buyerLang, "subscription");
+            const emailHtml = renderEmailWrapper(t.title, t.body(license.license_code, planName));
+            ctx.waitUntil(sendDRMEmail(env, license.buyer_email, t.subject, emailHtml));
+          }
+
+          return new Response(JSON.stringify({ message: "Subscription canceled immediately, license revoked" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        // Turning off auto-renewal at period end: DO NOT revoke active period, set auto_renew = 0
         await env.DB.prepare(
           "UPDATE licenses SET auto_renew = 0 WHERE paddle_subscription_id = ?"
         ).bind(subscriptionId).run();

@@ -29,6 +29,7 @@ if (!fs.existsSync(authPath) || !fs.existsSync(blacklistPath) || !fs.existsSync(
 const {
   ensureDrmTables,
   ensureDeviceIdColumn,
+  ensureAutoRenewColumn,
   ensureActivationNetworkColumns,
   ensureVerificationCodesCreatedAt,
   ensureDeviceRegistryTable,
@@ -194,6 +195,20 @@ function makeEnv(db, overrides = {}) {
     assertEqual(dbCol.prepareCount, 1, 'ensureDeviceIdColumn 1st call prepares 1 statement');
     await ensureDeviceIdColumn(makeEnv(dbCol));
     assertEqual(dbCol.prepareCount, 1, 'ensureDeviceIdColumn 2nd call hits cache');
+
+    // ensureAutoRenewColumn
+    const dbAr = new CountingMockD1();
+    await ensureAutoRenewColumn(makeEnv(dbAr));
+    assertEqual(dbAr.prepareCount, 1, 'ensureAutoRenewColumn 1st call prepares 1 statement');
+    await ensureAutoRenewColumn(makeEnv(dbAr));
+    assertEqual(dbAr.prepareCount, 1, 'ensureAutoRenewColumn 2nd call hits cache');
+
+    // ensureActivationNetworkColumns (includes trace_id)
+    const dbNet = new CountingMockD1();
+    await ensureActivationNetworkColumns(makeEnv(dbNet));
+    assertEqual(dbNet.prepareCount, 8, 'ensureActivationNetworkColumns 1st call prepares 8 statements (incl. trace_id)');
+    await ensureActivationNetworkColumns(makeEnv(dbNet));
+    assertEqual(dbNet.prepareCount, 8, 'ensureActivationNetworkColumns 2nd call hits cache');
 
     // ensureVerificationCodesCreatedAt
     const dbVc = new CountingMockD1();

@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { ensureDeviceRegistryTable } from './auth';
 import { logSystemError } from './error-logger';
+import { countMatchingFingerprints } from './blacklist';
 
 export interface DeviceRegistryParams {
   uuidHash?: string | null;
@@ -32,32 +33,12 @@ export function generateRandomDeviceId(): string {
   return Array.from(bytes, b => ('00' + b.toString(16)).slice(-2)).join('');
 }
 
-/** Shared fingerprint component equality matcher */
+/** Shared fingerprint component equality matcher (3-of-2 weighted model) */
 export function matchRegistryFingerprint(
   reqUuid: string, reqCpu: string, reqDisk: string,
   dbUuid: string, dbCpu: string, dbDisk: string
 ): boolean {
-  const reqU = (reqUuid || '').trim();
-  const reqC = (reqCpu || '').trim();
-  const reqD = (reqDisk || '').trim();
-  const dbU = (dbUuid || '').trim();
-  const dbC = (dbCpu || '').trim();
-  const dbD = (dbDisk || '').trim();
-
-  let compareCount = 0;
-  if (reqU && dbU) {
-    if (reqU !== dbU) return false;
-    compareCount++;
-  }
-  if (reqC && dbC) {
-    if (reqC !== dbC) return false;
-    compareCount++;
-  }
-  if (reqD && dbD) {
-    if (reqD !== dbD) return false;
-    compareCount++;
-  }
-  return compareCount >= 2;
+  return countMatchingFingerprints(reqUuid, reqCpu, reqDisk, dbUuid, dbCpu, dbDisk) >= 2;
 }
 
 const WRITE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes

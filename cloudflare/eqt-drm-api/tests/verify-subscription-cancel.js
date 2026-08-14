@@ -243,14 +243,15 @@ class RealPaddleD1Mock {
     // 2. Revoke subscription (status = revoked, revoked_at = ?, revoke_reason = ?)
     if (s.includes('UPDATE licenses') && s.includes("status = 'revoked'") && s.includes('paddle_subscription_id =')) {
       const revokedAt = args[0];
-      const reason = args[1];
-      const subId = args[2];
+      const reason = args.length === 3 ? args[1] : (s.includes("revoke_reason = 'subscription'") ? 'subscription' : 'past_due');
+      const subId = args.length === 3 ? args[2] : args[1];
       let changes = 0;
       for (const lic of this.tables.licenses.values()) {
         if (lic.paddle_subscription_id === subId) {
           lic.status = 'revoked';
           lic.revoked_at = revokedAt;
           lic.revoke_reason = reason;
+          lic.auto_renew = 0;
           changes++;
         }
       }
@@ -431,7 +432,8 @@ async function main() {
     event_type: 'subscription.canceled',
     data: {
       id: subId,
-      status: 'canceled'
+      status: 'canceled',
+      effective_from: 'next_billing_period'
     }
   };
   const resCancel = await sendWebhook(cancelPayload);
@@ -439,6 +441,59 @@ async function main() {
   const licAfterCancel = mockDb.tables.licenses.get(licenseCode);
   assert(licAfterCancel.status === 'active', 'License status remains active after cancel');
   assert(licAfterCancel.auto_renew === 0, 'License auto_renew is set to 0');
+
+  // -------------------------------------------------------------
+  // Test Case 1B: subscription.canceled with effective_from: "immediately" (Revokes license & unlinks device)
+  // -------------------------------------------------------------
+  console.log('\n[Case 1B] Handling subscription.canceled (effective_from: immediately) webhook...');
+  const immediateSubId = 'sub_immediate_cancel_' + Date.now();
+  const immediateLicCode = 'EQT-PLUS-SUB-IMM-001';
+  const immediateDevId = 'dev_imm_mock_001';
+  mockDb.tables.licenses.set(immediateLicCode, {
+    license_code: immediateLicCode,
+    tier: 'PLUS',
+    status: 'active',
+    max_devices: 2,
+    expires_at: initialExpiry,
+    duration_days: 365,
+    buyer_email: email,
+    paddle_subscription_id: immediateSubId,
+    paddle_transaction_id: 'txn_imm_001',
+    auto_renew: 1,
+    source: 'purchase',
+    revoked_at: null,
+    revoke_reason: null,
+    created_at: new Date().toISOString()
+  });
+  mockDb.tables.device_registry.set(immediateDevId, {
+    device_id: immediateDevId,
+    uuid_hash: 'u_imm',
+    cpu_hash: 'c_imm',
+    disk_hash: 'd_imm',
+    tier_label: 'paid',
+    license_code: immediateLicCode,
+    email: email,
+    last_seen_at: new Date().toISOString()
+  });
+
+  const cancelImmPayload = {
+    event_id: 'evt_cancel_imm_001',
+    event_type: 'subscription.canceled',
+    data: {
+      id: immediateSubId,
+      status: 'canceled',
+      effective_from: 'immediately'
+    }
+  };
+  const resCancelImm = await sendWebhook(cancelImmPayload);
+  assert(resCancelImm.status === 200, 'subscription.canceled (immediately) returns 200 OK');
+  const licAfterCancelImm = mockDb.tables.licenses.get(immediateLicCode);
+  assert(licAfterCancelImm.status === 'revoked', 'License status is revoked on immediate cancel');
+  assert(licAfterCancelImm.revoke_reason === 'subscription', 'License revoke_reason is subscription');
+  assert(licAfterCancelImm.auto_renew === 0, 'License auto_renew is 0 on immediate cancel');
+  const devAfterCancelImm = mockDb.tables.device_registry.get(immediateDevId);
+  assert(devAfterCancelImm.tier_label === 'free', 'Device tier_label downgraded to free on immediate cancel');
+  assert(devAfterCancelImm.license_code === null, 'Device license_code unlinked on immediate cancel');
 
   // -------------------------------------------------------------
   // Test Case 2: subscription.updated (past_due - Non-payment revokes license & unlinks device)

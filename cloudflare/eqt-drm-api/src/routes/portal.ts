@@ -21,7 +21,7 @@ import {
   normalizeLicenseSource,
   revokeLicenseSql
 } from '../utils/license-source';
-import { ensureLicenseSourceColumns, ensureLicenseUpgradesTable } from '../utils/auth';
+import { ensureAutoRenewColumn, ensureLicenseSourceColumns, ensureLicenseUpgradesTable } from '../utils/auth';
 
 /** Never leak raw Paddle JSON dumps to the browser toast. */
 function sanitizeRefundPublicError(err: unknown, reqLang: string): string {
@@ -67,22 +67,6 @@ async function revokeLicenseAndNotify(
     const t = getLicenseRevokeEmailTemplate(reqLang, reason);
     const emailHtml = renderEmailWrapper(t.title, t.body(license_code, planName));
     ctx.waitUntil(sendDRMEmail(env, notifyEmail, t.subject, emailHtml));
-  }
-}
-
-const autoRenewColumnEnsured = new WeakSet<object>();
-async function ensureAutoRenewColumn(env: Env) {
-  if (!env?.DB || autoRenewColumnEnsured.has(env.DB)) return;
-  try {
-    await env.DB.prepare("ALTER TABLE licenses ADD COLUMN auto_renew INTEGER DEFAULT 1").run();
-    autoRenewColumnEnsured.add(env.DB);
-  } catch (err: any) {
-    const msg = String(err?.message || err);
-    if (/duplicate column|already exists/i.test(msg)) {
-      autoRenewColumnEnsured.add(env.DB);
-    } else {
-      console.error("Failed to ensure auto_renew column:", err);
-    }
   }
 }
 

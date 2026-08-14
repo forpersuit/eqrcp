@@ -1,28 +1,16 @@
 const crypto = require('crypto');
 
-// 1. Pure JS Fingerprint match tester
-function matchRegistryFingerprint(reqUuid, reqCpu, reqDisk, dbUuid, dbCpu, dbDisk) {
-  const reqU = (reqUuid || '').trim();
-  const reqC = (reqCpu || '').trim();
-  const reqD = (reqDisk || '').trim();
-  const dbU = (dbUuid || '').trim();
-  const dbC = (dbCpu || '').trim();
-  const dbD = (dbDisk || '').trim();
+// 1. Pure JS Fingerprint match tester (3-of-2 weighted model)
+function countMatchingFingerprints(clientUuid, clientCpu, clientDisk, storedUuid, storedCpu, storedDisk) {
+  let matches = 0;
+  if (clientUuid && storedUuid && clientUuid === storedUuid) matches++;
+  if (clientCpu && storedCpu && clientCpu === storedCpu) matches++;
+  if (clientDisk && storedDisk && clientDisk === storedDisk) matches++;
+  return matches;
+}
 
-  let compareCount = 0;
-  if (reqU && dbU) {
-    if (reqU !== dbU) return false;
-    compareCount++;
-  }
-  if (reqC && dbC) {
-    if (reqC !== dbC) return false;
-    compareCount++;
-  }
-  if (reqD && dbD) {
-    if (reqD !== dbD) return false;
-    compareCount++;
-  }
-  return compareCount > 0;
+function matchRegistryFingerprint(reqUuid, reqCpu, reqDisk, dbUuid, dbCpu, dbDisk) {
+  return countMatchingFingerprints(reqUuid, reqCpu, reqDisk, dbUuid, dbCpu, dbDisk) >= 2;
 }
 
 // 2. Pure JS Random Device ID generator
@@ -129,13 +117,21 @@ async function runTests() {
   }
   console.log(`  ✓ Partial overlap matched existing device_id!`);
 
-  // Test 4: Conflict in shared fingerprint -> Assign new device_id
-  console.log('\nTest 4: Conflict in shared fingerprint...');
-  const dev4 = await db.registerOrRefresh({ uuidHash: 'uuid-101', cpuHash: 'cpu-DIFFERENT', diskHash: 'disk-101' }, net);
-  if (dev4.device_id === dev1.device_id) {
-    throw new Error(`Test 4 Failed: conflicting hardware should create new device!`);
+  // Test 4A: 1 component changed (2 of 3 match) -> Hardware drift tolerance reuses device_id
+  console.log('\nTest 4A: 1 component changed (2 of 3 match)...');
+  const dev4a = await db.registerOrRefresh({ uuidHash: 'uuid-101', cpuHash: 'cpu-DIFFERENT', diskHash: 'disk-101' }, net);
+  if (dev4a.device_id !== dev1.device_id) {
+    throw new Error(`Test 4A Failed: 2 matching components should reuse device_id!`);
   }
-  console.log(`  ✓ Conflicting hardware properly created distinct device_id: ${dev4.device_id}`);
+  console.log(`  ✓ 1 changed component (2 matches) successfully reused device_id: ${dev4a.device_id}`);
+
+  // Test 4B: 2 components changed (only 1 match) -> Assign new device_id
+  console.log('\nTest 4B: 2 components changed (only 1 match)...');
+  const dev4b = await db.registerOrRefresh({ uuidHash: 'uuid-101', cpuHash: 'cpu-DIFFERENT-1', diskHash: 'disk-DIFFERENT-2' }, net);
+  if (dev4b.device_id === dev1.device_id) {
+    throw new Error(`Test 4B Failed: only 1 matching component should create new device!`);
+  }
+  console.log(`  ✓ Distinct hardware (<2 matches) properly created distinct device_id: ${dev4b.device_id}`);
 
   // Test 5: All-empty components for free -> Skip registration
   console.log('\nTest 5: All-empty components for free check-in...');
