@@ -791,7 +791,7 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
 
     const toggleBtn = document.querySelector('.transfer-stage .toggle-qr-expand-action');
     if (toggleBtn) {
-        const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+        const collapseText = isQRExpanded ? t('hide_chat_qr') || 'Hide QR' : t('show_chat_qr') || 'Show QR';
         toggleBtn.classList.toggle('active', isQRExpanded);
         toggleBtn.setAttribute('title', collapseText);
         toggleBtn.setAttribute('aria-label', collapseText);
@@ -818,7 +818,7 @@ function renderShareTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
 
     const isQRExpanded = isTaskQRExpanded(task);
-    const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+    const collapseText = isQRExpanded ? t('hide_chat_qr') || 'Hide QR' : t('show_chat_qr') || 'Show QR';
 
     const isPaid = state.status?.isPaid;
     const usedTransfers = state.status?.usedTransfers || 0;
@@ -848,7 +848,7 @@ function renderShareTransfer(task) {
             
             <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
+                    👥 ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
@@ -956,7 +956,7 @@ function renderDeviceProgressHtml(task) {
 
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || '设备传输进度'}</strong>
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || 'Transfer Progress'}</strong>
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%; overflow: hidden;">${listItems}</ul>
                 </div>
@@ -965,7 +965,7 @@ function renderDeviceProgressHtml(task) {
     } else {
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || '设备传输进度'}</strong>
+                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || 'Transfer Progress'}</strong>
                 <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
                     ${t('no_devices_download')}
                 </div>
@@ -1107,7 +1107,7 @@ function renderReceiveTransfer(task) {
     const qrImage = qrImageURL(task.pageUrl);
 
     const isQRExpanded = isTaskQRExpanded(task);
-    const collapseText = isQRExpanded ? t('hide_chat_qr') || '折叠二维码' : t('show_chat_qr') || '显示二维码';
+    const collapseText = isQRExpanded ? t('hide_chat_qr') || 'Hide QR' : t('show_chat_qr') || 'Show QR';
 
     const isPaid = state.status?.isPaid;
     const usedReceiveTransfers = state.status?.usedReceiveTransfers || 0;
@@ -1137,7 +1137,7 @@ function renderReceiveTransfer(task) {
 
             <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || '设备数'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
+                    👥 ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
@@ -1169,9 +1169,9 @@ function renderReceiveDeviceProgressHtml(task) {
     const recvDir = state.receiveDir || state.settings?.output || '';
     const headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || '设备传输进度'}</strong>
+            <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || 'Transfer Progress'}</strong>
             ${recvDir ? `
-                <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || '打开接收文件夹')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
+                <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || 'Open receive folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
                     ${openFolderIcon()}
                 </button>
             ` : ''}
@@ -2124,8 +2124,8 @@ function renderSettingsPanel() {
                                 return `
                                     <div class="emoji-picker-popover" id="emoji-picker-popover">
                                         <div class="emoji-picker-custom-row">
-                                            <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || '自定义...')}" maxlength="8" />
-                                            <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || '确定'}</button>
+                                            <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || 'Custom...')}" maxlength="8" />
+                                            <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || 'Confirm'}</button>
                                         </div>
                                         <div class="emoji-picker-divider"></div>
                                         <div class="emoji-picker-scroll-area">
@@ -2271,7 +2271,7 @@ function renderSettingsPanel() {
             </details>
             ${state.settings?.devMode ? `
             <details class="settings-advanced-details dev-details" style="margin-top: 16px; border-color: rgba(47, 158, 115, 0.3);" ${state.settingsDevOpen ? 'open' : ''}>
-                <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">🛠️ ${t('dev_options') || '开发者选项'}</summary>
+                <summary class="settings-advanced-summary dev-summary" style="color: var(--accent); font-weight: 700;">🛠️ ${t('dev_options') || 'Developer Options'}</summary>
                 <div class="settings-advanced-content">
                     <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
                         <div class="setting-row" style="margin-bottom: 8px;">
@@ -2295,16 +2295,16 @@ function renderSettingsPanel() {
 
                         <div style="padding: 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; margin-bottom: 10px; box-sizing: border-box; width: 100%;">
                             <div style="font-weight: 700; font-size: 11.5px; color: var(--text-primary); margin-bottom: 8px;">
-                                ${t('custom_log_dir') || '主日志保存目录'}
+                                ${t('custom_log_dir') || 'Log Directory'}
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%; margin-bottom: 12px;">
-                                <div id="dev-open-dir" title="${t('click_to_open_dir') || '点击在资源管理器中打开此目录'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
+                                <div id="dev-open-dir" title="${t('click_to_open_dir') || 'Click to open directory in file explorer'}" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 11.5px; background: var(--bg); color: var(--accent); border: 1.2px solid var(--line); border-radius: 6px; cursor: pointer; font-family: var(--font-mono); word-break: break-all; line-height: 1.35; user-select: text;">
                                     📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : t('choose_folder')))}
                                 </div>
-                                <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || '选择目录...'}</button>
+                                <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || 'Browse...'}</button>
                             </div>
 
-                            <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || '日志文件列表：'}</div>
+                            <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || 'Available log files:'}</div>
                             <div class="dev-log-files-list" style="display: flex; flex-direction: column; gap: 6px;">
                                 ${(state.logFiles && state.logFiles.length > 0) ? state.logFiles.map(file => `
                                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;">
@@ -2313,11 +2313,11 @@ function renderSettingsPanel() {
                                             <span style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(file.path)}">${escapeHTML(file.path)} (${escapeHTML(file.size)})</span>
                                         </div>
                                         <button type="button" class="ghost btn-open-single-log" data-path="${escapeHTML(file.path)}" ${!file.exists ? 'disabled' : ''} style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 5px; margin: 0; white-space: nowrap; font-weight: 600;">
-                                            ${t('btn_open') || '打开'}
+                                            ${t('btn_open') || 'Open'}
                                         </button>
                                     </div>
                                 `).join('') : `
-                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">${t('dev_no_log_files') || '暂无已生成的日志文件'}</div>
+                                    <div style="padding: 8px; font-size: 11px; color: var(--text-secondary); text-align: center;">${t('dev_no_log_files') || 'No log files found'}</div>
                                 `}
                             </div>
                         </div>
@@ -2326,20 +2326,20 @@ function renderSettingsPanel() {
                     <!-- Module 2: Billing & Quota Debug -->
                     <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
                         <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                            <span>⚡</span> ${t('dev_section_billing') || '额度与授权测试'}
+                            <span>⚡</span> ${t('dev_section_billing') || 'Quota & License Testing'}
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; width: 100%;">
-                            <button type="button" class="ghost" id="dev-reset-quota" style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || '重置计时'}</button>
-                            <button type="button" class="ghost" id="dev-max-quota" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || '最大额度'}</button>
-                            <button type="button" class="ghost" id="dev-force-sync" style="padding: 7px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || '在线对账'}</button>
+                            <button type="button" class="ghost" id="dev-reset-quota" style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || 'Reset Quota'}</button>
+                            <button type="button" class="ghost" id="dev-max-quota" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || 'Max Quota'}</button>
+                            <button type="button" class="ghost" id="dev-force-sync" style="padding: 7px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || 'Online Sync'}</button>
                         </div>
                         <div style="padding: 10px 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; box-sizing: border-box; width: 100%;">
-                            <div style="font-weight: 700; font-size: 11.5px; color: var(--accent); margin-bottom: 6px;">${t('dev_inject_license') || '注入激活码（Dev）'}</div>
+                            <div style="font-weight: 700; font-size: 11.5px; color: var(--accent); margin-bottom: 6px;">${t('dev_inject_license') || 'Inject License (Dev)'}</div>
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
                                 <input type="text" id="dev-license-code" value="${escapeHTML(state.devLicenseCode || '')}" placeholder="EQT-PLUS-…" style="flex: 1; min-width: 0; padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); border: 1.2px solid var(--line); border-radius: 6px; outline: none; font-family: var(--font-mono);" />
-                                <button type="button" id="dev-inject-license" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap; color: var(--accent); border-color: var(--accent); font-weight: 700;">${t('dev_inject_btn') || '注入'}</button>
+                                <button type="button" id="dev-inject-license" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 30px; border-radius: 6px; margin: 0; white-space: nowrap; color: var(--accent); border-color: var(--accent); font-weight: 700;">${t('dev_inject_btn') || 'Inject'}</button>
                             </div>
-                            <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">${t('dev_inject_hint') || '调用线上 /activate，等同于 About 面板兑换。'}</div>
+                            <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">${t('dev_inject_hint') || 'Calls online /activate, same as About panel redeem.'}</div>
                             ${state.devInjectMsg ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devInjectError ? '#ef4444' : 'var(--accent)'};">${escapeHTML(state.devInjectMsg)}</div>` : ''}
                         </div>
                     </div>
@@ -2347,16 +2347,16 @@ function renderSettingsPanel() {
                     <!-- Module 3: Crash Debug -->
                     <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
                         <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                            <span>💥</span> ${t('crash_report_title') || '崩溃报告'}
+                            <span>💥</span> ${t('crash_report_title') || 'Crash Report'}
                         </div>
-                        <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.35;">${t('dev_trigger_crash_desc') || '仅开发环境：写入一次崩溃 dump，重启后即可走完整崩溃上报流程。'}</div>
-                        <button type="button" class="ghost" id="dev-trigger-crash" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 700; width: 100%;">💥 ${t('dev_trigger_crash') || '触发崩溃测试'}</button>
+                        <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.35;">${t('dev_trigger_crash_desc') || 'Dev only: Writes a crash dump to test crash reporting on next launch.'}</div>
+                        <button type="button" class="ghost" id="dev-trigger-crash" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 700; width: 100%;">💥 ${t('dev_trigger_crash') || 'Trigger Crash Test'}</button>
                         ${state.devCrashMsg ? `<div style="font-size: 11px; margin-top: 8px; color: ${state.devCrashMsg.startsWith('✅') ? 'var(--accent)' : '#ef4444'};">${escapeHTML(state.devCrashMsg)}</div>` : ''}
                     </div>
 
                     <!-- Module 4: Exit Dev Mode -->
                     <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
-                        ${t('btn_exit_dev_mode') || '退出开发者模式'}
+                        ${t('btn_exit_dev_mode') || 'Exit Developer Mode'}
                     </button>
                 </div>
             </details>
@@ -2479,12 +2479,12 @@ function computeLicensePlanState() {
 
         let expVal = '';
         if (expiresAt === 'LIFETIME') {
-            expVal = t('lifetime') || '永久';
+            expVal = t('lifetime') || 'Lifetime';
         } else if (isParseableLicenseDate(expiresAt)) {
             expVal = new Date(expiresAt).toLocaleDateString();
         }
         if (expVal) {
-            expiryDetail = `${t('expiry_label') || '有效期'}：${expVal}`;
+            expiryDetail = `${t('expiry_label') || 'Expires'}: ${expVal}`;
             if (expiryText) {
                 expiryDetail += ` (${expiryText})`;
             }
@@ -2503,7 +2503,7 @@ function computeLicensePlanState() {
             freeQuotaPills = [];
             warningBox = `
                 <div class="notice error compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4;">
-                    <strong>⚠️ ${t('locked_rollback')}：</strong>
+                    <strong>⚠️ ${t('locked_rollback')}: </strong>
                     ${t('locked_rollback_desc')}
                 </div>
             `;
@@ -2532,7 +2532,7 @@ function renderLicensePlanBlock() {
                 <div class="about-plan-tag">
                     <span>${t('plan_label')}</span>
                     ${isOnline() ? `
-                    <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || '立即同步并刷新授权状态与付费权益')}">
+                    <button class="tool-button ${state.isRefreshingLicense ? 'spinning' : ''}" id="refresh-license-btn" aria-label="Refresh license" style="padding: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--accent-strong); line-height: 1;" ${state.isRefreshingLicense ? 'disabled' : ''} title="${escapeAttr(t('refresh_license_tooltip') || 'Sync and refresh license status')}">
                         <span style="width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;">${refreshIcon()}</span>
                     </button>
                     ` : ''}
@@ -2546,10 +2546,10 @@ function renderLicensePlanBlock() {
                     ${redeemDetail ? `<span class="about-plan-pill">${escapeHTML(redeemDetail)}</span>` : ''}
                     ${expiryDetail ? `<span class="about-plan-pill">${escapeHTML(expiryDetail)}</span>` : ''}
                     ${(hasPaidLicense() && state.status?.buyerEmail) ? `
-                        <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || '点击复制邮箱')}">
-                            <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || '激活邮箱'}：${escapeHTML(state.status.buyerEmail)}</span>
+                        <span class="email-copy-wrapper" data-email="${escapeAttr(state.status.buyerEmail)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; border: 1px dashed var(--accent-strong, #16a34a); background: rgba(22, 163, 74, 0.05); transition: background 0.2s;" title="${escapeAttr(t('click_to_copy') || 'Click to copy email')}">
+                            <span style="font-size: 11px; color: var(--accent-strong, #16a34a); font-weight: 600;">${t('license_buyer_email') || 'Buyer Email'}: ${escapeHTML(state.status.buyerEmail)}</span>
                             <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent-strong, #16a34a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
-                                ✓ ${escapeHTML(t('copied') || '已复制')}
+                                ✓ ${escapeHTML(t('copied') || 'Copied')}
                             </span>
                         </span>
                     ` : ''}
@@ -2596,9 +2596,9 @@ function renderAboutPanel() {
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('product') || 'Product'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}${info.isTest ? ` (${escapeAttr(t('test_version_badge') || '测试版')})` : ''}">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}${info.isTest ? ` (${escapeAttr(t('test_version_badge') || 'Test Build')})` : ''}">
                         <span style="overflow: hidden; text-overflow: ellipsis;">${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</span>
-                        ${info.isTest ? `<span class="test-version-tag" style="font-size: 10px; font-weight: 800; color: #d97706; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; line-height: 1.2; flex-shrink: 0;">${escapeHTML(t('test_version_badge') || '测试版')}</span>` : ''}
+                        ${info.isTest ? `<span class="test-version-tag" style="font-size: 10px; font-weight: 800; color: #d97706; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; line-height: 1.2; flex-shrink: 0;">${escapeHTML(t('test_version_badge') || 'Test Build')}</span>` : ''}
                     </span>
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
@@ -2649,9 +2649,9 @@ function renderPlanComparisonPanel() {
                 <div class="plan-card plan-card-premium" style="border: 1.2px solid var(--line); border-radius: 16px; padding: 24px; background: var(--bg-hover); display: flex; flex-direction: column; text-align: left; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;">
                     <div style="margin-bottom: 16px; border-bottom: 1.2px solid var(--line); padding-bottom: 14px;">
                         <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">${t('free_tier_tag') || 'Free Tier'}</span>
-                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('free_quota') || '体验版'}</h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('free_tier_desc') || '局域网极速协作与传输体验版。'}</p>
-                        <div style="font-size: 26px; font-weight: 900; color: var(--text-primary); margin-top: 14px;">${t('free_price') || '¥0'} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">${t('lifetime') || '永久'}</span></div>
+                        <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('free_quota') || 'Free Tier'}</h3>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('free_tier_desc') || 'LAN speed collaboration and transfer.'}</p>
+                        <div style="font-size: 26px; font-weight: 900; color: var(--text-primary); margin-top: 14px;">${t('free_price') || '$0'} <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">${t('lifetime') || 'Lifetime'}</span></div>
                     </div>
                     <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
@@ -2675,17 +2675,17 @@ function renderPlanComparisonPanel() {
                     <div style="margin-bottom: 16px;">
                         <span style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.08em; display: block; margin-bottom: 2px;">${t('plus_upgrade_tag') || 'Plus Upgrade'}</span>
                         <h3 style="font-size: 22px; margin: 4px 0; font-weight: 800; color: var(--text-primary);">${t('plus_card_title') || 'PLUS / PLUS Lifetime'}</h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_plus_desc_short') || '解除局域网 Chat 及文件传输的全部大小与频率限制。'}</p>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin: 6px 0 12px; min-height: 32px; line-height: 1.5;">${t('plan_plus_desc_short') || 'Unlock all limits on file size and transfer rates.'}</p>
                         
                         <!-- 价格区分小卡片 -->
                         <div style="display: flex; gap: 12px; margin: 14px 0 6px; box-sizing: border-box; width: 100%;">
                             <div style="flex: 1; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_annual_label') || 'PLUS (年度版)'}</div>
-                                <div style="font-size: 18px; font-weight: 900; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('year_unit') || '年'}</span></div>
+                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_annual_label') || 'PLUS (Annual)'}</div>
+                                <div style="font-size: 18px; font-weight: 900; color: var(--accent);">$11.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('year_unit') || 'yr'}</span></div>
                             </div>
                             <div style="flex: 1; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left;">
-                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_lifetime_label') || 'PLUS Lifetime (买断版)'}</div>
-                                <div style="font-size: 18px; font-weight: 900; color: var(--text-primary);">$29.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('buyout_unit') || '买断'}</span></div>
+                                <div style="font-size: 10px; color: var(--text-secondary); font-weight: 800; letter-spacing: 0.02em;">${t('plus_lifetime_label') || 'PLUS Lifetime (One-time)'}</div>
+                                <div style="font-size: 18px; font-weight: 900; color: var(--text-primary);">$29.99 <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary);">/ ${t('buyout_unit') || 'lifetime'}</span></div>
                             </div>
                         </div>
                     </div>
@@ -2713,17 +2713,17 @@ function renderPlanComparisonPanel() {
 
             <!-- 说明与跳转部分 -->
             <div style="background: var(--bg-hover); border-radius: 12px; padding: 16px 18px; font-size: 12px; color: var(--text-secondary); line-height: 1.65; text-align: left; border: 1.2px solid var(--line); display: flex; flex-direction: column; gap: 10px;">
-                <div style="font-weight: 800; font-size: 13px; color: var(--text-primary); margin-bottom: 2px;">📌 ${t('plan_note_disclaimer_title') || '套餐注意事项与重要说明'}</div>
-                <div>1. <strong>${t('free_tier_rules') || '免费版说明'}</strong>：${t('free_tier_rules_desc')}</div>
+                <div style="font-weight: 800; font-size: 13px; color: var(--text-primary); margin-bottom: 2px;">📌 ${t('plan_note_disclaimer_title') || 'Plan Terms & Notes'}</div>
+                <div>1. <strong>${t('free_tier_rules') || 'Free Tier Terms'}</strong>: ${t('free_tier_rules_desc')}</div>
                 <div>2. ${t('plan_note_free_online')}</div>
                 <div>3. ${t('plan_note_plus_offline')}</div>
                 <div>4. ${t('plan_note_device_edit')}</div>
-                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line);">💡 <strong>${t('plan_binding_note') || '设备绑定规则'}</strong>：${t('plan_binding_note_desc')}</div>
+                <div style="margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line);">💡 <strong>${t('plan_binding_note') || 'Device Binding Rules'}</strong>: ${t('plan_binding_note_desc')}</div>
             </div>
             
             <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-                <button class="ghost" id="plan-back-to-license" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_license') || '返回授权'}</button>
-                ${isOnline() ? `<button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || '兑换激活码'}</button>` : ''}
+                <button class="ghost" id="plan-back-to-license" style="padding: 10px 18px; font-weight: 600;">${t('btn_back_license') || 'Back to License'}</button>
+                ${isOnline() ? `<button class="primary" id="plan-go-redeem" style="padding: 10px 18px; font-weight: 600;">${t('redeem_title') || 'Redeem Code'}</button>` : ''}
             </div>
         </div>
     `;
@@ -3521,14 +3521,14 @@ function bindEvents() {
                     copyBtn.classList.add('success-saved');
                     copyBtn.innerHTML = `
                         <span style="display: flex; align-items: center; justify-content: center;">✓</span>
-                        <span>${escapeHTML(t('copied') || '已复制')}</span>
+                        <span>${escapeHTML(t('copied') || 'Copied')}</span>
                     `;
                     setTimeout(() => {
                         if (copyBtn && copyBtn.isConnected) {
                             copyBtn.classList.remove('success-saved');
                             copyBtn.innerHTML = `
                                 <span style="display: flex; align-items: center; justify-content: center;">${copyIcon()}</span>
-                                <span>${escapeHTML(t('copy_share_url') || '复制官网链接')}</span>
+                                <span>${escapeHTML(t('copy_share_url') || 'Copy official link')}</span>
                             `;
                         }
                     }, 2000);
@@ -3627,7 +3627,7 @@ function bindEvents() {
                         if (!state.settings) state.settings = {};
                         state.settings.logDir = selected;
                         await saveSettingsData();
-                        showToast(t('log_dir_updated') || '日志保存路径已更新');
+                        showToast(t('log_dir_updated') || 'Log directory updated');
                         state.appInfo = await AppInfo();
                         if (typeof GetLogFiles === 'function') {
                             state.logFiles = await GetLogFiles();
@@ -3672,7 +3672,7 @@ function bindEvents() {
                     } catch (err) {
                         state.shareLimitNotice = '';
                     }
-                    showToast(t('dev_quota_reset_success') || '已重置每日计时为 0s');
+                    showToast(t('dev_quota_reset_success') || 'Reset daily quota to 0s');
                     render();
                     openPanel('settings');
                 }).catch(error => {
@@ -3689,7 +3689,7 @@ function bindEvents() {
                     } catch (err) {
                         state.shareLimitNotice = '';
                     }
-                    showToast(t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)');
+                    showToast(t('dev_quota_max_success') || 'Set usage to 10m (600s)');
                     render();
                     openPanel('settings');
                 }).catch(error => {
@@ -3701,11 +3701,11 @@ function bindEvents() {
                 DevForceOnlineLicenseSync().then((status) => {
                     state.status = status;
                     syncLicenseFromStatus(state.status);
-                    showToast(t('dev_sync_success') || '在线对账完成，状态已同步');
+                    showToast(t('dev_sync_success') || 'Online license sync completed');
                     render();
                     openPanel('settings');
                 }).catch(async (error) => {
-                    showToast('对账完成：' + (error?.message || error));
+                    showToast((t('dev_sync_result') || 'Sync completed: ') + (error?.message || error));
                     try {
                         state.status = await RefreshLicenseStatus();
                         syncLicenseFromStatus(state.status);
@@ -3751,12 +3751,12 @@ function bindEvents() {
             if (e.target.closest('#dev-trigger-crash')) {
                 DevTriggerCrash().then(info => {
                     state.devCrashMsg = (info && info.hasReport)
-                        ? '✅ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。')
-                        : '❌ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。');
+                        ? '✅ ' + (t('dev_crash_triggered') || 'Crash dump written. Restart eqt-desktop to see crash report.')
+                        : '❌ ' + (t('dev_crash_triggered') || 'Crash dump written. Restart eqt-desktop to see crash report.');
                     render();
                     openPanel('settings');
                 }).catch(err => {
-                    state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || '触发崩溃失败：') + err;
+                    state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || 'Failed to trigger crash: ') + err;
                     render();
                     openPanel('settings');
                 });
@@ -3768,7 +3768,7 @@ function bindEvents() {
                 state.settings.debugLog = false;
                 state.settings.viewportDebug = false;
                 saveSettingsData().then(() => {
-                    showToast(t('dev_mode_disabled') || '开发者模式已禁用');
+                    showToast(t('dev_mode_disabled') || 'Developer mode disabled');
                     render();
                     openPanel('settings');
                 });
@@ -5796,10 +5796,10 @@ function formatActivationError(err) {
     if (!err) return t('activation_failed') || 'Activation failed. Please check network and code validity.';
     const errStr = String(err?.message || err);
     if (errStr.includes('context deadline exceeded') || errStr.includes('Timeout exceeded') || errStr.includes('Client.Timeout') || errStr.toLowerCase().includes('timeout')) {
-        return t('network_timeout') || '连接授权服务器超时，请检查网络连接或开启代理后重试。';
+        return t('network_timeout') || 'Connection timed out. Please check network or proxy settings.';
     }
     if (errStr.includes('connectex') || errStr.includes('connection refused') || errStr.includes('no such host') || errStr.includes('dial tcp')) {
-        return t('network_unreachable') || '无法连接至授权服务器，请检查网络连接或防火墙设置。';
+        return t('network_unreachable') || 'Cannot connect to license server. Please check network or firewall settings.';
     }
     const translated = t(errStr);
     if (translated && translated !== errStr) {
@@ -5986,14 +5986,14 @@ function shareItemStatus(task, path) {
     const current = shortName(task.transferCurrent || '');
     if (current && current === shortName(path)) {
         if (task.transferState === 'transferring') {
-            return t('running') || '运行中';
+            return t('running') || 'Running';
         }
-        return t('active') || '活跃';
+        return t('active') || 'Active';
     }
     if (task.transferState === 'waiting') {
-        return t('waiting') || '等待中';
+        return t('waiting') || 'Waiting';
     }
-    return t('locked') || '未开始';
+    return t('locked') || 'Locked';
 }
 
 function titleCase(value) {
