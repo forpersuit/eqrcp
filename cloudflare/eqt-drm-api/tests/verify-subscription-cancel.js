@@ -52,7 +52,8 @@ class RealPaddleD1Mock {
       licenses: new Map(),
       activations: new Map(),
       device_registry: new Map(),
-      system_error_logs: new Map()
+      system_error_logs: new Map(),
+      paddle_processed_transactions: new Map()
     };
     this.autoIncrement = { activations: 1, system_error_logs: 1 };
   }
@@ -85,8 +86,36 @@ class RealPaddleD1Mock {
     };
   }
 
+  async batch(statements) {
+    const results = [];
+    for (const stmt of statements) {
+      if (stmt && typeof stmt.run === 'function') {
+        results.push(await stmt.run());
+      } else {
+        results.push({ meta: { changes: 1 } });
+      }
+    }
+    return results;
+  }
+
   executeSqlFirst(sql, args) {
     const s = sql.replace(/\s+/g, ' ').trim();
+
+    if (s.includes('FROM paddle_processed_transactions WHERE transaction_id =')) {
+      const txnId = args[0];
+      const row = this.tables.paddle_processed_transactions?.get(txnId);
+      return row ? { license_code: row.license_code, action: row.action } : null;
+    }
+
+    if (s.includes('FROM licenses WHERE paddle_transaction_id =')) {
+      const txnId = args[0];
+      for (const lic of this.tables.licenses.values()) {
+        if (lic.paddle_transaction_id === txnId) {
+          return { license_code: lic.license_code, buyer_email: lic.buyer_email, tier: lic.tier };
+        }
+      }
+      return null;
+    }
 
     if (s.includes('SELECT license_code, buyer_email, tier, status, revoke_reason FROM licenses WHERE paddle_subscription_id =')) {
       const subId = args[0];
@@ -141,6 +170,14 @@ class RealPaddleD1Mock {
 
   executeSqlRun(sql, args) {
     const s = sql.replace(/\s+/g, ' ').trim();
+
+    if (s.includes('INSERT') && s.includes('INTO paddle_processed_transactions')) {
+      const txnId = args[0];
+      const licCode = args[1];
+      const action = args[2];
+      this.tables.paddle_processed_transactions.set(txnId, { transaction_id: txnId, license_code: licCode, action });
+      return { meta: { changes: 1 } };
+    }
 
     // 1. UPDATE licenses SET auto_renew = 0 WHERE paddle_subscription_id = ?
     if (s.includes('UPDATE licenses SET auto_renew = 0 WHERE paddle_subscription_id =')) {
@@ -428,6 +465,38 @@ async function main() {
   assert(resCreate.status === 200, 'subscription.created returns 200 OK');
   const createJson = await resCreate.json();
   assert(createJson.message.includes('acknowledged'), 'subscription.created response says acknowledged');
+
+  // -------------------------------------------------------------
+  // Test Case 5: transaction.completed Replay (Idempotency)
+  // -------------------------------------------------------------
+  console.log('\n[Case 5] Handling transaction.completed replay for existing txn...');
+  const initTxnId = 'txn_offline_init_001';
+  mockDb.tables.licenses.set('EQT-PLUS-ORIG', {
+    license_code: 'EQT-PLUS-ORIG',
+    paddle_transaction_id: initTxnId,
+    paddle_subscription_id: 'sub_orig',
+    status: 'active'
+  });
+  mockDb.tables.paddle_processed_transactions.set(initTxnId, {
+    transaction_id: initTxnId,
+    license_code: 'EQT-PLUS-ORIG',
+    action: 'initial'
+  });
+
+  const replayPayload = {
+    event_id: 'evt_replay_001',
+    event_type: 'transaction.completed',
+    data: {
+      id: initTxnId,
+      customer_id: 'ctm_123',
+      items: [{ price_id: 'pri_01kxymyma34hgmndccwswheta3', quantity: 1 }]
+    }
+  };
+  const resReplay = await sendWebhook(replayPayload);
+  assert(resReplay.status === 200, 'Replayed transaction returns 200 OK');
+  const replayJson = await resReplay.json();
+  assert(replayJson.message.includes('already processed'), 'Replayed transaction returns already processed message');
+  assert(replayJson.license_code === 'EQT-PLUS-ORIG', 'Replayed transaction returns matching license_code');
 
   console.log('\n=== All Subscription Lifecycle & Recovery Tests Passed 100% ===');
 }

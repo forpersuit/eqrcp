@@ -525,6 +525,69 @@ func TestDesktopAgentAllowsLocalAndWailsOrigins(t *testing.T) {
 			t.Fatalf("private LAN origin status = %d, want %d", response.StatusCode, http.StatusForbidden)
 		}
 	})
+
+	// Verify Sec-Fetch-Site: cross-site with empty Origin is rejected
+	t.Run("reject_sec_fetch_cross_site", func(t *testing.T) {
+		agent := newDesktopAgent(application.Flags{})
+		server := httptest.NewServer(agent.routes())
+		defer server.Close()
+
+		request, err := http.NewRequest(http.MethodGet, server.URL+"/status", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Sec-Fetch-Site", "cross-site")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatalf("Sec-Fetch-Site cross-site status = %d, want %d", response.StatusCode, http.StatusForbidden)
+		}
+	})
+
+	// Verify untrusted Referer with empty Origin is rejected
+	t.Run("reject_untrusted_referer", func(t *testing.T) {
+		agent := newDesktopAgent(application.Flags{})
+		server := httptest.NewServer(agent.routes())
+		defer server.Close()
+
+		request, err := http.NewRequest(http.MethodGet, server.URL+"/status", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Referer", "http://malicious-site.example.com/exploit")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusForbidden {
+			t.Fatalf("untrusted Referer status = %d, want %d", response.StatusCode, http.StatusForbidden)
+		}
+	})
+
+	// Verify trusted Referer with empty Origin is allowed
+	t.Run("allow_trusted_referer", func(t *testing.T) {
+		agent := newDesktopAgent(application.Flags{})
+		server := httptest.NewServer(agent.routes())
+		defer server.Close()
+
+		request, err := http.NewRequest(http.MethodGet, server.URL+"/status", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Referer", "http://127.0.0.1:19000/settings")
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("trusted Referer status = %d, want %d", response.StatusCode, http.StatusOK)
+		}
+	})
 }
 
 func TestDesktopAgentHandlesTrustedPreflight(t *testing.T) {
