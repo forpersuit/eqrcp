@@ -450,7 +450,8 @@ export async function requireAdminAuth(
     return new Response(
       JSON.stringify({
         error: "Cloudflare Access JWT required",
-        code: "ACCESS_JWT_REQUIRED"
+        code: "ACCESS_JWT_REQUIRED",
+        error_code: "ACCESS_JWT_REQUIRED"
       }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -478,7 +479,8 @@ export async function requireAdminAuth(
   return new Response(
     JSON.stringify({
       error: result.error || "Invalid Cloudflare Access JWT",
-      code: "ACCESS_JWT_INVALID"
+      code: "ACCESS_JWT_INVALID",
+      error_code: "ACCESS_JWT_INVALID"
     }),
     { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
