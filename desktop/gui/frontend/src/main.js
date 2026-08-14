@@ -3513,11 +3513,9 @@ function bindEvents() {
             }
             if (e.target.closest('#copy-share-url-btn')) {
                 const url = 'https://www.eqt.net.im';
-                try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(url);
-                    }
-                } catch (_) {}
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => {});
+                }
                 const copyBtn = document.querySelector('#copy-share-url-btn');
                 if (copyBtn) {
                     copyBtn.classList.add('success-saved');
@@ -4067,7 +4065,6 @@ function bindEvents() {
                                     e.target.closest('.history-search-dropdown');
                 if (!inSearchBox) {
                     shrinkSearchBoxInDOM();
-                    return;
                 }
             }
 
@@ -4735,10 +4732,6 @@ async function toggleStartupIntegration(event) {
         const prefix = t('integration_toggle_failed') || 'Failed to update system integration';
         showToast(`${prefix}: ${errMsg}`);
     }
-}
-
-function bindSettingsControls() {
-    document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
 }
 
 function updateIntegrationRow(kind) {
