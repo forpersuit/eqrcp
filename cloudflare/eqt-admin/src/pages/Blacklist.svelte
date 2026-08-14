@@ -82,13 +82,17 @@
     }
   }
 
-  async function handleUnban(id: number) {
-    if (!confirm(`确认解除封禁 #${id}？`)) return;
+  let unbanTarget = $state<ManualBlacklistEntry | null>(null);
+
+  async function executeUnban() {
+    if (!unbanTarget) return;
+    const targetId = unbanTarget.id;
     busy = true;
     errorMsg = '';
     try {
-      await adminFetch(`/api/v1/admin/blacklist/${id}`, { method: 'DELETE' });
-      actionMsg = `已解除 #${id}`;
+      await adminFetch(`/api/v1/admin/blacklist/${targetId}`, { method: 'DELETE' });
+      actionMsg = `已解除 #${targetId}`;
+      unbanTarget = null;
       await loadList();
     } catch (err: any) {
       errorMsg = err.message || '解封失败';
@@ -234,7 +238,7 @@
                 <td>{row.active ? '生效' : '已解封'}</td>
                 <td>
                   {#if row.active}
-                    <button type="button" class="btn btn-secondary btn-sm" disabled={busy} onclick={() => handleUnban(row.id)}>
+                    <button type="button" class="btn btn-secondary btn-sm" disabled={busy} onclick={() => (unbanTarget = row)}>
                       解封
                     </button>
                   {/if}
@@ -247,6 +251,25 @@
     {/if}
   </div>
 </div>
+
+{#if unbanTarget}
+  <div class="modal-overlay" onclick={() => (unbanTarget = null)} role="presentation">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal-content modal-confirm" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1" aria-modal="true">
+      <h3 class="danger-title">确认解除封禁</h3>
+      <p class="confirm-text">
+        确定要解除条目 <strong>#{unbanTarget.id}</strong>（{identityLine(unbanTarget)}）的封禁吗？<br />
+        解除后该目标将恢复正常的授权验证与 API 访问。
+      </p>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick={() => (unbanTarget = null)} disabled={busy}>取消</button>
+        <button type="button" class="btn btn-danger" onclick={executeUnban} disabled={busy}>
+          {busy ? '处理中...' : '确认解除'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .header-row {
@@ -388,6 +411,29 @@
   .btn-sm {
     font-size: 0.75rem;
     padding: 0.3rem 0.6rem;
+  }
+  .danger-title {
+    color: var(--accent-danger);
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+  .confirm-text {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+  .confirm-text strong {
+    color: var(--text-primary);
+  }
+  .modal-confirm {
+    max-width: 480px;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
   }
   @media (max-width: 900px) {
     .fp-grid {

@@ -1,4 +1,4 @@
-import { clearAccessSession, isAuthenticated } from './auth';
+import { clearAccessSession } from './auth';
 import { getAdminEnvironment } from './env.svelte';
 
 /**
@@ -36,27 +36,39 @@ export async function adminFetch<T = any>(endpoint: string, options: ApiOptions 
     ...((optHeaders as Record<string, string>) || {})
   };
 
-  const response = await fetch(urlStr, {
-    ...fetchInit,
-    headers,
-    credentials: 'same-origin'
-  });
+  let response: Response;
+  try {
+    response = await fetch(urlStr, {
+      ...fetchInit,
+      headers,
+      credentials: 'same-origin'
+    });
+  } catch (err: any) {
+    throw new Error(`网络连接失败: ${err?.message || '未知网络错误'}`);
+  }
 
   if (response.status === 401) {
     clearAccessSession();
     const data = await response.json().catch(() => ({}));
-    const msg = data.error ? `${data.error} (${data.code || '401'})` : 'Cloudflare Access 会话无效或未登录 (401)';
+    const msg = data?.error ? `${data.error} (${data.code || '401'})` : 'Cloudflare Access 会话无效或未登录 (401)';
     throw new Error(msg);
   }
 
-  if (response.status === 503) {
+  if (response.status === 502 || response.status === 503) {
     const data = await response.json().catch(() => ({}));
-    throw new Error((data as any).error || 'Admin API 未配置');
+    throw new Error(data?.error || `服务暂时不可用 (${response.status})`);
   }
 
-  const data = await response.json();
-  if (!response.ok || data.error) {
-    throw new Error(data.error || `请求失败 (${response.status})`);
+  const data = await response.json().catch(() => null);
+  if (data === null) {
+    if (!response.ok) {
+      throw new Error(`请求失败 (${response.status} ${response.statusText})`);
+    }
+    return {} as T;
+  }
+
+  if (!response.ok || (data && typeof data === 'object' && 'error' in data && data.error)) {
+    throw new Error(data?.error || `请求失败 (${response.status})`);
   }
 
   return data as T;

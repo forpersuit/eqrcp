@@ -54,7 +54,7 @@
 | 问题 | 处置 |
 | :--- | :--- |
 | 字段模型错误 | 已对齐契约 |
-| alert/confirm | 已 modal + banner |
+| alert/confirm | 已全站统一为 in-app modal + banner（含 Blacklist 解封等全流程，杜绝原生弹窗） |
 | 无操作审计页 | OpsAudit |
 | Overview 无跳转 | onNavigate |
 | 无 Pages / 防索引 | 已部署 + `_headers` |

@@ -7,11 +7,16 @@ export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
 export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health' | 'metrics';
+export type BlacklistKind = 'email' | 'device';
+export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
+export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired';
+export type AdminAuditAction = 'GENERATE' | 'REVOKE' | 'UNBIND' | 'CLEAR_LOGS' | 'BLACKLIST_ADD' | 'BLACKLIST_REMOVE';
+export type AdminAuditTargetType = 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | 'BLACKLIST';
 
 /** GET/POST /api/v1/admin/blacklist */
 export interface ManualBlacklistEntry {
   id: number;
-  kind: 'email' | 'device' | string;
+  kind: BlacklistKind;
   email?: string | null;
   email_hash?: string | null;
   device_id?: string | null;
@@ -39,14 +44,10 @@ export interface Activation {
   user_agent?: string | null;
 }
 
-/** licenses row + admin-computed fields */
-export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test' | string;
-export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired' | string;
-
 export interface License {
   license_code: string;
-  tier: LicenseTier | string;
-  status: LicenseStatus | string;
+  tier: LicenseTier;
+  status: LicenseStatus;
   max_devices: number;
   expires_at?: string | null;
   duration_days?: number | null;
@@ -64,7 +65,7 @@ export interface License {
 
 export interface SystemErrorLog {
   id: number;
-  level: ErrorLogLevel | string;
+  level: ErrorLogLevel;
   category: string;
   error_message: string;
   context_json: string | null;
@@ -73,8 +74,8 @@ export interface SystemErrorLog {
 
 export interface AdminAuditLog {
   id: number;
-  action: 'GENERATE' | 'REVOKE' | 'UNBIND' | 'CLEAR_LOGS' | string;
-  target_type: 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | string;
+  action: AdminAuditAction;
+  target_type: AdminAuditTargetType;
   target_id: string | null;
   details_json: string | null;
   operator_ip: string | null;
@@ -107,7 +108,7 @@ export interface HealthProbeResult {
 
 export interface HealthRecentEvent {
   id: number;
-  level: string;
+  level: ErrorLogLevel;
   category: string;
   error_message: string;
   created_at: string;
@@ -147,12 +148,12 @@ export interface GenerateLicenseBody {
 export interface GenerateLicenseResponse {
   success?: boolean;
   license_code: string;
-  tier: string;
+  tier: LicenseTier;
   max_devices: number;
   expires_at: string;
   duration_days: number | null;
-  status: string;
-  source?: string;
+  status: LicenseStatus;
+  source?: LicenseSource;
   buyer_email?: string | null;
   email_sent?: boolean;
 }
