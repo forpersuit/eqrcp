@@ -7,7 +7,17 @@ identity_file="${EQT_GIT_SSH_KEY:-$HOME/.ssh/wsl-github}"
 ssh_timeout="${EQT_GIT_SSH_PROBE_TIMEOUT:-8}"
 
 proxy_host() {
-  ip route | awk '/default/ {print $3; exit}'
+  if nc -z -w 1 127.0.0.1 10808 >/dev/null 2>&1; then
+    echo "127.0.0.1"
+    return
+  fi
+  local route_host
+  route_host="$(ip route | awk '/default/ {print $3; exit}')"
+  if [[ -n "$route_host" ]] && nc -z -w 1 "$route_host" 10808 >/dev/null 2>&1; then
+    echo "$route_host"
+    return
+  fi
+  echo "${route_host:-127.0.0.1}"
 }
 
 ssh_base_options() {
