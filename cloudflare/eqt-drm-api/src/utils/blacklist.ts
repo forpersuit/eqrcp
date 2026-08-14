@@ -2,17 +2,25 @@ import { Env, ONE_YEAR_MS, MAX_YEARLY_ABUSIVE_REFUNDS } from '../types';
 import { isPurchaseLikeRevocation } from './license-source';
 import { sha256Hex } from './crypto';
 
-// Perform 3-of-2 matching check between client hashes and a stored activation record
-export function matchFingerprint(
+// Count matching non-empty fingerprint fields between client hashes and stored record
+export function countMatchingFingerprints(
   clientUuid: string, clientCpu: string, clientDisk: string,
   storedUuid: string, storedCpu: string, storedDisk: string
-): boolean {
+): number {
   let matches = 0;
   // Empty-string fields must not count as a match (AGENTS fingerprint rule)
   if (clientUuid && storedUuid && clientUuid === storedUuid) matches++;
   if (clientCpu && storedCpu && clientCpu === storedCpu) matches++;
   if (clientDisk && storedDisk && clientDisk === storedDisk) matches++;
-  return matches >= 2;
+  return matches;
+}
+
+// Perform 3-of-2 matching check between client hashes and a stored activation record
+export function matchFingerprint(
+  clientUuid: string, clientCpu: string, clientDisk: string,
+  storedUuid: string, storedCpu: string, storedDisk: string
+): boolean {
+  return countMatchingFingerprints(clientUuid, clientCpu, clientDisk, storedUuid, storedCpu, storedDisk) >= 2;
 }
 
 function withinRollingYear(iso: string | null | undefined, oneYearAgoMs: number): boolean {

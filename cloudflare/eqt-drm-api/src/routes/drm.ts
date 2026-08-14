@@ -2,7 +2,7 @@ import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
-import { matchFingerprint, checkAbusiveRefundBlacklist } from '../utils/blacklist';
+import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited, logRateLimitHit } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
@@ -804,16 +804,21 @@ export async function handleDrmRoutes(
 
     let matchedActivation: any = null;
     for (const act of activations) {
-      if (matchFingerprint(
+      const fpMatches = countMatchingFingerprints(
         uHash, cHash, dHash,
         act.uuid_hash || "", act.cpu_hash || "", act.disk_hash || ""
-      )) {
+      );
+      // Standard match: at least 2 of 3 fingerprints match
+      if (fpMatches >= 2) {
         matchedActivation = act;
         break;
       }
+      // Hardware drift tolerance: device_id matches AND at least 1 fingerprint matches (prevents 0-match clone attacks)
       if ((body as any).device_id && act.device_id && act.device_id === (body as any).device_id) {
-        matchedActivation = act;
-        break;
+        if (fpMatches >= 1) {
+          matchedActivation = act;
+          break;
+        }
       }
     }
 

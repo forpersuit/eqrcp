@@ -3005,7 +3005,129 @@ function getTaskFolder(task) {
     return '';
 }
 
+async function handleModeSwitch(targetMode) {
+    if (state.mode === targetMode) {
+        return;
+    }
 
+    const activeShare = activeShareTask();
+    const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
+    const activeChat = activeChatTask();
+    const activeTask = activeShare || activeRecv || activeChat;
+
+    if (activeTask) {
+        try {
+            const confirmed = await showConfirmSwitchDialog();
+            if (!confirmed) {
+                return;
+            }
+            if (activeChat) {
+                await StopChat();
+            } else {
+                await StopCurrent();
+            }
+            if (state.status) {
+                state.status.current = null;
+                state.status.chat = null;
+            }
+            state.busy = false;
+        } catch (e) {
+            console.error('Failed to stop current active task on mode switch:', e);
+            return;
+        }
+    }
+
+    setMode(targetMode);
+    clearMessages();
+    render();
+}
+
+function shrinkSearchBoxInDOM() {
+    const title = document.querySelector('.panel-title');
+    const refreshBtn = document.querySelector('#refresh');
+    const clearBtn = document.querySelector('#clear-history');
+    const searchBox = document.querySelector('.search-input-box');
+    const searchInput = document.querySelector('#history-search-input');
+    const toggleSearch = document.querySelector('#toggle-search');
+    
+    if (showSearchInput) {
+        toggleSearchInput();
+    }
+    toggleSearchDropdown(false);
+    
+    const panel = document.querySelector('.side .panel');
+    if (panel) {
+        panel.classList.remove('search-active');
+    }
+    
+    if (title) {
+        title.style.opacity = '1';
+        title.style.maxWidth = '150px';
+        title.style.transform = 'translateX(0)';
+        title.style.pointerEvents = 'auto';
+    }
+    if (refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.width = '28px';
+        refreshBtn.style.pointerEvents = 'auto';
+    }
+    if (clearBtn) {
+        clearBtn.style.opacity = '1';
+        clearBtn.style.width = '28px';
+        clearBtn.style.pointerEvents = 'auto';
+    }
+    if (searchBox) {
+        searchBox.style.width = '28px';
+        searchBox.style.background = 'transparent';
+    }
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.style.opacity = '0';
+        searchInput.style.width = '0px';
+        searchInput.style.pointerEvents = 'none';
+    }
+    if (toggleSearch) {
+        toggleSearch.style.background = 'transparent';
+        toggleSearch.style.color = 'inherit';
+    }
+    
+    const zone = document.querySelector('#search-results-expand-zone');
+    if (zone) {
+        zone.style.display = 'none';
+        zone.innerHTML = '';
+    }
+
+    refreshHistoryListInDOM();
+}
+
+function refreshHistoryListInDOM() {
+    const historyListWrapper = document.querySelector('.history-list-wrapper');
+    const historyEl = document.querySelector('.history');
+    if (historyListWrapper) {
+        const savedScrollTop = historyEl ? historyEl.scrollTop : 0;
+        const history = state.status?.history || [];
+        historyListWrapper.innerHTML = renderHistory(history);
+        setTimeout(() => {
+            const newHistoryEl = document.querySelector('.history');
+            if (newHistoryEl) {
+                let scrolled = false;
+                if (lastFocusedTaskId) {
+                    const targetLi = newHistoryEl.querySelector(`#history-item-${lastFocusedTaskId}`);
+                    if (targetLi) {
+                        targetLi.scrollIntoView({
+                            behavior: 'auto',
+                            block: 'nearest'
+                        });
+                        scrolled = true;
+                    }
+                }
+                if (!scrolled) {
+                    newHistoryEl.scrollTop = savedScrollTop;
+                }
+            }
+        }, 0);
+    }
+}
 
 function bindEvents() {
     // 通过事件委托绑定动态按钮，只绑定一次，避免每次 render 后重复叠加监听器
@@ -3170,7 +3292,7 @@ function bindEvents() {
                 }
                 return;
             }
-            if (e.target.closest('#open-redeem-inline')) {
+            if (e.target.closest('#open-redeem, #open-redeem-inline')) {
                 openPanel('redeem');
                 return;
             }
@@ -3178,11 +3300,693 @@ function bindEvents() {
                 closePanel();
                 return;
             }
+
+            // Mode switch
+            const modeBtn = e.target.closest('[data-mode]');
+            if (modeBtn) {
+                const targetMode = modeBtn.dataset.mode;
+                if (targetMode) {
+                    handleModeSwitch(targetMode);
+                }
+                return;
+            }
+
+            // Main UI buttons
+            if (e.target.closest('#refresh, .refresh-action')) {
+                refreshStatus();
+                return;
+            }
+            if (e.target.closest('#choose-files')) {
+                chooseFiles();
+                return;
+            }
+            if (e.target.closest('#choose-folder')) {
+                chooseFolder();
+                return;
+            }
+            if (e.target.closest('#clear-share')) {
+                state.sharePaths = [];
+                state.shareLimitNotice = '';
+                clearMessages();
+                render();
+                return;
+            }
+            const removeBtn = e.target.closest('.remove-path');
+            if (removeBtn) {
+                removePath({ currentTarget: removeBtn });
+                return;
+            }
+            if (e.target.closest('#start-share')) {
+                startShare();
+                return;
+            }
+            if (e.target.closest('#start-chat')) {
+                startChat();
+                return;
+            }
+            if (e.target.closest('#choose-receive')) {
+                chooseReceiveDirectory();
+                return;
+            }
+            if (e.target.closest('#start-receive')) {
+                startReceive();
+                return;
+            }
+            if (e.target.closest('#save-receive-dir')) {
+                saveSettings();
+                return;
+            }
+            if (e.target.closest('.stop-current-action')) {
+                stopCurrent();
+                return;
+            }
+            if (e.target.closest('.stop-chat-action')) {
+                stopChat();
+                return;
+            }
+            const openQrEl = e.target.closest('.open-qr, .preview-button[data-open-url]');
+            if (openQrEl) {
+                openQRPage({ currentTarget: openQrEl });
+                return;
+            }
+            if (e.target.closest('#clear-history')) {
+                clearHistory();
+                return;
+            }
+            if (e.target.closest('#toggle-search')) {
+                toggleSearchInput();
+                render();
+                if (showSearchInput) {
+                    const inputEl = document.querySelector('#history-search-input');
+                    if (inputEl) {
+                        inputEl.focus();
+                        const val = inputEl.value;
+                        inputEl.value = '';
+                        inputEl.value = val;
+                    }
+                } else {
+                    lastFocusedTaskId = null;
+                }
+                return;
+            }
+            const dropdownItem = e.target.closest('.search-dropdown-item');
+            if (dropdownItem) {
+                const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+                if (taskId) {
+                    lastFocusedTaskId = taskId;
+                    toggleSearchDropdown(false);
+                    const zone = document.querySelector('#search-results-expand-zone');
+                    if (zone) {
+                        zone.style.display = 'none';
+                        zone.innerHTML = '';
+                    }
+                    const targetLi = document.getElementById(`history-item-${taskId}`);
+                    if (targetLi) {
+                        targetLi.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest'
+                        });
+                    }
+                }
+                return;
+            }
+            const repeatBtn = e.target.closest('.repeat-task');
+            if (repeatBtn) {
+                repeatTask({ currentTarget: repeatBtn });
+                return;
+            }
+            const saveUrlBtn = e.target.closest('[data-save-url]');
+            if (saveUrlBtn) {
+                saveAttachmentAsFromButton({ currentTarget: saveUrlBtn });
+                return;
+            }
+            if (e.target.closest('#copy-chat-url, .copy-chat-url-action')) {
+                copyChatURL();
+                return;
+            }
+            if (e.target.closest('.chat-qr-toggle-action')) {
+                toggleChatQR();
+                return;
+            }
+
+            // Panel buttons
+            if (e.target.closest('#confirm-switch-ok')) {
+                if (confirmSwitchResolve) {
+                    confirmSwitchResolve(true);
+                    confirmSwitchResolve = null;
+                }
+                closePanel();
+                return;
+            }
+            if (e.target.closest('#confirm-switch-cancel')) {
+                if (confirmSwitchResolve) {
+                    confirmSwitchResolve(false);
+                    confirmSwitchResolve = null;
+                }
+                closePanel();
+                return;
+            }
+            const crashUploadBtn = e.target.closest('#crash-report-upload');
+            if (crashUploadBtn) {
+                crashUploadBtn.disabled = true;
+                crashUploadBtn.textContent = t('crash_report_uploading');
+                SubmitCrashReport().then(reportId => {
+                    LogInfo('[CrashReport] Submitted: ' + reportId);
+                }).catch(err => {
+                    LogError('[CrashReport] Upload failed: ' + err);
+                }).finally(() => {
+                    closePanel();
+                });
+                return;
+            }
+            if (e.target.closest('#crash-report-ignore')) {
+                DismissCrashReport().catch(err => {
+                    LogError('[CrashReport] Dismiss failed: ' + err);
+                });
+                closePanel();
+                return;
+            }
+            if (e.target.closest('#crash-report-never-ask')) {
+                DismissCrashReportPermanently().catch(err => {
+                    LogError('[CrashReport] Permanent dismiss failed: ' + err);
+                });
+                closePanel();
+                return;
+            }
+            if (e.target.closest('.open-docs')) {
+                openExternal();
+                return;
+            }
+            if (e.target.closest('#send-feedback')) {
+                sendFeedback();
+                return;
+            }
+            if (e.target.closest('#copy-feedback')) {
+                copyFeedback();
+                return;
+            }
+            if (e.target.closest('#btn-select-image')) {
+                document.querySelector('#feedback-image-input')?.click();
+                return;
+            }
+            if (e.target.closest('#btn-clear-image')) {
+                state.feedbackImageBase64 = null;
+                state.feedbackImageFormat = null;
+                state.feedbackSendResult = '';
+                const imgInp = document.querySelector('#feedback-image-input');
+                if (imgInp) imgInp.value = '';
+                const prevCont = document.querySelector('#feedback-image-preview-container');
+                if (prevCont) prevCont.style.display = 'none';
+                const prevImg = document.querySelector('#feedback-image-preview');
+                if (prevImg) prevImg.src = '';
+                return;
+            }
+
+            // Share Overlay
+            if (e.target.closest('#close-share-overlay') || e.target.id === 'share-overlay-backdrop' || (e.target.classList && e.target.classList.contains('share-overlay-backdrop'))) {
+                closeShareOverlay(state, render);
+                return;
+            }
+
+            // Settings Panel Controls
+            if (e.target.closest('#open-chat-save')) {
+                openChatSaveDirectory();
+                return;
+            }
+            if (e.target.closest('#btn-select-chat-download-dir')) {
+                SelectReceiveDirectory().then(async (dir) => {
+                    if (dir) {
+                        const input = document.querySelector('#settings-chat-download-dir');
+                        if (input) {
+                            input.value = dir;
+                            syncSettingsFromDOM();
+                            await handleAutoSaveSettings();
+                            syncPanelSurface();
+                        }
+                    }
+                }).catch(err => {
+                    console.error('Failed to select chat download directory:', err);
+                });
+                return;
+            }
+            if (e.target.closest('.edit-chat-sender')) {
+                state.isEditingChatSender = true;
+                syncPanelSurface();
+                const inputEl = document.querySelector('#settings-chat-sender');
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.select();
+                }
+                return;
+            }
+            if (e.target.closest('.cancel-chat-sender')) {
+                state.isEditingChatSender = false;
+                syncPanelSurface();
+                return;
+            }
+            if (e.target.closest('.save-chat-sender')) {
+                const inputEl = document.querySelector('#settings-chat-sender');
+                if (inputEl && state.settings) {
+                    const newName = cleanChatProfileName(inputEl.value);
+                    state.settings.chatSender = newName;
+                    state.isEditingChatSender = false;
+                    handleAutoSaveSettings().then(() => syncPanelSurface());
+                }
+                return;
+            }
+            if (e.target.closest('#btn-avatar-upload')) {
+                document.querySelector('#settings-avatar-file')?.click();
+                return;
+            }
+            if (e.target.closest('#btn-avatar-reset')) {
+                if (state.settings) {
+                    state.settings.chatAvatar = '';
+                    handleAutoSaveSettings().then(() => syncPanelSurface());
+                }
+                return;
+            }
+            if (e.target.closest('#btn-emoji-more')) {
+                state.showEmojiPicker = !state.showEmojiPicker;
+                syncPanelSurface();
+                return;
+            }
+            const emojiPickerItem = e.target.closest('.emoji-picker-item');
+            if (emojiPickerItem) {
+                const emojiVal = emojiPickerItem.dataset.emoji;
+                if (state.settings && emojiVal) {
+                    state.settings.chatAvatar = emojiVal;
+                    state.showEmojiPicker = false;
+                    handleAutoSaveSettings().then(() => syncPanelSurface());
+                }
+                return;
+            }
+            if (e.target.closest('#btn-emoji-picker-custom-submit')) {
+                const inputEl = document.querySelector('#emoji-picker-custom-input');
+                if (inputEl && state.settings) {
+                    const rawVal = inputEl.value.trim();
+                    const emojiVal = cleanChatAvatar(rawVal);
+                    if (emojiVal) {
+                        state.settings.chatAvatar = emojiVal;
+                        state.showEmojiPicker = false;
+                        handleAutoSaveSettings().then(() => syncPanelSurface());
+                    }
+                }
+                return;
+            }
+            if (e.target.closest('#dev-select-log-dir')) {
+                SelectLogDirectory().then(async (selected) => {
+                    if (selected) {
+                        if (!state.settings) state.settings = {};
+                        state.settings.logDir = selected;
+                        await saveSettingsData();
+                        showToast(t('log_dir_updated') || '日志保存路径已更新');
+                        state.appInfo = await AppInfo();
+                        if (typeof GetLogFiles === 'function') {
+                            state.logFiles = await GetLogFiles();
+                        }
+                        render();
+                        openPanel('settings');
+                    }
+                }).catch(error => {
+                    showToast('Failed to select log directory: ' + (error?.message || error));
+                });
+                return;
+            }
+            const openLogBtn = e.target.closest('.btn-open-single-log');
+            if (openLogBtn) {
+                const targetPath = openLogBtn.getAttribute('data-path');
+                if (targetPath) {
+                    OpenPath(targetPath).catch(error => {
+                        showToast('Failed to open log: ' + (error?.message || error));
+                    });
+                }
+                return;
+            }
+            if (e.target.closest('#dev-open-dir')) {
+                const logPath = state.appInfo?.logPath;
+                if (logPath) {
+                    const separator = logPath.includes('\\') ? '\\' : '/';
+                    const parts = logPath.split(separator);
+                    parts.pop();
+                    const logDir = parts.join(separator);
+                    OpenPath(logDir).catch(error => {
+                        showToast('Failed to open log directory: ' + (error?.message || error));
+                    });
+                }
+                return;
+            }
+            if (e.target.closest('#dev-reset-quota')) {
+                DevSetUsedSeconds(0).then(async (status) => {
+                    state.status = status;
+                    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+                    try {
+                        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+                    } catch (err) {
+                        state.shareLimitNotice = '';
+                    }
+                    showToast(t('dev_quota_reset_success') || '已重置每日计时为 0s');
+                    render();
+                    openPanel('settings');
+                }).catch(error => {
+                    showToast('Failed to reset quota: ' + (error?.message || error));
+                });
+                return;
+            }
+            if (e.target.closest('#dev-max-quota')) {
+                DevSetUsedSeconds(600).then(async (status) => {
+                    state.status = status;
+                    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+                    try {
+                        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
+                    } catch (err) {
+                        state.shareLimitNotice = '';
+                    }
+                    showToast(t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)');
+                    render();
+                    openPanel('settings');
+                }).catch(error => {
+                    showToast('Failed to max quota: ' + (error?.message || error));
+                });
+                return;
+            }
+            if (e.target.closest('#dev-force-sync')) {
+                DevForceOnlineLicenseSync().then((status) => {
+                    state.status = status;
+                    syncLicenseFromStatus(state.status);
+                    showToast(t('dev_sync_success') || '在线对账完成，状态已同步');
+                    render();
+                    openPanel('settings');
+                }).catch(async (error) => {
+                    showToast('对账完成：' + (error?.message || error));
+                    try {
+                        state.status = await RefreshLicenseStatus();
+                        syncLicenseFromStatus(state.status);
+                    } catch (e) {
+                        try {
+                            state.status = await AgentStatus();
+                            syncLicenseFromStatus(state.status);
+                        } catch (_) {}
+                    }
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.closest('#dev-inject-license')) {
+                const code = String(state.devLicenseCode || document.querySelector('#dev-license-code')?.value || '').trim().toUpperCase();
+                state.devInjectError = false;
+                state.devInjectMsg = '';
+                if (!code) {
+                    state.devInjectError = true;
+                    state.devInjectMsg = t('dev_inject_empty');
+                    render();
+                    openPanel('settings');
+                    return;
+                }
+                state.devInjectMsg = t('dev_inject_working');
+                render();
+                openPanel('settings');
+                ActivateLicense(code).then(async () => {
+                    await loadStatusData();
+                    state.devInjectError = false;
+                    state.devInjectMsg = t('dev_inject_ok') + ': ' + code;
+                    render();
+                    openPanel('settings');
+                }).catch(error => {
+                    state.devInjectError = true;
+                    state.devInjectMsg = formatActivationError(error);
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.closest('#dev-trigger-crash')) {
+                DevTriggerCrash().then(info => {
+                    state.devCrashMsg = (info && info.hasReport)
+                        ? '✅ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。')
+                        : '❌ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。');
+                    render();
+                    openPanel('settings');
+                }).catch(err => {
+                    state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || '触发崩溃失败：') + err;
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.closest('#dev-disable-mode')) {
+                if (!state.settings) state.settings = {};
+                state.settings.devMode = false;
+                state.settings.debugLog = false;
+                state.settings.viewportDebug = false;
+                saveSettingsData().then(() => {
+                    showToast(t('dev_mode_disabled') || '开发者模式已禁用');
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.closest('#btn-manual-update-check')) {
+                runManualUpdateCheck();
+                return;
+            }
         });
+
+        document.addEventListener('toggle', (e) => {
+            if (e.target.classList.contains('settings-advanced-details')) {
+                if (e.target.classList.contains('dev-details')) {
+                    state.settingsDevOpen = e.target.open;
+                } else {
+                    state.settingsAdvancedOpen = e.target.open;
+                }
+            }
+        }, true);
 
         document.addEventListener('input', (e) => {
             if (e.target.id === 'redeem-code') {
                 state.tempRedeemCode = e.target.value;
+                return;
+            }
+            if (e.target.id === 'receive-dir') {
+                state.receiveDir = e.target.value;
+                const val = e.target.value.trim();
+                const startBtn = document.querySelector('#start-receive');
+                if (startBtn) {
+                    startBtn.disabled = state.busy || !val;
+                }
+                const saveBtn = document.querySelector('#save-receive-dir');
+                if (saveBtn) {
+                    saveBtn.disabled = !val;
+                }
+                return;
+            }
+            if (e.target.id === 'history-search-input') {
+                const val = e.target.value;
+                updateSearchQuery(val);
+                
+                const historyListWrapper = document.querySelector('.history-list-wrapper');
+                if (historyListWrapper) {
+                    const history = state.status?.history || [];
+                    historyListWrapper.innerHTML = renderHistory(history);
+                }
+                
+                const zone = document.querySelector('#search-results-expand-zone');
+                if (zone) {
+                    if (val.trim()) {
+                        toggleSearchDropdown(true);
+                        const history = state.status?.history || [];
+                        const matchResults = getMatchResults(history, val);
+                        
+                        if (matchResults.length > 0) {
+                            zone.innerHTML = matchResults.map(item => `
+                                <div class="search-dropdown-item" data-target-id="${item.taskId}" ${item.filePath ? `data-file-path="${escapeAttr(item.filePath)}"` : ''} ${item.deviceName ? `data-device-name="${escapeAttr(item.deviceName)}"` : ''}>
+                                    <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
+                                    <div class="dropdown-item-content">
+                                        <div class="dropdown-item-title">
+                                            ${highlightText(item.text, val)}
+                                        </div>
+                                        <div class="dropdown-item-detail">
+                                            ${escapeHTML(item.detail)}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('');
+                            zone.style.display = 'flex';
+                        } else {
+                            zone.style.display = 'none';
+                            zone.innerHTML = '';
+                        }
+                    } else {
+                        toggleSearchDropdown(false);
+                        zone.style.display = 'none';
+                        zone.innerHTML = '';
+                    }
+                }
+                return;
+            }
+            if (e.target.id === 'feedback-message') {
+                state.feedbackMessage = e.target.value;
+                state.feedbackSendResult = '';
+                state.feedbackError = null;
+                state.feedbackNotice = null;
+                return;
+            }
+            if (e.target.id === 'feedback-contact') {
+                state.feedbackContact = e.target.value;
+                state.feedbackSendResult = '';
+                state.feedbackError = null;
+                state.feedbackNotice = null;
+                return;
+            }
+            if (e.target.id === 'settings-chat-sender') {
+                const previewEl = document.querySelector('.avatar-preview');
+                if (previewEl) {
+                    const cleaned = cleanChatProfileName(e.target.value);
+                    const avatarVal = state.settings?.chatAvatar || '';
+                    previewEl.innerHTML = renderAvatarMarkup(avatarVal, (cleaned.charAt(0) || 'D').toUpperCase());
+                }
+                return;
+            }
+            if (e.target.id === 'dev-license-code') {
+                state.devLicenseCode = String(e.target.value || '');
+                return;
+            }
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history')) {
+                syncSettingsFromDOM();
+                return;
+            }
+        });
+
+        document.addEventListener('change', async (e) => {
+            if (e.target.id === 'feedback-category') {
+                state.feedbackSendResult = '';
+                state.feedbackError = null;
+                state.feedbackNotice = null;
+                return;
+            }
+            if (e.target.id === 'feedback-image-input') {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                    const result = await compressImageToWebP(file);
+                    state.feedbackImageBase64 = result.dataUrl;
+                    state.feedbackImageFormat = result.format;
+                    const prevImg = document.querySelector('#feedback-image-preview');
+                    const prevCont = document.querySelector('#feedback-image-preview-container');
+                    if (prevImg) prevImg.src = result.dataUrl;
+                    if (prevCont) prevCont.style.display = 'block';
+                    state.feedbackError = '';
+                    const noticeEl = document.querySelector('.feedback-panel .notice.error');
+                    if (noticeEl) noticeEl.remove();
+                } catch (err) {
+                    console.error('Failed to compress image:', err);
+                    state.feedbackError = t('feedback_compress_error') + err.message;
+                    render();
+                    openPanel('feedback');
+                }
+                return;
+            }
+            if (e.target.id === 'settings-right-click') {
+                toggleRightClickIntegration(e);
+                return;
+            }
+            if (e.target.id === 'settings-startup') {
+                toggleStartupIntegration(e);
+                return;
+            }
+            if (e.target.id === 'dev-debug-log') {
+                if (!state.settings) state.settings = {};
+                state.settings.debugLog = Boolean(e.target.checked);
+                saveSettingsData().then(() => {
+                    state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.id === 'dev-viewport-debug') {
+                if (!state.settings) state.settings = {};
+                state.settings.viewportDebug = Boolean(e.target.checked);
+                saveSettingsData().then(() => {
+                    state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.id === 'settings-avatar-file') {
+                const file = e.target.files?.[0];
+                if (file && state.settings) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const img = new Image();
+                        img.onload = async () => {
+                            const canvas = document.createElement('canvas');
+                            const maxDim = 128;
+                            let w = img.width;
+                            let h = img.height;
+                            if (w > maxDim || h > maxDim) {
+                                if (w > h) {
+                                    h = Math.round((h * maxDim) / w);
+                                    w = maxDim;
+                                } else {
+                                    w = Math.round((w * maxDim) / h);
+                                    h = maxDim;
+                                }
+                            }
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, w, h);
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                            state.settings.chatAvatar = compressedBase64;
+                            e.target.value = '';
+                            await handleAutoSaveSettings();
+                            syncPanelSurface();
+                        };
+                        img.src = ev.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+                return;
+            }
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history')) {
+                syncSettingsFromDOM();
+                handleAutoSaveSettings().then(() => {
+                    if (e.target.id === 'settings-auto-update-mode') {
+                        const mode = e.target.value;
+                        if (mode && mode !== 'off') {
+                            state.settings.lastUpdateCheckTime = 0;
+                            handleAutoSaveSettings().then(() => {
+                                runAutoUpdateCheck(true);
+                            });
+                        }
+                    }
+                });
+                return;
+            }
+        });
+
+        document.addEventListener('contextmenu', (e) => {
+            const saveEl = e.target.closest('[data-save-url]');
+            if (saveEl) {
+                openChatContextMenu(e);
+            }
+        });
+
+        document.addEventListener('mouseover', (e) => {
+            const dropdownItem = e.target.closest('.search-dropdown-item');
+            if (dropdownItem) {
+                const taskId = parseInt(dropdownItem.dataset.targetId, 10);
+                if (taskId) {
+                    const targetLi = document.getElementById(`history-item-${taskId}`);
+                    if (targetLi) {
+                        targetLi.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest'
+                        });
+                    }
+                }
             }
         });
 
@@ -3199,96 +4003,31 @@ function bindEvents() {
                 }
                 if (state.activePanel) {
                     closePanel();
+                    return;
                 }
+            }
+            if (e.target.id === 'settings-chat-sender') {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.querySelector('.save-chat-sender')?.click();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    document.querySelector('.cancel-chat-sender')?.click();
+                }
+                return;
+            }
+            if (e.target.id === 'emoji-picker-custom-input') {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.querySelector('#btn-emoji-picker-custom-submit')?.click();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    state.showEmojiPicker = false;
+                    syncPanelSurface();
+                }
+                return;
             }
         });
-
-function shrinkSearchBoxInDOM() {
-    const title = document.querySelector('.panel-title');
-    const refreshBtn = document.querySelector('#refresh');
-    const clearBtn = document.querySelector('#clear-history');
-    const searchBox = document.querySelector('.search-input-box');
-    const searchInput = document.querySelector('#history-search-input');
-    const toggleSearch = document.querySelector('#toggle-search');
-    
-    if (showSearchInput) {
-        toggleSearchInput(); // 这会把 showSearchInput 设为 false，searchQuery 设为 ''
-    }
-    toggleSearchDropdown(false);
-    
-    const panel = document.querySelector('.side .panel');
-    if (panel) {
-        panel.classList.remove('search-active');
-    }
-    
-    if (title) {
-        title.style.opacity = '1';
-        title.style.maxWidth = '150px';
-        title.style.transform = 'translateX(0)';
-        title.style.pointerEvents = 'auto';
-    }
-    if (refreshBtn) {
-        refreshBtn.style.opacity = '1';
-        refreshBtn.style.width = '28px';
-        refreshBtn.style.pointerEvents = 'auto';
-    }
-    if (clearBtn) {
-        clearBtn.style.opacity = '1';
-        clearBtn.style.width = '28px';
-        clearBtn.style.pointerEvents = 'auto';
-    }
-    if (searchBox) {
-        searchBox.style.width = '28px';
-        searchBox.style.background = 'transparent';
-    }
-    if (searchInput) {
-        searchInput.value = '';
-        searchInput.style.opacity = '0';
-        searchInput.style.width = '0px';
-        searchInput.style.pointerEvents = 'none';
-    }
-    if (toggleSearch) {
-        toggleSearch.style.background = 'transparent';
-        toggleSearch.style.color = 'inherit';
-    }
-    
-    const zone = document.querySelector('#search-results-expand-zone');
-    if (zone) {
-        zone.style.display = 'none';
-        zone.innerHTML = '';
-    }
-
-    refreshHistoryListInDOM();
-}
-
-function refreshHistoryListInDOM() {
-    const historyListWrapper = document.querySelector('.history-list-wrapper');
-    const historyEl = document.querySelector('.history');
-    if (historyListWrapper) {
-        const savedScrollTop = historyEl ? historyEl.scrollTop : 0;
-        const history = state.status?.history || [];
-        historyListWrapper.innerHTML = renderHistory(history);
-        setTimeout(() => {
-            const newHistoryEl = document.querySelector('.history');
-            if (newHistoryEl) {
-                let scrolled = false;
-                if (lastFocusedTaskId) {
-                    const targetLi = newHistoryEl.querySelector(`#history-item-${lastFocusedTaskId}`);
-                    if (targetLi) {
-                        targetLi.scrollIntoView({
-                            behavior: 'auto',
-                            block: 'nearest'
-                        });
-                        scrolled = true;
-                    }
-                }
-                if (!scrolled) {
-                    newHistoryEl.scrollTop = savedScrollTop;
-                }
-            }
-        }, 0);
-    }
-}
 
         document.addEventListener('pointerdown', (e) => {
             if (showSearchInput) {
@@ -3309,7 +4048,6 @@ function refreshHistoryListInDOM() {
                     state.deviceFilesExpanded = state.deviceFilesExpanded || {};
                     state.deviceFilesExpanded[clientID] = !state.deviceFilesExpanded[clientID];
                     
-                    // 局部更新 UI 替代全局 render()，以防打断或闪烁
                     const transferStage = document.querySelector('.transfer-stage');
                     if (transferStage) {
                         if (state.mode === 'share') {
@@ -3329,253 +4067,18 @@ function refreshHistoryListInDOM() {
                     render();
                 }
             }
+
+            if (state.chatQROpen) {
+                closeChatQROnOutside(e);
+            }
         });
     }
-    document.querySelectorAll('[data-mode]').forEach((button) => {
-        button.addEventListener('click', async () => {
-            const targetMode = button.dataset.mode;
-            if (state.mode === targetMode) {
-                return;
-            }
 
-            const activeShare = activeShareTask();
-            const activeRecv = state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current) ? state.status.current : null;
-            const activeChat = activeChatTask();
-            const activeTask = activeShare || activeRecv || activeChat;
-
-            if (activeTask) {
-                try {
-                    const confirmed = await showConfirmSwitchDialog();
-                    if (!confirmed) {
-                        return;
-                    }
-                    if (activeChat) {
-                        await StopChat();
-                    } else {
-                        await StopCurrent();
-                    }
-                    if (state.status) {
-                        state.status.current = null;
-                        state.status.chat = null;
-                    }
-                    state.busy = false;
-                } catch (e) {
-                    console.error('Failed to stop current active task on mode switch:', e);
-                    return;
-                }
-            }
-
-            setMode(targetMode);
-            clearMessages();
-            render();
-        });
-    });
-    document.querySelector('#refresh')?.addEventListener('click', refreshStatus);
-    document.querySelectorAll('.refresh-action').forEach((button) => {
-        button.addEventListener('click', refreshStatus);
-    });
-    document.querySelector('#open-redeem')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#choose-files')?.addEventListener('click', chooseFiles);
-    document.querySelector('#choose-folder')?.addEventListener('click', chooseFolder);
-    document.querySelector('#clear-share')?.addEventListener('click', () => {
-        state.sharePaths = [];
-        state.shareLimitNotice = '';
-        clearMessages();
-        render();
-    });
-    document.querySelectorAll('.remove-path').forEach((button) => {
-        button.addEventListener('click', removePath);
-    });
-    document.querySelector('#start-share')?.addEventListener('click', startShare);
-    document.querySelector('#start-chat')?.addEventListener('click', startChat);
-    document.querySelector('#choose-receive')?.addEventListener('click', chooseReceiveDirectory);
-      // 悬浮匹配结果 Hover 滚动定位到对应大卡片项
-    document.addEventListener('mouseover', (e) => {
-        const dropdownItem = e.target.closest('.search-dropdown-item');
-        if (dropdownItem) {
-            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
-            if (taskId) {
-                const targetLi = document.getElementById(`history-item-${taskId}`);
-                if (targetLi) {
-                    targetLi.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }
-            }
-        }
-    });
-
-    // 点击某条搜索记录，收起结果列表，滚动到对应项，但不关闭搜索框，保持关键字高亮
-    document.addEventListener('click', (e) => {
-        const dropdownItem = e.target.closest('.search-dropdown-item');
-        if (dropdownItem) {
-            const taskId = parseInt(dropdownItem.dataset.targetId, 10);
-            if (taskId) {
-                lastFocusedTaskId = taskId;
-                // 1. 关闭下拉面板
-                toggleSearchDropdown(false);
-                const zone = document.querySelector('#search-results-expand-zone');
-                if (zone) {
-                    zone.style.display = 'none';
-                    zone.innerHTML = '';
-                }
-                
-                // 2. 平滑滚动到历史记录中对应那项
-                const targetLi = document.getElementById(`history-item-${taskId}`);
-                if (targetLi) {
-                    targetLi.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }
-            }
-        }
-    });
-
-    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
-        const val = e.target.value;
-        updateSearchQuery(val);
-        
-        const historyListWrapper = document.querySelector('.history-list-wrapper');
-        if (historyListWrapper) {
-            const history = state.status?.history || [];
-            historyListWrapper.innerHTML = renderHistory(history);
-        }
-        
-        const zone = document.querySelector('#search-results-expand-zone');
-        if (zone) {
-            if (val.trim()) {
-                toggleSearchDropdown(true);
-                const history = state.status?.history || [];
-                const matchResults = getMatchResults(history, val);
-                
-                if (matchResults.length > 0) {
-                    zone.innerHTML = matchResults.map(item => `
-                        <div class="search-dropdown-item" data-target-id="${item.taskId}" ${item.filePath ? `data-file-path="${escapeAttr(item.filePath)}"` : ''} ${item.deviceName ? `data-device-name="${escapeAttr(item.deviceName)}"` : ''}>
-                            <span class="dropdown-item-icon">${item.type === 'file' ? '📄' : (item.type === 'device' ? '📱' : 'ℹ️')}</span>
-                            <div class="dropdown-item-content">
-                                <div class="dropdown-item-title">
-                                    ${highlightText(item.text, val)}
-                                </div>
-                                <div class="dropdown-item-detail">
-                                    ${escapeHTML(item.detail)}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
-                    zone.style.display = 'flex';
-                } else {
-                    zone.style.display = 'none';
-                    zone.innerHTML = '';
-                }
-            } else {
-                toggleSearchDropdown(false);
-                zone.style.display = 'none';
-                zone.innerHTML = '';
-            }
-        }
-    });
-    document.querySelector('#receive-dir')?.addEventListener('input', (e) => {
-        state.receiveDir = e.target.value;
-        const val = e.target.value.trim();
-        const startBtn = document.querySelector('#start-receive');
-        if (startBtn) {
-            startBtn.disabled = state.busy || !val;
-        }
-        const saveBtn = document.querySelector('#save-receive-dir');
-        if (saveBtn) {
-            saveBtn.disabled = !val;
-        }
-    });
-    document.querySelector('#start-receive')?.addEventListener('click', startReceive);
-    document.querySelector('#save-receive-dir')?.addEventListener('click', saveSettings);
-    bindPanelEvents();
-    bindShareEvents(state, t, escapeHTML, horizontalLogoURL, faviconURL, render);
-    document.querySelectorAll('.stop-current-action').forEach((button) => {
-        button.addEventListener('click', stopCurrent);
-    });
-    document.querySelectorAll('.stop-chat-action').forEach((button) => {
-        button.addEventListener('click', stopChat);
-    });
-    document.querySelectorAll('.open-qr, .preview-button[data-open-url]').forEach((button) => {
-        button.addEventListener('click', openQRPage);
-    });
-    document.querySelector('#clear-history')?.addEventListener('click', clearHistory);
-    document.querySelector('#toggle-search')?.addEventListener('click', () => {
-        toggleSearchInput();
-        render();
-        if (showSearchInput) {
-            const inputEl = document.querySelector('#history-search-input');
-            if (inputEl) {
-                inputEl.focus();
-                const val = inputEl.value;
-                inputEl.value = '';
-                inputEl.value = val;
-            }
-        } else {
-            lastFocusedTaskId = null;
-        }
-    });
-    document.querySelector('#history-search-input')?.addEventListener('input', (e) => {
-        const val = e.target.value;
-        updateSearchQuery(val);
-        
-        const historyListWrapper = document.querySelector('.history-list-wrapper');
-        if (historyListWrapper) {
-            const history = state.status?.history || [];
-            let filteredHistory = history;
-            if (val.trim()) {
-                const query = val.trim().toLowerCase();
-                filteredHistory = history.filter(task => {
-                    if (String(task.id).toLowerCase().includes(query)) return true;
-                    
-                    const actionText = ((task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : (task.action === 'chat' ? t('chat') : task.action))).toLowerCase();
-                    if (actionText.includes(query)) return true;
-
-                    const files = task.action === 'receive' ? (task.savedFiles || []) : (task.paths || []);
-                    for (const file of files) {
-                        const shortName = String(file || '').split(/[\\/]/).filter(Boolean).pop() || file || '';
-                        if (shortName.toLowerCase().includes(query) || file.toLowerCase().includes(query)) {
-                            return true;
-                        }
-                    }
-
-                    if (task.clientStates) {
-                        for (const client of Object.values(task.clientStates)) {
-                            const clientName = client.deviceName || client.clientID || '';
-                            if (clientName.toLowerCase().includes(query)) {
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                });
-            }
-            historyListWrapper.innerHTML = renderHistory(filteredHistory);
-        }
-    });
-    document.querySelectorAll('.repeat-task').forEach((button) => {
-        button.addEventListener('click', repeatTask);
-    });
-    document.querySelectorAll('[data-save-url]').forEach((element) => {
-        element.addEventListener('contextmenu', openChatContextMenu);
-        element.addEventListener('click', saveAttachmentAsFromButton);
-    });
-    document.querySelector('#copy-chat-url')?.addEventListener('click', copyChatURL);
-    document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
-        button.addEventListener('click', copyChatURL);
-    });
-    document.querySelectorAll('.chat-qr-toggle-action').forEach((button) => {
-        button.addEventListener('click', toggleChatQR);
-    });
-    document.removeEventListener('pointerdown', closeChatQROnOutside);
-    if (state.chatQROpen) {
-        document.addEventListener('pointerdown', closeChatQROnOutside);
-    }
+    document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
 
     const chatIframe = document.querySelector('#chat-iframe');
-    if (chatIframe) {
+    if (chatIframe && !chatIframe._langListenerBound) {
+        chatIframe._langListenerBound = true;
         chatIframe.addEventListener('load', () => {
             const lang = state.settings?.lang;
             if (lang) {
@@ -3584,150 +4087,20 @@ function refreshHistoryListInDOM() {
                         type: 'update-lang',
                         lang: lang
                     }, activeChatFrameOrigin() || '*');
-                } catch (e) {
-                    // Ignored
-                }
+                } catch (e) {}
             }
         });
     }
 }
 
 function bindPanelEvents() {
-    document.querySelector('#confirm-switch-ok')?.addEventListener('click', () => {
-        if (confirmSwitchResolve) {
-            confirmSwitchResolve(true);
-            confirmSwitchResolve = null;
-        }
-        closePanel();
-    });
-    document.querySelector('#confirm-switch-cancel')?.addEventListener('click', () => {
-        if (confirmSwitchResolve) {
-            confirmSwitchResolve(false);
-            confirmSwitchResolve = null;
-        }
-        closePanel();
-    });
-    document.querySelector('#crash-report-upload')?.addEventListener('click', async () => {
-        const btn = document.querySelector('#crash-report-upload');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = t('crash_report_uploading');
-        }
-        try {
-            const reportId = await SubmitCrashReport();
-            LogInfo('[CrashReport] Submitted: ' + reportId);
-        } catch (err) {
-            LogError('[CrashReport] Upload failed: ' + err);
-        }
-        closePanel();
-    });
-    document.querySelector('#crash-report-ignore')?.addEventListener('click', async () => {
-        try {
-            await DismissCrashReport();
-        } catch (err) {
-            LogError('[CrashReport] Dismiss failed: ' + err);
-        }
-        closePanel();
-    });
-    document.querySelector('#crash-report-never-ask')?.addEventListener('click', async () => {
-        try {
-            await DismissCrashReportPermanently();
-        } catch (err) {
-            LogError('[CrashReport] Permanent dismiss failed: ' + err);
-        }
-        closePanel();
-    });
-    bindSettingsControls();
-    document.querySelector('.open-docs')?.addEventListener('click', openExternal);
-    document.querySelector('#send-feedback')?.addEventListener('click', sendFeedback);
-    document.querySelector('#copy-feedback')?.addEventListener('click', copyFeedback);
-
-    // Feedback image uploader events
-    const imageInput = document.querySelector('#feedback-image-input');
-    const selectImageBtn = document.querySelector('#btn-select-image');
-    const clearImageBtn = document.querySelector('#btn-clear-image');
-    const previewContainer = document.querySelector('#feedback-image-preview-container');
-    const previewImg = document.querySelector('#feedback-image-preview');
-
-    selectImageBtn?.addEventListener('click', () => {
-        imageInput?.click();
-    });
-
-    imageInput?.addEventListener('change', async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        try {
-            const result = await compressImageToWebP(file);
-            state.feedbackImageBase64 = result.dataUrl;
-            state.feedbackImageFormat = result.format;
-            
-            if (previewImg) previewImg.src = result.dataUrl;
-            if (previewContainer) previewContainer.style.display = 'block';
-            state.feedbackError = '';
-            // Render to update potential error displays without losing inputs since fields aren't data-bound to state
-            const noticeEl = document.querySelector('.feedback-panel .notice.error');
-            if (noticeEl) noticeEl.remove();
-        } catch (err) {
-            console.error('Failed to compress image:', err);
-            state.feedbackError = t('feedback_compress_error') + err.message;
-            render();
-            openPanel('feedback');
-        }
-    });
-
-    clearImageBtn?.addEventListener('click', () => {
-        state.feedbackImageBase64 = null;
-        state.feedbackImageFormat = null;
-        state.feedbackSendResult = '';
-        if (imageInput) imageInput.value = '';
-        if (previewContainer) previewContainer.style.display = 'none';
-        if (previewImg) previewImg.src = '';
-    });
-
-    const fbMessage = document.querySelector('#feedback-message');
-    fbMessage?.addEventListener('input', (e) => {
-        state.feedbackMessage = e.target.value;
-        state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
-    });
-
-    const fbContact = document.querySelector('#feedback-contact');
-    fbContact?.addEventListener('input', (e) => {
-        state.feedbackContact = e.target.value;
-        state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
-    });
-
-    const fbCategory = document.querySelector('#feedback-category');
-    fbCategory?.addEventListener('change', () => {
-        state.feedbackSendResult = '';
-        state.feedbackError = null;
-        state.feedbackNotice = null;
-    });
     if (state.confirmResetPending) {
         document.getElementById('cancel-reset-license')?.focus();
     }
 }
 
 function bindChatQRPanelEvents() {
-    document.querySelectorAll('.refresh-action').forEach((button) => {
-        button.addEventListener('click', refreshStatus);
-    });
-    document.querySelectorAll('.open-qr').forEach((button) => {
-        button.addEventListener('click', openQRPage);
-    });
-    document.querySelectorAll('.stop-current-action').forEach((button) => {
-        button.addEventListener('click', stopCurrent);
-    });
-    document.querySelectorAll('.chat-qr-toggle-action').forEach((button) => {
-        button.addEventListener('click', toggleChatQR);
-    });
-    document.querySelectorAll('.copy-chat-url-action').forEach((button) => {
-        button.addEventListener('click', copyChatURL);
-    });
+    // Handled via static delegation in bindEvents
 }
 
 function syncAndSaveSettingsInBackground() {
@@ -4336,416 +4709,7 @@ async function toggleStartupIntegration(event) {
 }
 
 function bindSettingsControls() {
-    document.querySelector('#settings-right-click')?.addEventListener('change', toggleRightClickIntegration);
-    document.querySelector('#settings-startup')?.addEventListener('change', toggleStartupIntegration);
     document.querySelectorAll('[data-help]').forEach(bindHelpTooltip);
-    document.querySelector('#open-chat-save')?.addEventListener('click', openChatSaveDirectory);
-    document.querySelector('#btn-select-chat-download-dir')?.addEventListener('click', async () => {
-        try {
-            const dir = await SelectReceiveDirectory();
-            if (dir) {
-                const input = document.querySelector('#settings-chat-download-dir');
-                if (input) {
-                    input.value = dir;
-                    syncSettingsFromDOM();
-                    await handleAutoSaveSettings();
-                    syncPanelSurface();
-                }
-            }
-        } catch (err) {
-            console.error('Failed to select chat download directory:', err);
-        }
-    });
-
-    // Chat Sender Edit controls
-    document.querySelector('.edit-chat-sender')?.addEventListener('click', () => {
-        state.isEditingChatSender = true;
-        syncPanelSurface();
-        const inputEl = document.querySelector('#settings-chat-sender');
-        if (inputEl) {
-            inputEl.focus();
-            inputEl.select();
-        }
-    });
-
-    document.querySelector('.cancel-chat-sender')?.addEventListener('click', () => {
-        state.isEditingChatSender = false;
-        syncPanelSurface();
-    });
-
-    document.querySelector('.save-chat-sender')?.addEventListener('click', async () => {
-        const inputEl = document.querySelector('#settings-chat-sender');
-        if (inputEl && state.settings) {
-            const newName = cleanChatProfileName(inputEl.value);
-            state.settings.chatSender = newName;
-            state.isEditingChatSender = false;
-            await handleAutoSaveSettings();
-            syncPanelSurface();
-        }
-    });
-
-    const chatSenderInput = document.querySelector('#settings-chat-sender');
-    if (chatSenderInput) {
-        chatSenderInput.addEventListener('keydown', async (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                document.querySelector('.save-chat-sender')?.click();
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                document.querySelector('.cancel-chat-sender')?.click();
-            }
-        });
-        chatSenderInput.addEventListener('input', (event) => {
-            const previewEl = document.querySelector('.avatar-preview');
-            if (previewEl) {
-                const cleaned = cleanChatProfileName(event.target.value);
-                const avatarVal = state.settings?.chatAvatar || '';
-                previewEl.innerHTML = renderAvatarMarkup(avatarVal, (cleaned.charAt(0) || 'D').toUpperCase());
-            }
-        });
-    }
-
-    // Avatar upload/reset and presets
-    document.querySelector('#btn-avatar-upload')?.addEventListener('click', () => {
-        document.querySelector('#settings-avatar-file')?.click();
-    });
-
-    document.querySelector('#settings-avatar-file')?.addEventListener('change', (event) => {
-        const file = event.target.files?.[0];
-        if (file && state.settings) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = async () => {
-                    const canvas = document.createElement('canvas');
-                    const maxDim = 128;
-                    let w = img.width;
-                    let h = img.height;
-                    if (w > maxDim || h > maxDim) {
-                        if (w > h) {
-                            h = Math.round((h * maxDim) / w);
-                            w = maxDim;
-                        } else {
-                            w = Math.round((w * maxDim) / h);
-                            h = maxDim;
-                        }
-                    }
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                    
-                    state.settings.chatAvatar = compressedBase64;
-                    event.target.value = '';
-                    await handleAutoSaveSettings();
-                    syncPanelSurface();
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
-    document.querySelector('#btn-avatar-reset')?.addEventListener('click', async () => {
-        if (state.settings) {
-            state.settings.chatAvatar = '';
-            await handleAutoSaveSettings();
-            syncPanelSurface();
-        }
-    });
-
-    document.querySelector('#btn-emoji-more')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        state.showEmojiPicker = !state.showEmojiPicker;
-        syncPanelSurface();
-    });
-
-    document.querySelectorAll('.emoji-picker-item').forEach(btn => {
-        btn.addEventListener('click', async (event) => {
-            event.stopPropagation();
-            const emojiVal = event.currentTarget.dataset.emoji;
-            if (state.settings && emojiVal) {
-                state.settings.chatAvatar = emojiVal;
-                state.showEmojiPicker = false;
-                await handleAutoSaveSettings();
-                syncPanelSurface();
-            }
-        });
-    });
-
-    const customEmojiInput = document.querySelector('#emoji-picker-custom-input');
-    if (customEmojiInput) {
-        customEmojiInput.addEventListener('click', (event) => {
-            event.stopPropagation();
-        });
-        customEmojiInput.addEventListener('keydown', async (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                document.querySelector('#btn-emoji-picker-custom-submit')?.click();
-            } else if (event.key === 'Escape') {
-                event.preventDefault();
-                state.showEmojiPicker = false;
-                syncPanelSurface();
-            }
-        });
-    }
-
-    document.querySelector('#btn-emoji-picker-custom-submit')?.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        const inputEl = document.querySelector('#emoji-picker-custom-input');
-        if (inputEl && state.settings) {
-            const rawVal = inputEl.value.trim();
-            const emojiVal = cleanChatAvatar(rawVal);
-            if (emojiVal) {
-                state.settings.chatAvatar = emojiVal;
-                state.showEmojiPicker = false;
-                await handleAutoSaveSettings();
-                syncPanelSurface();
-            }
-        }
-    });
-
-    const portEl = document.querySelector('#settings-port');
-    if (portEl) {
-        portEl.addEventListener('blur', () => {
-            if (state.settings && portEl.value !== String(state.settings.port || 0)) {
-                portEl.value = String(state.settings.port || 0);
-            }
-        });
-    }
-
-    const inputs = [
-        '#settings-interface',
-        '#settings-port',
-        '#settings-browser',
-        '#settings-chat-autosave',
-        '#settings-chat-download-dir',
-        '#settings-chat-v2',
-        '#settings-close-behavior',
-        '#settings-auto-update-mode',
-        '#settings-update-interval',
-        '#settings-lang',
-        '#settings-show-history'
-    ];
-    inputs.forEach(selector => {
-        const el = document.querySelector(selector);
-        if (el) {
-            el.addEventListener('change', async () => {
-                syncSettingsFromDOM();
-                await handleAutoSaveSettings();
-                if (selector === '#settings-auto-update-mode') {
-                    const mode = el.value;
-                    if (mode && mode !== 'off') {
-                        state.settings.lastUpdateCheckTime = 0;
-                        await handleAutoSaveSettings();
-                        runAutoUpdateCheck(true);
-                    }
-                }
-            });
-            el.addEventListener('input', syncSettingsFromDOM);
-        }
-    });
-
-    const advDetails = document.querySelector('.settings-advanced-details');
-    if (advDetails) {
-        advDetails.addEventListener('toggle', (event) => {
-            state.settingsAdvancedOpen = event.currentTarget.open;
-        });
-    }
-
-    const devDetails = document.querySelector('.settings-advanced-details.dev-details');
-    if (devDetails) {
-        devDetails.addEventListener('toggle', (event) => {
-            state.settingsDevOpen = event.currentTarget.open;
-        });
-    }
-
-    document.querySelector('#dev-debug-log')?.addEventListener('change', async (event) => {
-        if (!state.settings) state.settings = {};
-        state.settings.debugLog = Boolean(event.currentTarget.checked);
-        await saveSettingsData();
-        state.notice = state.settings.debugLog ? t('debug_logs_enabled') : t('debug_logs_disabled');
-        render();
-        openPanel('settings');
-    });
-
-    document.querySelector('#dev-viewport-debug')?.addEventListener('change', async (event) => {
-        if (!state.settings) state.settings = {};
-        state.settings.viewportDebug = Boolean(event.currentTarget.checked);
-        await saveSettingsData();
-        state.notice = state.settings.viewportDebug ? t('viewport_debug_enabled') : t('viewport_debug_disabled');
-        render();
-        openPanel('settings');
-    });
-
-    document.querySelector('#dev-select-log-dir')?.addEventListener('click', async () => {
-        try {
-            const selected = await SelectLogDirectory();
-            if (selected) {
-                if (!state.settings) state.settings = {};
-                state.settings.logDir = selected;
-                await saveSettingsData();
-                showToast(t('log_dir_updated') || '日志保存路径已更新');
-                state.appInfo = await AppInfo();
-                if (typeof GetLogFiles === 'function') {
-                    state.logFiles = await GetLogFiles();
-                }
-                render();
-                openPanel('settings');
-            }
-        } catch (error) {
-            showToast('Failed to select log directory: ' + (error?.message || error));
-        }
-    });
-
-    document.querySelectorAll('.btn-open-single-log').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const targetPath = e.currentTarget.getAttribute('data-path');
-            if (targetPath) {
-                try {
-                    await OpenPath(targetPath);
-                } catch (error) {
-                    showToast('Failed to open log: ' + (error?.message || error));
-                }
-            }
-        });
-    });
-
-    document.querySelector('#dev-open-dir')?.addEventListener('click', async () => {
-        const logPath = state.appInfo?.logPath;
-        if (logPath) {
-            try {
-                const separator = logPath.includes('\\') ? '\\' : '/';
-                const parts = logPath.split(separator);
-                parts.pop();
-                const logDir = parts.join(separator);
-                await OpenPath(logDir);
-            } catch (error) {
-                showToast('Failed to open log directory: ' + (error?.message || error));
-            }
-        }
-    });
-
-    document.querySelector('#dev-reset-quota')?.addEventListener('click', async () => {
-        try {
-            state.status = await DevSetUsedSeconds(0);
-            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-            try {
-                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-            } catch (e) {
-                state.shareLimitNotice = '';
-            }
-            showToast(t('dev_quota_reset_success') || '已重置每日计时为 0s');
-            render();
-            openPanel('settings');
-        } catch (error) {
-            showToast('Failed to reset quota: ' + (error?.message || error));
-        }
-    });
-
-    document.querySelector('#dev-max-quota')?.addEventListener('click', async () => {
-        try {
-            state.status = await DevSetUsedSeconds(600);
-            const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-            try {
-                state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-            } catch (e) {
-                state.shareLimitNotice = '';
-            }
-            showToast(t('dev_quota_max_success') || '已将使用秒数设置为 10分钟(600s)');
-            render();
-            openPanel('settings');
-        } catch (error) {
-            showToast('Failed to max quota: ' + (error?.message || error));
-        }
-    });
-
-    document.querySelector('#dev-force-sync')?.addEventListener('click', async () => {
-        try {
-            state.status = await DevForceOnlineLicenseSync();
-            syncLicenseFromStatus(state.status);
-            showToast(t('dev_sync_success') || '在线对账完成，状态已同步');
-            render();
-            openPanel('settings');
-        } catch (error) {
-            // Wails rejects on (status, err) when err != nil — re-fetch authoritative snapshot.
-            // Unbind/revoke paths still demote local .lic; UI must follow online result.
-            showToast('对账完成：' + (error?.message || error));
-            try {
-                state.status = await RefreshLicenseStatus();
-                syncLicenseFromStatus(state.status);
-            } catch (e) {
-                try {
-                    state.status = await AgentStatus();
-                    syncLicenseFromStatus(state.status);
-                } catch (_) {}
-            }
-            render();
-            openPanel('settings');
-        }
-    });
-
-    document.querySelector('#dev-license-code')?.addEventListener('input', (e) => {
-        state.devLicenseCode = String(e.target?.value || '');
-    });
-
-    document.querySelector('#dev-inject-license')?.addEventListener('click', async () => {
-        const code = String(state.devLicenseCode || document.querySelector('#dev-license-code')?.value || '')
-            .trim()
-            .toUpperCase();
-        state.devInjectError = false;
-        state.devInjectMsg = '';
-        if (!code) {
-            state.devInjectError = true;
-            state.devInjectMsg = t('dev_inject_empty');
-            render();
-            openPanel('settings');
-            return;
-        }
-        try {
-            state.devInjectMsg = t('dev_inject_working');
-            render();
-            openPanel('settings');
-            await ActivateLicense(code);
-            await loadStatusData();
-            state.devInjectError = false;
-            state.devInjectMsg = t('dev_inject_ok') + ': ' + code;
-            render();
-            openPanel('settings');
-        } catch (error) {
-            state.devInjectError = true;
-            state.devInjectMsg = formatActivationError(error);
-            render();
-            openPanel('settings');
-        }
-    });
-
-    document.querySelector('#dev-trigger-crash')?.addEventListener('click', async () => {
-        try {
-            const info = await DevTriggerCrash();
-            state.devCrashMsg = (info && info.hasReport)
-                ? '✅ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。')
-                : '❌ ' + (t('dev_crash_triggered') || '崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。');
-        } catch (err) {
-            state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || '触发崩溃失败：') + err;
-        }
-        render();
-        openPanel('settings');
-    });
-
-    document.querySelector('#dev-disable-mode')?.addEventListener('click', async () => {
-        if (!state.settings) state.settings = {};
-        state.settings.devMode = false;
-        state.settings.debugLog = false;
-        state.settings.viewportDebug = false;
-        await saveSettingsData();
-        showToast(t('dev_mode_disabled') || '开发者模式已禁用');
-        render();
-        openPanel('settings');
-    });
-
-    document.querySelector('#btn-manual-update-check')?.addEventListener('click', runManualUpdateCheck);
 }
 
 function updateIntegrationRow(kind) {
@@ -4773,7 +4737,6 @@ function updateIntegrationRow(kind) {
     const control = document.querySelector(config.control);
     if (control) {
         control.innerHTML = `${renderStatusBadge(config.status)}${renderSwitch(config.switchId, config.status?.enabled, config.status?.supported === false)}`;
-        document.querySelector(`#${config.switchId}`)?.addEventListener('change', config.handler);
     }
 }
 
@@ -4973,6 +4936,10 @@ function showContextMenu(items, x, y) {
 }
 
 function bindHelpTooltip(element) {
+    if (element._helpTooltipBound) {
+        return;
+    }
+    element._helpTooltipBound = true;
     element.addEventListener('mouseenter', showHelpTooltip);
     element.addEventListener('focus', showHelpTooltip);
     element.addEventListener('mousemove', positionHelpTooltip);
@@ -5308,6 +5275,9 @@ function applyStatusData(nextStatus) {
 
 async function run(fn, options = {}) {
     const showBusy = options.busy !== false;
+    if (showBusy && state.busy) {
+        return;
+    }
     state.error = '';
     if (showBusy) {
         state.busy = true;
