@@ -3124,6 +3124,60 @@ function bindEvents() {
                 window.runtime.BrowserOpenURL(portalUrl);
                 return;
             }
+            const buyLicBtn = e.target.closest('.buy-license-btn, #buy-license-btn, #plan-buy-license-btn');
+            if (buyLicBtn) {
+                e.preventDefault();
+                const pricingUrl = state.appInfo?.isTest
+                    ? 'https://test.eqt.net.im/pricing.html'
+                    : 'https://www.eqt.net.im/pricing.html';
+                window.runtime.BrowserOpenURL(pricingUrl);
+                return;
+            }
+            const planBackBtn = e.target.closest('#plan-back-to-license');
+            if (planBackBtn) {
+                state.activePanel = 'license';
+                render();
+                return;
+            }
+            const planGoRedeemBtn = e.target.closest('#plan-go-redeem');
+            if (planGoRedeemBtn) {
+                state.activePanel = 'redeem';
+                render();
+                return;
+            }
+            const emailCopyWrapper = e.target.closest('.email-copy-wrapper');
+            if (emailCopyWrapper) {
+                e.preventDefault();
+                const textToCopy = emailCopyWrapper.getAttribute('data-copy-text') || emailCopyWrapper.getAttribute('data-email');
+                if (textToCopy) {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(textToCopy);
+                    } else {
+                        const input = document.createElement('input');
+                        input.value = textToCopy;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                    }
+                    const mask = emailCopyWrapper.querySelector('.email-copy-mask');
+                    if (mask) {
+                        mask.style.opacity = '1';
+                        setTimeout(() => {
+                            mask.style.opacity = '0';
+                        }, 1200);
+                    }
+                }
+                return;
+            }
+            if (e.target.closest('#open-redeem-inline')) {
+                openPanel('redeem');
+                return;
+            }
+            if (e.target.closest('#close-panel') || (e.target.classList && e.target.classList.contains('overlay'))) {
+                closePanel();
+                return;
+            }
         });
 
         document.addEventListener('input', (e) => {
@@ -3539,13 +3593,6 @@ function refreshHistoryListInDOM() {
 }
 
 function bindPanelEvents() {
-    document.querySelector('#open-redeem-inline')?.addEventListener('click', () => openPanel('redeem'));
-    document.querySelector('#close-panel')?.addEventListener('click', closePanel);
-    document.querySelector('.overlay')?.addEventListener('click', (event) => {
-        if (event.target.classList.contains('overlay')) {
-            closePanel();
-        }
-    });
     document.querySelector('#confirm-switch-ok')?.addEventListener('click', () => {
         if (confirmSwitchResolve) {
             confirmSwitchResolve(true);
@@ -3663,55 +3710,6 @@ function bindPanelEvents() {
     if (state.confirmResetPending) {
         document.getElementById('cancel-reset-license')?.focus();
     }
-
-    document.querySelectorAll('.email-copy-wrapper').forEach(wrapper => {
-        wrapper.addEventListener('click', (e) => {
-            e.preventDefault();
-            const textToCopy = wrapper.getAttribute('data-copy-text') || wrapper.getAttribute('data-email');
-            if (!textToCopy) return;
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(textToCopy);
-            } else {
-                const input = document.createElement('input');
-                input.value = textToCopy;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand('copy');
-                document.body.removeChild(input);
-            }
-            const mask = wrapper.querySelector('.email-copy-mask');
-            if (mask) {
-                mask.style.opacity = '1';
-                setTimeout(() => {
-                    mask.style.opacity = '0';
-                }, 1200);
-            }
-        });
-    });
-    document.querySelectorAll('.buy-license-btn, #buy-license-btn, #plan-buy-license-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            // 测试构建(eqtdev)打开测试站 pricing,生产构建打开生产站 pricing。
-            // 测试站约定见 docs/deploy/test-environment.md(test.eqt.net.im)。
-            const pricingUrl = state.appInfo?.isTest
-                ? 'https://test.eqt.net.im/pricing.html'
-                : 'https://www.eqt.net.im/pricing.html';
-            window.runtime.BrowserOpenURL(pricingUrl);
-        });
-    });
-
-    document.querySelector('#plan-back-to-license')?.addEventListener('click', () => {
-        state.activePanel = 'license';
-        render();
-    });
-    document.querySelector('#plan-go-redeem')?.addEventListener('click', () => {
-        state.activePanel = 'redeem';
-        render();
-    });
-
-
-
-
 }
 
 function bindChatQRPanelEvents() {
