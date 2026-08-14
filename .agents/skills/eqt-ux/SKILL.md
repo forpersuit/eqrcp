@@ -57,17 +57,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 
 ---
 
-## 3. 多语言 (i18n) 与 Locale 匹配规范
-
-- **桌面 UI (Wails)**：
-  - 使用 `t(key)` 词条替换。保存语言偏好时调用 `applyLanguageChange(newLang)` 刷新 DOM，并向 `#chat-iframe` 发送 `postMessage` 消息。
-  - **i18n 完整性与多语种Key对齐校验**：新增或修改界面词条时，必须保证所有 7 种支持语言（`zh`, `en`, `ja`, `ko`, `es`, `de`, `fr`）的 `i18n.js` 字典键 100% 对齐（0 缺失 key），避免硬编码英/中文字符串作为模板中的 fallback。可以使用 `node` 脚本对比 `Object.keys(global.translations[lang])` 对齐度。
-- **移动端页面 (`upload.tmpl.html` & `chat.tmpl.html`)**：
-  - 默认根据 `navigator.language` 渲染语种。
-  - 语种偏好统一读写 LocalStorage 的 `eqt_lang` 与 `eqt-page-lang` 双键。
-  - 词条包必须与 `en` 英文包进行深度 Merge 兜底，防止缺译字段报错。
-  - 前端读取语言标识时统一执行 `toLowerCase().split('-')[0]` 归一化（如 `zh-CN` -> `zh`）。
-  - **Iframe URL 稳定性**：桌面端 `renderChat()` 渲染 `#chat-iframe` 时，**绝对禁止**将语言字段拼接进 `iframe.src` URL 查询参数中（否则重绘时会强制重载 iframe 导致 Svelte 状态丢失）。语种同步完全依赖 `postMessage({ type: 'update-lang', lang })` 无刷新静默推送。
+- **Web 管理后台 (Cloudflare Pages / Svelte 5)**：
+  - **全站 i18n 接线与零硬编码**：所有业务卡片（如 3D 地球 `LicenseGlobeCard`、探针监控 `SystemHealth`、审计表格 `OpsAudit`）、模态框 `aria-label`、Tooltip、图表文字等必须全面接入 `$t()`。新增键时必须在 `zh.ts` 和 `en.ts` 中双向同步。
+  - **Modal 焦点生命周期完整闭环**：当父组件采用条件销毁模式（`{#if showModal}<Modal open={true} ...>{/if}`）挂载弹窗时，`open` 属性恒为 `true` 且组件关闭是通过 DOM 卸载完成的。因此必须在 Svelte 5 `$effect` 的 cleanup 返回函数以及 `onDestroy` 钩子中执行 `previouslyFocused?.focus()`，确保弹窗销毁后焦点平稳归还给触发元素，防止焦点回落到 `<body>` 破坏无障碍体验。
+  - **前后端审计动作枚举严密对齐**：前端动作筛选下拉菜单与 `AdminAuditAction` 类型必须与后端 Worker 实际写入的全部 9 种审计动作（`GENERATE`, `REVOKE`, `UNBIND`, `CLEAR_LOGS`, `QUERY_ACTIVATION_LOCATIONS`, `QUERY_LIVE_DEVICES`, `PRUNE`, `BLACKLIST_ADD`, `BLACKLIST_REMOVE`）严格 1:1 对齐，并通过 `$t` 支持本地化展示。
+  - **审计摘要提取字段健壮性**：黑名单添加/解封等操作的 `details_json` 字段提取应防呆兼顾多重字段名（如 `d.email || d.device_id || d.target || row.target_id`），避免后端字段名微调导致摘要退化为兜底文案。
 
 ---
 
