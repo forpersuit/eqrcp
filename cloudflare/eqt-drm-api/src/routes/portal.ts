@@ -252,7 +252,7 @@ export async function handlePortalRoutes(
       });
     }
 
-    // Atomic unbind: INSERT unbind_records ONLY IF quota not reached (eliminates TOCTOU)
+    // Atomic unbind: INSERT unbind_records ONLY IF quota not reached and not already recorded (eliminates TOCTOU and retry duplicate deduction)
     const oneYearAgoISO = new Date(Date.now() - ONE_YEAR_MS).toISOString();
     const nowIso = new Date().toISOString();
 
@@ -263,15 +263,25 @@ export async function handlePortalRoutes(
         SELECT COUNT(*) FROM unbind_records
         WHERE license_code = ? AND unbound_at >= ?
       ) < ?
-    `).bind(license_code, activation.id, nowIso, license_code, oneYearAgoISO, MAX_YEARLY_UNBINDS).run();
+      AND NOT EXISTS (
+        SELECT 1 FROM unbind_records
+        WHERE license_code = ? AND activation_id = ?
+      )
+    `).bind(license_code, activation.id, nowIso, license_code, oneYearAgoISO, MAX_YEARLY_UNBINDS, license_code, activation.id).run();
 
     if (!insertResult.meta || insertResult.meta.changes === 0) {
-      return new Response(JSON.stringify({
-        error: getApiTranslation("unbind_limit_reached", reqLang)
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      const alreadyRecorded = await env.DB.prepare(
+        "SELECT id FROM unbind_records WHERE license_code = ? AND activation_id = ?"
+      ).bind(license_code, activation.id).first<any>();
+
+      if (!alreadyRecorded) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("unbind_limit_reached", reqLang)
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Quota slot claimed atomically: delete activation and update device_registry in batch
@@ -288,13 +298,13 @@ export async function handlePortalRoutes(
     const unbindCheck = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM unbind_records WHERE license_code = ? AND unbound_at >= ?"
     ).bind(license_code, oneYearAgoISO).first<any>();
-    const unbindCount = (unbindCheck && unbindCheck.count) ? Number(unbindCheck.count) : MAX_YEARLY_UNBINDS;
+    const unbindCount = (unbindCheck && typeof unbindCheck.count === 'number') ? unbindCheck.count : ((unbindCheck && unbindCheck.count != null) ? Number(unbindCheck.count) : 0);
+    const remainingUnbinds = Math.max(0, MAX_YEARLY_UNBINDS - unbindCount);
 
     // Send unbind security email notification asynchronously
     const targetEmail = session.email || license.buyer_email;
     if (targetEmail) {
       const t = getDeviceNoticeTemplate(reqLang);
-      const remainingUnbinds = MAX_YEARLY_UNBINDS - (unbindCount + 1);
       const emailHtml = renderEmailWrapper(t.unboundTitle, t.unboundBody(license_code, nowIso, remainingUnbinds));
       ctx.waitUntil(sendDRMEmail(
         env,

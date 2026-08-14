@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS unbind_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_unbind_license ON unbind_records(license_code);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unbind_license_activation ON unbind_records(license_code, activation_id);
 
 -- Admin / ops error audit log (also ensured at runtime by ensureAuditLogTable)
 CREATE TABLE IF NOT EXISTS system_error_logs (
