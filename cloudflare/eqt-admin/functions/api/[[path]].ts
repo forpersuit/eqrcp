@@ -23,21 +23,63 @@ interface PagesContext {
 
 export async function onRequest(context: PagesContext): Promise<Response> {
   try {
+    const reqUrl = new URL(context.request.url);
+
+    // Extract Cloudflare Access identity JWT
+    let jwt =
+      context.request.headers.get("Cf-Access-Jwt-Assertion") ||
+      context.request.headers.get("cf-access-jwt-assertion");
+    if (!jwt) {
+      const cookieHeader =
+        context.request.headers.get("cookie") ||
+        context.request.headers.get("Cookie");
+      if (cookieHeader) {
+        const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+        if (match) {
+          jwt = match[1].trim();
+        }
+      }
+    }
+
     const rawEnv = (
       context.request.headers.get("X-EQT-Environment") ||
       context.request.headers.get("x-eqt-environment") ||
       ""
     ).toLowerCase().trim();
 
-    // Strict whitelist check for environment
-    const isTest = (rawEnv === "test" || rawEnv === "sandbox");
+    const wantsTest = (rawEnv === "test" || rawEnv === "sandbox");
+
+    // Pre-condition gating for test upstream routing:
+    // To prevent public unauthenticated requests from probing test Worker via proxy,
+    // switching to test upstream on production hosts requires a valid Access JWT.
+    const isNonProdHost =
+      reqUrl.hostname === "localhost" ||
+      reqUrl.hostname === "127.0.0.1" ||
+      reqUrl.hostname.endsWith(".pages.dev");
+
+    if (wantsTest && !isNonProdHost && !jwt) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "切换至测试沙箱环境需要有效的 Cloudflare Access 身份凭证 (401)",
+          code: "UNAUTHORIZED_ENVIRONMENT_SWITCH",
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
+
+    const isTest = wantsTest && (isNonProdHost || Boolean(jwt));
 
     let upstreamBase = isTest
       ? (context.env?.DRM_API_TEST_UPSTREAM || DEFAULT_TEST_UPSTREAM)
       : (context.env?.DRM_API_UPSTREAM || DEFAULT_PROD_UPSTREAM);
     upstreamBase = upstreamBase.replace(/\/$/, "");
-
-    const reqUrl = new URL(context.request.url);
 
     const pathParam = context.params.path;
     const pathSegments = Array.isArray(pathParam)
@@ -46,9 +88,27 @@ export async function onRequest(context: PagesContext): Promise<Response> {
         ? [String(pathParam)]
         : [];
 
-    // Sanitize path segments to prevent directory traversal
+    // Sanitize path segments to prevent irregular path traversal
     const safeSegments = pathSegments.filter((seg) => seg && seg !== "." && seg !== "..");
     const subPath = safeSegments.join("/");
+
+    // Restrict proxy scope: only allow admin endpoints (/v1/admin/*, /v1/health)
+    if (subPath && !subPath.startsWith("v1/admin") && !subPath.startsWith("v1/health")) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `禁止代理非管理端 API 路径: /api/${subPath}`,
+          code: "FORBIDDEN_PROXY_PATH",
+        }),
+        {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
 
     // Incoming: /api/<subPath> → upstream /api/<subPath>
     const target = `${upstreamBase}/api/${subPath}${reqUrl.search}`;
@@ -68,21 +128,6 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       }
     }
 
-    // Cloudflare may expose identity on Access-protected host via header or cookie
-    let jwt =
-      context.request.headers.get("Cf-Access-Jwt-Assertion") ||
-      context.request.headers.get("cf-access-jwt-assertion");
-    if (!jwt) {
-      const cookieHeader =
-        context.request.headers.get("cookie") ||
-        context.request.headers.get("Cookie");
-      if (cookieHeader) {
-        const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
-        if (match) {
-          jwt = match[1].trim();
-        }
-      }
-    }
     if (jwt) {
       headers.set("Cf-Access-Jwt-Assertion", jwt);
       headers.set("Authorization", `Bearer ${jwt}`);

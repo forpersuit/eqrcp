@@ -19,7 +19,7 @@ export interface ApiOptions extends RequestInit {
   params?: Record<string, string>;
 }
 
-export async function adminFetch<T = any>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+export async function adminFetch<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   const { params, headers: optHeaders, ...fetchInit } = options;
   const API_BASE = resolveApiBase();
   const currentEnv = getAdminEnvironment();

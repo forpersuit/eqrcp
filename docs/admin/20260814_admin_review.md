@@ -7,8 +7,9 @@
 | **分层结构** | ✅ 好：`lib/`（api/auth/env/i18n/types）、`pages/`、`components/` 组件化清晰 | 保持 |
 | **生产鉴权** | ✅ 好：Cloudflare Access JWT 同源反代，比单 secret 强 | 保持 |
 | **安全基线** | ✅ 好：`_headers` 有 noindex/X-Frame-Options: DENY/nosniff，robots.txt Disallow | 保持 |
-| **类型安全** | ✅ 严格化：已消除假联合类型（`'A' \| string`），恢复 TS 静态检查能力 | **✅ 已修复** |
+| **类型安全** | ✅ 严格化：消除假联合类型（`'A' \| string`），`adminFetch` 默认泛型修正为 `unknown` 强制调用方收窄 | **✅ 已修复** |
 | **反代健壮性** | ✅ 健壮化：反代增加 502/503 结构化 JSON 返回，前端 `adminFetch` 防御性 JSON 解析 | **✅ 已修复** |
+| **环境路由与收敛** | ✅ 收敛门槛：生产域名切换至测试沙箱强制校验 Access JWT 凭证，限制仅代理管理端路径 | **✅ 已修复** |
 | **弹窗交互** | ✅ 规范化：Blacklist 原生 `confirm()` 已迁移为内建模态确认框，杜绝 alert/confirm 违规 | **✅ 已修复** |
 | **测试覆盖** | ❌ 零测试文件（纯函数未单测覆盖） | 待处理 (P2) |
 | **架构一致性** | ⚠️ i18n 存在空字典架子、文档与实现存在 SSOT 漂移 | 待处理 (P1/P2) |
@@ -64,23 +65,26 @@
 
 ---
 
-### 🟠 4. X-EQT-Environment 与反代路径安全防护
+### 🟠 4. X-EQT-Environment 测试环境上游收敛与路径规范化
 
 - **位置**：`functions/api/[[path]].ts`
 - **原问题**：
-  - 仅凭客户端标头直接分发路由，且路径解析未清洗，存在路径越权或目录遍历风险。
+  - 测试上游 `lic-test.eqt.net.im` 可被公网客户端仅凭 `X-EQT-Environment: test` 请求头打入，缺乏前置鉴权门槛；
+  - 路径拼接未规范化，存在打到非预期端点的可能。
 - **✅ 修复方案与状态（已完成）**：
-  1. 严格限定环境参数白名单校验（仅放行合法的 `test` / `sandbox`，其余严格回退至生产 `production`）。
-  2. 对 `params.path` 路径片段进行过滤，剔除 `.` 与 `..` 等非法路径穿透片段，安全组装 `upstream` 目标。
+  1. **测试路由鉴权门槛**：在生产域名（如 `admin.eqt.net.im`）下，仅当请求包含有效的 Cloudflare Access JWT 凭证时才允许路由至测试上游，未鉴权请求尝试切换测试环境直接拦截返回 401（本地与 preview 环境不受限）。
+  2. **API 范围收敛**：强制反代路径必须匹配管理端白名单（`/v1/admin/*` 与 `/v1/health`），禁止代理其他非管理端 API。
+  3. **路径清洗**：过滤 `.` 与 `..` 片段，规范化拼接路径。
 
 ---
 
-### 🟠 5. adminFetch 泛型与错误处理规范
+### 🟠 5. adminFetch 泛型收窄为 unknown
 
-- **位置**：`src/lib/api.ts`
-- **原问题**：`adminFetch<T = any>` 默认泛型宽泛，且错误体结构校验不完善。
+- **位置**：`src/lib/api.ts:22`
+- **原问题**：`adminFetch<T = any>` 默认使用 `any`，导致未指定类型的调用点自动丢失 TypeScript 静态校验。
 - **✅ 修复方案与状态（已完成）**：
-  - 与 #3 协同修复：全站 8 个核心业务页面数据读取均已标注显式响应类型（如 `<AdminHealthResponse>`、`<License[]>` 等），并完善了响应体 `error` 字段的多重校验。
+  - 将签名更新为 `export async function adminFetch<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T>`。
+  - 强制要求调用方显式指定返回类型（如 `adminFetch<AdminHealthResponse>`）或在消费时进行类型收窄，彻底消除隐式 `any` 风险。
 
 ---
 
@@ -132,8 +136,8 @@ Svelte 5 模板中的 `onclick={handler}` 在编译期会被转换为标准的 `
 1. **已完成（第 1–5 项）**：
    - [x] **P0**：`Blacklist.svelte` 移除 `confirm()`，改用内建模态确认框；修正 `gap-analysis.md`。
    - [x] **P1**：Pages Function 反代加 `try/catch` 结构化 502/503；`api.ts` 增强网络错误与 JSON 兜底。
-   - [x] **P1**：`functions/api/[[path]].ts` 路径安全清洗与环境白名单校验。
-   - [x] **P2**：`types.ts` 修复宽泛联合类型，恢复完整类型安全。
+   - [x] **P1**：`functions/api/[[path]].ts` 增加 Access JWT 鉴权门槛收敛测试上游，限制仅代理管理端白名单路径。
+   - [x] **P2**：`types.ts` 修复宽泛联合类型；`api.ts` 将 `adminFetch` 默认泛型调整为 `unknown`。
 2. **待进行（后续轮次）**：
    - [ ] **P1**：统一 i18n 策略（决定精简或全面落地）。
    - [ ] **P2**：引入 `vitest` 为核心纯函数补齐单测。
