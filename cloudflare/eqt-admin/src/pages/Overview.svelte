@@ -6,7 +6,7 @@
   import LicenseGlobeCard from '../components/LicenseGlobeCard.svelte';
 
   interface Props {
-    onNavigate?: (tab: AdminTab) => void;
+    onNavigate?: (tab: AdminTab, prefillQuery?: string) => void;
   }
   let { onNavigate }: Props = $props();
 
@@ -99,7 +99,7 @@
   </div>
 
   <div class="globe-section">
-    <LicenseGlobeCard />
+    <LicenseGlobeCard onNavigateToLicense={(code) => onNavigate?.('licenses', code)} />
   </div>
 </div>
 

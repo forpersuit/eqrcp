@@ -189,6 +189,7 @@ export interface LiveDeviceLocation {
 /** Cross-region arc for a license code redeemed on devices in multiple locations */
 export interface LiveDeviceArc {
   license_code: string;
+  email?: string | null;
   from_country: string;
   from_city?: string | null;
   from_lat: number;

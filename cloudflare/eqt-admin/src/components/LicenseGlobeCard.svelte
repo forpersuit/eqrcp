@@ -2,7 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
   import { t, currentLocale } from '../lib/i18n';
+  import Modal from './Modal.svelte';
   import type { LiveDeviceLocation, LiveDeviceArc, LiveDevicesResponse } from '../lib/types';
+
+  interface Props {
+    onNavigateToLicense?: (licenseCode: string) => void;
+  }
+  let { onNavigateToLicense }: Props = $props();
 
   const COUNTRY_COORDS: Record<string, { lat: number; lng: number; zh: string; en: string }> = {
     'CN': { lat: 35.8617, lng: 104.1954, zh: '中国', en: 'China' },
@@ -44,6 +50,49 @@
 
   let activeWindow = $state<string>('1h');
   let showArcs = $state<boolean>(true);
+  let showArcsModal = $state<boolean>(false);
+  let copiedCode = $state<string | null>(null);
+
+  function maskEmail(email?: string | null): string {
+    if (!email) return '—';
+    const atIdx = email.indexOf('@');
+    if (atIdx === -1) return email;
+    const name = email.slice(0, atIdx);
+    const domain = email.slice(atIdx);
+    if (name.length <= 2) {
+      return `${name[0]}***${domain}`;
+    }
+    return `${name[0]}***${name[name.length - 1]}${domain}`;
+  }
+
+  function maskLicenseCode(code?: string | null): string {
+    if (!code) return '—';
+    const parts = code.split('-');
+    if (parts.length >= 4) {
+      return `${parts[0]}-${parts[1]}-***-${parts[parts.length - 1].slice(-4)}`;
+    }
+    if (code.length > 8) {
+      return `${code.slice(0, 7)}***${code.slice(-4)}`;
+    }
+    return code;
+  }
+
+  async function copyFullCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      copiedCode = code;
+      setTimeout(() => {
+        if (copiedCode === code) copiedCode = null;
+      }, 2000);
+    } catch (e) {
+      console.warn('Copy failed:', e);
+    }
+  }
+
+  function handleInspectLicense(code: string) {
+    showArcsModal = false;
+    onNavigateToLicense?.(code);
+  }
 
   let globeInstance: any = null;
   let isFallback2D = $state(false);
@@ -485,7 +534,14 @@
       </label>
 
       {#if crossRegionArcs.length > 0}
-        <span class="badge badge-purple" title={$t('globe.crossRegionTooltip')}>{$t('globe.crossRegionLinks', { count: crossRegionArcs.length })}</span>
+        <button
+          type="button"
+          class="badge badge-purple badge-clickable"
+          title={$t('globe.crossRegionTooltip')}
+          onclick={() => (showArcsModal = true)}
+        >
+          {$t('globe.crossRegionLinksBtn', { count: crossRegionArcs.length })}
+        </button>
       {/if}
       <span class="badge badge-info">{$t('globe.activeStatus', { total: totalActiveDevices, paid: totalPaidDevices, free: totalFreeDevices })}</span>
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>
@@ -517,6 +573,63 @@
     <div class="empty-bar">{$t('globe.empty')}</div>
   {/if}
 </div>
+
+<Modal
+  open={showArcsModal}
+  title={$t('globe.arcsModalTitle', { count: crossRegionArcs.length })}
+  onclose={() => (showArcsModal = false)}
+  maxWidth="680px"
+>
+  <div class="arcs-modal-content">
+    <p class="arcs-modal-subtitle">{$t('globe.arcsModalSubtitle')}</p>
+
+    {#if crossRegionArcs.length === 0}
+      <div class="empty-hint">{$t('globe.noArcsInWindow')}</div>
+    {:else}
+      <div class="arcs-list">
+        {#each crossRegionArcs as arc, idx}
+          {@const fromCountryName = getCountryDisplayName(arc.from_country)}
+          {@const toCountryName = getCountryDisplayName(arc.to_country)}
+          {@const fromLoc = arc.from_city ? `${fromCountryName} · ${arc.from_city}` : (fromCountryName || arc.from_country)}
+          {@const toLoc = arc.to_city ? `${toCountryName} · ${arc.to_city}` : (toCountryName || arc.to_country)}
+          <div class="arc-card-item">
+            <div class="arc-card-header">
+              <span class="arc-route">📍 <b>{fromLoc}</b> ➔ <b>{toLoc}</b></span>
+              <span class="arc-index">#{idx + 1}</span>
+            </div>
+            <div class="arc-card-body">
+              <div class="arc-info-row">
+                <span class="info-label">{$t('globe.arcLicenseCode')}:</span>
+                <code class="masked-code">{maskLicenseCode(arc.license_code)}</code>
+                <button
+                  type="button"
+                  class="btn btn-xs btn-outline copy-action-btn"
+                  onclick={() => copyFullCode(arc.license_code)}
+                  title="Copy full unmasked license code to clipboard"
+                >
+                  {copiedCode === arc.license_code ? `✓ ${$t('globe.copied')}` : `📋 ${$t('globe.copyLicenseCode')}`}
+                </button>
+              </div>
+              <div class="arc-info-row">
+                <span class="info-label">{$t('globe.arcEmail')}:</span>
+                <span class="masked-email">{maskEmail(arc.email)}</span>
+              </div>
+            </div>
+            <div class="arc-card-footer">
+              <button
+                type="button"
+                class="btn btn-xs btn-primary inspect-btn"
+                onclick={() => handleInspectLicense(arc.license_code)}
+              >
+                🔍 {$t('globe.viewInLicenses')}
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+</Modal>
 
 <style>
   .globe-card {
@@ -712,6 +825,19 @@
     border: 1px solid rgba(168, 85, 247, 0.3);
   }
 
+  .badge-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .badge-clickable:hover {
+    background: rgba(168, 85, 247, 0.35);
+    border-color: rgba(168, 85, 247, 0.6);
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+  }
+
   .badge-info {
     background: rgba(56, 189, 248, 0.15);
     color: #38bdf8;
@@ -741,5 +867,121 @@
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
     font-size: 0.8rem;
+  }
+
+  /* Arcs Modal Styles */
+  .arcs-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .arcs-modal-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted, #94a3b8);
+    margin: 0;
+  }
+
+  .empty-hint {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.9rem;
+  }
+
+  .arcs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .arc-card-item {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .arc-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.5rem;
+  }
+
+  .arc-route {
+    font-size: 0.95rem;
+    color: #38bdf8;
+    font-weight: 500;
+  }
+
+  .arc-index {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.15);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .arc-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .arc-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .info-label {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.8rem;
+    min-width: 90px;
+  }
+
+  .masked-code {
+    font-family: monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .masked-email {
+    font-size: 0.85rem;
+    color: var(--text-primary, #e2e8f0);
+    font-family: monospace;
+  }
+
+  .copy-action-btn {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.45rem;
+  }
+
+  .arc-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 0.5rem;
+  }
+
+  .inspect-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
   }
 </style>

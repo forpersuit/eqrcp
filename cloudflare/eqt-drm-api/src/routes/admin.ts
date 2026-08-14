@@ -508,7 +508,7 @@ export async function handleAdminRoutes(
       // device_id would always yield a single node (dead code). Free devices have
       // license_code = NULL and are excluded by the filter below.
       const rawSql = `
-        SELECT license_code, ip_country AS country, city, latitude, longitude
+        SELECT license_code, email, ip_country AS country, city, latitude, longitude
         FROM device_registry
         WHERE last_seen_at >= ?
           AND license_code IS NOT NULL AND license_code != ''
@@ -518,6 +518,7 @@ export async function handleAdminRoutes(
       `;
       const rawRes = await env.DB.prepare(rawSql).bind(cutoff).all<{
         license_code: string;
+        email?: string | null;
         country: string;
         city?: string | null;
         latitude: number;
@@ -525,7 +526,7 @@ export async function handleAdminRoutes(
       }>();
       const rawList = rawRes.results || [];
 
-      const codeNodesMap = new Map<string, Array<{ country: string; city?: string; latitude: number; longitude: number }>>();
+      const codeNodesMap = new Map<string, Array<{ country: string; city?: string; latitude: number; longitude: number; email?: string }>>();
       for (const item of rawList) {
         const code = item.license_code;
         if (!codeNodesMap.has(code)) {
@@ -535,7 +536,8 @@ export async function handleAdminRoutes(
           country: item.country.toUpperCase(),
           city: item.city || undefined,
           latitude: item.latitude,
-          longitude: item.longitude
+          longitude: item.longitude,
+          email: item.email || undefined
         });
       }
 
@@ -559,8 +561,10 @@ export async function handleAdminRoutes(
               seenPairs.add(pairKey);
               // fromNode is whichever raw node matches the normalized "from" key.
               const [fromNode, toNode] = locKey1 === fromKey ? [n1, n2] : [n2, n1];
+              const arcEmail = n1.email || n2.email || undefined;
               crossRegionArcs.push({
                 license_code: code,
+                email: arcEmail,
                 from_country: fromNode.country,
                 from_city: fromNode.city,
                 from_lat: fromNode.latitude,
@@ -608,7 +612,7 @@ export async function handleAdminRoutes(
     const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200);
     const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
-    let sql = "SELECT * FROM licenses";
+    let whereClause = "";
     let params: any[] = [];
 
     if (queryStr) {
@@ -619,14 +623,16 @@ export async function handleAdminRoutes(
         emailHash = Array.from(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
       }
       const likeQuery = `%${queryStr}%`;
-      sql += " WHERE license_code LIKE ? OR buyer_email LIKE ? OR paddle_transaction_id LIKE ? OR buyer_email_hash = ?";
+      whereClause = " WHERE license_code LIKE ? OR buyer_email LIKE ? OR paddle_transaction_id LIKE ? OR buyer_email_hash = ?";
       params = [likeQuery, likeQuery, likeQuery, emailHash || queryStr];
     }
 
-    sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    const countSql = "SELECT COUNT(*) as total FROM licenses" + whereClause;
+    const countRes = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
+    const total = countRes?.total || 0;
 
-    const res = await env.DB.prepare(sql).bind(...params).all();
+    const sql = "SELECT * FROM licenses" + whereClause + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    const res = await env.DB.prepare(sql).bind(...params, limit, offset).all();
     const rawLicenses: any[] = res.results || [];
     let licensesWithDevices: any[] = [];
 
@@ -656,7 +662,13 @@ export async function handleAdminRoutes(
       });
     }
 
-    return new Response(JSON.stringify({ success: true, licenses: licensesWithDevices }), {
+    return new Response(JSON.stringify({
+      success: true,
+      licenses: licensesWithDevices,
+      total,
+      limit,
+      offset
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

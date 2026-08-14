@@ -99,11 +99,16 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 管理端 Admin 契约测试：`cloudflare/eqt-drm-api/tests/e2e-admin-test.js` (`npm run test:admin`)
 - **Admin 测试覆盖**：鉴权 fail-closed 拦截、Health 探针、手动发码 `POST /admin/generate`、检索 `GET /admin/licenses`、解绑 `POST /admin/unbind`、吊销 `POST /admin/revoke`、日志清理 `DELETE /admin/error-logs`、高危操作审计查询 `GET /admin/audit-logs`。
 
-### 3.6 管理后台 (Admin) 操作审计留痕与全量指标探针
+### 3.6 管理后台 (Admin) 操作审计留痕、跨地域多活视界与全量分页契约
 - **高危操作审计追溯 (SSOT Audit Log)**：
   - D1 数据表 `admin_audit_logs` 记录管理端高权限操作：`GENERATE`（手动发码）、`REVOKE`（吊销授权）、`UNBIND`（解绑设备）、`CLEAR_LOGS`（清空错误日志）。
   - 处理路由时使用 `ctx.waitUntil(logAdminAudit(env, action, targetType, targetId, details, clientIp))` 异步落盘，防范操作抵赖。
   - 提供 `GET /api/v1/admin/audit-logs` 供检索，支持按 `action` 过滤及关键词模糊检索与分页。
+- **全球活跃设备视界与跨地域多活连接 (`/api/v1/admin/devices/live`)**：
+  - 基于 `device_registry` 经纬度、活跃窗口（1h/12h/24h/7d）与 `license_code` 进行聚合。
+  - 同一激活码多地在线时生成 `cross_region_arcs`（携带 `email`），前端 Badge 点击弹出 Modal 详情并展示脱敏授权码与邮箱，支持一键复制完整码及自动跳转至授权码管理模块检索。
+- **Admin 列表数据全量分页契约 (Pagination Contract)**：
+  - 所有列表接口（`/error-logs`、`/audit-logs`、`/blacklist`、`/licenses`）统一遵循服务端分页规范：返回 `{ success: true, [items]: [], total, limit, offset }`，由前端 `Pagination.svelte` 统一驱动上下页与总数展示。
 - **Health 探针与 Overview 实时 KPI 架构**：
   - 在 `GET /api/v1/admin/health` 中提供运营指标：`total_licenses`, `active_licenses`, `today_activations`, `total_error_logs`, `errors_24h`。
   - **快速指标查询 (`?probe=0` / `?quick=1`)**：Overview 概览页默认带 `?probe=0`，直接返回 D1 统计指标并跳过阻塞式外部 SMTP/Paddle 网络探测，使仪表盘在毫秒级秒开；Worker 内部对全量探针实施 15s 内存缓存，防止连续刷新压垮外部 SMTP/API。

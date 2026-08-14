@@ -14,6 +14,7 @@
 
   let authed = $state(isAuthenticated());
   let currentTab = $state<AdminTab>('overview');
+  let licenseSearchPrefill = $state<string>('');
 
   function handleLogout() {
     clearAccessSession();
@@ -25,7 +26,10 @@
     authed = false;
   }
 
-  function navigateTo(tab: AdminTab) {
+  function navigateTo(tab: AdminTab, prefillQuery?: string) {
+    if (tab === 'licenses') {
+      licenseSearchPrefill = prefillQuery || '';
+    }
     currentTab = tab;
   }
 
@@ -165,7 +169,7 @@
         {:else if currentTab === 'ops'}
           <OpsAudit />
         {:else if currentTab === 'licenses'}
-          <Licenses />
+          <Licenses prefillQuery={licenseSearchPrefill} />
         {:else if currentTab === 'blacklist'}
           <Blacklist />
         {:else if currentTab === 'health'}

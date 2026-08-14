@@ -163,6 +163,7 @@ async function runTests() {
   assert(j1.cross_region_arcs.length === 1, 'Exactly 1 cross-region arc');
   const arc = j1.cross_region_arcs[0];
   assert(arc.license_code === 'EQT-PAID-1', 'Arc keyed by license_code (not device_id)');
+  assert(arc.email === 'a@x.com', 'Arc carries buyer email for admin drilldown');
   const arcCountries = [arc.from_country, arc.to_country].sort().join(',');
   assert(arcCountries === 'CN,US', 'Arc connects CN <-> US (either direction — ordering is non-semantic)');
 
@@ -203,8 +204,7 @@ async function runTests() {
   const details = JSON.parse(latest.details_json || '{}');
   assert(details.total_active_devices === 4, 'audit details carry total_active_devices=4');
 
-  // --- T7: unordered city-pair normalization — 2 devices in city A + 1 in city B for
-  // --- the SAME license code must emit exactly ONE arc (not one per direction).
+  // --- T7: unordered city-pair normalization ---
   console.log('\nTest 7: unordered pair normalization (2-in-A + 1-in-B = 1 arc, deterministic direction)...');
   const db7 = new SqliteD1Mock();
   env.DB = db7;
@@ -218,6 +218,7 @@ async function runTests() {
   const j7 = await res7.json();
   assert(j7.cross_region_arcs.length === 1, `exactly 1 arc (not 2) for Guangzhou(2)+Chengdu(1) — got ${j7.cross_region_arcs.length}`);
   const arc7 = j7.cross_region_arcs[0];
+  assert(arc7.email === 'm@x.com', 'arc7 carries email');
   const arc7Endpoints = [arc7.from_city, arc7.to_city].sort().join(',');
   assert(arc7Endpoints === 'Chengdu,Guangzhou', `arc spans the right pair, got ${arc7Endpoints}`);
   // Deterministic: run the query twice; direction must not flip.
@@ -226,6 +227,15 @@ async function runTests() {
   const arc7b = j7b.cross_region_arcs[0];
   assert(arc7.from_city === arc7b.from_city && arc7.to_city === arc7b.to_city,
     `arc direction deterministic across calls (${arc7.from_city}->${arc7.to_city})`);
+
+  // --- T8: /api/v1/admin/licenses pagination returns total count ---
+  console.log('\nTest 8: /api/v1/admin/licenses pagination with total count...');
+  const res8 = await adminGet(db7, 'https://lic.eqt.net.im/api/v1/admin/licenses?limit=10&offset=0');
+  assert(res8.status === 200, '200 OK for licenses query');
+  const j8 = await res8.json();
+  assert(typeof j8.total === 'number', 'licenses response contains numeric total');
+  assert(j8.limit === 10, 'licenses response contains limit=10');
+  assert(j8.offset === 0, 'licenses response contains offset=0');
 
   console.log('\n🎉🎉 ALL /api/v1/admin/devices/live OFFLINE TESTS PASSED DETERMINISTICALLY! 🎉🎉');
 }

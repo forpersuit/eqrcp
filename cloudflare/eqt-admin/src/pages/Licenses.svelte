@@ -4,6 +4,7 @@
   import { t } from '../lib/i18n';
   import Modal from '../components/Modal.svelte';
   import Banner from '../components/Banner.svelte';
+  import Pagination from '../components/Pagination.svelte';
   import type {
     Activation,
     GenerateLicenseResponse,
@@ -11,9 +12,17 @@
     LicenseTier
   } from '../lib/types';
 
+  interface Props {
+    prefillQuery?: string;
+  }
+  let { prefillQuery = '' }: Props = $props();
+
   const AUTO_REFRESH_MS = 20_000;
 
   let licenses = $state<License[]>([]);
+  let total = $state(0);
+  let page = $state(1);
+  const pageSize = 50;
   let loading = $state(true);
   let refreshing = $state(false);
   let errorMsg = $state('');
@@ -85,10 +94,15 @@
     }
     if (!silent) errorMsg = '';
     try {
-      const params: Record<string, string> = {};
+      const offset = (page - 1) * pageSize;
+      const params: Record<string, string> = {
+        limit: String(pageSize),
+        offset: String(offset)
+      };
       if (searchQuery.trim()) params.q = searchQuery.trim();
-      const data = await adminFetch<{ licenses: License[] }>('/api/v1/admin/licenses', { params });
+      const data = await adminFetch<{ licenses: License[]; total?: number }>('/api/v1/admin/licenses', { params });
       licenses = data.licenses || [];
+      total = typeof data.total === 'number' ? data.total : licenses.length;
       if (selectedLicense) {
         const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
         if (refreshed) selectedLicense = refreshed;
@@ -98,10 +112,30 @@
       if (!silent) {
         errorMsg = err.message || $t('common.failed');
         licenses = [];
+        total = 0;
       }
     } finally {
       loading = false;
       refreshing = false;
+    }
+  }
+
+  function handleSearch() {
+    page = 1;
+    loadLicenses();
+  }
+
+  function prevPage() {
+    if (page > 1) {
+      page--;
+      loadLicenses();
+    }
+  }
+
+  function nextPage() {
+    if (page * pageSize < total) {
+      page++;
+      loadLicenses();
     }
   }
 
@@ -259,7 +293,21 @@
     }
   }
 
+  let prevPrefill = '';
+  $effect(() => {
+    if (prefillQuery && prefillQuery !== prevPrefill) {
+      prevPrefill = prefillQuery;
+      searchQuery = prefillQuery;
+      page = 1;
+      loadLicenses();
+    }
+  });
+
   onMount(() => {
+    if (prefillQuery) {
+      searchQuery = prefillQuery;
+      prevPrefill = prefillQuery;
+    }
     loadLicenses();
     startAutoRefresh();
   });
@@ -301,9 +349,9 @@
           class="input"
           placeholder={$t('licenses.searchPlaceholder')}
           bind:value={searchQuery}
-          onkeydown={(e) => e.key === 'Enter' && loadLicenses()}
+          onkeydown={(e) => e.key === 'Enter' && handleSearch()}
         />
-        <button class="search-icon-btn" onclick={() => loadLicenses()} disabled={loading} title={$t('common.search')} aria-label={$t('common.search')}>
+        <button class="search-icon-btn" onclick={handleSearch} disabled={loading} title={$t('common.search')} aria-label={$t('common.search')}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -399,6 +447,7 @@
         </tbody>
       </table>
     </div>
+    <Pagination {page} {pageSize} {total} onprev={prevPage} onnext={nextPage} />
   {/if}
 </div>
 
