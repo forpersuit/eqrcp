@@ -63,17 +63,28 @@ assert(portalHtml.includes('const escDevKey = escapeHtml(devKey);'), 'W6: portal
 assert(portalHtml.includes("err.error_code === 'RATE_LIMITED'"), 'W8: portal.html checks RATE_LIMITED error_code');
 assert(portalHtml.includes("err.error_code === 'SESSION_EXPIRED'"), 'W1: portal.html checks SESSION_EXPIRED error_code');
 
-// W3 check: pending upgrade keys exist across all 7 languages
+// W3 check: pending upgrade and pagination keys exist across all 7 languages
 const langMatches = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
 for (const l of langMatches) {
   const pendingKeyCheck = portalHtml.includes(`"${l}": {`) || portalHtml.includes(`'${l}': {`);
   assert(pendingKeyCheck, `W3: portal.html defines language ${l}`);
+  assert(portalHtml.includes(`"pagination_prev":`), `Pagination: portal.html defines pagination_prev for ${l}`);
+  assert(portalHtml.includes(`"pagination_next":`), `Pagination: portal.html defines pagination_next for ${l}`);
 }
 assert(portalHtml.includes('"pending_upgrade_banner": "終身アップグレード購入済み'), 'W3: ja pending_upgrade_banner defined');
 assert(portalHtml.includes('"pending_upgrade_banner": "평생 플랜 업그레이드 구매 완료'), 'W3: ko pending_upgrade_banner defined');
 assert(portalHtml.includes('"pending_upgrade_banner": "Pase vitalicio comprado'), 'W3: es pending_upgrade_banner defined');
 assert(portalHtml.includes('"pending_upgrade_banner": "Lifetime-Upgrade erworben'), 'W3: de pending_upgrade_banner defined');
 assert(portalHtml.includes('"pending_upgrade_banner": "Pass à vie acheté'), 'W3: fr pending_upgrade_banner defined');
+
+// 4. Check portal.html pagination components and functions
+assert(portalHtml.includes('id="licenses-pagination"'), 'Pagination: portal.html contains #licenses-pagination element');
+assert(portalHtml.includes('id="page-prev-btn"'), 'Pagination: portal.html contains #page-prev-btn element');
+assert(portalHtml.includes('id="page-next-btn"'), 'Pagination: portal.html contains #page-next-btn element');
+assert(portalHtml.includes('function renderPagination()'), 'Pagination: portal.html defines renderPagination function');
+assert(portalHtml.includes('function initPaginationListeners()'), 'Pagination: portal.html defines initPaginationListeners function');
+assert(portalHtml.includes('page: 1'), 'Pagination: portal.html manages page state');
+assert(portalHtml.includes('pageSize: 5'), 'Pagination: portal.html manages pageSize state');
 
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

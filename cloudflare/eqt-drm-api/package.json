@@ -1,6 +1,6 @@
 {
   "name": "eqt-drm-api",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Serverless Licensing & DRM Backend for EQT on Cloudflare",
   "main": "src/index.ts",
   "scripts": {
@@ -26,8 +26,9 @@
     "test:health:offline": "node --env-file=../../.env.test tests/health-check-offline.js",
     "test:schema-cache:offline": "npx esbuild src/utils/auth.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/auth.js --platform=node --format=cjs && npx esbuild src/utils/blacklist.ts --bundle --outfile=tests/compiled/blacklist.js --platform=node --format=cjs && npx esbuild src/utils/error-logger.ts --bundle --outfile=tests/compiled/error-logger.js --platform=node --format=cjs && npx esbuild src/utils/rate-limit.ts --bundle --outfile=tests/compiled/rate-limit.js --platform=node --format=cjs && node tests/schema-cache-offline.js",
     "test:subscription:offline": "npx esbuild src/routes/paddle.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outdir=tests/compiled --platform=node --format=cjs && node --env-file=../../.env.test tests/verify-subscription-cancel.js",
+    "test:portal:offline": "npx esbuild src/routes/portal.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/portal.js --platform=node --format=cjs && node --env-file=../../.env.test tests/portal-pagination-offline.js",
     "test:website-review": "node tests/verify-website-review-fixes.mjs",
-    "test:offline": "npm run test:env-guard && npm run test:schema-cache:offline && npm run test:abuse:offline && npm run test:utils:offline && npm run test:d1-retry:offline && npm run test:admin:metrics:offline && npm run test:health:offline && npm run test:subscription:offline && npm run test:website-review",
+    "test:offline": "npm run test:env-guard && npm run test:schema-cache:offline && npm run test:abuse:offline && npm run test:utils:offline && npm run test:d1-retry:offline && npm run test:admin:metrics:offline && npm run test:health:offline && npm run test:subscription:offline && npm run test:portal:offline && npm run test:website-review",
     "test:ci": "npm run test:admin:live && npm run test:device-reg:offline:live && npm run test:upgrade:offline && npm run test:d1-retry:offline && npm run test:offline"
   },
   "devDependencies": {

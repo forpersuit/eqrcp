@@ -105,9 +105,25 @@ export async function handlePortalRoutes(
     const email = session.email;
     const userEmailHash = await emailHash(email);
 
-    const { results: licenses } = await env.DB.prepare(
-      "SELECT * FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ? ORDER BY created_at DESC"
-    ).bind(email, userEmailHash).all<any>();
+    const hasLimit = url.searchParams.has("limit");
+    const hasOffset = url.searchParams.has("offset");
+    const limit = Math.max(1, Math.min(parseInt(url.searchParams.get("limit") || "10", 10) || 10, 100));
+    const offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+
+    const countRes = await env.DB.prepare(
+      "SELECT COUNT(*) as total FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ?"
+    ).bind(email, userEmailHash).first<{ total: number }>();
+    const total = countRes?.total || 0;
+
+    let licensesSql = "SELECT * FROM licenses WHERE buyer_email = ? OR buyer_email_hash = ? ORDER BY created_at DESC";
+    const binds: any[] = [email, userEmailHash];
+
+    if (hasLimit || hasOffset) {
+      licensesSql += " LIMIT ? OFFSET ?";
+      binds.push(limit, offset);
+    }
+
+    const { results: licenses } = await env.DB.prepare(licensesSql).bind(...binds).all<any>();
 
     const oneYearAgoIso = new Date(Date.now() - 365 * 86400 * 1000).toISOString();
 
@@ -159,7 +175,10 @@ export async function handlePortalRoutes(
     return new Response(JSON.stringify({
       success: true,
       email: email,
-      licenses: list
+      licenses: list,
+      total,
+      limit: hasLimit || hasOffset ? limit : list.length,
+      offset: hasLimit || hasOffset ? offset : 0
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

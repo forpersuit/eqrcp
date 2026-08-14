@@ -107,8 +107,8 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **全球活跃设备视界与跨地域多活连接 (`/api/v1/admin/devices/live`)**：
   - 基于 `device_registry` 经纬度、活跃窗口（1h/12h/24h/7d）与 `license_code` 进行聚合。
   - 同一激活码多地在线时生成 `cross_region_arcs`（携带 `email`），前端 Badge 点击弹出 Modal 详情并展示脱敏授权码与邮箱，支持一键复制完整码及自动跳转至授权码管理模块检索。
-- **Admin 列表数据全量分页契约 (Pagination Contract)**：
-  - 所有列表接口（`/error-logs`、`/audit-logs`、`/blacklist`、`/licenses`）统一遵循服务端分页规范：返回 `{ success: true, [items]: [], total, limit, offset }`，由前端 `Pagination.svelte` 统一驱动上下页与总数展示。
+- **Admin 与 Portal 列表数据全量分页契约 (Pagination Contract)**：
+  - 管理端（`/error-logs`、`/audit-logs`、`/blacklist`、`/licenses`）与用户自助端（`GET /api/v1/user/licenses`）统一遵循服务端分页契约：返回 `{ success: true, [items]: [], total, limit, offset }`，分别由前端 `Pagination.svelte` 与 `portal.html` 动态分页条统一驱动上下页、范围计算与总数展示。
 - **Health 探针与 Overview 实时 KPI 架构**：
   - 在 `GET /api/v1/admin/health` 中提供运营指标：`total_licenses`, `active_licenses`, `today_activations`, `total_error_logs`, `errors_24h`。
   - **快速指标查询 (`?probe=0` / `?quick=1`)**：Overview 概览页默认带 `?probe=0`，直接返回 D1 统计指标并跳过阻塞式外部 SMTP/Paddle 网络探测，使仪表盘在毫秒级秒开；Worker 内部对全量探针实施 15s 内存缓存，防止连续刷新压垮外部 SMTP/API。
