@@ -83,8 +83,8 @@ assert(portalHtml.includes('id="page-prev-btn"'), 'Pagination: portal.html conta
 assert(portalHtml.includes('id="page-next-btn"'), 'Pagination: portal.html contains #page-next-btn element');
 assert(portalHtml.includes('function renderPagination()'), 'Pagination: portal.html defines renderPagination function');
 assert(portalHtml.includes('function initPaginationListeners()'), 'Pagination: portal.html defines initPaginationListeners function');
-assert(portalHtml.includes('page: 1'), 'Pagination: portal.html manages page state');
-assert(portalHtml.includes('pageSize: 5'), 'Pagination: portal.html manages pageSize state');
+assert(portalHtml.includes('state.page = maxPage;'), 'Pagination: portal.html includes self-healing fallback to maxPage');
+assert(portalHtml.includes('return await loadLicenses();'), 'Pagination: portal.html reloads licenses after self-healing page clamp');
 
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

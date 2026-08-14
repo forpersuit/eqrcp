@@ -304,11 +304,9 @@
   });
 
   onMount(() => {
-    if (prefillQuery) {
-      searchQuery = prefillQuery;
-      prevPrefill = prefillQuery;
+    if (!prefillQuery) {
+      loadLicenses();
     }
-    loadLicenses();
     startAutoRefresh();
   });
 

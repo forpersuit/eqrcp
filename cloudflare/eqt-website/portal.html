@@ -1206,8 +1206,18 @@
                     throw err;
                 }
 
-                state.licenses = data.licenses || [];
-                state.total = typeof data.total === 'number' ? data.total : state.licenses.length;
+                const receivedLicenses = data.licenses || [];
+                const receivedTotal = typeof data.total === 'number' ? data.total : receivedLicenses.length;
+
+                // Self-healing pagination fallback: if last item on current page is removed/refunded, auto-fallback to max available page
+                const maxPage = Math.max(1, Math.ceil(receivedTotal / state.pageSize));
+                if (receivedTotal > 0 && receivedLicenses.length === 0 && state.page > maxPage) {
+                    state.page = maxPage;
+                    return await loadLicenses();
+                }
+
+                state.licenses = receivedLicenses;
+                state.total = receivedTotal;
                 renderLicenses();
                 renderPagination();
 
