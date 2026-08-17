@@ -422,7 +422,7 @@ globe.gl 库（2.32.0）与地球贴图（`earth-night.jpg` / `earth-topology.pn
 
 - 功能增加 → 小版本号 +1（仓库规则）；
 - 需跑 `go test ./...`、`npm run test:e2e`、`npm run test:admin`；
-- 新路由在 `docs/test-analysis.md` 或对应契约文档登记。
+- 新路由在对应契约文档登记。
 
 ### 6.6 订阅续期与手动续期能力
 

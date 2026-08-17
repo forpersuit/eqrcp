@@ -264,7 +264,7 @@ Body:    category / version / os / message / imageUrl
 | 桌面 | 安装包 / Wails GUI | `desktop/gui/`、`scripts/build-artifacts.sh` |
 | Chat v2 | 随服务端 / 嵌入页 | `pkg/chat/v2/` |
 
-部署命令习惯见 [admin/IMPORTANT_admin-release.md](./admin/IMPORTANT_admin-release.md) 与 [admin/ops-guide.md](./ops-guide.md)。
+部署命令习惯见 [admin/IMPORTANT_admin-release.md](./admin/IMPORTANT_admin-release.md) 与 [admin/ops-guide.md](./admin/ops-guide.md)。
 
 ---
 

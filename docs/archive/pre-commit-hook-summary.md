@@ -177,7 +177,7 @@ rm .git/hooks/pre-commit
 ## 相关文档
 
 - [Git Hooks Setup](./git-hooks-setup.md) - Hook安装和使用指南
-- [AGENTS.md](../AGENTS.md) - 项目开发规范
+- [AGENTS.md](../../AGENTS.md) - 项目开发规范
 - [Git Hooks官方文档](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks)
 
 ## 提交历史

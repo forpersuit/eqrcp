@@ -230,7 +230,6 @@ The helper first checks direct `x.com` reachability. If direct access is unavail
 
 Planning documents:
 
-- [Test analysis](docs/test-analysis.md)
 - [Desktop integration plan](docs/desktop-integration-plan.md)
 - [Chat 模式文档目录](docs/chat/README.md)
 - [Desktop platform notes](docs/desktop-platform-notes.md)

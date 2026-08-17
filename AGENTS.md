@@ -63,7 +63,7 @@ Pull requests should include a concise behavior summary, test commands run, and 
 
 ## Security & Configuration Tips
 
-Do not commit local config, generated binaries, logs, or received files. Keep network-facing changes scoped and document any new routes in `docs/test-analysis.md` or the desktop integration plan when relevant.
+Do not commit local config, generated binaries, logs, or received files. Keep network-facing changes scoped and document any new routes in the corresponding contract docs (`docs/admin/api-contract.md` / `docs/portal/api-contract.md`) or the desktop integration plan when relevant.
 
 ## Project Skill Notes
 

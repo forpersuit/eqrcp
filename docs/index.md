@@ -53,7 +53,6 @@ Environment variables use the `EQT_` prefix.
 - [Payment & Licensing System Docs (支付与授权系统文档)](payment/README.md)
 - [Product Presentation & Merchant Compliance (支付合规页)](product-landing.md)
 - [Auto-Update Design & Settings (自动更新设计)](IMPORTANT_auto-update-design.md)
-- [Test analysis](test-analysis.md)
 - [Desktop integration plan](desktop-integration-plan.md)
 - **[Chat 模式文档目录](chat/README.md)** — V2 现状、Free 额度、交互修复、历史归档
 - **[密码学与加密文档目录](crypto/README.md)** — 传输与内容加密（Chat/Pro E2EE）、DRM 授权 Ed25519 签名与硬件指纹密码学规范

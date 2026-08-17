@@ -247,7 +247,7 @@ graph TD
   - 使用指数退避算法（Exponential Backoff）延长下一次检测时间（如从 1 小时、2 小时，逐渐退避到每 24 小时尝试一次），避免离线状态下持续请求导致不必要的 CPU 和日志开销。
 
 ### 3.3 激活与授权约束 (License Integrity)
-- 更新包的替换过程必须绝对保证用户本地证书（如 `license.lic`，参见 [licensing-architecture.md](file:///home/yelon/develop/me/eqrcp/docs/licensing-architecture.md)）的安全。
+- 更新包的替换过程必须绝对保证用户本地证书（如 `license.lic`，参见 [licensing-architecture.md](./payment/licensing-architecture.md)）的安全。
 - 严禁将更新包解压目录指向存放用户证书的敏感配置目录。更新程序在覆盖二进制时，不能触碰任何用户配置数据文件（如 `chat_usage.json` 或 `.config.yaml`）。
 
 ---

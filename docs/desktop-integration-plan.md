@@ -42,7 +42,6 @@ Status: completed.
 
 Deliverables:
 
-- Record baseline tests in `docs/test-analysis.md`.
 - Record platform integration details in `docs/desktop-platform-notes.md`.
 - Record security limits in `docs/security-notes.md`.
 - Keep the CLI behavior stable while planning desktop commands.

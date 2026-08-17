@@ -134,8 +134,8 @@ git commit -m "Release v1.0.0"
 
 ## 相关文档
 
-- [Git Hooks Setup](./git-hooks-setup.md)
-- [Pre-commit Hook Summary](./pre-commit-hook-summary.md)
+- [Git Hooks Setup](./archive/git-hooks-setup.md)（已归档：旧 hook 行为）
+- [Pre-commit Hook Summary](./archive/pre-commit-hook-summary.md)（已归档：旧 hook 行为）
 - [Wails官方文档](https://wails.io/)
 
 ## 跨平台构建命令
