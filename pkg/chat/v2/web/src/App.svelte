@@ -541,6 +541,23 @@
 
   let contextMenuEl: HTMLDivElement | null = null;
 
+  function getTextContextMenuLabels(lang: string) {
+    if (lang.startsWith('zh')) {
+      return { cut: '剪切', copy: '复制', paste: '粘贴', selectAll: '全选' };
+    } else if (lang.startsWith('ja')) {
+      return { cut: '切り取り', copy: 'コピー', paste: '貼り付け', selectAll: 'すべて選択' };
+    } else if (lang.startsWith('ko')) {
+      return { cut: '잘라내기', copy: '복사', paste: '붙여넣기', selectAll: '모두 선택' };
+    } else if (lang.startsWith('es')) {
+      return { cut: 'Cortar', copy: 'Copiar', paste: 'Pegar', selectAll: 'Seleccionar todo' };
+    } else if (lang.startsWith('de')) {
+      return { cut: 'Ausschneiden', copy: 'Kopieren', paste: 'Einfügen', selectAll: 'Alles auswählen' };
+    } else if (lang.startsWith('fr')) {
+      return { cut: 'Couper', copy: 'Copier', paste: 'Coller', selectAll: 'Tout sélectionner' };
+    }
+    return { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' };
+  }
+
   function handleGlobalContextMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
@@ -559,18 +576,7 @@
       menu.style.zIndex = '99999';
 
       const input = target as HTMLInputElement | HTMLTextAreaElement;
-      const isZh = currentLang === 'zh';
-      const labels = isZh ? {
-        cut: '剪切',
-        copy: '复制',
-        paste: '粘贴',
-        selectAll: '全选'
-      } : {
-        cut: 'Cut',
-        copy: 'Copy',
-        paste: 'Paste',
-        selectAll: 'Select All'
-      };
+      const labels = getTextContextMenuLabels(currentLang);
 
       const items = [];
 
