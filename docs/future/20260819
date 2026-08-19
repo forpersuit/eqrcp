@@ -1,0 +1,16 @@
+1. chat 模式的 GUI 邮件功能异常
+2. 移动端复制后, 同步桌面端剪切板
+3. 右键模板, 购买成功后的
+4. paddle 主题色, 邮件主题色
+
+---
+2026-08-19: #4 paddle 主题色已处理 — 账号级 `primary_checkout_color` 配置脚本 `scripts/paddle-set-checkout-theme.sh`（sandbox+live 各一次），文档见 docs/payment/paddle-payment.md §6；邮件主题色仍待办。
+
+---
+2026-08-19 补充：live Paddle 审计完成（Dashboard 实查，vendor 383037）。
+已验证 ✅：主题色 #39e5b6 已保存；live 商品/价格与 pricing.html 一致；Webhook「eqt live webhook」Active 订阅 5 事件（transaction.completed / subscription.canceled / subscription.updated / adjustment.created / adjustment.updated）；live 客户端 token 一致。
+硬阻塞 🚨：① live `default_checkout_url` 为空（收银台打不开）；② live 账号身份验证未完成（onboarding identity_verification / final_review not_started）。
+待办 ⏳：③ 提交 `www.eqt.net.im` 域名审核（目前只有 eqt.net.im Pending，subdomain 不自动过审）；④ Worker `PADDLE_API_KEY` 换 live（wrangler secret put）；⑤ 核对 `PADDLE_WEBHOOK_SECRET` 与 live webhook secret 一致；⑥ sandbox 主题色未应用（需 sandbox key 跑脚本）；⑦ 生产 TEST_MAIL_RECEIVER 残留确认。
+
+---
+2026-08-20: apex→www 301 重定向已配置并验证 ✅（`https://eqt.net.im/*` → `https://www.eqt.net.im/*`，路径+query 保留）。机制：DNS A(proxied 192.0.2.0) + Zone Redirect Rule（phase `http_request_dynamic_redirect`）。备注：权限加在 .env 里被注释的 `cfut_` token 上（DNS+rules）；激活的 `cfat_` 只管 worker/r2/d1。临时 Worker `eqt-apex-redirect` 已删除。

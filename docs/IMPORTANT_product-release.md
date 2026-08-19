@@ -280,7 +280,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | Cancel C1/C2 | 通过 | `cancel-subscription` 立刻 revoke；Portal UI；Worker `f934e80d…`；Pages 已发 |
 | 2026-07-25 | agent | 年付续费同码 | 通过 | `transaction.completed` 按 `subscription_id` 延长 expires_at，不新发码 |
 | 2026-08-19 | agent | **Paddle live 审计** | 部分 | live 主题色 `#39e5b6` 已应用；商品/价格/Webhook（5 事件）与代码一致；**待办**：① `default_checkout_url` 仍空 ② `www.eqt.net.im` 未提交审核 ③ live 账号身份验证未完成（identity_verification/final_review）④ R2 换 live `PADDLE_API_KEY` ⑤ 核对 `PADDLE_WEBHOOK_SECRET` |
-| | | | | |
+| 2026-08-20 | agent | **apex→www 301 重定向** | 通过 | `eqt.net.im` → `https://www.eqt.net.im`（路径+query 保留）：DNS A(proxied `192.0.2.0`) + Zone Redirect Rule（`http_request_dynamic_redirect`，`(http.host eq "eqt.net.im")` → `concat("https://www.eqt.net.im", path)`）；`www.eqt.net.im/pricing` 200 |
 
 ---
 
