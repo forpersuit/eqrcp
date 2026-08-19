@@ -279,6 +279,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | 同步清单 | 文档 | §2.2.1 SMTP/Webhook 释义；§4.2 Cancel/发票推进 |
 | 2026-07-25 | agent | Cancel C1/C2 | 通过 | `cancel-subscription` 立刻 revoke；Portal UI；Worker `f934e80d…`；Pages 已发 |
 | 2026-07-25 | agent | 年付续费同码 | 通过 | `transaction.completed` 按 `subscription_id` 延长 expires_at，不新发码 |
+| 2026-08-19 | agent | **Paddle live 审计** | 部分 | live 主题色 `#39e5b6` 已应用；商品/价格/Webhook（5 事件）与代码一致；**待办**：① `default_checkout_url` 仍空 ② `www.eqt.net.im` 未提交审核 ③ live 账号身份验证未完成（identity_verification/final_review）④ R2 换 live `PADDLE_API_KEY` ⑤ 核对 `PADDLE_WEBHOOK_SECRET` |
 | | | | | |
 
 ---

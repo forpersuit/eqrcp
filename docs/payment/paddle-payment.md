@@ -162,3 +162,13 @@ live 账号的收银台在域名过审前**无法打开**：Paddle 要求**默�
    - EQT 官网已全部满足：`www.eqt.net.im` 公开可达；`terms.html` 7 语种含 Paddle MoR 声明（见第 97–98 行）。
 3. **过审后设默认支付链接**：live `default_checkout_url = https://www.eqt.net.im/pricing`（须为含 Paddle.js 的页面）。用 `scripts/paddle-set-checkout-theme.sh` 带 `EQT_CHECKOUT_URL` 一次完成；**主题色与域名无关，可提前**只设颜色（不带 `EQT_CHECKOUT_URL`）。
 4. **环境切换**：`pricing.html` 经 `window.EQT_IS_TEST`（来自 `js/api-base.js`，按 hostname 判定）自动切生产；`www.eqt.net.im` 下已指向 live token 与 live 价格 ID，**无需改代码**。localhost / test 子域自动落 sandbox。
+
+5. **已验证 live 状态（2026-08-19，登录 live Dashboard 核对）**：
+   - ✅ **主题色**：`primary_checkout_color = #39e5b6` 已保存（Checkout settings，live）。
+   - ✅ **商品 / 价格**：live 目录 product `pro_01kyd2j68kvpd9vek49yss00qw`（EQT）下两个价格均 active，与 `pricing.html` 内嵌 live 价格 ID **完全一致**：Lifetime `pri_01kyd2nbsmg44rjmvf4vbetgwj`（$29.99）、Yearly `pri_01kydyzmn1pc29npe377dxtq96`（$11.99/yr）。
+   - ✅ **Webhook** `eqt live webhook` Active → `https://lic.eqt.net.im/api/v1/paddle/webhook`，订阅 5 个事件：`transaction.completed` / `subscription.canceled` / `subscription.updated` / `adjustment.created` / `adjustment.updated`（Paddle Billing v2 退款走 `adjustment.*`，与 Worker `routes/paddle.ts` 处理一致；secret 以 `pdl_ntfset_` 开头）。
+   - ✅ **客户端 token**：`live_44b75bb0843ad17927eb60e8e07` 与 Dashboard「EQT client」一致。
+   - ❌ **`default_checkout_url` 仍为空**：当前第一硬阻塞——不设则收银台打不开（"Something went wrong"）。
+   - 🚨 **账号验证未完成**：onboarding `account_setup` in_progress，`identity_verification` / `final_review` 均 not_started。Paddle 要求完成身份验证后才放行真实收款，**优先级高于默认链接**。
+   - ⚠️ **域名审核**：仅 `eqt.net.im` 处于 Pending；`www.eqt.net.im` **未提交**（Paddle 明确 subdomain 不自动过审，须单独提交）。过审后方可把 `default_checkout_url` 设为 `https://www.eqt.net.im/pricing`。
+   - ⚠️ **部署 key（R2）**：Worker `PADDLE_API_KEY` 仍是 sandbox → 必须 `wrangler secret put` 换 live；`PADDLE_WEBHOOK_SECRET` 必须等于上述 Webhook 的 secret（Dashboard 复制，勿用 destination ID `ntfset_...`）。
