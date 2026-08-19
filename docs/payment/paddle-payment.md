@@ -149,3 +149,16 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
 - **默认支付链接是必需项**：不设置时 Checkout 直接打不开，报 "Something went wrong"。沙箱可填任意 URL（含 localhost）；live 需先通过域名审核。
 - **执行脚本**：`scripts/paddle-set-checkout-theme.sh`（见脚本头注释）——一键对 sandbox + live 设主题色，可选带默认支付链接。
 - **无代码替代**：Paddle Dashboard → Checkout → Checkout settings → Primary brand color，填产品主题色 `#39e5b6`。
+
+---
+
+## 7. 上线流程：网站域名审核 → 默认支付链接 (Website Approval → Default Payment Link)
+
+live 账号的收银台在域名过审前**无法打开**：Paddle 要求**默认支付链接必须落在已审核通过的域名**上，顺序不能颠倒。
+
+1. **提交网站审核**：Paddle Dashboard → Checkout → **Website approval** → Domain approval，提交 `www.eqt.net.im`（checkout 所在域名）。状态 `pending_review` → `approved`（自动化通常几分钟，官方注明 live 可能数天）。
+2. **过审前自查**（Paddle 抓站核对，任一不满足会 `action_required` / `rejected`）：
+   - 页面公开可达、不需登录；定价可见；存在 Terms / Privacy / Refund policy；条款声明 Paddle 为 Merchant of Record。
+   - EQT 官网已全部满足：`www.eqt.net.im` 公开可达；`terms.html` 7 语种含 Paddle MoR 声明（见第 97–98 行）。
+3. **过审后设默认支付链接**：live `default_checkout_url = https://www.eqt.net.im/pricing`（须为含 Paddle.js 的页面）。用 `scripts/paddle-set-checkout-theme.sh` 带 `EQT_CHECKOUT_URL` 一次完成；**主题色与域名无关，可提前**只设颜色（不带 `EQT_CHECKOUT_URL`）。
+4. **环境切换**：`pricing.html` 经 `window.EQT_IS_TEST`（来自 `js/api-base.js`，按 hostname 判定）自动切生产；`www.eqt.net.im` 下已指向 live token 与 live 价格 ID，**无需改代码**。localhost / test 子域自动落 sandbox。
