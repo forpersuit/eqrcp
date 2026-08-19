@@ -14,3 +14,12 @@
 
 ---
 2026-08-20: apex→www 301 重定向已配置并验证 ✅（`https://eqt.net.im/*` → `https://www.eqt.net.im/*`，路径+query 保留）。机制：DNS A(proxied 192.0.2.0) + Zone Redirect Rule（phase `http_request_dynamic_redirect`）。备注：权限加在 .env 里被注释的 `cfut_` token 上（DNS+rules）；激活的 `cfat_` 只管 worker/r2/d1。临时 Worker `eqt-apex-redirect` 已删除。
+
+---
+2026-08-20 补充（Paddle 域名 Pending 排查，Dashboard 实查）：
+- ✅ 修正：**www 不能单独提交**——Paddle 域名输入框对 `www.eqt.net.im` 报 "Invalid domain name"，页面规则 "Don't include www"。`eqt.net.im` Pending 即覆盖站点（含 www）。此前文档「www 未提交须单独提交」的说法作废。
+- 🔍 Pending 根因（两项，均确认属实）：
+  ① onboarding「02 Verify your account」**Not started**——Paddle 需完成业务验证才放行真实收款，疑似域名审批的主闸门。需用户个人+公司信息，约 10 分钟。
+  ② `eqt.net.im` 此前无任何 Web 记录，审核抓不到内容——已配 301 跳转修复，现可抓取 www 完整站点。
+- ✅ 网站侧审核前置全部达标：/ /pricing /terms /privacy /refund 均 200；价格与 live 目录一致；`support@eqt.net.im` 首页可达。
+- ⏭ 下一步：用户启动「02 Verify your account」（onboarding/account-setup?step=intro）。

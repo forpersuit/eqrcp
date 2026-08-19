@@ -170,5 +170,5 @@ live 账号的收银台在域名过审前**无法打开**：Paddle 要求**默�
    - ✅ **客户端 token**：`live_44b75bb0843ad17927eb60e8e07` 与 Dashboard「EQT client」一致。
    - ❌ **`default_checkout_url` 仍为空**：当前第一硬阻塞——不设则收银台打不开（"Something went wrong"）。
    - 🚨 **账号验证未完成**：onboarding `account_setup` in_progress，`identity_verification` / `final_review` 均 not_started。Paddle 要求完成身份验证后才放行真实收款，**优先级高于默认链接**。
-   - ⚠️ **域名审核**：仅 `eqt.net.im` 处于 Pending；`www.eqt.net.im` **未提交**（Paddle 明确 subdomain 不自动过审，须单独提交）。过审后方可把 `default_checkout_url` 设为 `https://www.eqt.net.im/pricing`。
+   - ⚠️ **域名审核**：`eqt.net.im` 处于 Pending（**该审批即覆盖 www**——Paddle 域名输入框明确拒绝 `www.` 前缀，勿再单独提交 www）。2026-08-20 实测排查 Pending 根因：① onboarding「02 Verify your account」仍 **Not started**（Paddle 需先验证业务才放行真实收款，最可能的闸门）；② 此前 apex `eqt.net.im` 无任何 Web 记录，审核抓取不到站点内容——当天已配 apex→www 301，现审核可跟随跳转到完整合规站点。过审后把 `default_checkout_url` 设为 `https://www.eqt.net.im/pricing`。
    - ⚠️ **部署 key（R2）**：Worker `PADDLE_API_KEY` 仍是 sandbox → 必须 `wrangler secret put` 换 live；`PADDLE_WEBHOOK_SECRET` 必须等于上述 Webhook 的 secret（Dashboard 复制，勿用 destination ID `ntfset_...`）。

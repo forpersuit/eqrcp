@@ -281,6 +281,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-07-25 | agent | 年付续费同码 | 通过 | `transaction.completed` 按 `subscription_id` 延长 expires_at，不新发码 |
 | 2026-08-19 | agent | **Paddle live 审计** | 部分 | live 主题色 `#39e5b6` 已应用；商品/价格/Webhook（5 事件）与代码一致；**待办**：① `default_checkout_url` 仍空 ② `www.eqt.net.im` 未提交审核 ③ live 账号身份验证未完成（identity_verification/final_review）④ R2 换 live `PADDLE_API_KEY` ⑤ 核对 `PADDLE_WEBHOOK_SECRET` |
 | 2026-08-20 | agent | **apex→www 301 重定向** | 通过 | `eqt.net.im` → `https://www.eqt.net.im`（路径+query 保留）：DNS A(proxied `192.0.2.0`) + Zone Redirect Rule（`http_request_dynamic_redirect`，`(http.host eq "eqt.net.im")` → `concat("https://www.eqt.net.im", path)`）；`www.eqt.net.im/pricing` 200 |
+| 2026-08-20 | agent | **Paddle 域名 Pending 排查** | 结论 | **www 勿单独提交**（表单拒绝 `www.`，`eqt.net.im` Pending 即覆盖）；Pending 根因＝「02 Verify your account」未开始 + apex 此前无 Web 记录（已靠 301 修复）；网站侧审核前置全部 200 |
 
 ---
 
