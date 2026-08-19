@@ -135,3 +135,17 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
      ```sh
      python3 /home/yelon/.gemini/antigravity-cli/brain/54396198-9bb7-4067-9424-f3d0c93587c8/scratch/read_mail.py
      ```
+
+## 6. 结账主题色与默认支付链接 (Checkout Theme & Default Payment Link)
+
+结账界面品牌色是 **账号级配置**（`primary_checkout_color`），不是网站代码改动；Paddle 收银台 overlay 默认套用该颜色，sandbox 与 live 各管各的。
+
+| 环境 | 端点 | 鉴权 |
+|---|---|---|
+| Sandbox | `PATCH https://sandbox-api.paddle.com/settings/account` | Seller API key（`pdl_test_...`） |
+| Live | `PATCH https://api.paddle.com/settings/account` | Seller API key（`pdl_live_...`） |
+
+- **局部更新**：PATCH 只改你传的字段，其余（default_checkout_url / tax mode / saved payment methods）不变；只改主题色只需发 `{"primary_checkout_color":"#39e5b6"}`。
+- **默认支付链接是必需项**：不设置时 Checkout 直接打不开，报 "Something went wrong"。沙箱可填任意 URL（含 localhost）；live 需先通过域名审核。
+- **执行脚本**：`scripts/paddle-set-checkout-theme.sh`（见脚本头注释）——一键对 sandbox + live 设主题色，可选带默认支付链接。
+- **无代码替代**：Paddle Dashboard → Checkout → Checkout settings → Primary brand color，填产品主题色 `#39e5b6`。
