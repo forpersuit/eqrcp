@@ -282,6 +282,7 @@ Body:    category / version / os / message / imageUrl
 | 2026-08-19 | agent | **Paddle live 审计** | 部分 | live 主题色 `#39e5b6` 已应用；商品/价格/Webhook（5 事件）与代码一致；**待办**：① `default_checkout_url` 仍空 ② `www.eqt.net.im` 未提交审核 ③ live 账号身份验证未完成（identity_verification/final_review）④ R2 换 live `PADDLE_API_KEY` ⑤ 核对 `PADDLE_WEBHOOK_SECRET` |
 | 2026-08-20 | agent | **apex→www 301 重定向** | 通过 | `eqt.net.im` → `https://www.eqt.net.im`（路径+query 保留）：DNS A(proxied `192.0.2.0`) + Zone Redirect Rule（`http_request_dynamic_redirect`，`(http.host eq "eqt.net.im")` → `concat("https://www.eqt.net.im", path)`）；`www.eqt.net.im/pricing` 200 |
 | 2026-08-20 | agent | **Paddle 域名 Pending 排查** | 结论 | **www 勿单独提交**（表单拒绝 `www.`，`eqt.net.im` Pending 即覆盖）；Pending 根因＝「02 Verify your account」未开始 + apex 此前无 Web 记录（已靠 301 修复）；网站侧审核前置全部 200 |
+| 2026-08-20 | agent | **Paddle 域名 provisional approved + 整改** | 通过 | 用户完成业务验证（02 In progress，域名 In review）后收到 Paddle 邮件：`eqt.net.im` 已临时批准，payout 前需整改 2 项——① 退款政策含限定条件/例外 → 改为无条件 14 天全额退款（移除设备/技术条件、不可退款码例外、365 天限制）② 条款缺法定公司名 → 新增「Seller & Legal Entity」（`Huiai Technology (Xinzhou) Co., Ltd.`）+「合理使用与反滥用」（承接 365 天黑名单披露）。已部署并验证线上。Paddle 官方要求见 minimum-seller-terms（退款期 14–90 天 + 无不合理 qualifiers；卖家名须入条款） |
 
 ---
 

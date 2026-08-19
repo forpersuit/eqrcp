@@ -23,3 +23,12 @@
   ② `eqt.net.im` 此前无任何 Web 记录，审核抓不到内容——已配 301 跳转修复，现可抓取 www 完整站点。
 - ✅ 网站侧审核前置全部达标：/ /pricing /terms /privacy /refund 均 200；价格与 live 目录一致；`support@eqt.net.im` 首页可达。
 - ⏭ 下一步：用户启动「02 Verify your account」（onboarding/account-setup?step=intro）。
+
+---
+2026-08-20 补（Paddle 业务验证提交 + 域名临时批准 + 网站整改）：
+- ✅ 用户完成 onboarding Step 1–5（含统一社会信用代码 `91140902MAKHW5D934`，GB 32100-2015 校验通过）；「02 Verify your account」变 **In progress**，域名 `eqt.net.im` 变 **In review**（印证根因＝验证未开始）。
+- 📧 Paddle 邮件（docs/payment/20260820_paddle_mail_reply.md）：`eqt.net.im` **provisionally approved**，payout 前需整改 2 项：
+  ① 退款政策含限定条件/例外 → 按 Paddle 要求改为**无条件 14 天全额退款**（移除设备/技术条件、不可退款码例外、365 天限制；订阅取消/处理流程保留）。
+  ② 条款缺法定公司名 → 新增「Seller & Legal Entity」（`Huiai Technology (Xinzhou) Co., Ltd.`）+「合理使用与反滥用」条款（承接 365 天黑名单披露，Paddle 最低条款要求有 Misuse 条款）。
+- 🚀 已改 refund.html / terms.html / pricing.html（各 7 语种 + HTML 基线）并 `npm run deploy`（项目 `eqt`）；线上验证 /refund /terms /pricing 均 200 且新文案生效。
+- ⏭ 下一步：Paddle 侧等审核（可能邮件要身份验证）；域名正式 approved 后设 live `default_checkout_url = https://www.eqt.net.im/pricing`。
