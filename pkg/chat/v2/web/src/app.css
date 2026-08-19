@@ -1633,6 +1633,9 @@ input:focus { border-color: var(--accent); outline: none; }
     white-space: nowrap;
 }
 .custom-context-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
     transition: background 0.1s ease, color 0.1s ease;
 }
 .custom-context-menu button:hover {
