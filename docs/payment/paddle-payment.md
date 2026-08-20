@@ -179,3 +179,48 @@ live 账号的收银台在域名过审前**无法打开**：Paddle 要求**默�
    - ✅ **live 密钥已切到 Worker**：`.env` 的 `PADDLE_API_KEY`（`pdl_live_apikey_...`，69 字符符合官方正则）与 `PADDLE_WEBHOOK_SECRET`（`pdl_ntfset_..._euVBSSLM...H6NHbzA`，70 字符符合官方 `^pdl_ntfset_[a-zA-Z0-9]{26}_[a-zA-Z0-9]{32}$`）均经 live API 实证可用：`/notification-settings`、`/products`、`/event-types` 全部 HTTP 200；webhook secret 与官方 `endpoint_secret_key` 逐字符一致。用 `wrangler secret put` 推送并 `wrangler deploy`（Version `6614ea93`）。离线测试套件 `npm run test:offline` 52 项全过。
    - ✅ **live `default_checkout_url` 已设**：Checkout Settings → Default payment link 填 `https://www.eqt.net.im/pricing`，保存后 GraphQL `getCheckoutSettings` 确认 `"defaultCheckoutUrl":{"url":"https://www.eqt.net.im/pricing","state":"APPROVED"}`。**收银台硬阻塞解除**（API key 无 `account-settings` 读权限返回 403，此设置只能在 Dashboard 改）。
    - ⏳ **剩余唯一阻塞：`02 Verify your account` = In review**（Paddle 侧）。2026-08-20 第二封邮件 `20260820_paddle_mail_reply_2.md`：Paddle 无法用注册信息识别企业与股东，需在 Dashboard 上传①政府签发企业注册文件（营业执照）②股东/股权结构文件（列出持股 ≥25% 的所有者姓名+占比）。已上传 → 状态变 In review。通过后 Paddle 会邮件联系关键利益相关者做身份验证。
+
+---
+
+## 8. 多币种结算与收款链路 (Currency Conversion & Payout)
+
+> 结论速览：**客户用本地币付 → Paddle 一律换算成结算币种（USD）入账 → 大陆银行只能收到 USD/EUR 电汇或经 Payoneer 提现人民币。** Paddle 全流程**不支持人民币**，国内银行收款的落地路径是 **Payoneer 提现 CNY**。
+
+### 8.1 客户本地币 → 你的账户（自动换汇）
+
+- **方案已启用（Plan B）**：账号级 **Automatic currency conversion** 已开启（Dashboard → Business Account → Currencies → Manage → Select all）。当前 **33 种币种活跃换算**（RUB 因无支持国家被排除）。无需改代码，checkout 收银台按买家 IP/地址自动以本地币展示与收款。
+- **结算币种（Balance currency）只有 5 种**：`USD / GBP / EUR / AUD / CAD`，**没有 CNY**（Dashboard Currencies → Edit 抽屉确认）。当前 EQT 设为 **USD**。
+- **入账路径**：买家按交易币种支付 → Paddle 换算为结算币种入账。报表提供 `transaction_to_balance_currency_exchange_rate` 与 `fx_fee_in_balance_currency`；`exchange_rate = 1.0` 表示交易币 = 结算币（如美区用户付 USD），**无 FX 费用**。
+- **live PricingPreview 实测**（价格 `pri_01kydyzmn1pc29npe377dxtq96`，$11.99/yr 折算后）：
+  | 国家 | 币种 | 买家应付 |
+  | :--- | :--- | :--- |
+  | US | USD | $11.99 |
+  | GB | GBP | £7.33 |
+  | DE | EUR | €8.63 |
+  | IN | INR | ₹972.74 |
+  | JP | JPY | ¥1,732 |
+  | BR | BRL | R$62.15 |
+- **页面不改**：`pricing.html` 仍硬编码美元标价（`$11.99`/`$29.99`）。结账 overlay 才会按买家本地币换算，属"先见美元、付款见本地币"，体验可接受，暂不做 7 语种本地化展示。
+
+### 8.2 你的账户 → 大陆银行（Payout）
+
+- **当前 Payout 配置**（Dashboard → Business Account → Payout Settings）：国家 **China**、收款方式 **Payoneer**、最低起付阈值 **$100**（可改 $250–$100k）。此时 payout 尚为空（业务验证未过、未产生交易）。
+- **Payoneer 路线（推荐，唯一能落袋人民币的官方路径）**：
+  ```
+  Paddle（USD）→ Payoneer 账户 → 提现人民币 → 大陆银行卡
+  ```
+  Payoneer 支持按人民币提现到大陆银行。
+- **Wire transfer（电汇）替代**：Paddle 走 SWIFT 直打大陆银行，**只能收 USD 或 EUR，收不了人民币**；且 balance currency ≠ 到账币种时跨币种电汇有 wire fee。若选此路，建议 balance = 到账币种（USD 或 EUR）以避开第二层换汇。
+
+### 8.3 损耗明细
+
+| 损耗层 | 产生条件 | 说明 |
+| :--- | :--- | :--- |
+| ① **Paddle 处理费** | 所有订单 | **5%**，固定，绕不开 |
+| ② **客户币 → 结算币 FX** | 买家非美元支付 | FX 转换费 + 汇率点差（报表 `fx_fee_in_balance_currency` 记录）。美区用户付 USD 时此层为 0 |
+| ③ **Payoneer 提现人民币** | 提现为 CNY 时 | Payoneer 换汇点差（约 1~2% 量级，以当日汇率为准）。若保留 USD 直接消费则为 0 |
+
+- **纯美区单**：只付 ① 的 5%。
+- **非美区单**：① + ②。
+- **落袋人民币**：① + ② + ③。
+- **为什么躲不掉换汇**：Paddle 结算币种不含 CNY，换汇至少发生一次（Paddle 内客户币→USD）；想要人民币则再经 Payoneer 换一次（USD→CNY）。若改走 wire transfer 收 EUR/USD 则免去 ③，但银行端需自行换汇人民币。
