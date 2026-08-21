@@ -32,7 +32,7 @@
                     "colors": {
                         "tertiary": "#a3e635",
                         "surface-bright": "#22332e",
-                        "primary": "#39e5b6",
+                        "primary": "#156f5a",
                         "on-secondary-container": "#00515d",
                         "on-surface-variant": "#a5b9b2",
                         "surface-variant": "#17231f",
@@ -45,7 +45,7 @@
                         "surface-dim": "#080e0c",
                         "on-secondary-fixed": "#001f25",
                         "secondary-fixed-dim": "#156f5a",
-                        "primary-fixed-dim": "#39e5b6",
+                        "primary-fixed-dim": "#156f5a",
                         "on-primary-fixed-variant": "#00b369",
                         "surface-container-low": "#0a110e",
                         "on-secondary": "#ffffff",
@@ -215,8 +215,8 @@
                 </div>
 
                 <!-- Plus Lifetime (Highlighted) -->
-                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80 shadow-[0_0_30px_rgba(57,229,182,0.15)]">
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-secondary font-bold px-3 py-1 rounded-full font-label-sm text-label-sm text-xs" data-i18n="price_lifetime_badge">BEST VALUE</div>
+                <div class="glass-panel p-8 rounded-2xl flex flex-col h-full border border-primary glow-primary relative md:-translate-y-4 bg-surface-container-low/80 shadow-[0_0_30px_rgba(21,111,90,0.3)]">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white font-bold px-3 py-1 rounded-full font-label-sm text-label-sm text-xs" data-i18n="price_lifetime_badge">BEST VALUE</div>
                     <h3 class="font-headline-md text-headline-md text-primary mb-xs text-xl font-bold" data-i18n="price_lifetime_title">Plus Lifetime</h3>
                     <div class="font-display-lg text-display-lg text-on-surface text-3xl font-bold mb-6">$29.99<span class="text-body-md font-body-md text-on-surface-variant text-sm font-normal" data-i18n="price_lifetime_period">/one-time</span></div>
                     <ul class="space-y-md mb-8 flex-grow">
@@ -225,7 +225,7 @@
                         <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat3">Lifetime updates</span></li>
                         <li class="flex items-center gap-sm text-on-surface text-sm"><span class="material-symbols-outlined text-primary text-sm">check</span> <span data-i18n="price_lifetime_feat4">Uncapped speed &amp; unlimited size</span></li>
                     </ul>
-                    <button id="buy-lifetime-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
+                    <button id="buy-lifetime-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(21,111,90,0.4)] active:scale-95 transition-all duration-300 font-label-md text-label-md" data-i18n="price_lifetime_btn">Buy Lifetime</button>
                 </div>
 
                 <!-- Plus Yearly -->
@@ -870,13 +870,6 @@
             }
         }
 
-        // Modal elements control
-        const modalEl = document.getElementById('license-modal');
-        const loadingState = document.getElementById('modal-loading-state');
-        const successState = document.getElementById('modal-success-state');
-        const errorState = document.getElementById('modal-error-state');
-        const codeDisplay = document.getElementById('license-code-display');
-
         function openModalAndStartPoll(transactionId) {
             const modalEl = document.getElementById('license-modal');
             const loadingState = document.getElementById('modal-loading-state');
@@ -946,44 +939,48 @@
             }, 300);
         }
 
-        // Bind modal close buttons
-        const closeBtn = document.getElementById('close-modal-btn');
-        const closeTopBtn = document.getElementById('close-modal-btn-top');
-        const okBtn = document.getElementById('modal-ok-btn');
-        const errOkBtn = document.getElementById('modal-err-ok-btn');
+        // Modal elements control (re-fetched at call time because this script
+        // runs before the modal markup that follows it in the document).
+        function initLicenseModalBindings() {
+            const closeBtn = document.getElementById('close-modal-btn');
+            const closeTopBtn = document.getElementById('close-modal-btn-top');
+            const okBtn = document.getElementById('modal-ok-btn');
+            const errOkBtn = document.getElementById('modal-err-ok-btn');
 
-        if (closeBtn) closeBtn.addEventListener('click', closeModal);
-        if (closeTopBtn) closeTopBtn.addEventListener('click', closeModal);
-        if (okBtn) okBtn.addEventListener('click', closeModal);
-        if (errOkBtn) errOkBtn.addEventListener('click', closeModal);
+            if (closeBtn) closeBtn.addEventListener('click', closeModal);
+            if (closeTopBtn) closeTopBtn.addEventListener('click', closeModal);
+            if (okBtn) okBtn.addEventListener('click', closeModal);
+            if (errOkBtn) errOkBtn.addEventListener('click', closeModal);
 
-        // Copy license code functionality
-        const copyBtn = document.getElementById('copy-code-btn');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                if (codeDisplay) {
-                    navigator.clipboard.writeText(codeDisplay.textContent).then(() => {
-                        const copyTxt = document.getElementById('copy-text');
-                        const copyIcon = document.getElementById('copy-icon');
-                        if (copyTxt) {
-                            const currentLang = localStorage.getItem('eqt-lang') || 'en';
-                            copyTxt.textContent = (currentLang === 'zh') ? '已复制！' : 'Copied!';
-                        }
-                        if (copyIcon) {
-                            copyIcon.textContent = 'check';
-                        }
-                        setTimeout(() => {
+            // Copy license code functionality
+            const copyBtn = document.getElementById('copy-code-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => {
+                    const codeDisplay = document.getElementById('license-code-display');
+                    if (codeDisplay) {
+                        navigator.clipboard.writeText(codeDisplay.textContent).then(() => {
+                            const copyTxt = document.getElementById('copy-text');
+                            const copyIcon = document.getElementById('copy-icon');
                             if (copyTxt) {
                                 const currentLang = localStorage.getItem('eqt-lang') || 'en';
-                                copyTxt.textContent = (currentLang === 'zh') ? '复制' : 'Copy';
+                                copyTxt.textContent = (currentLang === 'zh') ? '已复制！' : 'Copied!';
                             }
                             if (copyIcon) {
-                                copyIcon.textContent = 'content_copy';
+                                copyIcon.textContent = 'check';
                             }
-                        }, 2000);
-                    });
-                }
-            });
+                            setTimeout(() => {
+                                if (copyTxt) {
+                                    const currentLang = localStorage.getItem('eqt-lang') || 'en';
+                                    copyTxt.textContent = (currentLang === 'zh') ? '复制' : 'Copy';
+                                }
+                                if (copyIcon) {
+                                    copyIcon.textContent = 'content_copy';
+                                }
+                            }, 2000);
+                        });
+                    }
+                });
+            }
         }
 
         window.openModalAndStartPoll = openModalAndStartPoll;
@@ -992,6 +989,7 @@
             initLang();
             initCheckoutButtons();
             initPaddle();
+            initLicenseModalBindings();
         });
     </script>
 
@@ -1040,7 +1038,7 @@
                 </p>
                 
                 <!-- Submit button -->
-                <button id="verify-and-pay-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(57,229,182,0.4)] active:scale-95 transition-all duration-300 text-sm flex items-center justify-center gap-2">
+                <button id="verify-and-pay-btn" class="w-full py-3 bg-gradient-to-r from-secondary to-primary text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(21,111,90,0.4)] active:scale-95 transition-all duration-300 text-sm flex items-center justify-center gap-2">
                     <span data-i18n="verify_and_pay_btn">Verify &amp; Proceed to Payment</span>
                     <span class="material-symbols-outlined text-sm">lock_open</span>
                 </button>
@@ -1097,7 +1095,7 @@
                     </ol>
                 </div>
                 
-                <button id="modal-ok-btn" class="w-full py-2.5 bg-primary text-secondary hover:shadow-[0_0_15px_rgba(57,229,182,0.3)] font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Get Started</button>
+                <button id="modal-ok-btn" class="w-full py-2.5 bg-primary text-white hover:shadow-[0_0_15px_rgba(21,111,90,0.3)] font-bold rounded-lg transition-all duration-300 text-sm" data-i18n="modal_ok">Get Started</button>
             </div>
             
             <!-- State 3: Error / Timeout -->

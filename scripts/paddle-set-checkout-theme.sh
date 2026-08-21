@@ -16,14 +16,14 @@
 #     ./scripts/paddle-set-checkout-theme.sh
 #
 # Env options:
-#   EQT_PRIMARY_COLOR   brand hex, default #39e5b6 (product theme primary)
+#   EQT_PRIMARY_COLOR   brand hex, default #156f5a (GUI/brand theme primary)
 #   EQT_CHECKOUT_URL    optional: also set the default payment link on BOTH envs.
 #                       Required for checkout to open at all; live's domain must
 #                       be approved first. If omitted, the link is not touched.
 
 set -euo pipefail
 
-EQT_PRIMARY_COLOR="${EQT_PRIMARY_COLOR:-#39e5b6}"
+EQT_PRIMARY_COLOR="${EQT_PRIMARY_COLOR:-#156f5a}"
 SANDBOX_BASE="https://sandbox-api.paddle.com"
 LIVE_BASE="https://api.paddle.com"
 

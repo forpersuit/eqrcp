@@ -271,8 +271,8 @@ export async function sendDRMEmail(env: Env, to: string, subject: string, html: 
 export function renderEmailWrapper(title: string, contentHtml: string): string {
   return `
     <div style="font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; color: #334155; line-height: 1.6;">
-      <div style="border-bottom: 2px solid #10b981; padding-bottom: 14px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">EQT <span style="font-size: 13px; font-weight: 600; color: #10b981;">Easy QR Transfer</span></span>
+      <div style="border-bottom: 2px solid #156f5a; padding-bottom: 14px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">EQT <span style="font-size: 13px; font-weight: 600; color: #156f5a;">Easy QR Transfer</span></span>
         <span style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Official Notice</span>
       </div>
       <h2 style="color: #0f172a; margin-top: 0; font-size: 18px; font-weight: 700;">${title}</h2>
@@ -288,8 +288,8 @@ export function buildAuthCodeEmailHtml(lang: string, code: string): { subject: s
   const t = AUTH_CODE_EMAIL_I18N[norm] || AUTH_CODE_EMAIL_I18N['zh'] || AUTH_CODE_EMAIL_I18N['en'];
   const content = `
     <p style="color: #475569; font-size: 14px;">${t.bodyText}</p>
-    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
-      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #166534; font-family: monospace;">${code}</span>
+    <div style="background: #e8f2ee; border: 1px solid #156f5a; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #0d4e42; font-family: monospace;">${code}</span>
     </div>
     <p style="font-size: 13px; color: #64748b;">${t.validityText}</p>
   `;
@@ -301,8 +301,8 @@ export function buildCheckoutEmailHtml(lang: string, code: string): { subject: s
   const t = CHECKOUT_EMAIL_I18N[norm] || CHECKOUT_EMAIL_I18N['zh'] || CHECKOUT_EMAIL_I18N['en'];
   const content = `
     <p style="color: #475569; font-size: 14px;">${t.bodyHtml}</p>
-    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
-      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #166534; font-family: monospace;">${code}</span>
+    <div style="background: #e8f2ee; border: 1px solid #156f5a; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #0d4e42; font-family: monospace;">${code}</span>
     </div>
     <p style="font-size: 13px; color: #64748b;">${t.validityText}</p>
   `;
