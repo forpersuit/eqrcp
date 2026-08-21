@@ -10,7 +10,7 @@
 
 | 产品版本 | 标价 | 周期 | Paddle Price ID (Sandbox) | 对应 License 规格 |
 | :--- | :--- | :--- | :--- | :--- |
-| **终身 Plus 版 (Lifetime)** | `$29.99` | 一次性买断 | `pri_01kxymyma34hgmndccwswheta3` | 级别为 `PLUS`，永不过期 (`LIFETIME`) |
+| **终身 Plus 版 (Lifetime)** | `$29.99` | 一次性买断 | `pri_01kyhmkv4ppj10r4cdgw3sv48p` | 级别为 `PLUS`，永不过期 (`LIFETIME`) |
 | **年付 Plus 版 (Yearly)** | `$11.99` | 按年续费 | `pri_01kxymxqngex49tg65wb0701pc` | 级别为 `PLUS`，有效期 `365` 天 |
 
 > [!IMPORTANT]
@@ -142,7 +142,7 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
 
 | 环境 | 端点 | 鉴权 |
 |---|---|---|
-| Sandbox | `PATCH https://sandbox-api.paddle.com/settings/account` | Seller API key（`pdl_test_...`） |
+| Sandbox | `PATCH https://sandbox-api.paddle.com/settings/account` | Seller API key（沙箱 `pdl_sdbx_...`） |
 | Live | `PATCH https://api.paddle.com/settings/account` | Seller API key（`pdl_live_...`） |
 
 - **局部更新**：PATCH 只改你传的字段，其余（default_checkout_url / tax mode / saved payment methods）不变；只改主题色只需发 `{"primary_checkout_color":"#39e5b6"}`。
@@ -179,6 +179,11 @@ live 账号的收银台在域名过审前**无法打开**：Paddle 要求**默�
    - ✅ **live 密钥已切到 Worker**：`.env` 的 `PADDLE_API_KEY`（`pdl_live_apikey_...`，69 字符符合官方正则）与 `PADDLE_WEBHOOK_SECRET`（`pdl_ntfset_..._euVBSSLM...H6NHbzA`，70 字符符合官方 `^pdl_ntfset_[a-zA-Z0-9]{26}_[a-zA-Z0-9]{32}$`）均经 live API 实证可用：`/notification-settings`、`/products`、`/event-types` 全部 HTTP 200；webhook secret 与官方 `endpoint_secret_key` 逐字符一致。用 `wrangler secret put` 推送并 `wrangler deploy`（Version `6614ea93`）。离线测试套件 `npm run test:offline` 52 项全过。
    - ✅ **live `default_checkout_url` 已设**：Checkout Settings → Default payment link 填 `https://www.eqt.net.im/pricing`，保存后 GraphQL `getCheckoutSettings` 确认 `"defaultCheckoutUrl":{"url":"https://www.eqt.net.im/pricing","state":"APPROVED"}`。**收银台硬阻塞解除**（API key 无 `account-settings` 读权限返回 403，此设置只能在 Dashboard 改）。
    - ⏳ **剩余唯一阻塞：`02 Verify your account` = In review**（Paddle 侧）。2026-08-20 第二封邮件 `20260820_paddle_mail_reply_2.md`：Paddle 无法用注册信息识别企业与股东，需在 Dashboard 上传①政府签发企业注册文件（营业执照）②股东/股权结构文件（列出持股 ≥25% 的所有者姓名+占比）。已上传 → 状态变 In review。通过后 Paddle 会邮件联系关键利益相关者做身份验证。
+
+7. **第三轮推进（2026-08-21，认证通过 → 零成本 E2E）✅**：
+   - ✅ **`02 Verify your account` 已通过（Verification passed）**：live onboarding 此前唯一硬阻塞解除，Paddle 放行真实收款。
+   - ✅ **live 零成本 E2E 折扣已建**：`POST /discounts` 创建 100% off 折扣码 **`EQTE2E100`**（id `dsc_01m0j5sj308zny5wkxvx3bc4zt`；`type=percentage`、`amount=100`、单次使用 `usage_limit=1`、`recur=false`、`restrict_to=[pro_01kyd2j68kvpd9vek49yss00qw]`、`expires_at=2026-08-23`）。用于真实卡 $0 交易验证 webhook 履约 → DB 落库 → 取消订阅 → 归档折扣。
+   - ⚠️ **sandbox 主题色/默认链接 403**：`.env.test` 的 sandbox key（`pdl_sdbx_apik...`）无 `account-settings` 权限（`403 not authorized to read|update account-settings`）。sandbox `primary_checkout_color`/`default_checkout_url` 需在 Dashboard（Checkout → Checkout settings）或全权限 Seller key 下设置。
 
 ---
 
