@@ -8,7 +8,7 @@ import {
 import { emailHash, verifyPaddleSignature } from '../utils/crypto';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
-import { ensureAutoRenewColumn, ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns } from '../utils/auth';
+import { ensureAutoRenewColumn, ensureLicensePaddleTxnIndex, ensureLicenseSourceColumns, ensurePaddleProcessedTxnTable } from '../utils/auth';
 import { isPaddleSandbox, revokeByPaddleSubSql, revokeByPaddleTxnSql, revokeLicenseSql } from '../utils/license-source';
 import { getLicenseRevokeEmailTemplate, getPurchaseEmailTemplate, getRenewalEmailTemplate } from '../i18n';
 import { isD1RateLimited } from '../utils/rate-limit';
@@ -88,6 +88,7 @@ export async function handlePaddleRoutes(
     await ensureLicenseSourceColumns(env);
     await ensureLicensePaddleTxnIndex(env);
     await ensureAutoRenewColumn(env);
+    await ensurePaddleProcessedTxnTable(env);
     const rawBody = await request.text();
     let signature = request.headers.get("paddle-signature") || request.headers.get("Paddle-Signature");
     if (!signature) {
