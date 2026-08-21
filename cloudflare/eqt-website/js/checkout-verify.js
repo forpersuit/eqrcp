@@ -50,6 +50,14 @@
             return window.currentLang || localStorage.getItem('eqt-lang') || 'en';
         }
 
+        // Map the site language selector value to a Paddle Checkout locale code.
+        // Page langs: en/ja/ko/es/de/fr/zh — only zh needs rewriting to BCP-47.
+        toPaddleLocale() {
+            const lang = this.getLang();
+            const map = { 'zh': 'zh-Hans' };
+            return map[lang] || lang;
+        }
+
         getTranslation(key, defaultVal) {
             const lang = this.getLang();
             if (window.translations && window.translations[lang] && window.translations[lang][key]) {
@@ -349,7 +357,7 @@
                                 items: [{ priceId: this.pendingPriceId, quantity: 1 }],
                                 customer: { email: this.verifiedEmail },
                                 customData: { buyer_email: this.verifiedEmail },
-                                settings: { allowLogout: false }
+                                settings: { allowLogout: false, locale: this.toPaddleLocale() }
                             });
                         } catch (pErr) {
                             console.error("Paddle Open Error:", pErr);
