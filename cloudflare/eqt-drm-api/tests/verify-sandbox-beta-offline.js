@@ -331,6 +331,208 @@ async function runTests() {
     assertEqual(acts.length, 1, 'Exactly 1 activation recorded for legitimate test device');
   }
 
+  // ------------------------------------------------------------
+  // Test 8: 8-day hard expiry cap (activate + verify both enforce it)
+  // ------------------------------------------------------------
+  console.log('\n--- Test 8: 8-day hard expiry cap on test licenses ---');
+  {
+    // Backdate quickTestCode creation to 9 days ago -> created_at + 8d is already in the past
+    const nineDaysAgo = new Date(Date.now() - 9 * 86400000).toISOString();
+    mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(nineDaysAgo, quickTestCode);
+
+    const res = await callDrm('POST', '/api/v1/activate', {
+      license_code: quickTestCode,
+      device_id: 'b0036718cb9a469999d2910cdf418b1f',
+      uuid_hash: 'legit_uuid_hash_1111111111111111',
+      cpu_hash: 'legit_cpu_hash_2222222222222222',
+      disk_hash: 'legit_disk_hash_3333333333333333'
+    });
+    assertEqual(res.status, 403, 'Activate after 8-day cap returns 403 (expired)');
+    assert(res.json.error, 'Returns an error message on 8-day expiry');
+
+    const vres = await callDrm('POST', '/api/v1/verify', {
+      license_code: quickTestCode,
+      uuid_hash: 'legit_uuid_hash_1111111111111111',
+      cpu_hash: 'legit_cpu_hash_2222222222222222',
+      disk_hash: 'legit_disk_hash_3333333333333333'
+    });
+    assertEqual(vres.status, 403, 'Verify after 8-day cap returns 403 (expired)');
+
+    // Restore created_at so later tests on quickTestCode remain valid
+    mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(new Date().toISOString(), quickTestCode);
+  }
+
+  // ------------------------------------------------------------
+  // Test 9: Deleting a whitelist entry blocks further activation
+  // ------------------------------------------------------------
+  console.log('\n--- Test 9: Delete whitelist entry -> activation rejected ---');
+  let delCode = '';
+  {
+    await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      device_id: 'del_device_001',
+      email: 'del@301098.xyz',
+      notes: 'deletion test'
+    });
+    const mintRes = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
+      tier: 'PLUS',
+      device_id: 'del_device_001',
+      email: 'del@301098.xyz',
+      expires_in_days: 8
+    });
+    assertEqual(mintRes.status, 200, 'Mint for registered pair returns 200');
+    delCode = mintRes.json.license_code;
+
+    mockD1.db.prepare(`
+      INSERT INTO device_registry (device_id, uuid_hash, cpu_hash, disk_hash, tier_label, registered_at, last_seen_at)
+      VALUES (?, ?, ?, ?, 'free', datetime('now'), datetime('now'))
+    `).run('del_device_001', 'del_uuid_hash_aaaaaaaaaaaaaaaa', 'del_cpu_hash_bbbbbbbbbbbbbbbb', 'del_disk_hash_cccccccccccccccc');
+
+    const act1 = await callDrm('POST', '/api/v1/activate', {
+      license_code: delCode,
+      device_id: 'del_device_001',
+      uuid_hash: 'del_uuid_hash_aaaaaaaaaaaaaaaa',
+      cpu_hash: 'del_cpu_hash_bbbbbbbbbbbbbbbb',
+      disk_hash: 'del_disk_hash_cccccccccccccccc'
+    });
+    assertEqual(act1.status, 200, 'Activation succeeds while whitelist entry exists');
+
+    const listRes = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
+    const row = listRes.json.testers.find(t => t.email === 'del@301098.xyz');
+    assert(row && row.id, 'Whitelist row for del@301098.xyz exists');
+    const delRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${row.id}`);
+    assertEqual(delRes.status, 200, 'DELETE whitelist entry returns 200');
+
+    const act2 = await callDrm('POST', '/api/v1/activate', {
+      license_code: delCode,
+      device_id: 'del_device_001',
+      uuid_hash: 'del_uuid_hash_aaaaaaaaaaaaaaaa',
+      cpu_hash: 'del_cpu_hash_bbbbbbbbbbbbbbbb',
+      disk_hash: 'del_disk_hash_cccccccccccccccc'
+    });
+    assertEqual(act2.status, 403, 'Activation rejected after whitelist entry is deleted');
+  }
+
+  // ------------------------------------------------------------
+  // Test 10: Deleting a whitelist entry blocks verify (license renewal)
+  // ------------------------------------------------------------
+  console.log('\n--- Test 10: Delete whitelist entry -> verify rejected ---');
+  {
+    await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      device_id: 'verify_device_001',
+      email: 'paired@301098.xyz',
+      notes: 'verify deletion test'
+    });
+    const mintRes = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
+      tier: 'PLUS',
+      device_id: 'verify_device_001',
+      email: 'paired@301098.xyz',
+      expires_in_days: 8
+    });
+    const pairedCode = mintRes.json.license_code;
+
+    mockD1.db.prepare(`
+      INSERT INTO device_registry (device_id, uuid_hash, cpu_hash, disk_hash, tier_label, registered_at, last_seen_at)
+      VALUES (?, ?, ?, ?, 'free', datetime('now'), datetime('now'))
+    `).run('verify_device_001', 'pair_uuid_hash_dddddddddddddddd', 'pair_cpu_hash_eeeeeeeeeeeeeeee', 'pair_disk_hash_ffffffffffffffff');
+
+    const act1 = await callDrm('POST', '/api/v1/activate', {
+      license_code: pairedCode,
+      device_id: 'verify_device_001',
+      uuid_hash: 'pair_uuid_hash_dddddddddddddddd',
+      cpu_hash: 'pair_cpu_hash_eeeeeeeeeeeeeeee',
+      disk_hash: 'pair_disk_hash_ffffffffffffffff'
+    });
+    assertEqual(act1.status, 200, 'Activation succeeds for paired whitelist entry');
+
+    const listRes = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
+    const row = listRes.json.testers.find(t => t.email === 'paired@301098.xyz');
+    await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${row.id}`);
+
+    const vres = await callDrm('POST', '/api/v1/verify', {
+      license_code: pairedCode,
+      uuid_hash: 'pair_uuid_hash_dddddddddddddddd',
+      cpu_hash: 'pair_cpu_hash_eeeeeeeeeeeeeeee',
+      disk_hash: 'pair_disk_hash_ffffffffffffffff'
+    });
+    assertEqual(vres.status, 403, 'Verify rejected after whitelist entry is deleted');
+  }
+
+  // ------------------------------------------------------------
+  // Test 11: Email-only whitelist entry (no device) -> activation rejected
+  // ------------------------------------------------------------
+  console.log('\n--- Test 11: Email-only whitelist entry cannot activate ---');
+  {
+    await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      email: 'orphan@301098.xyz',
+      notes: 'email-only entry'
+    });
+    const genRes = await callAdmin('POST', '/api/v1/admin/generate-license', {
+      tier: 'PLUS',
+      source: 'test',
+      buyer_email: 'orphan@301098.xyz',
+      expires_in_days: 7
+    });
+    assertEqual(genRes.status, 200, 'Generate test license for email-only entry returns 200');
+    const orphanCode = genRes.json.license_code;
+
+    const res = await callDrm('POST', '/api/v1/activate', {
+      license_code: orphanCode,
+      device_id: 'some_unregistered_device',
+      uuid_hash: 'orphan_uuid_hash_1111111111111111',
+      cpu_hash: 'orphan_cpu_hash_2222222222222222',
+      disk_hash: 'orphan_disk_hash_3333333333333333'
+    });
+    assertEqual(res.status, 403, 'Email-only whitelist entry cannot activate (no bound device)');
+  }
+
+  // ------------------------------------------------------------
+  // Test 12: Paddle sandbox purchase (LIFETIME) in test env is capped at 8 days
+  // ------------------------------------------------------------
+  console.log('\n--- Test 12: Paddle purchase code in test env capped at 8 days ---');
+  {
+    await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      device_id: 'paddle_device_001',
+      email: 'paddle@301098.xyz',
+      notes: 'paddle sandbox purchase test'
+    });
+    mockD1.db.prepare(`
+      INSERT INTO device_registry (device_id, uuid_hash, cpu_hash, disk_hash, tier_label, registered_at, last_seen_at)
+      VALUES (?, ?, ?, ?, 'free', datetime('now'), datetime('now'))
+    `).run('paddle_device_001', 'paddle_uuid_hash_aaaaaaaaaaaaaaaa', 'paddle_cpu_hash_bbbbbbbbbbbbbbbb', 'paddle_disk_hash_cccccccccccccccc');
+
+    const paddleCode = 'EQT-PAD-TEST-20260822-000001';
+    const now = new Date().toISOString();
+    mockD1.db.prepare(`
+      INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, buyer_email, source, created_at)
+      VALUES (?, 'PLUS', 'active', 2, 'LIFETIME', 'paddle@301098.xyz', 'purchase', ?)
+    `).run(paddleCode, now);
+
+    const res = await callDrm('POST', '/api/v1/activate', {
+      license_code: paddleCode,
+      device_id: 'paddle_device_001',
+      uuid_hash: 'paddle_uuid_hash_aaaaaaaaaaaaaaaa',
+      cpu_hash: 'paddle_cpu_hash_bbbbbbbbbbbbbbbb',
+      disk_hash: 'paddle_disk_hash_cccccccccccccccc'
+    });
+    assertEqual(res.status, 200, 'Paddle purchase activates in test env (whitelisted tester)');
+    const got = Date.parse(res.json.expires_at);
+    const expect = Date.now() + 8 * 86400000;
+    assert(!Number.isNaN(got), 'Activation returns a parseable expires_at');
+    assert(Math.abs(got - expect) < 120000, `expires_at is capped to ~8 days (got ${res.json.expires_at})`);
+
+    // Backdate to 9 days ago -> 8-day cap expired
+    const nineDaysAgo = new Date(Date.now() - 9 * 86400000).toISOString();
+    mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(nineDaysAgo, paddleCode);
+    const res2 = await callDrm('POST', '/api/v1/activate', {
+      license_code: paddleCode,
+      device_id: 'paddle_device_001',
+      uuid_hash: 'paddle_uuid_hash_aaaaaaaaaaaaaaaa',
+      cpu_hash: 'paddle_cpu_hash_bbbbbbbbbbbbbbbb',
+      disk_hash: 'paddle_disk_hash_cccccccccccccccc'
+    });
+    assertEqual(res2.status, 403, 'Paddle purchase after 8-day cap returns 403 (expired)');
+  }
+
   console.log('\n============================================================');
   console.log(`Results: ${passed} passed, ${failed} failed`);
   console.log('============================================================\n');

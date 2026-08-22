@@ -395,8 +395,12 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
       )
     `).run();
     try {
+      // Migration: old unique device index prohibited one-device-many-emails. Drop before recreating non-unique.
+      await env.DB.prepare(`DROP INDEX IF EXISTS idx_beta_device`).run();
+    } catch (_) {}
+    try {
       await env.DB.prepare(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_device ON sandbox_beta_testers(device_id) WHERE device_id IS NOT NULL AND device_id != ''
+        CREATE INDEX IF NOT EXISTS idx_beta_device ON sandbox_beta_testers(device_id) WHERE device_id IS NOT NULL AND device_id != ''
       `).run();
     } catch (_) {}
     try {
@@ -411,9 +415,9 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
       if (!countRow || countRow.count === 0) {
         const now = new Date().toISOString();
         await env.DB.batch([
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, NULL, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'Default Sandbox Beta Device', now),
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('tmp@301098.xyz', 'Default Sandbox Tester 1', now),
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('anon@301098.xyz', 'Default Sandbox Tester 2', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'tmp@301098.xyz', 'Default Sandbox Beta Device', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'anon@301098.xyz', 'Default Sandbox Beta Device (alt email)', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('sandbox_seed_device_placeholder', 'seed@301098.xyz', 'Default Sandbox Seed Pair', now),
         ]);
       }
     }

@@ -1,7 +1,8 @@
 import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
-import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns } from '../utils/auth';
+import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable } from '../utils/auth';
+import { isTestEnvironment } from '../utils/env-guard';
 import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited, logRateLimitHit } from '../utils/rate-limit';
@@ -71,6 +72,64 @@ export function evaluateLicenseExpiration(
     isRedeemExpired,
     isExpired,
   };
+}
+
+const SANDBOX_TEST_DAYS = 8;
+const SANDBOX_TEST_MS = SANDBOX_TEST_DAYS * 86400 * 1000;
+
+// Sandbox constraint gate: test licenses are constrained in EVERY environment;
+// in test environments ALL licenses are constrained (covers Paddle sandbox purchases).
+function needsSandboxConstraint(licenseSource: string, env: Env, url?: URL): boolean {
+  return licenseSource === "test" || isTestEnvironment(env, url);
+}
+
+// Real-time tester whitelist check. The whitelist is the single authority for
+// "registered & still allowed": deleting a whitelist entry immediately blocks
+// activation/refresh. Never trusts the client-supplied device_id.
+async function assertSandboxTesterAllowed(
+  env: Env,
+  buyerEmail: string | null | undefined,
+  authoritativeDeviceId: string,
+  reqLang: string,
+  corsHeaders: Record<string, string>
+): Promise<Response | null> {
+  await ensureBetaTestersTable(env);
+  const email = (buyerEmail || "").trim().toLowerCase();
+  if (!email) {
+    return new Response(JSON.stringify({
+      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license has no registered tester email"
+    }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const tester = await env.DB.prepare(
+    "SELECT * FROM sandbox_beta_testers WHERE LOWER(email) = ? AND status = 'active'"
+  ).bind(email).first<any>();
+  if (!tester) {
+    return new Response(JSON.stringify({
+      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license is not registered for any sandbox tester"
+    }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  const registeredDeviceId = (tester.device_id || "").trim();
+  if (!registeredDeviceId) {
+    return new Response(JSON.stringify({
+      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license is bound to a tester entry without a bound device"
+    }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (authoritativeDeviceId !== registeredDeviceId) {
+    return new Response(JSON.stringify({
+      error: getApiTranslation("unauthorized_test_device", reqLang) || `This test license is restricted to authorized device: ${registeredDeviceId}`
+    }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  return null;
+}
+
+// Hard 8-day cap: effective expiry = min(baseExpiresAt, created_at + 8 days). LIFETIME treated as infinite.
+function applySandboxExpiry(baseExpiresAt: string, createdMs: number): string {
+  const hardMs = createdMs + SANDBOX_TEST_MS;
+  const hardIso = new Date(hardMs).toISOString();
+  if (baseExpiresAt === "LIFETIME") return hardIso;
+  const baseMs = new Date(baseExpiresAt).getTime();
+  if (Number.isNaN(baseMs) || baseMs > hardMs) return hardIso;
+  return baseExpiresAt;
 }
 
 
@@ -416,6 +475,14 @@ export async function handleDrmRoutes(
 
     let baseExpiresAt = license.expires_at || "LIFETIME";
 
+    // Hard 8-day cap for sandbox-constrained licenses (min with created_at + 8 days)
+    if (needsSandboxConstraint(licenseSource, env, url)) {
+      const createdMs = license.created_at ? new Date(license.created_at).getTime() : 0;
+      if (!Number.isNaN(createdMs) && createdMs > 0) {
+        baseExpiresAt = applySandboxExpiry(baseExpiresAt, createdMs);
+      }
+    }
+
     // Initial expiration check before DB mutations
     const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);
     if (initialEval.isRedeemExpired) {
@@ -466,6 +533,27 @@ export async function handleDrmRoutes(
       baseExpiresAt = evaluateLicenseExpiration(license, baseExpiresAt, matchedActivation.activated_at).effectiveExpiresAt;
     }
 
+    // Sandbox gate: resolve authoritative device_id and enforce the real-time tester whitelist
+    // for every sandbox-constrained request (including already-activated re-activations), so
+    // deleting a whitelist entry immediately blocks activation/refresh.
+    const sandboxConstrained = needsSandboxConstraint(licenseSource, env, url);
+    let authoritativeDeviceId = "";
+    const net = activationClientMeta(request);
+    if (sandboxConstrained || !isAlreadyActivated) {
+      const regRes = await registerOrRefreshDevice(env, {
+        uuidHash: uuid_hash || "",
+        cpuHash: cpu_hash || "",
+        diskHash: disk_hash || "",
+        tierLabel: 'free',
+        appVersion: body.app_version || null
+      }, net);
+      authoritativeDeviceId = regRes.device_id || "";
+    }
+    if (sandboxConstrained) {
+      const denied = await assertSandboxTesterAllowed(env, license.buyer_email, authoritativeDeviceId, reqLang, corsHeaders);
+      if (denied) return denied;
+    }
+
     // Peer licenses on this device — stacking decision BEFORE writing a new activation row
     const peerLicenses = await findPeerActiveLicensesOnDevice(
       env,
@@ -497,32 +585,6 @@ export async function handleDrmRoutes(
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
-      }
-
-      // Get or assign device_id without pre-promoting to paid before activation check succeeds
-      const net = activationClientMeta(request);
-      const regRes = await registerOrRefreshDevice(env, {
-        uuidHash: uuid_hash || "",
-        cpuHash: cpu_hash || "",
-        diskHash: disk_hash || "",
-        tierLabel: 'free',
-        appVersion: body.app_version || null
-      }, net);
-      const authoritativeDeviceId = regRes.device_id || "";
-
-      // Check if license is bound to a specific test device ID.
-      // Security: Only authoritativeDeviceId computed from verified hardware fingerprints
-      // is trusted. The client-provided device_id in request body is untrusted and NEVER used to bypass binding.
-      if (licenseSource === "test" && license.bound_device_id && license.bound_device_id.trim() !== "") {
-        const boundId = license.bound_device_id.trim();
-        if (authoritativeDeviceId !== boundId) {
-          return new Response(JSON.stringify({
-            error: getApiTranslation("unauthorized_test_device", reqLang) || `This test license is restricted to authorized device: ${boundId}`
-          }), {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
       }
 
       const traceId = request.headers.get('X-Trace-Id') || null;
@@ -649,7 +711,7 @@ export async function handleDrmRoutes(
       email: license.buyer_email || null,
       appVersion: body.app_version || null
     }, netMeta);
-    const authoritativeDeviceId = finalReg.device_id;
+    authoritativeDeviceId = finalReg.device_id;
 
     const remainingMs = stack.remainingMs;
     let finalExpiresAt = baseExpiresAt;
@@ -781,7 +843,16 @@ export async function handleDrmRoutes(
       });
     }
 
+    const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
     let baseExpiresAt = license.expires_at || "LIFETIME";
+
+    // Hard 8-day cap for sandbox-constrained licenses (min with created_at + 8 days)
+    if (needsSandboxConstraint(licenseSource, env, url)) {
+      const createdMs = license.created_at ? new Date(license.created_at).getTime() : 0;
+      if (!Number.isNaN(createdMs) && createdMs > 0) {
+        baseExpiresAt = applySandboxExpiry(baseExpiresAt, createdMs);
+      }
+    }
 
     // Initial expiration check before checking device activation or DB mutations
     const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);
@@ -866,6 +937,13 @@ export async function handleDrmRoutes(
     }, net);
 
     const activeDeviceId = regResult.device_id || "";
+
+    // Real-time tester whitelist gate on refresh: a deleted whitelist entry stops license renewal.
+    if (needsSandboxConstraint(licenseSource, env, url)) {
+      const denied = await assertSandboxTesterAllowed(env, license.buyer_email, activeDeviceId, reqLang, corsHeaders);
+      if (denied) return denied;
+    }
+
     const currentTime = new Date().toISOString();
     const verifyPayloadStr = `OK|${license_code}|${uuid_hash || ""}|${cpu_hash || ""}|${disk_hash || ""}|${activeDeviceId}|${currentTime}`;
     const encoder = new TextEncoder();

@@ -1360,7 +1360,19 @@ export async function handleAdminRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-    const expDays = Number(body.expires_in_days || 7);
+    // Enforce "register first, then mint": the device+email pair must already exist in the whitelist.
+    const existingTester = await env.DB.prepare(
+      "SELECT * FROM sandbox_beta_testers WHERE device_id = ? AND LOWER(email) = ? AND status = 'active'"
+    ).bind(deviceId, email.toLowerCase()).first<any>();
+    if (!existingTester) {
+      return new Response(JSON.stringify({
+        error: "device_id and email must be registered in the sandbox tester whitelist before minting"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const expDays = Math.min(Number(body.expires_in_days || 8), 8);
     const durDays = Number(body.duration_days || 30);
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");

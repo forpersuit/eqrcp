@@ -1,6 +1,6 @@
 {
   "name": "eqt-drm-api",
-  "version": "1.9.5",
+  "version": "1.10.0",
   "description": "Serverless Licensing & DRM Backend for EQT on Cloudflare",
   "main": "src/index.ts",
   "scripts": {
