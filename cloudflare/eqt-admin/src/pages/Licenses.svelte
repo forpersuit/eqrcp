@@ -441,13 +441,22 @@
           <button class="btn btn-secondary btn-sm" onclick={() => (showAddTesterModal = true)}>
             + {$t('licenses.addTesterBtn')}
           </button>
-          <button
-            class="btn btn-primary btn-sm btn-quick-mint"
-            disabled={quickMinting}
-            onclick={() => handleQuickMintTestLicense('b0036718cb9a469999d2910cdf418b1f', 'tmp@301098.xyz')}
-          >
-            {quickMinting ? $t('licenses.mintingQuickTest') : $t('licenses.mintQuickTestLicense')}
-          </button>
+          {#if betaTesters.length > 0}
+            <button
+              class="btn btn-primary btn-sm btn-quick-mint"
+              disabled={quickMinting}
+              onclick={() => {
+                const target = betaTesters.find(t => t.device_id && t.email) || betaTesters[0];
+                if (target) {
+                  handleQuickMintTestLicense(target.device_id || null, target.email || null);
+                } else {
+                  showAddTesterModal = true;
+                }
+              }}
+            >
+              {quickMinting ? $t('licenses.mintingQuickTest') : $t('licenses.mintQuickTestLicense')}
+            </button>
+          {/if}
         </div>
       </div>
 
@@ -472,6 +481,17 @@
               {/if}
             </div>
             <div class="tester-actions">
+              {#if tester.device_id || tester.email}
+                <button
+                  type="button"
+                  class="chip-action-btn chip-mint-btn"
+                  title={$t('licenses.mintForTester')}
+                  disabled={quickMinting}
+                  onclick={() => handleQuickMintTestLicense(tester.device_id || null, tester.email || null)}
+                >
+                  ⚡ {$t('licenses.mintForTester')}
+                </button>
+              {/if}
               <button
                 type="button"
                 class="chip-action-btn"

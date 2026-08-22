@@ -513,7 +513,7 @@ export async function handleDrmRoutes(
       // Check if license is bound to a specific test device ID.
       // Security: Only authoritativeDeviceId computed from verified hardware fingerprints
       // is trusted. The client-provided device_id in request body is untrusted and NEVER used to bypass binding.
-      if (license.bound_device_id && license.bound_device_id.trim() !== "") {
+      if (licenseSource === "test" && license.bound_device_id && license.bound_device_id.trim() !== "") {
         const boundId = license.bound_device_id.trim();
         if (authoritativeDeviceId !== boundId) {
           return new Response(JSON.stringify({

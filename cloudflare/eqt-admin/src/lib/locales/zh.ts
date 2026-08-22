@@ -105,6 +105,7 @@ export const zh = {
     deleteSuccess: "已移除测试资格",
     addSuccess: "测试资格已添加",
     quickFill: "填入",
+    mintForTester: "签发测试码",
     noTesters: "暂无配置的测试资格记录",
     maxDevices: "最大绑定设备数",
     redeemDays: "兑换截止天数 redeem-by（必填）",

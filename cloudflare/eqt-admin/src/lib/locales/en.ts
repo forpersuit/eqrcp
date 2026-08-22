@@ -104,6 +104,7 @@ export const en = {
     deleteSuccess: "Tester qualification removed",
     addSuccess: "Tester qualification added",
     quickFill: "Fill",
+    mintForTester: "Mint Code",
     noTesters: "No test qualification entries configured yet",
     maxDevices: "Max Devices",
     redeemDays: "Redeem-by Days (Required)",
