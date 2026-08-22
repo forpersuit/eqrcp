@@ -237,8 +237,18 @@ async function runTests() {
     addedTesterId = json.id;
 
     const listRes = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
-    const newlyAdded = listRes.json.testers.find(t => t.id === addedTesterId);
-    assert(newlyAdded && newlyAdded.device_id === 'dev_test_lab_machine_999', 'New tester persists in database');
+    // Add same email with new device (UPSERT test)
+    const updateRes = await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      device_id: 'dev_test_lab_machine_updated',
+      email: 'lab_qa@301098.xyz',
+      notes: 'Updated Rig'
+    });
+    assertEqual(updateRes.status, 200, 'Re-adding existing email returns 200 (UPSERT)');
+    assert(updateRes.json.updated === true, 'Response marks updated: true');
+
+    const updatedList = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
+    const updatedTester = updatedList.json.testers.find(t => t.email === 'lab_qa@301098.xyz');
+    assertEqual(updatedTester.device_id, 'dev_test_lab_machine_updated', 'Device ID was updated via UPSERT');
 
     // Delete it
     const delRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}`);
@@ -257,7 +267,7 @@ async function runTests() {
     assertEqual(resBad1.status, 400, 'Missing params returns 400');
     assert(resBad1.json.error.includes('Missing required parameters'), 'Error mentions missing parameters');
 
-    // 5B: Valid parameters -> 200 OK
+    // 5B: Valid parameters -> 200 OK (duration_days capped at 8)
     const { status, json } = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
       tier: 'PLUS',
       device_id: 'b0036718cb9a469999d2910cdf418b1f',
@@ -270,7 +280,7 @@ async function runTests() {
     assert(json.license_code.startsWith('EQT-TEST-PLUS-'), `License code prefix is EQT-TEST-PLUS- (${json.license_code})`);
     assertEqual(json.bound_device_id, 'b0036718cb9a469999d2910cdf418b1f', 'Bound device ID matches');
     assertEqual(json.buyer_email, 'tmp@301098.xyz', 'Buyer email matches');
-    assertEqual(json.duration_days, 30, 'Duration days is 30');
+    assertEqual(json.duration_days, 8, 'Duration days is capped at 8');
     quickTestCode = json.license_code;
   }
 
@@ -531,6 +541,31 @@ async function runTests() {
       disk_hash: 'paddle_disk_hash_cccccccccccccccc'
     });
     assertEqual(res2.status, 403, 'Paddle purchase after 8-day cap returns 403 (expired)');
+  }
+
+  // ------------------------------------------------------------
+  // Test 13: GET /api/v1/admin/licenses returns enriched device activity metrics
+  // ------------------------------------------------------------
+  console.log('\n--- Test 13: Admin licenses query returns device activity & last_seen_at ---');
+  {
+    // Update device_registry for legitimate test machine with app_version and last_ip
+    mockD1.db.prepare(`
+      UPDATE device_registry
+      SET app_version = '1.0.5', last_ip = '203.0.113.195', city = 'Tokyo', ip_country = 'JP', last_seen_at = datetime('now')
+      WHERE device_id = 'b0036718cb9a469999d2910cdf418b1f'
+    `).run();
+
+    const { status, json } = await callAdmin('GET', `/api/v1/admin/licenses?query=${quickTestCode}`);
+    assertEqual(status, 200, 'GET /admin/licenses returns 200');
+    assert(json.licenses && json.licenses.length > 0, 'Found minted test license');
+    const lic = json.licenses[0];
+    assert(lic.activations && lic.activations.length > 0, 'License has activations list');
+    const act = lic.activations[0];
+    assertEqual(act.device_id, 'b0036718cb9a469999d2910cdf418b1f', 'Activation has device_id');
+    assertEqual(act.app_version, '1.0.5', 'Activation returns app_version from device_registry');
+    assertEqual(act.last_ip, '203.0.113.195', 'Activation returns last_ip from device_registry');
+    assertEqual(act.last_city, 'Tokyo', 'Activation returns last_city from device_registry');
+    assert(act.last_seen_at, 'Activation returns last_seen_at from device_registry');
   }
 
   console.log('\n============================================================');

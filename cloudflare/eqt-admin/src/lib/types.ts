@@ -38,7 +38,7 @@ export interface ManualBlacklistEntry {
   active: number | boolean;
 }
 
-/** Row shape from activations table */
+/** Row shape from activations table with device_registry activity metrics */
 export interface Activation {
   id: number;
   license_code: string;
@@ -51,6 +51,13 @@ export interface Activation {
   client_ip?: string | null;
   ip_country?: string | null;
   user_agent?: string | null;
+  /** Populated from device_registry join for live activity tracking */
+  last_seen_at?: string | null;
+  app_version?: string | null;
+  last_ip?: string | null;
+  last_country?: string | null;
+  last_city?: string | null;
+  last_region?: string | null;
 }
 
 export interface License {

@@ -654,7 +654,16 @@ export async function handleAdminRoutes(
     if (rawLicenses.length > 0) {
       const licenseCodes = rawLicenses.map(lic => lic.license_code);
       const placeholders = licenseCodes.map(() => '?').join(',');
-      const actSql = `SELECT id, license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at, client_ip, ip_country, user_agent FROM activations WHERE license_code IN (${placeholders}) ORDER BY id ASC`;
+      const actSql = `
+        SELECT
+          a.id, a.license_code, a.uuid_hash, a.cpu_hash, a.disk_hash, a.device_id,
+          a.activated_at, a.client_ip, a.ip_country, a.user_agent,
+          d.last_seen_at, d.app_version, d.last_ip, d.city as last_city, d.region as last_region, d.ip_country as last_country
+        FROM activations a
+        LEFT JOIN device_registry d ON a.device_id = d.device_id
+        WHERE a.license_code IN (${placeholders})
+        ORDER BY a.id ASC
+      `;
       const actRes = await env.DB.prepare(actSql).bind(...licenseCodes).all();
       const rawActivations: any[] = actRes.results || [];
 
@@ -1269,7 +1278,8 @@ export async function handleAdminRoutes(
 
     const body: any = await request.json().catch(() => ({}));
     const deviceId = (body.device_id || "").trim() || null;
-    const email = (body.email || "").trim() || null;
+    const rawEmail = (body.email || "").trim();
+    const email = rawEmail ? rawEmail.toLowerCase() : null;
     const notes = (body.notes || "").trim() || null;
 
     if (!deviceId && !email) {
@@ -1280,7 +1290,28 @@ export async function handleAdminRoutes(
     }
 
     const now = new Date().toISOString();
-    const res = await env.DB.prepare(
+    let res: any;
+    if (email) {
+      const existing = await env.DB.prepare(
+        "SELECT id FROM sandbox_beta_testers WHERE LOWER(email) = ?"
+      ).bind(email).first<{ id: number }>();
+
+      if (existing) {
+        res = await env.DB.prepare(
+          "UPDATE sandbox_beta_testers SET device_id = COALESCE(?, device_id), notes = COALESCE(?, notes), status = 'active' WHERE id = ?"
+        ).bind(deviceId, notes, existing.id).run();
+        return new Response(JSON.stringify({
+          success: true,
+          id: existing.id,
+          updated: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    res = await env.DB.prepare(
       "INSERT INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)"
     ).bind(deviceId, email, notes, now).run();
 
@@ -1373,7 +1404,7 @@ export async function handleAdminRoutes(
       });
     }
     const expDays = Math.min(Number(body.expires_in_days || 8), 8);
-    const durDays = Number(body.duration_days || 30);
+    const durDays = Math.min(Number(body.duration_days || 8), 8);
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const randBytes = new Uint8Array(6);

@@ -78,23 +78,29 @@
 
   function deviceNetworkLine(act: Activation): string {
     const parts: string[] = [];
-    if (act.ip_country) parts.push(act.ip_country);
-    if (act.client_ip) parts.push(act.client_ip);
+    const locParts = [act.last_city, act.last_region, act.last_country || act.ip_country].filter(Boolean);
+    if (locParts.length) {
+      parts.push(locParts.join(', '));
+    }
+    const ip = act.last_ip || act.client_ip;
+    if (ip && !parts.some(p => p.includes(ip))) {
+      parts.push(ip);
+    }
     return parts.length ? parts.join(' · ') : $t('licenses.noIpRecorded');
   }
 
   function latestActivationHint(lic: License): string {
     if (!lic.activations?.length) return '';
     const sorted = [...lic.activations].sort((a, b) =>
-      String(b.activated_at || '').localeCompare(String(a.activated_at || ''))
+      String(b.last_seen_at || b.activated_at || '').localeCompare(String(a.last_seen_at || a.activated_at || ''))
     );
     const latest = sorted[0];
     if (!latest) return '';
-    const geo = latest.ip_country || latest.client_ip;
+    const geo = latest.last_country || latest.ip_country || latest.last_ip || latest.client_ip;
     if (!geo) return '';
-    return latest.ip_country
-      ? `${latest.ip_country}${latest.client_ip ? ' ' + latest.client_ip : ''}`
-      : String(latest.client_ip);
+    const country = latest.last_country || latest.ip_country;
+    const ip = latest.last_ip || latest.client_ip;
+    return country ? `${country}${ip ? ' ' + ip : ''}` : String(ip);
   }
 
   async function loadLicenses(opts: { silent?: boolean } = {}) {
@@ -741,14 +747,29 @@
       <div class="device-list">
         {#each selectedLicense.activations as act (act.id)}
           <div class="device-item card">
-            <div>
-              <div class="dev-name">{deviceTitle(act)}</div>
-              <div class="dev-fp">{deviceSubtitle(act)}</div>
-              <div class="dev-time">
-                {$t('licenses.activatedAt')}: {act.activated_at ? new Date(act.activated_at).toLocaleString() : '-'}
+            <div class="device-item-content">
+              <div class="dev-name-row">
+                <span class="dev-name">{deviceTitle(act)}</span>
+                {#if act.app_version}
+                  <span class="badge badge-active dev-ver-badge">v{act.app_version}</span>
+                {/if}
               </div>
-              <div class="dev-net" title={act.user_agent || ''}>
-                {$t('licenses.network')}: {deviceNetworkLine(act)}
+              <div class="dev-fp">{deviceSubtitle(act)}</div>
+              <div class="dev-metrics-grid">
+                <div class="dev-metric-item">
+                  <span class="metric-label">{$t('licenses.activatedAt')}:</span>
+                  <span class="metric-val">{act.activated_at ? new Date(act.activated_at).toLocaleString() : '-'}</span>
+                </div>
+                {#if act.last_seen_at}
+                  <div class="dev-metric-item">
+                    <span class="metric-label">{$t('licenses.lastSeenAt')}:</span>
+                    <span class="metric-val highlight-seen">{new Date(act.last_seen_at).toLocaleString()}</span>
+                  </div>
+                {/if}
+                <div class="dev-metric-item">
+                  <span class="metric-label">{$t('licenses.network')}:</span>
+                  <span class="metric-val" title={act.user_agent || ''}>{deviceNetworkLine(act)}</span>
+                </div>
               </div>
             </div>
             <button
@@ -991,8 +1012,22 @@
 
   .device-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 1rem 0; }
   .device-item { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem; gap: 1rem; }
+  .device-item-content { flex: 1; min-width: 0; }
+  .dev-name-row { display: flex; align-items: center; gap: 0.5rem; }
   .dev-name { font-weight: 600; color: var(--text-primary); }
+  .dev-ver-badge { font-size: 0.65rem; padding: 1px 6px; }
   .dev-fp { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+  .dev-metrics-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+  }
+  .dev-metric-item { display: flex; align-items: center; gap: 0.35rem; }
+  .metric-label { color: var(--text-muted); }
+  .metric-val { color: var(--text-secondary); }
+  .highlight-seen { color: var(--accent-primary); font-weight: 600; }
   .dev-time { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
 
   .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
