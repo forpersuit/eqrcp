@@ -491,6 +491,7 @@ export async function handleAdminRoutes(
 
     let crossRegionArcs: {
       license_code: string;
+      email?: string;
       from_country: string;
       from_city?: string;
       from_lat: number;

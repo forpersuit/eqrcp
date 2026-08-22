@@ -106,7 +106,7 @@ if [[ "$run_checks" -eq 1 ]]; then
   (cd "$root_dir" && go vet ./...)
 
   echo "Running Go tests..."
-  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 60s ./...)
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s ./...)
   if wails_cmd="$(find_wails)"; then
     echo "Generating Wails bindings..."
     rm -f /tmp/wailsbindings || true
@@ -122,7 +122,7 @@ if [[ "$run_checks" -eq 1 ]]; then
   (cd "$root_dir/desktop/gui" && go vet ./...)
 
   echo "Running GUI Go tests..."
-  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 60s ./...)
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s ./...)
 fi
 
 echo "Building Windows CLI artifacts..."

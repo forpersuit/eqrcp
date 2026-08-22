@@ -32,7 +32,7 @@
     "test:ci": "npm run test:admin:live && npm run test:device-reg:offline:live && npm run test:upgrade:offline && npm run test:d1-retry:offline && npm run test:offline"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240101.0",
+    "@cloudflare/workers-types": "^5.20260822.1",
     "typescript": "^5.3.3",
     "wrangler": "^4.113.0"
   }
