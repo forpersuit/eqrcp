@@ -250,10 +250,29 @@ async function runTests() {
     const updatedTester = updatedList.json.testers.find(t => t.email === 'lab_qa@301098.xyz');
     assertEqual(updatedTester.device_id, 'dev_test_lab_machine_updated', 'Device ID was updated via UPSERT');
 
-    // Delete it
+    // UPSERT with empty device_id unbinds device (device_id becomes null)
+    const clearDevRes = await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
+      device_id: '',
+      email: 'lab_qa@301098.xyz',
+      notes: 'Cleared Device Binding'
+    });
+    assertEqual(clearDevRes.status, 200, 'Passing empty device_id returns 200 (UPSERT)');
+    const listAfterClear = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
+    const clearedTester = listAfterClear.json.testers.find(t => t.email === 'lab_qa@301098.xyz');
+    assertEqual(clearedTester.device_id, null, 'device_id was cleared to null via empty string in UPSERT');
+
+    // DELETE invalid non-digit string returns 400
+    const badIdRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}abc`);
+    assertEqual(badIdRes.status, 400, 'DELETE with non-numeric ID returns 400');
+
+    // Delete it successfully
     const delRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}`);
     assertEqual(delRes.status, 200, 'DELETE tester returns 200');
     assert(delRes.json.success === true, 'Delete success is true');
+
+    // Delete non-existent ID returns 404
+    const delNotFoundRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}`);
+    assertEqual(delNotFoundRes.status, 404, 'DELETE already deleted tester returns 404');
   }
 
   // ------------------------------------------------------------

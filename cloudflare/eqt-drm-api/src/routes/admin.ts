@@ -1361,21 +1361,21 @@ export async function handleAdminRoutes(
     }
     await ensureBetaTestersTable(env);
 
-    let targetId: number | null = null;
+    let rawIdStr = "";
     if (url.pathname.startsWith("/api/v1/admin/sandbox/testers/")) {
-      const rawStr = url.pathname.replace("/api/v1/admin/sandbox/testers/", "").trim();
-      targetId = parseInt(rawStr, 10);
+      rawIdStr = url.pathname.replace("/api/v1/admin/sandbox/testers/", "").trim();
     } else {
       const body: any = await request.json().catch(() => ({}));
-      targetId = body.id ? parseInt(String(body.id), 10) : null;
+      rawIdStr = body.id !== undefined && body.id !== null ? String(body.id).trim() : "";
     }
 
-    if (!targetId || isNaN(targetId) || targetId <= 0) {
+    if (!/^\d+$/.test(rawIdStr) || parseInt(rawIdStr, 10) <= 0) {
       return new Response(JSON.stringify({ error: "Invalid or missing tester ID to delete" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+    const targetId = parseInt(rawIdStr, 10);
 
     const delRes = await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
     if (!delRes.meta?.changes) {
